@@ -11,10 +11,12 @@ from construct import Struct as cStruct
 import subprocess
 from eth_keys import keys as eth_keys
 import random
+import os
 
 system_id = '11111111111111111111111111111111'
 rent_id = 'SysvarRent111111111111111111111111111111111'
 token_id = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
+loader_id = os.environ['EVM_LOADER_ID']
 
 def create_program_address(seeds, programId):
     seeds_str = ' '.join([s.hex() for s in seeds])
@@ -98,6 +100,14 @@ TRANSFER_LAMPORTS_LAYOUT = cStruct(
     "amount" / Int64ul,
     "nonce" / Int8ul,
     "eth_acc" / Bytes(20),
+)
+
+CREATE_ACCOuNT_LAYOUT = cStruct(
+    "instruction" / Int8ul,
+    "lamports" / Int64ul,
+    "space" / Int64ul,
+    "ether" / Bytes(20),
+    "nonce" / Int8ul,
 )
 
 class AccountInfo(NamedTuple):
@@ -253,3 +263,21 @@ class WrapperProgram():
                 AccountMeta(pubkey=rent_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=signer_key, is_signer=True, is_writable=True),
             ])
+
+class EvmLoaderProgram():
+    def __init__(self, client, program):
+        self.program = program
+        self.client = client
+
+    def createAccount(self, lamports, space, ether, signer_key):
+        print('--- createAccount:', lamports, space, ether)
+        (authority, nonceAuthority) = create_program_address([bytes(ether)], self.program)
+        data = CREATE_ACCOuNT_LAYOUT.build(dict(
+            instruction=2,
+            lamports=lamports,
+            nonce=nonceAuthority,
+            space=space,
+            ether=bytes(ether),
+        ))
+        return TransactionInstruction(program_id=self.program, data=data, keys=[
+                AccountMeta(pubkey=signer_key, is_signer=True, is_writable=True)])
