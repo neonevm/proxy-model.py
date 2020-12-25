@@ -110,6 +110,11 @@ CREATE_ACCOuNT_LAYOUT = cStruct(
     "nonce" / Int8ul,
 )
 
+CALL = cStruct(
+    "instruction" / Int8ul,
+    "ether" / Bytes(),
+)
+
 class AccountInfo(NamedTuple):
     eth_acc: eth_keys.PublicKey
     trx_count: int
@@ -283,3 +288,15 @@ class EvmLoaderProgram():
                 AccountMeta(pubkey=signer_key, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=program_key, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=system_program_key, is_signer=False, is_writable=False)])
+
+    def call(self, call_data, program_key, caller_key, signer_key, clock_key):
+        print('--- call:', call_data)
+        data = CALL_LAYOUT.build(dict(
+            instruction=3,
+            call_data=call_data,
+        ))
+        return TransactionInstruction(program_id=self.program, data=data, keys=[
+                AccountMeta(pubkey=program_key, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=caller_key, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=signer_key, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=clock_key, is_signer=False, is_writable=False)])

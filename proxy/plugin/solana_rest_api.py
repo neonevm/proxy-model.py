@@ -157,6 +157,7 @@ class EthereumModel:
     def _getContract(self, contractId):
         contract = self.contracts.get(contractId)
         if not contract:
+            # TODO Support not only token contract
             contract = SolanaTokenContract(self.client, self.wrapper, EthereumAddress(contractId))
             self.contracts[contractId] = contract
             #raise Exception("Unknown contract {}".format(contractId))
