@@ -269,7 +269,7 @@ class EvmLoaderProgram():
         self.program = program
         self.client = client
 
-    def createAccount(self, lamports, space, ether, signer_key, program_key):
+    def createAccount(self, lamports, space, ether, signer_key, program_key, system_program_key):
         print('--- createAccount:', lamports, space, ether)
         (authority, nonceAuthority) = create_program_address([bytes(ether)], self.program)
         data = CREATE_ACCOuNT_LAYOUT.build(dict(
@@ -280,5 +280,6 @@ class EvmLoaderProgram():
             ether=bytes(ether),
         ))
         return TransactionInstruction(program_id=self.program, data=data, keys=[
-                AccountMeta(pubkey=signer_key, is_signer=True, is_writable=True)
-                AccountMeta(pubkey=program_key, is_signer=False, is_writable=True)])
+                AccountMeta(pubkey=signer_key, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=program_key, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=system_program_key, is_signer=False, is_writable=False)])
