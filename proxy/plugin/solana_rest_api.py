@@ -28,13 +28,15 @@ from solana.rpc.api import Client as SolanaClient
 from solana.rpc.types import TxOpts
 from solana.account import Account as SolanaAccount
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from .wrapper import WrapperProgram, EthereumAddress
+from .wrapper import WrapperProgram, EthereumAddress, EvmLoaderProgram
 from sha3 import keccak_256
 import base58
 import base64
 import traceback
+import os
 
 wrapper_id = 'HB7yN5ZLPi1cLUAZs6QF4y6ZdRN1K4YhGzyRgewF23rD'
+loader_id = os.environ['EVM_LOADER_ID']
 
 class Contract:
     def __init__(self, functions):
@@ -147,6 +149,7 @@ class EthereumModel:
     def __init__(self):
         self.client = SolanaClient('http://localhost:8899')
         self.wrapper = WrapperProgram(self.client, wrapper_id)
+        self.evm_loader = EvmLoaderProgram(self.client, loader_id)
         self.signatures = {}
         self.signer = SolanaAccount(b'\xdc~\x1c\xc0\x1a\x97\x80\xc2\xcd\xdfn\xdb\x05.\xf8\x90N\xde\xf5\x042\xe2\xd8\x10xO%/\xe7\x89\xc0<')
 
@@ -354,7 +357,7 @@ class EthereumModel:
                     EthereumAddress(toAddress),
                     trx.value//(10**9)))
         elif trx.callData:
-            outTrx.add(self._getContract(toAddress).execute(sender, trx.callData.hex()))
+            outTrx.add(self.evm_loader.execute(trx.callData.hex(), toAddress, sender)) # TODO signer and clock
         else:
             raise Exception("Missing token for transfer")
 

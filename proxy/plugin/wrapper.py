@@ -11,12 +11,10 @@ from construct import Struct as cStruct
 import subprocess
 from eth_keys import keys as eth_keys
 import random
-import os
 
 system_id = '11111111111111111111111111111111'
 rent_id = 'SysvarRent111111111111111111111111111111111'
 token_id = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
-loader_id = os.environ['EVM_LOADER_ID']
 
 def create_program_address(seeds, programId):
     seeds_str = ' '.join([s.hex() for s in seeds])
