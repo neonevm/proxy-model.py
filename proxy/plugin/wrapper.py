@@ -6,7 +6,7 @@ from solana._layouts.shared import PUBLIC_KEY_LAYOUT, RUST_STRING_LAYOUT
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 import base58
 import base64
-from construct import Bytes, Int8ul, Int32ul, Int64ul, Pass  # type: ignore
+from construct import Bytes, GreedyBytes, Int8ul, Int32ul, Int64ul, Pass  # type: ignore
 from construct import Struct as cStruct
 import subprocess
 from eth_keys import keys as eth_keys
@@ -110,9 +110,9 @@ CREATE_ACCOuNT_LAYOUT = cStruct(
     "nonce" / Int8ul,
 )
 
-CALL = cStruct(
+CALL_LAYOUT = cStruct(
     "instruction" / Int8ul,
-    "ether" / Bytes(),
+    "ether" / GreedyBytes,
 )
 
 class AccountInfo(NamedTuple):
@@ -277,7 +277,7 @@ class EvmLoaderProgram():
     def createAccount(self, lamports, space, ether, signer_key, program_key, system_program_key):
         print('--- createAccount:', lamports, space, ether)
         (authority, nonceAuthority) = create_program_address([bytes(ether)], self.program)
-        data = CREATE_ACCOuNT_LAYOUT.build(dict(
+        data = CREATE_ACCOUNT_LAYOUT.build(dict(
             instruction=2,
             lamports=lamports,
             nonce=nonceAuthority,
