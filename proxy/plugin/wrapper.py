@@ -13,8 +13,10 @@ from eth_keys import keys as eth_keys
 import random
 
 system_id = '11111111111111111111111111111111'
-rent_id = 'SysvarRent111111111111111111111111111111111'
+rent_id  = 'SysvarRent111111111111111111111111111111111'
 token_id = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
+clock_id = 'SysvarC1ock11111111111111111111111111111111'
+fake_id =  'Fake111111111111111111111111111111111111111'
 
 def create_program_address(seeds, programId):
     seeds_str = ' '.join([s.hex() for s in seeds])
@@ -287,7 +289,7 @@ class EvmLoaderProgram():
                 AccountMeta(pubkey=program_key, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=system_program_key, is_signer=False, is_writable=False)])
 
-    def call(self, call_data, program_key, caller_key, signer_key, clock_key):
+    def call(self, call_data, program_key, caller_key): # TODO add signer key
         print('--- call:', call_data)
         data = CALL_LAYOUT.build(dict(
             instruction=3,
@@ -296,5 +298,5 @@ class EvmLoaderProgram():
         return TransactionInstruction(program_id=self.program, data=data, keys=[
                 AccountMeta(pubkey=program_key, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=caller_key, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=signer_key, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=clock_key, is_signer=False, is_writable=False)])
+                AccountMeta(pubkey=fake_id, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=clock_id, is_signer=False, is_writable=False)])
