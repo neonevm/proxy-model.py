@@ -357,7 +357,7 @@ class EthereumModel:
                     EthereumAddress(toAddress),
                     trx.value//(10**9)))
         elif trx.callData:
-            outTrx.add(self.evm_loader.execute(trx.callData.hex(), toAddress, sender)) # TODO signer in future
+            outTrx.add(self.evm_loader.call(trx.callData.hex(), toAddress, sender)) # TODO signer in future
         else:
             raise Exception("Missing token for transfer")
 
