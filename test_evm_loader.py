@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-from plugin.wrapper import EvmLoaderProgram
+# requires:
+# pip3 install -r requirements.txt
+# pip3 install solana
+from proxy.plugin.wrapper import EvmLoaderProgram
 from solana.rpc.api import Client
 from solana.account import Account
 from solana.publickey import PublicKey
@@ -18,6 +21,12 @@ evm_loader = os.environ.get("EVM_LOADER")  #"CLBfz3DZK4VBYAu6pCgDrQkNwLsQphT9tg4
 
 if evm_loader is None:
     print("Please set EVM_LOADER environment")
+    exit(1)
+
+system_program_key = os.environ.get("SYSTEM_PROGRAM_KEY")  #"CLBfz3DZK4VBYAu6pCgDrQkNwLsQphT9tg41h6TQZAh3"
+
+if system_program_key is None:
+    print("Please set SYSTEM_PROGRAM_KEY environment")
     exit(1)
 
 def confirm_transaction(client, tx_sig):
@@ -60,8 +69,8 @@ class EvmLoaderTests(unittest.TestCase):
         program = EvmLoaderProgram()
         # lamports, space, ether, signer_key, program_key, system_program_key
         trx = Transaction().add(
-            program.createAccount(1000, 1000, sys.argv[0], sys.argv[1], sys.argv[2], sys.argv[3])
-            )
+            program.createAccount(1000, 1000, '000000000000000000000000000000000000FFFF', system_program_key, system_program_key, system_program_key)
+        )
         result = http_client.send_transaction(trx, self.acc)
 
 if __name__ == '__main__':

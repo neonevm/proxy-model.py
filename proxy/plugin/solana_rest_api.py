@@ -36,7 +36,7 @@ import traceback
 import os
 
 wrapper_id = 'HB7yN5ZLPi1cLUAZs6QF4y6ZdRN1K4YhGzyRgewF23rD'
-loader_id = os.environ['EVM_LOADER_ID']
+loader_id = os.environ.get('EVM_LOADER_ID')
 
 class Contract:
     def __init__(self, functions):
