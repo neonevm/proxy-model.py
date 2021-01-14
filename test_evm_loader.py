@@ -10,6 +10,7 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 import unittest
 import time
 import os
+import secrets
 
 solana_url = os.environ.get("SOLANA_URL")
 if solana_url is None:
@@ -67,9 +68,11 @@ class EvmLoaderTests(unittest.TestCase):
 
     def test_createAccount(self):
         program = EvmLoaderProgram()
+        addr = secrets.token_hex(20)
+        print('Creating account: ', addr)
         # lamports, space, ether, signer_key, program_key, system_program_key
         trx = Transaction().add(
-            program.createAccount(1000, 1000, '000000000000000000000000000000000000FFFF', system_program_key, system_program_key, system_program_key)
+            program.createAccount(1000, 1000, addr, system_program_key, system_program_key, system_program_key)
         )
         result = http_client.send_transaction(trx, self.acc)
 
