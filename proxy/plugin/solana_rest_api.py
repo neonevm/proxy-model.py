@@ -27,6 +27,7 @@ from .eth_proto import Trx as EthTrx
 from solana.rpc.api import Client as SolanaClient
 from solana.rpc.types import TxOpts
 from solana.account import Account as SolanaAccount
+from solana.publickey import PublicKey
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from .wrapper import WrapperProgram, EthereumAddress, EvmLoaderProgram
 from sha3 import keccak_256
@@ -417,6 +418,35 @@ class SolanaContractTests(unittest.TestCase):
         self.assertTrue(receiptId in block['transactions'])
 
     def test_transferTokens(self):
+        (token, sender, receiver, amount) = ('0xcf73021fde8654e64421f67372a47aa53c4341a8', '0x324726ca9954ed9bd567a62ae38a7dd7b4eaad0e', '0xb937ad32debafa742907d83cb9749443160de0c4', 32)
+        senderBalance = self.getTokenBalance(token, sender)
+        receiverBalance = self.getTokenBalance(token, receiver)
+        blockNumber = self.getBlockNumber()
+
+        receiptId = self.model.eth_sendRawTransaction('0xf8b018850bdfd63e00830186a094b80102fd2d3d1be86823dd36f9c783ad0ee7d89880b844a9059cbb000000000000000000000000cac68f98c1893531df666f2d58243b27dd351a8800000000000000000000000000000000000000000000000000000000000000208602e92be91e86a05ed7d0093a991563153f59c785e989a466e5e83bddebd9c710362f5ee23f7dbaa023a641d304039f349546089bc0cb2a5b35e45619fd97661bd151183cb47f1a0a')
+        print('ReceiptId:', receiptId)
+
+        self.assertEqual(self.getTokenBalance(token, sender), senderBalance - amount)
+        self.assertEqual(self.getTokenBalance(token, receiver), receiverBalance + amount)
+
+        receipt = self.model.eth_getTransactionReceipt(receiptId)
+        print('Receipt:', receipt)
+        
+        block = self.model.eth_getBlockByNumber(receipt['blockNumber'], False)
+        print('Block:', block)
+
+        self.assertTrue(receiptId in block['transactions'])
+
+    def test_call(self):
+        addr = secrets.token_hex(20)
+        print('Creating account: ', addr)
+        # lamports, space, ether, signer_key, program_key, system_program_key
+        program_key = PublicKey("A8semLLUsg5ZbhACjD2Vdvn8gpDZV1Z2dPwoid9YUr4S")
+        trx = Transaction().add(
+            self.model.evm_loader.createAccount(1000, 1000, addr, program_key, system_program_key, system_program_key)
+        )
+
+        print('Calling trx')
         (token, sender, receiver, amount) = ('0xcf73021fde8654e64421f67372a47aa53c4341a8', '0x324726ca9954ed9bd567a62ae38a7dd7b4eaad0e', '0xb937ad32debafa742907d83cb9749443160de0c4', 32)
         senderBalance = self.getTokenBalance(token, sender)
         receiverBalance = self.getTokenBalance(token, receiver)
