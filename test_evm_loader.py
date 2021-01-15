@@ -76,5 +76,19 @@ class EvmLoaderTests(unittest.TestCase):
         )
         result = http_client.send_transaction(trx, self.acc)
 
+    def test_call(self):
+        program = EvmLoaderProgram()
+        addr = secrets.token_hex(20)
+        print('Creating account: ', addr)
+        # lamports, space, ether, signer_key, program_key, system_program_key
+        trx = Transaction().add(
+            program.createAccount(1000, 1000, addr, system_program_key, system_program_key, system_program_key)
+        )
+        result = http_client.send_transaction(trx, self.acc)
+        trx = Transaction().add(
+            program.call('0xf8b018850bdfd63e00830186a094b80102fd2d3d1be86823dd36f9c783ad0ee7d89880b844a9059cbb000000000000000000000000cac68f98c1893531df666f2d58243b27dd351a8800000000000000000000000000000000000000000000000000000000000000208602e92be91e86a05ed7d0093a991563153f59c785e989a466e5e83bddebd9c710362f5ee23f7dbaa023a641d304039f349546089bc0cb2a5b35e45619fd97661bd151183cb47f1a0a', addr, self.acc) # TODO signer in future
+        )
+        result = http_client.send_transaction(trx, self.acc)
+
 if __name__ == '__main__':
     unittest.main()
