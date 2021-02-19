@@ -36,7 +36,7 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from sha3 import keccak_256
 import base58
 import traceback
-from .erc20_wrapper import EthereumAddress, create_program_address, sender_eth, evm_loader_id, getLamports, \
+from .erc20_wrapper import EthereumAddress, create_program_address, evm_loader_id, getLamports, \
     getAccountInfo,  call, deploy, transaction_history, solana_cli, solana_url
 
 
@@ -60,6 +60,9 @@ class Receipt:
         if self.block: raise Exception("Transaction already included in block {}".format(block.number))
         (self.block, self.index) = (block, index)
 
+def solana2ether(public_key):
+    from web3 import Web3
+    return bytes(Web3.keccak(bytes(PublicKey(public_key)))[-20:])
 
 class EthereumModel:
     def __init__(self):
@@ -86,7 +89,8 @@ class EthereumModel:
 
         self.contracts = {}
         self.accounts = {}
-        self.caller_ether = bytes.fromhex(sender_eth)
+
+        self.caller_ether = solana2ether(self.signer.public_key())
         (self.caller, self.caller_nonce) = create_program_address(self.caller_ether.hex(), evm_loader_id)
         info = self.client.get_account_info(self.caller)
         if info['result']['value'] is None:

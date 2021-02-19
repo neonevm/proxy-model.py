@@ -13,7 +13,6 @@ import json
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER", "BY8ZhLU2DiBvrvJZZYsH7TvCZJSgSmrvYtQzeomN2VGv")
-sender_eth = "a6df389b014C45155086Ef10f365D9AF3Ab3D812"
 location_bin = ".deploy_contract.bin"
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
