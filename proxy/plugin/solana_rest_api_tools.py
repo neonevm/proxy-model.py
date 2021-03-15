@@ -24,7 +24,7 @@ from web3.auto import w3
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
-#evm_loader_id = "9TdKEctsU5L7mfMTrdBrsxHnxGbTgMiUbtSoJrEZYecs"
+#evm_loader_id = "3xSVByoVjn6FHPH1hC3fuztXnEmzkfhTxUrBZEkwKwN9"
 location_bin = ".deploy_contract.bin"
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
@@ -339,18 +339,21 @@ def call_signed(acc, client, trx_raw):
     add_keys_05 = []
     if output_json["exit_status"] == 'succeed':
         for acc_desc in output_json["accounts"]:
+            call_inner_eth = acc_desc['address'][2:]
+            (call_inner, _) = create_program_address(call_inner_eth, evm_loader_id)
             if acc_desc["new"] == True:
-                call_inner_eth = acc_desc['address'][2:]
-                (call_inner, _) = create_program_address(call_inner_eth, evm_loader_id)
                 call_inner_info = client.get_account_info(call_inner)
                 if call_inner_info['result']['value'] is None:
                     print("Create solana call_inner account...")
                     cli = solana_cli(solana_url)
-                    output = cli.call("create-ether-account {} {} 10".format(evm_loader_id, call_inner_eth))
+                    output = cli.call("create-ether-account {} {} 10 10000".format(evm_loader_id, call_inner_eth))
                     result = json.loads(output.splitlines()[-1])
                     call_inner = result["solana"]
                     print("Done call_inner:", call_inner)
-                add_keys_05.append( AccountMeta(pubkey=call_inner, is_signer=False, is_writable=False))
+                add_keys_05.append(AccountMeta(pubkey=call_inner, is_signer=False, is_writable=True))
+            else:
+                if call_inner != contract_sol and call_inner != sender_sol :
+                    add_keys_05.append( AccountMeta(pubkey=call_inner, is_signer=False, is_writable=True))
 
     print("transaction:", evm_instruction.hex())
 
