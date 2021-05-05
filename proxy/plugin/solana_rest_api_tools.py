@@ -313,7 +313,7 @@ def call_signed(acc, client, ethTrx, storage, steps):
             trx.add(createEtherAccountTrx(client, address, evm_loader_id, acc, None)[0])
 
     accounts = [
-        AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
             AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
             AccountMeta(pubkey=sender_sol, is_signer=False, is_writable=True),
@@ -322,6 +322,7 @@ def call_signed(acc, client, ethTrx, storage, steps):
         ] + add_keys_05 + [
             AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
     ]
+    evm_loader_index = accounts.index(AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False)) + 1
 
     trx.add(TransactionInstruction(
         program_id=keccakprog,
@@ -349,10 +350,14 @@ def call_signed(acc, client, ethTrx, storage, steps):
 
         logger.debug("Continue")
         result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="recent"))
-        if (result['result']['meta']['innerInstructions'] and result['result']['meta']['innerInstructions'][0]['instructions']):
-            data = b58decode(result['result']['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-            if (data[0] == 6):
-                return result['result']['transaction']['signatures'][0]
+        innerInstruction = result['result']['meta']['innerInstructions']
+        innerInstruction = next((i for i in innerInstruction if i["index"] == 0), None)
+        if (innerInstruction and innerInstruction['instructions']):
+            instruction = innerInstruction['instructions'][-1]
+            if (instruction['programIdIndex'] == evm_loader_index):
+                data = b58decode(instruction['data'])
+                if (data[0] == 6):
+                    return result['result']['transaction']['signatures'][0]
 
 
 def deploy(contract, evm_loader):
