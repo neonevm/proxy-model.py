@@ -42,7 +42,7 @@ class EthereumModel:
     def __init__(self):
         # Initialize user account
         res = solana_cli().call("config get")
-        res = res.splitlines()[-1]
+        res = res.splitlines()[-2]
         substr = "Keypair Path: "
         if not res.startswith(substr):
             raise Exception("cannot get keypair path")
