@@ -236,7 +236,7 @@ def solana2ether(public_key):
     from web3 import Web3
     return bytes(Web3.keccak(bytes.fromhex(public_key))[-20:])
 
-def create_program_address(ether, program_id, base):
+def ether2program(ether, program_id, base):
     if isinstance(ether, str):
         if ether.startswith('0x'): ether = ether[2:]
     else: ether = ether.hex()
@@ -244,7 +244,7 @@ def create_program_address(ether, program_id, base):
     items = output.rstrip().split(' ')
     return (items[0], int(items[1]))
 
-def create_seed_address(ether, program_id, base):
+def ether2seed(ether, program_id, base):
     if isinstance(ether, str):
         if ether.startswith('0x'): ether = ether[2:]
     else: ether = ether.hex()
@@ -354,7 +354,7 @@ def createEtherAccountTrx(client, ether, evm_loader_id, signer, code_acc=None):
     if isinstance(ether, str):
         if ether.startswith('0x'): ether = ether[2:]
     else: ether = ether.hex()
-    (sol, nonce) = create_program_address(ether, evm_loader_id, signer.public_key())
+    (sol, nonce) = ether2program(ether, evm_loader_id, signer.public_key())
     logger.debug('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
     seed = b58encode(bytes.fromhex(ether))
     base = signer.public_key()
@@ -395,7 +395,7 @@ def createEtherAccount(client, ether, evm_loader_id, signer, space=0):
 def deploy_contract(acc, client, ethTrx, storage, steps):
 
     sender_ether = bytes.fromhex(ethTrx.sender())
-    (sender_sol, _) = create_program_address(sender_ether.hex(), evm_loader_id, acc.public_key())
+    (sender_sol, _) = ether2program(sender_ether.hex(), evm_loader_id, acc.public_key())
     logger.debug("Sender account solana: %s %s", sender_ether, sender_sol)
 
     #info = _getAccountData(client, sender_sol, ACCOUNT_INFO_LAYOUT.sizeof())
@@ -405,8 +405,8 @@ def deploy_contract(acc, client, ethTrx, storage, steps):
     # Create legacy contract address from (sender_eth, nonce)
     #rlp = pack(sender_ether, ethTrx.nonce or None)
     contract_eth = keccak_256(rlp.encode((sender_ether, ethTrx.nonce))).digest()[-20:]
-    (contract_sol, contract_nonce) = create_program_address(contract_eth.hex(), evm_loader_id, acc.public_key())
-    (code_sol, code_nonce, code_seed) = create_seed_address(contract_eth.hex(), evm_loader_id, acc.public_key())
+    (contract_sol, contract_nonce) = ether2program(contract_eth.hex(), evm_loader_id, acc.public_key())
+    (code_sol, code_nonce, code_seed) = ether2seed(contract_eth.hex(), evm_loader_id, acc.public_key())
 
     logger.debug("Legacy contract address ether: %s", contract_eth.hex())
     logger.debug("Legacy contract address solana: %s %s", contract_sol, contract_nonce)
@@ -502,12 +502,12 @@ def _getAccountData(client, account, expected_length, owner=None):
     return data
 
 def getAccountInfo(client, eth_acc, base_account):
-    (account_sol, nonce) = create_program_address(bytes(eth_acc).hex(), evm_loader_id, base_account)
+    (account_sol, nonce) = ether2program(bytes(eth_acc).hex(), evm_loader_id, base_account)
     info = _getAccountData(client, account_sol, ACCOUNT_INFO_LAYOUT.sizeof())
     return AccountInfo.frombytes(info)
 
 def getLamports(client, evm_loader, eth_acc, base_account):
-    (account, nonce) = create_program_address(bytes(eth_acc).hex(), evm_loader, base_account)
+    (account, nonce) = ether2program(bytes(eth_acc).hex(), evm_loader, base_account)
     return int(client.get_balance(account, commitment="recent")['result']['value'])
 
 
