@@ -16,7 +16,7 @@ import rlp
 from .eth_proto import Trx
 from solana.rpc.types import TxOpts
 import re
-from solana.rpc.commitment import Confirmed
+from solana.rpc.commitment import Confirmed, Recent
 from solana.rpc.api import SendTransactionError
 
 from construct import Bytes, Int8ul, Int32ul, Int64ul, Struct as cStruct
@@ -339,11 +339,31 @@ def send_measured_transaction(client, trx, acc):
         logger.info("Failed result: %s"%json.dumps(result, indent=3))
     return result
 
+def send_transaction_wo_confirmation(client, trx, acc):
+    result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=Recent))
+    return result["result"]
+
 def check_if_program_exceeded_instructions(err_result):
     err_pattern = "Program failed to complete: exceeded maximum number of instructions allowed"
-    if err_result['data']['logs'][-1].find(err_pattern) >= 0 or err_result['data']['logs'][-2].find(err_pattern) >= 0:
+    if len(err_result['data']['logs']) > 1 and (err_result['data']['logs'][-1].find(err_pattern) >= 0 or err_result['data']['logs'][-2].find(err_pattern) >= 0):
         return True
     return False
+
+def check_if_error_after_result(err_result):
+    err_invalid_account = "invalid account data for instruction"
+    err_already_processed = "This transaction has already been processed"
+    if err_result['message'].find(err_invalid_account) >= 0 or err_result['message'].find(err_already_processed) >= 0:
+        return True
+    return False
+
+def check_sequental_results(client, result_list):
+    for trx in result_list:
+        confirm_transaction(client, trx)
+        result = client.get_confirmed_transaction(trx)
+        (succed, signature) = check_if_continue_returned(result)
+        if succed:
+            return signature
+    raise Exception("Do not found result transaction")
 
 def check_if_continue_returned(result):
     # print(result["result"])
@@ -361,13 +381,14 @@ def check_if_continue_returned(result):
     return (False, ())
 
 def call_continue(acc, client, step_count, accounts):
+    results = []
     try:
         while(True):
             result = sol_instr_10_continue(acc, client, step_count, accounts)
-            (succed, signature) = check_if_continue_returned(result)
-            if succed:
-                return signature
+            results.append(result)
     except Exception as err:
+        if check_if_error_after_result(err.result):
+            return check_sequental_results(client, results)
         sol_instr_12_cancel(acc, client, accounts)
         raise
 
@@ -381,7 +402,7 @@ def sol_instr_10_continue(acc, client, initial_step_count, accounts):
 
         print("Step count {}", step_count)
         try:
-            result = send_measured_transaction(client, trx, acc)
+            result = send_transaction_wo_confirmation(client, trx, acc)
             return result
         except SendTransactionError as err:
             if check_if_program_exceeded_instructions(err.result):
