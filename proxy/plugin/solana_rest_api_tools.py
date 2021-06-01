@@ -350,9 +350,8 @@ def check_if_program_exceeded_instructions(err_result):
     return False
 
 def check_if_error_after_result(err_result):
-    err_invalid_account = "invalid account data for instruction"
-    err_already_processed = "This transaction has already been processed"
-    if err_result['message'].find(err_invalid_account) >= 0 or err_result['message'].find(err_already_processed) >= 0:
+    err_invalid_account = "custom program error: 0xff00ff00"
+    if err_result['message'].find(err_invalid_account) >= 0:
         return True
     return False
 
@@ -399,14 +398,16 @@ def sol_instr_10_continue(acc, client, initial_step_count, accounts):
         trx.add(TransactionInstruction(program_id=evm_loader_id,
                                        data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
                                        keys= accounts))
-
-        print("Step count {}", step_count)
+        logger.debug("Step count {}".format(step_count))
         try:
             result = send_transaction_wo_confirmation(client, trx, acc)
             return result
         except SendTransactionError as err:
+            print(err.result['message'])
             if check_if_program_exceeded_instructions(err.result):
                 step_count = int(step_count * 90 / 100)
+            elif err.result['message'].find("This transaction has already been processed") >= 0:
+                continue
             else:
                 raise
     raise Exception("Can't execute even one EVM instruction")
