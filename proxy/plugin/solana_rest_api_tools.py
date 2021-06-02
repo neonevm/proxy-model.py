@@ -350,7 +350,7 @@ def check_if_program_exceeded_instructions(err_result):
     return False
 
 def check_if_error_after_result(err_result):
-    err_invalid_account = "custom program error: 0xff00ff00"
+    err_invalid_account = "custom program error: 0x1"
     if err_result['message'].find(err_invalid_account) >= 0:
         return True
     return False
