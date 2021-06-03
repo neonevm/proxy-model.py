@@ -358,11 +358,26 @@ def error_after_return(err_result):
         return True
     return False
 
+def custom_error(result):
+    if "result" not in result:
+        return False
+    if "meta" not in result["result"]:
+        return False
+    if "err" not in result["result"]["meta"]:
+        return False
+    if "InstructionError" not in result["result"]["meta"]["err"]:
+        return False
+    for err in result["result"]["meta"]["err"]["InstructionError"]:
+        if "Custom" in err and err["Custom"] == 1:
+            return True
+    return False
+
 def process_sent_transactions(client, result_list):
     for trx in result_list:
         confirm_transaction(client, trx)
         result = client.get_confirmed_transaction(trx)
-        get_measurements(result)
+        if not custom_error(result):
+            get_measurements(result)
         (finded, signature) = find_return_in_reciept(result)
         if finded:
             return signature
