@@ -322,6 +322,14 @@ def extract_measurements_from_receipt(receipt):
                 })
     return result
 
+def get_measurements(result):
+    try:
+        measurements = extract_measurements_from_receipt(result)
+        for m in measurements: logger.info(json.dumps(m))
+    except Exception as err:
+        logger.error("Can't get measurements %s"%err)
+        logger.info("Failed result: %s"%json.dumps(result, indent=3))
+
 def send_transaction(client, trx, acc):
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
     confirm_transaction(client, result["result"])
@@ -331,12 +339,7 @@ def send_transaction(client, trx, acc):
 # Do not rename this function! This name used in CI measurements (see function `cleanup_docker` in .buildkite/steps/deploy-test.sh)
 def send_measured_transaction(client, trx, acc):
     result = send_transaction(client, trx, acc)
-    try:
-        measurements = extract_measurements_from_receipt(result)
-        for m in measurements: logger.info(json.dumps(m))
-    except Exception as err:
-        logger.error("Can't get measurements %s"%err)
-        logger.info("Failed result: %s"%json.dumps(result, indent=3))
+    get_measurements(result)
     return result
 
 def send_transaction_wo_confirmation(client, trx, acc):
@@ -359,6 +362,7 @@ def check_sequental_results(client, result_list):
     for trx in result_list:
         confirm_transaction(client, trx)
         result = client.get_confirmed_transaction(trx)
+        get_measurements(result)
         (succed, signature) = check_if_continue_returned(result)
         if succed:
             return signature
