@@ -342,33 +342,33 @@ def send_measured_transaction(client, trx, acc):
     get_measurements(result)
     return result
 
-def send_transaction_wo_confirmation(client, trx, acc):
+def send_transaction_no_confirm(client, trx, acc):
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=Recent))
     return result["result"]
 
-def check_if_program_exceeded_instructions(err_result):
+def program_exceeded_instructions(err_result):
     err_pattern = "Program failed to complete: exceeded maximum number of instructions allowed"
     if len(err_result['data']['logs']) > 1 and (err_result['data']['logs'][-1].find(err_pattern) >= 0 or err_result['data']['logs'][-2].find(err_pattern) >= 0):
         return True
     return False
 
-def check_if_error_after_result(err_result):
+def error_after_return(err_result):
     err_invalid_account = "custom program error: 0x1"
     if err_result['message'].find(err_invalid_account) >= 0:
         return True
     return False
 
-def check_sequental_results(client, result_list):
+def process_sent_transactions(client, result_list):
     for trx in result_list:
         confirm_transaction(client, trx)
         result = client.get_confirmed_transaction(trx)
         get_measurements(result)
-        (succed, signature) = check_if_continue_returned(result)
-        if succed:
+        (finded, signature) = find_return_in_reciept(result)
+        if finded:
             return signature
     raise Exception("Do not found result transaction")
 
-def check_if_continue_returned(result):
+def find_return_in_reciept(result):
     # logger.debug(result)
     acc_meta_lst = result["result"]["transaction"]["message"]["accountKeys"]
     evm_loader_index = acc_meta_lst.index(evm_loader_id)
@@ -390,7 +390,7 @@ def call_continue(acc, client, step_count, accounts):
         while(True):
             result = sol_instr_10_continue(acc, client, step_count, accounts, transaction_id)
             if result == None:
-                return check_sequental_results(client, results)
+                return process_sent_transactions(client, results)
             results.append(result)
             transaction_id = transaction_id + 1
     except Exception as err:
@@ -405,14 +405,14 @@ def sol_instr_10_continue(acc, client, initial_step_count, accounts, transaction
                                        data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little') + transaction_id.to_bytes(4, byteorder='little'),
                                        keys= accounts))
         try:
-            result = send_transaction_wo_confirmation(client, trx, acc)
+            result = send_transaction_no_confirm(client, trx, acc)
             logger.debug("Step count {} for {}".format(step_count, result))
             return result
         except SendTransactionError as err:
             logger.debug(err.result['message'])
-            if check_if_program_exceeded_instructions(err.result):
+            if program_exceeded_instructions(err.result):
                 step_count = int(step_count * 90 / 100)
-            elif check_if_error_after_result(err.result):
+            elif error_after_return(err.result):
                 return None
             else:
                 raise
