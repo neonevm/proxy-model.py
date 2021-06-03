@@ -389,11 +389,11 @@ def call_continue(acc, client, step_count, accounts):
     try:
         while(True):
             result = sol_instr_10_continue(acc, client, step_count, accounts, transaction_id)
+            if result == None:
+                return check_sequental_results(client, results)
             results.append(result)
             transaction_id = transaction_id + 1
     except Exception as err:
-        if check_if_error_after_result(err.result):
-            return check_sequental_results(client, results)
         sol_instr_12_cancel(acc, client, accounts)
         raise
 
@@ -412,8 +412,8 @@ def sol_instr_10_continue(acc, client, initial_step_count, accounts, transaction
             logger.debug(err.result['message'])
             if check_if_program_exceeded_instructions(err.result):
                 step_count = int(step_count * 90 / 100)
-            elif err.result['message'].find("This transaction has already been processed") >= 0:
-                continue
+            elif check_if_error_after_result(err.result):
+                return None
             else:
                 raise
     raise Exception("Can't execute even one EVM instruction")
