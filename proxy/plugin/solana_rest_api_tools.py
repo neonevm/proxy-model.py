@@ -322,6 +322,7 @@ def extract_measurements_from_receipt(receipt):
                 })
     return result
 
+# Do not rename this function! This name used in CI measurements (see function `cleanup_docker` in .buildkite/steps/deploy-test.sh)
 def get_measurements(result):
     try:
         measurements = extract_measurements_from_receipt(result)
@@ -336,7 +337,6 @@ def send_transaction(client, trx, acc):
     result = client.get_confirmed_transaction(result["result"])
     return result
 
-# Do not rename this function! This name used in CI measurements (see function `cleanup_docker` in .buildkite/steps/deploy-test.sh)
 def send_measured_transaction(client, trx, acc):
     result = send_transaction(client, trx, acc)
     get_measurements(result)
