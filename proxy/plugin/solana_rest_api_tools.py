@@ -365,7 +365,7 @@ def check_sequental_results(client, result_list):
     raise Exception("Do not found result transaction")
 
 def check_if_continue_returned(result):
-    # print(result["result"])
+    logger.debug(result)
     acc_meta_lst = result["result"]["transaction"]["message"]["accountKeys"]
     evm_loader_index = acc_meta_lst.index(evm_loader_id)
 
@@ -381,29 +381,31 @@ def check_if_continue_returned(result):
 
 def call_continue(acc, client, step_count, accounts):
     results = []
+    transaction_id = 0
     try:
         while(True):
-            result = sol_instr_10_continue(acc, client, step_count, accounts)
+            result = sol_instr_10_continue(acc, client, step_count, accounts, transaction_id)
             results.append(result)
+            transaction_id = transaction_id + 1
     except Exception as err:
         if check_if_error_after_result(err.result):
             return check_sequental_results(client, results)
         sol_instr_12_cancel(acc, client, accounts)
         raise
 
-def sol_instr_10_continue(acc, client, initial_step_count, accounts):
+def sol_instr_10_continue(acc, client, initial_step_count, accounts, transaction_id):
     step_count = initial_step_count
     while step_count > 0:
         trx = Transaction()
         trx.add(TransactionInstruction(program_id=evm_loader_id,
-                                       data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+                                       data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little') + transaction_id.to_bytes(4, byteorder='little'),
                                        keys= accounts))
-        logger.debug("Step count {}".format(step_count))
         try:
             result = send_transaction_wo_confirmation(client, trx, acc)
+            logger.debug("Step count {}".format(step_count))
             return result
         except SendTransactionError as err:
-            print(err.result['message'])
+            logger.debug(err.result['message'])
             if check_if_program_exceeded_instructions(err.result):
                 step_count = int(step_count * 90 / 100)
             elif err.result['message'].find("This transaction has already been processed") >= 0:
