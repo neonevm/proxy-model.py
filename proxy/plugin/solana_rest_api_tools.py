@@ -369,7 +369,7 @@ def check_sequental_results(client, result_list):
     raise Exception("Do not found result transaction")
 
 def check_if_continue_returned(result):
-    logger.debug(result)
+    # logger.debug(result)
     acc_meta_lst = result["result"]["transaction"]["message"]["accountKeys"]
     evm_loader_index = acc_meta_lst.index(evm_loader_id)
 
@@ -406,7 +406,7 @@ def sol_instr_10_continue(acc, client, initial_step_count, accounts, transaction
                                        keys= accounts))
         try:
             result = send_transaction_wo_confirmation(client, trx, acc)
-            logger.debug("Step count {}".format(step_count))
+            logger.debug("Step count {} for {}".format(step_count, result))
             return result
         except SendTransactionError as err:
             logger.debug(err.result['message'])
