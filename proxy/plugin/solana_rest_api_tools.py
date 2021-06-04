@@ -352,37 +352,37 @@ def program_exceeded_instructions(err_result):
         return True
     return False
 
-def error_after_return(err_result):
+def uninitialized_storage_account_error(err_result):
+    # if err message is like
+    # {'code': -32002, 'message': 'Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1', 'data': {'err':.......
     err_invalid_account = "custom program error: 0x1"
-    if err_result['message'].find(err_invalid_account) >= 0:
+    if err_result.get("message") != None and err_result['message'].find(err_invalid_account) >= 0:
         return True
+    # if err message is like
+    # {"jsonrpc":"2.0","result":{"blockTime":1622732053,"meta":{"err":{"InstructionError":[0,{"Custom":1}]},.......
+    sub_err = get_nested(err_result, ["result", "meta", "err", "InstructionError"])
+    if not sub_err == None:
+        if not isinstance(sub_err, list) and not isinstance(sub_err, tuple):
+            return False
+        for err in sub_err:
+            if isinstance(err, dict) and err.get("Custom") != None and err["Custom"] == 1:
+                return True
     return False
 
-def custom_error(result):
-    err = result.get("result")
-    if err == None:
-        return False
-    err = err.get("meta")
-    if err == None:
-        return False
-    err = err.get("err")
-    if err == None:
-        return False
-    err = err.get("InstructionError")
-    if err == None:
-        return False
-    if not isinstance(err, list) and not isinstance(err, tuple):
-        return False
-    for err in result["result"]["meta"]["err"]["InstructionError"]:
-        if isinstance(err, dict) and err.get("Custom") != None and err["Custom"] == 1:
-            return True
-    return False
+def get_nested(my_dict, keys=[]):
+    key = keys.pop(0)
+    sub_dict = my_dict.get(key)
+    if sub_dict == None:
+        return None
+    if len(keys) == 0:
+        return sub_dict
+    return get_nested(sub_dict, keys)
 
 def process_sent_transactions(client, result_list):
     for trx in result_list:
         confirm_transaction(client, trx)
         result = client.get_confirmed_transaction(trx)
-        if not custom_error(result):
+        if not uninitialized_storage_account_error(result):
             get_measurements(result)
         (finded, signature) = find_return_in_reciept(result)
         if finded:
@@ -434,7 +434,7 @@ def sol_instr_10_continue(acc, client, initial_step_count, accounts, transaction
             logger.debug(err.result['message'])
             if program_exceeded_instructions(err.result):
                 step_count = int(step_count * 90 / 100)
-            elif error_after_return(err.result):
+            elif uninitialized_storage_account_error(err.result):
                 return None
             else:
                 raise
