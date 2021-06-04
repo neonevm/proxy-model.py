@@ -407,16 +407,17 @@ def find_return_in_reciept(result):
 def call_continue(acc, client, step_count, accounts):
     results = []
     transaction_id = 0
-    try:
-        while(True):
+    while(True):
+        result = object()
+        try:
             result = sol_instr_10_continue(acc, client, step_count, accounts, transaction_id)
-            if result == None:
-                return process_sent_transactions(client, results)
-            results.append(result)
-            transaction_id = transaction_id + 1
-    except Exception as err:
-        sol_instr_12_cancel(acc, client, accounts)
-        raise
+        except Exception as err:
+            sol_instr_12_cancel(acc, client, accounts)
+            raise
+        if result == None:
+            return process_sent_transactions(client, results)
+        results.append(result)
+        transaction_id = transaction_id + 1
 
 def sol_instr_10_continue(acc, client, initial_step_count, accounts, transaction_id):
     step_count = initial_step_count
