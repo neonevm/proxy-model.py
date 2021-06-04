@@ -369,10 +369,12 @@ def custom_error(result):
     if err == None:
         return False
     err = err.get("InstructionError")
-    if err == None or not isinstance(err, dict):
+    if err == None:
+        return False
+    if not isinstance(err, list) and not isinstance(err, tuple):
         return False
     for err in result["result"]["meta"]["err"]["InstructionError"]:
-        if err.get("Custom") != None and err["Custom"] == 1:
+        if isinstance(err, dict) and err.get("Custom") != None and err["Custom"] == 1:
             return True
     return False
 
