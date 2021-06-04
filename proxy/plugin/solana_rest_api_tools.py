@@ -359,16 +359,20 @@ def error_after_return(err_result):
     return False
 
 def custom_error(result):
-    if "result" not in result:
+    err = result.get("result")
+    if err == None:
         return False
-    if "meta" not in result["result"]:
+    err = err.get("meta")
+    if err == None:
         return False
-    if "err" not in result["result"]["meta"]:
+    err = err.get("err")
+    if err == None:
         return False
-    if "InstructionError" not in result["result"]["meta"]["err"]:
+    err = err.get("InstructionError")
+    if err == None or not isinstance(err, dict):
         return False
     for err in result["result"]["meta"]["err"]["InstructionError"]:
-        if "Custom" in err and err["Custom"] == 1:
+        if err.get("Custom") != None and err["Custom"] == 1:
             return True
     return False
 
