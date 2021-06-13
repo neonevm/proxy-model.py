@@ -355,9 +355,7 @@ def check_if_continue_returned(result, tx_count):
     if (innerInstruction and innerInstruction['instructions']):
         instruction = innerInstruction['instructions'][-1]
         if (instruction['programIdIndex'] == evm_loader_index):
-            logger.debug(evm_loader_index)
             data = b58decode(instruction['data'])
-            logger.debug(data[0])
             if (data[0] == 6):
                 return (True, result['result']['transaction']['signatures'][0])
     return (False, ())
@@ -392,12 +390,9 @@ def sol_instr_10_continue(acc, client, initial_step_count, accounts):
                                             keys= accounts))
         try:
             result = send_measured_transaction(client, trx, acc)
-            logger.debug("Trx count {}".format(tx_count))
-            logger.debug("Step count {}".format(step_count))
+            logger.debug("Step count = {}; Trx count = {}".format(step_count, tx_count))
             return (result, tx_count)
         except SendTransactionError as err:
-            logger.debug(client.get_balance(acc.public_key(), commitment=Confirmed))
-            logger.debug(err.result['message'])
             if program_exceeded_instructions(err.result):
                 step_count = int(step_count * 90 / 100)
             elif uninitialized_storage_account_error(err.result):
