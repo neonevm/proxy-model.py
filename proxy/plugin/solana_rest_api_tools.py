@@ -346,7 +346,7 @@ def program_exceeded_instructions(err_result):
     return False
 
 def check_if_continue_returned(result, tx_count):
-    logger.debug(result["result"])
+    # logger.debug(result["result"])
     acc_meta_lst = result["result"]["transaction"]["message"]["accountKeys"]
     evm_loader_index = acc_meta_lst.index(evm_loader_id)
 
