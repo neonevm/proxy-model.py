@@ -339,14 +339,14 @@ def send_measured_transaction(client, trx, acc):
         logger.info("Failed result: %s"%json.dumps(result, indent=3))
     return result
 
-def check_if_program_exceeded_instructions(err_result):
+def program_exceeded_instructions(err_result):
     err_pattern = "Program failed to complete: exceeded maximum number of instructions allowed"
     if err_result['data']['logs'][-1].find(err_pattern) >= 0 or err_result['data']['logs'][-2].find(err_pattern) >= 0:
         return True
     return False
 
 def check_if_continue_returned(result):
-    # print(result["result"])
+    logger.debug(result["result"])
     acc_meta_lst = result["result"]["transaction"]["message"]["accountKeys"]
     evm_loader_index = acc_meta_lst.index(evm_loader_id)
 
@@ -355,10 +355,20 @@ def check_if_continue_returned(result):
     if (innerInstruction and innerInstruction['instructions']):
         instruction = innerInstruction['instructions'][-1]
         if (instruction['programIdIndex'] == evm_loader_index):
+            logger.debug(evm_loader_index)
             data = b58decode(instruction['data'])
+            logger.debug(data[0])
             if (data[0] == 6):
                 return (True, result['result']['transaction']['signatures'][0])
     return (False, ())
+
+def uninitialized_storage_account_error(err_result):
+    # if err message is like
+    # {'code': -32002, 'message': 'Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1', 'data': {'err':.......
+    err_invalid_account = "custom program error: 0x1"
+    if err_result.get("message") != None and err_result['message'].find(err_invalid_account) >= 0:
+        return True
+    return False
 
 def call_continue(acc, client, step_count, accounts):
     try:
@@ -373,19 +383,25 @@ def call_continue(acc, client, step_count, accounts):
 
 def sol_instr_10_continue(acc, client, initial_step_count, accounts):
     step_count = initial_step_count
-    while step_count > 0:
+    tx_count = 5
+    while step_count > 0 and tx_count > 0:
         trx = Transaction()
-        trx.add(TransactionInstruction(program_id=evm_loader_id,
-                                       data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
-                                       keys= accounts))
-
-        print("Step count {}", step_count)
+        for _ in range(tx_count):
+            trx.add(TransactionInstruction(program_id=evm_loader_id,
+                                            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+                                            keys= accounts))
         try:
             result = send_measured_transaction(client, trx, acc)
+            logger.debug("Trx count {}".format(tx_count))
+            logger.debug("Step count {}".format(step_count))
             return result
         except SendTransactionError as err:
-            if check_if_program_exceeded_instructions(err.result):
+            logger.debug(client.get_balance(acc.public_key(), commitment=Confirmed))
+            logger.debug(err.result['message'])
+            if program_exceeded_instructions(err.result):
                 step_count = int(step_count * 90 / 100)
+            elif uninitialized_storage_account_error(err.result):
+                tx_count = tx_count - 1
             else:
                 raise
     raise Exception("Can't execute even one EVM instruction")
