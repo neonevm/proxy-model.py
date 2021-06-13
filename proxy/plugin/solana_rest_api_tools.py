@@ -345,13 +345,13 @@ def program_exceeded_instructions(err_result):
         return True
     return False
 
-def check_if_continue_returned(result):
+def check_if_continue_returned(result, tx_count):
     logger.debug(result["result"])
     acc_meta_lst = result["result"]["transaction"]["message"]["accountKeys"]
     evm_loader_index = acc_meta_lst.index(evm_loader_id)
 
     innerInstruction = result['result']['meta']['innerInstructions']
-    innerInstruction = next((i for i in innerInstruction if i["index"] == 0), None)
+    innerInstruction = next((i for i in innerInstruction if i["index"] == (tx_count - 1)), None)
     if (innerInstruction and innerInstruction['instructions']):
         instruction = innerInstruction['instructions'][-1]
         if (instruction['programIdIndex'] == evm_loader_index):
@@ -373,8 +373,8 @@ def uninitialized_storage_account_error(err_result):
 def call_continue(acc, client, step_count, accounts):
     try:
         while(True):
-            result = sol_instr_10_continue(acc, client, step_count, accounts)
-            (succed, signature) = check_if_continue_returned(result)
+            (result, tx_count) = sol_instr_10_continue(acc, client, step_count, accounts)
+            (succed, signature) = check_if_continue_returned(result, tx_count)
             if succed:
                 return signature
     except Exception as err:
@@ -394,7 +394,7 @@ def sol_instr_10_continue(acc, client, initial_step_count, accounts):
             result = send_measured_transaction(client, trx, acc)
             logger.debug("Trx count {}".format(tx_count))
             logger.debug("Step count {}".format(step_count))
-            return result
+            return (result, tx_count)
         except SendTransactionError as err:
             logger.debug(client.get_balance(acc.public_key(), commitment=Confirmed))
             logger.debug(err.result['message'])
@@ -449,8 +449,8 @@ def call_signed(acc, client, ethTrx, storage, steps):
             AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
             AccountMeta(pubkey=sender_sol, is_signer=False, is_writable=True),
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
         ] + add_keys_05 + [
+            AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
     ]
 
