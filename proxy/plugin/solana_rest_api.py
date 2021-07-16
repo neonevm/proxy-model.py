@@ -76,9 +76,9 @@ class EthereumModel:
         return 0
 
     def eth_estimateGas(self, param):
-        if not param['data']:
-            raise Exception("Missing data in eth_estimateGas param")
         try:
+            if not param['data']:
+                raise Exception("Missing data in eth_estimateGas param")
             caller_id = param['from'] if 'from' in param else "0x0000000000000000000000000000000000000000"
             contract_id = param['to'] if 'to' in param else "0x0000000000000000000000000000000000000000"
             data = param['data']
