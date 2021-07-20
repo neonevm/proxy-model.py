@@ -79,8 +79,8 @@ class EthereumModel:
         try:
             if not param['data']:
                 raise Exception("Missing data in eth_estimateGas param")
-            caller_id = param['from'] if 'from' in param else "0x0000000000000000000000000000000000000000"
-            contract_id = param['to'] if 'to' in param else "0x0000000000000000000000000000000000000000"
+            caller_id = param['from']
+            contract_id = param['to'] if 'to' in param else "deploy"
             data = param['data']
             result = call_emulated(contract_id, caller_id, data)
             return result['used_gas']
