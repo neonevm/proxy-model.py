@@ -232,7 +232,7 @@ def confirm_transaction(client, tx_sig, confirmations=0):
                status['confirmationStatus'] == 'confirmed' and status['confirmations'] >= confirmations):
 #            logger.debug('Confirmed transaction:', resp)
                 return
-        sleep_time = 0.1
+        sleep_time = 1
         time.sleep(sleep_time)
         elapsed_time += sleep_time
     #if not resp["result"]:
@@ -518,7 +518,7 @@ def create_account_list_by_emulate(acc, client, ethTrx, storage):
     output_json = call_emulated(ethTrx.toAddress.hex(), sender_ether.hex(), ethTrx.callData.hex())
     logger.debug("emulator returns: %s", json.dumps(output_json, indent=3))
     for acc_desc in output_json["accounts"]:
-
+        acc_desc["writable"] = True
         address = bytes.fromhex(acc_desc["address"][2:])
         if address == ethTrx.toAddress:
             (contract_sol, code_sol) = (acc_desc["account"], acc_desc["contract"])
