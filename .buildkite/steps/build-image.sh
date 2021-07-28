@@ -4,7 +4,7 @@ set -euo pipefail
 REVISION=$(git rev-parse HEAD)
 
 set ${SOLANA_REVISION:=v1.7.6-resources}
-set ${EVM_LOADER_REVISION:=9443f841b3635650b0eff682a704b1ce88daffc5}
+set ${EVM_LOADER_REVISION:=b2cdd7ed80e2d7dc39a60f778b722856bc2c32cc}
 
 # Refreshing cybercoredev/solana:latest image is required to run .buildkite/steps/build-image.sh locally
 docker pull cybercoredev/solana:${SOLANA_REVISION}
