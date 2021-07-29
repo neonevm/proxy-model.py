@@ -220,7 +220,7 @@ class solana_cli:
 
 class neon_cli:
     def call(self, arguments):
-        cmd = 'neon-cli --url {} {}'.format(solana_url, arguments)
+        cmd = 'neon-cli -v -v -v -v --url {} {}'.format(solana_url, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
