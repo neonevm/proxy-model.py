@@ -87,12 +87,13 @@ class EthereumModel:
                 raise Exception("Missing data in eth_estimateGas param")
             caller_id = param['from']
             contract_id = param['to'] if 'to' in param else "deploy"
-            data = param['data']
-            result = call_emulated(contract_id, caller_id, data)
+            data = param['data'] if 'data' in param else ""
+            value = param['value'] if 'value' in param else ""
+            result = call_emulated(contract_id, caller_id, data, value)
             return result['used_gas']
         except Exception as err:
             logger.debug("Exception on eth_estimateGas: %s", err)
-            return 9999997
+            return 999999999
 
     def __repr__(self):
         return str(self.__dict__)
