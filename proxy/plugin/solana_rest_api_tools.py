@@ -201,9 +201,11 @@ class EthereumAddress:
     def __bytes__(self): return self.data
 
 
-def emulator(contract, sender, data, value):
-    data = data if data != None else ""
-    cmd = 'emulate --commitment=recent  --evm_loader {} {} {} {} {}'.format(evm_loader_id, sender, contract, data, value)
+def emulator(contract, sender, data, value, debug):
+    data = data if data is not None else ""
+    value = value if value is not None else ""
+    debug = debug if debug is not None else ""
+    cmd = '{} emulate --commitment=recent  --evm_loader {} {} {} {} {}'.format(debug, evm_loader_id, sender, contract, data, value)
     print(cmd)
     return neon_cli().call(cmd)
 
@@ -271,8 +273,8 @@ def ether2seed(ether, program_id, base):
     return (acc, 255, seed)
 
 
-def call_emulated(contract_id, caller_id, data, value=''):
-    output = emulator(contract_id, caller_id, data, value)
+def call_emulated(contract_id, caller_id, data=None, value=None, debug=None):
+    output = emulator(contract_id, caller_id, data, value, debug)
     logger.debug("call_emulated %s %s %s %s return %s", contract_id, caller_id, data, value, output)
     result = json.loads(output)
     exit_status = result['exit_status']
