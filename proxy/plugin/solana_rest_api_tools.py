@@ -270,7 +270,8 @@ def ether2seed(ether, program_id, base):
     logger.debug('ether2program: {} {} => {} (seed {})'.format(ether, 255, acc, seed))
     return (acc, 255, seed)
 
-def call_emulated(contract_id, caller_id, data, value):
+
+def call_emulated(contract_id, caller_id, data, value=''):
     output = emulator(contract_id, caller_id, data, value)
     logger.debug("call_emulated %s %s %s %s return %s", contract_id, caller_id, data, value, output)
     result = json.loads(output)
