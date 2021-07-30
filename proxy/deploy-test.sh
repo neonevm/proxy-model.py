@@ -12,8 +12,8 @@ arg=sys.argv[1]
 print(arg)
 import json
 resp = json.loads(arg)
-print('used_gas:', resp['used_gas'])
-assert resp['used_gas'] == 89078
+print('used_gas:', resp['result'])
+assert resp['result'] == 89078
 " "$RESPONSE"
 
 echo "Deploy test success"
