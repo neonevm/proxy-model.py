@@ -89,8 +89,7 @@ class EthereumModel:
             contract_id = param['to'] if 'to' in param else "deploy"
             data = param['data'] if 'data' in param else ""
             value = param['value'] if 'value' in param else ""
-            debug = param['debug'] if 'debug' in param else ""
-            result = call_emulated(contract_id, caller_id, data, value, debug)
+            result = call_emulated(contract_id, caller_id, data, value)
             return result['used_gas']
         except Exception as err:
             logger.debug("Exception on eth_estimateGas: %s", err)
