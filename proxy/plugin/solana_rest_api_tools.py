@@ -738,13 +738,16 @@ def deploy_contract(acc, client, ethTrx, storage, steps):
     if sender_sol_info['result']['value'] is None:
         trx.add(createEtherAccountTrx(client, sender_ether, evm_loader_id, acc)[0])
 
-    if client.get_balance(code_sol, commitment=Confirmed)['result']['value'] == 0:
+    contract_info = client.get_account_info(contract_sol, commitment=Confirmed, encoding="base64")['result']['value']
+    if contract_info is None:
         msg_size = len(ethTrx.signature() + len(ethTrx.unsigned_msg()).to_bytes(8, byteorder="little") + ethTrx.unsigned_msg())
         valids_size = (msg_size // 8) + 1
-        code_account_size = CODE_INFO_LAYOUT.sizeof() + msg_size + valids_size + 2048
+        code_account_size = CODE_INFO_LAYOUT.sizeof() + msg_size + valids_size + 1024*10
         trx.add(createAccountWithSeed(acc.public_key(), acc.public_key(), code_seed, 10**9, code_account_size, PublicKey(evm_loader_id)))
-    if client.get_balance(contract_sol, commitment=Confirmed)['result']['value'] == 0:
         trx.add(createEtherAccountTrx(client, contract_eth, evm_loader_id, acc, code_sol)[0])
+    else:
+        contract = ACCOUNT_INFO_LAYOUT.parse(base64.b64decode(contract_info['data'][0]))
+        code_sol = PublicKey(contract.code_acc)
     if len(trx.instructions):
         result = send_measured_transaction(client, trx, acc)
 
