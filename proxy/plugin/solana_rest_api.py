@@ -73,7 +73,7 @@ class EthereumModel:
         pass
 
     def eth_chainId(self):
-        return "0x6f"  # 111
+        return "0x6f" # 111
 
     def net_version(self):
         return '1600243666737'
@@ -94,7 +94,7 @@ class EthereumModel:
             return result['used_gas']
         except Exception as err:
             logger.debug("Exception on eth_estimateGas: %s", err)
-            return 999999999
+            raise
 
     def __repr__(self):
         return str(self.__dict__)
@@ -129,7 +129,7 @@ class EthereumModel:
         signatures = [trx['transaction']['signatures'][0] for trx in block['transactions']]
         eth_signatures = []
         for signature in signatures:
-            eth_signature = '0x' + keccak_256(base58.b58decode(signature)).hexdigest()
+            eth_signature = '0x'+keccak_256(base58.b58decode(signature)).hexdigest()
             self.signatures[eth_signature] = signature
             eth_signatures.append(eth_signature)
 
@@ -157,7 +157,7 @@ class EthereumModel:
             caller_id = obj['from'] if 'from' in obj else "0x0000000000000000000000000000000000000000"
             contract_id = obj['to']
             data = obj['data']
-            return "0x" + call_emulated(contract_id, caller_id, data)['result']
+            return "0x"+call_emulated(contract_id, caller_id, data)['result']
         except Exception as err:
             logger.debug("eth_call %s", err)
             return '0x'
@@ -168,27 +168,27 @@ class EthereumModel:
             acc_info = getAccountInfo(self.client, EthereumAddress(account), self.signer.public_key())
             return hex(int.from_bytes(acc_info.trx_count, 'little'))
         except Exception as err:
-            print("Can't get account info: %s" % err)
+            print("Can't get account info: %s"%err)
             return hex(0)
 
     def eth_getTransactionReceipt(self, trxId):
         receipt = self.signatures.get(trxId, None)
         logger.debug('getTransactionReceipt: %s %s', trxId, receipt)
         if not receipt:
-            logger.debug("Not found receipt")
+            logger.debug ("Not found receipt")
             return {
-                "transactionHash": '0x0',
-                "transactionIndex": '0x0',
-                "blockHash": '0x0',
-                "blockNumber": '0x0',
-                "from": '0x0',
-                "to": '0x0',
-                "gasUsed": '0x0',
-                "cumulativeGasUsed": '0x0',
-                "contractAddress": '0x0',
-                "logs": [],
-                "status": "0x0",
-                "logsBloom": '0x0'
+            "transactionHash":'0x0',
+            "transactionIndex":'0x0',
+            "blockHash":'0x0',
+            "blockNumber":'0x0',
+            "from":'0x0',
+            "to":'0x0',
+            "gasUsed":'0x0',
+            "cumulativeGasUsed":'0x0',
+            "contractAddress":'0x0',
+            "logs":[],
+            "status":"0x0",
+            "logsBloom":'0x0'
             }
 
         trx = self.client.get_confirmed_transaction(receipt)
@@ -212,21 +212,21 @@ class EthereumModel:
                     pos = 29
                     for _ in range(count_topics):
                         topic_bin = log[pos:pos + 32]
-                        topics.append('0x' + topic_bin.hex())
+                        topics.append('0x'+topic_bin.hex())
                         pos += 32
                     data = log[pos:]
-                    rec = {'address': '0x' + address.hex(),
-                           'topics': topics,
-                           'data': '0x' + data.hex(),
-                           'transactionLogIndex': hex(0),
-                           'transactionIndex': inner['index'],
-                           'blockNumber': hex(trx['result']['slot']),
-                           'transactionHash': trxId,
-                           'logIndex': log_index,
-                           'blockHash': '0x%064x' % trx['result']['slot']
-                           }
+                    rec = { 'address': '0x'+address.hex(),
+                            'topics': topics,
+                            'data': '0x'+data.hex(),
+                            'transactionLogIndex': hex(0),
+                            'transactionIndex': inner['index'],
+                            'blockNumber': hex(trx['result']['slot']),
+                            'transactionHash': trxId,
+                            'logIndex': log_index,
+                            'blockHash': '0x%064x'%trx['result']['slot']
+                        }
                     logs.append(rec)
-                    log_index += 1
+                    log_index +=1
                 elif int().from_bytes(instruction, "little") == 6:  # OnReturn evmInstruction code
                     if log[1] < 0xd0:
                         status = "0x1"
@@ -252,18 +252,18 @@ class EthereumModel:
         # logger.debug('DATA: %s', data.hex())
 
         result = {
-            "transactionHash": trxId,
-            "transactionIndex": hex(0),
-            "blockHash": '0x%064x' % trx['result']['slot'],
-            "blockNumber": hex(trx['result']['slot']),
-            "from": '0x' + self.eth_sender[trxId],
+            "transactionHash":trxId,
+            "transactionIndex":hex(0),
+            "blockHash":'0x%064x'%trx['result']['slot'],
+            "blockNumber":hex(trx['result']['slot']),
+            "from":'0x'+self.eth_sender[trxId],
             # "to":'',
-            "gasUsed": '0x%x' % gas_used,
-            "cumulativeGasUsed": '0x%x' % gas_used,
-            "contractAddress": self.contract_address.get(trxId),
+            "gasUsed":'0x%x' % gas_used,
+            "cumulativeGasUsed":'0x%x' % gas_used,
+            "contractAddress":self.contract_address.get(trxId),
             "logs": logs,
             "status": status,
-            "logsBloom": "0x" + '0' * 512
+            "logsBloom":"0x"+'0'*512
         }
         logger.debug('RESULT: %s', json.dumps(result, indent=3))
         return result
@@ -272,22 +272,22 @@ class EthereumModel:
         receipt = self.signatures.get(trxId, None)
         logger.debug('getTransactionReceipt: %s %s', trxId, receipt)
         if not receipt:
-            logger.debug("Not found receipt")
+            logger.debug ("Not found receipt")
             return {
-                "blockHash": '0x0',
-                "blockNumber": '0x0',
-                "from": '0x0',
-                "gas": '0x0',
-                "gasPrice": '0x0',
-                "hash": '0x0',
-                "input": '0x0',
-                "nonce": '0x0',
-                "to": '0x0',
-                "transactionIndex": '0x0',
-                "value": '0x0',
-                "v": '0x0',
-                "r": '0x0',
-                "s": '0x0'
+                "blockHash":'0x0',
+                "blockNumber":'0x0',
+                "from":'0x0',
+                "gas":'0x0',
+                "gasPrice":'0x0',
+                "hash":'0x0',
+                "input":'0x0',
+                "nonce":'0x0',
+                "to":'0x0',
+                "transactionIndex":'0x0',
+                "value":'0x0',
+                "v":'0x0',
+                "r":'0x0',
+                "s":'0x0'
             }
 
         trx = self.client.get_confirmed_transaction(receipt)
@@ -299,31 +299,31 @@ class EthereumModel:
 
         data = base58.b58decode(trx['result']['transaction']['message']['instructions'][0]['data'])
         logger.debug('DATA: %s', data.hex())
-        sender = self.eth_sender[trxId]
+        sender =  self.eth_sender[trxId]
         # nonce = int(self.eth_getTransactionCount('0x'+data[sender].hex(), ""), 16)
         nonce = 0
         # if nonce > 0 :
         #     nonce = nonce - 1
         ret = {
-            "blockHash": '0x%064x' % trx['result']['slot'],
-            "blockNumber": hex(trx['result']['slot']),
-            "from": '0x' + sender,
-            "gas": '0x%x' % trx['result']['meta']['fee'],
-            "gasPrice": '0x00',
-            "hash": trxId,
-            "input": "0x" + data.hex(),
-            "nonce": hex(nonce),
-            "to": '0x' + data[17:37].hex(),
-            "transactionIndex": hex(0),
-            "value": '0x00',
-            "v": hex(self.vrs[trxId][0]),
-            "r": hex(self.vrs[trxId][1]),
-            "s": hex(self.vrs[trxId][2])
+            "blockHash":'0x%064x'%trx['result']['slot'],
+            "blockNumber":hex(trx['result']['slot']),
+            "from":'0x'+sender,
+            "gas":'0x%x' % trx['result']['meta']['fee'],
+            "gasPrice":'0x00',
+            "hash":trxId,
+            "input":"0x"+data.hex(),
+            "nonce":hex(nonce),
+            "to":'0x'+data[17:37].hex(),
+            "transactionIndex":hex(0),
+            "value":'0x00',
+            "v":hex(self.vrs[trxId][0]),
+            "r":hex(self.vrs[trxId][1]),
+            "s":hex(self.vrs[trxId][2])
         }
-        logger.debug("eth_getTransactionByHash: %s", ret);
+        logger.debug ("eth_getTransactionByHash: %s", ret);
         return ret
 
-    def eth_getCode(self, param, param1):
+    def eth_getCode(self, param,  param1):
         return "0x01"
 
     def eth_sendRawTransaction(self, rawTrx):
