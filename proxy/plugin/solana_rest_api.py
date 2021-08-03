@@ -157,7 +157,7 @@ class EthereumModel:
             return "0x"+call_emulated(contract_id, caller_id, data)['result']
         except Exception as err:
             logger.debug("eth_call %s", err)
-            return '0x'
+            raise
 
     def eth_getTransactionCount(self, account, tag):
         logger.debug('eth_getTransactionCount: %s', account)
