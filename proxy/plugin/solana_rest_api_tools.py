@@ -1,4 +1,5 @@
-from solana.publickey import PublicKey
+import shlex
+
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from solana.sysvar import *
 from solana.blockhash import Blockhash
@@ -25,8 +26,8 @@ from spl.token.instructions import get_associated_token_address
 from construct import Bytes, Int8ul, Int32ul, Int64ul, Struct as cStruct
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
 from hashlib import sha256
-#from eth_keys import keys
 from web3.auto import w3
+import logging
 import logging
 
 logger = logging.getLogger(__name__)
@@ -223,7 +224,9 @@ class neon_cli:
     def call(self, arguments):
         cmd = 'neon-cli --url {} {}'.format(solana_url, arguments)
         try:
-            return subprocess.check_output(cmd, shell=True, universal_newlines=True)
+            args = shlex.split(cmd)
+            p = subprocess.run(args, stdout=subprocess.PIPE, timeout=0.1, universal_newlines=True)
+            return p.stdout
         except subprocess.CalledProcessError as err:
             import sys
             logger.debug("ERR: neon-cli error {}".format(err))
