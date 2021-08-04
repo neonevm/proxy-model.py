@@ -20,7 +20,7 @@ assert resp['result'] == 89078
 
 # Check eth_estimateGas on deploying a contract with the empty data
 # https://github.com/neonlabsorg/proxy-model.py/issues/122
-RESPONSE=$(curl -v --header "Content-Type: application/json" --data '{"method":"eth_estimateGas","id":1002,"jsonrpc":"2.0","params":[{"from":"0x55864414d401c9ff160043c50f6daca3bd22ccfc", "debug": "-v -v -v -v", "value": "0x0",}]}' $PROXY_URL)
+RESPONSE=$(curl -v --header "Content-Type: application/json" --data '{"method":"eth_estimateGas","id":1002,"jsonrpc":"2.0","params":[{"from":"0x55864414d401c9ff160043c50f6daca3bd22ccfc", "value": "0x0"}]}' $PROXY_URL)
 python3 -c "
 import sys
 arg=sys.argv[1]
