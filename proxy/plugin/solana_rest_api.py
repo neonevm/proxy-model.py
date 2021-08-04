@@ -85,7 +85,7 @@ class EthereumModel:
         try:
             caller_id = param['from'] if 'from' in param else "0x0000000000000000000000000000000000000000"
             contract_id = param['to'] if 'to' in param else "deploy"
-            data = param['data'] if 'data' in param else ""
+            data = param['data'] if 'data' in param else "None"
             value = param['value'] if 'value' in param else ""
             result = call_emulated(contract_id, caller_id, data, value)
             return result['used_gas']
@@ -153,8 +153,9 @@ class EthereumModel:
         try:
             caller_id = obj['from'] if 'from' in obj else "0x0000000000000000000000000000000000000000"
             contract_id = obj['to']
-            data = obj['data']
-            return "0x"+call_emulated(contract_id, caller_id, data)['result']
+            data = obj['data'] if 'data' in obj else "None"
+            value = obj['value'] if 'value' in obj else ""
+            return "0x"+call_emulated(contract_id, caller_id, data, value)['result']
         except Exception as err:
             logger.debug("eth_call %s", err)
             raise
