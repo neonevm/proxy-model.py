@@ -28,7 +28,6 @@ from .solana_rest_api_tools import EthereumAddress,  create_storage_account, evm
     Trx, deploy_contract, EthereumError
 from web3 import Web3
 import logging
-import random
 from ..core.acceptor.pool import signatures_glob, vrs_glob, contract_address_glob, eth_sender_glob, proxy_id_glob
 
 logger = logging.getLogger(__name__)

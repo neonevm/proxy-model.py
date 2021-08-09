@@ -1,4 +1,3 @@
-import shlex
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from solana.sysvar import *
 from solana.blockhash import Blockhash
