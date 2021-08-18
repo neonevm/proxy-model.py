@@ -105,8 +105,8 @@ class EthereumModel:
 
     def eth_blockNumber(self):
         slot = self.client.get_slot()['result']
-        logger.debug("eth_blockNumber %s", hex(slot))
-        return hex(slot)
+        logger.debug("eth_blockNumber %s", '0x'+hex(slot))
+        return '0x'+hex(slot)
 
     def eth_getBalance(self, account, tag):
         """account - address to check for balance.
@@ -116,7 +116,7 @@ class EthereumModel:
         logger.debug('eth_getBalance: %s %s', account, eth_acc)
         balance = getTokens(self.client, evm_loader_id, eth_acc, self.signer.public_key())
 
-        return hex(balance*10**9)
+        return '0x'+hex(balance*10**9)
 
     def eth_getBlockByNumber(self, tag, full):
         """Returns information about a block by block number.
@@ -171,10 +171,10 @@ class EthereumModel:
         logger.debug('eth_getTransactionCount: %s', account)
         try:
             acc_info = getAccountInfo(self.client, EthereumAddress(account), self.signer.public_key())
-            return hex(int.from_bytes(acc_info.trx_count, 'little'))
+            return '0x'+hex(int.from_bytes(acc_info.trx_count, 'little'))
         except Exception as err:
             print("Can't get account info: %s"%err)
-            return hex(0)
+            return '0x'+hex(0)
 
     def eth_getTransactionReceipt(self, trxId):
         receipt = self.signatures.get(trxId, None)
@@ -223,11 +223,11 @@ class EthereumModel:
                     rec = { 'address': '0x'+address.hex(),
                             'topics': topics,
                             'data': '0x'+data.hex(),
-                            'transactionLogIndex': hex(0),
-                            'transactionIndex': hex(inner['index']),
-                            'blockNumber': hex(trx['result']['slot']),
+                            'transactionLogIndex': '0x'+hex(0),
+                            'transactionIndex': '0x'+hex(inner['index']),
+                            'blockNumber': '0x'+hex(trx['result']['slot']),
                             'transactionHash': trxId,
-                            'logIndex': hex(log_index),
+                            'logIndex': '0x'+hex(log_index),
                             'blockHash': '0x%064x'%trx['result']['slot']
                         }
                     logs.append(rec)
@@ -258,16 +258,16 @@ class EthereumModel:
 
         result = {
             "transactionHash":trxId,
-            "transactionIndex":hex(0),
+            "transactionIndex":'0x'+hex(0),
             "blockHash":'0x%064x'%trx['result']['slot'],
-            "blockNumber":hex(trx['result']['slot']),
+            "blockNumber":'0x'+hex(trx['result']['slot']),
             "from":'0x'+self.eth_sender[trxId],
             # "to":'',
             "gasUsed":'0x%x' % gas_used,
             "cumulativeGasUsed":'0x%x' % gas_used,
             "contractAddress":self.contract_address.get(trxId),
             "logs": logs,
-            "status": status,
+            "status": '0x'+hex(status),
             "logsBloom":"0x"+'0'*512
         }
         logger.debug('RESULT: %s', json.dumps(result, indent=3))
@@ -311,19 +311,19 @@ class EthereumModel:
         #     nonce = nonce - 1
         ret = {
             "blockHash":'0x%064x'%trx['result']['slot'],
-            "blockNumber":hex(trx['result']['slot']),
+            "blockNumber":'0x'+hex(trx['result']['slot']),
             "from":'0x'+sender,
             "gas":'0x%x' % trx['result']['meta']['fee'],
             "gasPrice":'0x00',
             "hash":trxId,
             "input":"0x"+data.hex(),
-            "nonce":hex(nonce),
+            "nonce":'0x'+hex(nonce),
             "to":'0x'+data[17:37].hex(),
-            "transactionIndex":hex(0),
+            "transactionIndex":'0x'+hex(0),
             "value":'0x00',
-            "v":hex(self.vrs[trxId][0]),
-            "r":hex(self.vrs[trxId][1]),
-            "s":hex(self.vrs[trxId][2])
+            "v":'0x'+hex(self.vrs[trxId][0]),
+            "r":'0x'+hex(self.vrs[trxId][1]),
+            "s":'0x'+hex(self.vrs[trxId][2])
         }
         logger.debug ("eth_getTransactionByHash: %s", ret);
         return ret
