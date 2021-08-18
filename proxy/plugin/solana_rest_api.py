@@ -86,7 +86,7 @@ class EthereumModel:
         return '1600243666737'
 
     def eth_gasPrice(self):
-        return 0
+        return '0x'+hex(0)
 
     def eth_estimateGas(self, param):
         try:
