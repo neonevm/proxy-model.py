@@ -106,7 +106,7 @@ class EthereumModel:
     def eth_blockNumber(self):
         slot = self.client.get_slot()['result']
         logger.debug("eth_blockNumber %s", hex(slot))
-        return '0x'+hex(slot)
+        return hex(slot)
 
     def eth_getBalance(self, account, tag):
         """account - address to check for balance.
@@ -260,7 +260,7 @@ class EthereumModel:
             "transactionHash":trxId,
             "transactionIndex":'0x'+hex(0),
             "blockHash":'0x%064x'%trx['result']['slot'],
-            "blockNumber":'0x'+hex(trx['result']['slot']),
+            "blockNumber":hex(trx['result']['slot']),
             "from":'0x'+self.eth_sender[trxId],
             # "to":'',
             "gasUsed":'0x%x' % gas_used,
@@ -319,7 +319,7 @@ class EthereumModel:
             "input":"0x"+data.hex(),
             "nonce":hex(nonce),
             "to":'0x'+data[17:37].hex(),
-            "transactionIndex":'0x'+hex(0),
+            "transactionIndex":hex(0),
             "value":'0x00',
             "v":hex(self.vrs[trxId][0]),
             "r":hex(self.vrs[trxId][1]),
