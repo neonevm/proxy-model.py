@@ -171,10 +171,10 @@ class EthereumModel:
         logger.debug('eth_getTransactionCount: %s', account)
         try:
             acc_info = getAccountInfo(self.client, EthereumAddress(account), self.signer.public_key())
-            return '0x'+hex(int.from_bytes(acc_info.trx_count, 'little'))
+            return hex(int.from_bytes(acc_info.trx_count, 'little'))
         except Exception as err:
             print("Can't get account info: %s"%err)
-            return '0x'+hex(0)
+            return hex(0)
 
     def eth_getTransactionReceipt(self, trxId):
         receipt = self.signatures.get(trxId, None)
@@ -223,11 +223,11 @@ class EthereumModel:
                     rec = { 'address': '0x'+address.hex(),
                             'topics': topics,
                             'data': '0x'+data.hex(),
-                            'transactionLogIndex': '0x'+hex(0),
-                            'transactionIndex': '0x'+hex(inner['index']),
-                            'blockNumber': '0x'+hex(trx['result']['slot']),
+                            'transactionLogIndex': hex(0),
+                            'transactionIndex': inner['index'],
+                            'blockNumber': hex(trx['result']['slot']),
                             'transactionHash': trxId,
-                            'logIndex': '0x'+hex(log_index),
+                            'logIndex': log_index,
                             'blockHash': '0x%064x'%trx['result']['slot']
                         }
                     logs.append(rec)
@@ -258,7 +258,7 @@ class EthereumModel:
 
         result = {
             "transactionHash":trxId,
-            "transactionIndex":'0x'+hex(0),
+            "transactionIndex":hex(0),
             "blockHash":'0x%064x'%trx['result']['slot'],
             "blockNumber":hex(trx['result']['slot']),
             "from":'0x'+self.eth_sender[trxId],
