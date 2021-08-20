@@ -105,7 +105,7 @@ class EthereumModel:
 
     def eth_blockNumber(self):
         slot = self.client.get_slot()['result']
-        logger.debug("eth_blockNumber %s", '0x'+hex(slot))
+        logger.debug("eth_blockNumber %s", hex(slot))
         return '0x'+hex(slot)
 
     def eth_getBalance(self, account, tag):
@@ -116,7 +116,7 @@ class EthereumModel:
         logger.debug('eth_getBalance: %s %s', account, eth_acc)
         balance = getTokens(self.client, evm_loader_id, eth_acc, self.signer.public_key())
 
-        return '0x'+hex(balance*10**9)
+        return hex(balance*10**9)
 
     def eth_getBlockByNumber(self, tag, full):
         """Returns information about a block by block number.
