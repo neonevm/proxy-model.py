@@ -267,7 +267,7 @@ class EthereumModel:
             "cumulativeGasUsed":'0x%x' % gas_used,
             "contractAddress":self.contract_address.get(trxId),
             "logs": logs,
-            "status": '0x'+hex(status),
+            "status": status,
             "logsBloom":"0x"+'0'*512
         }
         logger.debug('RESULT: %s', json.dumps(result, indent=3))
@@ -311,19 +311,19 @@ class EthereumModel:
         #     nonce = nonce - 1
         ret = {
             "blockHash":'0x%064x'%trx['result']['slot'],
-            "blockNumber":'0x'+hex(trx['result']['slot']),
+            "blockNumber":hex(trx['result']['slot']),
             "from":'0x'+sender,
             "gas":'0x%x' % trx['result']['meta']['fee'],
             "gasPrice":'0x00',
             "hash":trxId,
             "input":"0x"+data.hex(),
-            "nonce":'0x'+hex(nonce),
+            "nonce":hex(nonce),
             "to":'0x'+data[17:37].hex(),
             "transactionIndex":'0x'+hex(0),
             "value":'0x00',
-            "v":'0x'+hex(self.vrs[trxId][0]),
-            "r":'0x'+hex(self.vrs[trxId][1]),
-            "s":'0x'+hex(self.vrs[trxId][2])
+            "v":hex(self.vrs[trxId][0]),
+            "r":hex(self.vrs[trxId][1]),
+            "s":hex(self.vrs[trxId][2])
         }
         logger.debug ("eth_getTransactionByHash: %s", ret);
         return ret
