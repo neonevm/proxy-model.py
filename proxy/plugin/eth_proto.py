@@ -62,6 +62,8 @@ class Trx(rlp.Serializable):
         pub = sig.recover_public_key_from_msg_hash(hash)
         return pub.to_canonical_address().hex()
 
+    def val(self):
+        return self.value
 
 #class JsonEncoder(json.JSONEncoder):
 #    def default(self, obj):
