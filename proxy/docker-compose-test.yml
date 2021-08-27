@@ -34,5 +34,19 @@ services:
     networks:
       - net
 
+  faucet:
+    container_name: faucet
+    image: cybercoredev/faucet:${REVISION}
+    environment:
+      - WEB3_RPC_URL=http://localhost:9090/solana
+      - WEB3_PRIVATE_KEY=0x0000000000000000000000000000000000000000000000000000000000000Ace
+    hostname: faucet
+    ports:
+      - 127.0.0.1:3333:3333
+    expose:
+      - "3333"
+    networks:
+      - net
+
 networks:
   net:
