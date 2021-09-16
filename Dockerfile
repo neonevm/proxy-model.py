@@ -1,5 +1,5 @@
 ARG SOLANA_REVISION=v1.7.9-resources
-ARG EVM_LOADER_REVISION=latest
+ARG EVM_LOADER_REVISION=v0.2.0
 
 FROM cybercoredev/solana:${SOLANA_REVISION} AS cli
 
