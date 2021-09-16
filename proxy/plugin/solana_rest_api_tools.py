@@ -442,12 +442,12 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps):
         (continue_count, instruction_count) = simulate_continue(signer, client, perm_accs, trx_accs, steps)
         logger.debug("Send bucked:")
         result_list = []
-        for index in range(continue_count*3):
+        for index in range(continue_count):
             trx = Transaction().add(make_continue_instruction(perm_accs, trx_accs, instruction_count, index))
             result = client.send_transaction(
                     trx,
                     signer,
-                    opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed)
+                    opts=TxOpts(skip_confirmation=True, skip_preflight=True)
                 )["result"]
             result_list.append(result)
         logger.debug("Collect bucked results:")
@@ -622,10 +622,13 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
                 if continue_count == 0:
                     raise Exception("uninitialized storage account")
                 continue_count = instruction_error[0]
+                break
             else:
                 logger.debug("Result:\n%s"%json.dumps(response, indent=3))
                 raise Exception("unspecified error")
         else:
+            # In case of long Ethereum transaction we speculative send more iterations then need
+            continue_count = continue_count * 3
             break
 
     logger.debug("tx_count = {}, step_count = {}".format(continue_count, step_count))
