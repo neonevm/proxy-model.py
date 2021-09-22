@@ -4,7 +4,9 @@
 import unittest
 import os
 import io
+import time
 import subprocess
+import requests
 
 class Test_Neon_Faucet(unittest.TestCase):
     @classmethod
@@ -24,6 +26,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         os.environ['NEON_OPERATOR_KEYFILE'] = 'id.json'
         os.environ['NEON_ETH_MAX_AMOUNT'] = '10'
         cls.faucet = subprocess.Popen(['faucet', 'run', '--workers', '1'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        time.sleep(1)
 
     def test_eth_token(self):
         print("\n# test_eth_token")
@@ -33,13 +36,10 @@ class Test_Neon_Faucet(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        print('1')
+        requests.post('http://localhost:{}/request_stop'.format(os.environ['FAUCET_RPC_PORT']), data='{"delay": 1000}')
         with io.TextIOWrapper(cls.faucet.stdout, encoding="utf-8") as out:
             for line in out:
                 print(line.strip())
-        print('2')
-        cls.faucet.terminate()
-        print('3')
 
 if __name__ == '__main__':
     unittest.main()
