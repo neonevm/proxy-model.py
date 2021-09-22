@@ -24,6 +24,7 @@ services:
       - CONFIG=ci
     hostname: proxy
     ports:
+      - 127.0.0.1:3333:3333
       - 127.0.0.1:9090:9090
     expose:
       - "9090"

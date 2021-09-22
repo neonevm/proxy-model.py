@@ -3,6 +3,8 @@
 
 import unittest
 import os
+import io
+import subprocess
 
 class Test_Neon_Faucet(unittest.TestCase):
     @classmethod
@@ -21,7 +23,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         os.environ['NEON_TOKEN_MINT_DECIMALS'] = '9'
         os.environ['NEON_OPERATOR_KEYFILE'] = 'id.json'
         os.environ['NEON_ETH_MAX_AMOUNT'] = '10'
-        os.system('faucet run --workers 1')
+        cls.faucet = subprocess.Popen(['faucet', 'run', '--workers', '1'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     def test_eth_token(self):
         print("\n# test_eth_token")
@@ -31,7 +33,13 @@ class Test_Neon_Faucet(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        print("\nTest Neon Faucet finished")
+        print('1')
+        with io.TextIOWrapper(cls.faucet.stdout, encoding="utf-8") as out:
+            for line in out:
+                print(line.strip())
+        print('2')
+        cls.faucet.terminate()
+        print('3')
 
 if __name__ == '__main__':
     unittest.main()
