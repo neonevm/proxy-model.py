@@ -137,9 +137,9 @@ class Test_Neon_Faucet(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.compile_erc20_contract(cls)
-        token_a = cls.deploy_erc20_token(cls, 'A')
-        token_b = cls.deploy_erc20_token(cls, 'B')
-        cls.start_faucet(cls, token_a, token_b)
+        cls.token_a = cls.deploy_erc20_token(cls, 'A')
+        cls.token_b = cls.deploy_erc20_token(cls, 'B')
+        cls.start_faucet(cls)
         print('Sleeping 1 sec...')
         time.sleep(1)
 
@@ -150,6 +150,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         self.contract = contract_interface
 
     def deploy_erc20_token(self, name):
+        print('Deploying ERC20 token...')
         erc20 = proxy.eth.contract(abi=self.contract['abi'], bytecode=self.contract['bin'])
         nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         tx = {'nonce': nonce}
@@ -160,13 +161,13 @@ class Test_Neon_Faucet(unittest.TestCase):
         print('Token', name, '=', tx_deploy_receipt.contractAddress)
         return tx_deploy_receipt.contractAddress
 
-    def start_faucet(self, token_a, token_b):
+    def start_faucet(self):
         os.environ['FAUCET_RPC_PORT'] = '3333'
         os.environ['FAUCET_RPC_ALLOWED_ORIGINS'] = 'http://localhost'
         os.environ['FAUCET_WEB3_ENABLE'] = 'true'
         os.environ['WEB3_RPC_URL'] = proxy_url
         os.environ['WEB3_PRIVATE_KEY'] = admin.key.hex()
-        os.environ['NEON_ERC20_TOKENS'] = token_a + ',' + token_b
+        os.environ['NEON_ERC20_TOKENS'] = self.token_a + ',' + self.token_b
         os.environ['NEON_ERC20_MAX_AMOUNT'] = '1000'
         os.environ['FAUCET_SOLANA_ENABLE'] = 'true'
         os.environ['SOLANA_URL'] = os.environ.get('SOLANA_URL', 'http://solana:8899')
@@ -177,32 +178,40 @@ class Test_Neon_Faucet(unittest.TestCase):
         os.environ['NEON_ETH_MAX_AMOUNT'] = '10'
         self.faucet = subprocess.Popen(['faucet', 'run', '--workers', '1'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_eth_token(self):
         print()
-        address = '0x1111111111111111111111111111111111111111'
-        balance_before = proxy.eth.get_balance(address)
+        balance_before = proxy.eth.get_balance(user.address)
         print('balance_before:', balance_before)
         url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
-        data = '{"wallet": "' + address + '", "amount": 1}'
+        data = '{"wallet": "' + user.address + '", "amount": 1}'
         r = requests.post(url, data=data)
         if not r.ok:
             print('Response:', r.status_code)
         assert(r.ok)
-        balance_after = proxy.eth.get_balance(address)
+        balance_after = proxy.eth.get_balance(user.address)
         print('balance_after:', balance_after)
         self.assertEqual(balance_after - balance_before, 1000000000000000000)
 
     # @unittest.skip("a.i.")
     def test_erc20_tokens(self):
         print()
-        address = '0x1111111111111111111111111111111111111111'
+        a_before = self.get_token_balance(self.token_a, user.address)
+        b_before = self.get_token_balance(self.token_b, user.address)
         url = 'http://localhost:{}/request_erc20_tokens'.format(os.environ['FAUCET_RPC_PORT'])
-        data = '{"wallet": "' + address + '", "amount": 1}'
+        data = '{"wallet": "' + user.address + '", "amount": 1}'
         r = requests.post(url, data=data)
         if not r.ok:
             print('Response:', r.status_code)
         assert(r.ok)
+        a_after = self.get_token_balance(self.token_a, user.address)
+        b_after = self.get_token_balance(self.token_b, user.address)
+        self.assertEqual(a_after - a_before, 1000000000000000000)
+        self.assertEqual(b_after - b_before, 1000000000000000000)
+
+    def get_token_balance(self, token_address, address):
+        erc20 = proxy.eth.contract(address=token_address, abi=self.contract['abi'])
+        return erc20.functions.balanceOf(address).call()
 
     def stop_faucet(self):
         url = 'http://localhost:{}/request_stop'.format(os.environ['FAUCET_RPC_PORT'])
