@@ -20,6 +20,7 @@ user = proxy.eth.account.create('issues/neonlabsorg/neon-evm/166/user')
 proxy.eth.default_account = admin.address
 
 ERC20_CONTRACT_SOURCE = '''
+// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 // ----------------------------------------------------------------------------
 // Safe maths
@@ -52,7 +53,7 @@ abstract contract ERC20Interface {
 // ERC20 Token, with the addition of symbol, name and decimals
 // assisted token transfers
 // ----------------------------------------------------------------------------
-contract N47Token is ERC20Interface, SafeMath {
+contract TestToken is ERC20Interface, SafeMath {
     string public symbol;
     string public  name;
     uint8 public decimals;
@@ -136,28 +137,27 @@ class Test_Neon_Faucet(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.compile_erc20_contract(cls)
-        token_a = cls.deploy_erc20_token(cls)
-        token_b = cls.deploy_erc20_token(cls)
+        token_a = cls.deploy_erc20_token(cls, 'A')
+        token_b = cls.deploy_erc20_token(cls, 'B')
         cls.start_faucet(cls, token_a, token_b)
         print('Sleeping 1 sec...')
         time.sleep(1)
 
     def compile_erc20_contract(self):
+        print('Compiling ERC20 contract...')
         compiled_contract = compile_source(ERC20_CONTRACT_SOURCE)
         contract_id, contract_interface = compiled_contract.popitem()
         self.contract = contract_interface
 
-    def deploy_erc20_token(self):
+    def deploy_erc20_token(self, name):
         erc20 = proxy.eth.contract(abi=self.contract['abi'], bytecode=self.contract['bin'])
         nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         tx = {'nonce': nonce}
         tx_constructor = erc20.constructor().buildTransaction(tx)
         tx_deploy = proxy.eth.account.sign_transaction(tx_constructor, admin.key)
         tx_deploy_hash = proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
-        print('tx_deploy_hash:', tx_deploy_hash.hex())
         tx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
-        print('tx_deploy_receipt:', tx_deploy_receipt)
-        print('deploy status:', tx_deploy_receipt.status)
+        print('Token', name, '=', tx_deploy_receipt.contractAddress)
         return tx_deploy_receipt.contractAddress
 
     def start_faucet(self, token_a, token_b):
@@ -165,7 +165,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         os.environ['FAUCET_RPC_ALLOWED_ORIGINS'] = 'http://localhost'
         os.environ['FAUCET_WEB3_ENABLE'] = 'true'
         os.environ['WEB3_RPC_URL'] = proxy_url
-        os.environ['WEB3_PRIVATE_KEY'] = proxy.eth.default_account
+        os.environ['WEB3_PRIVATE_KEY'] = admin.key.hex()
         os.environ['NEON_ERC20_TOKENS'] = token_a + ',' + token_b
         os.environ['NEON_ERC20_MAX_AMOUNT'] = '1000'
         os.environ['FAUCET_SOLANA_ENABLE'] = 'true'
@@ -193,7 +193,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         print('balance_after:', balance_after)
         self.assertEqual(balance_after - balance_before, 1000000000000000000)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_erc20_tokens(self):
         print()
         address = '0x1111111111111111111111111111111111111111'
