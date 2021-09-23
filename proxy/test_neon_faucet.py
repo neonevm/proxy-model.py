@@ -7,6 +7,10 @@ import io
 import time
 import subprocess
 import requests
+from web3 import Web3
+
+proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
+proxy = Web3(Web3.HTTPProvider(proxy_url))
 
 class Test_Neon_Faucet(unittest.TestCase):
     @classmethod
@@ -30,13 +34,20 @@ class Test_Neon_Faucet(unittest.TestCase):
         time.sleep(1) # 1 second
 
     def test_eth_token(self):
+        print()
+        address = '0x1111111111111111111111111111111111111111'
+        balance_before = proxy.eth.get_balance(address)
+        print('balance_before:', balance_before)
         url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
-        data = '{"wallet": "0x4570e07200b6332989Dc04fA2a671b839D26eF0E", "amount": 1}'
+        data = '{"wallet": "' + address + '", "amount": 1}'
         r = requests.post(url, data=data)
-        print('r:',r)
+        assert(r.ok)
+        balance_after = proxy.eth.get_balance(address)
+        print('balance_after:', balance_after)
+        self.assertEqual(balance_after - balance_before, 1000000000000000000)
 
     def test_erc20_tokens(self):
-        print("\n# test_erc20_tokens")
+        print()
 
     @classmethod
     def tearDownClass(cls):
