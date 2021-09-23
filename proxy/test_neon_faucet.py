@@ -67,7 +67,7 @@ contract TestToken is ERC20Interface, SafeMath {
         symbol = "TST";
         name = "TestToken";
         decimals = 18;
-        _totalSupply = 10000000000000000000000000000;
+        _totalSupply = 100000000000000000000000000000000000000000;
         balances[msg.sender] = _totalSupply;
         emit Transfer(address(0), msg.sender, _totalSupply);
     }
@@ -140,7 +140,6 @@ class Test_Neon_Faucet(unittest.TestCase):
         cls.token_a = cls.deploy_erc20_token(cls, 'A')
         cls.token_b = cls.deploy_erc20_token(cls, 'B')
         cls.start_faucet(cls)
-        print('Sleeping 1 sec...')
         time.sleep(1)
 
     def compile_erc20_contract(self):
@@ -182,7 +181,7 @@ class Test_Neon_Faucet(unittest.TestCase):
     def test_eth_token(self):
         print()
         balance_before = proxy.eth.get_balance(user.address)
-        print('balance_before:', balance_before)
+        print('NEO balance before:', balance_before)
         url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
         data = '{"wallet": "' + user.address + '", "amount": 1}'
         r = requests.post(url, data=data)
@@ -190,7 +189,7 @@ class Test_Neon_Faucet(unittest.TestCase):
             print('Response:', r.status_code)
         assert(r.ok)
         balance_after = proxy.eth.get_balance(user.address)
-        print('balance_after:', balance_after)
+        print('NEO balance after:', balance_after)
         self.assertEqual(balance_after - balance_before, 1000000000000000000)
 
     # @unittest.skip("a.i.")
@@ -198,6 +197,8 @@ class Test_Neon_Faucet(unittest.TestCase):
         print()
         a_before = self.get_token_balance(self.token_a, user.address)
         b_before = self.get_token_balance(self.token_b, user.address)
+        print('token A balance before:', a_before)
+        print('token B balance before:', b_before)
         url = 'http://localhost:{}/request_erc20_tokens'.format(os.environ['FAUCET_RPC_PORT'])
         data = '{"wallet": "' + user.address + '", "amount": 1}'
         r = requests.post(url, data=data)
@@ -206,6 +207,8 @@ class Test_Neon_Faucet(unittest.TestCase):
         assert(r.ok)
         a_after = self.get_token_balance(self.token_a, user.address)
         b_after = self.get_token_balance(self.token_b, user.address)
+        print('token A balance after:', a_after)
+        print('token B balance after:', b_after)
         self.assertEqual(a_after - a_before, 1000000000000000000)
         self.assertEqual(b_after - b_before, 1000000000000000000)
 
