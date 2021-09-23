@@ -17,8 +17,8 @@ class Test_Neon_Faucet(unittest.TestCase):
     def setUpClass(cls):
         os.environ['FAUCET_RPC_PORT'] = '3333'
         os.environ['FAUCET_RPC_ALLOWED_ORIGINS'] = 'http://localhost'
-        os.environ['FAUCET_WEB3_ENABLE'] = 'false'
-        os.environ['WEB3_RPC_URL'] = 'http://localhost:9090/solana'
+        os.environ['FAUCET_WEB3_ENABLE'] = 'true'
+        os.environ['WEB3_RPC_URL'] = proxy_url
         os.environ['WEB3_PRIVATE_KEY'] = '0x0000000000000000000000000000000000000000000000000000000000000Ace'
         os.environ['NEON_ERC20_TOKENS'] = '0x00000000000000000000000000000000CafeBabe, 0x00000000000000000000000000000000DeadBeef'
         os.environ['NEON_ERC20_MAX_AMOUNT'] = '1000'
@@ -33,6 +33,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         print('Sleeping 1 sec...')
         time.sleep(1) # 1 second
 
+    @unittest.skip("a.i.")
     def test_eth_token(self):
         print()
         address = '0x1111111111111111111111111111111111111111'
@@ -41,19 +42,31 @@ class Test_Neon_Faucet(unittest.TestCase):
         url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
         data = '{"wallet": "' + address + '", "amount": 1}'
         r = requests.post(url, data=data)
+        if not r.ok:
+            print('Response:', r.status_code)
         assert(r.ok)
         balance_after = proxy.eth.get_balance(address)
         print('balance_after:', balance_after)
         self.assertEqual(balance_after - balance_before, 1000000000000000000)
 
+    # @unittest.skip("a.i.")
     def test_erc20_tokens(self):
         print()
+        address = '0x1111111111111111111111111111111111111111'
+        url = 'http://localhost:{}/request_erc20_tokens'.format(os.environ['FAUCET_RPC_PORT'])
+        data = '{"wallet": "' + address + '", "amount": 1}'
+        r = requests.post(url, data=data)
+        if not r.ok:
+            print('Response:', r.status_code)
+        assert(r.ok)
 
     @classmethod
     def tearDownClass(cls):
         url = 'http://localhost:{}/request_stop'.format(os.environ['FAUCET_RPC_PORT'])
         data = '{"delay": 1000}' # 1 second
-        requests.post(url, data=data)
+        r = requests.post(url, data=data)
+        if not r.ok:
+            cls.faucet.terminate
         with io.TextIOWrapper(cls.faucet.stdout, encoding="utf-8") as out:
             for line in out:
                 print(line.strip())
