@@ -6,6 +6,7 @@ import time
 import logging
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
+from solana.rpc.commitment import Recent
 from sqlitedict import SqliteDict
 
 try:
@@ -37,12 +38,17 @@ class ContinueStruct:
 class Indexer:
     def __init__(self):
         self.client = Client(solana_url)
+        self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", encode=json.dumps, decode=json.loads)
+        self.blocks_by_height = SqliteDict(filename="local.db", tablename="solana_blocks_by_height", encode=json.dumps, decode=json.loads)
         self.transaction_receipts = SqliteDict(filename="local.db", tablename="known_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True)
+        self.constants = SqliteDict(filename="local.db", tablename="constants", autocommit=True)
         self.last_slot = 0
         self.transaction_order = []
+        if 'last_block' not in self.constants:
+            self.constants['last_block'] = 0
 
     def run(self):
         while (True):
@@ -51,6 +57,8 @@ class Indexer:
 
                 self.gather_unknown_transactions()
                 self.process_receipts()
+
+                self.gather_blocks()
             except Exception as err:
                 logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
 
@@ -382,6 +390,42 @@ class Indexer:
         self.eth_sol_trx[eth_signature] = signatures
         for sig in signatures:
             self.sol_eth_trx[sig] = eth_signature
+
+    def gather_blocks(self):
+        max_slot = self.client.get_slot(commitment="recent")["result"]
+
+        last_block = self.constants['last_block']
+        if last_block + 10_000 < max_slot:
+            max_slot = last_block + 10_000
+        slots = self.client._provider.make_request("getBlocks", last_block, max_slot, {"commitment": "confirmed"})["result"]
+
+        logger.debug("start getting blocks")
+        pool = ThreadPool(2)
+        results = pool.map(self.get_block, slots)
+
+        for block_result in results:
+            (slot, block) = block_result
+            block['slot'] = slot
+            self.blocks_by_hash['0x' + base58.b58decode(block['blockhash']).hex()] = block
+            self.blocks_by_height[block['blockHeight']] = block
+
+        self.blocks_by_hash.commit()
+        self.blocks_by_height.commit()
+        self.constants['last_block'] = max_slot
+
+    def get_block(self, slot):
+        block = None
+        retry = True
+
+        while retry:
+            try:
+                block = self.client._provider.make_request("getBlock", slot, {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
+                retry = False
+            except Exception as err:
+                logger.debug(err)
+                time.sleep(1)
+
+        return (slot, block)
 
 
 def run_indexer():
