@@ -38,12 +38,12 @@ class ContinueStruct:
 class Indexer:
     def __init__(self):
         self.client = Client(solana_url)
-        self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", encode=json.dumps, decode=json.loads)
-        self.blocks_by_height = SqliteDict(filename="local.db", tablename="solana_blocks_by_height", encode=json.dumps, decode=json.loads)
+        self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True)
+        self.blocks_by_height = SqliteDict(filename="local.db", tablename="solana_blocks_by_height", autocommit=True)
         self.transaction_receipts = SqliteDict(filename="local.db", tablename="known_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
-        self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True)
+        self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.constants = SqliteDict(filename="local.db", tablename="constants", autocommit=True)
         self.last_slot = 0
         self.transaction_order = []
@@ -61,9 +61,6 @@ class Indexer:
                 self.gather_blocks()
             except Exception as err:
                 logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
-
-            time.sleep(1)
-
 
     def gather_unknown_transactions(self):
         poll_txs = set()
@@ -388,8 +385,11 @@ class Indexer:
             'from_address': from_address,
         }
         self.eth_sol_trx[eth_signature] = signatures
-        for sig in signatures:
-            self.sol_eth_trx[sig] = eth_signature
+        for idx, sig in enumerate(signatures):
+            self.sol_eth_trx[sig] = {
+                'idx': idx,
+                'eth': eth_signature,
+            }
 
     def gather_blocks(self):
         max_slot = self.client.get_slot(commitment="recent")["result"]
@@ -405,9 +405,8 @@ class Indexer:
 
         for block_result in results:
             (slot, block) = block_result
-            block['slot'] = slot
-            self.blocks_by_hash['0x' + base58.b58decode(block['blockhash']).hex()] = block
-            self.blocks_by_height[block['blockHeight']] = block
+            self.blocks_by_hash['0x' + base58.b58decode(block['blockhash']).hex()] = slot
+            self.blocks_by_height[block['blockHeight']] = slot
 
         self.blocks_by_hash.commit()
         self.blocks_by_height.commit()
