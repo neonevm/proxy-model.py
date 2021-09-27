@@ -167,13 +167,13 @@ class EthereumModel:
 
         ret = {
             "gasUsed": hex(gasUsed),
-            "hash": "0x"+base58.b58decode(block_info['blockhash']).hex(),
+            "hash": '0x' + base58.b58decode(block_info['blockhash']).hex(),
             "number": hex(block_info['blockHeight']),
-            "parentHash": "0x"+base58.b58decode(block_info['previousBlockhash']).hex(),
-            "timestamp": hex(block_info['blockHeight']),
+            "parentHash": '0x' + base58.b58decode(block_info['previousBlockhash']).hex(),
+            "timestamp": hex(block_info['blockTime']),
             "transactions": transactions,
-            "logsBloom":"0x"+'0'*512,
-            "gasLimit": "0x6691b7",
+            "logsBloom": '0x'+'0'*512,
+            "gasLimit": '0x6691b7',
         }
         return ret
 
@@ -188,7 +188,7 @@ class EthereumModel:
             return None
         ret = self.getBlockBySlot(slot, full)
         logger.debug("eth_getBlockByHash: %s", json.dumps(ret, indent=3))
-        return self.eth_getBlockByNumber(ret, full)
+        return ret
 
     def eth_getBlockByNumber(self, tag, full):
         """Returns information about a block by block number.
@@ -207,7 +207,7 @@ class EthereumModel:
                 return None
         ret = self.getBlockBySlot(slot, full)
         logger.debug("eth_getBlockByNumber: %s", json.dumps(ret, indent=3))
-        return self.eth_getBlockByNumber(ret, full)
+        return ret
 
     def eth_call(self, obj, tag):
         """Executes a new message call immediately without creating a transaction on the block chain.
@@ -357,31 +357,31 @@ class EthereumModel:
 
             logger.debug('Transaction signature: %s %s', signature, eth_signature)
 
-            got_result = get_trx_results(self.client.get_confirmed_transaction(signature)['result'])
-            if got_result:
-                (logs, status, gas_used, return_value, slot) = got_result
-                for rec in logs:
-                    rec['transactionHash'] = eth_signature
+            # got_result = get_trx_results(self.client.get_confirmed_transaction(signature)['result'])
+            # if got_result:
+            #     (logs, status, gas_used, return_value, slot) = got_result
+            #     for rec in logs:
+            #         rec['transactionHash'] = eth_signature
 
-                self.ethereum_trx[eth_signature] = {
-                    'eth_trx': rawTrx[2:],
-                    'slot': slot,
-                    'logs': logs,
-                    'status': status,
-                    'gas_used': gas_used,
-                    'return_value': return_value,
-                    'from_address': '0x'+sender,
-                }
-            else:
-                self.ethereum_trx[eth_signature] = {
-                    'eth_trx': rawTrx[2:],
-                    'slot': None,
-                    'logs': None,
-                    'status': None,
-                    'gas_used': None,
-                    'return_value': None,
-                    'from_address': '0x'+sender,
-                }
+            #     self.ethereum_trx[eth_signature] = {
+            #         'eth_trx': rawTrx[2:],
+            #         'slot': slot,
+            #         'logs': logs,
+            #         'status': status,
+            #         'gas_used': gas_used,
+            #         'return_value': return_value,
+            #         'from_address': '0x'+sender,
+            #     }
+            # else:
+            #     self.ethereum_trx[eth_signature] = {
+            #         'eth_trx': rawTrx[2:],
+            #         'slot': None,
+            #         'logs': None,
+            #         'status': None,
+            #         'gas_used': None,
+            #         'return_value': None,
+            #         'from_address': '0x'+sender,
+            #     }
 
             return eth_signature
 
