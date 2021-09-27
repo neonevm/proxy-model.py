@@ -9,7 +9,7 @@ import subprocess
 import requests
 from web3 import Web3
 from solcx import install_solc
-install_solc(version='0.8.7')
+install_solc(version='0.7.6')
 from solcx import compile_source
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "100000"))
@@ -21,7 +21,7 @@ proxy.eth.default_account = admin.address
 
 ERC20_CONTRACT_SOURCE = '''
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity >=0.7.0;
 // ----------------------------------------------------------------------------
 // Safe maths
 // ----------------------------------------------------------------------------
@@ -180,6 +180,14 @@ class Test_Neon_Faucet(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_eth_token(self):
         print()
+        # First request - trigger creation of the account
+        #url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
+        #data = '{"wallet": "' + user.address + '", "amount": 1}'
+        #r = requests.post(url, data=data)
+        #if not r.ok:
+        #    print('Response:', r.status_code)
+        #assert(r.ok)
+        # Second request - actual test
         balance_before = proxy.eth.get_balance(user.address)
         print('NEO balance before:', balance_before)
         url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
@@ -191,9 +199,9 @@ class Test_Neon_Faucet(unittest.TestCase):
         balance_after = proxy.eth.get_balance(user.address)
         print('NEO balance after:', balance_after)
         print('NEO balance difference:', balance_after - balance_before)
-        #self.assertEqual(balance_after - balance_before, 1000000000000000000)
+        self.assertEqual(balance_after - balance_before, 1000000000000000000)
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_erc20_tokens(self):
         print()
         a_before = self.get_token_balance(self.token_a, user.address)
