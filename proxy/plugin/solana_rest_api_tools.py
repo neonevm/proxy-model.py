@@ -321,7 +321,8 @@ def neon_config_load():
     if path == "":
         raise Exception("cannot program dump for ", evm_loader_id)
     neon_config = neon_cli().call("neon-elf", path)
-    logger.debug('neon_config: %', neon_config)
+    for neon_elf_symbol in neon_config.splitlines():
+        logger.debug(neon_elf_symbol)
 
 
 def call_emulated(contract_id, caller_id, data=None, value=None):
