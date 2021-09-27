@@ -22,7 +22,7 @@ class Test_web3_clientVersion(unittest.TestCase):
 
     def test_web3_clientVersion(self):
         print("check tag latest in web3_clientVersion")
-        web3_clientVersion = web3.clientVersion
+        web3_clientVersion = proxy.clientVersion
         self.assertEqual(web3_clientVersion, 'web3_clientVersion')
 
 

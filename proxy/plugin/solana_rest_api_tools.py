@@ -310,6 +310,19 @@ def ether2seed(ether, program_id, base):
     return (acc, 255, seed)
 
 
+def neon_config_load():
+    res = solana_cli().call('program', 'dump', evm_loader_id, './evm_loader.dump')
+    substr = "Wrote program to "
+    path = ""
+    for line in res.splitlines():
+        if line.startswith(substr):
+            path = line[len(substr):].strip()
+    if path == "":
+        raise Exception("cannot program dump for ", evm_loader_id)
+    neon_config = neon_cli().call("neon-elf", path)
+    print('neon_config:', neon_config)
+
+
 def call_emulated(contract_id, caller_id, data=None, value=None):
     output = emulator(contract_id, caller_id, data, value)
     logger.debug("call_emulated %s %s %s %s return %s", contract_id, caller_id, data, value, output)
