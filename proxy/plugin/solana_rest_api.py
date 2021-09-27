@@ -97,6 +97,9 @@ class EthereumModel:
         self.perm_accs = PermanentAccounts(self.client, self.signer, self.proxy_id)
         pass
 
+    def web3_clientVersion(self):
+        return 'web3_clientVersion'
+
     def eth_chainId(self):
         return chainId
 
