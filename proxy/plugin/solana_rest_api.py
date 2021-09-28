@@ -95,10 +95,11 @@ class EthereumModel:
         logger.debug("worker id {}".format(self.proxy_id))
 
         self.perm_accs = PermanentAccounts(self.client, self.signer, self.proxy_id)
+        neon_config_load(self)
         pass
 
     def web3_clientVersion(self):
-        neon_config_load()
+        neon_config_load(self)
         return 'web3_clientVersion'
 
     def eth_chainId(self):
