@@ -315,7 +315,7 @@ def neon_config_load(ethereum_model):
     logger.debug('proxy_id={}'.format(ethereum_model.proxy_id))
     try:
         ethereum_model.neon_config_json
-    except NameError:
+    except AttributeError:
         logger.debug("loading the config for the first time!")
         ethereum_model.neon_config_json = json.loads('{}')
         ethereum_model.neon_config_json['load_time'] = datetime.now().timestamp()
