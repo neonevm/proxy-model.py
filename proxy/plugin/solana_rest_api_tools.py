@@ -341,6 +341,11 @@ def neon_config_load(ethereum_model):
     ethereum_model.neon_config_json = json.loads(neon_elf)
     load_time = datetime.now().timestamp()
     ethereum_model.neon_config_json['load_time'] = load_time
+    # 'Neon/v2.0.8-62bbf7ec12072d96eee02655944a9e3fcefee8cb
+    ethereum_model.neon_config_json['web3_clientVersion'] = 'Neon/v' +\
+                                                            ethereum_model.neon_config_json['NEON_PKG_VERSION'] +\
+                                                            '-'\
+                                                            + ethereum_model.neon_config_json['NEON_REVISION']
     logger.debug(json.dumps(ethereum_model.neon_config_json, sort_keys=True, indent=2))
 
 
