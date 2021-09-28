@@ -312,7 +312,6 @@ def ether2seed(ether, program_id, base):
 
 
 def neon_config_load(ethereum_model):
-    logger.debug('proxy_id={}'.format(ethereum_model.proxy_id))
     try:
         ethereum_model.neon_config_json
     except AttributeError:
@@ -320,9 +319,9 @@ def neon_config_load(ethereum_model):
         ethereum_model.neon_config_json = json.loads('{}')
         ethereum_model.neon_config_json['load_time'] = datetime.now().timestamp()
     else:
-        time_duration = ethereum_model.neon_config_json['load_time'] - datetime.now().timestamp()
-        logger.debug('time_duration={} and evm_loader_id={}'.format(time_duration))
-        if time_duration < 1000:
+        elapsed_time = datetime.now().timestamp() - ethereum_model.neon_config_json['load_time']
+        logger.debug('elapsed_time={} proxy_id={}'.format(elapsed_time, ethereum_model.proxy_id))
+        if elapsed_time < 3600:
             return
 
     logger.debug('load for solana_url={} and evm_loader_id={}'.format(solana_url, evm_loader_id))
