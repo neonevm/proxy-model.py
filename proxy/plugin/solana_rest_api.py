@@ -150,7 +150,7 @@ class EthereumModel:
         gasUsed = 0
         trx_index = 0
         for signature in block_info['signatures']:
-            eth_trx = self.eth_sol_trx.get(signature, None)
+            eth_trx = self.sol_eth_trx.get(signature, None)
             if eth_trx is not None:
                 if eth_trx['idx'] == 0:
                     trx_receipt = self.eth_getTransactionReceipt(eth_trx['eth'], block_info)
@@ -182,7 +182,7 @@ class EthereumModel:
             trx_hash - Hash of a block.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
-        slot = self.blocks_by_height.get(trx_hash, None)
+        slot = self.blocks_by_hash.get(trx_hash, None)
         if slot is None:
             logger.debug("Not found block by hash %s", trx_hash)
             return None
@@ -357,31 +357,31 @@ class EthereumModel:
 
             logger.debug('Transaction signature: %s %s', signature, eth_signature)
 
-            # got_result = get_trx_results(self.client.get_confirmed_transaction(signature)['result'])
-            # if got_result:
-            #     (logs, status, gas_used, return_value, slot) = got_result
-            #     for rec in logs:
-            #         rec['transactionHash'] = eth_signature
+            got_result = get_trx_results(self.client.get_confirmed_transaction(signature)['result'])
+            if got_result:
+                (logs, status, gas_used, return_value, slot) = got_result
+                for rec in logs:
+                    rec['transactionHash'] = eth_signature
 
-            #     self.ethereum_trx[eth_signature] = {
-            #         'eth_trx': rawTrx[2:],
-            #         'slot': slot,
-            #         'logs': logs,
-            #         'status': status,
-            #         'gas_used': gas_used,
-            #         'return_value': return_value,
-            #         'from_address': '0x'+sender,
-            #     }
-            # else:
-            #     self.ethereum_trx[eth_signature] = {
-            #         'eth_trx': rawTrx[2:],
-            #         'slot': None,
-            #         'logs': None,
-            #         'status': None,
-            #         'gas_used': None,
-            #         'return_value': None,
-            #         'from_address': '0x'+sender,
-            #     }
+                self.ethereum_trx[eth_signature] = {
+                    'eth_trx': rawTrx[2:],
+                    'slot': slot,
+                    'logs': logs,
+                    'status': status,
+                    'gas_used': gas_used,
+                    'return_value': return_value,
+                    'from_address': '0x'+sender,
+                }
+            else:
+                self.ethereum_trx[eth_signature] = {
+                    'eth_trx': rawTrx[2:],
+                    'slot': got_result['slot'],
+                    'logs': None,
+                    'status': 0,
+                    'gas_used': None,
+                    'return_value': None,
+                    'from_address': '0x'+sender,
+                }
 
             return eth_signature
 

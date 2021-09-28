@@ -8,6 +8,7 @@ from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
 from solana.rpc.commitment import Recent
 from sqlitedict import SqliteDict
+from typing import Any, Dict, List, Optional, Union
 
 try:
     from utils import check_error, get_trx_results, get_trx_receipts
@@ -73,7 +74,11 @@ class Indexer:
 
         counter = 0
         while (continue_flag):
-            result = self.client.get_signatures_for_address(evm_loader_id, before=minimal_tx)
+            opts: Dict[str, Union[int, str]] = {}
+            if minimal_tx:
+                opts["before"] = minimal_tx
+            opts["commitment"] = "confirmed"
+            result = self.client._provider.make_request("getSignaturesForAddress", evm_loader_id, opts)
             logger.debug("{:>3} get_signatures_for_address {}".format(counter, len(result["result"])))
             counter += 1
 
@@ -314,7 +319,7 @@ class Indexer:
                             # logger.debug("{:>10} {:>6} Cancel 0x{}".format(slot, counter, instruction_data.hex()))
 
                             storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
-                            continue_table[storage_account] = ContinueStruct(signature, (None, None, None, None, None))
+                            continue_table[storage_account] = ContinueStruct(signature, (None, 0, None, None, trx['slot']))
 
                         elif instruction_data[0] == 0x0c:
                             # logger.debug("{:>10} {:>6} PartialCallOrContinueFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
@@ -408,8 +413,6 @@ class Indexer:
             self.blocks_by_hash['0x' + base58.b58decode(block['blockhash']).hex()] = slot
             self.blocks_by_height[block['blockHeight']] = slot
 
-        self.blocks_by_hash.commit()
-        self.blocks_by_height.commit()
         self.constants['last_block'] = max_slot
 
     def get_block(self, slot):
