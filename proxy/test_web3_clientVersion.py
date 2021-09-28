@@ -16,13 +16,14 @@ proxy.eth.default_account = eth_account.address
 class Test_web3_clientVersion(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/140")
+        print('\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/140')
         print('eth_account.address:', eth_account.address)
         print('eth_account.key:', eth_account.key.hex())
 
     def test_web3_clientVersion(self):
-        print("check tag latest in web3_clientVersion")
+        print('check tag Neon/ in web3_clientVersion')
         web3_clientVersion = proxy.clientVersion
+        print('web3_clientVersion:', web3_clientVersion)
         self.assertEqual(web3_clientVersion[:5], 'Neon/')
 
 
