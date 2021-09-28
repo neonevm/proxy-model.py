@@ -21,10 +21,10 @@ class Test_web3_clientVersion(unittest.TestCase):
         print('eth_account.key:', eth_account.key.hex())
 
     def test_web3_clientVersion(self):
-        print('check tag Neon/ in web3_clientVersion')
+        print('check tag Neon/v0. in web3_clientVersion')
         web3_clientVersion = proxy.clientVersion
         print('web3_clientVersion:', web3_clientVersion)
-        self.assertEqual(web3_clientVersion[:5], 'Neon/')
+        self.assertEqual(web3_clientVersion[:8], 'Neon/v0.')
 
 
 if __name__ == '__main__':
