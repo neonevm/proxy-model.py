@@ -7,6 +7,7 @@ import re
 import struct
 import subprocess
 import time
+from datetime import datetime
 from hashlib import sha256
 from typing import NamedTuple
 import rlp
@@ -311,7 +312,20 @@ def ether2seed(ether, program_id, base):
 
 
 def neon_config_load(ethereum_model):
-    logger.debug('neon_config_load for solana_url={} and evm_loader_id={}'.format(solana_url, evm_loader_id))
+    logger.debug('proxy_id={}'.format(ethereum_model.proxy_id))
+    try:
+        ethereum_model.neon_config_json
+    except NameError:
+        logger.debug("loading the config for the first time!")
+        ethereum_model.neon_config_json = json.loads('{}')
+        ethereum_model.neon_config_json['load_time'] = datetime.now().timestamp()
+    else:
+        time_duration = ethereum_model.neon_config_json['load_time'] - datetime.now().timestamp()
+        logger.debug('time_duration={} and evm_loader_id={}'.format(time_duration))
+        if time_duration < 1000:
+            return
+
+    logger.debug('load for solana_url={} and evm_loader_id={}'.format(solana_url, evm_loader_id))
     res = solana_cli().call('program', 'dump', evm_loader_id, './evm_loader.dump')
     substr = "Wrote program to "
     path = ""
@@ -320,9 +334,11 @@ def neon_config_load(ethereum_model):
             path = line[len(substr):].strip()
     if path == "":
         raise Exception("cannot program dump for ", evm_loader_id)
-    ethereum_model.neon_config = neon_cli().call("neon-elf", path)
-    for neon_elf_symbol in ethereum_model.neon_config.splitlines():
-        logger.debug(neon_elf_symbol)
+    neon_elf = '{' + neon_cli().call("neon-elf", path).replace('=', ":\"").replace('\n', "\",") + '}'
+    ethereum_model.neon_config_json = json.loads(neon_elf)
+    load_time = datetime.now().timestamp()
+    ethereum_model.neon_config_json['load_time'] = load_time
+    logger.debug(json.dumps(ethereum_model.neon_config_json, sort_keys=True, indent=2))
 
 
 def call_emulated(contract_id, caller_id, data=None, value=None):
