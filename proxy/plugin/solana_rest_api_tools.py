@@ -334,7 +334,11 @@ def neon_config_load(ethereum_model):
             path = line[len(substr):].strip()
     if path == "":
         raise Exception("cannot program dump for ", evm_loader_id)
-    neon_elf = '{' + neon_cli().call("neon-elf", path).replace('=', ":\"").replace('\n', "\",") + '}'
+    neon_elf = '{' + neon_cli().call("neon-elf", path)\
+        .replace('NEON_', '\"NEON_')\
+        .replace('=', '\":\"')\
+        .replace('\n', '\",') + '}'
+    neon_elf = neon_elf.replace(',}', '}')
     ethereum_model.neon_config_json = json.loads(neon_elf)
     load_time = datetime.now().timestamp()
     ethereum_model.neon_config_json['load_time'] = load_time
