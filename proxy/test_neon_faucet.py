@@ -180,7 +180,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         self.faucet = subprocess.Popen(['faucet', 'run', '--workers', '1'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     # @unittest.skip("a.i.")
-    def test_eth_token(self):
+    def test_neon_faucet_01_eth_token(self):
         print()
         # First request - trigger creation of the account without real transfer
         url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
@@ -205,7 +205,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         self.assertEqual(balance_after - balance_before, 1000000000000000000)
 
     # @unittest.skip("a.i.")
-    def test_erc20_tokens(self):
+    def test_neon_faucet_02_erc20_tokens(self):
         print()
         a_before = self.get_token_balance(self.token_a, user.address)
         b_before = self.get_token_balance(self.token_b, user.address)
