@@ -180,9 +180,9 @@ class Test_Neon_Faucet(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_eth_token(self):
         print()
-        # First request - trigger creation of the account
+        # First request - trigger creation of the account without real transfer
         url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
-        data = '{"wallet": "' + user.address + '", "amount": 1}'
+        data = '{"wallet": "' + user.address + '", "amount": 0}'
         r = requests.post(url, data=data)
         if not r.ok:
             print('Response:', r.status_code)
@@ -202,7 +202,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         print('NEO balance difference:', balance_after - balance_before)
         self.assertEqual(balance_after - balance_before, 1000000000000000000)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_erc20_tokens(self):
         print()
         a_before = self.get_token_balance(self.token_a, user.address)
