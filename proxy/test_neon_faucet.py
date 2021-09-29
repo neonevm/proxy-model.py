@@ -100,7 +100,7 @@ contract TestToken is ERC20Interface, SafeMath {
     //
     // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md
     // recommends that there are no checks for the approval double-spend attack
-    // as this should be implemented in user interfaces 
+    // as this should be implemented in user interfaces
     // ------------------------------------------------------------------------
     function approve(address spender, uint tokens) public override returns (bool success) {
         allowed[msg.sender][spender] = tokens;
@@ -109,7 +109,7 @@ contract TestToken is ERC20Interface, SafeMath {
     }
     // ------------------------------------------------------------------------
     // Transfer tokens from sender account to receiver account
-    // 
+    //
     // The calling account must already have sufficient tokens approve(...)-d
     // for spending from sender account and
     // - From account must have sufficient balance to transfer
@@ -181,12 +181,12 @@ class Test_Neon_Faucet(unittest.TestCase):
     def test_eth_token(self):
         print()
         # First request - trigger creation of the account
-        #url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
-        #data = '{"wallet": "' + user.address + '", "amount": 1}'
-        #r = requests.post(url, data=data)
-        #if not r.ok:
-        #    print('Response:', r.status_code)
-        #assert(r.ok)
+        url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
+        data = '{"wallet": "' + user.address + '", "amount": 1}'
+        r = requests.post(url, data=data)
+        if not r.ok:
+            print('Response:', r.status_code)
+        assert(r.ok)
         # Second request - actual test
         balance_before = proxy.eth.get_balance(user.address)
         print('NEO balance before:', balance_before)
@@ -196,6 +196,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         if not r.ok:
             print('Response:', r.status_code)
         assert(r.ok)
+        # Check
         balance_after = proxy.eth.get_balance(user.address)
         print('NEO balance after:', balance_after)
         print('NEO balance difference:', balance_after - balance_before)
