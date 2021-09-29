@@ -12,11 +12,12 @@ from solcx import install_solc
 install_solc(version='0.7.6')
 from solcx import compile_source
 
+issue = 'https://github.com/neonlabsorg/neon-evm/issues/166'
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "100000"))
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
-admin = proxy.eth.account.create('issues/neonlabsorg/neon-evm/166/admin')
-user = proxy.eth.account.create('issues/neonlabsorg/neon-evm/166/user')
+admin = proxy.eth.account.create(issue + '/admin')
+user = proxy.eth.account.create(issue + '/user')
 proxy.eth.default_account = admin.address
 
 ERC20_CONTRACT_SOURCE = '''
@@ -136,6 +137,7 @@ contract TestToken is ERC20Interface, SafeMath {
 class Test_Neon_Faucet(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print('\n\n' + issue)
         cls.compile_erc20_contract(cls)
         cls.token_a = cls.deploy_erc20_token(cls, 'A')
         cls.token_b = cls.deploy_erc20_token(cls, 'B')
