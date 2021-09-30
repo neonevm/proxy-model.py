@@ -339,7 +339,6 @@ def neon_config_load(ethereum_model):
             neon_config_json_str += param.replace('NEON_', '\"NEON_').replace('=', '\":\"') + '\",'
     neon_config_json_str += '}'
     neon_config_json_str = neon_config_json_str.replace(',}', '}')
-    logger.debug('neon_config_json_str={}'.format(neon_config_json_str))
     ethereum_model.neon_config_json = json.loads(neon_config_json_str)
     load_time = datetime.now().timestamp()
     ethereum_model.neon_config_json['load_time'] = load_time
