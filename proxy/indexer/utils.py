@@ -19,7 +19,7 @@ def check_error(trx):
 def get_trx_results(trx):
     slot = trx['slot']
     block_number = hex(slot)
-    block_hash = '0x%064x'%slot
+    # block_hash = '0x%064x'%slot
     got_result = False
     logs = []
     status = "0x1"
@@ -48,7 +48,7 @@ def get_trx_results(trx):
                         'blockNumber': block_number,
                         # 'transactionHash': trxId, # set when transaction found
                         'logIndex': hex(log_index),
-                        'blockHash': block_hash
+                        # 'blockHash': block_hash # set on return to user
                     }
                 logs.append(rec)
                 log_index +=1

@@ -6,9 +6,8 @@ import time
 import logging
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
-from solana.rpc.commitment import Recent
 from sqlitedict import SqliteDict
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, Union
 
 try:
     from utils import check_error, get_trx_results, get_trx_receipts
@@ -43,7 +42,6 @@ class Indexer:
     def __init__(self):
         self.client = Client(solana_url)
         self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True)
-        self.blocks_by_height = SqliteDict(filename="local.db", tablename="solana_blocks_by_height", autocommit=True)
         self.transaction_receipts = SqliteDict(filename="local.db", tablename="known_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
@@ -416,9 +414,9 @@ class Indexer:
         for block_result in results:
             (slot, block) = block_result
             self.blocks_by_hash['0x' + base58.b58decode(block['blockhash']).hex()] = slot
-            self.blocks_by_height[block['blockHeight']] = slot
 
         self.constants['last_block'] = max_slot
+        self.requested_blocks.clear()
 
     def get_block(self, slot):
         block = None

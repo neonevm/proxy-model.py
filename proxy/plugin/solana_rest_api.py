@@ -88,7 +88,6 @@ class EthereumModel:
         self.client = SolanaClient(solana_url)
 
         self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True)
-        self.blocks_by_height = SqliteDict(filename="local.db", tablename="solana_blocks_by_height", autocommit=True)
         self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
@@ -145,6 +144,8 @@ class EthereumModel:
         if 'error' in response:
             raise Exception(response['error']['message'])
         block_info = response['result']
+        if block_info is None:
+            return None
 
         transactions = []
         gasUsed = 0
@@ -159,7 +160,7 @@ class EthereumModel:
                     if full:
                         trx = self.eth_getTransactionByHash(eth_trx['eth'], block_info)
                         if trx is not None:
-                            trx['eth'] = hex(trx_index)
+                            trx['transactionIndex'] = hex(trx_index)
                             trx_index += 1
                             transactions.append(trx)
                     else:
@@ -199,15 +200,11 @@ class EthereumModel:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         if tag == "latest":
-            slot = int(self.client.get_slot()["result"])
+            slot = int(self.client.get_slot(commitment=Confirmed)["result"])
         elif tag in ('earliest', 'pending'):
             raise Exception("Invalid tag {}".format(tag))
         else:
-            height = int(tag, 16)
-            slot = self.blocks_by_height.get(height, None)
-            if slot is None:
-                logger.debug("Not found block by number %s", tag)
-                return None
+            slot = int(tag, 16)
         ret = self.getBlockBySlot(slot, full)
         if ret is not None:
             logger.debug("eth_getBlockByNumber: %s", json.dumps(ret, indent=3))
@@ -270,9 +267,12 @@ class EthereumModel:
             if block_info is None:
                 block_info = self.client._provider.make_request("getBlock", trx_info['slot'], {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
             blockHash = '0x' + base58.b58decode(block_info['blockhash']).hex()
-            blockNumber = hex(block_info['blockHeight'])
         except Exception as err:
-            logger.debug("Can't get account info: %s"%err)
+            logger.debug("Can't get block info: %s"%err)
+
+        logs = trx_info['logs']
+        for log in logs:
+            log['blockHash'] = blockHash
 
         result = {
             "transactionHash": trxId,
@@ -284,7 +284,7 @@ class EthereumModel:
             "gasUsed": hex(trx_info['gas_used']),
             "cumulativeGasUsed": '0x%x' % trx_info['gas_used'],
             "contractAddress": contract,
-            "logs": trx_info['logs'],
+            "logs": logs,
             "status": trx_info['status'],
             "logsBloom":"0x"+'0'*512
         }
@@ -310,7 +310,6 @@ class EthereumModel:
             if block_info is None:
                 block_info = self.client._provider.make_request("getBlock", trx_info['slot'], {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
             blockHash = '0x' + base58.b58decode(block_info['blockhash']).hex()
-            blockNumber = hex(block_info['blockHeight'])
         except Exception as err:
             logger.debug("Can't get block info: %s"%err)
 
