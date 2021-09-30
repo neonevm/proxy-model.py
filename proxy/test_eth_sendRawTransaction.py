@@ -147,7 +147,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_check_get_block_by_hash(self):
         print("\ntest_check_get_block_by_hash")
-        block = proxy.eth.get_block(self.deploy_block_hash)
+        block = proxy.eth.get_block(self.deploy_block_hash, full_transactions=True)
         print('block:', block)
 
     # @unittest.skip("a.i.")
