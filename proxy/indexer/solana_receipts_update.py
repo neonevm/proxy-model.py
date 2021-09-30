@@ -23,6 +23,8 @@ PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+UPDATE_BLOCK_COUNT = PARALLEL_REQUESTS * 16
+
 class HolderStruct:
     def __init__(self, storage_account):
         self.storage_account = storage_account
@@ -49,6 +51,7 @@ class Indexer:
         self.constants = SqliteDict(filename="local.db", tablename="constants", autocommit=True)
         self.last_slot = 0
         self.transaction_order = []
+        self.requested_blocks = []
         if 'last_block' not in self.constants:
             self.constants['last_block'] = 0
 
@@ -375,6 +378,7 @@ class Indexer:
 
     def submit_transaction(self, eth_trx, eth_signature, from_address, got_result, signatures):
         (logs, status, gas_used, return_value, slot) = got_result
+        self.requested_blocks.append(slot)
         if logs:
             for rec in logs:
                 rec['transactionHash'] = eth_signature
@@ -401,9 +405,10 @@ class Indexer:
         max_slot = self.client.get_slot(commitment="recent")["result"]
 
         last_block = self.constants['last_block']
-        if last_block + 10_000 < max_slot:
-            max_slot = last_block + 10_000
-        slots = self.client._provider.make_request("getBlocks", last_block, max_slot, {"commitment": "confirmed"})["result"]
+        if last_block + UPDATE_BLOCK_COUNT < max_slot:
+            max_slot = last_block + UPDATE_BLOCK_COUNT
+        res_list = self.client._provider.make_request("getBlocks", last_block, max_slot, {"commitment": "confirmed"})["result"]
+        slots = [*res_list, *self.requested_blocks]
 
         pool = ThreadPool(PARALLEL_REQUESTS)
         results = pool.map(self.get_block, slots)
