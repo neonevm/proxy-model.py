@@ -378,15 +378,19 @@ class EthereumModel:
                     'from_address': '0x'+sender,
                 }
             else:
+                slot = got_result['slot']
                 self.ethereum_trx[eth_signature] = {
                     'eth_trx': rawTrx[2:],
-                    'slot': got_result['slot'],
+                    'slot': slot,
                     'logs': None,
                     'status': 0,
                     'gas_used': None,
                     'return_value': None,
                     'from_address': '0x'+sender,
                 }
+
+            block = self.client._provider.make_request("getBlock", slot, {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
+            self.blocks_by_hash['0x' + base58.b58decode(block['blockhash']).hex()] = slot
 
             return eth_signature
 
