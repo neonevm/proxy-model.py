@@ -303,6 +303,11 @@ class EthereumModel:
         addr_to = None
         if eth_trx[3]:
             addr_to = '0x' + eth_trx[3].hex()
+        for i, eth_field in enumerate(eth_trx):
+            if len(eth_field) ==0:
+                eth_trx[i] = '0x0'
+            else:
+                eth_trx[i] = '0x'+eth_field.hex()
 
         blockHash = '0x%064x'%trx_info['slot']
         blockNumber = hex(trx_info['slot'])
@@ -319,15 +324,15 @@ class EthereumModel:
             "hash": trxId,
             "transactionIndex": hex(0),
             "from": trx_info['from_address'],
-            "nonce": '0x'+eth_trx[0].hex(),
-            "gasPrice": '0x'+eth_trx[1].hex(),
-            "gas": '0x'+eth_trx[2].hex(),
+            "nonce": eth_trx[0],
+            "gasPrice": eth_trx[1],
+            "gas": eth_trx[2],
             "to": addr_to,
-            "value": '0x'+eth_trx[4].hex(),
-            "input": '0x'+eth_trx[5].hex(),
-            "v": '0x'+eth_trx[6].hex(),
-            "r": '0x'+eth_trx[7].hex(),
-            "s": '0x'+eth_trx[8].hex(),
+            "value": eth_trx[4],
+            "input": eth_trx[5],
+            "v": eth_trx[6],
+            "r": eth_trx[7],
+            "s": eth_trx[8],
         }
 
         logger.debug ("eth_getTransactionByHash: %s", json.dumps(ret, indent=3))
