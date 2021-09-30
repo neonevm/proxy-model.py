@@ -334,7 +334,7 @@ def neon_config_load(ethereum_model):
     if path == "":
         raise Exception("cannot program dump for ", evm_loader_id)
     neon_config_json_str = '{ '
-    for param in neon_cli().call("neon-elf-params", path):
+    for param in neon_cli().call("neon-elf-params", path).splitlines():
         if param.startswith('NEON_') and '=' in param:
             neon_config_json_str += param.replace('NEON_', '\"NEON_').replace('=', '\":\"') + '\",'
     neon_config_json_str += '}'
