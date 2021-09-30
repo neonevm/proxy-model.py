@@ -18,6 +18,7 @@ except ImportError:
 
 solana_url = os.environ.get("SOLANA_URL", "https://api.devnet.solana.com")
 evm_loader_id = os.environ.get("EVM_LOADER", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
+PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -55,10 +56,10 @@ class Indexer:
         while (True):
             try:
                 logger.debug("Start indexing")
-
                 self.gather_unknown_transactions()
+                logger.debug("Process receipts")
                 self.process_receipts()
-
+                logger.debug("Start getting blocks")
                 self.gather_blocks()
             except Exception as err:
                 logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
@@ -107,7 +108,7 @@ class Indexer:
                     break
 
         logger.debug("start getting receipts")
-        pool = ThreadPool(2)
+        pool = ThreadPool(PARALLEL_REQUESTS)
         results = pool.map(self.get_tx_receipts, poll_txs)
 
         for transaction in results:
@@ -184,7 +185,7 @@ class Indexer:
                                 length = int.from_bytes(instruction_data[8:16], "little")
                                 data = instruction_data[16:]
 
-                                logger.debug("WRITE offset {} length {}".format(offset, length))
+                                # logger.debug("WRITE offset {} length {}".format(offset, length))
 
                                 if holder_table[write_account].max_written < (offset + length):
                                     holder_table[write_account].max_written = offset + length
@@ -194,7 +195,7 @@ class Indexer:
                                     holder_table[write_account].count_written += 1
 
                                 if holder_table[write_account].max_written == holder_table[write_account].count_written:
-                                    logger.debug("WRITE {} {}".format(holder_table[write_account].max_written, holder_table[write_account].count_written))
+                                    # logger.debug("WRITE {} {}".format(holder_table[write_account].max_written, holder_table[write_account].count_written))
                                     signature = holder_table[write_account].data[1:66]
                                     length = int.from_bytes(holder_table[write_account].data[66:74], "little")
                                     unsigned_msg = holder_table[write_account].data[74:74+length]
@@ -281,7 +282,7 @@ class Indexer:
 
                                 del continue_table[storage_account]
                             else:
-                                logger.debug("Storage not found")
+                                # logger.debug("Storage not found")
                                 pass
 
                         elif instruction_data[0] == 0x0a: # Continue
@@ -295,8 +296,8 @@ class Indexer:
                                 got_result = get_trx_results(trx)
                                 if got_result is not None:
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
-                                else:
-                                    logger.error("Result not found")
+                                # else:
+                                #     logger.error("Result not found")
 
 
                         elif instruction_data[0] == 0x0b: # ExecuteTrxFromAccountDataIterative
@@ -404,8 +405,7 @@ class Indexer:
             max_slot = last_block + 10_000
         slots = self.client._provider.make_request("getBlocks", last_block, max_slot, {"commitment": "confirmed"})["result"]
 
-        logger.debug("start getting blocks")
-        pool = ThreadPool(2)
+        pool = ThreadPool(PARALLEL_REQUESTS)
         results = pool.map(self.get_block, slots)
 
         for block_result in results:

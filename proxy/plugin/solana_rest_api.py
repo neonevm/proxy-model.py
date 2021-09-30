@@ -187,7 +187,10 @@ class EthereumModel:
             logger.debug("Not found block by hash %s", trx_hash)
             return None
         ret = self.getBlockBySlot(slot, full)
-        logger.debug("eth_getBlockByHash: %s", json.dumps(ret, indent=3))
+        if ret is not None:
+            logger.debug("eth_getBlockByHash: %s", json.dumps(ret, indent=3))
+        else:
+            logger.debug("Not found block by hash %s", trx_hash)
         return ret
 
     def eth_getBlockByNumber(self, tag, full):
@@ -206,7 +209,10 @@ class EthereumModel:
                 logger.debug("Not found block by number %s", tag)
                 return None
         ret = self.getBlockBySlot(slot, full)
-        logger.debug("eth_getBlockByNumber: %s", json.dumps(ret, indent=3))
+        if ret is not None:
+            logger.debug("eth_getBlockByNumber: %s", json.dumps(ret, indent=3))
+        else:
+            logger.debug("Not found block by number %s", tag)
         return ret
 
     def eth_call(self, obj, tag):
@@ -306,7 +312,7 @@ class EthereumModel:
             blockHash = '0x' + base58.b58decode(block_info['blockhash']).hex()
             blockNumber = hex(block_info['blockHeight'])
         except Exception as err:
-            logger.debug("Can't get account info: %s"%err)
+            logger.debug("Can't get block info: %s"%err)
 
         ret = {
             "blockHash": blockHash,
