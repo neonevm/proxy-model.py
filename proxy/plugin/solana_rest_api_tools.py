@@ -41,7 +41,7 @@ NEW_USER_AIRDROP_AMOUNT = int(os.environ.get("NEW_USER_AIRDROP_AMOUNT", "0"))
 location_bin = ".deploy_contract.bin"
 confirmation_check_delay = float(os.environ.get("NEON_CONFIRMATION_CHECK_DELAY", "0.1"))
 neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
-USE_COMBINED_START_CONTINUE = os.environ.get("USE_COMBINED_START_CONTINUE")
+USE_COMBINED_START_CONTINUE = os.environ.get("USE_COMBINED_START_CONTINUE", "YES") == "YES"
 CONTINUE_COUNT_FACTOR = int(os.environ.get("CONTINUE_COUNT_FACTOR", "3"))
 
 ACCOUNT_SEED_VERSION=b'\1'
@@ -465,14 +465,21 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps):
         (continue_count, instruction_count) = simulate_continue(signer, client, perm_accs, trx_accs, steps)
         logger.debug("Send bucked:")
         result_list = []
-        for index in range(continue_count*CONTINUE_COUNT_FACTOR):
-            trx = Transaction().add(make_continue_instruction(perm_accs, trx_accs, instruction_count, index))
-            result = client.send_transaction(
-                    trx,
-                    signer,
-                    opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed)
-                )["result"]
-            result_list.append(result)
+        try:
+            for index in range(continue_count):
+                trx = Transaction().add(make_continue_instruction(perm_accs, trx_accs, instruction_count, index))
+                result = client.send_transaction(
+                        trx,
+                        signer,
+                        opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed)
+                    )["result"]
+                result_list.append(result)
+        except Exception as err:
+            if str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1"):
+                pass
+            else:
+                raise
+
         logger.debug("Collect bucked results:")
         for trx in result_list:
             confirm_transaction(client, trx)
@@ -489,14 +496,21 @@ def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg):
         (continue_count, instruction_count) = simulate_continue_0x0d(signer, client, perm_accs, trx_accs, steps, msg)
         logger.debug("Send bucked:")
         result_list = []
-        for index in range(continue_count*CONTINUE_COUNT_FACTOR):
-            trx = Transaction().add(make_partial_call_or_continue_instruction_0x0d(perm_accs, trx_accs, instruction_count, msg, index))
-            result = client.send_transaction(
-                trx,
-                signer,
-                opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed)
-            )["result"]
-            result_list.append(result)
+        try:
+            for index in range(continue_count*CONTINUE_COUNT_FACTOR):
+                trx = Transaction().add(make_partial_call_or_continue_instruction_0x0d(perm_accs, trx_accs, instruction_count, msg, index))
+                result = client.send_transaction(
+                    trx,
+                    signer,
+                    opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed)
+                )["result"]
+                result_list.append(result)
+        except Exception as err:
+            if str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1"):
+                pass
+            else:
+                raise
+
         logger.debug("Collect bucked results:")
         for trx in result_list:
             confirm_transaction(client, trx)
@@ -550,8 +564,9 @@ def sol_instr_12_cancel(signer, client, perm_accs, trx_accs):
         data=bytearray.fromhex("0C"),
         keys=[
             AccountMeta(pubkey=perm_accs.storage, is_signer=False, is_writable=True),
-
             AccountMeta(pubkey=perm_accs.operator, is_signer=True, is_writable=True),
+            AccountMeta(pubkey=perm_accs.operator_token, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=trx_accs.caller_token, is_signer=False, is_writable=True),
             AccountMeta(pubkey=incinerator, is_signer=False, is_writable=True),
             AccountMeta(pubkey=system, is_signer=False, is_writable=False),
 
@@ -702,10 +717,13 @@ def simulate_continue_0x0d(signer, client, perm_accs, trx_accs, step_count, msg)
                 if continue_count == 0:
                     raise Exception("uninitialized storage account")
                 continue_count = instruction_error[0]
+                break
             else:
                 logger.debug("Result:\n%s"%json.dumps(response, indent=3))
                 raise Exception("unspecified error")
         else:
+            # In case of long Ethereum transaction we speculative send more iterations then need
+            continue_count = continue_count*CONTINUE_COUNT_FACTOR
             break
 
     logger.debug("tx_count = {}, step_count = {}".format(continue_count, step_count))
@@ -747,10 +765,13 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
                 if continue_count == 0:
                     raise Exception("uninitialized storage account")
                 continue_count = instruction_error[0]
+                break
             else:
                 logger.debug("Result:\n%s"%json.dumps(response, indent=3))
                 raise Exception("unspecified error")
         else:
+            # In case of long Ethereum transaction we speculative send more iterations then need
+            continue_count = continue_count*CONTINUE_COUNT_FACTOR
             break
 
     logger.debug("tx_count = {}, step_count = {}".format(continue_count, step_count))
@@ -768,15 +789,22 @@ def create_account_list_by_emulate(signer, client, ethTrx):
         address = bytes.fromhex(acc_desc["address"][2:])
         if address == ethTrx.toAddress:
             contract_sol = PublicKey(acc_desc["account"])
-            code_sol = PublicKey(acc_desc["contract"]) if acc_desc["contract"] != None else None
+            if acc_desc["contract"] != None :
+                code_sol = PublicKey(acc_desc["contract"])
+                code_writable = acc_desc["writable"]
+            else:
+                code_sol = None
+                code_writable = None
+
         elif address == sender_ether:
             sender_sol = PublicKey(acc_desc["account"])
         else:
-            add_keys_05.append(AccountMeta(pubkey=acc_desc["account"], is_signer=False, is_writable=acc_desc["writable"]))
+            add_keys_05.append(AccountMeta(pubkey=acc_desc["account"], is_signer=False, is_writable=(True if acc_desc["contract"] else acc_desc["writable"])))
             token_account = get_associated_token_address(PublicKey(acc_desc["account"]), ETH_TOKEN_MINT_ID)
             add_keys_05.append(AccountMeta(pubkey=token_account, is_signer=False, is_writable=True))
             if acc_desc["contract"]:
                 add_keys_05.append(AccountMeta(pubkey=acc_desc["contract"], is_signer=False, is_writable=acc_desc["writable"]))
+
         if acc_desc["new"]:
             logger.debug("Create solana accounts for %s: %s %s", acc_desc["address"], acc_desc["account"], acc_desc["contract"])
             code_account = None
@@ -824,7 +852,7 @@ def create_account_list_by_emulate(signer, client, ethTrx):
     eth_accounts = [
             AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
             AccountMeta(pubkey=get_associated_token_address(contract_sol, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-        ] + ([AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True)] if code_sol != None else []) + [
+        ] + ([AccountMeta(pubkey=code_sol, is_signer=False, is_writable=code_writable)] if code_sol != None else []) + [
             AccountMeta(pubkey=sender_sol, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller_token, is_signer=False, is_writable=True),
         ] + add_keys_05
