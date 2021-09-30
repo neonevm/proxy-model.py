@@ -333,15 +333,17 @@ def neon_config_load(ethereum_model):
             path = line[len(substr):].strip()
     if path == "":
         raise Exception("cannot program dump for ", evm_loader_id)
-    neon_elf = '{' + neon_cli().call("neon-elf", path)\
-        .replace('NEON_', '\"NEON_')\
-        .replace('=', '\":\"')\
-        .replace('\n', '\",') + '}'
-    neon_elf = neon_elf.replace(',}', '}')
-    ethereum_model.neon_config_json = json.loads(neon_elf)
+    neon_config_json_str = '{ '
+    for param in neon_cli().call("neon-elf-params", path):
+        if param.startswith('NEON_') and '=' in param:
+            neon_config_json_str += param.replace('NEON_', '\"NEON_').replace('=', '\":\"') + '\",'
+    neon_config_json_str += '}'
+    neon_config_json_str = neon_config_json_str.replace(',}', '}')
+    logger.debug('neon_config_json_str={}'.format(neon_config_json_str))
+    ethereum_model.neon_config_json = json.loads(neon_config_json_str)
     load_time = datetime.now().timestamp()
     ethereum_model.neon_config_json['load_time'] = load_time
-    # 'Neon/v2.0.8-62bbf7ec12072d96eee02655944a9e3fcefee8cb
+    # 'Neon/v0.3.0-rc0-d1e4ff618457ea9cbc82b38d2d927e8a62168bec
     ethereum_model.neon_config_json['web3_clientVersion'] = 'Neon/v' +\
                                                             ethereum_model.neon_config_json['NEON_PKG_VERSION'] +\
                                                             '-'\
