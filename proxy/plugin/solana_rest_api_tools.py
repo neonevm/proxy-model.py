@@ -44,6 +44,7 @@ confirmation_check_delay = float(os.environ.get("NEON_CONFIRMATION_CHECK_DELAY",
 neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
 USE_COMBINED_START_CONTINUE = os.environ.get("USE_COMBINED_START_CONTINUE", "YES") == "YES"
 CONTINUE_COUNT_FACTOR = int(os.environ.get("CONTINUE_COUNT_FACTOR", "3"))
+TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFIG", "3600"))
 
 ACCOUNT_SEED_VERSION=b'\1'
 
@@ -321,7 +322,7 @@ def neon_config_load(ethereum_model):
     else:
         elapsed_time = datetime.now().timestamp() - ethereum_model.neon_config_json['load_time']
         logger.debug('elapsed_time={} proxy_id={}'.format(elapsed_time, ethereum_model.proxy_id))
-        if elapsed_time < 3600:
+        if elapsed_time < TIMEOUT_TO_RELOAD_NEON_CONFIG:
             return
 
     logger.debug('load for solana_url={} and evm_loader_id={}'.format(solana_url, evm_loader_id))
