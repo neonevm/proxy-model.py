@@ -316,9 +316,7 @@ def neon_config_load(ethereum_model):
     try:
         ethereum_model.neon_config_json
     except AttributeError:
-        logger.debug("loading the config for the first time!")
-        ethereum_model.neon_config_json = json.loads('{}')
-        ethereum_model.neon_config_json['load_time'] = datetime.now().timestamp()
+        logger.debug("loading the neon config for the first time!")
     else:
         elapsed_time = datetime.now().timestamp() - ethereum_model.neon_config_json['load_time']
         logger.debug('elapsed_time={} proxy_id={}'.format(elapsed_time, ethereum_model.proxy_id))
@@ -341,8 +339,7 @@ def neon_config_load(ethereum_model):
     neon_config_json_str += '}'
     neon_config_json_str = neon_config_json_str.replace(',}', '}')
     ethereum_model.neon_config_json = json.loads(neon_config_json_str)
-    load_time = datetime.now().timestamp()
-    ethereum_model.neon_config_json['load_time'] = load_time
+    ethereum_model.neon_config_json['load_time'] = datetime.now().timestamp()
     # 'Neon/v0.3.0-rc0-d1e4ff618457ea9cbc82b38d2d927e8a62168bec
     ethereum_model.neon_config_json['web3_clientVersion'] = 'Neon/v' +\
                                                             ethereum_model.neon_config_json['NEON_PKG_VERSION'] +\
