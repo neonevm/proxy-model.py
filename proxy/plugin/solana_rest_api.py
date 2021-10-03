@@ -33,7 +33,7 @@ from web3 import Web3
 import logging
 from ..core.acceptor.pool import proxy_id_glob
 import os
-from ..indexer.utils import get_trx_results
+from ..indexer.utils import get_trx_results, LogDB
 from sqlitedict import SqliteDict
 
 logger = logging.getLogger(__name__)
@@ -87,6 +87,7 @@ class EthereumModel:
 
         self.client = SolanaClient(solana_url)
 
+        self.logs_db = LogDB(filename="local.db")
         self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True)
         self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
@@ -124,6 +125,16 @@ class EthereumModel:
     def __repr__(self):
         return str(self.__dict__)
 
+    def process_block_tag(self, tag):
+        if tag == "latest":
+            slot = int(self.client.get_slot(commitment=Confirmed)["result"])
+        elif tag in ('earliest', 'pending'):
+            raise Exception("Invalid tag {}".format(tag))
+        else:
+            slot = int(tag, 16)
+        return slot
+
+
     def eth_blockNumber(self):
         slot = self.client.get_slot(commitment=Confirmed)['result']
         logger.debug("eth_blockNumber %s", hex(slot))
@@ -138,6 +149,26 @@ class EthereumModel:
         balance = getTokens(self.client, self.signer, evm_loader_id, eth_acc, self.signer.public_key())
 
         return hex(balance*10**9)
+
+    def eth_getLogs(self, obj):
+        fromBlock = None
+        toBlock = None
+        address = None
+        topics = None
+        blockHash = None
+
+        if 'fromBlock' in obj:
+            fromBlock = self.process_block_tag(obj['fromBlock'])
+        if 'toBlock' in obj:
+            toBlock = self.process_block_tag(obj['toBlock'])
+        if 'address' in obj:
+           address = obj['address']
+        if 'topics' in obj:
+           topics = obj['topics']
+        if 'blockHash' in obj:
+           blockHash = obj['blockHash']
+
+        return self.logs_db.get_logs(fromBlock, toBlock, address, topics, blockHash)
 
     def getBlockBySlot(self, slot, full):
         response = self.client._provider.make_request("getBlock", slot, {"commitment":"confirmed", "transactionDetails":"signatures"})
@@ -199,12 +230,7 @@ class EthereumModel:
             tag - integer of a block number, or the string "earliest", "latest" or "pending", as in the default block parameter.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
-        if tag == "latest":
-            slot = int(self.client.get_slot(commitment=Confirmed)["result"])
-        elif tag in ('earliest', 'pending'):
-            raise Exception("Invalid tag {}".format(tag))
-        else:
-            slot = int(tag, 16)
+        slot = self.process_block_tag(tag)
         ret = self.getBlockBySlot(slot, full)
         if ret is not None:
             logger.debug("eth_getBlockByNumber: %s", json.dumps(ret, indent=3))
