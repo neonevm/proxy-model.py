@@ -417,7 +417,6 @@ class Indexer:
             self.blocks_by_hash[block_hash] = slot
 
         self.constants['last_block'] = max_slot
-        self.requested_blocks.clear()
 
     def get_block(self, slot):
         retry = True

@@ -123,7 +123,6 @@ class LogDB:
             cur = self.conn.cursor()
             cur.executemany('INSERT INTO logs VALUES (?, ?, ?, ?,  ?, ?,  ?)', rows)
             self.conn.commit()
-            logger.debug(cur.lastrowid)
         else:
             logger.debug("NO LOGS")
 
