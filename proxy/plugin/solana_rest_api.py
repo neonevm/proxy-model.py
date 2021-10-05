@@ -397,11 +397,19 @@ class EthereumModel:
 
             logger.debug('Transaction signature: %s %s', signature, eth_signature)
 
-            got_result = get_trx_results(self.client.get_confirmed_transaction(signature)['result'])
+            # try:
+            trx = self.client.get_confirmed_transaction(signature)['result']
+            slot = trx['slot']
+            block = self.client._provider.make_request("getBlock", slot, {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
+            block_hash = '0x' + base58.b58decode(block['blockhash']).hex()
+            got_result = get_trx_results(trx)
             if got_result:
                 (logs, status, gas_used, return_value, slot) = got_result
-                for rec in logs:
-                    rec['transactionHash'] = eth_signature
+                if logs:
+                    for rec in logs:
+                        rec['transactionHash'] = eth_signature
+                        rec['blockHash'] = block_hash
+                    self.logs_db.push_logs(logs)
 
                 self.ethereum_trx[eth_signature] = {
                     'eth_trx': rawTrx[2:],
@@ -413,7 +421,6 @@ class EthereumModel:
                     'from_address': '0x'+sender,
                 }
             else:
-                slot = got_result['slot']
                 self.ethereum_trx[eth_signature] = {
                     'eth_trx': rawTrx[2:],
                     'slot': slot,
@@ -423,9 +430,14 @@ class EthereumModel:
                     'return_value': None,
                     'from_address': '0x'+sender,
                 }
-
-            block = self.client._provider.make_request("getBlock", slot, {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
-            self.blocks_by_hash['0x' + base58.b58decode(block['blockhash']).hex()] = slot
+            self.eth_sol_trx[eth_signature] = [signature]
+            self.blocks_by_hash[block_hash] = slot
+            self.sol_eth_trx[signature] = {
+                'idx': 0,
+                'eth': eth_signature,
+            }
+            # except Exception as err:
+            #     logger.debug(err)
 
             return eth_signature
 
