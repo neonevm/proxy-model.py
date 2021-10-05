@@ -7,6 +7,7 @@ import logging
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
 from sqlitedict import SqliteDict
+from typing import Dict, Union
 
 try:
     from utils import check_error, get_trx_results, get_trx_receipts
@@ -68,7 +69,12 @@ class Indexer:
 
         counter = 0
         while (continue_flag):
-            result = self.client.get_signatures_for_address(evm_loader_id, before=minimal_tx)
+            opts: Dict[str, Union[int, str]] = {}
+            if minimal_tx:
+                opts["before"] = minimal_tx
+            opts["commitment"] = "confirmed"
+            result = self.client._provider.make_request("getSignaturesForAddress", evm_loader_id, opts)
+
             logger.debug("{:>3} get_signatures_for_address {}".format(counter, len(result["result"])))
             counter += 1
 
