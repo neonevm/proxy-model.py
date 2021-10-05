@@ -79,9 +79,6 @@ class Indexer:
 
         counter = 0
         while (continue_flag):
-            if counter > 1000:
-                break
-
             opts: Dict[str, Union[int, str]] = {}
             if minimal_tx:
                 opts["before"] = minimal_tx
@@ -303,9 +300,7 @@ class Indexer:
 
                                 del continue_table[storage_account]
                             else:
-                                logger.debug("Storage not found")
-                                logger.debug(signature)
-                                logger.debug(storage_account)
+                                logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
                                 pass
 
                         elif instruction_data[0] == 0x0a: # Continue
@@ -320,9 +315,7 @@ class Indexer:
                                 if got_result is not None:
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
                                 else:
-                                    logger.error("Result not found")
-                                    logger.debug(signature)
-                                    logger.debug(storage_account)
+                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
 
 
                         elif instruction_data[0] == 0x0b: # ExecuteTrxFromAccountDataIterative
@@ -341,9 +334,7 @@ class Indexer:
                                 else:
                                     holder_table[holder_account] = HolderStruct(storage_account)
                             else:
-                                logger.debug("Storage not found")
-                                logger.debug(signature)
-                                logger.debug(storage_account)
+                                logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
 
 
                         elif instruction_data[0] == 0x0c: # Cancel
@@ -377,9 +368,7 @@ class Indexer:
                                 if got_result is not None:
                                     self.submit_transaction(eth_trx, eth_signature, from_address, got_result, [signature])
                                 else:
-                                    logger.debug("Storage not found")
-                                    logger.debug(signature)
-                                    logger.debug(storage_account)
+                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
 
                         elif instruction_data[0] == 0x0d:
                             # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeOrContinue 0x{}".format(slot, counter, instruction_data.hex()))
@@ -402,9 +391,7 @@ class Indexer:
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
                                     holder_table[holder_account] = HolderStruct(storage_account)
                                 else:
-                                    logger.debug("Storage not found")
-                                    logger.debug(signature)
-                                    logger.debug(storage_account)
+                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
 
                         if instruction_data[0] > 0x0e:
                             logger.debug("{:>10} {:>6} Unknown 0x{}".format(slot, counter, instruction_data.hex()))
