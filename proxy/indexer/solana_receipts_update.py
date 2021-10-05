@@ -417,7 +417,7 @@ class Indexer:
             for rec in logs:
                 rec['transactionHash'] = eth_signature
 
-        logger.debug(eth_signature + " " + status)
+        # logger.debug(eth_signature + " " + status)
 
         self.ethereum_trx[eth_signature] = {
             'eth_trx': eth_trx,
