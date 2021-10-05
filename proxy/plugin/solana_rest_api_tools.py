@@ -302,6 +302,7 @@ def ether2program(ether, program_id, base):
     items = output.rstrip().split(' ')
     return (items[0], int(items[1]))
 
+
 def ether2seed(ether, program_id, base):
     if isinstance(ether, str):
         if ether.startswith('0x'): ether = ether[2:]
@@ -347,8 +348,7 @@ def neon_config_load_dict(ethereum_model):
     logger.debug(ethereum_model.neon_config_dict)
 
 
-def neon_config_load(ethereum_model):
-    neon_config_load_dict(ethereum_model)
+def neon_config_load_json(ethereum_model):
     try:
         ethereum_model.neon_config_json
     except AttributeError:
@@ -382,6 +382,11 @@ def neon_config_load(ethereum_model):
                                                             '-'\
                                                             + ethereum_model.neon_config_json['NEON_REVISION']
     logger.debug(json.dumps(ethereum_model.neon_config_json, sort_keys=True, indent=2))
+
+
+def neon_config_load(ethereum_model):
+    neon_config_load_dict(ethereum_model)
+    neon_config_load_json(ethereum_model)
 
 
 def call_emulated(contract_id, caller_id, data=None, value=None):

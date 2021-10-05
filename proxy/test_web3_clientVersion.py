@@ -26,9 +26,9 @@ class Test_web3_clientVersion(unittest.TestCase):
         print('check tag Neon/v in web3_clientVersion')
         web3_clientVersion = proxy.clientVersion
         print('web3_clientVersion:', web3_clientVersion)
-        self.assertEqual(web3_clientVersion[:6], 'Neon/v')
+        self.assertTrue(web3_clientVersion.startswith('Neon/v'))
         print('check for neon_revision:', neon_revision)
-        self.assertIn(neon_revision, web3_clientVersion)
+        self.assertTrue(web3_clientVersion.endswith(neon_revision))
 
 
 if __name__ == '__main__':
