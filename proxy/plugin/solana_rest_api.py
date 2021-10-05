@@ -214,6 +214,7 @@ class EthereumModel:
             trx_hash - Hash of a block.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
+        trx_hash = trx_hash.lower()
         slot = self.blocks_by_hash.get(trx_hash, None)
         if slot is None:
             logger.debug("Not found block by hash %s", trx_hash)
@@ -273,6 +274,7 @@ class EthereumModel:
     def eth_getTransactionReceipt(self, trxId, block_info = None):
         logger.debug('getTransactionReceipt: %s', trxId)
 
+        trxId = trxId.lower()
         trx_info = self.ethereum_trx.get(trxId, None)
         if trx_info is None:
             logger.debug ("Not found receipt")
@@ -320,6 +322,8 @@ class EthereumModel:
 
     def eth_getTransactionByHash(self, trxId, block_info = None):
         logger.debug('eth_getTransactionByHash: %s', trxId)
+
+        trxId = trxId.lower()
         trx_info = self.ethereum_trx.get(trxId, None)
         if trx_info is None:
             logger.debug ("Not found receipt")

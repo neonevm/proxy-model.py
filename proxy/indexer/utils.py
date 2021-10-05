@@ -119,7 +119,7 @@ class LogDB:
                     )
                 )
         if len(rows):
-            # logger.debug(rows)
+            logger.debug(rows)
             cur = self.conn.cursor()
             cur.executemany('INSERT INTO logs VALUES (?, ?, ?, ?,  ?, ?,  ?)', rows)
             self.conn.commit()
@@ -140,10 +140,12 @@ class LogDB:
             params.append(toBlock)
 
         if blockHash is not None:
+            blockHash = blockHash.lower()
             queries.append("blockHash = ?")
             params.append(blockHash)
 
         if topics is not None:
+            topics = [item.lower() for item in topics]
             query_placeholder = ", ".join("?" * len(topics))
             topics_query = f"topic IN ({query_placeholder})"
 
@@ -152,9 +154,11 @@ class LogDB:
 
         if address is not None:
             if isinstance(address, str):
+                address = address.lower()
                 queries.append("address = ?")
                 params.append(address)
             elif isinstance(address, list):
+                address = [item.lower() for item in address]
                 query_placeholder = ", ".join("?" * len(address))
                 address_query = f"address IN ({query_placeholder})"
 
@@ -163,13 +167,12 @@ class LogDB:
 
         query_string = "SELECT * FROM logs WHERE "
         for idx, query in enumerate(queries):
-            logger.debug(query)
-
             query_string += query
             if idx < len(queries) - 1:
                 query_string += " AND "
 
         logger.debug(query_string)
+        logger.debug(params)
 
         cur = self.conn.cursor()
         cur.execute(query_string, tuple(params))
