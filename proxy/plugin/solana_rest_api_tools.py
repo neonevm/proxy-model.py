@@ -318,7 +318,7 @@ def neon_config_load(ethereum_model):
         ethereum_model.neon_config_dict
     except AttributeError:
         logger.debug("loading the neon config dict for the first time!")
-        ethereum_model.neon_config_dict = dict(short='neon', long='neon config')
+        ethereum_model.neon_config_dict = dict()
     else:
         elapsed_time = datetime.now().timestamp() - ethereum_model.neon_config_dict['load_time']
         logger.debug('elapsed_time={} proxy_id={}'.format(elapsed_time, ethereum_model.proxy_id))
