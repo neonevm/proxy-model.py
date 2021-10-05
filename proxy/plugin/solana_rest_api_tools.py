@@ -313,7 +313,7 @@ def ether2seed(ether, program_id, base):
     return (acc, 255, seed)
 
 
-def neon_config_load_dict(ethereum_model):
+def neon_config_load(ethereum_model):
     try:
         ethereum_model.neon_config_dict
     except AttributeError:
@@ -346,47 +346,6 @@ def neon_config_load_dict(ethereum_model):
                                                             '-' \
                                                             + ethereum_model.neon_config_dict['NEON_REVISION']
     logger.debug(ethereum_model.neon_config_dict)
-
-
-def neon_config_load_json(ethereum_model):
-    try:
-        ethereum_model.neon_config_json
-    except AttributeError:
-        logger.debug("loading the neon config for the first time!")
-    else:
-        elapsed_time = datetime.now().timestamp() - ethereum_model.neon_config_json['load_time']
-        logger.debug('elapsed_time={} proxy_id={}'.format(elapsed_time, ethereum_model.proxy_id))
-        if elapsed_time < TIMEOUT_TO_RELOAD_NEON_CONFIG:
-            return
-
-    logger.debug('load for solana_url={} and evm_loader_id={}'.format(solana_url, evm_loader_id))
-    res = solana_cli().call('program', 'dump', evm_loader_id, './evm_loader.dump')
-    substr = "Wrote program to "
-    path = ""
-    for line in res.splitlines():
-        if line.startswith(substr):
-            path = line[len(substr):].strip()
-    if path == "":
-        raise Exception("cannot program dump for ", evm_loader_id)
-    neon_config_json_str = '{ '
-    for param in neon_cli().call("neon-elf-params", path).splitlines():
-        if param.startswith('NEON_') and '=' in param:
-            neon_config_json_str += param.replace('NEON_', '\"NEON_').replace('=', '\":\"') + '\",'
-    neon_config_json_str += '}'
-    neon_config_json_str = neon_config_json_str.replace(',}', '}')
-    ethereum_model.neon_config_json = json.loads(neon_config_json_str)
-    ethereum_model.neon_config_json['load_time'] = datetime.now().timestamp()
-    # 'Neon/v0.3.0-rc0-d1e4ff618457ea9cbc82b38d2d927e8a62168bec
-    ethereum_model.neon_config_json['web3_clientVersion'] = 'Neon/v' +\
-                                                            ethereum_model.neon_config_json['NEON_PKG_VERSION'] +\
-                                                            '-'\
-                                                            + ethereum_model.neon_config_json['NEON_REVISION']
-    logger.debug(json.dumps(ethereum_model.neon_config_json, sort_keys=True, indent=2))
-
-
-def neon_config_load(ethereum_model):
-    neon_config_load_dict(ethereum_model)
-    neon_config_load_json(ethereum_model)
 
 
 def call_emulated(contract_id, caller_id, data=None, value=None):

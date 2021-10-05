@@ -100,7 +100,7 @@ class EthereumModel:
 
     def web3_clientVersion(self):
         neon_config_load(self)
-        return self.neon_config_json['web3_clientVersion']
+        return self.neon_config_dict['web3_clientVersion']
 
     def eth_chainId(self):
         return chainId
