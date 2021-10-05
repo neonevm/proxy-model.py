@@ -43,9 +43,12 @@ class Indexer:
         self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True)
         self.last_slot = 0
+        self.current_slot = 0
         self.transaction_order = []
 
-    def run(self):
+        self.counter_ = 0
+
+    def run(self, loop = True):
         while (True):
             try:
                 logger.debug("Start indexing")
@@ -55,7 +58,10 @@ class Indexer:
             except Exception as err:
                 logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
 
-            time.sleep(1)
+            if loop:
+                time.sleep(1)
+            else:
+                break
 
 
     def gather_unknown_transactions(self):
@@ -64,11 +70,17 @@ class Indexer:
 
         minimal_tx = None
         continue_flag = True
-        minimal_slot = self.client.get_slot()["result"]
+        current_slot = self.client.get_slot(commitment="confirmed")["result"]
         maximum_slot = self.last_slot
+        minimal_slot = current_slot
+
+        percent = 0
 
         counter = 0
         while (continue_flag):
+            if counter > 1000:
+                break
+
             opts: Dict[str, Union[int, str]] = {}
             if minimal_tx:
                 opts["before"] = minimal_tx
@@ -106,9 +118,14 @@ class Indexer:
         pool = ThreadPool(2)
         results = pool.map(self.get_tx_receipts, poll_txs)
 
-        for transaction in results:
-            (solana_signature, trx) = transaction
-            self.transaction_receipts[solana_signature] = trx
+        # count = 0
+        # for transaction in results:
+        #     count += 1
+        #     if int(100 * count / len(poll_txs)) != percent:
+        #         percent = int(100 * count / len(poll_txs))
+        #         logger.debug(percent)
+        #     (solana_signature, trx) = transaction
+        #     self.transaction_receipts[solana_signature] = trx
 
         if len(self.transaction_order):
             index = 0
@@ -122,21 +139,29 @@ class Indexer:
             self.transaction_order = ordered_txs
 
         self.last_slot = maximum_slot
+        self.current_slot = current_slot
+
+        self.counter_ = 0
 
 
     def get_tx_receipts(self, solana_signature):
-        trx = None
+        # trx = None
         retry = True
 
         while retry:
             try:
                 trx = self.client.get_confirmed_transaction(solana_signature)['result']
+                self.transaction_receipts[solana_signature] = trx
                 retry = False
             except Exception as err:
                 logger.debug(err)
                 time.sleep(1)
 
-        return (solana_signature, trx)
+        self.counter_ += 1
+        if self.counter_ % 100 == 0:
+            logger.debug(self.counter_)
+
+        # return (solana_signature, trx)
 
 
     def process_receipts(self):
@@ -180,7 +205,7 @@ class Indexer:
                                 length = int.from_bytes(instruction_data[8:16], "little")
                                 data = instruction_data[16:]
 
-                                logger.debug("WRITE offset {} length {}".format(offset, length))
+                                # logger.debug("WRITE offset {} length {}".format(offset, length))
 
                                 if holder_table[write_account].max_written < (offset + length):
                                     holder_table[write_account].max_written = offset + length
@@ -190,7 +215,7 @@ class Indexer:
                                     holder_table[write_account].count_written += 1
 
                                 if holder_table[write_account].max_written == holder_table[write_account].count_written:
-                                    logger.debug("WRITE {} {}".format(holder_table[write_account].max_written, holder_table[write_account].count_written))
+                                    # logger.debug("WRITE {} {}".format(holder_table[write_account].max_written, holder_table[write_account].count_written))
                                     signature = holder_table[write_account].data[1:66]
                                     length = int.from_bytes(holder_table[write_account].data[66:74], "little")
                                     unsigned_msg = holder_table[write_account].data[74:74+length]
@@ -278,6 +303,8 @@ class Indexer:
                                 del continue_table[storage_account]
                             else:
                                 logger.debug("Storage not found")
+                                logger.debug(signature)
+                                logger.debug(storage_account)
                                 pass
 
                         elif instruction_data[0] == 0x0a: # Continue
@@ -293,6 +320,8 @@ class Indexer:
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
                                 else:
                                     logger.error("Result not found")
+                                    logger.debug(signature)
+                                    logger.debug(storage_account)
 
 
                         elif instruction_data[0] == 0x0b: # ExecuteTrxFromAccountDataIterative
@@ -310,6 +339,11 @@ class Indexer:
                                     holder_table[holder_account] = HolderStruct(storage_account)
                                 else:
                                     holder_table[holder_account] = HolderStruct(storage_account)
+                            else:
+                                logger.debug("Storage not found")
+                                logger.debug(signature)
+                                logger.debug(storage_account)
+
 
                         elif instruction_data[0] == 0x0c: # Cancel
                             # logger.debug("{:>10} {:>6} Cancel 0x{}".format(slot, counter, instruction_data.hex()))
@@ -341,6 +375,10 @@ class Indexer:
                                 got_result = get_trx_results(trx)
                                 if got_result is not None:
                                     self.submit_transaction(eth_trx, eth_signature, from_address, got_result, [signature])
+                                else:
+                                    logger.debug("Storage not found")
+                                    logger.debug(signature)
+                                    logger.debug(storage_account)
 
                         elif instruction_data[0] == 0x0d:
                             # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeOrContinue 0x{}".format(slot, counter, instruction_data.hex()))
@@ -362,6 +400,10 @@ class Indexer:
                                 if got_result is not None:
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
                                     holder_table[holder_account] = HolderStruct(storage_account)
+                                else:
+                                    logger.debug("Storage not found")
+                                    logger.debug(signature)
+                                    logger.debug(storage_account)
 
                         if instruction_data[0] > 0x0e:
                             logger.debug("{:>10} {:>6} Unknown 0x{}".format(slot, counter, instruction_data.hex()))
@@ -394,7 +436,7 @@ def run_indexer():
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
     indexer = Indexer()
-    indexer.run()
+    indexer.run(False)
 
 
 if __name__ == "__main__":
