@@ -17,6 +17,7 @@ except ImportError:
 
 solana_url = os.environ.get("SOLANA_URL", "https://api.devnet.solana.com")
 evm_loader_id = os.environ.get("EVM_LOADER", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
+PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -115,7 +116,7 @@ class Indexer:
                     break
 
         logger.debug("start getting receipts")
-        pool = ThreadPool(2)
+        pool = ThreadPool(PARALLEL_REQUESTS )
         results = pool.map(self.get_tx_receipts, poll_txs)
 
         # count = 0
