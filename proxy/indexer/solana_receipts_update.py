@@ -51,13 +51,13 @@ class Indexer:
 
     def run(self, loop = True):
         while (True):
-            try:
-                logger.debug("Start indexing")
+            # try:
+            logger.debug("Start indexing")
 
-                self.gather_unknown_transactions()
-                self.process_receipts()
-            except Exception as err:
-                logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
+            self.gather_unknown_transactions()
+            self.process_receipts()
+            # except Exception as err:
+            #     logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
 
             if loop:
                 time.sleep(1)
@@ -95,6 +95,11 @@ class Indexer:
             for tx in result["result"]:
                 solana_signature = tx["signature"]
                 slot = tx["slot"]
+
+                if solana_signature == "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn":
+                    logger.debug(solana_signature)
+                    continue_flag = False
+                    break
 
                 ordered_txs.append(solana_signature)
 
@@ -166,6 +171,7 @@ class Indexer:
         counter = 0
         holder_table = {}
         continue_table = {}
+        global_continue = set()
 
         for signature in self.transaction_order:
             counter += 1
@@ -177,6 +183,7 @@ class Indexer:
                 trx = self.transaction_receipts[signature]
                 if trx is None:
                     logger.error("trx is None")
+                    del self.transaction_receipts[signature]
                     continue
                 if 'slot' not in trx:
                     logger.debug("\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
@@ -238,10 +245,10 @@ class Indexer:
                                         del holder_table[write_account]
                                     except rlp.exceptions.DecodingError:
                                         logger.debug("DecodingError")
-                                        pass
+                                    except rlp.exceptions.ObjectDeserializationError:
+                                        logger.debug("DecodingError")
                                     except Exception as err:
                                         logger.debug("could not parse trx {}".format(err))
-                                        pass
 
                         elif instruction_data[0] == 0x01: # Finalize
                             # logger.debug("{:>10} {:>6} Finalize 0x{}".format(slot, counter, instruction_data.hex()))
@@ -300,8 +307,9 @@ class Indexer:
 
                                 del continue_table[storage_account]
                             else:
-                                logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
-                                pass
+                                if storage_account not in global_continue:
+                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
+                                    global_continue.add(storage_account)
 
                         elif instruction_data[0] == 0x0a: # Continue
                             # logger.debug("{:>10} {:>6} Continue 0x{}".format(slot, counter, instruction_data.hex()))
@@ -314,8 +322,11 @@ class Indexer:
                                 got_result = get_trx_results(trx)
                                 if got_result is not None:
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
+                                    global_continue.add(storage_account)
                                 else:
-                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
+                                    if storage_account not in global_continue:
+                                        logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
+                                        global_continue.add(storage_account)
 
 
                         elif instruction_data[0] == 0x0b: # ExecuteTrxFromAccountDataIterative
@@ -334,7 +345,9 @@ class Indexer:
                                 else:
                                     holder_table[holder_account] = HolderStruct(storage_account)
                             else:
-                                logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
+                                if storage_account not in global_continue:
+                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
+                                    global_continue.add(storage_account)
 
 
                         elif instruction_data[0] == 0x0c: # Cancel
@@ -342,6 +355,7 @@ class Indexer:
 
                             storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
                             continue_table[storage_account] = ContinueStruct(signature, (None, None, None, None, None))
+                            global_continue.add(storage_account)
 
                         elif instruction_data[0] == 0x0c:
                             # logger.debug("{:>10} {:>6} PartialCallOrContinueFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
@@ -366,9 +380,12 @@ class Indexer:
                             else:
                                 got_result = get_trx_results(trx)
                                 if got_result is not None:
+                                    global_continue.add(storage_account)
                                     self.submit_transaction(eth_trx, eth_signature, from_address, got_result, [signature])
                                 else:
-                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
+                                    if storage_account not in global_continue:
+                                        logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
+                                        global_continue.add(storage_account)
 
                         elif instruction_data[0] == 0x0d:
                             # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeOrContinue 0x{}".format(slot, counter, instruction_data.hex()))
@@ -388,10 +405,13 @@ class Indexer:
                             else:
                                 got_result = get_trx_results(trx)
                                 if got_result is not None:
+                                    global_continue.add(storage_account)
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
                                     holder_table[holder_account] = HolderStruct(storage_account)
                                 else:
-                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
+                                    if storage_account not in global_continue:
+                                        logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
+                                        global_continue.add(storage_account)
 
                         if instruction_data[0] > 0x0e:
                             logger.debug("{:>10} {:>6} Unknown 0x{}".format(slot, counter, instruction_data.hex()))
