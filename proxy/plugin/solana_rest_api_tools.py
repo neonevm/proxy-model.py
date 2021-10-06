@@ -92,7 +92,6 @@ obligatory_accounts = [
     AccountMeta(pubkey=sysvarclock, is_signer=False, is_writable=False),
 ]
 
-
 class TransactionAccounts:
     def __init__(self, caller_token, eth_accounts):
         self.caller_token = caller_token
@@ -115,8 +114,9 @@ def create_account_layout(lamports, space, ether, nonce):
         nonce=nonce
     ))
 
-def write_layout(offset, data):
-    return (bytes.fromhex("00000000")+
+def write_holder_layout(seed, offset, data):
+    return (bytes.fromhex("0F")+
+            seed+
             offset.to_bytes(4, byteorder="little")+
             len(data).to_bytes(8, byteorder="little")+
             data)
@@ -978,7 +978,7 @@ def call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, c
 
 def call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx):
 
-    write_trx_to_holder_account(signer, client, perm_accs.holder, ethTrx)
+    write_trx_to_holder_account(signer, client, perm_accs.holder, perm_accs.holder_seed, ethTrx)
 
     if len(create_acc_trx.instructions):
         precall_txs = Transaction()
@@ -1042,7 +1042,7 @@ def createEtherAccountTrx(client, ether, evm_loader_id, signer, code_acc=None):
     return (trx, sol, associated_token)
 
 
-def write_trx_to_holder_account(signer, client, holder, ethTrx):
+def write_trx_to_holder_account(signer, client, holder, holder_seed, ethTrx):
     msg = ethTrx.signature() + len(ethTrx.unsigned_msg()).to_bytes(8, byteorder="little") + ethTrx.unsigned_msg()
 
     # Write transaction to transaction holder account
@@ -1054,7 +1054,7 @@ def write_trx_to_holder_account(signer, client, holder, ethTrx):
         trx = Transaction()
         # logger.debug("sender_sol %s %s %s", sender_sol, holder, acc.public_key())
         trx.add(TransactionInstruction(program_id=evm_loader_id,
-                                       data=write_layout(offset, part),
+                                       data=write_holder_layout(holder_seed, offset, part),
                                        keys=[
                                            AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                                            AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False),
@@ -1092,7 +1092,7 @@ def deploy_contract(signer, client, ethTrx, perm_accs, steps):
     logger.debug("Legacy contract address solana: %s %s", contract_sol, contract_nonce)
     logger.debug("Legacy code address solana: %s %s", code_sol, code_nonce)
 
-    write_trx_to_holder_account(signer, client, perm_accs.holder, ethTrx)
+    write_trx_to_holder_account(signer, client, perm_accs.holder, perm_accs.holder_seed, ethTrx)
 
     # Create contract account & execute deploy transaction
     logger.debug("    # Create contract account & execute deploy transaction")

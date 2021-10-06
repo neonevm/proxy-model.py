@@ -58,8 +58,8 @@ class PermanentAccounts:
         self.storage = create_account_with_seed(client, funding=signer, base=signer, seed=storage_seed, storage_size=STORAGE_SIZE)
 
         holder_seed = keccak_256(b"holder" + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
-        holder_seed = bytes(holder_seed, 'utf8')
-        self.holder = create_account_with_seed(client, funding=signer, base=signer, seed=holder_seed, storage_size=STORAGE_SIZE)
+        self.holder_seed = bytes(holder_seed, 'utf8')
+        self.holder = create_account_with_seed(client, funding=signer, base=signer, seed=self.holder_seed, storage_size=STORAGE_SIZE)
 
         collateral_pool_index = proxy_id % 4
         self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
