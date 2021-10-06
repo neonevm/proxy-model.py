@@ -169,7 +169,7 @@ class EthereumModel:
         ret = {
             "gasUsed": hex(gasUsed),
             "hash": '0x' + base58.b58decode(block_info['blockhash']).hex(),
-            "number": hex(block_info['blockHeight']),
+            "number": hex(slot),
             "parentHash": '0x' + base58.b58decode(block_info['previousBlockhash']).hex(),
             "timestamp": hex(block_info['blockTime']),
             "transactions": transactions,
