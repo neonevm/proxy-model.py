@@ -25,9 +25,9 @@ from sha3 import keccak_256, shake_256
 import base58
 import traceback
 import threading
-from .solana_rest_api_tools import EthereumAddress,  create_account_with_seed, evm_loader_id, getTokens, \
+from .solana_rest_api_tools import EthereumAddress, create_account_with_seed, evm_loader_id, getTokens, \
     getAccountInfo, solana_cli, call_signed, solana_url, call_emulated, \
-    Trx, deploy_contract, EthereumError, create_collateral_pool_address, getTokenAddr, STORAGE_SIZE
+    Trx, deploy_contract, EthereumError, create_collateral_pool_address, getTokenAddr, STORAGE_SIZE, neon_config_load
 from solana.rpc.commitment import Commitment, Confirmed
 from web3 import Web3
 import logging
@@ -99,7 +99,12 @@ class EthereumModel:
         logger.debug("worker id {}".format(self.proxy_id))
 
         self.perm_accs = PermanentAccounts(self.client, self.signer, self.proxy_id)
+        neon_config_load(self)
         pass
+
+    def web3_clientVersion(self):
+        neon_config_load(self)
+        return self.neon_config_dict['web3_clientVersion']
 
     def eth_chainId(self):
         return chainId
@@ -200,7 +205,7 @@ class EthereumModel:
         ret = {
             "gasUsed": hex(gasUsed),
             "hash": '0x' + base58.b58decode(block_info['blockhash']).hex(),
-            "number": hex(block_info['blockHeight']),
+            "number": hex(slot),
             "parentHash": '0x' + base58.b58decode(block_info['previousBlockhash']).hex(),
             "timestamp": hex(block_info['blockTime']),
             "transactions": transactions,
@@ -397,47 +402,48 @@ class EthereumModel:
 
             logger.debug('Transaction signature: %s %s', signature, eth_signature)
 
-            # try:
-            trx = self.client.get_confirmed_transaction(signature)['result']
-            slot = trx['slot']
-            block = self.client._provider.make_request("getBlock", slot, {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
-            block_hash = '0x' + base58.b58decode(block['blockhash']).hex()
-            got_result = get_trx_results(trx)
-            if got_result:
-                (logs, status, gas_used, return_value, slot) = got_result
-                if logs:
-                    for rec in logs:
-                        rec['transactionHash'] = eth_signature
-                        rec['blockHash'] = block_hash
-                    self.logs_db.push_logs(logs)
+            try:
+                trx = self.client.get_confirmed_transaction(signature)['result']
+                slot = trx['slot']
+                block = self.client._provider.make_request("getBlock", slot, {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
+                block_hash = '0x' + base58.b58decode(block['blockhash']).hex()
+                got_result = get_trx_results(trx)
+                if got_result:
+                    (logs, status, gas_used, return_value, slot) = got_result
+                    if logs:
+                        for rec in logs:
+                            rec['transactionHash'] = eth_signature
+                            rec['blockHash'] = block_hash
+                        self.logs_db.push_logs(logs)
 
-                self.ethereum_trx[eth_signature] = {
-                    'eth_trx': rawTrx[2:],
-                    'slot': slot,
-                    'logs': logs,
-                    'status': status,
-                    'gas_used': gas_used,
-                    'return_value': return_value,
-                    'from_address': '0x'+sender,
+                    self.ethereum_trx[eth_signature] = {
+                        'eth_trx': rawTrx[2:],
+                        'slot': slot,
+                        'logs': logs,
+                        'status': status,
+                        'gas_used': gas_used,
+                        'return_value': return_value,
+                        'from_address': '0x'+sender,
+                    }
+                else:
+                    slot = got_result['slot']
+                    self.ethereum_trx[eth_signature] = {
+                        'eth_trx': rawTrx[2:],
+                        'slot': slot,
+                        'logs': None,
+                        'status': 0,
+                        'gas_used': None,
+                        'return_value': None,
+                        'from_address': '0x'+sender,
+                    }
+                self.eth_sol_trx[eth_signature] = [signature]
+                self.blocks_by_hash[block_hash] = slot
+                self.sol_eth_trx[signature] = {
+                    'idx': 0,
+                    'eth': eth_signature,
                 }
-            else:
-                self.ethereum_trx[eth_signature] = {
-                    'eth_trx': rawTrx[2:],
-                    'slot': slot,
-                    'logs': None,
-                    'status': 0,
-                    'gas_used': None,
-                    'return_value': None,
-                    'from_address': '0x'+sender,
-                }
-            self.eth_sol_trx[eth_signature] = [signature]
-            self.blocks_by_hash[block_hash] = slot
-            self.sol_eth_trx[signature] = {
-                'idx': 0,
-                'eth': eth_signature,
-            }
-            # except Exception as err:
-            #     logger.debug(err)
+            except Exception as err:
+                logger.debug(err)
 
             return eth_signature
 
