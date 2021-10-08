@@ -918,6 +918,14 @@ def create_account_list_by_emulate(signer, client, ethTrx, deployment_address=No
 
 def call_signed(signer, client, ethTrx, perm_accs, steps):
     (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx)
+
+    logger.debug("")
+    logger.debug("!!!")
+    for a in trx_accs.eth_accounts:
+        logger.debug(a.public_key)
+    logger.debug("!!!")
+    logger.debug("")
+
     msg = sender_ether + ethTrx.signature() + ethTrx.unsigned_msg()
 
     call_from_holder = False
