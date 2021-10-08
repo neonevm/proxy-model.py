@@ -922,7 +922,7 @@ def call_signed(signer, client, ethTrx, perm_accs, steps):
     logger.debug("")
     logger.debug("!!!")
     for a in trx_accs.eth_accounts:
-        logger.debug(a.public_key)
+        logger.debug(a.pubkey)
     logger.debug("!!!")
     logger.debug("")
 
