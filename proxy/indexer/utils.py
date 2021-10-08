@@ -1,10 +1,10 @@
 import base58
 import rlp
-import json
-import time
 import logging
-from web3 import Web3
 from web3.auto.gethdev import w3
+from ethereum.utils import sha3
+from ethereum.transactions import Transaction
+from eth_utils import big_endian_to_int
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -68,16 +68,14 @@ def get_trx_results(trx):
 
 
 def get_trx_receipts(unsigned_msg, signature):
-    eth_trx = rlp.decode(unsigned_msg)
+    eth_trx = rlp.decode(unsigned_msg, Transaction)
 
-    eth_trx[6] = int(signature[64]) + 35 + 2 * int.from_bytes(eth_trx[6], "little")
-    eth_trx[7] = signature[:32]
-    eth_trx[8] = signature[32:64]
+    v = int(signature[64]) + 35 + 2 * eth_trx[6]
+    r = big_endian_to_int(signature[0:32])
+    s = big_endian_to_int(signature[32:64])
 
-    eth_trx_raw = rlp.encode(eth_trx)
-    # logger.debug(rlp.decode(eth_trx_raw))
-
-    eth_signature = '0x' + bytes(Web3.keccak(eth_trx_raw)).hex()
-    from_address = w3.eth.account.recover_transaction(eth_trx_raw.hex())
+    eth_trx_raw = rlp.encode(Transaction(eth_trx[0], eth_trx[1], eth_trx[2], eth_trx[3], eth_trx[4], eth_trx[5], v, r, s), Transaction)
+    eth_signature = '0x' + sha3(eth_trx_raw).hex()
+    from_address = w3.eth.account.recover_transaction(eth_trx_raw.hex()).lower()
 
     return (eth_trx_raw.hex(), eth_signature, from_address)

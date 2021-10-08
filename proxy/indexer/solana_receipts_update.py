@@ -243,12 +243,14 @@ class Indexer:
                                             # raise
 
                                         del holder_table[write_account]
-                                    except rlp.exceptions.DecodingError:
-                                        logger.debug("DecodingError")
-                                    except rlp.exceptions.ObjectDeserializationError:
+                                    except rlp.exceptions.DecodingError or rlp.exceptions.ObjectDeserializationError:
                                         logger.debug("DecodingError")
                                     except Exception as err:
-                                        logger.debug("could not parse trx {}".format(err))
+                                        if str(err).startswith("unhashable type"):
+                                            pass
+                                        else:
+                                            logger.debug("could not parse trx {}".format(err))
+                                            raise
 
                         elif instruction_data[0] == 0x01: # Finalize
                             # logger.debug("{:>10} {:>6} Finalize 0x{}".format(slot, counter, instruction_data.hex()))
