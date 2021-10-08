@@ -395,9 +395,6 @@ class EthereumModel:
         logger.debug('Eth Hash: %s', eth_signature)
 
         try:
-            # if (not trx.toAddress):
-            #     (signature, _contract_eth) = deploy_contract(self.signer, self.client, trx, self.perm_accs, steps=1000)
-            # else:
             signature = call_signed(self.signer, self.client, trx, self.perm_accs, steps=250)
 
             logger.debug('Transaction signature: %s %s', signature, eth_signature)

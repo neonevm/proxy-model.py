@@ -1110,39 +1110,6 @@ def write_trx_to_holder_account(signer, client, holder, ethTrx):
         logger.debug("confirmed: %s", rcpt)
 
 
-# def deploy_contract(signer, client, ethTrx, perm_accs, steps):
-#     sender_ether = bytes.fromhex(ethTrx.sender())
-#     (sender_sol, _) = ether2program(sender_ether.hex(), evm_loader_id, signer.public_key())
-#     logger.debug("Sender account solana: %s %s", sender_ether.hex(), sender_sol)
-#
-#
-#     contract_eth = keccak_256(rlp.encode((sender_ether, ethTrx.nonce))).digest()[-20:]
-#     (contract_sol, contract_nonce) = ether2program(contract_eth.hex(), evm_loader_id, signer.public_key())
-#
-#     # We need append ACCOUNT_SEED_VERSION to created CODE account (to avoid using previously created accounts to store the code)
-#     # when calculate contract_sol variable ACCOUNT_SEED_VERSION already added in `neon-cli create-program-address`.
-#     (code_sol, code_nonce, code_seed) = ether2seed(ACCOUNT_SEED_VERSION+contract_eth, evm_loader_id, signer.public_key())
-#
-#     logger.debug("Legacy contract address ether: %s", contract_eth.hex())
-#     logger.debug("Legacy contract address solana: %s %s", contract_sol, contract_nonce)
-#     logger.debug("Legacy code address solana: %s %s", code_sol, code_nonce)
-# 
-#     write_trx_to_holder_account(signer, client, perm_accs.holder, ethTrx)
-#
-#     (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx,
-#                                                                               deployment_address=contract_eth)
-#     if len(create_acc_trx.instructions):
-#         result = send_measured_transaction(client, create_acc_trx, signer)
-#
-#     precall_txs = Transaction()
-#     precall_txs.add(make_call_from_account_instruction(perm_accs, trx_accs))
-#
-#     logger.debug("ExecuteTrxFromAccountDataIterative:")
-#     send_measured_transaction(client, precall_txs, signer)
-#
-#     return (call_continue(signer, client, perm_accs, trx_accs, steps), '0x'+contract_eth.hex())
-
-
 def _getAccountData(client, account, expected_length, owner=None):
     info = client.get_account_info(account, commitment=Confirmed)['result']['value']
     if info is None:
