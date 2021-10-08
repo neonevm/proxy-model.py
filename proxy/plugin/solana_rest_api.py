@@ -290,6 +290,16 @@ class EthereumModel:
         logger.debug('Eth Signature: %s', trx.signature().hex())
         logger.debug('Eth Hash: %s', eth_signature)
 
+        if trx.toAddress:
+            nonce = self.eth_getTransactionCount('0x' + sender, None)
+            to_address_nonce = self.eth_getTransactionCount('0x' + trx.toAddress.hex(), None)
+
+            logger.debug('Eth Sender trx nonce: %s', nonce)
+            logger.debug('Account nonce: %s', to_address_nonce)
+
+            if ((int(nonce, base=16) - int(to_address_nonce, base=16)) != 1):
+                raise Exception("Bad input nonce")
+
         try:
             if (not trx.toAddress):
                 (signature, _contract_eth) = deploy_contract(self.signer, self.client, trx, self.perm_accs, steps=1000)
