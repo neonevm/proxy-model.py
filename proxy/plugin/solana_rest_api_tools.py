@@ -814,18 +814,20 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
     logger.debug("tx_count = {}, step_count = {}".format(continue_count, step_count))
     return (continue_count, step_count)
 
-def create_account_list_by_emulate(signer, client, ethTrx, deployment_address=None):
+def create_account_list_by_emulate(signer, client, ethTrx):
     sender_ether = bytes.fromhex(ethTrx.sender())
     add_keys_05 = []
     trx = Transaction()
     new_neon_token_acccounts = []
 
-    if deployment_address:
-        to_address = "deploy"
+    if not ethTrx.toAddress:
+        to_address_arg = "deploy"
+        to_address = keccak_256(rlp.encode((bytes.fromhex(ethTrx.sender()), ethTrx.nonce))).digest()[-20:]
     else:
-        to_address = ethTrx.toAddress.hex()
+        to_address_arg = ethTrx.toAddress.hex()
+        to_address = ethTrx.toAddress
 
-    output_json = call_emulated(to_address, sender_ether.hex(), ethTrx.callData.hex(), hex(ethTrx.value))
+    output_json = call_emulated(to_address_arg, sender_ether.hex(), ethTrx.callData.hex(), hex(ethTrx.value))
     logger.debug("emulator returns: %s", json.dumps(output_json, indent=3))
     for acc_desc in output_json["accounts"]:
         address = bytes.fromhex(acc_desc["address"][2:])
@@ -866,7 +868,7 @@ def create_account_list_by_emulate(signer, client, ethTrx, deployment_address=No
                              str(NEW_USER_AIRDROP_AMOUNT))
 
 
-        if address == ethTrx.toAddress or address == deployment_address:
+        if address == to_address:
             contract_sol = PublicKey(acc_desc["account"])
             if acc_desc["new"]:
                 code_sol = code_account
@@ -918,25 +920,29 @@ def create_account_list_by_emulate(signer, client, ethTrx, deployment_address=No
 
 
 def call_signed(signer, client, ethTrx, perm_accs, steps):
+
     (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx)
 
-    msg = sender_ether + ethTrx.signature() + ethTrx.unsigned_msg()
+    if not ethTrx.toAddress:
+        call_from_holder = True
+    else:
+        call_from_holder = False
+        call_iterative = False
+        msg = sender_ether + ethTrx.signature() + ethTrx.unsigned_msg()
 
-    call_from_holder = False
-    call_iterative = False
-    try:
-        logger.debug("Try single trx call")
-        return call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx)
-    except Exception as err:
-        logger.debug(str(err))
-        if str(err).find("Program failed to complete") >= 0:
-            logger.debug("Program exceeded instructions")
-            call_iterative = True
-        elif str(err).startswith("transaction too large:"):
-            logger.debug("Transaction too large, call call_signed_with_holder_acc():")
-            call_from_holder = True
-        else:
-            raise
+        try:
+            logger.debug("Try single trx call")
+            return call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx)
+        except Exception as err:
+            logger.debug(str(err))
+            if str(err).find("Program failed to complete") >= 0:
+                logger.debug("Program exceeded instructions")
+                call_iterative = True
+            elif str(err).startswith("transaction too large:"):
+                logger.debug("Transaction too large, call call_signed_with_holder_acc():")
+                call_from_holder = True
+            else:
+                raise
 
     if call_from_holder:
         return call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx)
@@ -1087,37 +1093,37 @@ def write_trx_to_holder_account(signer, client, holder, ethTrx):
         logger.debug("confirmed: %s", rcpt)
 
 
-def deploy_contract(signer, client, ethTrx, perm_accs, steps):
-    sender_ether = bytes.fromhex(ethTrx.sender())
-    (sender_sol, _) = ether2program(sender_ether.hex(), evm_loader_id, signer.public_key())
-    logger.debug("Sender account solana: %s %s", sender_ether.hex(), sender_sol)
-
-
-    contract_eth = keccak_256(rlp.encode((sender_ether, ethTrx.nonce))).digest()[-20:]
-    (contract_sol, contract_nonce) = ether2program(contract_eth.hex(), evm_loader_id, signer.public_key())
-
-    # We need append ACCOUNT_SEED_VERSION to created CODE account (to avoid using previously created accounts to store the code)
-    # when calculate contract_sol variable ACCOUNT_SEED_VERSION already added in `neon-cli create-program-address`.
-    (code_sol, code_nonce, code_seed) = ether2seed(ACCOUNT_SEED_VERSION+contract_eth, evm_loader_id, signer.public_key())
-
-    logger.debug("Legacy contract address ether: %s", contract_eth.hex())
-    logger.debug("Legacy contract address solana: %s %s", contract_sol, contract_nonce)
-    logger.debug("Legacy code address solana: %s %s", code_sol, code_nonce)
-
-    write_trx_to_holder_account(signer, client, perm_accs.holder, ethTrx)
-
-    (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx,
-                                                                              deployment_address=contract_eth)
-    if len(create_acc_trx.instructions):
-        result = send_measured_transaction(client, create_acc_trx, signer)
-
-    precall_txs = Transaction()
-    precall_txs.add(make_call_from_account_instruction(perm_accs, trx_accs))
-
-    logger.debug("ExecuteTrxFromAccountDataIterative:")
-    send_measured_transaction(client, precall_txs, signer)
-
-    return (call_continue(signer, client, perm_accs, trx_accs, steps), '0x'+contract_eth.hex())
+# def deploy_contract(signer, client, ethTrx, perm_accs, steps):
+#     sender_ether = bytes.fromhex(ethTrx.sender())
+#     (sender_sol, _) = ether2program(sender_ether.hex(), evm_loader_id, signer.public_key())
+#     logger.debug("Sender account solana: %s %s", sender_ether.hex(), sender_sol)
+#
+#
+#     contract_eth = keccak_256(rlp.encode((sender_ether, ethTrx.nonce))).digest()[-20:]
+#     (contract_sol, contract_nonce) = ether2program(contract_eth.hex(), evm_loader_id, signer.public_key())
+#
+#     # We need append ACCOUNT_SEED_VERSION to created CODE account (to avoid using previously created accounts to store the code)
+#     # when calculate contract_sol variable ACCOUNT_SEED_VERSION already added in `neon-cli create-program-address`.
+#     (code_sol, code_nonce, code_seed) = ether2seed(ACCOUNT_SEED_VERSION+contract_eth, evm_loader_id, signer.public_key())
+#
+#     logger.debug("Legacy contract address ether: %s", contract_eth.hex())
+#     logger.debug("Legacy contract address solana: %s %s", contract_sol, contract_nonce)
+#     logger.debug("Legacy code address solana: %s %s", code_sol, code_nonce)
+# 
+#     write_trx_to_holder_account(signer, client, perm_accs.holder, ethTrx)
+#
+#     (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx,
+#                                                                               deployment_address=contract_eth)
+#     if len(create_acc_trx.instructions):
+#         result = send_measured_transaction(client, create_acc_trx, signer)
+#
+#     precall_txs = Transaction()
+#     precall_txs.add(make_call_from_account_instruction(perm_accs, trx_accs))
+#
+#     logger.debug("ExecuteTrxFromAccountDataIterative:")
+#     send_measured_transaction(client, precall_txs, signer)
+#
+#     return (call_continue(signer, client, perm_accs, trx_accs, steps), '0x'+contract_eth.hex())
 
 
 def _getAccountData(client, account, expected_length, owner=None):
