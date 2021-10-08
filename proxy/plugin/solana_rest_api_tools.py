@@ -9,7 +9,7 @@ import subprocess
 import time
 from datetime import datetime
 from hashlib import sha256
-from typing import NamedTuple
+from typing import NamedTuple, Any, List, Optional, Tuple, Union
 import rlp
 from base58 import b58decode, b58encode
 from construct import Bytes, Int8ul, Int32ul, Int64ul
@@ -121,13 +121,17 @@ def write_layout(offset, data):
             len(data).to_bytes(8, byteorder="little")+
             data)
 
-def accountWithSeed(base, seed, program):
-    # logger.debug(type(base), str(base), type(seed), str(seed), type(program), str(program))
-    result = PublicKey(sha256(bytes(base) + bytes(seed) + bytes(program)).digest())
+def accountWithSeed(base: PublicKey, seed: Union[bytes, str], program: PublicKey):
+    if isinstance(seed, bytes):
+        seed = str(seed, 'utf8')
+
+    logger.debug('accountWithSeed base %s seed %s program %s', base, seed, program)
+
+    result = PublicKey.create_with_seed(base, seed, program)
     logger.debug('accountWithSeed %s', str(result))
     return result
 
-def createAccountWithSeedTrx(funding, base, seed, lamports, space, program):
+def createAccountWithSeedTrx(funding: PublicKey, base: PublicKey, seed: bytes, lamports: int, space: int, program: PublicKey):
     seed_str = str(seed, 'utf8')
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
@@ -142,7 +146,7 @@ def createAccountWithSeedTrx(funding, base, seed, lamports, space, program):
         )
     )
     logger.debug("createAccountWithSeedTrx %s %s %s", type(base), base, data.hex())
-    created = accountWithSeed(base, seed, PublicKey(program))
+    created = accountWithSeed(base, seed, program)
     logger.debug("created %s", created)
     return TransactionInstruction(
         keys=[
@@ -303,14 +307,23 @@ def ether2program(ether, program_id, base):
     return (items[0], int(items[1]))
 
 
-def ether2seed(ether, program_id, base):
+def ether2seed(ether: Union[bytes, str], program_id: Union[str, PublicKey], base: PublicKey) -> Tuple[PublicKey, bytes]:
     if isinstance(ether, str):
         if ether.startswith('0x'): ether = ether[2:]
-    else: ether = ether.hex()
-    seed = b58encode(bytes.fromhex(ether))
-    acc = accountWithSeed(base, seed, PublicKey(program_id))
+        ether = bytes.fromhex(ether)
+
+    if isinstance(program_id, str):
+        program_id = PublicKey(program_id)
+
+    # We need append ACCOUNT_SEED_VERSION to created CODE account (to avoid using previously created accounts to store the code)
+    # when calculate contract_sol variable ACCOUNT_SEED_VERSION already added in `neon-cli create-program-address`.
+    ether = ACCOUNT_SEED_VERSION + ether
+
+    seed = b58encode(ether)
+    acc = accountWithSeed(base, seed, program_id)
     logger.debug('ether2program: {} {} => {} (seed {})'.format(ether, 255, acc, seed))
-    return (acc, 255, seed)
+
+    return acc, seed
 
 
 def neon_config_load(ethereum_model):
@@ -846,14 +859,14 @@ def create_account_list_by_emulate(signer, client, ethTrx):
             logger.debug("Create solana accounts for %s: %s %s", acc_desc["address"], acc_desc["account"], acc_desc["contract"])
             code_account = None
             if acc_desc["code_size"]:
-                seed = b58encode(address)
-                code_account = accountWithSeed(signer.public_key(), seed, PublicKey(evm_loader_id))
+                (code_account, code_account_seed) = ether2seed(address, evm_loader_id, signer.public_key())
+
                 logger.debug("     with code account %s", code_account)
                 code_size = acc_desc["code_size"]
                 valids_size = (code_size // 8) + 1
                 code_account_size = CODE_INFO_LAYOUT.sizeof() + code_size + valids_size + 2048
                 code_account_balance = client.get_minimum_balance_for_rent_exemption(code_account_size)["result"]
-                trx.add(createAccountWithSeedTrx(signer.public_key(), signer.public_key(), seed, code_account_balance, code_account_size, PublicKey(evm_loader_id)))
+                trx.add(createAccountWithSeedTrx(signer.public_key(), signer.public_key(), code_account_seed, code_account_balance, code_account_size, PublicKey(evm_loader_id)))
                 add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
             
             (create_trx, solana_address, token_address) = createEtherAccountTrx(client, address, evm_loader_id, signer, code_account)
@@ -1084,13 +1097,11 @@ def deploy_contract(signer, client, ethTrx, perm_accs, steps):
     contract_eth = keccak_256(rlp.encode((sender_ether, ethTrx.nonce))).digest()[-20:]
     (contract_sol, contract_nonce) = ether2program(contract_eth.hex(), evm_loader_id, signer.public_key())
 
-    # We need append ACCOUNT_SEED_VERSION to created CODE account (to avoid using previously created accounts to store the code)
-    # when calculate contract_sol variable ACCOUNT_SEED_VERSION already added in `neon-cli create-program-address`.
-    (code_sol, code_nonce, code_seed) = ether2seed(ACCOUNT_SEED_VERSION+contract_eth, evm_loader_id, signer.public_key())
+    (code_sol, code_seed) = ether2seed(contract_eth, evm_loader_id, signer.public_key())
 
     logger.debug("Legacy contract address ether: %s", contract_eth.hex())
     logger.debug("Legacy contract address solana: %s %s", contract_sol, contract_nonce)
-    logger.debug("Legacy code address solana: %s %s", code_sol, code_nonce)
+    logger.debug("Legacy code address solana: %s", code_sol)
 
     write_trx_to_holder_account(signer, client, perm_accs.holder, ethTrx)
 
