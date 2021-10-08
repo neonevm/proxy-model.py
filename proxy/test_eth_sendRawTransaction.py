@@ -179,7 +179,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         self.assertEqual(trx_store_receipt['status'], 0)  # false Transaction mined but execution failed
 
     # @unittest.skip("a.i.")
-    def test_04_execute_with_bad_nonce(self):
+    def test_04_execute_with_bad_nonce_grade_up_one(self):
         print("\ntest_04_execute_with_bad_nonce")
         bad_nonce = 1 + proxy.eth.get_transaction_count(proxy.eth.default_account)
         trx_store = self.storage_contract.functions.store(147).buildTransaction({'nonce': bad_nonce})
@@ -208,7 +208,36 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             self.assertTrue(file_name in log)
 
     # @unittest.skip("a.i.")
-    def test_05_transfer_one_gwei(self):
+    def test_05_execute_with_bad_nonce_grade_down_one(self):
+        print("\ntest_04_execute_with_bad_nonce")
+        bad_nonce = -1 + proxy.eth.get_transaction_count(proxy.eth.default_account)
+        trx_store = self.storage_contract.functions.store(147).buildTransaction({'nonce': bad_nonce})
+        print('trx_store:', trx_store)
+        trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
+        print('trx_store_signed:', trx_store_signed)
+        try:
+            trx_store_hash = proxy.eth.send_raw_transaction(trx_store_signed.rawTransaction)
+            print('trx_store_hash:', trx_store_hash)
+            self.assertTrue(False)
+        except Exception as e:
+            print('type(e):', type(e))
+            print('e:', e)
+            import json
+            response = json.loads(str(e).replace('\'', '\"').replace('None', 'null'))
+            print('response:', response)
+            print('code:', response['code'])
+            self.assertEqual(response['code'], -32002)
+            print('substring_err_147:', SUBSTRING_LOG_ERR_147)
+            logs = response['data']['logs']
+            print('logs:', logs)
+            log = [s for s in logs if SUBSTRING_LOG_ERR_147 in s][0]
+            print(log)
+            self.assertGreater(len(log), len(SUBSTRING_LOG_ERR_147))
+            file_name = 'src/entrypoint.rs'
+            self.assertTrue(file_name in log)
+
+    # @unittest.skip("a.i.")
+    def test_06_transfer_one_gwei(self):
         print("\ntest_05_transfer_one_gwei")
 
         one_gwei = 1_000_000_000
@@ -285,7 +314,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         self.assertEqual(bob_balance_after_transfer, bob_balance_before_transfer + one_gwei)
 
     # @unittest.skip("a.i.")
-    def test_06_transfer_one_and_a_half_gweis(self):
+    def test_07_transfer_one_and_a_half_gweis(self):
         print("\ntest_06_transfer_one_and_a_half_gweis")
 
         eth_account_alice = proxy.eth.account.create('alice')
@@ -366,7 +395,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         self.assertEqual(bob_balance_after_transfer, bob_balance_before_transfer + one_gwei)
 
     @unittest.skip("a.i.")
-    def test_07_execute_long_transaction(self):
+    def test_08_execute_long_transaction(self):
         print("\ntest_07_execute_long_transaction")
         trx_initValue = self.test_185_solidity_contract.functions.initValue('185 init value').buildTransaction({'nonce': proxy.eth.get_transaction_count(proxy.eth.default_account)})
         print('trx_initValue:', trx_initValue)

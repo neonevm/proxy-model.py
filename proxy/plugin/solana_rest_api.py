@@ -290,16 +290,19 @@ class EthereumModel:
         logger.debug('Eth Signature: %s', trx.signature().hex())
         logger.debug('Eth Hash: %s', eth_signature)
 
-        if trx.toAddress:
-            nonce = self.eth_getTransactionCount('0x' + sender, None)
-            to_address_nonce = self.eth_getTransactionCount('0x' + trx.toAddress.hex(), None)
+        nonce = int(self.eth_getTransactionCount('0x' + sender, None), base=16)
 
-            logger.debug('Eth Sender trx nonce: %s', nonce)
-            logger.debug('Account nonce: %s', to_address_nonce)
+        logger.debug('Eth Sender trx nonce: %s', nonce)
+        logger.debug('Operator nonce: %s', trx.nonce)
 
-            if ((int(nonce, base=16) - int(to_address_nonce, base=16)) != 1):
-                raise Exception("Bad input nonce")
-
+        if (int(nonce) != int(trx.nonce)):
+            raise EthereumError(-32002, 'Verifying nonce before send transaction: Error processing Instruction 1: invalid program argument'
+                                .format(int(nonce), int(trx.nonce)),
+                                {
+                                    'logs': [
+                                        '/src/entrypoint.rs Invalid Ethereum transaction nonce: acc {}, trx {}'.format(nonce, trx.nonce),
+                                    ]
+                                })
         try:
             if (not trx.toAddress):
                 (signature, _contract_eth) = deploy_contract(self.signer, self.client, trx, self.perm_accs, steps=1000)
