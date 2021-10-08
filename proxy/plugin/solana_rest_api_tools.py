@@ -886,7 +886,8 @@ def create_account_list_by_emulate(signer, client, ethTrx, deployment_address=No
             token_account = get_associated_token_address(PublicKey(acc_desc["account"]), ETH_TOKEN_MINT_ID)
             add_keys_05.append(AccountMeta(pubkey=token_account, is_signer=False, is_writable=True))
             if acc_desc["new"]:
-                add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=code_account_writable))
+                if code_account:
+                    add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=code_account_writable))
             else:
                 if acc_desc["contract"]:
                     add_keys_05.append(AccountMeta(pubkey=acc_desc["contract"], is_signer=False, is_writable=acc_desc["writable"]))
