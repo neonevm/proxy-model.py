@@ -818,35 +818,25 @@ def create_account_list_by_emulate(signer, client, ethTrx):
     sender_ether = bytes.fromhex(ethTrx.sender())
     add_keys_05 = []
     trx = Transaction()
-    new_neon_token_acccounts = []
 
-    output_json = call_emulated(ethTrx.toAddress.hex(), sender_ether.hex(), ethTrx.callData.hex(), hex(ethTrx.value))
+    if not ethTrx.toAddress:
+        to_address_arg = "deploy"
+        to_address = keccak_256(rlp.encode((bytes.fromhex(ethTrx.sender()), ethTrx.nonce))).digest()[-20:]
+    else:
+        to_address_arg = ethTrx.toAddress.hex()
+        to_address = ethTrx.toAddress
+
+    output_json = call_emulated(to_address_arg, sender_ether.hex(), ethTrx.callData.hex(), hex(ethTrx.value))
     logger.debug("emulator returns: %s", json.dumps(output_json, indent=3))
     for acc_desc in output_json["accounts"]:
         address = bytes.fromhex(acc_desc["address"][2:])
-        if address == ethTrx.toAddress:
-            contract_sol = PublicKey(acc_desc["account"])
-            if acc_desc["contract"] != None :
-                code_sol = PublicKey(acc_desc["contract"])
-                code_writable = acc_desc["writable"]
-            else:
-                code_sol = None
-                code_writable = None
 
-        elif address == sender_ether:
-            sender_sol = PublicKey(acc_desc["account"])
-        else:
-            add_keys_05.append(AccountMeta(pubkey=acc_desc["account"], is_signer=False, is_writable=(True if acc_desc["contract"] else acc_desc["writable"])))
-            token_account = get_associated_token_address(PublicKey(acc_desc["account"]), ETH_TOKEN_MINT_ID)
-            add_keys_05.append(AccountMeta(pubkey=token_account, is_signer=False, is_writable=True))
-            if acc_desc["contract"]:
-                add_keys_05.append(AccountMeta(pubkey=acc_desc["contract"], is_signer=False, is_writable=acc_desc["writable"]))
-
+        code_account = None
+        code_account_writable = False
         if acc_desc["new"]:
             logger.debug("Create solana accounts for %s: %s %s", acc_desc["address"], acc_desc["account"], acc_desc["contract"])
-            code_account = None
             if acc_desc["code_size"]:
-                seed = b58encode(address)
+                seed = b58encode(ACCOUNT_SEED_VERSION+address)
                 code_account = accountWithSeed(signer.public_key(), seed, PublicKey(evm_loader_id))
                 logger.debug("     with code account %s", code_account)
                 code_size = acc_desc["code_size"]
@@ -854,11 +844,11 @@ def create_account_list_by_emulate(signer, client, ethTrx):
                 code_account_size = CODE_INFO_LAYOUT.sizeof() + code_size + valids_size + 2048
                 code_account_balance = client.get_minimum_balance_for_rent_exemption(code_account_size)["result"]
                 trx.add(createAccountWithSeedTrx(signer.public_key(), signer.public_key(), seed, code_account_balance, code_account_size, PublicKey(evm_loader_id)))
-                add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
+                # add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
+                code_account_writable = acc_desc["writable"]
 
             (create_trx, solana_address, token_address) = createEtherAccountTrx(client, address, evm_loader_id, signer, code_account)
             trx.add(create_trx)
-            new_neon_token_acccounts.append(token_address)
 
             if address == sender_ether and NEW_USER_AIRDROP_AMOUNT > 0:
                 trx.add(transfer2(Transfer2Params(
@@ -875,11 +865,39 @@ def create_account_list_by_emulate(signer, client, ethTrx):
                              acc_desc["address"],
                              str(NEW_USER_AIRDROP_AMOUNT))
 
+
+        if address == to_address:
+            contract_sol = PublicKey(acc_desc["account"])
+            if acc_desc["new"]:
+                code_sol = code_account
+                code_writable = code_account_writable
+            else:
+                if acc_desc["contract"] != None:
+                    code_sol = PublicKey(acc_desc["contract"])
+                    code_writable = acc_desc["writable"]
+                else:
+                    code_sol = None
+                    code_writable = None
+
+        elif address == sender_ether:
+            sender_sol = PublicKey(acc_desc["account"])
+        else:
+            add_keys_05.append(AccountMeta(pubkey=acc_desc["account"], is_signer=False, is_writable=(True if acc_desc["contract"] else acc_desc["writable"])))
+            token_account = get_associated_token_address(PublicKey(acc_desc["account"]), ETH_TOKEN_MINT_ID)
+            add_keys_05.append(AccountMeta(pubkey=token_account, is_signer=False, is_writable=True))
+            if acc_desc["new"]:
+                if code_account:
+                    add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=code_account_writable))
+            else:
+                if acc_desc["contract"]:
+                    add_keys_05.append(AccountMeta(pubkey=acc_desc["contract"], is_signer=False, is_writable=acc_desc["writable"]))
+
+
     for token_account in output_json["token_accounts"]:
         add_keys_05.append(AccountMeta(pubkey=PublicKey(token_account["key"]), is_signer=False, is_writable=True))
 
-        if token_account["new"] and (PublicKey(token_account["key"]) not in new_neon_token_acccounts):
-            trx.add(create_associated_token_account(signer.public_key(), PublicKey(token_account["owner"]), PublicKey(token_account["mint"])))
+        if token_account["new"]:
+            trx.add(createERC20TokenAccountTrx(signer, token_account))
 
     for account_meta in output_json["solana_accounts"]:
         add_keys_05.append(AccountMeta(pubkey=PublicKey(account_meta["pubkey"]), is_signer=account_meta["is_signer"], is_writable=account_meta["is_writable"]))
@@ -900,24 +918,29 @@ def create_account_list_by_emulate(signer, client, ethTrx):
 
 
 def call_signed(signer, client, ethTrx, perm_accs, steps):
-    (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx)
-    msg = sender_ether + ethTrx.signature() + ethTrx.unsigned_msg()
 
-    call_from_holder = False
-    call_iterative = False
-    try:
-        logger.debug("Try single trx call")
-        return call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx)
-    except Exception as err:
-        logger.debug(str(err))
-        if str(err).find("Program failed to complete") >= 0:
-            logger.debug("Program exceeded instructions")
-            call_iterative = True
-        elif str(err).startswith("transaction too large:"):
-            logger.debug("Transaction too large, call call_signed_with_holder_acc():")
-            call_from_holder = True
-        else:
-            raise
+    (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx)
+
+    if not ethTrx.toAddress:
+        call_from_holder = True
+    else:
+        call_from_holder = False
+        call_iterative = False
+        msg = sender_ether + ethTrx.signature() + ethTrx.unsigned_msg()
+
+        try:
+            logger.debug("Try single trx call")
+            return call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx)
+        except Exception as err:
+            logger.debug(str(err))
+            if str(err).find("Program failed to complete") >= 0:
+                logger.debug("Program exceeded instructions")
+                call_iterative = True
+            elif str(err).startswith("transaction too large:"):
+                logger.debug("Transaction too large, call call_signed_with_holder_acc():")
+                call_from_holder = True
+            else:
+                raise
 
     if call_from_holder:
         return call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx)
@@ -1040,6 +1063,25 @@ def createEtherAccountTrx(client, ether, evm_loader_id, signer, code_acc=None):
                 AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
             ]))
     return (trx, sol, associated_token)
+
+def createERC20TokenAccountTrx(signer, token_info):
+    trx = Transaction()
+    trx.add(TransactionInstruction(
+    program_id=evm_loader_id,
+    data=bytes.fromhex('0F'),
+    keys=[
+        AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=True),
+        AccountMeta(pubkey=PublicKey(token_info["key"]), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=PublicKey(token_info["owner"]), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=PublicKey(token_info["contract"]), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=PublicKey(token_info["mint"]), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+        AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+        AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
+    ]))
+
+    return trx
+
 
 
 def write_trx_to_holder_account(signer, client, holder, holder_seed, ethTrx):
