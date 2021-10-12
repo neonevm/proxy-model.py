@@ -9,15 +9,17 @@ from multiprocessing.dummy import Pool as ThreadPool
 from sqlitedict import SqliteDict
 from typing import Dict, Union
 
+
 try:
-    from utils import check_error, get_trx_results, get_trx_receipts, LogDB
+    from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
 except ImportError:
-    from .utils import check_error, get_trx_results, get_trx_receipts, LogDB
+    from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
 
 
 solana_url = os.environ.get("SOLANA_URL", "https://api.devnet.solana.com")
 evm_loader_id = os.environ.get("EVM_LOADER", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
 PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -41,6 +43,7 @@ class ContinueStruct:
 class Indexer:
     def __init__(self):
         self.client = Client(solana_url)
+        self.canceller = Canceller()
         self.logs_db = LogDB(filename="local.db")
         self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True)
         self.transaction_receipts = SqliteDict(filename="local.db", tablename="known_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
@@ -53,7 +56,7 @@ class Indexer:
         self.transaction_order = []
         if 'last_block' not in self.constants:
             self.constants['last_block'] = 0
-
+        self.blocked_storages = set()
         self.counter_ = 0
 
     def run(self, loop = True):
@@ -65,6 +68,9 @@ class Indexer:
                 self.process_receipts()
                 logger.debug("Start getting blocks")
                 self.gather_blocks()
+                logger.debug("Unlock accounts")
+                self.canceller.unlock_accounts(self.blocked_storages)
+                self.blocked_storages.clear()
             except Exception as err:
                 logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
 
@@ -126,16 +132,7 @@ class Indexer:
 
         logger.debug("start getting receipts")
         pool = ThreadPool(PARALLEL_REQUESTS)
-        results = pool.map(self.get_tx_receipts, poll_txs)
-
-        # count = 0
-        # for transaction in results:
-        #     count += 1
-        #     if int(100 * count / len(poll_txs)) != percent:
-        #         percent = int(100 * count / len(poll_txs))
-        #         logger.debug(percent)
-        #     (solana_signature, trx) = transaction
-        #     self.transaction_receipts[solana_signature] = trx
+        pool.map(self.get_tx_receipts, poll_txs)
 
         if len(self.transaction_order):
             index = 0
@@ -178,7 +175,6 @@ class Indexer:
         counter = 0
         holder_table = {}
         continue_table = {}
-        global_continue = set()
 
         for signature in self.transaction_order:
             counter += 1
@@ -250,10 +246,12 @@ class Indexer:
                                             # raise
 
                                         del holder_table[write_account]
-                                    except rlp.exceptions.DecodingError or rlp.exceptions.ObjectDeserializationError:
-                                        logger.debug("DecodingError")
+                                    except rlp.exceptions.RLPException:
+                                        pass
                                     except Exception as err:
                                         if str(err).startswith("unhashable type"):
+                                            pass
+                                        elif str(err).startswith("unsupported operand type"):
                                             pass
                                         else:
                                             logger.debug("could not parse trx {}".format(err))
@@ -316,9 +314,8 @@ class Indexer:
 
                                 del continue_table[storage_account]
                             else:
-                                if storage_account not in global_continue:
-                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
-                                    global_continue.add(storage_account)
+                                # logger.debug("{} {}".format(signature, storage_account))
+                                self.blocked_storages.add(storage_account)
 
                         elif instruction_data[0] == 0x0a: # Continue
                             # logger.debug("{:>10} {:>6} Continue 0x{}".format(slot, counter, instruction_data.hex()))
@@ -331,11 +328,9 @@ class Indexer:
                                 got_result = get_trx_results(trx)
                                 if got_result is not None:
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
-                                    global_continue.add(storage_account)
                                 else:
-                                    if storage_account not in global_continue:
-                                        logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
-                                        global_continue.add(storage_account)
+                                    # logger.debug("{} {}".format(signature, storage_account))
+                                    self.blocked_storages.add(storage_account)
 
 
                         elif instruction_data[0] == 0x0b: # ExecuteTrxFromAccountDataIterative
@@ -354,17 +349,15 @@ class Indexer:
                                 else:
                                     holder_table[holder_account] = HolderStruct(storage_account)
                             else:
-                                if storage_account not in global_continue:
-                                    logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
-                                    global_continue.add(storage_account)
+                                # logger.debug("{} {}".format(signature, storage_account))
+                                self.blocked_storages.add(storage_account)
 
 
                         elif instruction_data[0] == 0x0c: # Cancel
                             # logger.debug("{:>10} {:>6} Cancel 0x{}".format(slot, counter, instruction_data.hex()))
 
                             storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
-                            continue_table[storage_account] = ContinueStruct(signature, (None, 0, None, None, trx['slot']))
-                            global_continue.add(storage_account)
+                            continue_table[storage_account] = ContinueStruct(signature, (None, "0x0", None, None, trx['slot']))
 
                         elif instruction_data[0] == 0x0c:
                             # logger.debug("{:>10} {:>6} PartialCallOrContinueFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
@@ -389,12 +382,10 @@ class Indexer:
                             else:
                                 got_result = get_trx_results(trx)
                                 if got_result is not None:
-                                    global_continue.add(storage_account)
                                     self.submit_transaction(eth_trx, eth_signature, from_address, got_result, [signature])
                                 else:
-                                    if storage_account not in global_continue:
-                                        logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
-                                        global_continue.add(storage_account)
+                                    # logger.debug("{} {}".format(signature, storage_account))
+                                    self.blocked_storages.add(storage_account)
 
                         elif instruction_data[0] == 0x0d:
                             # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeOrContinue 0x{}".format(slot, counter, instruction_data.hex()))
@@ -414,18 +405,17 @@ class Indexer:
                             else:
                                 got_result = get_trx_results(trx)
                                 if got_result is not None:
-                                    global_continue.add(storage_account)
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
                                     holder_table[holder_account] = HolderStruct(storage_account)
                                 else:
-                                    if storage_account not in global_continue:
-                                        logger.debug("LOST_TRX\t{}\t{}".format(signature, storage_account))
-                                        global_continue.add(storage_account)
+                                    # logger.debug("{} {}".format(signature, storage_account))
+                                    self.blocked_storages.add(storage_account)
 
                         if instruction_data[0] > 0x0e:
                             logger.debug("{:>10} {:>6} Unknown 0x{}".format(slot, counter, instruction_data.hex()))
 
                             pass
+
 
     def submit_transaction(self, eth_trx, eth_signature, from_address, got_result, signatures):
         (logs, status, gas_used, return_value, slot) = got_result
@@ -454,6 +444,7 @@ class Indexer:
 
         logger.debug(eth_signature + " " + status)
 
+
     def gather_blocks(self):
         max_slot = self.client.get_slot(commitment="recent")["result"]
 
@@ -470,6 +461,7 @@ class Indexer:
             self.blocks_by_hash[block_hash] = slot
 
         self.constants['last_block'] = max_slot
+
 
     def get_block(self, slot):
         retry = True
