@@ -314,8 +314,7 @@ class Indexer:
 
                                 del continue_table[storage_account]
                             else:
-                                # logger.debug("{} {}".format(signature, storage_account))
-                                self.blocked_storages.add(storage_account)
+                                self.add_hunged_storage(trx, storage_account)
 
                         elif instruction_data[0] == 0x0a: # Continue
                             # logger.debug("{:>10} {:>6} Continue 0x{}".format(slot, counter, instruction_data.hex()))
@@ -329,8 +328,7 @@ class Indexer:
                                 if got_result is not None:
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
                                 else:
-                                    # logger.debug("{} {}".format(signature, storage_account))
-                                    self.blocked_storages.add(storage_account)
+                                    self.add_hunged_storage(trx, storage_account)
 
 
                         elif instruction_data[0] == 0x0b: # ExecuteTrxFromAccountDataIterative
@@ -349,8 +347,7 @@ class Indexer:
                                 else:
                                     holder_table[holder_account] = HolderStruct(storage_account)
                             else:
-                                # logger.debug("{} {}".format(signature, storage_account))
-                                self.blocked_storages.add(storage_account)
+                                self.add_hunged_storage(trx, storage_account)
 
 
                         elif instruction_data[0] == 0x0c: # Cancel
@@ -384,8 +381,7 @@ class Indexer:
                                 if got_result is not None:
                                     self.submit_transaction(eth_trx, eth_signature, from_address, got_result, [signature])
                                 else:
-                                    # logger.debug("{} {}".format(signature, storage_account))
-                                    self.blocked_storages.add(storage_account)
+                                    self.add_hunged_storage(trx, storage_account)
 
                         elif instruction_data[0] == 0x0d:
                             # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeOrContinue 0x{}".format(slot, counter, instruction_data.hex()))
@@ -408,8 +404,7 @@ class Indexer:
                                     continue_table[storage_account] =  ContinueStruct(signature, got_result)
                                     holder_table[holder_account] = HolderStruct(storage_account)
                                 else:
-                                    # logger.debug("{} {}".format(signature, storage_account))
-                                    self.blocked_storages.add(storage_account)
+                                    self.add_hunged_storage(trx, storage_account)
 
                         if instruction_data[0] > 0x0e:
                             logger.debug("{:>10} {:>6} Unknown 0x{}".format(slot, counter, instruction_data.hex()))
@@ -476,6 +471,11 @@ class Indexer:
                 time.sleep(1)
 
         return (slot, block_hash)
+
+
+    def add_hunged_storage(self, trx, storage):
+        if abs(trx['slot'] - self.current_slot) > 30:
+            self.blocked_storages.add(storage)
 
 
 def run_indexer():

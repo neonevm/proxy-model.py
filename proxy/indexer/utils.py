@@ -326,7 +326,7 @@ class Canceller:
                         AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
                         AccountMeta(pubkey=self.operator, is_signer=True, is_writable=True),
                         AccountMeta(pubkey=self.operator_token, is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=acc_list[1], is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=acc_list[4], is_signer=False, is_writable=True),
                         AccountMeta(pubkey=incinerator, is_signer=False, is_writable=True),
                         AccountMeta(pubkey=system, is_signer=False, is_writable=False)
                     ]
