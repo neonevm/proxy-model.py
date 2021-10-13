@@ -123,9 +123,10 @@ fi
 echo "NEW_USER_AIRDROP_AMOUNT=$NEW_USER_AIRDROP_AMOUNT"
 
 
+isArg() { case "$1" in "$2"|"$2="*) true;; *) false;; esac }
 EXTRA_ARGS_TIMEOUT=' --timeout 300'
 for val in $EXTRA_ARGS; do
-    [ "$val" == '--timeout' ] && EXTRA_ARGS_TIMEOUT=''
+    isArg $val '--timeout' && EXTRA_ARGS_TIMEOUT=''
 done
 EXTRA_ARGS+=$EXTRA_ARGS_TIMEOUT
 
