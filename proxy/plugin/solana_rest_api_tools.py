@@ -839,11 +839,9 @@ def create_account_list_by_emulate(signer, client, ethTrx):
                 seed = b58encode(ACCOUNT_SEED_VERSION+address)
                 code_account = accountWithSeed(signer.public_key(), seed, PublicKey(evm_loader_id))
                 logger.debug("     with code account %s", code_account)
-                code_size = acc_desc["code_size"]
-                valids_size = (code_size // 8) + 1
-                code_account_size = CODE_INFO_LAYOUT.sizeof() + code_size + valids_size + 2048
-                code_account_balance = client.get_minimum_balance_for_rent_exemption(code_account_size)["result"]
-                trx.add(createAccountWithSeedTrx(signer.public_key(), signer.public_key(), seed, code_account_balance, code_account_size, PublicKey(evm_loader_id)))
+                code_size = acc_desc["code_size"] + 2048
+                code_account_balance = client.get_minimum_balance_for_rent_exemption(code_size)["result"]
+                trx.add(createAccountWithSeedTrx(signer.public_key(), signer.public_key(), seed, code_account_balance, code_size, PublicKey(evm_loader_id)))
                 # add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
                 code_account_writable = acc_desc["writable"]
 
@@ -864,7 +862,18 @@ def create_account_list_by_emulate(signer, client, ethTrx):
                              get_associated_token_address(PublicKey(acc_desc["account"]), ETH_TOKEN_MINT_ID),
                              acc_desc["address"],
                              str(NEW_USER_AIRDROP_AMOUNT))
-
+        else:
+            # resize storage account
+            if acc_desc["code_size_current"] and acc_desc["code_size"]:
+                if acc_desc["code_size"] > acc_desc["code_size_current"]:
+                    code_size = acc_desc["code_size"] + 2048
+                    seed = b58encode(ACCOUNT_SEED_VERSION + address + os.urandom(5))
+                    code_account = accountWithSeed(signer.public_key(), seed, PublicKey(evm_loader_id))
+                    logger.debug("creating new code_account with increased size %s", code_account)
+                    code_account_balance = client.get_minimum_balance_for_rent_exemption(code_size)["result"]
+                    trx.add(
+                        createAccountWithSeedTrx(signer.public_key(), signer.public_key(), seed, code_account_balance,
+                                                 code_size, PublicKey(evm_loader_id)))
 
         if address == to_address:
             contract_sol = PublicKey(acc_desc["account"])
