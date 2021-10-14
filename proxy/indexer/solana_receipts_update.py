@@ -70,14 +70,10 @@ class Indexer:
                 self.gather_blocks()
                 logger.debug("Unlock accounts")
                 self.canceller.unlock_accounts(self.blocked_storages)
-                self.blocked_storages.clear()
+                self.blocked_storages = set()
             except Exception as err:
                 logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
 
-            if loop:
-                time.sleep(1)
-            else:
-                break
 
     def gather_unknown_transactions(self):
         poll_txs = set()
@@ -354,7 +350,7 @@ class Indexer:
                             # logger.debug("{:>10} {:>6} Cancel 0x{}".format(slot, counter, instruction_data.hex()))
 
                             storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
-                            continue_table[storage_account] = ContinueStruct(signature, (None, "0x0", None, None, trx['slot']))
+                            continue_table[storage_account] = ContinueStruct(signature, ([], "0x0", 0, [], trx['slot']))
 
                         elif instruction_data[0] == 0x0c:
                             # logger.debug("{:>10} {:>6} PartialCallOrContinueFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
@@ -474,7 +470,7 @@ class Indexer:
 
 
     def add_hunged_storage(self, trx, storage):
-        if abs(trx['slot'] - self.current_slot) > 30:
+        if abs(trx['slot'] - self.current_slot) > 16:
             self.blocked_storages.add(storage)
 
 
