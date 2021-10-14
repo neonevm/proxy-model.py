@@ -63,13 +63,14 @@ STORAGE_SIZE = 128*1024
 
 ACCOUNT_INFO_LAYOUT = cStruct(
     "tag" / Int8ul,
-    "eth_acc" / Bytes(20),
+    "ether" / Bytes(20),
     "nonce" / Int8ul,
     "trx_count" / Bytes(8),
-    "code_acc" / Bytes(32),
-    "is_blocked" / Int8ul,
-    "blocked_by" / Bytes(32),
-    "eth_token" / Bytes(32),
+    "code_account" / Bytes(32),
+    "ro_blocked_cnt" / Int8ul,
+    "is_rw_blocked_acc" / Int8ul,
+    "rw_blocked_acc" / Bytes(32),
+    "eth_token_account" / Bytes(32),
 )
 
 CODE_INFO_LAYOUT = cStruct(
@@ -99,13 +100,14 @@ class TransactionAccounts:
         self.eth_accounts = eth_accounts
 
 class AccountInfo(NamedTuple):
-    eth_acc: eth_keys.PublicKey
+    ether: eth_keys.PublicKey
     trx_count: int
+    code_account: PublicKey
 
     @staticmethod
     def frombytes(data):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.eth_acc, cont.trx_count)
+        return AccountInfo(cont.ether, cont.trx_count, cont.code_account)
 
 def create_account_layout(lamports, space, ether, nonce):
     return bytes.fromhex("02000000")+CREATE_ACCOUNT_LAYOUT.build(dict(
@@ -828,6 +830,53 @@ def create_account_list_by_emulate(signer, client, ethTrx):
 
     output_json = call_emulated(to_address_arg, sender_ether.hex(), ethTrx.callData.hex(), hex(ethTrx.value))
     logger.debug("emulator returns: %s", json.dumps(output_json, indent=3))
+
+    # resize storage account
+    resize_instr = []
+    for acc_desc in output_json["accounts"]:
+        if acc_desc["new"] == None:
+
+            address = bytes.fromhex(acc_desc["address"][2:])
+            if acc_desc["code_size_current"] and acc_desc["code_size"]:
+                if acc_desc["code_size"] > acc_desc["code_size_current"]:
+                    code_size = acc_desc["code_size"] + 2048
+                    seed = b58encode(ACCOUNT_SEED_VERSION + address + os.urandom(5))
+                    code_account_new = accountWithSeed(signer.public_key(), seed, PublicKey(evm_loader_id))
+                    logger.debug("creating new code_account with increased size %s", code_account_new)
+                    code_account_balance = client.get_minimum_balance_for_rent_exemption(code_size)["result"]
+                    trx.add(
+                        createAccountWithSeedTrx(signer.public_key(), signer.public_key(), seed, code_account_balance,
+                                                 code_size, PublicKey(evm_loader_id)))
+                    resize_instr.append(TransactionInstruction(
+                        keys=[
+                            AccountMeta(pubkey=PublicKey(acc_desc["account"]), is_signer=False, is_writable=True),
+                            AccountMeta(pubkey=acc_desc["contract"], is_signer=False, is_writable=True),
+                            AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=False),
+                            AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False)
+                        ],
+                        program_id=evm_loader_id,
+                        data=None
+                    ))
+                    # replace code_account
+                    acc_desc["contract"] = code_account_new
+
+    for tx in resize_instr:
+        success = False
+        count = 2
+        while count > 0:
+            send_transaction(client, tx, signer)
+            info = _getAccountData(client, tx.keys[0].pubkey, ACCOUNT_INFO_LAYOUT.sizeof())
+            data = AccountInfo.frombytes(info)
+            if data.code_account == tx.keys[2].pubkey:
+                success = True
+                break
+            # wait for unlock account
+            time.sleep(1)
+            count = count-1
+
+        if success == False:
+            raise Exception("Can't resize storage account. Account is blocked {}".format(tx.keys[0].pubkey))
+
     for acc_desc in output_json["accounts"]:
         address = bytes.fromhex(acc_desc["address"][2:])
 
@@ -862,18 +911,6 @@ def create_account_list_by_emulate(signer, client, ethTrx):
                              get_associated_token_address(PublicKey(acc_desc["account"]), ETH_TOKEN_MINT_ID),
                              acc_desc["address"],
                              str(NEW_USER_AIRDROP_AMOUNT))
-        else:
-            # resize storage account
-            if acc_desc["code_size_current"] and acc_desc["code_size"]:
-                if acc_desc["code_size"] > acc_desc["code_size_current"]:
-                    code_size = acc_desc["code_size"] + 2048
-                    seed = b58encode(ACCOUNT_SEED_VERSION + address + os.urandom(5))
-                    code_account = accountWithSeed(signer.public_key(), seed, PublicKey(evm_loader_id))
-                    logger.debug("creating new code_account with increased size %s", code_account)
-                    code_account_balance = client.get_minimum_balance_for_rent_exemption(code_size)["result"]
-                    trx.add(
-                        createAccountWithSeedTrx(signer.public_key(), signer.public_key(), seed, code_account_balance,
-                                                 code_size, PublicKey(evm_loader_id)))
 
         if address == to_address:
             contract_sol = PublicKey(acc_desc["account"])
