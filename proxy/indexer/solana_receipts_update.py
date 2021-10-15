@@ -24,6 +24,9 @@ PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+DEVNET_HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn"
+HISTORY_START = [DEVNET_HISTORY_START]
+
 UPDATE_BLOCK_COUNT = PARALLEL_REQUESTS * 16
 
 class HolderStruct:
@@ -105,7 +108,7 @@ class Indexer:
                 solana_signature = tx["signature"]
                 slot = tx["slot"]
 
-                if solana_signature == "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn":
+                if solana_signature in HISTORY_START:
                     logger.debug(solana_signature)
                     continue_flag = False
                     break
