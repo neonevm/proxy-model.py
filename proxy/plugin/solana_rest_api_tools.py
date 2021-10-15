@@ -107,7 +107,7 @@ class AccountInfo(NamedTuple):
     @staticmethod
     def frombytes(data):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.ether, cont.trx_count, cont.code_account)
+        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
 
 def create_account_layout(lamports, space, ether, nonce):
     return bytes.fromhex("02000000")+CREATE_ACCOUNT_LAYOUT.build(dict(
@@ -834,48 +834,55 @@ def create_account_list_by_emulate(signer, client, ethTrx):
     # resize storage account
     resize_instr = []
     for acc_desc in output_json["accounts"]:
-        if acc_desc["new"] == None:
+        if acc_desc["new"] == False:
 
             address = bytes.fromhex(acc_desc["address"][2:])
             if acc_desc["code_size_current"] and acc_desc["code_size"]:
                 if acc_desc["code_size"] > acc_desc["code_size_current"]:
                     code_size = acc_desc["code_size"] + 2048
-                    seed = b58encode(ACCOUNT_SEED_VERSION + address + os.urandom(5))
+                    seed = b58encode(ACCOUNT_SEED_VERSION + os.urandom(20))
                     code_account_new = accountWithSeed(signer.public_key(), seed, PublicKey(evm_loader_id))
+
                     logger.debug("creating new code_account with increased size %s", code_account_new)
-                    code_account_balance = client.get_minimum_balance_for_rent_exemption(code_size)["result"]
-                    trx.add(
-                        createAccountWithSeedTrx(signer.public_key(), signer.public_key(), seed, code_account_balance,
-                                                 code_size, PublicKey(evm_loader_id)))
+                    create_account_with_seed(client, signer, signer, seed, code_size);
+                    logger.debug("resized account is created %s", code_account_new)
+
                     resize_instr.append(TransactionInstruction(
                         keys=[
                             AccountMeta(pubkey=PublicKey(acc_desc["account"]), is_signer=False, is_writable=True),
                             AccountMeta(pubkey=acc_desc["contract"], is_signer=False, is_writable=True),
-                            AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=False),
+                            AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
                             AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False)
                         ],
                         program_id=evm_loader_id,
-                        data=None
+                        data=bytearray.fromhex("11") # 17- ResizeStorageAccount
                     ))
                     # replace code_account
                     acc_desc["contract"] = code_account_new
 
-    for tx in resize_instr:
+    for instr in resize_instr:
+        logger.debug("code and storage migration, account %s from  %s to %s", instr.keys[0].pubkey, instr.keys[1].pubkey, instr.keys[2].pubkey)
+
+        tx = Transaction().add(instr)
         success = False
-        count = 2
-        while count > 0:
+        count = 0
+
+        while count < 2:
+            logger.debug("attemt: %d", count)
+
             send_transaction(client, tx, signer)
-            info = _getAccountData(client, tx.keys[0].pubkey, ACCOUNT_INFO_LAYOUT.sizeof())
-            data = AccountInfo.frombytes(info)
-            if data.code_account == tx.keys[2].pubkey:
+            info = _getAccountData(client, instr.keys[0].pubkey, ACCOUNT_INFO_LAYOUT.sizeof())
+            info_data = AccountInfo.frombytes(info)
+            if info_data.code_account == instr.keys[2].pubkey:
                 success = True
+                logger.debug("successful code and storage migration, %s", instr.keys[0].pubkey)
                 break
             # wait for unlock account
             time.sleep(1)
-            count = count-1
+            count = count+1
 
         if success == False:
-            raise Exception("Can't resize storage account. Account is blocked {}".format(tx.keys[0].pubkey))
+            raise Exception("Can't resize storage account. Account is blocked {}".format(instr.keys[0].pubkey))
 
     for acc_desc in output_json["accounts"]:
         address = bytes.fromhex(acc_desc["address"][2:])
