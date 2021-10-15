@@ -81,11 +81,6 @@ contract test_185 {
 
 
 class Test_eth_sendRawTransaction(unittest.TestCase):
-    test_noce_map = {
-        'grade_up_one': 1,
-        'grade_down_one': -1,
-    }
-
     @classmethod
     def setUpClass(cls):
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/147")
@@ -205,7 +200,11 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_04_execute_with_bad_nonce(self):
-        for name, offset in self.test_noce_map.items():
+        test_nonce_map = {
+            'grade_up_one': 1,
+            'grade_down_one': -1,
+        }
+        for name, offset in test_nonce_map.items():
             with self.subTest(name=name):
                 print("\ntest_04_execute_with_bad_nonce {} offsets".format(offset))
                 bad_nonce = offset + proxy.eth.get_transaction_count(proxy.eth.default_account)
