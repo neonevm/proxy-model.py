@@ -115,7 +115,7 @@ def create_account_layout(lamports, space, ether, nonce):
     ))
 
 def write_holder_layout(seed, offset, data):
-    return (bytes.fromhex('10')+
+    return (bytes.fromhex('11')+
             seed+
             offset.to_bytes(4, byteorder='little')+
             len(data).to_bytes(8, byteorder='little')+
