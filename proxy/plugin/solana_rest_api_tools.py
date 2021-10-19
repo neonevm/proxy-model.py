@@ -117,7 +117,7 @@ def create_account_layout(lamports, space, ether, nonce):
     ))
 
 def write_holder_layout(seed, offset, data):
-    return (bytes.fromhex('11')+
+    return (bytes.fromhex('12')+
             seed+
             offset.to_bytes(4, byteorder='little')+
             len(data).to_bytes(8, byteorder='little')+
@@ -855,7 +855,7 @@ def create_account_list_by_emulate(signer, client, ethTrx):
                             AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False)
                         ],
                         program_id=evm_loader_id,
-                        data=bytearray.fromhex("11")+bytes(seed) # 17- ResizeStorageAccount
+                        data=bytearray.fromhex("12")+bytes(seed) # 17- ResizeStorageAccount
                     ))
                     # replace code_account
                     acc_desc["contract"] = code_account_new
