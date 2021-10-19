@@ -855,7 +855,7 @@ def create_account_list_by_emulate(signer, client, ethTrx):
                             AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False)
                         ],
                         program_id=evm_loader_id,
-                        data=bytearray.fromhex("12")+bytes(seed) # 17- ResizeStorageAccount
+                        data=bytearray.fromhex("11")+bytes(seed) # 17- ResizeStorageAccount
                     ))
                     # replace code_account
                     acc_desc["contract"] = code_account_new
