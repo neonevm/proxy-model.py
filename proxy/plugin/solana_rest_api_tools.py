@@ -630,6 +630,8 @@ def make_partial_call_instruction(perm_accs, trx_accs, step_count, call_data):
             AccountMeta(pubkey=sysinstruct, is_signer=False, is_writable=False),
             AccountMeta(pubkey=perm_accs.operator, is_signer=True, is_writable=True),
             AccountMeta(pubkey=perm_accs.collateral_pool_address, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=perm_accs.operator_token, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=trx_accs.caller_token, is_signer=False, is_writable=True),
             AccountMeta(pubkey=system, is_signer=False, is_writable=False),
 
         ] + trx_accs.eth_accounts + [
@@ -696,6 +698,8 @@ def make_call_from_account_instruction(perm_accs, trx_accs, step_count = 0):
 
             AccountMeta(pubkey=perm_accs.operator, is_signer=True, is_writable=True),
             AccountMeta(pubkey=perm_accs.collateral_pool_address, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=perm_accs.operator_token, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=trx_accs.caller_token, is_signer=False, is_writable=True),
             AccountMeta(pubkey=system, is_signer=False, is_writable=False),
 
         ] + trx_accs.eth_accounts + [
