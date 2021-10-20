@@ -1,6 +1,8 @@
 import os
 import sys
 
+from proxy.plugin.solana_rest_api_tools import sysinstruct, ETH_TOKEN_MINT_ID, system, send_transaction
+
 sys.path.append("/spl/bin/")
 os.environ['SOLANA_URL'] = "http://solana:8899"
 os.environ['EVM_LOADER'] = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
@@ -188,6 +190,10 @@ class CancelTest(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator's NEON token account:
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User's NEON token account:
+                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
