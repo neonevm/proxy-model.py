@@ -1,3 +1,4 @@
+import base58
 import base64
 import json
 import logging
@@ -451,16 +452,11 @@ def check_if_program_exceeded_instructions(err_result):
 
 
 def check_if_continue_returned(result):
-    acc_meta_lst = result["result"]["transaction"]["message"]["accountKeys"]
-    evm_loader_index = acc_meta_lst.index(evm_loader_id)
-
-    innerInstruction = result['result']['meta']['innerInstructions']
-    innerInstruction = next((i for i in innerInstruction if i["index"] == 0), None)
-    if (innerInstruction and innerInstruction['instructions']):
-        instruction = innerInstruction['instructions'][-1]
-        if (instruction['programIdIndex'] == evm_loader_index):
-            data = b58decode(instruction['data'])
-            if (data[0] == 6):
+    for inner in (result['result']['meta']['innerInstructions']):
+        for event in inner['instructions']:
+            log = base58.b58decode(event['data'])
+            instruction = log[:1]
+            if int().from_bytes(instruction, "little") == 6:  # OnReturn evmInstruction code
                 return (True, result['result']['transaction']['signatures'][0])
     return (False, ())
 
@@ -519,7 +515,7 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps):
             else:
                 raise
 
-        logger.debug("Collect bucked results:")
+        logger.debug("Collect bucked results: {}".format(result_list))
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
