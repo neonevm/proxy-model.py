@@ -71,6 +71,7 @@ ACCOUNT_INFO_LAYOUT = cStruct(
     "ro_blocked_cnt" / Int8ul,
     "rw_blocked_acc" / Bytes(32),
     "eth_token_account" / Bytes(32),
+    "ro_blocked_cnt" / Int8ul,
 )
 
 CODE_INFO_LAYOUT = cStruct(
