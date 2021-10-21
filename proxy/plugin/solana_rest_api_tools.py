@@ -456,8 +456,8 @@ def check_if_continue_returned(result):
     accounts = tx_info["transaction"]["message"]["accountKeys"]
     evm_loader_instructions = []
 
-    for idx, trx in enumerate(tx_info["transaction"]["message"]["instructions"]):
-        if accounts[trx["programIdIndex"]] == evm_loader_id:
+    for idx, instruction in enumerate(tx_info["transaction"]["message"]["instructions"]):
+        if accounts[instruction["programIdIndex"]] == evm_loader_id:
             evm_loader_instructions.append(idx)
 
     for inner in (tx_info['meta']['innerInstructions']):
@@ -466,7 +466,6 @@ def check_if_continue_returned(result):
                 if accounts[event['programIdIndex']] == evm_loader_id:
                     instruction = base58.b58decode(event['data'])[:1]
                     if int().from_bytes(instruction, "little") == 6:  # OnReturn evmInstruction code
-                        logger.debug("Result:\n%s"%json.dumps(result, indent=3))
                         return (True, tx_info['transaction']['signatures'][0])
     return (False, ())
 
