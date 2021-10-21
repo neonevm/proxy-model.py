@@ -751,9 +751,9 @@ def simulate_continue_0x0d(signer, client, perm_accs, trx_accs, step_count, msg)
                 if step_count == 0:
                     raise Exception("cant run even one instruction")
             elif isinstance(err, dict) and "Custom" in err:
-                continue_count = instruction_error[0]
                 if continue_count == 0:
                     raise Exception("uninitialized storage account")
+                continue_count = instruction_error[0]
                 break
             else:
                 logger.debug("Result:\n%s"%json.dumps(response, indent=3))
@@ -799,9 +799,9 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
                 if step_count == 0:
                     raise Exception("cant run even one instruction")
             elif isinstance(err, dict) and "Custom" in err:
-                continue_count = instruction_error[0]
                 if continue_count == 0:
                     raise Exception("uninitialized storage account")
+                continue_count = instruction_error[0]
                 break
             else:
                 logger.debug("Result:\n%s"%json.dumps(response, indent=3))
