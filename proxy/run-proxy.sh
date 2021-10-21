@@ -11,7 +11,6 @@ if [ "$CONFIG" == "ci" ]; then
   [[ -z "$COLLATERAL_POOL_BASE"         ]] && export COLLATERAL_POOL_BASE=deploy
   [[ -z "$NEW_USER_AIRDROP_AMOUNT"      ]] && export NEW_USER_AIRDROP_AMOUNT=100
   [[ -z "$NEON_CHAIN_ID"                ]] && export NEON_CHAIN_ID=0x6f
-  [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=100000
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="0.5"
   [[ -z "$USE_COMBINED_START_CONTINUE"  ]] && export USE_COMBINED_START_CONTINUE="YES"
   [[ -z "$CONTINUE_COUNT_FACTOR"        ]] && export CONTINUE_COUNT_FACTOR="3"
@@ -22,7 +21,6 @@ elif [ "$CONFIG" == "local" ]; then
   [[ -z "$COLLATERAL_POOL_BASE"         ]] && export COLLATERAL_POOL_BASE=deploy
   [[ -z "$NEW_USER_AIRDROP_AMOUNT"      ]] && export NEW_USER_AIRDROP_AMOUNT=10
   [[ -z "$NEON_CHAIN_ID"                ]] && export NEON_CHAIN_ID=0x6f
-  [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=0
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="0.9"
 elif [ "$CONFIG" == "devnet" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="https://api.devnet.solana.com"
@@ -31,7 +29,6 @@ elif [ "$CONFIG" == "devnet" ]; then
   [[ -z "$COLLATERAL_POOL_BASE"         ]] && export COLLATERAL_POOL_BASE=7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx
   [[ -z "$NEW_USER_AIRDROP_AMOUNT"      ]] && export NEW_USER_AIRDROP_AMOUNT=0
   [[ -z "$NEON_CHAIN_ID"                ]] && export NEON_CHAIN_ID=0x6e
-  [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=90000
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="10"
 elif [ "$CONFIG" == "testnet" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="https://api.testnet.solana.com"
@@ -40,7 +37,6 @@ elif [ "$CONFIG" == "testnet" ]; then
   [[ -z "$COLLATERAL_POOL_BASE"         ]] && export COLLATERAL_POOL_BASE=7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx
   [[ -z "$NEW_USER_AIRDROP_AMOUNT"      ]] && export NEW_USER_AIRDROP_AMOUNT=0
   [[ -z "$NEON_CHAIN_ID"                ]] && export NEON_CHAIN_ID=0x6f
-  [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=90000
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="15"
 elif [ "$CONFIG" != "custom" ]; then
   exit 1
