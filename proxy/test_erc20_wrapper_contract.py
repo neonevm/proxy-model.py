@@ -21,7 +21,7 @@ from proxy.plugin.solana_rest_api_tools import createERC20TokenAccountTrx, creat
 install_solc(version='0.7.6')
 from solcx import compile_source
 
-EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "100000"))
+EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
 evm_loader_id = PublicKey(os.environ.get("EVM_LOADER"))
