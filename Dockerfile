@@ -1,5 +1,5 @@
 ARG SOLANA_REVISION=v1.7.9-resources
-ARG EVM_LOADER_REVISION=stable
+ARG EVM_LOADER_REVISION=v0.3.0-rc2
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 
