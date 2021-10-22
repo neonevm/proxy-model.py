@@ -68,7 +68,6 @@ ACCOUNT_INFO_LAYOUT = cStruct(
     "nonce" / Int8ul,
     "trx_count" / Bytes(8),
     "code_account" / Bytes(32),
-    "ro_blocked_cnt" / Int8ul,
     "rw_blocked_acc" / Bytes(32),
     "eth_token_account" / Bytes(32),
     "ro_blocked_cnt" / Int8ul,
