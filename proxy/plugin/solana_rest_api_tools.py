@@ -627,7 +627,7 @@ def sol_instr_12_cancel(signer, client, perm_accs, trx_accs):
 def make_partial_call_instruction(perm_accs, trx_accs, step_count, call_data):
     return TransactionInstruction(
         program_id = evm_loader_id,
-        data = bytearray.fromhex("09") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little") + call_data,
+        data = bytearray.fromhex("13") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little") + call_data,
         keys = [
             AccountMeta(pubkey=perm_accs.storage, is_signer=False, is_writable=True),
 
