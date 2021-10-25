@@ -48,12 +48,12 @@ class Indexer:
         self.client = Client(solana_url)
         self.canceller = Canceller()
         self.logs_db = LogDB(filename="local.db")
-        self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True, journal_mode='WAL')
-        self.transaction_receipts = SqliteDict(filename="local.db", tablename="known_transactions", autocommit=True, journal_mode='WAL', encode=json.dumps, decode=json.loads)
-        self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, journal_mode='WAL', encode=json.dumps, decode=json.loads)
-        self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, journal_mode='WAL', encode=json.dumps, decode=json.loads)
-        self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True, journal_mode='WAL', encode=json.dumps, decode=json.loads)
-        self.constants = SqliteDict(filename="local.db", tablename="constants", autocommit=True, journal_mode='WAL')
+        self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True, journal_mode='OFF')
+        self.transaction_receipts = SqliteDict(filename="local.db", tablename="known_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.constants = SqliteDict(filename="local.db", tablename="constants", autocommit=True, journal_mode='OFF')
         self.last_slot = 0
         self.current_slot = 0
         self.transaction_order = []

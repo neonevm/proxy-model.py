@@ -172,7 +172,7 @@ def get_account_list(client, storage_account):
 class LogDB:
     def __init__(self, filename="local.db"):
         self.conn = sqlite3.connect(filename, check_same_thread=False) # multithread mode
-        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA journal_mode=OFF")
         # self.conn.isolation_level = None # autocommit mode
         cur = self.conn.cursor()
         cur.execute("""CREATE TABLE IF NOT EXISTS

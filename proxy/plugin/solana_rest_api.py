@@ -88,10 +88,10 @@ class EthereumModel:
         self.client = SolanaClient(solana_url)
 
         self.logs_db = LogDB(filename="local.db")
-        self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True, journal_mode='WAL')
-        self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, journal_mode='WAL', encode=json.dumps, decode=json.loads)
-        self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, journal_mode='WAL', encode=json.dumps, decode=json.loads)
-        self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True, journal_mode='WAL', encode=json.dumps, decode=json.loads)
+        self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True, journal_mode='OFF')
+        self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
