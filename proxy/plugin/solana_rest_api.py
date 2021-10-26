@@ -408,8 +408,10 @@ class EthereumModel:
                                     ]
                                 })
         try:
-            signature = call_signed(self.signer, self.client, trx, self.perm_accs, steps=250)
-
+            pre = int(self.client.get_balance(self.signer.public_key(), commitment=Confirmed)['result']['value'])
+            (signature, cost) = call_signed(self.signer, self.client, trx, self.perm_accs, steps=250)
+            post = int(self.client.get_balance(self.signer.public_key(), commitment=Confirmed)['result']['value'])
+            logger.debug("COST: %d, %d, %d %d", cost,  pre, post, pre-post)
             logger.debug('Transaction signature: %s %s', signature, eth_signature)
 
             try:

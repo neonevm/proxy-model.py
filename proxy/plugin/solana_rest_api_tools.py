@@ -62,6 +62,8 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(
 
 STORAGE_SIZE = 128*1024
 
+cost = 0
+
 ACCOUNT_INFO_LAYOUT = cStruct(
     "type" / Int8ul,
     "ether" / Bytes(20),
@@ -433,6 +435,8 @@ def send_transaction(client, trx, signer):
     result = client.send_transaction(trx, signer, opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
     confirm_transaction(client, result["result"])
     result = client.get_confirmed_transaction(result["result"])
+    update_transaction_cost(result)
+    print(result)
     return result
 
 def send_measured_transaction(client, trx, signer):
@@ -528,6 +532,7 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps):
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
+            update_transaction_cost(result)
             get_measurements(result)
             (founded, signature) = check_if_continue_returned(result)
             if founded:
@@ -559,6 +564,7 @@ def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg):
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
+            update_transaction_cost(result)
             get_measurements(result)
             (founded, signature) = check_if_continue_returned(result)
             if founded:
@@ -821,6 +827,13 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
     logger.debug("tx_count = {}, step_count = {}".format(continue_count, step_count))
     return (continue_count, step_count)
 
+
+def update_transaction_cost(receipt):
+    global cost
+    # cost = cost + 1
+    cost = cost + receipt['result']['meta']['postBalances'][0]-receipt['result' ]['meta']['preBalances'][0]
+    logger.debug("COST  %d", cost)
+
 def create_account_list_by_emulate(signer, client, ethTrx):
     sender_ether = bytes.fromhex(ethTrx.sender())
     add_keys_05 = []
@@ -976,6 +989,8 @@ def create_account_list_by_emulate(signer, client, ethTrx):
 
 
 def call_signed(signer, client, ethTrx, perm_accs, steps):
+    global cost
+    cost = 0
 
     (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx)
 
@@ -988,7 +1003,8 @@ def call_signed(signer, client, ethTrx, perm_accs, steps):
 
         try:
             logger.debug("Try single trx call")
-            return call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx)
+            result  = call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx)
+            return (result, cost)
         except Exception as err:
             logger.debug(str(err))
             if str(err).find("Program failed to complete") >= 0:
@@ -1001,12 +1017,15 @@ def call_signed(signer, client, ethTrx, perm_accs, steps):
                 raise
 
     if call_from_holder:
-        return call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx)
+        result = call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx)
+        return (result, cost)
     if call_iterative:
         if USE_COMBINED_START_CONTINUE:
-            return call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
+            result = call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
+            return (result, cost)
         else:
-            return call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
+            result = call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
+            return (result, cost)
 
 
 def call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx):
@@ -1165,6 +1184,8 @@ def write_trx_to_holder_account(signer, client, holder, ethTrx):
     logger.debug("receipts %s", receipts)
     for rcpt in receipts:
         confirm_transaction(client, rcpt)
+        result = client.get_confirmed_transaction(rcpt)
+        update_transaction_cost(result)
         logger.debug("confirmed: %s", rcpt)
 
 
