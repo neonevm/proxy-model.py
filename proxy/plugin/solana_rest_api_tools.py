@@ -671,7 +671,7 @@ def make_partial_call_or_continue_instruction_0x0d(perm_accs, trx_accs, step_cou
 
 
 def make_continue_instruction(perm_accs, trx_accs, step_count, index=None):
-    data = bytearray.fromhex("0A") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little")
+    data = bytearray.fromhex("14") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little")
     if index:
         data = data + index.to_bytes(8, byteorder="little")
 

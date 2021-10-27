@@ -329,7 +329,6 @@ class Indexer:
                                 else:
                                     self.add_hunged_storage(trx, storage_account)
 
-
                         elif instruction_data[0] == 0x0b: # ExecuteTrxFromAccountDataIterative
                             # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterative 0x{}".format(slot, counter, instruction_data.hex()))
 
@@ -347,7 +346,6 @@ class Indexer:
                                     holder_table[holder_account] = HolderStruct(storage_account)
                             else:
                                 self.add_hunged_storage(trx, storage_account)
-
 
                         elif instruction_data[0] == 0x0c: # Cancel
                             # logger.debug("{:>10} {:>6} Cancel 0x{}".format(slot, counter, instruction_data.hex()))
@@ -446,7 +444,21 @@ class Indexer:
                             else:
                                 self.add_hunged_storage(trx, storage_account)
 
-                        if instruction_data[0] > 0x13:
+                        elif instruction_data[0] == 0x14:  # ContinueV02
+                            # logger.debug("{:>10} {:>6} ContinueV02 0x{}".format(slot, counter, instruction_data.hex()))
+
+                            storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
+
+                            if storage_account in continue_table:
+                                continue_table[storage_account].signatures.append(signature)
+                            else:
+                                got_result = get_trx_results(trx)
+                                if got_result is not None:
+                                    continue_table[storage_account] = ContinueStruct(signature, got_result)
+                                else:
+                                    self.add_hunged_storage(trx, storage_account)
+
+                        if instruction_data[0] > 0x14:
                             logger.debug("{:>10} {:>6} Unknown 0x{}".format(slot, counter, instruction_data.hex()))
 
                             pass
