@@ -105,6 +105,7 @@ def get_trx_results(trx):
 
 
 def get_trx_receipts(unsigned_msg, signature):
+    unsigned_msg = bytes(unsigned_msg)
     trx = rlp.decode(unsigned_msg, EthTrx)
 
     v = int(signature[64]) + 35 + 2 * trx[6]
@@ -162,7 +163,7 @@ def get_account_list(client, storage_account):
         offset = 1 + STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()
         for _ in range(storage.accounts_len):
             some_pubkey = PublicKey(data[offset:offset + 32])
-            acc_list.append(some_pubkey)
+            acc_list.append(str(some_pubkey))
             offset += 32
 
         return acc_list
@@ -329,17 +330,20 @@ class Canceller:
             PublicKey(incinerator),
             PublicKey(system),
         ]
-        for storage, trx_accs in blocked_storages:
+        for storage, trx_accs in blocked_storages.items():
             (eth_trx, blocked_accs) = trx_accs
             acc_list = get_account_list(self.client, storage)
             if eth_trx is None:
                 logger.error("trx is None")
+                continue
             if blocked_accs is None:
                 logger.error("blocked_accs is None")
+                continue
 
             eth_trx = rlp.decode(bytes.fromhex(eth_trx), EthTrx)
             if acc_list != blocked_accs:
                 logger.error("acc_list != blocked_accs")
+                continue
 
             if acc_list is not None:
                 keys = [
