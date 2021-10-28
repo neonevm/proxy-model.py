@@ -696,7 +696,7 @@ def make_continue_instruction(perm_accs, trx_accs, step_count, index=None):
 def make_call_from_account_instruction(perm_accs, trx_accs, step_count = 0):
     return TransactionInstruction(
         program_id = evm_loader_id,
-        data = bytearray.fromhex("12") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little"),
+        data = bytearray.fromhex("16") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little"),
         keys = [
             AccountMeta(pubkey=perm_accs.holder, is_signer=False, is_writable=True),
             AccountMeta(pubkey=perm_accs.storage, is_signer=False, is_writable=True),
