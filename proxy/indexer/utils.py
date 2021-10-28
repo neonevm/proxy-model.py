@@ -327,8 +327,18 @@ class Canceller:
             PublicKey(incinerator),
             PublicKey(system),
         ]
-        for storage in blocked_storages:
+        for storage, trx_accs in blocked_storages:
+            (eth_trx, blocked_accs) = trx_accs
             acc_list = get_account_list(self.client, storage)
+            if eth_trx is None:
+                logger.error("trx is None")
+            if blocked_accs is None:
+                logger.error("blocked_accs is None")
+
+            eth_trx = rlp.decode(bytes.fromhex(eth_trx), EthTrx)
+            if acc_list != blocked_accs:
+                logger.error("acc_list != blocked_accs")
+
             if acc_list is not None:
                 keys = [
                         AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
@@ -344,7 +354,7 @@ class Canceller:
                 trx = Transaction()
                 trx.add(TransactionInstruction(
                     program_id=evm_loader_id,
-                    data=bytearray.fromhex("0C"),
+                    data=bytearray.fromhex("15") + eth_trx[0].to_bytes(8, 'little'),
                     keys=keys
                 ))
 
@@ -352,7 +362,7 @@ class Canceller:
                 try:
                     self.client.send_transaction(trx, self.signer, opts=TxOpts(preflight_commitment=Confirmed))
                 except Exception as err:
-                    logger.debug(err)
+                    logger.error(err)
                 else:
                     logger.debug("Canceled")
                     logger.debug(acc_list)

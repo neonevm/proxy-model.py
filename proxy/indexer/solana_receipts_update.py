@@ -38,9 +38,21 @@ class HolderStruct:
 
 
 class ContinueStruct:
-    def __init__(self, signature, results):
+    def __init__(self, signature, results, accounts = None):
         self.signatures = [signature]
         self.results = results
+        self.accounts = accounts
+
+
+class TransactionStruct:
+    def __init__(self, eth_trx, eth_signature, from_address, got_result, signatures, storage, blocked_accounts):
+        self.eth_trx = eth_trx
+        self.eth_signature = eth_signature
+        self.from_address = from_address
+        self.got_result = got_result
+        self.signatures = signatures
+        self.storage = storage
+        self.blocked_accounts = blocked_accounts
 
 
 class Indexer:
@@ -59,7 +71,7 @@ class Indexer:
         self.transaction_order = []
         if 'last_block' not in self.constants:
             self.constants['last_block'] = 0
-        self.blocked_storages = set()
+        self.blocked_storages = {}
         self.counter_ = 0
 
     def run(self, loop = True):
@@ -73,7 +85,7 @@ class Indexer:
                 self.gather_blocks()
                 logger.debug("Unlock accounts")
                 self.canceller.unlock_accounts(self.blocked_storages)
-                self.blocked_storages = set()
+                self.blocked_storages = {}
             except Exception as err:
                 logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
 
@@ -174,6 +186,7 @@ class Indexer:
         counter = 0
         holder_table = {}
         continue_table = {}
+        trx_table = {}
 
         for signature in self.transaction_order:
             counter += 1
@@ -236,7 +249,15 @@ class Indexer:
                                         if storage_account in continue_table:
                                             continue_result = continue_table[storage_account]
 
-                                            self.submit_transaction(eth_trx, eth_signature, from_address, continue_result.results, continue_result.signatures)
+                                            trx_table[eth_signature] = TransactionStruct(
+                                                    eth_trx,
+                                                    eth_signature,
+                                                    from_address,
+                                                    continue_result.results,
+                                                    continue_result.signatures,
+                                                    storage_account,
+                                                    continue_result.accounts,
+                                                )
 
                                             del continue_table[storage_account]
                                         else:
@@ -288,7 +309,8 @@ class Indexer:
 
                             got_result = get_trx_results(trx)
                             if got_result is not None:
-                                self.submit_transaction(eth_trx, eth_signature, from_address, got_result, [signature])
+                                # self.submit_transaction(eth_trx, eth_signature, from_address, got_result, [signature])
+                                trx_table[eth_signature] = TransactionStruct(eth_trx, eth_signature, from_address, got_result, [signature], None, None)
                             else:
                                 logger.error("RESULT NOT FOUND IN 05\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
 
@@ -296,69 +318,7 @@ class Indexer:
                             # logger.debug("{:>10} {:>6} PartialCallFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
 
                             storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
-
-                            if storage_account in continue_table:
-                                # collateral_pool_buf = instruction_data[1:5]
-                                # step_count = instruction_data[5:13]
-                                # from_addr = instruction_data[13:33]
-
-                                sign = instruction_data[33:98]
-                                unsigned_msg = instruction_data[98:]
-
-                                (eth_trx, eth_signature, from_address) = get_trx_receipts(unsigned_msg, sign)
-
-                                continue_result = continue_table[storage_account]
-
-                                self.submit_transaction(eth_trx, eth_signature, from_address, continue_result.results, continue_result.signatures)
-
-                                del continue_table[storage_account]
-                            else:
-                                self.add_hunged_storage(trx, storage_account)
-
-                        elif instruction_data[0] == 0x0a: # Continue
-                            # logger.debug("{:>10} {:>6} Continue 0x{}".format(slot, counter, instruction_data.hex()))
-
-                            storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
-
-                            if storage_account in continue_table:
-                                continue_table[storage_account].signatures.append(signature)
-                            else:
-                                got_result = get_trx_results(trx)
-                                if got_result is not None:
-                                    continue_table[storage_account] =  ContinueStruct(signature, got_result)
-                                else:
-                                    self.add_hunged_storage(trx, storage_account)
-
-
-                        elif instruction_data[0] == 0x0b: # ExecuteTrxFromAccountDataIterative
-                            # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterative 0x{}".format(slot, counter, instruction_data.hex()))
-
-                            holder_account =  trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
-                            storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][1]]
-
-                            if storage_account in continue_table:
-                                continue_table[storage_account].signatures.append(signature)
-
-                                if holder_account in holder_table:
-                                    # logger.debug("holder_account found")
-                                    # logger.debug("Strange behavior. Pay attention.")
-                                    holder_table[holder_account] = HolderStruct(storage_account)
-                                else:
-                                    holder_table[holder_account] = HolderStruct(storage_account)
-                            else:
-                                self.add_hunged_storage(trx, storage_account)
-
-
-                        elif instruction_data[0] == 0x0c: # Cancel
-                            # logger.debug("{:>10} {:>6} Cancel 0x{}".format(slot, counter, instruction_data.hex()))
-
-                            storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
-                            continue_table[storage_account] = ContinueStruct(signature, ([], "0x0", 0, [], trx['slot']))
-
-                        elif instruction_data[0] == 0x0c:
-                            # logger.debug("{:>10} {:>6} PartialCallOrContinueFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
-
-                            storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
+                            blocked_accounts = [trx['transaction']['message']['accountKeys'][acc_idx] for acc_idx in instruction['accounts'][7:]]
 
                             # collateral_pool_buf = instruction_data[1:5]
                             # step_count = instruction_data[5:13]
@@ -369,24 +329,52 @@ class Indexer:
 
                             (eth_trx, eth_signature, from_address) = get_trx_receipts(unsigned_msg, sign)
 
+                            trx_table[eth_signature] = TransactionStruct(
+                                    eth_trx,
+                                    eth_signature,
+                                    from_address,
+                                    None,
+                                    [signature],
+                                    storage_account,
+                                    blocked_accounts
+                                )
+
                             if storage_account in continue_table:
                                 continue_result = continue_table[storage_account]
-
-                                self.submit_transaction(eth_trx, eth_signature, from_address, continue_result.results, continue_result.signatures)
-
+                                if continue_result.accounts != blocked_accounts:
+                                    logger.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
+                                continue_result.signatures.append(signature)
+                                trx_table[eth_signature].got_result = continue_result.results
+                                trx_table[eth_signature].signatures = continue_result.signatures
                                 del continue_table[storage_account]
-                            else:
-                                got_result = get_trx_results(trx)
-                                if got_result is not None:
-                                    self.submit_transaction(eth_trx, eth_signature, from_address, got_result, [signature])
-                                else:
-                                    self.add_hunged_storage(trx, storage_account)
 
-                        elif instruction_data[0] == 0x0d:
-                            # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeOrContinue 0x{}".format(slot, counter, instruction_data.hex()))
+                        elif instruction_data[0] == 0x0a: # Continue
+                            # logger.debug("{:>10} {:>6} Continue 0x{}".format(slot, counter, instruction_data.hex()))
+
+                            storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
+                            blocked_accounts = [trx['transaction']['message']['accountKeys'][acc_idx] for acc_idx in instruction['accounts'][5:]]
+                            got_result = get_trx_results(trx)
+
+                            if storage_account in continue_table:
+                                continue_table[storage_account].signatures.append(signature)
+
+                                if got_result:
+                                    if continue_table[storage_account].results:
+                                        logger.error("Strange behavior. Pay attention. RESULT ALREADY EXISTS IN CONTINUE TABLE")
+                                    if continue_table[storage_account].accounts != blocked_accounts:
+                                        logger.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
+
+                                    continue_table[storage_account].results = got_result
+                            else:
+                                continue_table[storage_account] = ContinueStruct(signature, got_result, blocked_accounts)
+
+
+                        elif instruction_data[0] == 0x0b: # ExecuteTrxFromAccountDataIterative
+                            # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterative 0x{}".format(slot, counter, instruction_data.hex()))
 
                             holder_account =  trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
                             storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][1]]
+                            blocked_accounts = [trx['transaction']['message']['accountKeys'][acc_idx] for acc_idx in instruction['accounts'][5:]]
 
                             if storage_account in continue_table:
                                 continue_table[storage_account].signatures.append(signature)
@@ -398,45 +386,107 @@ class Indexer:
                                 else:
                                     holder_table[holder_account] = HolderStruct(storage_account)
                             else:
-                                got_result = get_trx_results(trx)
-                                if got_result is not None:
-                                    continue_table[storage_account] =  ContinueStruct(signature, got_result)
+                                continue_table[storage_account] =  ContinueStruct(signature, None, blocked_accounts)
+                                holder_table[holder_account] = HolderStruct(storage_account)
+                                # self.add_hunged_storage(trx, storage_account)
+
+
+                        elif instruction_data[0] == 0x0c: # Cancel
+                            # logger.debug("{:>10} {:>6} Cancel 0x{}".format(slot, counter, instruction_data.hex()))
+
+                            storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
+                            continue_table[storage_account] = ContinueStruct(signature, ([], "0x0", 0, [], trx['slot']))
+
+                        elif instruction_data[0] == 0x0d:
+                            # logger.debug("{:>10} {:>6} PartialCallOrContinueFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
+
+                            storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
+                            blocked_accounts = [trx['transaction']['message']['accountKeys'][acc_idx] for acc_idx in instruction['accounts'][7:]]
+                            got_result = get_trx_results(trx)
+
+                            # collateral_pool_buf = instruction_data[1:5]
+                            # step_count = instruction_data[5:13]
+                            # from_addr = instruction_data[13:33]
+
+                            sign = instruction_data[33:98]
+                            unsigned_msg = instruction_data[98:]
+
+                            (eth_trx, eth_signature, from_address) = get_trx_receipts(unsigned_msg, sign)
+
+                            if eth_signature in trx_table:
+                                trx_table[eth_signature].signatures.append(signature)
+                            else:
+                                trx_table[eth_signature] = TransactionStruct(eth_trx, eth_signature, from_address, got_result, [signature], storage_account, blocked_accounts)
+
+                        elif instruction_data[0] == 0x0e:
+                            # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeOrContinue 0x{}".format(slot, counter, instruction_data.hex()))
+
+                            holder_account =  trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
+                            storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][1]]
+                            blocked_accounts = [trx['transaction']['message']['accountKeys'][acc_idx] for acc_idx in instruction['accounts'][7:]]
+                            got_result = get_trx_results(trx)
+
+                            if storage_account in continue_table:
+                                continue_table[storage_account].signatures.append(signature)
+
+                                if holder_account in holder_table:
+                                    logger.error("Strange behavior. Pay attention. HOLDER ACCOUNT FOUND")
                                     holder_table[holder_account] = HolderStruct(storage_account)
                                 else:
-                                    self.add_hunged_storage(trx, storage_account)
+                                    holder_table[holder_account] = HolderStruct(storage_account)
+
+                                if got_result:
+                                    if continue_table[storage_account].results:
+                                        logger.error("Strange behavior. Pay attention. RESULT ALREADY EXISTS IN CONTINUE TABLE")
+                                    if continue_table[storage_account].accounts != blocked_accounts:
+                                        logger.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
+
+                                    continue_table[storage_account].results = got_result
+                            else:
+                                continue_table[storage_account] =  ContinueStruct(signature, got_result, blocked_accounts)
+                                holder_table[holder_account] = HolderStruct(storage_account)
 
                         if instruction_data[0] > 0x0e:
                             logger.debug("{:>10} {:>6} Unknown 0x{}".format(slot, counter, instruction_data.hex()))
 
                             pass
 
+        for eth_signature, trx_struct in trx_table:
+            if trx_struct.got_result:
+                self.submit_transaction(trx_struct)
+            elif trx_struct.storage:
+                self.blocked_storages[trx_struct.storage] = (trx_struct.eth_trx, trx_struct.blocked_accounts)
+            else:
+                logger.error(trx_struct)
 
-    def submit_transaction(self, eth_trx, eth_signature, from_address, got_result, signatures):
-        (logs, status, gas_used, return_value, slot) = got_result
+
+
+    def submit_transaction(self, trx_struct):
+        (logs, status, gas_used, return_value, slot) = trx_struct.got_result
         (_slot, block_hash) = self.get_block(slot)
         if logs:
             for rec in logs:
-                rec['transactionHash'] = eth_signature
+                rec['transactionHash'] = trx_struct.eth_signature
                 rec['blockHash'] = block_hash
             self.logs_db.push_logs(logs)
-        self.ethereum_trx[eth_signature] = {
-            'eth_trx': eth_trx,
+        self.ethereum_trx[trx_struct.eth_signature] = {
+            'eth_trx': trx_struct.eth_trx,
             'slot': slot,
             'logs': logs,
             'status': status,
             'gas_used': gas_used,
             'return_value': return_value,
-            'from_address': from_address,
+            'from_address': trx_struct.from_address,
         }
-        self.eth_sol_trx[eth_signature] = signatures
-        for idx, sig in enumerate(signatures):
+        self.eth_sol_trx[trx_struct.eth_signature] = trx_struct.signatures
+        for idx, sig in enumerate(trx_struct.signatures):
             self.sol_eth_trx[sig] = {
                 'idx': idx,
-                'eth': eth_signature,
+                'eth': trx_struct.eth_signature,
             }
         self.blocks_by_hash[block_hash] = slot
 
-        logger.debug(eth_signature + " " + status)
+        logger.debug(trx_struct.eth_signature + " " + status)
 
 
     def gather_blocks(self):
