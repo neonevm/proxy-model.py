@@ -53,7 +53,7 @@ class PermanentAccounts:
         proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
         signer_public_key_bytes = bytes(signer.public_key())
 
-        storage_seed = shake_256(b"storage" + proxy_id_bytes + signer_public_key_bytes).hexdigest(16)
+        storage_seed = shake_256(b"storage615" + proxy_id_bytes + signer_public_key_bytes).hexdigest(16)
         storage_seed = bytes(storage_seed, 'utf8')
         self.storage = create_account_with_seed(client, funding=signer, base=signer, seed=storage_seed, storage_size=STORAGE_SIZE)
 
@@ -408,10 +408,8 @@ class EthereumModel:
                                     ]
                                 })
         try:
-            pre = int(self.client.get_balance(self.signer.public_key(), commitment=Confirmed)['result']['value'])
-            (signature, cost) = call_signed(self.signer, self.client, trx, self.perm_accs, steps=250)
-            post = int(self.client.get_balance(self.signer.public_key(), commitment=Confirmed)['result']['value'])
-            logger.debug("COST: %d, %d, %d %d", cost,  pre, post, pre-post)
+            signature = call_signed(self.signer, self.client, trx, self.perm_accs, steps=250)
+
             logger.debug('Transaction signature: %s %s', signature, eth_signature)
 
             try:

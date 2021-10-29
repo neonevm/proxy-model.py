@@ -35,6 +35,11 @@ from .eth_proto import Trx
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+logging.basicConfig(filename="log",
+                            filemode='a',
+                            format='%(asctime)s, %(message)s',
+                            datefmt='%H:%M:%S',
+                            level=logging.DEBUG)
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
 COLLATERAL_POOL_BASE = os.environ.get("COLLATERAL_POOL_BASE")
@@ -61,8 +66,6 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(
 )
 
 STORAGE_SIZE = 128*1024
-
-cost = 0
 
 ACCOUNT_INFO_LAYOUT = cStruct(
     "type" / Int8ul,
@@ -166,7 +169,7 @@ def create_collateral_pool_address(collateral_pool_index):
     return accountWithSeed(PublicKey(COLLATERAL_POOL_BASE), str.encode(seed), PublicKey(evm_loader_id))
 
 
-def create_account_with_seed(client, funding, base, seed, storage_size):
+def create_account_with_seed(client, funding, base, seed, storage_size, eth_hash=None):
     account = accountWithSeed(base.public_key(), seed, PublicKey(evm_loader_id))
 
     if client.get_balance(account, commitment=Confirmed)['result']['value'] == 0:
@@ -175,7 +178,7 @@ def create_account_with_seed(client, funding, base, seed, storage_size):
 
         trx = Transaction()
         trx.add(createAccountWithSeedTrx(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
-        send_transaction(client, trx, funding)
+        send_transaction(client, trx, funding, eth_hash)
 
     return account
 
@@ -431,16 +434,15 @@ def get_measurements(result):
         logger.error("Can't get measurements %s"%err)
         logger.info("Failed result: %s"%json.dumps(result, indent=3))
 
-def send_transaction(client, trx, signer):
+def send_transaction(client, trx, signer, eth_hash):
     result = client.send_transaction(trx, signer, opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
     confirm_transaction(client, result["result"])
     result = client.get_confirmed_transaction(result["result"])
-    update_transaction_cost(result)
-    print(result)
+    update_transaction_cost(result, eth_hash)
     return result
 
-def send_measured_transaction(client, trx, signer):
-    result = send_transaction(client, trx, signer)
+def send_measured_transaction(client, trx, signer, eth_hash):
+    result = send_transaction(client, trx, signer, eth_hash)
     get_measurements(result)
     return result
 
@@ -474,40 +476,40 @@ def check_if_continue_returned(result):
     return (False, ())
 
 
-def call_continue_0x0d(signer, client, perm_accs, trx_accs, steps, msg):
+def call_continue_0x0d(signer, client, perm_accs, trx_accs, steps, msg, eth_hash):
     try:
-        return call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg)
+        return call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg, eth_hash)
     except Exception as err:
         logger.debug("call_continue_bucked_0x0D exception:")
         logger.debug(str(err))
 
     try:
         # return call_continue_iterative_0x0d(signer, client, perm_accs, trx_accs, steps, msg)
-        return call_continue_iterative(signer, client, perm_accs, trx_accs, steps)
+        return call_continue_iterative(signer, client, perm_accs, trx_accs, steps, eth_hash)
     except Exception as err:
         logger.debug("call_continue_iterative exception:")
         logger.debug(str(err))
 
-    return sol_instr_12_cancel(signer, client, perm_accs, trx_accs)
+    return sol_instr_12_cancel(signer, client, perm_accs, trx_accs, eth_hash)
 
 
-def call_continue(signer, client, perm_accs, trx_accs, steps):
+def call_continue(signer, client, perm_accs, trx_accs, steps, eth_hash):
     try:
-        return call_continue_bucked(signer, client, perm_accs, trx_accs, steps)
+        return call_continue_bucked(signer, client, perm_accs, trx_accs, steps, eth_hash)
     except Exception as err:
         logger.debug("call_continue_bucked exception:")
         logger.debug(str(err))
 
     try:
-        return call_continue_iterative(signer, client, perm_accs, trx_accs, steps)
+        return call_continue_iterative(signer, client, perm_accs, trx_accs, steps, eth_hash)
     except Exception as err:
         logger.debug("call_continue_iterative exception:")
         logger.debug(str(err))
 
-    return sol_instr_12_cancel(signer, client, perm_accs, trx_accs)
+    return sol_instr_12_cancel(signer, client, perm_accs, trx_accs, eth_hash)
 
 
-def call_continue_bucked(signer, client, perm_accs, trx_accs, steps):
+def call_continue_bucked(signer, client, perm_accs, trx_accs, steps, eth_hash):
     while True:
         logger.debug("Continue bucked step:")
         (continue_count, instruction_count) = simulate_continue(signer, client, perm_accs, trx_accs, steps)
@@ -529,17 +531,18 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps):
                 raise
 
         logger.debug("Collect bucked results: {}".format(result_list))
+        signature = None
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
-            update_transaction_cost(result)
+            update_transaction_cost(result, eth_hash)
             get_measurements(result)
-            (founded, signature) = check_if_continue_returned(result)
+            (founded, signature_) = check_if_continue_returned(result)
             if founded:
-                return signature
+                signature = signature_
+        return signature
 
-
-def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg):
+def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg, eth_hash):
     while True:
         logger.debug("Continue bucked step:")
         (continue_count, instruction_count) = simulate_continue_0x0d(signer, client, perm_accs, trx_accs, steps, msg)
@@ -564,17 +567,17 @@ def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg):
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
-            update_transaction_cost(result)
+            update_transaction_cost(result, eth_hash)
             get_measurements(result)
             (founded, signature) = check_if_continue_returned(result)
             if founded:
                 return signature
 
 
-def call_continue_iterative(signer, client, perm_accs, trx_accs, step_count):
+def call_continue_iterative(signer, client, perm_accs, trx_accs, step_count, eth_hash):
     while True:
         logger.debug("Continue iterative step:")
-        result = sol_instr_10_continue(signer, client, perm_accs, trx_accs, step_count)
+        result = sol_instr_10_continue(signer, client, perm_accs, trx_accs, step_count, eth_hash)
         (succeed, signature) = check_if_continue_returned(result)
         if succeed:
             return signature
@@ -589,7 +592,7 @@ def call_continue_iterative(signer, client, perm_accs, trx_accs, step_count):
 #             return signature
 
 
-def sol_instr_10_continue(signer, client, perm_accs, trx_accs, initial_step_count):
+def sol_instr_10_continue(signer, client, perm_accs, trx_accs, initial_step_count, eth_hash):
     step_count = initial_step_count
     while step_count > 0:
         trx = Transaction()
@@ -597,7 +600,7 @@ def sol_instr_10_continue(signer, client, perm_accs, trx_accs, initial_step_coun
 
         logger.debug("Step count {}".format(step_count))
         try:
-            result = send_measured_transaction(client, trx, signer)
+            result = send_measured_transaction(client, trx, signer, eth_hash)
             return result
         except SendTransactionError as err:
             if check_if_program_exceeded_instructions(err.result):
@@ -607,7 +610,7 @@ def sol_instr_10_continue(signer, client, perm_accs, trx_accs, initial_step_coun
     raise Exception("Can't execute even one EVM instruction")
 
 
-def sol_instr_12_cancel(signer, client, perm_accs, trx_accs):
+def sol_instr_12_cancel(signer, client, perm_accs, trx_accs, eth_hash):
     trx = Transaction()
     trx.add(TransactionInstruction(
         program_id=evm_loader_id,
@@ -627,7 +630,7 @@ def sol_instr_12_cancel(signer, client, perm_accs, trx_accs):
     ))
 
     logger.debug("Cancel")
-    result = send_measured_transaction(client, trx, signer)
+    result = send_measured_transaction(client, trx, signer, eth_hash)
     return result['result']['transaction']['signatures'][0]
 
 
@@ -828,13 +831,19 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
     return (continue_count, step_count)
 
 
-def update_transaction_cost(receipt):
-    global cost
-    # cost = cost + 1
-    cost = cost + receipt['result']['meta']['postBalances'][0]-receipt['result' ]['meta']['preBalances'][0]
-    logger.debug("COST  %d", cost)
+def update_transaction_cost(receipt, eth_hash):
+    cost =  receipt['result']['meta']['preBalances'][0]-receipt['result' ]['meta']['postBalances'][0]
+    sig = receipt['result']['transaction']['signatures'][0]
+
+    if eth_hash:
+        logger.debug("COST %s %s %d", eth_hash.hex(), sig, cost  )
+    else:
+        logger.debug("COST %s %d", sig, cost)
+
 
 def create_account_list_by_emulate(signer, client, ethTrx):
+    eth_hash = ethTrx.hash_signed()
+
     sender_ether = bytes.fromhex(ethTrx.sender())
     add_keys_05 = []
     trx = Transaction()
@@ -862,7 +871,7 @@ def create_account_list_by_emulate(signer, client, ethTrx):
                     code_account_new = accountWithSeed(signer.public_key(), seed, PublicKey(evm_loader_id))
 
                     logger.debug("creating new code_account with increased size %s", code_account_new)
-                    create_account_with_seed(client, signer, signer, seed, code_size);
+                    create_account_with_seed(client, signer, signer, seed, code_size, eth_hash);
                     logger.debug("resized account is created %s", code_account_new)
 
                     resize_instr.append(TransactionInstruction(
@@ -888,7 +897,7 @@ def create_account_list_by_emulate(signer, client, ethTrx):
         while count < 2:
             logger.debug("attemt: %d", count)
 
-            send_transaction(client, tx, signer)
+            send_transaction(client, tx, signer, eth_hash)
             info = _getAccountData(client, instr.keys[0].pubkey, ACCOUNT_INFO_LAYOUT.sizeof())
             info_data = AccountInfo.frombytes(info)
             if info_data.code_account == instr.keys[2].pubkey:
@@ -989,8 +998,6 @@ def create_account_list_by_emulate(signer, client, ethTrx):
 
 
 def call_signed(signer, client, ethTrx, perm_accs, steps):
-    global cost
-    cost = 0
 
     (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx)
 
@@ -1003,8 +1010,7 @@ def call_signed(signer, client, ethTrx, perm_accs, steps):
 
         try:
             logger.debug("Try single trx call")
-            result  = call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx)
-            return (result, cost)
+            return call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx)
         except Exception as err:
             logger.debug(str(err))
             if str(err).find("Program failed to complete") >= 0:
@@ -1017,18 +1023,16 @@ def call_signed(signer, client, ethTrx, perm_accs, steps):
                 raise
 
     if call_from_holder:
-        result = call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx)
-        return (result, cost)
+        return call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx)
     if call_iterative:
         if USE_COMBINED_START_CONTINUE:
-            result = call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
-            return (result, cost)
+            return call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
         else:
-            result = call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
-            return (result, cost)
+            return call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
 
 
 def call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx):
+    eth_hash = ethTrx.hash_signed()
     precall_txs = Transaction()
     precall_txs.add(create_acc_trx)
     precall_txs.add(TransactionInstruction(
@@ -1040,12 +1044,13 @@ def call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, ms
     precall_txs.add(make_partial_call_instruction(perm_accs, trx_accs, 0, msg))
 
     logger.debug("Partial call")
-    send_measured_transaction(client, precall_txs, signer)
+    send_measured_transaction(client, precall_txs, signer, eth_hash)
 
-    return call_continue(signer, client, perm_accs, trx_accs, steps)
+    return call_continue(signer, client, perm_accs, trx_accs, steps, eth_hash)
 
 
 def call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx):
+    eth_hash = ethTrx.hash_signed()
     precall_txs = Transaction()
     precall_txs.add(create_acc_trx)
     precall_txs.add(TransactionInstruction(
@@ -1057,12 +1062,13 @@ def call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, step
     precall_txs.add(make_partial_call_or_continue_instruction_0x0d(perm_accs, trx_accs, steps, msg))
 
     logger.debug("Partial call 0x0d")
-    send_measured_transaction(client, precall_txs, signer)
+    send_measured_transaction(client, precall_txs, signer, eth_hash)
 
-    return call_continue_0x0d(signer, client, perm_accs, trx_accs, steps, msg)
+    return call_continue_0x0d(signer, client, perm_accs, trx_accs, steps, msg, eth_hash)
 
 
 def call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx):
+    eth_hash = ethTrx.hash_signed()
     call_txs_05 = Transaction()
     call_txs_05.add(create_acc_trx)
     call_txs_05.add(TransactionInstruction(
@@ -1072,27 +1078,27 @@ def call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, c
             AccountMeta(pubkey=keccakprog, is_signer=False, is_writable=False),
         ]))
     call_txs_05.add(make_05_call_instruction(perm_accs, trx_accs, msg))
-    result = send_measured_transaction(client, call_txs_05, signer)
+    result = send_measured_transaction(client, call_txs_05, signer, eth_hash)
     return result['result']['transaction']['signatures'][0]
 
 
 def call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx):
-
     write_trx_to_holder_account(signer, client, perm_accs.holder, ethTrx)
+    eth_hash = ethTrx.hash_signed()
 
     if len(create_acc_trx.instructions):
         precall_txs = Transaction()
         precall_txs.add(create_acc_trx)
-        send_measured_transaction(client, precall_txs, signer)
+        send_measured_transaction(client, precall_txs, signer, eth_hash)
 
     precall_txs = Transaction()
     precall_txs.add(make_call_from_account_instruction(perm_accs, trx_accs))
 
     # ExecuteTrxFromAccountDataIterative
     logger.debug("ExecuteTrxFromAccountDataIterative:")
-    send_measured_transaction(client, precall_txs, signer)
+    send_measured_transaction(client, precall_txs, signer, eth_hash)
 
-    return call_continue(signer, client, perm_accs, trx_accs, steps)
+    return call_continue(signer, client, perm_accs, trx_accs, steps, eth_hash)
 
 
 def createEtherAccountTrx(client, ether, evm_loader_id, signer, code_acc=None):
@@ -1162,8 +1168,9 @@ def createERC20TokenAccountTrx(signer, token_info):
 
 
 def write_trx_to_holder_account(signer, client, holder, ethTrx):
-    msg = ethTrx.signature() + len(ethTrx.unsigned_msg()).to_bytes(8, byteorder="little") + ethTrx.unsigned_msg()
+    eth_hash = ethTrx.hash_signed()
 
+    msg = ethTrx.signature() + len(ethTrx.unsigned_msg()).to_bytes(8, byteorder="little") + ethTrx.unsigned_msg()
     # Write transaction to transaction holder account
     offset = 0
     receipts = []
@@ -1185,7 +1192,7 @@ def write_trx_to_holder_account(signer, client, holder, ethTrx):
     for rcpt in receipts:
         confirm_transaction(client, rcpt)
         result = client.get_confirmed_transaction(rcpt)
-        update_transaction_cost(result)
+        update_transaction_cost(result, eth_hash)
         logger.debug("confirmed: %s", rcpt)
 
 
