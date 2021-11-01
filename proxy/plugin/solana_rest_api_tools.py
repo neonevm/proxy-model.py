@@ -35,11 +35,11 @@ from .eth_proto import Trx
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
 COLLATERAL_POOL_BASE = os.environ.get("COLLATERAL_POOL_BASE")
 NEW_USER_AIRDROP_AMOUNT = int(os.environ.get("NEW_USER_AIRDROP_AMOUNT", "0"))
-#evm_loader_id = "EfyDoGDRPy7wrLfSLyXrbhiAG6NmufMk1ytap13gLy1"
 location_bin = ".deploy_contract.bin"
 confirmation_check_delay = float(os.environ.get("NEON_CONFIRMATION_CHECK_DELAY", "0.1"))
 neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
@@ -431,7 +431,7 @@ def get_measurements(result):
         logger.error("Can't get measurements %s"%err)
         logger.info("Failed result: %s"%json.dumps(result, indent=3))
 
-def send_transaction(client, trx, signer, eth_hash):
+def send_transaction(client, trx, signer, eth_hash=""):
     result = client.send_transaction(trx, signer, opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
     confirm_transaction(client, result["result"])
     result = client.get_confirmed_transaction(result["result"])
@@ -487,7 +487,7 @@ def call_continue_0x0d(signer, client, perm_accs, trx_accs, steps, msg, eth_hash
         logger.debug("call_continue_iterative exception:")
         logger.debug(str(err))
 
-    return sol_instr_21_cancel(signer, client, perm_accs, trx_accs)
+    return sol_instr_21_cancel(signer, client, perm_accs, trx_accs, eth_hash)
 
 
 def call_continue(signer, client, perm_accs, trx_accs, steps, eth_hash):
@@ -503,7 +503,7 @@ def call_continue(signer, client, perm_accs, trx_accs, steps, eth_hash):
         logger.debug("call_continue_iterative exception:")
         logger.debug(str(err))
 
-    return sol_instr_21_cancel(signer, client, perm_accs, trx_accs)
+    return sol_instr_21_cancel(signer, client, perm_accs, trx_accs, eth_hash)
 
 
 def call_continue_bucked(signer, client, perm_accs, trx_accs, steps, eth_hash):
@@ -609,7 +609,7 @@ def sol_instr_10_continue(signer, client, perm_accs, trx_accs, initial_step_coun
     raise Exception("Can't execute even one EVM instruction")
 
 
-def sol_instr_21_cancel(signer, client, perm_accs, trx_accs):
+def sol_instr_21_cancel(signer, client, perm_accs, trx_accs, eth_hash):
     trx = Transaction()
     trx.add(TransactionInstruction(
         program_id=evm_loader_id,
@@ -1089,7 +1089,7 @@ def call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, c
 def call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx):
 
     write_trx_to_holder_account(signer, client, perm_accs.holder, perm_accs.proxy_id, ethTrx)
-
+    eth_hash = ethTrx.hash_signed()
     if len(create_acc_trx.instructions):
         precall_txs = Transaction()
         precall_txs.add(create_acc_trx)
@@ -1172,6 +1172,7 @@ def createERC20TokenAccountTrx(signer, token_info):
 
 
 def write_trx_to_holder_account(signer, client, holder, proxy_id, ethTrx):
+    eth_hash = ethTrx.hash_signed()
     msg = ethTrx.signature() + len(ethTrx.unsigned_msg()).to_bytes(8, byteorder="little") + ethTrx.unsigned_msg()
 
     # Write transaction to transaction holder account
@@ -1194,6 +1195,8 @@ def write_trx_to_holder_account(signer, client, holder, proxy_id, ethTrx):
     logger.debug("receipts %s", receipts)
     for rcpt in receipts:
         confirm_transaction(client, rcpt)
+        result = client.get_confirmed_transaction(rcpt)
+        update_transaction_cost(result, eth_hash)
         logger.debug("confirmed: %s", rcpt)
 
 def _getAccountData(client, account, expected_length, owner=None):
