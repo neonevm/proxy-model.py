@@ -35,11 +35,11 @@ from .eth_proto import Trx
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# logging.basicConfig(filename="log",
-#                             filemode='a',
-#                             format='%(asctime)s, %(message)s',
-#                             datefmt='%H:%M:%S',
-#                             level=logging.DEBUG)
+logging.basicConfig(filename="log",
+                            filemode='a',
+                            format='%(asctime)s, %(message)s',
+                            datefmt='%H:%M:%S',
+                            level=logging.DEBUG)
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
 COLLATERAL_POOL_BASE = os.environ.get("COLLATERAL_POOL_BASE")
@@ -533,14 +533,16 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps, ethTrx):
 
         logger.debug("Collect bucked results: {}".format(result_list))
         signature = None
+        extra_sol_trx = False
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
-            update_transaction_cost(result, ethTrx)
+            update_transaction_cost(result, ethTrx, extra_sol_trx=extra_sol_trx)
             get_measurements(result)
             (founded, signature_) = check_if_continue_returned(result)
             if founded:
                 signature = signature_
+                extra_sol_trx = True
         if signature:
             return signature
 
@@ -567,14 +569,16 @@ def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg, e
 
         logger.debug("Collect bucked results:")
         signature=None
+        extra_sol_trx = False
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
-            update_transaction_cost(result, ethTrx)
+            update_transaction_cost(result, ethTrx, extra_sol_trx=extra_sol_trx)
             get_measurements(result)
             (founded, signature_) = check_if_continue_returned(result)
             if founded:
                 signature = signature_
+                extra_sol_trx = True
         if signature:
             return signature
 
@@ -840,7 +844,7 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
     return (continue_count, step_count)
 
 
-def update_transaction_cost(receipt, eth_trx):
+def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False):
     cost =  receipt['result']['meta']['preBalances'][0]-receipt['result' ]['meta']['postBalances'][0]
     sig = receipt['result']['transaction']['signatures'][0]
     used_gas=None
@@ -861,7 +865,8 @@ def update_transaction_cost(receipt, eth_trx):
                     used_gas =  int().from_bytes(used_gas, "little")
 
     if eth_trx:
-        logger.debug("COST %s %s %s %s %d %s", eth_trx.hash_signed().hex(), eth_trx.sender(), eth_trx.toAddress.hex(),  sig, cost, used_gas if used_gas else "")
+        logger.debug("COST %s %s %s %s %d %s, %s", eth_trx.hash_signed().hex(), eth_trx.sender(), eth_trx.toAddress.hex(),
+                     sig, cost, used_gas if used_gas else "", "extra" if extra_sol_trx else "")
     else:
         logger.debug("COST %s %d", sig, cost)
 
