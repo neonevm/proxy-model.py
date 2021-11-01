@@ -60,6 +60,8 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(
     os.environ.get("ETH_TOKEN_MINT", "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU")
 )
 
+COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
+
 STORAGE_SIZE = 128*1024
 
 ACCOUNT_INFO_LAYOUT = cStruct(
@@ -93,6 +95,32 @@ obligatory_accounts = [
     AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
     AccountMeta(pubkey=sysvarclock, is_signer=False, is_writable=False),
 ]
+
+class ComputeBudget():
+    @staticmethod
+    def requestUnits(units):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("00")+units.to_bytes(4,"little")
+        )
+    
+    @staticmethod
+    def requestHeapFrame(size):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("01")+units.to_bytes(4,"little")
+        )
+
+DEFAULT_UNITS=500*1000
+DEFAULT_HEAP_FRAME=256*1024
+
+def TransactionWithComputeBudget(units=DEFAULT_UNITS, heapFrame=DEFAULT_HEAP_FRAME, **args):
+    trx = Transaction(**args)
+    if units: trx.add(ComputeBudget.requestUnits(units))
+    if heapFrame: trx.add(ComputeBudget.requestHeapFrame(units))
+    return trx
 
 
 class TransactionInfo:
@@ -173,7 +201,7 @@ def create_account_with_seed(client, funding, base, seed, storage_size):
         minimum_balance = client.get_minimum_balance_for_rent_exemption(storage_size, commitment=Confirmed)["result"]
         logger.debug("Minimum balance required for account {}".format(minimum_balance))
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(createAccountWithSeedTrx(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
         send_transaction(client, trx, funding)
 
@@ -513,7 +541,9 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps):
         result_list = []
         try:
             for index in range(continue_count):
-                trx = Transaction().add(make_continue_instruction(perm_accs, trx_accs, instruction_count, index))
+                trx = TransactionWithComputeBudget()
+                trx.add(ComputeBudget.request
+                trx.add(make_continue_instruction(perm_accs, trx_accs, instruction_count, index))
                 result = client.send_transaction(
                         trx,
                         signer,
@@ -544,7 +574,8 @@ def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg):
         result_list = []
         try:
             for index in range(continue_count*CONTINUE_COUNT_FACTOR):
-                trx = Transaction().add(make_partial_call_or_continue_instruction_0x0d(perm_accs, trx_accs, instruction_count, msg, index))
+                trx = TransactionWithComputeBudget()
+                trx.add(make_partial_call_or_continue_instruction_0x0d(perm_accs, trx_accs, instruction_count, msg, index))
                 result = client.send_transaction(
                     trx,
                     signer,
@@ -588,7 +619,7 @@ def call_continue_iterative(signer, client, perm_accs, trx_accs, step_count):
 def sol_instr_10_continue(signer, client, perm_accs, trx_accs, initial_step_count):
     step_count = initial_step_count
     while step_count > 0:
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(make_continue_instruction(perm_accs, trx_accs, step_count))
 
         logger.debug("Step count {}".format(step_count))
@@ -604,7 +635,7 @@ def sol_instr_10_continue(signer, client, perm_accs, trx_accs, initial_step_coun
 
 
 def sol_instr_21_cancel(signer, client, perm_accs, trx_accs):
-    trx = Transaction()
+    trx = TransactionWithComputeBudget()
     trx.add(TransactionInstruction(
         program_id=evm_loader_id,
         data=bytearray.fromhex("15") + trx_accs.nonce.to_bytes(8, 'little'),
@@ -739,7 +770,7 @@ def simulate_continue_0x0d(signer, client, perm_accs, trx_accs, step_count, msg)
     while True:
         logger.debug(continue_count)
         blockhash = Blockhash(client.get_recent_blockhash(Confirmed)["result"]["value"]["blockhash"])
-        trx = Transaction(recent_blockhash = blockhash)
+        trx = TransactionWithComputeBudget(recent_blockhash = blockhash)
         for _ in range(continue_count):
             trx.add(make_partial_call_or_continue_instruction_0x0d(perm_accs, trx_accs, step_count, msg))
         trx.sign(signer)
@@ -787,7 +818,7 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
     while True:
         logger.debug(continue_count)
         blockhash = Blockhash(client.get_recent_blockhash(Confirmed)["result"]["value"]["blockhash"])
-        trx = Transaction(recent_blockhash = blockhash)
+        trx = TransactionWithComputeBudget(recent_blockhash = blockhash)
         for _ in range(continue_count):
             trx.add(make_continue_instruction(perm_accs, trx_accs, step_count))
         trx.sign(signer)
@@ -831,7 +862,7 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
 def create_account_list_by_emulate(signer, client, ethTrx):
     sender_ether = bytes.fromhex(ethTrx.sender())
     add_keys_05 = []
-    trx = Transaction()
+    trx = TransactionWithComputeBudget()
 
     if not ethTrx.toAddress:
         to_address_arg = "deploy"
@@ -875,7 +906,7 @@ def create_account_list_by_emulate(signer, client, ethTrx):
     for instr in resize_instr:
         logger.debug("code and storage migration, account %s from  %s to %s", instr.keys[0].pubkey, instr.keys[1].pubkey, instr.keys[2].pubkey)
 
-        tx = Transaction().add(instr)
+        tx = TransactionWithComputeBudget().add(instr)
         success = False
         count = 0
 
@@ -1017,7 +1048,7 @@ def call_signed(signer, client, ethTrx, perm_accs, steps):
 
 
 def call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx):
-    precall_txs = Transaction()
+    precall_txs = TransactionWithComputeBudget()
     precall_txs.add(create_acc_trx)
     precall_txs.add(TransactionInstruction(
         program_id=keccakprog,
@@ -1034,7 +1065,7 @@ def call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, ms
 
 
 def call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx):
-    precall_txs = Transaction()
+    precall_txs = TransactionWithComputeBudget()
     precall_txs.add(create_acc_trx)
     precall_txs.add(TransactionInstruction(
         program_id=keccakprog,
@@ -1051,7 +1082,7 @@ def call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, step
 
 
 def call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, create_acc_trx):
-    call_txs_05 = Transaction()
+    call_txs_05 = TransactionWithComputeBudget()
     call_txs_05.add(create_acc_trx)
     call_txs_05.add(TransactionInstruction(
         program_id=keccakprog,
@@ -1069,11 +1100,11 @@ def call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, ste
     write_trx_to_holder_account(signer, client, perm_accs.holder, perm_accs.proxy_id, ethTrx)
 
     if len(create_acc_trx.instructions):
-        precall_txs = Transaction()
+        precall_txs = TransactionWithComputeBudget()
         precall_txs.add(create_acc_trx)
         send_measured_transaction(client, precall_txs, signer)
 
-    precall_txs = Transaction()
+    precall_txs = TransactionWithComputeBudget()
     precall_txs.add(make_call_from_account_instruction(perm_accs, trx_accs))
 
     # ExecuteTrxFromAccountDataIterative
@@ -1097,7 +1128,7 @@ def createEtherAccountTrx(client, ether, evm_loader_id, signer, code_acc=None):
             space=0,
             ether=bytes.fromhex(ether),
             nonce=nonce))
-    trx = Transaction()
+    trx = TransactionWithComputeBudget()
     if code_acc is None:
         trx.add(TransactionInstruction(
             program_id=evm_loader_id,
@@ -1130,7 +1161,7 @@ def createEtherAccountTrx(client, ether, evm_loader_id, signer, code_acc=None):
     return (trx, sol, associated_token)
 
 def createERC20TokenAccountTrx(signer, token_info):
-    trx = Transaction()
+    trx = TransactionWithComputeBudget()
     trx.add(TransactionInstruction(
     program_id=evm_loader_id,
     data=bytes.fromhex('0F'),
@@ -1158,7 +1189,7 @@ def write_trx_to_holder_account(signer, client, holder, proxy_id, ethTrx):
     rest = msg
     while len(rest):
         (part, rest) = (rest[:1000], rest[1000:])
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         # logger.debug("sender_sol %s %s %s", sender_sol, holder, acc.public_key())
         trx.add(TransactionInstruction(program_id=evm_loader_id,
                                        data=write_holder_layout(proxy_id, offset, part),
