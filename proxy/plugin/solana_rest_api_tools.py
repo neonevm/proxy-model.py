@@ -532,16 +532,15 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps, ethTrx):
                 raise
 
         logger.debug("Collect bucked results: {}".format(result_list))
-        signature = None
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
             update_transaction_cost(result, ethTrx)
             get_measurements(result)
-            (founded, signature_) = check_if_continue_returned(result)
+            (founded, signature) = check_if_continue_returned(result)
             if founded:
-                signature = signature_
-        return signature
+                return signature
+
 
 def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg, ethTrx):
     while True:
@@ -564,17 +563,15 @@ def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg, e
             else:
                 raise
 
-        signature = None
         logger.debug("Collect bucked results:")
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
             update_transaction_cost(result, ethTrx)
             get_measurements(result)
-            (founded, signature_) = check_if_continue_returned(result)
+            (founded, signature) = check_if_continue_returned(result)
             if founded:
-                signature = signature_
-        return signature
+                return signature
 
 
 def call_continue_iterative(signer, client, perm_accs, trx_accs, step_count, ethTrx):
