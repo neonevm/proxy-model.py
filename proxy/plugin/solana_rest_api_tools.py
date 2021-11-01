@@ -1187,8 +1187,8 @@ def write_trx_to_holder_account(signer, client, holder, proxy_id, ethTrx):
     receipts = []
     rest = msg
     while len(rest):
-        (part, rest) = (rest[:1000], rest[1000:])
-        trx = TransactionWithComputeBudget()
+        (part, rest) = (rest[:950], rest[950:])
+        trx = TransactionWithComputeBudget(units=None)
         # logger.debug("sender_sol %s %s %s", sender_sol, holder, acc.public_key())
         trx.add(TransactionInstruction(program_id=evm_loader_id,
                                        data=write_holder_layout(proxy_id, offset, part),
