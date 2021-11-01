@@ -10,6 +10,7 @@ from .solana_utils import *
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
 evm_loader_id = PublicKey(os.environ.get("EVM_LOADER"))
+# evm_loader_id = PublicKey("4j9m4R2QDqRwtxSWaBF9R6YFVnrP19sZ6mHTdzWi8mNr")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey("HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU")
 neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
 

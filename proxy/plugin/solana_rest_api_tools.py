@@ -35,7 +35,11 @@ from .eth_proto import Trx
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
+# logging.basicConfig(filename="log",
+#                             filemode='a',
+#                             format='%(asctime)s, %(message)s',
+#                             datefmt='%H:%M:%S',
+#                             level=logging.DEBUG)
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
 COLLATERAL_POOL_BASE = os.environ.get("COLLATERAL_POOL_BASE")
@@ -839,8 +843,16 @@ def update_transaction_cost(receipt, eth_hash):
     cost =  receipt['result']['meta']['preBalances'][0]-receipt['result' ]['meta']['postBalances'][0]
     sig = receipt['result']['transaction']['signatures'][0]
 
+    gas_used=""
+    log_messages = receipt['result']['meta']['logMessages']
+    str = 'Program log: used gas'
+    for log in log_messages:
+        if log.find(str) == 0:
+            gas_used =  log[len(str):].strip()
+            break
+
     if eth_hash:
-        logger.debug("COST %s %s %d", eth_hash.hex(), sig, cost  )
+        logger.debug("COST %s %s %d %s", eth_hash.hex(), sig, cost, gas_used)
     else:
         logger.debug("COST %s %d", sig, cost)
 
