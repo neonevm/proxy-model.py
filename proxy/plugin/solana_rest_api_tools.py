@@ -106,11 +106,11 @@ class ComputeBudget():
         )
     
     @staticmethod
-    def requestHeapFrame(size):
+    def requestHeapFrame(heapFrame):
         return TransactionInstruction(
             program_id=COMPUTE_BUDGET_ID,
             keys=[],
-            data=bytes.fromhex("01")+units.to_bytes(4,"little")
+            data=bytes.fromhex("01")+heapFrame.to_bytes(4,"little")
         )
 
 DEFAULT_UNITS=500*1000
@@ -119,7 +119,7 @@ DEFAULT_HEAP_FRAME=256*1024
 def TransactionWithComputeBudget(units=DEFAULT_UNITS, heapFrame=DEFAULT_HEAP_FRAME, **args):
     trx = Transaction(**args)
     if units: trx.add(ComputeBudget.requestUnits(units))
-    if heapFrame: trx.add(ComputeBudget.requestHeapFrame(units))
+    if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
     return trx
 
 
@@ -542,7 +542,6 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps):
         try:
             for index in range(continue_count):
                 trx = TransactionWithComputeBudget()
-                trx.add(ComputeBudget.request
                 trx.add(make_continue_instruction(perm_accs, trx_accs, instruction_count, index))
                 result = client.send_transaction(
                         trx,

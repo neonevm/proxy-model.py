@@ -1,4 +1,4 @@
-ARG SOLANA_REVISION=v1.7.9-resources
+ARG SOLANA_REVISION=v1.8.2-testnet
 ARG EVM_LOADER_REVISION=latest
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
@@ -31,7 +31,7 @@ COPY --from=cli /opt/solana/bin/solana \
                 /cli/bin/
 
 COPY --from=spl /opt/solana/bin/solana /cli/bin/
-COPY --from=spl /opt/evm_loader.so /opt/evm_loader-keypair.json \
+COPY --from=spl /opt/evm_loader.so \
                 /opt/neon-cli /spl/bin/
 COPY --from=spl /opt/spl-token /opt/test_token_keypair /opt/test_token_owner /spl/bin/
 COPY --from=spl /opt/collateral_pool_generator.py \
