@@ -173,7 +173,7 @@ def get_account_list(client, storage_account):
 
 
 class LogDB:
-    def __init__(self, filename="local.db"):
+    def __init__(self, filename="log.db"):
         self.conn = sqlite3.connect(filename, check_same_thread=False) # multithread mode
         self.conn.execute("PRAGMA journal_mode=OFF")
         # self.conn.isolation_level = None # autocommit mode
