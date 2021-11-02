@@ -20,6 +20,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from web3.auto.gethdev import w3
 
+from proxy.plugin.solana_rest_api_tools import TransactionWithComputeBudget
 
 solana_url = os.environ.get("SOLANA_URL", "https://api.devnet.solana.com")
 evm_loader_id = os.environ.get("EVM_LOADER", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
@@ -357,7 +358,7 @@ class Canceller:
                 for acc in acc_list:
                     keys.append(AccountMeta(pubkey=acc, is_signer=False, is_writable=(False if acc in readonly_accs else True)))
 
-                trx = Transaction()
+                trx = TransactionWithComputeBudget(units=None)
                 trx.add(TransactionInstruction(
                     program_id=evm_loader_id,
                     data=bytearray.fromhex("15") + eth_trx[0].to_bytes(8, 'little'),

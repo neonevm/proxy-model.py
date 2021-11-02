@@ -2,7 +2,8 @@ import os
 import sys
 from time import sleep
 
-from proxy.plugin.solana_rest_api_tools import sysinstruct, ETH_TOKEN_MINT_ID, system, send_transaction
+from proxy.plugin.solana_rest_api_tools import sysinstruct, ETH_TOKEN_MINT_ID, system, send_transaction, \
+    TransactionWithComputeBudget
 
 sys.path.append("/spl/bin/")
 os.environ['SOLANA_URL'] = "http://solana:8899"
@@ -177,7 +178,6 @@ class CancelTest(unittest.TestCase):
 
         return (trx_raw.hex(), eth_signature, from_address)
 
-
     def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
@@ -209,27 +209,24 @@ class CancelTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget(units=None)
         trx.add(self.sol_instr_keccak(self, make_keccak_instruction_data(1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(self, storage, steps, instruction))
         print(trx.__dict__)
         return send_transaction(client, trx, self.acc)
 
-
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
-
 
     def create_storage_account(self, seed):
         storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(EVM_LOADER))).digest())
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget(units=None)
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(EVM_LOADER)))
             send_transaction(client, trx, self.acc)
 
