@@ -46,6 +46,7 @@ neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
 USE_COMBINED_START_CONTINUE = os.environ.get("USE_COMBINED_START_CONTINUE", "YES") == "YES"
 CONTINUE_COUNT_FACTOR = int(os.environ.get("CONTINUE_COUNT_FACTOR", "3"))
 TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFIG", "3600"))
+MINIMAL_GAS_PRICE=int(os.environ.get("MINIMAL_GAS_PRICE", 1))*10**9
 
 ACCOUNT_SEED_VERSION=b'\1'
 
@@ -95,10 +96,11 @@ obligatory_accounts = [
 ]
 
 
-class TransactionAccounts:
-    def __init__(self, caller_token, eth_accounts):
+class TransactionInfo:
+    def __init__(self, caller_token, eth_accounts, nonce):
         self.caller_token = caller_token
         self.eth_accounts = eth_accounts
+        self.nonce = nonce
 
 class AccountInfo(NamedTuple):
     ether: eth_keys.PublicKey
@@ -118,10 +120,11 @@ def create_account_layout(lamports, space, ether, nonce):
         nonce=nonce
     ))
 
-def write_layout(offset, data):
-    return (bytes.fromhex("00000000")+
-            offset.to_bytes(4, byteorder="little")+
-            len(data).to_bytes(8, byteorder="little")+
+def write_holder_layout(nonce, offset, data):
+    return (bytes.fromhex('12')+
+            nonce.to_bytes(8, byteorder='little')+
+            offset.to_bytes(4, byteorder='little')+
+            len(data).to_bytes(8, byteorder='little')+
             data)
 
 def accountWithSeed(base, seed, program):
@@ -484,7 +487,7 @@ def call_continue_0x0d(signer, client, perm_accs, trx_accs, steps, msg):
         logger.debug("call_continue_iterative exception:")
         logger.debug(str(err))
 
-    return sol_instr_12_cancel(signer, client, perm_accs, trx_accs)
+    return sol_instr_21_cancel(signer, client, perm_accs, trx_accs)
 
 
 def call_continue(signer, client, perm_accs, trx_accs, steps):
@@ -500,7 +503,7 @@ def call_continue(signer, client, perm_accs, trx_accs, steps):
         logger.debug("call_continue_iterative exception:")
         logger.debug(str(err))
 
-    return sol_instr_12_cancel(signer, client, perm_accs, trx_accs)
+    return sol_instr_21_cancel(signer, client, perm_accs, trx_accs)
 
 
 def call_continue_bucked(signer, client, perm_accs, trx_accs, steps):
@@ -601,11 +604,11 @@ def sol_instr_10_continue(signer, client, perm_accs, trx_accs, initial_step_coun
     raise Exception("Can't execute even one EVM instruction")
 
 
-def sol_instr_12_cancel(signer, client, perm_accs, trx_accs):
+def sol_instr_21_cancel(signer, client, perm_accs, trx_accs):
     trx = Transaction()
     trx.add(TransactionInstruction(
         program_id=evm_loader_id,
-        data=bytearray.fromhex("0C"),
+        data=bytearray.fromhex("15") + trx_accs.nonce.to_bytes(8, 'little'),
         keys=[
             AccountMeta(pubkey=perm_accs.storage, is_signer=False, is_writable=True),
             AccountMeta(pubkey=perm_accs.operator, is_signer=True, is_writable=True),
@@ -628,13 +631,15 @@ def sol_instr_12_cancel(signer, client, perm_accs, trx_accs):
 def make_partial_call_instruction(perm_accs, trx_accs, step_count, call_data):
     return TransactionInstruction(
         program_id = evm_loader_id,
-        data = bytearray.fromhex("09") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little") + call_data,
+        data = bytearray.fromhex("13") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little") + call_data,
         keys = [
             AccountMeta(pubkey=perm_accs.storage, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=sysinstruct, is_signer=False, is_writable=False),
             AccountMeta(pubkey=perm_accs.operator, is_signer=True, is_writable=True),
             AccountMeta(pubkey=perm_accs.collateral_pool_address, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=perm_accs.operator_token, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=trx_accs.caller_token, is_signer=False, is_writable=True),
             AccountMeta(pubkey=system, is_signer=False, is_writable=False),
 
         ] + trx_accs.eth_accounts + [
@@ -669,7 +674,7 @@ def make_partial_call_or_continue_instruction_0x0d(perm_accs, trx_accs, step_cou
 
 
 def make_continue_instruction(perm_accs, trx_accs, step_count, index=None):
-    data = bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder="little")
+    data = bytearray.fromhex("14") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little")
     if index:
         data = data + index.to_bytes(8, byteorder="little")
 
@@ -680,6 +685,7 @@ def make_continue_instruction(perm_accs, trx_accs, step_count, index=None):
             AccountMeta(pubkey=perm_accs.storage, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=perm_accs.operator, is_signer=True, is_writable=True),
+            AccountMeta(pubkey=perm_accs.collateral_pool_address, is_signer=False, is_writable=True),
             AccountMeta(pubkey=perm_accs.operator_token, is_signer=False, is_writable=True),
             AccountMeta(pubkey=trx_accs.caller_token, is_signer=False, is_writable=True),
             AccountMeta(pubkey=system, is_signer=False, is_writable=False),
@@ -694,13 +700,15 @@ def make_continue_instruction(perm_accs, trx_accs, step_count, index=None):
 def make_call_from_account_instruction(perm_accs, trx_accs, step_count = 0):
     return TransactionInstruction(
         program_id = evm_loader_id,
-        data = bytearray.fromhex("0B") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little"),
+        data = bytearray.fromhex("16") + perm_accs.collateral_pool_index_buf + step_count.to_bytes(8, byteorder="little"),
         keys = [
             AccountMeta(pubkey=perm_accs.holder, is_signer=False, is_writable=True),
             AccountMeta(pubkey=perm_accs.storage, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=perm_accs.operator, is_signer=True, is_writable=True),
             AccountMeta(pubkey=perm_accs.collateral_pool_address, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=perm_accs.operator_token, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=trx_accs.caller_token, is_signer=False, is_writable=True),
             AccountMeta(pubkey=system, is_signer=False, is_writable=False),
 
         ] + trx_accs.eth_accounts + [
@@ -970,7 +978,7 @@ def create_account_list_by_emulate(signer, client, ethTrx):
             AccountMeta(pubkey=caller_token, is_signer=False, is_writable=True),
         ] + add_keys_05
 
-    trx_accs = TransactionAccounts(caller_token, eth_accounts)
+    trx_accs = TransactionInfo(caller_token, eth_accounts, ethTrx.nonce)
 
     return (trx_accs, sender_ether, trx)
 
@@ -1059,7 +1067,7 @@ def call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, c
 
 def call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx):
 
-    write_trx_to_holder_account(signer, client, perm_accs.holder, ethTrx)
+    write_trx_to_holder_account(signer, client, perm_accs.holder, perm_accs.proxy_id, ethTrx)
 
     if len(create_acc_trx.instructions):
         precall_txs = Transaction()
@@ -1142,7 +1150,7 @@ def createERC20TokenAccountTrx(signer, token_info):
 
 
 
-def write_trx_to_holder_account(signer, client, holder, ethTrx):
+def write_trx_to_holder_account(signer, client, holder, proxy_id, ethTrx):
     msg = ethTrx.signature() + len(ethTrx.unsigned_msg()).to_bytes(8, byteorder="little") + ethTrx.unsigned_msg()
 
     # Write transaction to transaction holder account
@@ -1154,7 +1162,7 @@ def write_trx_to_holder_account(signer, client, holder, ethTrx):
         trx = Transaction()
         # logger.debug("sender_sol %s %s %s", sender_sol, holder, acc.public_key())
         trx.add(TransactionInstruction(program_id=evm_loader_id,
-                                       data=write_layout(offset, part),
+                                       data=write_holder_layout(proxy_id, offset, part),
                                        keys=[
                                            AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                                            AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False),
@@ -1166,7 +1174,6 @@ def write_trx_to_holder_account(signer, client, holder, ethTrx):
     for rcpt in receipts:
         confirm_transaction(client, rcpt)
         logger.debug("confirmed: %s", rcpt)
-
 
 def _getAccountData(client, account, expected_length, owner=None):
     info = client.get_account_info(account, commitment=Confirmed)['result']['value']
