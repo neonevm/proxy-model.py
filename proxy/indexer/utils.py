@@ -34,6 +34,7 @@ keccakprog = "KeccakSecp256k11111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
 system = "11111111111111111111111111111111"
+COMPUTE_BUDGET_ID = "ComputeBudget111111111111111111111111111111"
 
 
 logger = logging.getLogger(__name__)
@@ -321,7 +322,6 @@ class Canceller:
             logger.debug("ERR: solana error {}".format(err))
             raise
 
-
     def unlock_accounts(self, blocked_storages):
         readonly_accs = [
             PublicKey(evm_loader_id),
@@ -333,6 +333,7 @@ class Canceller:
             PublicKey(rentid),
             PublicKey(incinerator),
             PublicKey(system),
+            PublicKey(COMPUTE_BUDGET_ID),
         ]
         for storage, trx_accs in blocked_storages.items():
             (eth_trx, blocked_accs) = trx_accs
