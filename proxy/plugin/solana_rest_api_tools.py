@@ -421,7 +421,7 @@ def extract_measurements_from_receipt(receipt):
         messages[-1]['logs'].append(log)
 
     for instr in instructions:
-        if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',): continue
+        if instr['program'] in ('KeccakSecp256k11111111111111111111111111111','ComputeBudget111111111111111111111111111111'): continue
         if messages[0]['program'] != instr['program']:
             raise Exception('Invalid program in log messages: expect %s, actual %s' % (messages[0]['program'], instr['program']))
         instr['logs'] = messages.pop(0)['logs']
