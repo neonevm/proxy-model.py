@@ -47,13 +47,13 @@ class Indexer:
     def __init__(self):
         self.client = Client(solana_url)
         self.canceller = Canceller()
-        self.logs_db = LogDB(filename="local.db")
-        self.blocks_by_hash = SqliteDict(filename="local.db", tablename="solana_blocks_by_hash", autocommit=True, journal_mode='OFF')
-        self.transaction_receipts = SqliteDict(filename="local.db", tablename="known_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
-        self.ethereum_trx = SqliteDict(filename="local.db", tablename="ethereum_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
-        self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
-        self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
-        self.constants = SqliteDict(filename="local.db", tablename="constants", autocommit=True, journal_mode='OFF')
+        self.logs_db = LogDB(filename="log.db")
+        self.blocks_by_hash = SqliteDict(filename="solana_blocks_by_hash.db", autocommit=True, journal_mode='OFF')
+        self.transaction_receipts = SqliteDict(filename="known_transactions.db", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.ethereum_trx = SqliteDict(filename="ethereum_transactions.db", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.eth_sol_trx = SqliteDict(filename="ethereum_solana_transactions.db", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.sol_eth_trx = SqliteDict(filename="solana_ethereum_transactions.db", autocommit=True, journal_mode='OFF', encode=json.dumps, decode=json.loads)
+        self.constants = SqliteDict(filename="constants.db", autocommit=True, journal_mode='OFF')
         self.last_slot = 0
         self.current_slot = 0
         self.transaction_order = []
