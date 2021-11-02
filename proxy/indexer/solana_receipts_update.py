@@ -554,11 +554,6 @@ class Indexer:
         return (slot, block_hash)
 
 
-    def add_hunged_storage(self, trx, storage):
-        if abs(trx['slot'] - self.current_slot) > 16:
-            self.blocked_storages.add(storage)
-
-
 def run_indexer():
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)

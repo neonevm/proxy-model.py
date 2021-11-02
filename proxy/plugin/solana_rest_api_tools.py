@@ -537,6 +537,8 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps_emulated, st
     except Exception as err:
         if str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1"):
             pass
+        elif check_if_program_exceeded_instructions(err.result):
+            steps = int(steps * 90 / 100)
         else:
             raise
 
@@ -573,6 +575,8 @@ def call_continue_bucked_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps
     except Exception as err:
         if str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1"):
             pass
+        elif check_if_program_exceeded_instructions(err.result):
+            steps = int(steps * 90 / 100)
         else:
             raise
 
@@ -602,6 +606,8 @@ def call_continue_bucked_0x0e(signer, client, perm_accs, trx_accs, steps_emulate
     except Exception as err:
         if str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1"):
             pass
+        elif check_if_program_exceeded_instructions(err.result):
+            steps = int(steps * 90 / 100)
         else:
             raise
 
