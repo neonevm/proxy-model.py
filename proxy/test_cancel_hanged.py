@@ -211,7 +211,7 @@ class CancelTest(unittest.TestCase):
 
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
-        trx = TransactionWithComputeBudget(units=None)
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_keccak(self, make_keccak_instruction_data(1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(self, storage, steps, instruction))
         print(trx.__dict__)
@@ -226,7 +226,7 @@ class CancelTest(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = TransactionWithComputeBudget(units=None)
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(EVM_LOADER)))
             send_transaction(client, trx, self.acc)
 

@@ -358,7 +358,7 @@ class Canceller:
                 for acc in acc_list:
                     keys.append(AccountMeta(pubkey=acc, is_signer=False, is_writable=(False if acc in readonly_accs else True)))
 
-                trx = TransactionWithComputeBudget(units=None)
+                trx = TransactionWithComputeBudget()
                 trx.add(TransactionInstruction(
                     program_id=evm_loader_id,
                     data=bytearray.fromhex("15") + eth_trx[0].to_bytes(8, 'little'),
