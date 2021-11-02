@@ -179,7 +179,7 @@ def create_account_with_seed(client, funding, base, seed, storage_size, eth_trx=
 
         trx = Transaction()
         trx.add(createAccountWithSeedTrx(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
-        send_transaction(client, trx, funding, eth_trx)
+        send_transaction(client, trx, funding, eth_trx=eth_trx, reason='createAccountWithSeed')
 
     return account
 
@@ -435,15 +435,15 @@ def get_measurements(result):
         logger.error("Can't get measurements %s"%err)
         logger.info("Failed result: %s"%json.dumps(result, indent=3))
 
-def send_transaction(client, trx, signer, eth_trx=None):
+def send_transaction(client, trx, signer, eth_trx=None, reason=None):
     result = client.send_transaction(trx, signer, opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
     confirm_transaction(client, result["result"])
     result = client.get_confirmed_transaction(result["result"])
-    update_transaction_cost(result, eth_trx)
+    update_transaction_cost(result, eth_trx, reason=reason)
     return result
 
-def send_measured_transaction(client, trx, signer, eth_trx):
-    result = send_transaction(client, trx, signer, eth_trx)
+def send_measured_transaction(client, trx, signer, eth_trx, reason):
+    result = send_transaction(client, trx, signer, eth_trx=eth_trx, reason=reason)
     get_measurements(result)
     return result
 
@@ -537,7 +537,7 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps, ethTrx):
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
-            update_transaction_cost(result, ethTrx, extra_sol_trx=extra_sol_trx)
+            update_transaction_cost(result, ethTrx, extra_sol_trx=extra_sol_trx, reason='ContinueV02')
             get_measurements(result)
             (founded, signature_) = check_if_continue_returned(result)
             if founded:
@@ -573,7 +573,7 @@ def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg, e
         for trx in result_list:
             confirm_transaction(client, trx)
             result = client.get_confirmed_transaction(trx)
-            update_transaction_cost(result, ethTrx, extra_sol_trx=extra_sol_trx)
+            update_transaction_cost(result, ethTrx, extra_sol_trx=extra_sol_trx, reason='PartialCallOrContinueFromRawEthereumTX')
             get_measurements(result)
             (founded, signature_) = check_if_continue_returned(result)
             if founded:
@@ -608,7 +608,7 @@ def sol_instr_10_continue(signer, client, perm_accs, trx_accs, initial_step_coun
 
         logger.debug("Step count {}".format(step_count))
         try:
-            result = send_measured_transaction(client, trx, signer, ethTrx)
+            result = send_measured_transaction(client, trx, signer, ethTrx, 'ContinueV02')
             return result
         except SendTransactionError as err:
             if check_if_program_exceeded_instructions(err.result):
@@ -638,7 +638,7 @@ def sol_instr_21_cancel(signer, client, perm_accs, trx_accs, ethTrx):
     ))
 
     logger.debug("Cancel")
-    result = send_measured_transaction(client, trx, signer, ethTrx)
+    result = send_measured_transaction(client, trx, signer, ethTrx, 'CancelWithNonce')
     return result['result']['transaction']['signatures'][0]
 
 
@@ -844,7 +844,7 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
     return (continue_count, step_count)
 
 
-def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False):
+def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
     cost =  receipt['result']['meta']['preBalances'][0]-receipt['result' ]['meta']['postBalances'][0]
     sig = receipt['result']['transaction']['signatures'][0]
     used_gas=None
@@ -865,10 +865,22 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False):
                     used_gas =  int().from_bytes(used_gas, "little")
 
     if eth_trx:
-        logger.debug("COST %s %s %s %s %d %s, %s", eth_trx.hash_signed().hex(), eth_trx.sender(), eth_trx.toAddress.hex(),
-                     sig, cost, used_gas if used_gas else "", "extra" if extra_sol_trx else "")
+        logger.debug("COST %s %s %s %s %d %s %s %s",
+                     eth_trx.hash_signed().hex(),
+                     eth_trx.sender(),
+                     eth_trx.toAddress.hex(),
+                     sig,
+                     cost,
+                     used_gas if used_gas else "",
+                     "extra" if extra_sol_trx else "",
+                     reason if reason else "",
+                     )
     else:
-        logger.debug("COST %s %d", sig, cost)
+        logger.debug("COST %s %d %s",
+                     sig,
+                     cost,
+                     reason if reason else "",
+                     )
 
 
 def create_account_list_by_emulate(signer, client, ethTrx):
@@ -926,7 +938,7 @@ def create_account_list_by_emulate(signer, client, ethTrx):
         while count < 2:
             logger.debug("attemt: %d", count)
 
-            send_transaction(client, tx, signer, ethTrx)
+            send_transaction(client, tx, signer, eth_trx=ethTrx, reason='resize_storage_account')
             info = _getAccountData(client, instr.keys[0].pubkey, ACCOUNT_INFO_LAYOUT.sizeof())
             info_data = AccountInfo.frombytes(info)
             if info_data.code_account == instr.keys[2].pubkey:
@@ -1072,7 +1084,7 @@ def call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, ms
     precall_txs.add(make_partial_call_instruction(perm_accs, trx_accs, 0, msg))
 
     logger.debug("Partial call")
-    send_measured_transaction(client, precall_txs, signer, ethTrx)
+    send_measured_transaction(client, precall_txs, signer, ethTrx, 'PartialCallFromRawEthereumTXv02')
 
     return call_continue(signer, client, perm_accs, trx_accs, steps, ethTrx)
 
@@ -1089,7 +1101,7 @@ def call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, step
     precall_txs.add(make_partial_call_or_continue_instruction_0x0d(perm_accs, trx_accs, steps, msg))
 
     logger.debug("Partial call 0x0d")
-    send_measured_transaction(client, precall_txs, signer, ethTrx)
+    send_measured_transaction(client, precall_txs, signer, ethTrx, 'PartialCallOrContinueFromRawEthereumTX')
 
     return call_continue_0x0d(signer, client, perm_accs, trx_accs, steps, msg, ethTrx)
 
@@ -1104,7 +1116,7 @@ def call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, c
             AccountMeta(pubkey=keccakprog, is_signer=False, is_writable=False),
         ]))
     call_txs_05.add(make_05_call_instruction(perm_accs, trx_accs, msg))
-    result = send_measured_transaction(client, call_txs_05, signer, ethTrx)
+    result = send_measured_transaction(client, call_txs_05, signer, ethTrx, 'CallFromRawEthereumTX')
     return result['result']['transaction']['signatures'][0]
 
 
@@ -1114,14 +1126,14 @@ def call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, ste
     if len(create_acc_trx.instructions):
         precall_txs = Transaction()
         precall_txs.add(create_acc_trx)
-        send_measured_transaction(client, precall_txs, signer, ethTrx)
+        send_measured_transaction(client, precall_txs, signer, ethTrx, 'create_accounts_for_deploy')
 
     precall_txs = Transaction()
     precall_txs.add(make_call_from_account_instruction(perm_accs, trx_accs))
 
     # ExecuteTrxFromAccountDataIterative
     logger.debug("ExecuteTrxFromAccountDataIterative:")
-    send_measured_transaction(client, precall_txs, signer, ethTrx)
+    send_measured_transaction(client, precall_txs, signer, ethTrx, 'ExecuteTrxFromAccountDataIterativeV02')
 
     return call_continue(signer, client, perm_accs, trx_accs, steps, ethTrx)
 
@@ -1216,7 +1228,7 @@ def write_trx_to_holder_account(signer, client, holder, proxy_id, ethTrx):
     for rcpt in receipts:
         confirm_transaction(client, rcpt)
         result = client.get_confirmed_transaction(rcpt)
-        update_transaction_cost(result, ethTrx)
+        update_transaction_cost(result, ethTrx, reason='WriteHolder')
         logger.debug("confirmed: %s", rcpt)
 
 def _getAccountData(client, account, expected_length, owner=None):
