@@ -35,11 +35,6 @@ from .eth_proto import Trx
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-logging.basicConfig(filename="log",
-                            filemode='a',
-                            format='%(asctime)s, %(message)s',
-                            datefmt='%H:%M:%S',
-                            level=logging.DEBUG)
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
 COLLATERAL_POOL_BASE = os.environ.get("COLLATERAL_POOL_BASE")
@@ -865,21 +860,26 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
                     used_gas =  int().from_bytes(used_gas, "little")
 
     if eth_trx:
-        logger.debug("COST %s %s %s %s %d %s %s %s",
+        logger.debug("COST %s %d %d %s %s %s %s %s",
                      eth_trx.hash_signed().hex(),
-                     eth_trx.sender(),
-                     eth_trx.toAddress.hex(),
-                     sig,
                      cost,
-                     used_gas if used_gas else "",
-                     "extra" if extra_sol_trx else "",
-                     reason if reason else "",
+                     used_gas if used_gas else 0,
+                     eth_trx.sender(),
+                     eth_trx.toAddress.hex() if eth_trx.toAddress else "None",
+                     sig,
+                     "extra" if extra_sol_trx else "ok",
+                     reason if reason else "None",
                      )
     else:
-        logger.debug("COST %s %d %s",
-                     sig,
+        logger.debug("COST %s %d %d %s %s %s %s %s",
+                     'None',
                      cost,
-                     reason if reason else "",
+                     used_gas if used_gas else 0,
+                     'None',
+                     'None',
+                     sig,
+                     "extra" if extra_sol_trx else "ok",
+                     reason if reason else "None",
                      )
 
 
