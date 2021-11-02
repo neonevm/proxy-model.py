@@ -368,8 +368,7 @@ class Canceller:
                     data=bytearray.fromhex("15") + eth_trx[0].to_bytes(8, 'little'),
                     keys=keys
                 ))
-
-                logger.debug("Send Cancel")
+                logger.debug("Send Cancel trx {}".format(trx))
                 try:
                     self.client.send_transaction(trx, self.signer, opts=TxOpts(preflight_commitment=Confirmed))
                 except Exception as err:
