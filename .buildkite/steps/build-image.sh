@@ -3,8 +3,8 @@ set -euo pipefail
 
 REVISION=$(git rev-parse HEAD)
 
-set ${SOLANA_REVISION:=v1.7.9-resources}
-set ${EVM_LOADER_REVISION:=latest}
+set ${SOLANA_REVISION:=v1.7.9-testnet}
+set ${EVM_LOADER_REVISION:=ca4df414d0dc2e45d80044516dacef8ef5000e24}
 
 # Refreshing neonlabsorg/solana:latest image is required to run .buildkite/steps/build-image.sh locally
 docker pull neonlabsorg/solana:${SOLANA_REVISION}
