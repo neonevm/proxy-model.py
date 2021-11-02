@@ -6,7 +6,7 @@ from proxy.plugin.solana_rest_api_tools import sysinstruct, ETH_TOKEN_MINT_ID, s
     TransactionWithComputeBudget
 
 sys.path.append("/spl/bin/")
-os.environ['SOLANA_URL'] = "http://solana:8899"
+os.environ['SOLANA_URL'] = os.environ.get('SOLANA_URL', "http://solana:8899")
 os.environ['EVM_LOADER'] = os.environ.get('EVM_LOADER', "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io")
 os.environ['ETH_TOKEN_MINT'] = "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU"
 os.environ['COLLATERAL_POOL_BASE'] = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"

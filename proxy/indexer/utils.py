@@ -360,7 +360,7 @@ class Canceller:
                         AccountMeta(pubkey=system, is_signer=False, is_writable=False)
                     ]
                 for acc in acc_list:
-                    keys.append(AccountMeta(pubkey=acc, is_signer=False, is_writable=(False if acc in readonly_accs else True)))
+                    keys.append(AccountMeta(pubkey=acc, is_signer=False, is_writable=(False if PublicKey(acc) in readonly_accs else True)))
 
                 trx = TransactionWithComputeBudget()
                 trx.add(TransactionInstruction(
@@ -368,7 +368,7 @@ class Canceller:
                     data=bytearray.fromhex("15") + eth_trx[0].to_bytes(8, 'little'),
                     keys=keys
                 ))
-                logger.debug("Send Cancel trx {}".format(trx))
+                logger.debug('Send Cancel')
                 try:
                     self.client.send_transaction(trx, self.signer, opts=TxOpts(preflight_commitment=Confirmed))
                 except Exception as err:
