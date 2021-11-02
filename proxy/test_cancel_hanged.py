@@ -1,11 +1,12 @@
 import os
 import sys
+from time import sleep
 
 from proxy.plugin.solana_rest_api_tools import sysinstruct, ETH_TOKEN_MINT_ID, system, send_transaction
 
 sys.path.append("/spl/bin/")
 os.environ['SOLANA_URL'] = "http://solana:8899"
-os.environ['EVM_LOADER'] = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
+os.environ['EVM_LOADER'] = os.environ.get('EVM_LOADER', "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io")
 os.environ['ETH_TOKEN_MINT'] = "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU"
 os.environ['COLLATERAL_POOL_BASE'] = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
 os.environ['NEON_CHAIN_ID'] = "0x6f"
@@ -75,7 +76,7 @@ contract ReturnsEvents {
 class CancelTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print("\ntest_event.py setUpClass")
+        print("\ntest_cancel_hanged.py setUpClass")
 
         cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
