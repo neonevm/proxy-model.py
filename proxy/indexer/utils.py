@@ -20,7 +20,10 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from web3.auto.gethdev import w3
 
-from proxy.plugin.solana_rest_api_tools import TransactionWithComputeBudget
+try:
+    from proxy.plugin.solana_rest_api_tools import TransactionWithComputeBudget
+except ImportError:
+    from proxy.plugin.solana_rest_api_tools import TransactionWithComputeBudget
 
 solana_url = os.environ.get("SOLANA_URL", "https://api.devnet.solana.com")
 evm_loader_id = os.environ.get("EVM_LOADER", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
