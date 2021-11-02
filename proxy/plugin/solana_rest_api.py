@@ -396,8 +396,8 @@ class EthereumModel:
 
         nonce = int(self.eth_getTransactionCount('0x' + sender, None), base=16)
 
-        logger.debug('Eth Sender trx nonce: %s', nonce)
-        logger.debug('Operator nonce: %s', trx.nonce)
+        logger.debug('Eth Sender trx nonce: %s', trx.nonce)
+        logger.debug('Operator nonce: %s', nonce)
 
         if (int(nonce) != int(trx.nonce)):
             raise EthereumError(-32002, 'Verifying nonce before send transaction: Error processing Instruction 1: invalid program argument'
