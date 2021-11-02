@@ -212,7 +212,7 @@ class CancelTest(unittest.TestCase):
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
         trx = TransactionWithComputeBudget()
-        trx.add(self.sol_instr_keccak(self, make_keccak_instruction_data(1, len(msg), 13)))
+        trx.add(self.sol_instr_keccak(self, make_keccak_instruction_data(len(trx.instructions)+1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(self, storage, steps, instruction))
         print(trx.__dict__)
         return send_transaction(client, trx, self.acc)
