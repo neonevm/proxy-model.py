@@ -476,10 +476,13 @@ def check_if_continue_returned(result):
 
 def call_continue_combined(signer, client, ethTrx, perm_accs, trx_accs, steps_emulated, steps, msg):
     try:
-        return call_continue_bucked_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps_emulated, steps, msg)
+        return_result = call_continue_bucked_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps_emulated, steps, msg)
     except Exception as err:
         logger.debug("call_continue_bucked_0x0D exception:")
         logger.debug(str(err))
+
+    if return_result is not None:
+        return return_result
 
     try:
         return call_continue_iterative(signer, client, perm_accs, trx_accs, steps)
@@ -492,10 +495,13 @@ def call_continue_combined(signer, client, ethTrx, perm_accs, trx_accs, steps_em
 
 def call_continue_with_holder_combined(signer, client, perm_accs, trx_accs, steps_emulated, steps):
     try:
-        return call_continue_bucked_0x0e(signer, client, perm_accs, trx_accs, steps_emulated, steps)
+        return_result = call_continue_bucked_0x0e(signer, client, perm_accs, trx_accs, steps_emulated, steps)
     except Exception as err:
         logger.debug("call_continue_bucked_0x0E exception:")
         logger.debug(str(err))
+
+    if return_result is not None:
+        return return_result
 
     try:
         return call_continue_iterative(signer, client, perm_accs, trx_accs, steps)
@@ -508,10 +514,13 @@ def call_continue_with_holder_combined(signer, client, perm_accs, trx_accs, step
 
 def call_continue(signer, client, perm_accs, trx_accs, steps_emulated, steps):
     try:
-        return call_continue_bucked(signer, client, perm_accs, trx_accs, steps_emulated, steps)
+        return_result = call_continue_bucked(signer, client, perm_accs, trx_accs, steps_emulated, steps)
     except Exception as err:
         logger.debug("call_continue_bucked exception:")
         logger.debug(str(err))
+
+    if return_result is not None:
+        return return_result
 
     try:
         return call_continue_iterative(signer, client, perm_accs, trx_accs, steps)
