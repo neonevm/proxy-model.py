@@ -31,6 +31,7 @@ rentid = "SysvarRent111111111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
 system = "11111111111111111111111111111111"
 
+JOURNAL_MODE = os.environ.get("JOURNAL_MODE", "DELETE")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -175,7 +176,7 @@ def get_account_list(client, storage_account):
 class LogDB:
     def __init__(self, filename="log.db"):
         self.conn = sqlite3.connect(filename, check_same_thread=False) # multithread mode
-        self.conn.execute("PRAGMA journal_mode=OFF")
+        self.conn.execute("PRAGMA journal_mode={}".format(JOURNAL_MODE))
         # self.conn.isolation_level = None # autocommit mode
         cur = self.conn.cursor()
         cur.execute("""CREATE TABLE IF NOT EXISTS
