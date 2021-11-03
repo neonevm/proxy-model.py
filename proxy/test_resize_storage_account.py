@@ -5,6 +5,8 @@ from solana.publickey import PublicKey
 from solcx import compile_source
 from solcx import install_solc
 
+from proxy.plugin.solana_rest_api_tools import MINIMAL_GAS_PRICE
+
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
 evm_loader_id = PublicKey(os.environ.get("EVM_LOADER"))
@@ -66,10 +68,12 @@ class resize_storage_account(unittest.TestCase):
     def test_resize_storage_account(self):
         print("\n\nresize_storage_account")
         nonce = proxy.eth.get_transaction_count(self.account.address)
-        tx = self.contract.functions.inc().buildTransaction({'nonce': nonce})
+        tx = self.contract.functions.inc().buildTransaction({'nonce': nonce, 'gasPrice': MINIMAL_GAS_PRICE})
         tx = proxy.eth.account.sign_transaction(tx, self.account.key)
         signature = proxy.eth.send_raw_transaction(tx.rawTransaction)
+        print('signature:', signature)
         receipt = proxy.eth.wait_for_transaction_receipt(signature)
+        print('receipt:', receipt)
         self.assertIsNotNone(receipt)
 
 
