@@ -45,7 +45,7 @@ class ContinueStruct:
 
 
 class TransactionStruct:
-    def __init__(self, eth_trx, eth_signature, from_address, got_result, signatures, storage, blocked_accounts):
+    def __init__(self, eth_trx, eth_signature, from_address, got_result, signatures, storage, blocked_accounts, slot):
         # logger.debug(eth_signature)
         self.eth_trx = eth_trx
         self.eth_signature = eth_signature
@@ -54,6 +54,7 @@ class TransactionStruct:
         self.signatures = signatures
         self.storage = storage
         self.blocked_accounts = blocked_accounts
+        self.slot = slot
 
 
 class Indexer:
@@ -271,6 +272,7 @@ class Indexer:
                                                     continue_result.signatures,
                                                     storage_account,
                                                     continue_result.accounts,
+                                                    slot
                                                 )
 
                                             del continue_table[storage_account]
@@ -327,7 +329,16 @@ class Indexer:
                             got_result = get_trx_results(trx)
                             if got_result is not None:
                                 # self.submit_transaction(eth_trx, eth_signature, from_address, got_result, [signature])
-                                trx_table[eth_signature] = TransactionStruct(eth_trx, eth_signature, from_address, got_result, [signature], None, None)
+                                trx_table[eth_signature] = TransactionStruct(
+                                        eth_trx,
+                                        eth_signature,
+                                        from_address,
+                                        got_result,
+                                        [signature],
+                                        None,
+                                        None,
+                                        slot
+                                    )
                             else:
                                 logger.error("RESULT NOT FOUND IN 05\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
 
@@ -357,7 +368,8 @@ class Indexer:
                                     None,
                                     [signature],
                                     storage_account,
-                                    blocked_accounts
+                                    blocked_accounts,
+                                    slot
                                 )
 
                             if storage_account in continue_table:
@@ -446,7 +458,16 @@ class Indexer:
                             if eth_signature in trx_table:
                                 trx_table[eth_signature].signatures.append(signature)
                             else:
-                                trx_table[eth_signature] = TransactionStruct(eth_trx, eth_signature, from_address, got_result, [signature], storage_account, blocked_accounts)
+                                trx_table[eth_signature] = TransactionStruct(
+                                        eth_trx,
+                                        eth_signature,
+                                        from_address,
+                                        got_result,
+                                        [signature],
+                                        storage_account,
+                                        blocked_accounts,
+                                        slot
+                                    )
 
                         elif instruction_data[0] == 0x0e:
                             # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeOrContinue 0x{}".format(slot, counter, instruction_data.hex()))
@@ -487,10 +508,10 @@ class Indexer:
             if trx_struct.got_result:
                 self.submit_transaction(trx_struct)
             elif trx_struct.storage:
-                self.blocked_storages[trx_struct.storage] = (trx_struct.eth_trx, trx_struct.blocked_accounts)
+                if abs(trx_struct.slot - self.current_slot) > 16:
+                    self.blocked_storages[trx_struct.storage] = (trx_struct.eth_trx, trx_struct.blocked_accounts)
             else:
                 logger.error(trx_struct)
-
 
 
     def submit_transaction(self, trx_struct):
