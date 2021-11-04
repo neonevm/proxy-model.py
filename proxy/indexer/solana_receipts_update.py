@@ -19,6 +19,7 @@ except ImportError:
 solana_url = os.environ.get("SOLANA_URL", "https://api.devnet.solana.com")
 evm_loader_id = os.environ.get("EVM_LOADER", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
 PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
+CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
 
 
 logger = logging.getLogger(__name__)
@@ -508,7 +509,7 @@ class Indexer:
             if trx_struct.got_result:
                 self.submit_transaction(trx_struct)
             elif trx_struct.storage:
-                if abs(trx_struct.slot - self.current_slot) > 16:
+                if abs(trx_struct.slot - self.current_slot) > CANCEL_TIMEOUT:
                     self.blocked_storages[trx_struct.storage] = (trx_struct.eth_trx, trx_struct.blocked_accounts)
             else:
                 logger.error(trx_struct)
