@@ -17,11 +17,27 @@ services:
     networks:
       - net
 
+  postgres:
+    container_name: postgres
+    image: postgres:14.0
+    environment:
+      POSTGRES_DB: "neon-db"
+      POSTGRES_USER: "neon-proxy"
+      POSTGRES_PASSWORD: "neon-proxy-pass"
+    hostname: postgres
+    expose:
+      - "5432"
+    networks:
+      - net
+
   proxy:
     container_name: proxy
     image: neonlabsorg/proxy:${REVISION}
     environment:
-      - CONFIG=ci
+      POSTGRES_DB: "neon-db"
+      POSTGRES_USER: "neon-proxy"
+      POSTGRES_PASSWORD: "neon-proxy-pass"
+      CONFIG: "ci"
     hostname: proxy
     ports:
       - 127.0.0.1:9090:9090
