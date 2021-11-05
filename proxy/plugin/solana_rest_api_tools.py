@@ -1042,19 +1042,19 @@ def call_signed(signer, client, ethTrx, perm_accs, steps):
             else:
                 raise
 
-    if call_iterative:
-        try:
-            if USE_COMBINED_START_CONTINUE:
-                return call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
-            else:
-                return call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
-        except Exception as err:
-            logger.debug(str(err))
-            if str(err).startswith("transaction too large:"):
-                logger.debug("Transaction too large, call call_signed_with_holder_acc():")
-                call_from_holder = True
-            else:
-                raise
+        if call_iterative:
+            try:
+                if USE_COMBINED_START_CONTINUE:
+                    return call_signed_iterative_0x0d(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
+                else:
+                    return call_signed_iterative(signer, client, ethTrx, perm_accs, trx_accs, steps, msg, create_acc_trx)
+            except Exception as err:
+                logger.debug(str(err))
+                if str(err).startswith("transaction too large:"):
+                    logger.debug("Transaction too large, call call_signed_with_holder_acc():")
+                    call_from_holder = True
+                else:
+                    raise
 
     if call_from_holder:
         return call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx)
