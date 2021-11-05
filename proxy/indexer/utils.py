@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import rlp
-import sqlite3
+import psycopg2
 import subprocess
 from construct import Struct, Bytes, Int64ul
 from eth_utils import big_endian_to_int
@@ -173,11 +173,15 @@ def get_account_list(client, storage_account):
         return None
 
 
+POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
+POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
+POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy")
+POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
+
+
 class LogDB:
-    def __init__(self, filename="log.db"):
-        self.conn = sqlite3.connect(filename, check_same_thread=False) # multithread mode
-        self.conn.execute("PRAGMA journal_mode={}".format(JOURNAL_MODE))
-        # self.conn.isolation_level = None # autocommit mode
+    def __init__(self):
+        self.conn = psycopg2.connect(dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASSWORD, host=POSTGRES_HOST)
         cur = self.conn.cursor()
         cur.execute("""CREATE TABLE IF NOT EXISTS
         logs (

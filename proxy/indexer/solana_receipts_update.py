@@ -6,14 +6,16 @@ import time
 import logging
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
-from sqlitedict import SqliteDict
+# from sqlitedict import SqliteDict
 from typing import Dict, Union
 
 
 try:
     from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+    from sql_dict import SQLDict
 except ImportError:
     from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+    from .sql_dict import SQLDict
 
 
 solana_url = os.environ.get("SOLANA_URL", "https://api.devnet.solana.com")
@@ -61,13 +63,13 @@ class Indexer:
     def __init__(self):
         self.client = Client(solana_url)
         self.canceller = Canceller()
-        self.logs_db = LogDB(filename="log.db")
-        self.blocks_by_hash = SqliteDict(filename="solana_blocks_by_hash.db", autocommit=True, journal_mode=JOURNAL_MODE)
-        self.transaction_receipts = SqliteDict(filename="known_transactions.db", autocommit=True, journal_mode=JOURNAL_MODE, encode=json.dumps, decode=json.loads)
-        self.ethereum_trx = SqliteDict(filename="ethereum_transactions.db", autocommit=True, journal_mode=JOURNAL_MODE, encode=json.dumps, decode=json.loads)
-        self.eth_sol_trx = SqliteDict(filename="ethereum_solana_transactions.db", autocommit=True, journal_mode=JOURNAL_MODE, encode=json.dumps, decode=json.loads)
-        self.sol_eth_trx = SqliteDict(filename="solana_ethereum_transactions.db", autocommit=True, journal_mode=JOURNAL_MODE, encode=json.dumps, decode=json.loads)
-        self.constants = SqliteDict(filename="constants.db", autocommit=True, journal_mode=JOURNAL_MODE)
+        self.logs_db = LogDB()
+        self.blocks_by_hash = SQLDict(tablename="solana_blocks_by_hash")
+        self.transaction_receipts = SQLDict(tablename="known_transactions")
+        self.ethereum_trx = SQLDict(tablename="ethereum_transactions")
+        self.eth_sol_trx = SQLDict(tablename="ethereum_solana_transactions")
+        self.sol_eth_trx = SQLDict(tablename="solana_ethereum_transactions")
+        self.constants = SQLDict(tablename="constants")
         self.last_slot = 0
         self.current_slot = 0
         self.transaction_order = []

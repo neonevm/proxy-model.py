@@ -34,7 +34,7 @@ import logging
 from ..core.acceptor.pool import proxy_id_glob
 import os
 from ..indexer.utils import get_trx_results, LogDB
-from sqlitedict import SqliteDict
+from ..indexer.sql_dict import SQLDict
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -88,11 +88,11 @@ class EthereumModel:
 
         self.client = SolanaClient(solana_url)
 
-        self.logs_db = LogDB(filename="log.db")
-        self.blocks_by_hash = SqliteDict(filename="solana_blocks_by_hash.db", autocommit=True, journal_mode=JOURNAL_MODE)
-        self.ethereum_trx = SqliteDict(filename="ethereum_transactions.db", autocommit=True, journal_mode=JOURNAL_MODE, encode=json.dumps, decode=json.loads)
-        self.eth_sol_trx = SqliteDict(filename="ethereum_solana_transactions.db", autocommit=True, journal_mode=JOURNAL_MODE, encode=json.dumps, decode=json.loads)
-        self.sol_eth_trx = SqliteDict(filename="solana_ethereum_transactions.db", autocommit=True, journal_mode=JOURNAL_MODE, encode=json.dumps, decode=json.loads)
+        self.logs_db = LogDB()
+        self.blocks_by_hash = SQLDict(tablename="solana_blocks_by_hash")
+        self.ethereum_trx = SQLDict(tablename="ethereum_transactions")
+        self.eth_sol_trx = SQLDict(tablename="ethereum_solana_transactions")
+        self.sol_eth_trx = SQLDict(tablename="solana_ethereum_transactions")
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value

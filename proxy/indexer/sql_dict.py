@@ -1,4 +1,4 @@
-import psycopg
+import psycopg2
 import os
 
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
@@ -23,11 +23,12 @@ def decode(obj):
 
 
 class SQLDict(dict):
-    def __init__(self, tablename='table', dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASSWORD, host=POSTGRES_HOST, encode=encode, decode=decode):
+    def __init__(self, tablename='table', encode=encode, decode=decode):
         self.encode = encode
         self.decode = decode
         self.tablename = tablename
-        self.conn = psycopg.connect(dbname, user, password, host)
+        self.conn = psycopg2.connect(dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASSWORD, host=POSTGRES_HOST, autocommit=True)
+        self.conn.isolation_level
         self.conn.execute("""
         CREATE TABLE IF NOT EXISTS
         {} (
