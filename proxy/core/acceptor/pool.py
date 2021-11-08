@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 LOCK = multiprocessing.Lock()
 
 proxy_id_glob = multiprocessing.Value('i', 0)
+proxy_used_id_glob = multiprocessing.Array('i', 1024)
 
 
 class AcceptorPool:
