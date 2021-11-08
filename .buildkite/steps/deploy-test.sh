@@ -5,7 +5,7 @@ wait-for-proxy()
 {
   PROXY_URL="$1"
 
-  for i in {1..15}; do
+  for i in {1..12}; do
       if curl -s --header "Content-Type: application/json" --data '{"method":"eth_blockNumber","params":[],"id":93,"jsonrpc":"2.0"}' $PROXY_URL > /dev/null;
       then
         echo `date +%H:%M:%S`" proxy is available"

@@ -1,5 +1,7 @@
 import psycopg2
 import os
+import logging
+from collections.abc import MutableMapping
 
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
@@ -12,9 +14,13 @@ except ImportError:
     from pickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
 
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
 def encode(obj):
     """Serialize an object using pickle to a binary format accepted by SQLite."""
-    return psycopg.Binary(dumps(obj, protocol=PICKLE_PROTOCOL))
+    return psycopg2.Binary(dumps(obj, protocol=PICKLE_PROTOCOL))
 
 
 def decode(obj):
@@ -22,46 +28,59 @@ def decode(obj):
     return loads(bytes(obj))
 
 
-class SQLDict(dict):
-    def __init__(self, tablename='table', encode=encode, decode=decode):
+class SQLDict(MutableMapping):
+    """Serialize an object using pickle to a binary format accepted by SQLite."""
+
+    def __init__(self, tablename='table'):
         self.encode = encode
         self.decode = decode
         self.tablename = tablename
-        self.conn = psycopg2.connect(dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASSWORD, host=POSTGRES_HOST, autocommit=True)
-        self.conn.isolation_level
-        self.conn.execute("""
-        CREATE TABLE IF NOT EXISTS
-        {} (
-            key TEXT UNIQUE,
-            value BLOB
-        )""".format(self.tablename))
+        self.conn = psycopg2.connect(
+            dbname=POSTGRES_DB,
+            user=POSTGRES_USER,
+            password=POSTGRES_PASSWORD,
+            host=POSTGRES_HOST
+        )
+        self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        cur = self.conn.cursor()
+        cur.execute('''
+                CREATE TABLE IF NOT EXISTS
+                {} (
+                    key TEXT UNIQUE,
+                    value BYTEA
+                )
+            '''.format(self.tablename)
+        )
 
     def close(self):
-        self.conn.commit()
         self.conn.close()
 
     def __len__(self):
-        REQUEST = 'SELECT COUNT(*) FROM {}'.format(self.tablename)
-        rows = self.conn.execute(REQUEST).fetchone()[0]
+        cur = self.conn.cursor()
+        cur.execute('SELECT COUNT(*) FROM {}'.format(self.tablename))
+        rows = cur.fetchone()[0]
         return rows if rows is not None else 0
 
     def iterkeys(self):
-        REQUEST = 'SELECT key FROM {}'.format(self.tablename)
-        c = self.conn.cursor()
-        for key in c.execute(REQUEST):
-            yield key[0]
+        cur = self.conn.cursor()
+        cur.execute('SELECT key FROM {}'.format(self.tablename))
+        rows = cur.fetchall()
+        for row in rows:
+            yield row[0]
 
     def itervalues(self):
-        REQUEST = 'SELECT value FROM {}'.format(self.tablename)
-        c = self.conn.cursor()
-        for value in c.execute(REQUEST):
+        cur = self.conn.cursor()
+        cur.execute('SELECT value FROM {}'.format(self.tablename))
+        rows = cur.fetchall()
+        for value in rows:
             yield self.decode(value[0])
 
     def iteritems(self):
-        REQUEST = 'SELECT key, value FROM {}'.format(self.tablename)
-        c = self.conn.cursor()
-        for key, value in c.execute(REQUEST):
-            yield key, self.decode(value)
+        cur = self.conn.cursor()
+        cur.execute('SELECT key, value FROM {}'.format(self.tablename))
+        rows = cur.fetchall()
+        for row in rows:
+            yield row[0], self.decode(row[1])
 
     def keys(self):
         return list(self.iterkeys())
@@ -73,25 +92,35 @@ class SQLDict(dict):
         return list(self.iteritems())
 
     def __contains__(self, key):
-        REQUEST = 'SELECT 1 FROM {} WHERE key = ?'.format(self.tablename)
-        return self.conn.execute(REQUEST, (key,)).fetchone() is not None
+        cur = self.conn.cursor()
+        cur.execute('SELECT 1 FROM {} WHERE key = %s'.format(self.tablename), (key,))
+        return cur.fetchone() is not None
 
     def __getitem__(self, key):
-        REQUEST = 'SELECT value FROM {} WHERE key = ?'.format(self.tablename)
-        item = self.conn.execute(REQUEST, (key,)).fetchone()
+        cur = self.conn.cursor()
+        cur.execute('SELECT value FROM {} WHERE key = %s'.format(self.tablename), (key,))
+        item = cur.fetchone()
         if item is None:
             raise KeyError(key)
         return self.decode(item[0])
 
     def __setitem__(self, key, value):
-        REQUEST = 'REPLACE INTO {} (key, value) VALUES (?,?)'.format(self.tablename)
-        self.conn.execute(REQUEST, (key, self.encode(value)))
+        cur = self.conn.cursor()
+        cur.execute('''
+                INSERT INTO {} (key, value)
+                VALUES (%s,%s)
+                ON CONFLICT (key)
+                DO UPDATE SET
+                value = EXCLUDED.value
+            '''.format(self.tablename),
+            (key, self.encode(value))
+        )
 
     def __delitem__(self, key):
-        REQUEST = 'DELETE FROM {} WHERE key = ?'.format(self.tablename)
+        cur = self.conn.cursor()
         if key not in self:
             raise KeyError(key)
-        self.conn.execute(REQUEST, (key,))
+        cur.execute('DELETE FROM {} WHERE key = %s'.format(self.tablename), (key,))
 
     def __iter__(self):
         return self.iterkeys()

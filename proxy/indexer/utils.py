@@ -181,7 +181,12 @@ POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 
 class LogDB:
     def __init__(self):
-        self.conn = psycopg2.connect(dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASSWORD, host=POSTGRES_HOST)
+        self.conn = psycopg2.connect(
+            dbname=POSTGRES_DB,
+            user=POSTGRES_USER,
+            password=POSTGRES_PASSWORD,
+            host=POSTGRES_HOST
+        )
         cur = self.conn.cursor()
         cur.execute("""CREATE TABLE IF NOT EXISTS
         logs (
@@ -194,7 +199,7 @@ class LogDB:
             transactionLogIndex INT,
 
             json TEXT,
-            UNIQUE(transactionLogIndex, transactionHash, topic) ON CONFLICT IGNORE
+            UNIQUE(transactionLogIndex, transactionHash, topic)
         );""")
         self.conn.commit()
 
@@ -217,7 +222,7 @@ class LogDB:
         if len(rows):
             # logger.debug(rows)
             cur = self.conn.cursor()
-            cur.executemany('INSERT INTO logs VALUES (?, ?, ?, ?,  ?, ?,  ?)', rows)
+            cur.executemany('INSERT INTO logs VALUES (?, ?, ?, ?,  ?, ?,  ?) ON CONFLICT DO NOTHING', rows)
             self.conn.commit()
         else:
             logger.debug("NO LOGS")
