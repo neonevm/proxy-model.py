@@ -31,7 +31,6 @@ rentid = "SysvarRent111111111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
 system = "11111111111111111111111111111111"
 
-JOURNAL_MODE = os.environ.get("JOURNAL_MODE", "DELETE")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -173,20 +172,22 @@ def get_account_list(client, storage_account):
         return None
 
 
-POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
-POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
-POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy")
-POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 
 
 class LogDB:
     def __init__(self):
+        POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
+        POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
+        POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy")
+        POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
+
         self.conn = psycopg2.connect(
             dbname=POSTGRES_DB,
             user=POSTGRES_USER,
             password=POSTGRES_PASSWORD,
             host=POSTGRES_HOST
         )
+
         cur = self.conn.cursor()
         cur.execute("""CREATE TABLE IF NOT EXISTS
         logs (

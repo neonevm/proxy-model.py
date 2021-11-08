@@ -44,7 +44,6 @@ modelInstance = None
 
 chainId = os.environ.get("NEON_CHAIN_ID", "0x6e")    # default value 110
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
-JOURNAL_MODE = os.environ.get("JOURNAL_MODE", "DELETE")
 
 class PermanentAccounts:
     def __init__(self, client, signer, proxy_id):

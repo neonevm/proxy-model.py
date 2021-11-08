@@ -6,7 +6,6 @@ import time
 import logging
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
-# from sqlitedict import SqliteDict
 from typing import Dict, Union
 
 
@@ -21,7 +20,6 @@ except ImportError:
 solana_url = os.environ.get("SOLANA_URL", "https://api.devnet.solana.com")
 evm_loader_id = os.environ.get("EVM_LOADER", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
 PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
-JOURNAL_MODE = os.environ.get("JOURNAL_MODE", "DELETE")
 CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
 
 
