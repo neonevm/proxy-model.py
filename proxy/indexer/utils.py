@@ -19,15 +19,13 @@ from solana.transaction import AccountMeta, Transaction, TransactionInstruction
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from web3.auto.gethdev import w3
+from proxy.environment import solana_url, evm_loader_id, ETH_TOKEN_MINT_ID
 
 try:
     from proxy.plugin.solana_rest_api_tools import TransactionWithComputeBudget
 except ImportError:
     from proxy.plugin.solana_rest_api_tools import TransactionWithComputeBudget
 
-solana_url = os.environ.get("SOLANA_URL", "https://api.devnet.solana.com")
-evm_loader_id = os.environ.get("EVM_LOADER", "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU")
-ETH_TOKEN_MINT_ID = os.environ.get("ETH_TOKEN_MINT", "89dre8rZjLNft7HoupGiyxu3MNftR577ZYu8bHe2kK7g")
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
@@ -308,7 +306,7 @@ class Canceller:
         self.client = Client(solana_url)
 
         self.operator = self.signer.public_key()
-        self.operator_token = get_associated_token_address(PublicKey(self.operator), PublicKey(ETH_TOKEN_MINT_ID))
+        self.operator_token = get_associated_token_address(PublicKey(self.operator), ETH_TOKEN_MINT_ID)
 
 
     def call(self, *args):
@@ -325,7 +323,7 @@ class Canceller:
     def unlock_accounts(self, blocked_storages):
         readonly_accs = [
             PublicKey(evm_loader_id),
-            PublicKey(ETH_TOKEN_MINT_ID),
+            ETH_TOKEN_MINT_ID,
             PublicKey(TOKEN_PROGRAM_ID),
             PublicKey(sysvarclock),
             PublicKey(sysinstruct),
