@@ -25,8 +25,8 @@ from sha3 import keccak_256
 import base58
 import traceback
 import threading
-from .solana_rest_api_tools import EthereumAddress, create_account_with_seed, evm_loader_id, getTokens, \
-    getAccountInfo, solana_cli, call_signed, solana_url, call_emulated, \
+from .solana_rest_api_tools import EthereumAddress, create_account_with_seed, getTokens, \
+    getAccountInfo, call_signed, call_emulated, \
     Trx,  EthereumError, create_collateral_pool_address, getTokenAddr, STORAGE_SIZE, neon_config_load, MINIMAL_GAS_PRICE
 from solana.rpc.commitment import Commitment, Confirmed
 from web3 import Web3
@@ -35,6 +35,7 @@ from ..core.acceptor.pool import proxy_id_glob
 import os
 from ..indexer.utils import get_trx_results, LogDB
 from ..indexer.sql_dict import SQLDict
+from proxy.environment import evm_loader_id, solana_cli, solana_url
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -42,7 +43,6 @@ logger.setLevel(logging.DEBUG)
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-chainId = os.environ.get("NEON_CHAIN_ID", "0x6e")    # default value 110
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 
 class PermanentAccounts:
@@ -107,10 +107,14 @@ class EthereumModel:
         return self.neon_config_dict['web3_clientVersion']
 
     def eth_chainId(self):
-        return chainId
+        neon_config_load(self)
+        # NEON_CHAIN_ID is a string in decimal form
+        return hex(int(self.neon_config_dict['NEON_CHAIN_ID']))
 
     def net_version(self):
-        return str(int(chainId,base=16))
+        neon_config_load(self)
+        # NEON_CHAIN_ID is a string in decimal form
+        return self.neon_config_dict['NEON_CHAIN_ID']
 
     def eth_gasPrice(self):
         return hex(MINIMAL_GAS_PRICE)
