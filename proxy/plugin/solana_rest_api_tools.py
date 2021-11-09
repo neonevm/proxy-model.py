@@ -30,6 +30,7 @@ from spl.token.instructions import get_associated_token_address, create_associat
 from web3.auto import w3
 from proxy.environment import neon_cli, evm_loader_id, ETH_TOKEN_MINT_ID, COLLATERAL_POOL_BASE, read_elf_params
 from .eth_proto import Trx
+from ..core.acceptor.pool import new_acc_id_glob
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -86,6 +87,55 @@ obligatory_accounts = [
     AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
     AccountMeta(pubkey=sysvarclock, is_signer=False, is_writable=False),
 ]
+
+
+class PermanentAccounts:
+    def __init__(self, client, signer):
+        with new_acc_id_glob.get_lock():
+            self.acc_id = new_acc_id_glob.value
+            new_acc_id_glob.value += 1
+
+        logger.debug("LOCK RESOURCES {}".format(self.acc_id))
+        logger.debug("worker id {}".format(self.acc_id))
+
+        self.client = client
+        self.signer = signer
+        self.operator = signer.public_key()
+        self.operator_token = getTokenAddr(self.operator)
+
+        acc_id_bytes = self.acc_id.to_bytes((self.acc_id.bit_length() + 7) // 8, 'big')
+
+        storage_seed = keccak_256(b"storage" + acc_id_bytes).hexdigest()[:32]
+        storage_seed = bytes(storage_seed, 'utf8')
+
+        holder_seed = keccak_256(b"holder" + acc_id_bytes).hexdigest()[:32]
+        holder_seed = bytes(holder_seed, 'utf8')
+
+        accounts = create_multiple_accounts_with_seed(
+            client,
+            funding=signer,
+            base=signer,
+            seeds=[storage_seed, holder_seed],
+            sizes=[STORAGE_SIZE, STORAGE_SIZE])
+        self.storage = accounts[0]
+        self.holder = accounts[1]
+
+        collateral_pool_index = self.acc_id % 10
+        self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+        self.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+
+    def __del__(self):
+        logger.debug("FREE RESOURCES {}".format(self.acc_id))
+
+        acc_id_bytes = self.acc_id.to_bytes((self.acc_id.bit_length() + 7) // 8, 'big')
+
+        storage_seed = keccak_256(b"storage" + acc_id_bytes).hexdigest()[:32]
+        storage_seed = bytes(storage_seed, 'utf8')
+
+        holder_seed = keccak_256(b"holder" + acc_id_bytes).hexdigest()[:32]
+        holder_seed = bytes(holder_seed, 'utf8')
+
+        refund_accounts(self.client, self.signer, [storage_seed, holder_seed])
 
 
 class TransactionInfo:
@@ -207,7 +257,7 @@ def refund_accounts(client, owner, seeds):
 def make_refund_tx(del_key, owner, seed):
     return TransactionInstruction(
         program_id=PublicKey(evm_loader_id),
-        data=bytearray.fromhex("10") + bytes(seed, 'utf8'),
+        data=bytearray.fromhex("10") + bytes(seed),
         keys=[
             AccountMeta(pubkey=del_key, is_signer=False, is_writable=True),
             AccountMeta(pubkey=owner.public_key(), is_signer=True, is_writable=True),
@@ -981,7 +1031,8 @@ def create_account_list_by_emulate(signer, client, ethTrx):
     return (trx_accs, sender_ether, trx)
 
 
-def call_signed(signer, client, ethTrx, perm_accs, steps):
+def call_signed(signer, client, ethTrx, steps):
+    perm_accs = PermanentAccounts(client, signer)
 
     (trx_accs, sender_ether, create_acc_trx) = create_account_list_by_emulate(signer, client, ethTrx)
 
@@ -1065,7 +1116,7 @@ def call_signed_noniterative(signer, client, ethTrx, perm_accs, trx_accs, msg, c
 
 def call_signed_with_holder_acc(signer, client, ethTrx, perm_accs, trx_accs, steps, create_acc_trx):
 
-    write_trx_to_holder_account(signer, client, perm_accs.holder, perm_accs.proxy_id, ethTrx)
+    write_trx_to_holder_account(signer, client, perm_accs.holder, perm_accs.acc_id, ethTrx)
 
     if len(create_acc_trx.instructions):
         precall_txs = Transaction()
@@ -1148,7 +1199,7 @@ def createERC20TokenAccountTrx(signer, token_info):
 
 
 
-def write_trx_to_holder_account(signer, client, holder, proxy_id, ethTrx):
+def write_trx_to_holder_account(signer, client, holder, acc_id, ethTrx):
     msg = ethTrx.signature() + len(ethTrx.unsigned_msg()).to_bytes(8, byteorder="little") + ethTrx.unsigned_msg()
 
     # Write transaction to transaction holder account
@@ -1160,7 +1211,7 @@ def write_trx_to_holder_account(signer, client, holder, proxy_id, ethTrx):
         trx = Transaction()
         # logger.debug("sender_sol %s %s %s", sender_sol, holder, acc.public_key())
         trx.add(TransactionInstruction(program_id=evm_loader_id,
-                                       data=write_holder_layout(proxy_id, offset, part),
+                                       data=write_holder_layout(acc_id, offset, part),
                                        keys=[
                                            AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                                            AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False),

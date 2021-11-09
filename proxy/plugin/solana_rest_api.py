@@ -25,10 +25,8 @@ from sha3 import keccak_256
 import base58
 import traceback
 import threading
-from .solana_rest_api_tools import EthereumAddress, create_account_with_seed, getTokens, \
-    getAccountInfo, call_signed, call_emulated, create_multiple_accounts_with_seed, \
-    Trx,  EthereumError, create_collateral_pool_address, getTokenAddr, STORAGE_SIZE, \
-    neon_config_load, MINIMAL_GAS_PRICE, refund_accounts
+from .solana_rest_api_tools import EthereumAddress, getTokens, getAccountInfo, \
+    call_signed, call_emulated, EthereumError, neon_config_load, MINIMAL_GAS_PRICE
 from solana.rpc.commitment import Commitment, Confirmed
 from web3 import Web3
 import logging
@@ -45,54 +43,6 @@ modelInstanceLock = threading.Lock()
 modelInstance = None
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
-
-class PermanentAccounts:
-    def __init__(self, client, signer):
-        with proxy_id_glob.get_lock():
-            self.proxy_id = proxy_id_glob.value
-            proxy_id_glob.value += 1
-
-        logger.debug("LOCK RESOURCES {}".format(self.proxy_id))
-        logger.debug("worker id {}".format(self.proxy_id))
-
-        self.client = client
-        self.signer = signer
-        self.operator = signer.public_key()
-        self.operator_token = getTokenAddr(self.operator)
-
-        proxy_id_bytes = self.proxy_id.to_bytes((self.proxy_id.bit_length() + 7) // 8, 'big')
-
-        storage_seed = keccak_256(b"storage" + proxy_id_bytes).hexdigest()[:32]
-        storage_seed = bytes(storage_seed, 'utf8')
-
-        holder_seed = keccak_256(b"holder" + proxy_id_bytes).hexdigest()[:32]
-        holder_seed = bytes(holder_seed, 'utf8')
-
-        accounts = create_multiple_accounts_with_seed(
-            client,
-            funding=signer,
-            base=signer,
-            seeds=[storage_seed, holder_seed],
-            sizes=[STORAGE_SIZE, STORAGE_SIZE])
-        self.storage = accounts[0]
-        self.holder = accounts[1]
-
-        collateral_pool_index = self.proxy_id % 10
-        self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
-        self.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
-
-    def __del__(self):
-        logger.debug("FREE RESOURCES {}".format(self.proxy_id))
-
-        proxy_id_bytes = self.proxy_id.to_bytes((self.proxy_id.bit_length() + 7) // 8, 'big')
-
-        storage_seed = keccak_256(b"storage" + proxy_id_bytes).hexdigest()[:32]
-        storage_seed = bytes(storage_seed, 'utf8')
-
-        holder_seed = keccak_256(b"holder" + proxy_id_bytes).hexdigest()[:32]
-        holder_seed = bytes(holder_seed, 'utf8')
-
-        refund_accounts(self.client, self.signer, [storage_seed, holder_seed])
 
 class EthereumModel:
     def __init__(self):
@@ -121,8 +71,11 @@ class EthereumModel:
         self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
 
+        with proxy_id_glob.get_lock():
+            self.proxy_id = proxy_id_glob.value
+            proxy_id_glob.value += 1
+        logger.debug("worker id {}".format(self.proxy_id))
 
-        # self.perm_accs = PermanentAccounts(self.client, self.signer, self.proxy_id)
         neon_config_load(self)
         pass
 
@@ -439,8 +392,7 @@ class EthereumModel:
                                     ]
                                 })
         try:
-            perm_accs = PermanentAccounts(self.client, self.signer)
-            signature = call_signed(self.signer, self.client, trx, perm_accs, steps=250)
+            signature = call_signed(self.signer, self.client, trx, steps=250)
 
             logger.debug('Transaction signature: %s %s', signature, eth_signature)
 
