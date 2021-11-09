@@ -32,7 +32,7 @@ from .solana_rest_api_tools import EthereumAddress, create_account_with_seed, ge
 from solana.rpc.commitment import Commitment, Confirmed
 from web3 import Web3
 import logging
-from ..core.acceptor.pool import proxy_id_glob, proxy_used_id_glob
+from ..core.acceptor.pool import proxy_id_glob
 import os
 from ..indexer.utils import get_trx_results, LogDB
 from sqlitedict import SqliteDict
@@ -48,14 +48,12 @@ EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 
 class PermanentAccounts:
     def __init__(self, client, signer):
-        with proxy_used_id_glob.get_lock():
-            for index in range(len(proxy_used_id_glob)):
-                if proxy_used_id_glob[index] == 0:
-                    proxy_used_id_glob[index] = 1
-                    self.proxy_id = index
-                    break
+        with proxy_id_glob.get_lock():
+            self.proxy_id = proxy_id_glob.value
+            proxy_id_glob.value += 1
 
         logger.debug("LOCK RESOURCES {}".format(self.proxy_id))
+        logger.debug("worker id {}".format(self.proxy_id))
 
         self.client = client
         self.signer = signer
@@ -86,21 +84,15 @@ class PermanentAccounts:
     def __del__(self):
         logger.debug("FREE RESOURCES {}".format(self.proxy_id))
 
-        with proxy_used_id_glob.get_lock():
-            if proxy_used_id_glob[self.proxy_id] == 1:
-                proxy_used_id_glob[self.proxy_id] = 0
+        proxy_id_bytes = self.proxy_id.to_bytes((self.proxy_id.bit_length() + 7) // 8, 'big')
 
-                proxy_id_bytes = self.proxy_id.to_bytes((self.proxy_id.bit_length() + 7) // 8, 'big')
+        storage_seed = keccak_256(b"storage" + proxy_id_bytes).hexdigest()[:32]
+        storage_seed = bytes(storage_seed, 'utf8')
 
-                storage_seed = keccak_256(b"storage" + proxy_id_bytes).hexdigest()[:32]
-                storage_seed = bytes(storage_seed, 'utf8')
+        holder_seed = keccak_256(b"holder" + proxy_id_bytes).hexdigest()[:32]
+        holder_seed = bytes(holder_seed, 'utf8')
 
-                holder_seed = keccak_256(b"holder" + proxy_id_bytes).hexdigest()[:32]
-                holder_seed = bytes(holder_seed, 'utf8')
-
-                refund_accounts(self.client, self.signer, [storage_seed, holder_seed])
-            else:
-                raise Exception("Proxy resource id ({}) is locked.".format(self.proxy_id))
+        refund_accounts(self.client, self.signer, [storage_seed, holder_seed])
 
 class EthereumModel:
     def __init__(self):
@@ -129,10 +121,6 @@ class EthereumModel:
         self.eth_sol_trx = SqliteDict(filename="local.db", tablename="ethereum_solana_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
         self.sol_eth_trx = SqliteDict(filename="local.db", tablename="solana_ethereum_transactions", autocommit=True, encode=json.dumps, decode=json.loads)
 
-        with proxy_id_glob.get_lock():
-            self.proxy_id = proxy_id_glob.value
-            proxy_id_glob.value += 1
-        logger.debug("worker id {}".format(self.proxy_id))
 
         # self.perm_accs = PermanentAccounts(self.client, self.signer, self.proxy_id)
         neon_config_load(self)
