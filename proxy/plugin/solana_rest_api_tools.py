@@ -173,6 +173,47 @@ def create_account_with_seed(client, funding, base, seed, storage_size):
     return account
 
 
+def create_multiple_accounts_with_seed(client, funding, base, seeds, sizes):
+    accounts = []
+    trx = Transaction()
+
+    for seed, storage_size in zip(seeds, sizes):
+        account = accountWithSeed(base.public_key(), seed, PublicKey(evm_loader_id))
+        accounts.append(account)
+
+        if client.get_balance(account, commitment=Confirmed)['result']['value'] == 0:
+            minimum_balance = client.get_minimum_balance_for_rent_exemption(storage_size, commitment=Confirmed)["result"]
+            logger.debug("Minimum balance required for account {}".format(minimum_balance))
+
+            trx.add(createAccountWithSeedTrx(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
+
+    if len(trx.instructions) > 0:
+        send_transaction(client, trx, funding)
+
+    return accounts
+
+
+def refund_accounts(client, owner, seeds):
+    trx = Transaction()
+    for seed in seeds:
+        account = accountWithSeed(owner.public_key(), seed, PublicKey(evm_loader_id))
+        if client.get_balance(account, commitment=Confirmed)['result']['value'] != 0:
+            trx.add(make_refund_tx(account, owner, seed))
+
+    if len(trx.instructions) > 0:
+        send_transaction(client, trx, owner)
+
+
+def make_refund_tx(del_key, owner, seed):
+    return TransactionInstruction(
+        program_id=PublicKey(evm_loader_id),
+        data=bytearray.fromhex("10") + bytes(seed, 'utf8'),
+        keys=[
+            AccountMeta(pubkey=del_key, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=owner.public_key(), is_signer=True, is_writable=True),
+        ])
+
+
 def make_keccak_instruction_data(check_instruction_index, msg_len, data_start):
     if check_instruction_index > 255 and check_instruction_index < 0:
         raise Exception("Invalid index for instruction - {}".format(check_instruction_index))

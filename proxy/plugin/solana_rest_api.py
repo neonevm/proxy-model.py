@@ -26,8 +26,9 @@ import base58
 import traceback
 import threading
 from .solana_rest_api_tools import EthereumAddress, create_account_with_seed, getTokens, \
-    getAccountInfo, call_signed, call_emulated, \
-    Trx,  EthereumError, create_collateral_pool_address, getTokenAddr, STORAGE_SIZE, neon_config_load, MINIMAL_GAS_PRICE
+    getAccountInfo, call_signed, call_emulated, create_multiple_accounts_with_seed, \
+    Trx,  EthereumError, create_collateral_pool_address, getTokenAddr, STORAGE_SIZE, \
+    neon_config_load, MINIMAL_GAS_PRICE, refund_accounts
 from solana.rpc.commitment import Commitment, Confirmed
 from web3 import Web3
 import logging
@@ -56,6 +57,8 @@ class PermanentAccounts:
 
         logger.debug("LOCK RESOURCES {}".format(self.proxy_id))
 
+        self.client = client
+        self.signer = signer
         self.operator = signer.public_key()
         self.operator_token = getTokenAddr(self.operator)
 
@@ -63,11 +66,18 @@ class PermanentAccounts:
 
         storage_seed = keccak_256(b"storage" + proxy_id_bytes).hexdigest()[:32]
         storage_seed = bytes(storage_seed, 'utf8')
-        self.storage = create_account_with_seed(client, funding=signer, base=signer, seed=storage_seed, storage_size=STORAGE_SIZE)
 
         holder_seed = keccak_256(b"holder" + proxy_id_bytes).hexdigest()[:32]
         holder_seed = bytes(holder_seed, 'utf8')
-        self.holder = create_account_with_seed(client, funding=signer, base=signer, seed=holder_seed, storage_size=STORAGE_SIZE)
+
+        accounts = create_multiple_accounts_with_seed(
+            client,
+            funding=signer,
+            base=signer,
+            seeds=[storage_seed, holder_seed],
+            sizes=[STORAGE_SIZE, STORAGE_SIZE])
+        self.storage = accounts[0]
+        self.holder = accounts[1]
 
         collateral_pool_index = self.proxy_id % 10
         self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
@@ -79,6 +89,16 @@ class PermanentAccounts:
         with proxy_used_id_glob.get_lock():
             if proxy_used_id_glob[self.proxy_id] == 1:
                 proxy_used_id_glob[self.proxy_id] = 0
+
+                proxy_id_bytes = self.proxy_id.to_bytes((self.proxy_id.bit_length() + 7) // 8, 'big')
+
+                storage_seed = keccak_256(b"storage" + proxy_id_bytes).hexdigest()[:32]
+                storage_seed = bytes(storage_seed, 'utf8')
+
+                holder_seed = keccak_256(b"holder" + proxy_id_bytes).hexdigest()[:32]
+                holder_seed = bytes(holder_seed, 'utf8')
+
+                refund_accounts(self.client, self.signer, [storage_seed, holder_seed])
             else:
                 raise Exception("Proxy resource id ({}) is locked.".format(self.proxy_id))
 
