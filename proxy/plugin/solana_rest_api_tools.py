@@ -838,17 +838,6 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
                     used_gas = base58.b58decode(event['data'])[2:10]
                     used_gas = int().from_bytes(used_gas, "little")
 
-    logger.debug("COST %s %d %d %s %s %s %s %s",
-                 hash,
-                 cost,
-                 used_gas if used_gas else 0,
-                 sender,
-                 to_address,
-                 sig,
-                 "extra" if extra_sol_trx else "ok",
-                 reason if reason else "None",
-                 )
-
     operator_cost[hash] = {
         'cost': cost,
         'used_gas': used_gas if used_gas else 0,
