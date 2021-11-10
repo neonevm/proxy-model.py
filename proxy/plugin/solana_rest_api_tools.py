@@ -490,7 +490,7 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps, eth_trx):
             if result['result']['meta']['err']:
                 instruction_error =  result['result']['meta']['err']['InstructionError']
                 err = instruction_error[1]
-                if isinstance(err, dict)  and err['Custom'] == 1:
+                if isinstance(err, dict)  and err.get('Custom', 0) == 1:
                     extra_sol_trx = True
             update_transaction_cost(result, eth_trx, extra_sol_trx=extra_sol_trx, reason='ContinueV02')
             get_measurements(result)
@@ -533,7 +533,7 @@ def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg, e
             if result['result']['meta']['err']:
                 instruction_error =  result['result']['meta']['err']['InstructionError']
                 err = instruction_error[1]
-                if isinstance(err, dict) and err['Custom'] == 1:
+                if isinstance(err, dict) and err.get('Custom', 0) == 1:
                     extra_sol_trx = True
 
             update_transaction_cost(result, eth_trx, extra_sol_trx=extra_sol_trx, reason='PartialCallOrContinueFromRawEthereumTX')
