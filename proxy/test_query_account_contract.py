@@ -20,7 +20,7 @@ QUERY_ACCOUNT_INTERFACE_SOURCE = '''
 pragma solidity >=0.7.0;
 
 interface IQueryAccount {
-    function metadata(address to) external returns (bool);
+    function metadata(address to) external returns (bytes memory);
 }
 '''
 
@@ -51,15 +51,15 @@ class Test_Query_Account_Contract(unittest.TestCase):
         cls.deploy_contract(cls)
 
     def deploy_contract(self):
-        compiled_interface = compile_source(QUERY_ACCOUNT_INTERFACE_SOURCE)
-        interface_id, interface = compiled_interface.popitem()
+        compiled = compile_source(QUERY_ACCOUNT_INTERFACE_SOURCE)
+        id, interface = compiled.popitem()
         self.interface = interface
 
-        compiled_wrapper = compile_source(QUERY_ACCOUNT_CONTRACT_SOURCE)
-        wrapper_id, wrapper_interface = compiled_wrapper.popitem()
-        self.wrapper = wrapper_interface
+        compiled = compile_source(QUERY_ACCOUNT_CONTRACT_SOURCE)
+        id, interface = compiled.popitem()
+        self.contract = interface
         
-        contract = proxy.eth.contract(abi=self.wrapper['abi'], bytecode=wrapper_interface['bin'])
+        contract = proxy.eth.contract(abi=self.contract['abi'], bytecode=self.contract['bin'])
         nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         tx = {'nonce': nonce}
         tx_constructor = contract.constructor().buildTransaction(tx)
