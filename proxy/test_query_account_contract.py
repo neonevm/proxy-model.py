@@ -21,8 +21,7 @@ QUERY_ACCOUNT_INTERFACE_SOURCE = '''
 pragma solidity >=0.7.0;
 
 interface IQueryAccount {
-    function metadata(bytes32 solana_address) external view returns (bytes1[] memory);
-    function data(bytes32 solana_address, string memory key) external view returns (bytes1[] memory);
+    function metadata() external returns (bool);
 }
 '''
 
@@ -31,8 +30,14 @@ QUERY_ACCOUNT_CONTRACT_SOURCE = '''
 
 pragma solidity >=0.7.0;
 
+interface IQueryAccount {
+    function metadata() external returns (bool);
+}
+
 contract QueryAccount {
     address constant NeonQueryAccount = 0xff00000000000000000000000000000000000002;
+
+    constructor() {}
 
     fallback() external {
         bytes memory call_data = abi.encodePacked(msg.data);
@@ -82,9 +87,8 @@ class Test_Query_Account_Contract(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_query_metadata(self):
         print('\nABI:', self.interface['abi'])
-        print('\nCode:', proxy.eth.get_code(self.contract_address))
         query = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
-        meta = query.functions.metadata(bytes('XXX', 'utf-8')).call()
+        meta = query.functions.metadata().call()
         print('==== meta:', meta)
 
 if __name__ == '__main__':
