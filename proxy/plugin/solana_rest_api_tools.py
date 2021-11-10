@@ -30,6 +30,7 @@ from spl.token.instructions import get_associated_token_address, create_associat
 from web3.auto import w3
 from proxy.environment import neon_cli, evm_loader_id, ETH_TOKEN_MINT_ID, COLLATERAL_POOL_BASE, read_elf_params
 from .eth_proto import Trx
+from ..indexer.sql_dict import SQLDict
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -53,6 +54,8 @@ incinerator = "1nc1nerator11111111111111111111111111111111"
 system = "11111111111111111111111111111111"
 
 STORAGE_SIZE = 128*1024
+
+operator_cost = SQLDict(tablename="operator_cost")
 
 ACCOUNT_INFO_LAYOUT = cStruct(
     "type" / Int8ul,
@@ -846,6 +849,15 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
                  reason if reason else "None",
                  )
 
+    operator_cost[hash] = {
+        'cost': cost,
+        'used_gas': used_gas if used_gas else 0,
+        'sender': sender,
+        'to_address': to_address,
+        'sig': sig,
+        'status': 'extra' if extra_sol_trx else 'ok',
+        'reason':  reason if reason else ''
+    }
 
 def create_account_list_by_emulate(signer, client, eth_trx):
 
