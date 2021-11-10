@@ -17,27 +17,19 @@ proxy.eth.default_account = admin.address
 
 QUERY_ACCOUNT_INTERFACE_SOURCE = '''
 // SPDX-License-Identifier: MIT
-
 pragma solidity >=0.7.0;
 
 interface IQueryAccount {
-    function metadata() external returns (bool);
+    function metadata(address to) external returns (bool);
 }
 '''
 
 QUERY_ACCOUNT_CONTRACT_SOURCE = '''
 // SPDX-License-Identifier: MIT
-
 pragma solidity >=0.7.0;
-
-interface IQueryAccount {
-    function metadata() external returns (bool);
-}
 
 contract QueryAccount {
     address constant NeonQueryAccount = 0xff00000000000000000000000000000000000002;
-
-    constructor() {}
 
     fallback() external {
         bytes memory call_data = abi.encodePacked(msg.data);
@@ -56,40 +48,36 @@ class Test_Query_Account_Contract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print('\n\n' + issue)
-        cls.compile_contract(cls)
-        cls.contract_address = cls.deploy_contract(cls, "QueryAccount")
-        print('QueryAccount:', cls.contract_address)
+        cls.deploy_contract(cls)
 
-    def compile_contract(self):
-        print('Compiling QueryAccount contract...')
+    def deploy_contract(self):
         compiled_interface = compile_source(QUERY_ACCOUNT_INTERFACE_SOURCE)
-        id, interface = compiled_interface.popitem()
+        interface_id, interface = compiled_interface.popitem()
         self.interface = interface
-        compiled_contract = compile_source(QUERY_ACCOUNT_CONTRACT_SOURCE)
-        id, interface = compiled_contract.popitem()
-        self.contract = interface
 
-    def deploy_contract(self, name):
-        print('Deploying QueryAccount contract...')
-        contract = proxy.eth.contract(abi=self.contract['abi'], bytecode=self.contract['bin'])
+        compiled_wrapper = compile_source(QUERY_ACCOUNT_CONTRACT_SOURCE)
+        wrapper_id, wrapper_interface = compiled_wrapper.popitem()
+        self.wrapper = wrapper_interface
+        
+        contract = proxy.eth.contract(abi=self.wrapper['abi'], bytecode=wrapper_interface['bin'])
         nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         tx = {'nonce': nonce}
         tx_constructor = contract.constructor().buildTransaction(tx)
-        print('tx_constructor:', tx_constructor)
         tx_deploy = proxy.eth.account.sign_transaction(tx_constructor, admin.key)
-        print('tx_deploy:', tx_deploy)
         tx_deploy_hash = proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
-        print('tx_deploy_hash:', tx_deploy_hash)
         tx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
-        print('tx_deploy_receipt:', tx_deploy_receipt)
-        return tx_deploy_receipt.contractAddress
+        self.contract_address = tx_deploy_receipt.contractAddress
 
     # @unittest.skip("a.i.")
     def test_query_metadata(self):
-        print('\nABI:', self.interface['abi'])
-        query = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
-        meta = query.functions.metadata().call()
-        print('==== meta:', meta)
+        contract = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
+        tx = {'nonce': nonce}
+        tx = contract.functions.metadata(user.address).buildTransaction(tx)
+        tx = proxy.eth.account.sign_transaction(tx, admin.key)
+        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
+        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+        self.assertIsNotNone(tx_receipt)
 
 if __name__ == '__main__':
     unittest.main()
