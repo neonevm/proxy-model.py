@@ -5,7 +5,7 @@ from solcx import compile_source
 from solcx import install_solc
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
-from .solana_utils import *
+from solana_utils import *
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
