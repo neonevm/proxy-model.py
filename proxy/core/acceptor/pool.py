@@ -28,6 +28,8 @@ LOCK = multiprocessing.Lock()
 
 proxy_id_glob = multiprocessing.Value('i', 0)
 new_acc_id_glob = multiprocessing.Value('i', 0)
+manager = multiprocessing.Manager()
+acc_list_glob = manager.list()
 
 
 class AcceptorPool:
