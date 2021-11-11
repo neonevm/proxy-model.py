@@ -58,7 +58,7 @@ export PROXY_URL=http://127.0.0.1:9090/solana
 
 echo "Wait proxy..." && wait-for-proxy "$PROXY_URL"
 
-export EVM_LOADER=$(docker exec proxy bash -c "cat evm_loader_id" | sed '/Program Id: \([0-9A-Za-z]\+\)/,${s//\1/;b};s/^.*$//;$q1')
+export EVM_LOADER=$(docker exec proxy bash -c "cat /var/deployment_data/evm_loader_id" | sed '/Program Id: \([0-9A-Za-z]\+\)/,${s//\1/;b};s/^.*$//;$q1')
 export SOLANA_URL=$(docker exec solana bash -c 'echo "$SOLANA_URL"')
 
 echo "EVM_LOADER" $EVM_LOADER
