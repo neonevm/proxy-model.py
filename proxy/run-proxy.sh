@@ -6,8 +6,6 @@ date
 
 if [ "$CONFIG" == "ci" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="http://solana:8899"
-  [[ -z "$EVM_LOADER"                   ]] && export EVM_LOADER=$(cat /var/deployment_data/evm_loader_id | \
-                                                                  sed '/Program Id: \([0-9A-Za-z]\+\)/,${s//\1/;b};s/^.*$//;$q1')
   [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=100000
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="0.5"
   [[ -z "$USE_COMBINED_START_CONTINUE"  ]] && export USE_COMBINED_START_CONTINUE="YES"

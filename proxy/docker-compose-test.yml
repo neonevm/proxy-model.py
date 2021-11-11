@@ -52,6 +52,7 @@ services:
     container_name: proxy
     image: neonlabsorg/proxy:${REVISION}
     environment:
+      SOLANA_URL: http://solana:8899
       POSTGRES_DB: neon-db
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
@@ -69,9 +70,7 @@ services:
       - net
     volumes:
       - deployment_data:/var/deployment_data
-    entrypoint: >
-      bash -c "proxy/prepare-test.sh
-      && proxy/run-proxy.sh"
+    entrypoint: proxy/run-test-proxy.sh
 
 networks:
   net:
