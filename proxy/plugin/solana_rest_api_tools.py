@@ -135,7 +135,7 @@ class PermanentAccounts:
 
 class TransactionInfo:
     def __init__(self, caller_token, eth_accounts, eth_trx):
-        self.ethTrx = eth_trx
+        self.eth_trx = eth_trx
 
         self.caller_token = caller_token
         self.eth_accounts = eth_accounts
