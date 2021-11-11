@@ -55,8 +55,6 @@ system = "11111111111111111111111111111111"
 
 STORAGE_SIZE = 128*1024
 
-operator_cost = SQLDict(tablename="operator_cost")
-
 ACCOUNT_INFO_LAYOUT = cStruct(
     "type" / Int8ul,
     "ether" / Bytes(20),
@@ -809,6 +807,14 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
     return (continue_count, step_count)
 
 
+class cost_singleton(object):
+    def __new__(cls):
+        if not hasattr(cls, 'instance'):
+            cls.instance = super(cost_singleton, cls).__new__(cls)
+            cls.instance.operator_cost = SQLDict(tablename="operator_cost")
+        return cls.instance
+
+
 def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
     cost = receipt['result']['meta']['preBalances'][0] - receipt['result']['meta']['postBalances'][0]
     if eth_trx:
@@ -838,7 +844,8 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
                     used_gas = base58.b58decode(event['data'])[2:10]
                     used_gas = int().from_bytes(used_gas, "little")
 
-    operator_cost[hash] = {
+    table = cost_singleton()
+    table.operator_cost[hash] = {
         'cost': cost,
         'used_gas': used_gas if used_gas else 0,
         'sender': sender,
