@@ -28,11 +28,11 @@ services:
     networks:
       - net
     command: >
-      wait-for-solana.sh 20
-      && create-test-accounts.sh 1
-      && deploy-evm.sh
-      && cp evm_loader_id /var/deployment_data/
-      && cp evm_loader-keypair.json /var/deployment_data/
+       bash -c "wait-for-solana.sh 30
+       && create-test-accounts.sh 1
+       && deploy-evm.sh
+       && cp evm_loader_id /var/deployment_data/
+       && cp evm_loader-keypair.json /var/deployment_data/"
 
   postgres:
     container_name: postgres
@@ -70,8 +70,8 @@ services:
     volumes:
       - deployment_data:/var/deployment_data
     command: >
-      prepare-test.sh
-      && run-proxy.sh
+      bash -c "prepare-test.sh
+      && run-proxy.sh"
 
 networks:
   net:
