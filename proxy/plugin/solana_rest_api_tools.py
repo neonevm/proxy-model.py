@@ -55,7 +55,7 @@ system = "11111111111111111111111111111111"
 
 STORAGE_SIZE = 128*1024
 
-# operator_cost = SQLDict(tablename="operator_cost")
+operator_cost = SQLDict(tablename="operator_cost")
 
 ACCOUNT_INFO_LAYOUT = cStruct(
     "type" / Int8ul,
@@ -838,15 +838,15 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
                     used_gas = base58.b58decode(event['data'])[2:10]
                     used_gas = int().from_bytes(used_gas, "little")
 
-    # operator_cost[hash] = {
-    #     'cost': cost,
-    #     'used_gas': used_gas if used_gas else 0,
-    #     'sender': sender,
-    #     'to_address': to_address,
-    #     'sig': sig,
-    #     'status': 'extra' if extra_sol_trx else 'ok',
-    #     'reason':  reason if reason else ''
-    # }
+    operator_cost[hash] = {
+        'cost': cost,
+        'used_gas': used_gas if used_gas else 0,
+        'sender': sender,
+        'to_address': to_address,
+        'sig': sig,
+        'status': 'extra' if extra_sol_trx else 'ok',
+        'reason':  reason if reason else ''
+    }
 
 def create_account_list_by_emulate(signer, client, eth_trx):
 
