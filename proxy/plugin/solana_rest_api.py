@@ -466,7 +466,6 @@ class EthereumModel:
 
         except solana.rpc.api.SendTransactionError as err:
             logger.debug("eth_sendRawTransaction solana.rpc.api.SendTransactionError:%s", err.result)
-            self._log_transaction_error(err)
             raise
         except EthereumError as err:
             logger.debug("eth_sendRawTransaction EthereumError:%s", err)
@@ -474,12 +473,6 @@ class EthereumModel:
         except Exception as err:
             logger.debug("eth_sendRawTransaction type(err):%s, Exception:%s", type(err), err)
             raise
-
-    def _log_transaction_error(self, error: solana.rpc.api.SendTransactionError, logger):
-        logs = error.result.get("data", {}).get("logs", [])
-        error.result.get("data", {}).update({"logs": ["\n\t" + log for log in logs]})
-        log_msg = str(error.result).replace("\\n\\t", "\n\t")
-        logger.debug(f"Got SendTransactionError: {log_msg}")
 
 class JsonEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -589,7 +582,6 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             response['result'] = method(*request['params'])
         except solana.rpc.api.SendTransactionError as err:
             traceback.print_exc()
-            self._log_transaction_error(err, logger)
             response['error'] = err.result
         except EthereumError as err:
             traceback.print_exc()
@@ -599,12 +591,6 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             response['error'] = {'code': -32000, 'message': str(err)}
 
         return response
-
-    def _log_transaction_error(self, error: solana.rpc.api.SendTransactionError, logger):
-        logs = error.result.get("data", {}).get("logs", [])
-        error.result.get("data", {}).update({"logs": ["\n\t" + log for log in logs]})
-        log_msg = str(error.result).replace("\\n\\t", "\n\t")
-        logger.debug(f"Got SendTransactionError: {log_msg}")
 
     def handle_request(self, request: HttpParser) -> None:
         if request.method == b'OPTIONS':
