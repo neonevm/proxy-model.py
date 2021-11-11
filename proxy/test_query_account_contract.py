@@ -20,7 +20,7 @@ QUERY_ACCOUNT_INTERFACE_SOURCE = '''
 pragma solidity >=0.7.0;
 
 interface IQueryAccount {
-    function metadata(address to) external returns (bytes memory);
+    function metadata(address to) external returns (bool);
 }
 '''
 
@@ -48,6 +48,7 @@ class Test_Query_Account_Contract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print('\n\n' + issue)
+        print('user address:', user.address)
         cls.deploy_contract(cls)
 
     def deploy_contract(self):
