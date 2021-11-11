@@ -493,7 +493,7 @@ def call_continue_bucked(signer, client, perm_accs, trx_accs, steps, eth_trx):
             if result['result']['meta']['err']:
                 instruction_error =  result['result']['meta']['err']['InstructionError']
                 err = instruction_error[1]
-                if isinstance(err, dict)  and err['Custom'] == 1:
+                if isinstance(err, dict)  and err.get('Custom', 0) == 1:
                     extra_sol_trx = True
             update_transaction_cost(result, eth_trx, extra_sol_trx=extra_sol_trx, reason='ContinueV02')
             get_measurements(result)
@@ -536,7 +536,7 @@ def call_continue_bucked_0x0d(signer, client, perm_accs, trx_accs, steps, msg, e
             if result['result']['meta']['err']:
                 instruction_error =  result['result']['meta']['err']['InstructionError']
                 err = instruction_error[1]
-                if isinstance(err, dict) and err['Custom'] == 1:
+                if isinstance(err, dict) and err.get('Custom', 0) == 1:
                     extra_sol_trx = True
 
             update_transaction_cost(result, eth_trx, extra_sol_trx=extra_sol_trx, reason='PartialCallOrContinueFromRawEthereumTX')
@@ -972,7 +972,7 @@ def create_account_list_by_emulate(signer, client, eth_trx):
         elif address == sender_ether:
             sender_sol = PublicKey(acc_desc["account"])
         else:
-            add_keys_05.append(AccountMeta(pubkey=acc_desc["account"], is_signer=False, is_writable=(True if acc_desc["contract"] else acc_desc["writable"])))
+            add_keys_05.append(AccountMeta(pubkey=acc_desc["account"], is_signer=False, is_writable=True))
             token_account = get_associated_token_address(PublicKey(acc_desc["account"]), ETH_TOKEN_MINT_ID)
             add_keys_05.append(AccountMeta(pubkey=token_account, is_signer=False, is_writable=True))
             if acc_desc["new"]:
