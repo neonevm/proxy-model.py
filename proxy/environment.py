@@ -49,10 +49,15 @@ def read_elf_params(out_dict):
             path = line[len(substr):].strip()
     if path == "":
         raise Exception("cannot program dump for ", evm_loader_id)
+
+    transforms = {"NEON_CHAIN_ID": lambda x: int(x, 16)}
     for param in neon_cli().call("neon-elf-params", path).splitlines():
         if param.startswith('NEON_') and '=' in param:
             v = param.split('=')
-            out_dict[v[0]] = v[1]
+            transform = transforms.get(v[0], False)
+            out_dict[v[0]] = transform(v[1]) if transform else v[1]
+
+
 
 ELF_PARAMS = {}
 read_elf_params(ELF_PARAMS)
