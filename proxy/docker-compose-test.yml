@@ -1,4 +1,4 @@
-version: "2.1"
+version: "3"
 
 services:
   solana:
@@ -16,6 +16,23 @@ services:
       - "8001-8009/udp"
     networks:
       - net
+
+  evm_loader:
+    container_name: evm_loader
+    image: neonlabsorg/evm_loader:${EVM_LOADER_REVISION:-latest}
+    environment:
+      - SOLANA_URL=http://solana:8899
+      - CONFIG=ci
+    volumes:
+      - deployment_data:/var/deployment_data
+    networks:
+      - net
+    command: >
+      wait-for-solana.sh 20
+      && create-test-accounts.sh 1
+      && deploy-evm.sh
+      && cp evm_loader_id /var/deployment_data/
+      && cp evm_loader-keypair.json /var/deployment_data/
 
   postgres:
     container_name: postgres
@@ -38,14 +55,28 @@ services:
       POSTGRES_DB: neon-db
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
+      NEW_USER_AIRDROP_AMOUNT: 100
       CONFIG: ci
     hostname: proxy
+    depends_on:
+      evm_loader:
+        condition: service_completed_successfully
     ports:
       - 127.0.0.1:9090:9090
     expose:
       - "9090"
     networks:
       - net
+    volumes:
+      - deployment_data:/var/deployment_data
+    command: >
+      prepare-test.sh
+      && run-proxy.sh
 
 networks:
   net:
+
+volumes:
+  # provides data interchange between evm_loader and proxy
+  deployment_data:
+

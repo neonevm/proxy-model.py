@@ -40,6 +40,7 @@ docker-compose -f proxy/docker-compose-test.yml up -d
 function cleanup_docker {
     docker logs proxy >proxy.log 2>&1
     docker logs solana >solana.log 2>&1
+    docker logs evm_loader >evm_loader.log 2>&1
     grep 'get_measurements' <proxy.log >measurements.log
     echo "Cleanup docker-compose..."
     docker-compose -f proxy/docker-compose-test.yml down --rmi 'all'
