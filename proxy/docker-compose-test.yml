@@ -28,7 +28,7 @@ services:
     networks:
       - net
     command: >
-       bash -c "wait-for-solana.sh 30
+       bash -c "wait-for-solana.sh 50
        && create-test-accounts.sh 1
        && deploy-evm.sh
        && cp evm_loader_id /var/deployment_data/
@@ -69,9 +69,9 @@ services:
       - net
     volumes:
       - deployment_data:/var/deployment_data
-    command: >
-      bash -c "prepare-test.sh
-      && run-proxy.sh"
+    entrypoint: >
+      bash -c "proxy/prepare-test.sh
+      && proxy/run-proxy.sh"
 
 networks:
   net:
