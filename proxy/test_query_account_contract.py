@@ -20,7 +20,7 @@ QUERY_ACCOUNT_INTERFACE_SOURCE = '''
 pragma solidity >=0.7.0;
 
 interface IQueryAccount {
-    function metadata(address to) external returns (bool);
+    function metadata(uint256 solana_address) external view returns (bytes memory);
 }
 '''
 
@@ -35,10 +35,10 @@ contract QueryAccount {
         bytes memory call_data = abi.encodePacked(msg.data);
         (bool success, bytes memory result) = NeonQueryAccount.delegatecall(call_data);
 
-        require(success, string(result));
+        require(success);
 
         assembly {
-            return(add(result, 0x20), mload(result))
+            return(add(result, 0x20), 64)
         }
     }
 }
@@ -71,14 +71,12 @@ class Test_Query_Account_Contract(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_query_metadata(self):
-        contract = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
-        nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        tx = {'nonce': nonce}
-        tx = contract.functions.metadata(user.address).buildTransaction(tx)
-        tx = proxy.eth.account.sign_transaction(tx, admin.key)
-        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
-        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
-        self.assertIsNotNone(tx_receipt)
+        query = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        solana_address = 255
+        r = query.functions.metadata(solana_address).call()
+        print('\ntype(r):', type(r))
+        print('\len(r):', len(r))
+        print('r:', r.decode('ascii'))
 
 if __name__ == '__main__':
     unittest.main()
