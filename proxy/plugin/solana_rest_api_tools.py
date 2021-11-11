@@ -807,10 +807,10 @@ def simulate_continue(signer, client, perm_accs, trx_accs, step_count):
     return (continue_count, step_count)
 
 
-class cost_singleton(object):
+class CostSingleton(object):
     def __new__(cls):
         if not hasattr(cls, 'instance'):
-            cls.instance = super(cost_singleton, cls).__new__(cls)
+            cls.instance = super(CostSingleton, cls).__new__(cls)
             cls.instance.operator_cost = SQLDict(tablename="operator_cost")
         return cls.instance
 
@@ -844,7 +844,7 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
                     used_gas = base58.b58decode(event['data'])[2:10]
                     used_gas = int().from_bytes(used_gas, "little")
 
-    table = cost_singleton()
+    table = CostSingleton()
     table.operator_cost[hash] = {
         'cost': cost,
         'used_gas': used_gas if used_gas else 0,
