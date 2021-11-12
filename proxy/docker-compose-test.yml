@@ -68,6 +68,8 @@ services:
       - "9090"
     networks:
       - net
+    depends_on:
+      - postgres
     volumes:
       - deployment_data:/var/deployment_data
     entrypoint: proxy/run-test-proxy.sh
