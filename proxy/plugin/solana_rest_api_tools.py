@@ -49,6 +49,8 @@ ACCOUNT_SEED_VERSION=b'\1'
 
 COLLATERALL_POOL_MAX=10
 
+EMPTY_STORAGE_TAG=0
+
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
@@ -191,11 +193,11 @@ def get_account_info(client, storage_account):
 
     data = base64.b64decode(info['data'][0])
 
-    empty = True if data[0] == 0 else False
+    account_tag = data[0]
     lamports = info['lamports']
     owner = info['owner']
 
-    return (empty, lamports, owner)
+    return (account_tag, lamports, owner)
 
 
 def accountWithSeed(base, seed, program):
@@ -268,12 +270,12 @@ def create_multiple_accounts_with_seed(client, funding, base, seeds, sizes):
 
             trx.add(createAccountWithSeedTrx(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
         else:
-            (empty, lamports, owner) = account_info
+            (tag, lamports, owner) = account_info
             if lamports < minimum_balance:
                 raise Exception("insufficient balance")
             if PublicKey(owner) != PublicKey(evm_loader_id):
                 raise Exception("wrong owner")
-            if not empty:
+            if tag != EMPTY_STORAGE_TAG:
                 raise Exception("not empty")
 
     if len(trx.instructions) > 0:
