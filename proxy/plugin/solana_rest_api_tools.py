@@ -614,14 +614,6 @@ def make_05_call_instruction(perm_accs, trx_accs, call_data):
     )
 
 
-class CostSingleton(object):
-    def __new__(cls):
-        if not hasattr(cls, 'instance'):
-            cls.instance = super(CostSingleton, cls).__new__(cls)
-            cls.instance.operator_cost = SQLCost(tablename="operator_cost")
-        return cls.instance
-
-
 def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
     cost = receipt['result']['meta']['preBalances'][0] - receipt['result']['meta']['postBalances'][0]
     if eth_trx:
