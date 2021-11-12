@@ -38,7 +38,7 @@ contract QueryAccount {
         require(success);
 
         assembly {
-            return(add(result, 0x20), 64)
+            return(add(result, 0x20), mload(result))
         }
     }
 }
@@ -71,11 +71,12 @@ class Test_Query_Account_Contract(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_query_metadata(self):
+        print('\nABI:', self.interface['abi'])
         query = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
         solana_address = 255
         r = query.functions.metadata(solana_address).call()
-        print('\ntype(r):', type(r))
-        print('\len(r):', len(r))
+        print('type(r):', type(r))
+        print('len(r):', len(r))
         print('r:', r.decode('ascii'))
 
 if __name__ == '__main__':
