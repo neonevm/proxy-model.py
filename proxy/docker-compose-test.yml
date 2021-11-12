@@ -16,6 +16,13 @@ services:
       - "8001-8009/udp"
     networks:
       - net
+    healthcheck:
+      # Must be available from outside (calling without -u causes premature result)
+      test: [ CMD-SHELL, "solana cluster-version -u $SOLANA_URL" ]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
 
   evm_loader:
     container_name: evm_loader
@@ -27,9 +34,11 @@ services:
       - deployment_data:/var/deployment_data
     networks:
       - net
+    depends_on:
+      solana:
+        condition: service_healthy
     command: >
-       bash -c "wait-for-solana.sh 50
-       && create-test-accounts.sh 1
+       bash -c "create-test-accounts.sh 1
        && deploy-evm.sh
        && cp evm_loader_id /var/deployment_data/
        && cp evm_loader-keypair.json /var/deployment_data/"
@@ -48,10 +57,10 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: [ CMD-SHELL, "pg_isready" ]
-      interval: 15s
+      interval: 5s
       timeout: 10s
-      retries: 7
-      start_period: 15s
+      retries: 10
+      start_period: 5s
     expose:
       - "5432"
     networks:
