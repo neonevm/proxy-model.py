@@ -103,12 +103,12 @@ class SQLCost():
         cur.execute('''
                 CREATE TABLE IF NOT EXISTS OPERATOR_COST
                 (
-                    hash varchar(100),
+                    hash char(64),
                     cost bigint,
                     used_gas bigint,
-                    sender varchar(100),
-                    to_address varchar(100) ,
-                    sig varchar(100),
+                    sender char(40),
+                    to_address char(40) ,
+                    sig char(100),
                     status varchar(100),
                     reason varchar(100)
                 )'''
