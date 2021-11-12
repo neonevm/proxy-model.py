@@ -43,6 +43,15 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
     hostname: postgres
+    depends_on:
+      evm_loader:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ CMD-SHELL, "pg_isready" ]
+      interval: 15s
+      timeout: 10s
+      retries: 7
+      start_period: 15s
     expose:
       - "5432"
     networks:
@@ -61,7 +70,7 @@ services:
     hostname: proxy
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       evm_loader:
         condition: service_completed_successfully
     ports:
