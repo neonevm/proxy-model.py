@@ -328,7 +328,7 @@ def create_account_with_seed(client, funding, base, seed, storage_size, eth_trx=
 
 def create_multiple_accounts_with_seed(client, funding, base, seeds, sizes):
     accounts = []
-    trx = Transaction()
+    trx = TransactionWithComputeBudget()
 
     for seed, storage_size in zip(seeds, sizes):
         account = accountWithSeed(base.public_key(), seed, PublicKey(evm_loader_id))
@@ -1012,13 +1012,14 @@ def call_signed(signer, client, eth_trx, steps):
     finally:
         del perm_accs
 
+
 def call_signed_iterative(signer, client, eth_trx, perm_accs, trx_info, steps, msg, create_acc_trx):
     if len(create_acc_trx.instructions):
         precall_txs = TransactionWithComputeBudget()
         precall_txs.add(create_acc_trx)
         send_measured_transaction(client, precall_txs, signer, eth_trx, 'CreateAccountsForTrx')
 
-    precall_txs = Transaction()
+    precall_txs = TransactionWithComputeBudget()
     precall_txs.add(TransactionInstruction(
         program_id=keccakprog,
         data=make_keccak_instruction_data(len(precall_txs.instructions)+1, len(eth_trx.unsigned_msg()), data_start=13),
