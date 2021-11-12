@@ -32,7 +32,7 @@ services:
        && create-test-accounts.sh 1
        && deploy-evm.sh
        && cp evm_loader_id /var/deployment_data/
-       && cp test_token_owner /var/deployment_data/"
+       && cp evm_loader-keypair.json /var/deployment_data/"
 
   postgres:
     container_name: postgres
