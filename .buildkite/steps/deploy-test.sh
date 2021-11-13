@@ -45,6 +45,8 @@ function cleanup_docker {
     echo "Cleanup docker-compose..."
     docker-compose -f proxy/docker-compose-test.yml down --rmi 'all'
     echo "Cleanup docker-compose done."
+    echo "Removing temporary data volume"
+    docker volume prune -f
 
     if grep '\[E\] get_measurements' <measurements.log; then
         echo 'Failed to get measurements'
