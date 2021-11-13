@@ -52,9 +52,6 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
     hostname: postgres
-    depends_on:
-      evm_loader:
-        condition: service_completed_successfully
     healthcheck:
       test: [ CMD-SHELL, "pg_isready" ]
       interval: 5s
