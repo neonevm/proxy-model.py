@@ -15,31 +15,17 @@ admin = proxy.eth.account.create(issue + '/admin')
 user = proxy.eth.account.create(issue + '/user')
 proxy.eth.default_account = admin.address
 
-QUERY_ACCOUNT_INTERFACE_SOURCE = '''
+CONTRACT_SOURCE = '''
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.0;
 
-interface IQueryAccount {
-    function metadata(uint256 solana_address) external view returns (bytes memory);
-}
-'''
+contract TestQueryAccount {
+    address constant QueryAccount = 0xff00000000000000000000000000000000000002;
 
-QUERY_ACCOUNT_CONTRACT_SOURCE = '''
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.7.0;
-
-contract QueryAccount {
-    address constant NeonQueryAccount = 0xff00000000000000000000000000000000000002;
-
-    fallback() external {
-        bytes memory call_data = abi.encodePacked(msg.data);
-        (bool success, bytes memory result) = NeonQueryAccount.delegatecall(call_data);
-
+    function test_metadata(uint256 solana_address) external returns (uint256) {
+        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("metadata(uint256)", solana_address));
         require(success);
-
-        assembly {
-            return(add(result, 0x20), mload(result))
-        }
+        return 33;
     }
 }
 '''
@@ -52,14 +38,9 @@ class Test_Query_Account_Contract(unittest.TestCase):
         cls.deploy_contract(cls)
 
     def deploy_contract(self):
-        compiled = compile_source(QUERY_ACCOUNT_INTERFACE_SOURCE)
-        id, interface = compiled.popitem()
-        self.interface = interface
-
-        compiled = compile_source(QUERY_ACCOUNT_CONTRACT_SOURCE)
+        compiled = compile_source(CONTRACT_SOURCE)
         id, interface = compiled.popitem()
         self.contract = interface
-        
         contract = proxy.eth.contract(abi=self.contract['abi'], bytecode=self.contract['bin'])
         nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         tx = {'nonce': nonce}
@@ -71,13 +52,12 @@ class Test_Query_Account_Contract(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_query_metadata(self):
-        print('\nABI:', self.interface['abi'])
-        query = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        print('\n')
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         solana_address = 255
-        r = query.functions.metadata(solana_address).call()
+        r = query.functions.test_metadata(solana_address).call()
         print('type(r):', type(r))
-        print('len(r):', len(r))
-        print('r:', r.decode('ascii'))
+        print('r:', r)
 
 if __name__ == '__main__':
     unittest.main()
