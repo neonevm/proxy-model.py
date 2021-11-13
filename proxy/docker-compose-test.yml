@@ -18,7 +18,7 @@ services:
       - net
     healthcheck:
       # Must be available from outside (calling without -u causes premature result)
-      test: [ CMD-SHELL, "solana cluster-version -u $SOLANA_URL" ]
+      test: [ CMD-SHELL, "solana cluster-version -u http://solana:8899" ]
       interval: 5s
       timeout: 10s
       retries: 10
