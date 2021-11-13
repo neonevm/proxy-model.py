@@ -35,17 +35,19 @@ UNISWAP_V2_CORE_IMAGE=neonlabsorg/uniswap-v2-core:stable
 # Refreshing uniswap-v2-core image is required to run .buildkite/steps/deploy-test.sh locally
 docker pull $UNISWAP_V2_CORE_IMAGE
 
-docker-compose -f proxy/docker-compose-test.yml up -d
-
 function cleanup_docker {
-    docker logs proxy >proxy.log 2>&1
-    docker logs solana >solana.log 2>&1
-    docker logs evm_loader >evm_loader.log 2>&1
-    grep 'get_measurements' <proxy.log >measurements.log
-    echo "Cleanup docker-compose..."
+    if docker logs proxy >proxy.log 2>&1; then
+      echo "proxy logs saved";
+      grep 'get_measurements' <proxy.log >measurements.log
+    fi
+
+    if docker logs solana >solana.log 2>&1; then echo "solana logs saved"; fi
+    if docker logs evm_loader >evm_loader.log 2>&1; then echo "evm_loader logs saved"; fi
+
+    echo "\nCleanup docker-compose..."
     docker-compose -f proxy/docker-compose-test.yml down --rmi 'all'
     echo "Cleanup docker-compose done."
-    echo "Removing temporary data volume"
+    echo "\nRemoving temporary data volumes..."
     docker volume prune -f
 
     if grep '\[E\] get_measurements' <measurements.log; then
@@ -54,7 +56,11 @@ function cleanup_docker {
     fi
 }
 trap cleanup_docker EXIT
-sleep 10
+
+if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
+  echo "docker-compose failed to start"
+  exit 1;
+fi
 
 export PROXY_URL=http://127.0.0.1:9090/solana
 
