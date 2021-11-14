@@ -5,13 +5,14 @@
 ##
 ## metadata(uint256) returns (bytes memory)
 ##     Takes a Solana address, treats it as an address of an account.
-##     Returns the account's owner and length of the account's data.
+##     If success, returns result code (1 byte), the account's owner (32 bytes) and length of the account's data (8 bytes).
+##     Returns empty array otherwise.
 ##
 ## data(uint256, uint256, uint256) returns (bytes memory)
 ##     Takes a Solana address, treats it as an address of an account,
 ##     also takes an offset and length of the account's data.
-##     Returns the success flag, the account's owner and the data.
-##     The success flag would have been false if no account found or any error happened.
+##     If success, returns result code (1 byte), the account's owner (32 bytes) and the data (length bytes).
+##     Returns empty array otherwise.
 
 import unittest
 import os
@@ -34,20 +35,20 @@ pragma solidity >=0.7.0;
 contract TestQueryAccount {
     address constant QueryAccount = 0xff00000000000000000000000000000000000002;
 
-    function test_metadata() external returns (uint256) {
+    function test_metadata() external returns (bool) {
         uint256 solana_address = 255;
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("metadata(uint256)", solana_address));
         require(success);
-        return result.length;
+        return result.length > 0;
     }
 
-    function test_data() external returns (uint256) {
+    function test_data() external returns (bool) {
         uint256 solana_address = 255;
         uint256 offset = 0;
         uint256 length = 64;
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
         require(success);
-        return result.length;
+        return result.length > 0;
     }
 }
 '''
@@ -76,17 +77,15 @@ class Test_Query_Account_Contract(unittest.TestCase):
     def test_query_metadata(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        r = query.functions.test_metadata().call()
-        print('type(r):', type(r))
-        print('r:', r)
+        ok = query.functions.test_metadata().call()
+        assert(ok)
 
     # @unittest.skip("a.i.")
     def test_query_data(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        r = query.functions.test_data().call()
-        print('type(r):', type(r))
-        print('r:', r)
+        ok = query.functions.test_data().call()
+        assert(ok)
 
 if __name__ == '__main__':
     unittest.main()
