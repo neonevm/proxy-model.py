@@ -29,7 +29,6 @@ services:
     image: neonlabsorg/evm_loader:${EVM_LOADER_REVISION:-latest}
     environment:
       - SOLANA_URL=http://solana:8899
-      - CONFIG=ci
     networks:
       - net
     depends_on:
