@@ -79,16 +79,20 @@ contract TestQueryAccount {
         if (result[0] != 0) {
             return false;
         }
-        if (result[1] != 0) {
+        byte r1 = 0x71;
+        byte r2 = 0x33;
+        byte r3 = 0xc6;
+        byte r4 = 0x12;
+        if (result[1] != r1) {
             return false;
         }
-        if (result[2] != 0) {
+        if (result[2] != r2) {
             return false;
         }
-        if (result[3] != 0) {
+        if (result[3] != r3) {
             return false;
         }
-        if (result[4] != 0) {
+        if (result[4] != r4) {
             return false;
         }
         return true;
