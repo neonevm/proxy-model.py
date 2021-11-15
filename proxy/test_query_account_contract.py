@@ -28,6 +28,12 @@ admin = proxy.eth.account.create(issue + '/admin')
 user = proxy.eth.account.create(issue + '/user')
 proxy.eth.default_account = admin.address
 
+# Address: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU
+# uint256: 110178555362476360822489549210862241441608066866019832842197691544474470948129
+
+# Address: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+# uint256: 3106054211088883198575105191760876350940303353676611666299516346430146937001
+
 CONTRACT_SOURCE = '''
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.0;
@@ -36,10 +42,29 @@ contract TestQueryAccount {
     address constant QueryAccount = 0xff00000000000000000000000000000000000002;
 
     function test_metadata() external returns (bool) {
-        uint256 solana_address = 255;
+        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("metadata(uint256)", solana_address));
         require(success);
-        return result.length > 0;
+        if (result.length == 0) {
+            return false;
+        }
+        if (result[0] != 0) {
+            return false;
+        }
+        if (result.length != (1 + 32 + 8)) {
+            return false;
+        }
+        uint256 owner_address = to_uint256(copy_slice(result, 1, 33));
+        uint256 golden_owner_address = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
+        if (owner_address != golden_owner_address) {
+            return false;
+        }
+        uint64 data_length = to_uint64(copy_slice(result, 33, 41));
+        uint64 golden_data_length = 82;
+        if (data_length != golden_data_length) {
+            return false;
+        }
+        return true;
     }
 
     function test_data() external returns (bool) {
@@ -48,7 +73,33 @@ contract TestQueryAccount {
         uint256 length = 64;
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
         require(success);
-        return result.length > 0;
+        if (result.length == 0) {
+            return false;
+        }
+        return true;
+    }
+
+    function copy_slice(bytes memory source, uint64 left_index, uint64 right_index) internal pure returns (bytes memory) {
+        require(right_index > left_index);
+        bytes memory result = new bytes(right_index - left_index);
+        uint64 index = 0;
+        for (uint64 i = left_index; i < right_index; i++) {
+            result[index] = source[i];
+            index++;
+        }
+        return result;
+    }
+
+    function to_uint64(bytes memory bb) internal pure returns (uint64 result) {
+        assembly {
+            result := mload(add(bb, 8))
+        }
+    }
+
+    function to_uint256(bytes memory bb) internal pure returns (uint256 result) {
+        assembly {
+            result := mload(add(bb, 32))
+        }
     }
 }
 '''
@@ -77,15 +128,15 @@ class Test_Query_Account_Contract(unittest.TestCase):
     def test_query_metadata(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_metadata().call()
-        assert(ok)
+        get_metadata_ok = query.functions.test_metadata().call()
+        assert(get_metadata_ok)
 
     # @unittest.skip("a.i.")
     def test_query_data(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_data().call()
-        assert(ok)
+        get_data_ok = query.functions.test_data().call()
+        assert(get_data_ok)
 
 if __name__ == '__main__':
     unittest.main()
