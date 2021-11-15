@@ -11,7 +11,7 @@
 ## data(uint256, uint256, uint256) returns (bytes memory)
 ##     Takes a Solana address, treats it as an address of an account,
 ##     also takes an offset and length of the account's data.
-##     If success, returns result code (1 byte), the account's owner (32 bytes) and the data (length bytes).
+##     If success, returns result code (1 byte) and the data (length bytes).
 ##     Returns empty array otherwise.
 
 import unittest
@@ -54,12 +54,12 @@ contract TestQueryAccount {
         if (result.length != (1 + 32 + 8)) {
             return false;
         }
-        uint256 owner_address = to_uint256(copy_slice(result, 1, 33));
+        uint256 owner_address = to_uint256(clone_slice(result, 1, 33));
         uint256 golden_owner_address = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
         if (owner_address != golden_owner_address) {
             return false;
         }
-        uint64 data_length = to_uint64(copy_slice(result, 33, 41));
+        uint64 data_length = to_uint64(clone_slice(result, 33, 41));
         uint64 golden_data_length = 82;
         if (data_length != golden_data_length) {
             return false;
@@ -68,24 +68,37 @@ contract TestQueryAccount {
     }
 
     function test_data() external returns (bool) {
-        uint256 solana_address = 255;
-        uint256 offset = 0;
-        uint256 length = 64;
+        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+        uint256 offset = 20;
+        uint256 length = 4;
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
         require(success);
         if (result.length == 0) {
             return false;
         }
+        if (result[0] != 0) {
+            return false;
+        }
+        if (result[1] != 0) {
+            return false;
+        }
+        if (result[2] != 0) {
+            return false;
+        }
+        if (result[3] != 0) {
+            return false;
+        }
+        if (result[4] != 0) {
+            return false;
+        }
         return true;
     }
 
-    function copy_slice(bytes memory source, uint64 left_index, uint64 right_index) internal pure returns (bytes memory) {
+    function clone_slice(bytes memory source, uint64 left_index, uint64 right_index) internal pure returns (bytes memory) {
         require(right_index > left_index);
         bytes memory result = new bytes(right_index - left_index);
-        uint64 index = 0;
         for (uint64 i = left_index; i < right_index; i++) {
-            result[index] = source[i];
-            index++;
+            result[i - left_index] = source[i];
         }
         return result;
     }
