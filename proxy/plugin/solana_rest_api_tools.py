@@ -138,47 +138,6 @@ class CostSingleton(object):
             cls.instance.operator_cost = SQLCost()
         return cls.instance
 
-class PermanentAccounts:
-    def __init__(self, client, signer):
-        while True:
-            with new_acc_id_glob.get_lock():
-                try:
-                    self.acc_id = acc_list_glob.pop(0)
-                except IndexError:
-                    self.acc_id = new_acc_id_glob.value
-                    new_acc_id_glob.value += 1
-
-            logger.debug("LOCK RESOURCES {}".format(self.acc_id))
-
-            self.operator = signer.public_key()
-            self.operator_token = getTokenAddr(self.operator)
-
-            acc_id_bytes = self.acc_id.to_bytes((self.acc_id.bit_length() + 7) // 8, 'big')
-
-            storage_seed = keccak_256(b"storage" + acc_id_bytes).hexdigest()[:32]
-            storage_seed = bytes(storage_seed, 'utf8')
-
-            holder_seed = keccak_256(b"holder" + acc_id_bytes).hexdigest()[:32]
-            holder_seed = bytes(holder_seed, 'utf8')
-
-            try:
-                self.storage, self.holder = create_multiple_accounts_with_seed(
-                        client,
-                        funding=signer,
-                        base=signer,
-                        seeds=[storage_seed, holder_seed],
-                        sizes=[STORAGE_SIZE, STORAGE_SIZE]
-                    )
-            except Exception as err:
-                logger.warn("Account is locked err({}) id({}) owner({})".format(str(err), self.acc_id, signer.public_key()))
-            else:
-                break
-
-    def __del__(self):
-        logger.debug("FREE RESOURCES {}".format(self.acc_id))
-        with new_acc_id_glob.get_lock():
-            acc_list_glob.append(self.acc_id)
-
 
 class AccountInfo(NamedTuple):
     ether: eth_keys.PublicKey
@@ -274,50 +233,6 @@ def create_collateral_pool_address(collateral_pool_index):
     COLLATERAL_SEED_PREFIX = "collateral_seed_"
     seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
     return accountWithSeed(PublicKey(COLLATERAL_POOL_BASE), str.encode(seed), PublicKey(evm_loader_id))
-
-
-def create_account_with_seed(client, funding, base, seed, storage_size, eth_trx=None):
-    account = accountWithSeed(base.public_key(), seed, PublicKey(evm_loader_id))
-
-    if client.get_balance(account, commitment=Confirmed)['result']['value'] == 0:
-        minimum_balance = client.get_minimum_balance_for_rent_exemption(storage_size, commitment=Confirmed)["result"]
-        logger.debug("Minimum balance required for account {}".format(minimum_balance))
-
-        trx = Transaction()
-        trx.add(createAccountWithSeedTrx(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
-        send_transaction(client, trx, funding, eth_trx=eth_trx, reason='createAccountWithSeed')
-
-    return account
-
-
-def create_multiple_accounts_with_seed(client, funding, base, seeds, sizes):
-    accounts = []
-    trx = Transaction()
-
-    for seed, storage_size in zip(seeds, sizes):
-        account = accountWithSeed(base.public_key(), seed, PublicKey(evm_loader_id))
-        accounts.append(account)
-
-        minimum_balance = client.get_minimum_balance_for_rent_exemption(storage_size, commitment=Confirmed)["result"]
-
-        account_info = get_account_info(client, account)
-        if account_info is None:
-            logger.debug("Minimum balance required for account {}".format(minimum_balance))
-
-            trx.add(createAccountWithSeedTrx(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
-        else:
-            (tag, lamports, owner) = account_info
-            if lamports < minimum_balance:
-                raise Exception("insufficient balance")
-            if PublicKey(owner) != PublicKey(evm_loader_id):
-                raise Exception("wrong owner")
-            if tag != EMPTY_STORAGE_TAG:
-                raise Exception("not empty")
-
-    if len(trx.instructions) > 0:
-        send_transaction(client, trx, funding)
-
-    return accounts
 
 
 def make_keccak_instruction_data(check_instruction_index, msg_len, data_start):
@@ -610,6 +525,86 @@ class TransactionSender:
         self.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
 
 
+    def init_perm_accs(self):
+        while True:
+            with new_acc_id_glob.get_lock():
+                try:
+                    self.perm_accs_id = acc_list_glob.pop(0)
+                except IndexError:
+                    self.perm_accs_id = new_acc_id_glob.value
+                    new_acc_id_glob.value += 1
+
+            logger.debug("LOCK RESOURCES {}".format(self.perm_accs_id))
+
+            acc_id_bytes = self.perm_accs_id.to_bytes((self.perm_accs_id.bit_length() + 7) // 8, 'big')
+
+            storage_seed = keccak_256(b"storage" + acc_id_bytes).hexdigest()[:32]
+            storage_seed = bytes(storage_seed, 'utf8')
+
+            holder_seed = keccak_256(b"holder" + acc_id_bytes).hexdigest()[:32]
+            holder_seed = bytes(holder_seed, 'utf8')
+
+            try:
+                self.storage, self.holder = self.create_multiple_accounts_with_seed(
+                        seeds=[storage_seed, holder_seed],
+                        sizes=[STORAGE_SIZE, STORAGE_SIZE]
+                    )
+            except Exception as err:
+                logger.warn("Account is locked err({}) id({}) owner({})".format(str(err), self.perm_accs_id, self.signer.public_key()))
+            else:
+                break
+
+
+    def free_perm_accs(self):
+        logger.debug("FREE RESOURCES {}".format(self.perm_accs_id))
+        with new_acc_id_glob.get_lock():
+            acc_list_glob.append(self.perm_accs_id)
+
+
+    def create_account_with_seed(self, seed, storage_size):
+        account = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
+
+        if self.client.get_balance(account, commitment=Confirmed)['result']['value'] == 0:
+            minimum_balance = self.client.get_minimum_balance_for_rent_exemption(storage_size, commitment=Confirmed)["result"]
+            logger.debug("Minimum balance required for account {}".format(minimum_balance))
+
+            trx = Transaction()
+            trx.add(createAccountWithSeedTrx(self.signer.public_key(), self.signer.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
+            send_transaction(self.client, trx, self.signer, eth_trx=self.eth_trx, reason='createAccountWithSeed')
+
+        return account
+
+
+    def create_multiple_accounts_with_seed(self, seeds, sizes):
+        accounts = []
+        trx = Transaction()
+
+        for seed, storage_size in zip(seeds, sizes):
+            account = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
+            accounts.append(account)
+
+            minimum_balance = self.client.get_minimum_balance_for_rent_exemption(storage_size, commitment=Confirmed)["result"]
+
+            account_info = get_account_info(self.client, account)
+            if account_info is None:
+                logger.debug("Minimum balance required for account {}".format(minimum_balance))
+
+                trx.add(createAccountWithSeedTrx(self.signer.public_key(), self.signer.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
+            else:
+                (tag, lamports, owner) = account_info
+                if lamports < minimum_balance:
+                    raise Exception("insufficient balance")
+                if PublicKey(owner) != PublicKey(evm_loader_id):
+                    raise Exception("wrong owner")
+                if tag != EMPTY_STORAGE_TAG:
+                    raise Exception("not empty")
+
+        if len(trx.instructions) > 0:
+            send_transaction(self.client, trx, self.signer, eth_trx=self.eth_trx, reason='createAccountWithSeed')
+
+        return accounts
+
+
     def execute(self):
         self.create_account_list_by_emulate()
 
@@ -634,7 +629,7 @@ class TransactionSender:
                 else:
                     raise
 
-        self.perm_accs = PermanentAccounts(self.client, self.signer)
+        self.init_perm_accs()
         try:
             if call_iterative:
                 try:
@@ -650,7 +645,7 @@ class TransactionSender:
             if call_from_holder:
                 return self.call_signed_with_holder_acc()
         finally:
-            del self.perm_accs
+            self.free_perm_accs()
 
 
     def create_account_list_by_emulate(self):
@@ -681,7 +676,7 @@ class TransactionSender:
                         code_account_new = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
 
                         logger.debug("creating new code_account with increased size %s", code_account_new)
-                        create_account_with_seed(self.client, self.signer, self.signer, seed, code_size, self.eth_trx);
+                        self.create_account_with_seed(seed, code_size)
                         logger.debug("resized account is created %s", code_account_new)
 
                         resize_instr.append(TransactionInstruction(
@@ -880,7 +875,7 @@ class TransactionSender:
             trx = Transaction()
             # logger.debug("sender_sol %s %s %s", sender_sol, holder, acc.public_key())
             trx.add(TransactionInstruction(program_id=evm_loader_id,
-                                        data=write_holder_layout(self.perm_accs.acc_id, offset, part),
+                                        data=write_holder_layout(self.perm_accs_id, offset, part),
                                         keys=[
                                             AccountMeta(pubkey=self.perm_accs.holder, is_signer=False, is_writable=True),
                                             AccountMeta(pubkey=self.signer.public_key(), is_signer=True, is_writable=False),
