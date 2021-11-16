@@ -41,7 +41,7 @@ pragma solidity >=0.7.0;
 contract TestQueryAccount {
     address constant QueryAccount = 0xff00000000000000000000000000000000000002;
 
-    function test_metadata() external returns (bool) {
+    function test_metadata_ok() external returns (bool) {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("metadata(uint256)", solana_address));
         require(success);
@@ -67,7 +67,17 @@ contract TestQueryAccount {
         return true;
     }
 
-    function test_data() external returns (bool) {
+    function test_metadata_unexistent_account() external returns (bool) {
+        uint256 solana_address = 90000;
+        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("metadata(uint256)", solana_address));
+        require(success);
+        if (result.length == 0) {
+            return true;
+        }
+        return false;
+    }
+
+    function test_data_ok() external returns (bool) {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
         uint256 offset = 20;
         uint256 length = 4;
@@ -98,7 +108,7 @@ contract TestQueryAccount {
         return true;
     }
 
-    function clone_slice(bytes memory source, uint64 left_index, uint64 right_index) internal pure returns (bytes memory) {
+    function clone_slice(bytes memory source, uint64 left_index, uint64 right_index) private pure returns (bytes memory) {
         require(right_index > left_index);
         bytes memory result = new bytes(right_index - left_index);
         for (uint64 i = left_index; i < right_index; i++) {
@@ -107,13 +117,13 @@ contract TestQueryAccount {
         return result;
     }
 
-    function to_uint64(bytes memory bb) internal pure returns (uint64 result) {
+    function to_uint64(bytes memory bb) private pure returns (uint64 result) {
         assembly {
             result := mload(add(bb, 8))
         }
     }
 
-    function to_uint256(bytes memory bb) internal pure returns (uint256 result) {
+    function to_uint256(bytes memory bb) private pure returns (uint256 result) {
         assembly {
             result := mload(add(bb, 32))
         }
@@ -141,18 +151,25 @@ class Test_Query_Account_Contract(unittest.TestCase):
         tx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
         self.contract_address = tx_deploy_receipt.contractAddress
 
-    # @unittest.skip("a.i.")
-    def test_query_metadata(self):
+    @unittest.skip("a.i.")
+    def test_query_metadata_ok(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        get_metadata_ok = query.functions.test_metadata().call()
+        get_metadata_ok = query.functions.test_metadata_ok().call()
         assert(get_metadata_ok)
 
-    # @unittest.skip("a.i.")
-    def test_query_data(self):
+    #@unittest.skip("a.i.")
+    def test_query_metadata_unexistent_account(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        get_data_ok = query.functions.test_data().call()
+        get_metadata_unexistent_account = query.functions.test_metadata_unexistent_account().call()
+        assert(get_metadata_unexistent_account)
+
+    @unittest.skip("a.i.")
+    def test_query_data_ok(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        get_data_ok = query.functions.test_data_ok().call()
         assert(get_data_ok)
 
 if __name__ == '__main__':
