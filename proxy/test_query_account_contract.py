@@ -79,6 +79,7 @@ contract TestQueryAccount {
 
     function test_data_ok() external returns (bool) {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+        // Test getting partial data
         uint256 offset = 20;
         uint256 length = 4;
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
@@ -103,6 +104,17 @@ contract TestQueryAccount {
             return false;
         }
         if (result[4] != r4) {
+            return false;
+        }
+        // Test getting full data
+        offset = 0;
+        length = 82;
+        (success, result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
+        require(success);
+        if (result.length != (1+82)) { // initial byte stores error code (0==success)
+            return false;
+        }
+        if (result[0] != 0) {
             return false;
         }
         return true;
@@ -187,42 +199,42 @@ class Test_Query_Account_Contract(unittest.TestCase):
         tx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
         self.contract_address = tx_deploy_receipt.contractAddress
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_metadata_ok(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_metadata_ok = query.functions.test_metadata_ok().call()
         assert(get_metadata_ok)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_metadata_unexistent_account(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_metadata_unexistent_account = query.functions.test_metadata_unexistent_account().call()
         assert(get_metadata_unexistent_account)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_data_ok(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_data_ok = query.functions.test_data_ok().call()
         assert(get_data_ok)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_data_unexistent_account(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_data_unexistent_account = query.functions.test_data_unexistent_account().call()
         assert(get_data_unexistent_account)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_data_too_big_offset(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_data_too_big_offset = query.functions.test_data_too_big_offset().call()
         assert(get_data_too_big_offset)
 
-    #@unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_data_too_big_length(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
