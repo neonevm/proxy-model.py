@@ -195,6 +195,10 @@ class EthereumModel:
         }
         return ret
 
+    def eth_getStorageAt(self, account, position, block_identifier):
+        print(f"eth_getStorageAt: {account}, {position}, {block_identifier}")
+        return 0
+
     def eth_getBlockByHash(self, trx_hash, full):
         """Returns information about a block by hash.
             trx_hash - Hash of a block.

@@ -428,6 +428,11 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         print('times_to_calculate:', times_to_calculate)
         print('time_duration:', time_duration)
 
+    def test_get_storage_at(self):
+        proxy.eth.get_storage_at(self.storage_contract.address,
+                                 Web3.keccak("number"),
+                                 "latest")
+
 
 if __name__ == '__main__':
     unittest.main()
