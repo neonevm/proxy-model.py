@@ -429,9 +429,20 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         print('time_duration:', time_duration)
 
     def test_get_storage_at(self):
-        proxy.eth.get_storage_at(self.storage_contract.address,
-                                 Web3.keccak("number"),
-                                 "latest")
+        print("\nhttps://github.com/neonlabsorg/proxy-model.py/issues/289")
+        right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
+        value_to_store = 452356
+        trx_store = self.storage_contract.functions.store(value_to_store).buildTransaction({'nonce': right_nonce})
+        print('trx_store:', trx_store)
+        trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
+        print('trx_store_signed:', trx_store_signed)
+        trx_store_hash = proxy.eth.send_raw_transaction(trx_store_signed.rawTransaction)
+        print('trx_store_hash:', trx_store_hash.hex())
+        trx_store_receipt = proxy.eth.wait_for_transaction_receipt(trx_store_hash)
+        print('trx_store_receipt:', trx_store_receipt)
+        value_received = int(proxy.eth.get_storage_at(self.storage_contract.address, 0, "latest"))
+        print('eth_getStorageAt return:', value_received)
+        self.assertEqual(value_received, value_to_store)
 
 
 if __name__ == '__main__':

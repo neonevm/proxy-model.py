@@ -34,7 +34,7 @@ from ..core.acceptor.pool import proxy_id_glob
 import os
 from ..indexer.utils import get_trx_results, LogDB
 from ..indexer.sql_dict import SQLDict
-from proxy.environment import evm_loader_id, solana_cli, solana_url
+from proxy.environment import evm_loader_id, solana_cli, solana_url, neon_cli
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -196,8 +196,15 @@ class EthereumModel:
         return ret
 
     def eth_getStorageAt(self, account, position, block_identifier):
-        print(f"eth_getStorageAt: {account}, {position}, {block_identifier}")
-        return 0
+        '''Retrieves storage data by given position
+        Currently supports only 'latest' block
+        '''
+        if block_identifier != "latest":
+            print(f"Block type '{block_identifier}' is not supported yet")
+            raise RuntimeError("Not supported block")
+        value = neon_cli().call('get-ether-storage-at', account, position)
+        print(f"eth_getStorageAt >> '{value}'")
+        return value
 
     def eth_getBlockByHash(self, trx_hash, full):
         """Returns information about a block by hash.
