@@ -68,7 +68,7 @@ contract TestQueryAccount {
     }
 
     function test_metadata_unexistent_account() external returns (bool) {
-        uint256 solana_address = 90000;
+        uint256 solana_address = 90000; // hopefully does not exist
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("metadata(uint256)", solana_address));
         require(success);
         if (result.length == 0) {
@@ -106,6 +106,42 @@ contract TestQueryAccount {
             return false;
         }
         return true;
+    }
+
+    function test_data_unexistent_account() external returns (bool) {
+        uint256 solana_address = 90000; // hopefully does not exist
+        uint256 offset = 0;
+        uint256 length = 1;
+        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
+        require(success);
+        if (result.length == 0) {
+            return true;
+        }
+        return false;
+    }
+
+    function test_data_too_big_offset() external returns (bool) {
+        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+        uint256 offset = 200; // data len is 82
+        uint256 length = 1;
+        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
+        require(success);
+        if (result.length == 0) {
+            return true;
+        }
+        return false;
+    }
+
+    function test_data_too_big_length() external returns (bool) {
+        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+        uint256 offset = 0;
+        uint256 length = 200; // data len is 82
+        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
+        require(success);
+        if (result.length == 0) {
+            return true;
+        }
+        return false;
     }
 
     function clone_slice(bytes memory source, uint64 left_index, uint64 right_index) private pure returns (bytes memory) {
@@ -152,25 +188,46 @@ class Test_Query_Account_Contract(unittest.TestCase):
         self.contract_address = tx_deploy_receipt.contractAddress
 
     @unittest.skip("a.i.")
-    def test_query_metadata_ok(self):
+    def test_metadata_ok(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_metadata_ok = query.functions.test_metadata_ok().call()
         assert(get_metadata_ok)
 
-    #@unittest.skip("a.i.")
-    def test_query_metadata_unexistent_account(self):
+    @unittest.skip("a.i.")
+    def test_metadata_unexistent_account(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_metadata_unexistent_account = query.functions.test_metadata_unexistent_account().call()
         assert(get_metadata_unexistent_account)
 
     @unittest.skip("a.i.")
-    def test_query_data_ok(self):
+    def test_data_ok(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_data_ok = query.functions.test_data_ok().call()
         assert(get_data_ok)
+
+    @unittest.skip("a.i.")
+    def test_data_unexistent_account(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        get_data_unexistent_account = query.functions.test_data_unexistent_account().call()
+        assert(get_data_unexistent_account)
+
+    @unittest.skip("a.i.")
+    def test_data_too_big_offset(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        get_data_too_big_offset = query.functions.test_data_too_big_offset().call()
+        assert(get_data_too_big_offset)
+
+    #@unittest.skip("a.i.")
+    def test_data_too_big_length(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        get_data_too_big_length = query.functions.test_data_too_big_length().call()
+        assert(get_data_too_big_length)
 
 if __name__ == '__main__':
     unittest.main()
