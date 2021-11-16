@@ -440,9 +440,9 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         print('trx_store_hash:', trx_store_hash.hex())
         trx_store_receipt = proxy.eth.wait_for_transaction_receipt(trx_store_hash)
         print('trx_store_receipt:', trx_store_receipt)
-        value_received = int(proxy.eth.get_storage_at(self.storage_contract.address, 0, "latest"))
-        print('eth_getStorageAt return:', value_received)
-        self.assertEqual(value_received, value_to_store)
+        value_received = proxy.eth.get_storage_at(self.storage_contract.address, 0, "latest")
+        print('eth_getStorageAt return:', value_received.hex())
+        self.assertEqual(int.from_bytes(value_received, byteorder='big'), value_to_store)
 
 
 if __name__ == '__main__':
