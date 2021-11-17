@@ -67,14 +67,11 @@ contract TestQueryAccount {
         return true;
     }
 
-    function test_metadata_unexistent_account() external returns (bool) {
+    function test_metadata_nonexistent_account() external returns (bool) {
         uint256 solana_address = 90000; // hopefully does not exist
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("metadata(uint256)", solana_address));
-        require(success);
-        if (result.length == 0) {
-            return true;
-        }
-        return false;
+        require(!success);
+        return true;
     }
 
     function test_data_ok() external returns (bool) {
@@ -120,16 +117,13 @@ contract TestQueryAccount {
         return true;
     }
 
-    function test_data_unexistent_account() external returns (bool) {
+    function test_data_nonexistent_account() external returns (bool) {
         uint256 solana_address = 90000; // hopefully does not exist
         uint256 offset = 0;
         uint256 length = 1;
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
-        require(success);
-        if (result.length == 0) {
-            return true;
-        }
-        return false;
+        require(!success);
+        return true;
     }
 
     function test_data_too_big_offset() external returns (bool) {
@@ -137,11 +131,8 @@ contract TestQueryAccount {
         uint256 offset = 200; // data len is 82
         uint256 length = 1;
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
-        require(success);
-        if (result.length == 0) {
-            return true;
-        }
-        return false;
+        require(!success);
+        return true;
     }
 
     function test_data_too_big_length() external returns (bool) {
@@ -149,11 +140,8 @@ contract TestQueryAccount {
         uint256 offset = 0;
         uint256 length = 200; // data len is 82
         (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
-        require(success);
-        if (result.length == 0) {
-            return true;
-        }
-        return false;
+        require(!success);
+        return true;
     }
 
     function clone_slice(bytes memory source, uint64 left_index, uint64 right_index) private pure returns (bytes memory) {
@@ -207,11 +195,11 @@ class Test_Query_Account_Contract(unittest.TestCase):
         assert(get_metadata_ok)
 
     # @unittest.skip("a.i.")
-    def test_metadata_unexistent_account(self):
+    def test_metadata_nonexistent_account(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        get_metadata_unexistent_account = query.functions.test_metadata_unexistent_account().call()
-        assert(get_metadata_unexistent_account)
+        get_metadata_nonexistent_account = query.functions.test_metadata_nonexistent_account().call()
+        assert(get_metadata_nonexistent_account)
 
     # @unittest.skip("a.i.")
     def test_data_ok(self):
@@ -221,11 +209,11 @@ class Test_Query_Account_Contract(unittest.TestCase):
         assert(get_data_ok)
 
     # @unittest.skip("a.i.")
-    def test_data_unexistent_account(self):
+    def test_data_nonexistent_account(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        get_data_unexistent_account = query.functions.test_data_unexistent_account().call()
-        assert(get_data_unexistent_account)
+        get_data_nonexistent_account = query.functions.test_data_nonexistent_account().call()
+        assert(get_data_nonexistent_account)
 
     # @unittest.skip("a.i.")
     def test_data_too_big_offset(self):
