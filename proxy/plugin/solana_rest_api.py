@@ -200,11 +200,14 @@ class EthereumModel:
         Currently supports only 'latest' block
         '''
         if block_identifier != "latest":
-            print(f"Block type '{block_identifier}' is not supported yet")
-            raise RuntimeError("Not supported block")
-        value = neon_cli().call('get-ether-storage-at', account, position)
-        print(f"eth_getStorageAt >> '{value}'")
-        return value
+            logger.debug(f"Block type '{block_identifier}' is not supported yet")
+            raise RuntimeError(f"Not supported block identifier: {block_identifier}")
+
+        try:
+            value = neon_cli().call('get-storage-at', account, position)
+            return value
+        except:
+            return '0x0'
 
     def eth_getBlockByHash(self, trx_hash, full):
         """Returns information about a block by hash.
