@@ -131,12 +131,8 @@ class SQLCost():
             (hash, cost, used_gas, sender, to_address, sig, status, reason)
         )
 
-class CostSingleton(object):
-    def __new__(cls):
-        if not hasattr(cls, 'instance'):
-            cls.instance = super(CostSingleton, cls).__new__(cls)
-            cls.instance.operator_cost = SQLCost()
-        return cls.instance
+operator_cost = SQLCost()
+
 
 class PermanentAccounts:
     def __init__(self, client, signer):
@@ -769,8 +765,7 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
                     used_gas = base58.b58decode(event['data'])[2:10]
                     used_gas = int().from_bytes(used_gas, "little")
 
-    table = CostSingleton().operator_cost
-    table.insert(
+    operator_cost.insert(
         hash,
         cost,
         used_gas if used_gas else 0,
