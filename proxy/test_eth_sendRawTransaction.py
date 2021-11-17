@@ -456,5 +456,10 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         print('eth_getStorageAt non-existing address => ', value_received.hex())
         self.assertEqual(int.from_bytes(value_received, byteorder='big'), 0)
 
+        not_a_contract_address = proxy.eth.default_account
+        value_received = proxy.eth.get_storage_at(not_a_contract_address, 0, "latest")
+        print('eth_getStorageAt not_a_contract_address address => ', value_received.hex())
+        self.assertEqual(int.from_bytes(value_received, byteorder='big'), 0)
+
 if __name__ == '__main__':
     unittest.main()
