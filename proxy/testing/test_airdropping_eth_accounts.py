@@ -50,6 +50,10 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         self.assertEqual(self._EXPECTED_BALANCE_WEI, wrapper_actual_balance)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, nested_actual_balance)
 
+    def test_raise_on_constructing(self):
+        contract_owner: LocalAccount = self._web3.eth.account.create()
+        contract = self._compile_and_deploy_contract(contract_owner, self._WRAPPER_CONTRACT_STORAGE_SOURCE)
+
     def _compile_and_deploy_contract(self, contract_owner: LocalAccount, source: str) -> web3_eth.Contract:
         compiled_sol = solcx.compile_source(source)
         contract_id, contract_interface = compiled_sol.popitem()
@@ -92,6 +96,7 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         contract Wrapper {
             address private nested_address;
             constructor() {
+                reqire(False, "test value")
                 Nested nested = new Nested();
                 nested_address = address(nested);
             }
