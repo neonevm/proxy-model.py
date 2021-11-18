@@ -70,11 +70,21 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
 
     def _get_balance_wei(self, eth_acc: str) -> int:
         pub_key = self._host_solana_account.public_key()
-        token_owner_account, nonce = ether2program(eth_acc, self._EVM_LOADER_ID, pub_key)
+        token_owner_account, nonce = ether2program(eth_acc)
         balance = get_token_balance_gwei(self._solana_client, token_owner_account)
         self.assertIsNotNone(balance)
         self.assertIsInstance(balance, int)
         return balance * eth_utils.denoms.gwei
+
+    _CONTRACT_REQUIRES_LIST = '''
+        // SPDX-License-Identifier: GPL-3.0
+        pragma solidity >=0.7.0 <0.9.0;
+        contract RequiresList {
+            constructor(address[] memory payees) {
+                require(payees.length > 0, "PaymentSplitter: no payees");
+            }
+        }
+    '''
 
     _CONTRACT_STORAGE_SOURCE = '''
         // SPDX-License-Identifier: GPL-3.0
@@ -96,7 +106,6 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         contract Wrapper {
             address private nested_address;
             constructor() {
-                reqire(False, "test value")
                 Nested nested = new Nested();
                 nested_address = address(nested);
             }
