@@ -45,6 +45,7 @@ USE_COMBINED_START_CONTINUE = os.environ.get("USE_COMBINED_START_CONTINUE", "NO"
 CONTINUE_COUNT_FACTOR = int(os.environ.get("CONTINUE_COUNT_FACTOR", "3"))
 TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFIG", "3600"))
 MINIMAL_GAS_PRICE=int(os.environ.get("MINIMAL_GAS_PRICE", 1))*10**9
+WRITE_TRANSACTION_COST_IN_DB = os.environ.get("WRITE_TRANSACTION_COST_IN_DB", "NO") == "YES"
 
 ACCOUNT_SEED_VERSION=b'\1'
 
@@ -741,6 +742,9 @@ def make_05_call_instruction(signer, trx_info, call_data):
 
 
 def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
+    if not WRITE_TRANSACTION_COST_IN_DB:
+        return
+
     cost = receipt['result']['meta']['preBalances'][0] - receipt['result']['meta']['postBalances'][0]
     if eth_trx:
         hash = eth_trx.hash_signed().hex()
