@@ -1270,4 +1270,9 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, contract_id: str, 
     if not is_account_exists(client, caller_eth_account):
         create_eth_account_and_airdrop(client, signer, caller_eth_account)
     result = call_emulated(contract_id, str(caller_eth_account), data, value)
-    return result['used_gas'] + EXTRA_GAS
+    used_gas = result.get("used_gas")
+    if used_gas is None:
+        logger.error(f"Failed estimate_gas, unexpected result, by contract_id: {contract_id}, caller_eth_account: "
+                     f"{caller_eth_account}, data: {data}, value: {value}, emulation result: {result}")
+        raise Exception("Bad estimate_gas result")
+    return used_gas + EXTRA_GAS
