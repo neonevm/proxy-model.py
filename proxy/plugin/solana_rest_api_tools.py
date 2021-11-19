@@ -231,6 +231,7 @@ def write_holder_layout(nonce, offset, data):
             len(data).to_bytes(8, byteorder='little')+
             data)
 
+
 def get_account_info(client, storage_account):
     opts = {
         "encoding": "base64",
@@ -1093,15 +1094,15 @@ def _getAccountData(client, account, expected_length, owner=None):
     return data
 
 
-def getAccountInfo(client, eth_acc, base_account):
-    (account_sol, nonce) = ether2program(bytes(eth_acc).hex())
+def getAccountInfo(client, eth_account: EthereumAddress):
+    account_sol, nonce = ether2program(eth_account)
     info = _getAccountData(client, account_sol, ACCOUNT_INFO_LAYOUT.sizeof())
     return AccountInfo.frombytes(info)
 
 
-def getLamports(client, evm_loader, eth_acc, base_account):
-    (account, nonce) = ether2program(bytes(eth_acc).hex())
-    return int(client.get_balance(account, commitment=Confirmed)['result']['value'])
+def getLamports(client, eth_account):
+    pda_account, nonce = ether2program(eth_account)
+    return int(client.get_balance(pda_account, commitment=Confirmed)['result']['value'])
 
 
 def make_create_eth_account_trx(signer: SolanaAccount, eth_address: EthereumAddress, evm_loader_id, code_acc=None) \
@@ -1202,8 +1203,8 @@ def get_token_balance_gwei(client: SolanaClient, pda_account: str) -> int:
     return int(balance)
 
 
-def get_token_balance_or_airdrop(client: SolanaClient, signer: SolanaAccount, evm_loader: str, eth_account: EthereumAddress) -> int:
-    associated_token_account, nonce = ether2program(bytes(eth_account).hex())
+def get_token_balance_or_airdrop(client: SolanaClient, signer: SolanaAccount, eth_account: EthereumAddress) -> int:
+    associated_token_account, nonce = ether2program(eth_account)
     logger.debug(f"Get balance for eth account: {eth_account} aka: {associated_token_account}")
 
     try:
