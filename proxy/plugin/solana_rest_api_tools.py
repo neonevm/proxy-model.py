@@ -1259,8 +1259,8 @@ def make_instruction_data_from_tx(instruction, private_key=None):
 
 
 def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> bool:
-    pda_caller_account, nonce = ether2program(eth_account)
-    info = client.get_account_info(pda_caller_account, commitment=Confirmed)
+    caller_pda_account, nonce = ether2program(eth_account)
+    info = client.get_account_info(caller_pda_account, commitment=Confirmed)
     value = get_from_dict(info, "result", "value")
     return value is not None
 
