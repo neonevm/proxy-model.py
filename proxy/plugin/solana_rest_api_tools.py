@@ -1265,9 +1265,9 @@ def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> boo
     return value is not None
 
 
-def estimate_gas(client: SolanaClient, signer: SolanaAccount, contract_id: str, eth_caller_account: EthereumAddress,
+def estimate_gas(client: SolanaClient, signer: SolanaAccount, contract_id: str, caller_eth_account: EthereumAddress,
                  data: str = None, value: str = None):
-    if not is_account_exists(client, eth_caller_account):
-        create_eth_account_and_airdrop(client, signer, eth_caller_account)
-    result = call_emulated(contract_id, str(eth_caller_account), data, value)
+    if not is_account_exists(client, caller_eth_account):
+        create_eth_account_and_airdrop(client, signer, caller_eth_account)
+    result = call_emulated(contract_id, str(caller_eth_account), data, value)
     return result['used_gas'] + EXTRA_GAS
