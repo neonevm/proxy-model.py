@@ -1,18 +1,20 @@
 ## File: test_query_account_contract.py
 ## Integration test for the QueryAccount smart contract.
 ##
-## QueryAccount precompiled contract supports two methods:
+## QueryAccount precompiled contract supports three methods:
 ##
-## metadata(uint256) returns (bytes memory)
+## owner(uint256) returns (uint256)
 ##     Takes a Solana address, treats it as an address of an account.
-##     If success, returns result code (1 byte), the account's owner (32 bytes) and length of the account's data (8 bytes).
-##     Returns empty array otherwise.
+##     Returns the account's owner (32 bytes).
 ##
-## data(uint256, uint256, uint256) returns (bytes memory)
+## length(uint256) returns (uint64)
+##     Takes a Solana address, treats it as an address of an account.
+##     Returns the length of the account's data (8 bytes).
+##
+## data(uint256, uint64, uint64) returns (bytes memory)
 ##     Takes a Solana address, treats it as an address of an account,
 ##     also takes an offset and length of the account's data.
-##     If success, returns result code (1 byte) and the data (length bytes).
-##     Returns empty array otherwise.
+##     Returns a chunk of the data (length bytes).
 
 import unittest
 import os
@@ -28,128 +30,34 @@ admin = proxy.eth.account.create(issue + '/admin')
 user = proxy.eth.account.create(issue + '/user')
 proxy.eth.default_account = admin.address
 
-# Address: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU
+# Address: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU (a token mint account)
 # uint256: 110178555362476360822489549210862241441608066866019832842197691544474470948129
 
-# Address: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+# Address: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA (owner of the account)
 # uint256: 3106054211088883198575105191760876350940303353676611666299516346430146937001
 
 CONTRACT_SOURCE = '''
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.0;
 
-contract TestQueryAccount {
-    address constant QueryAccount = 0xff00000000000000000000000000000000000002;
+contract QueryAccount {
+    address constant precompiled = 0xff00000000000000000000000000000000000002;
 
-    function test_metadata_ok() external returns (bool) {
-        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
-        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("metadata(uint256)", solana_address));
-        require(success);
-        if (result.length == 0) {
-            return false;
-        }
-        if (result[0] != 0) {
-            return false;
-        }
-        if (result.length != (1 + 32 + 8)) {
-            return false;
-        }
-        uint256 owner_address = to_uint256(clone_slice(result, 1, 33));
-        uint256 golden_owner_address = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
-        if (owner_address != golden_owner_address) {
-            return false;
-        }
-        uint64 data_length = to_uint64(clone_slice(result, 33, 41));
-        uint64 golden_data_length = 82;
-        if (data_length != golden_data_length) {
-            return false;
-        }
-        return true;
+    function owner(uint256 solana_address) public returns (uint256) {
+        (bool success, bytes memory result) = precompiled.delegatecall(abi.encodeWithSignature("owner(uint256)", solana_address));
+        require(success, "QueryAccount.owner failed");
+        return to_uint256(result);
     }
 
-    function test_metadata_nonexistent_account() external returns (bool) {
-        uint256 solana_address = 90000; // hopefully does not exist
-        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("metadata(uint256)", solana_address));
-        require(!success);
-        return true;
+    function length(uint256 solana_address) public returns (uint64) {
+        (bool success, bytes memory result) = precompiled.delegatecall(abi.encodeWithSignature("length(uint256)", solana_address));
+        require(success, "QueryAccount.length failed");
+        return to_uint64(result);
     }
 
-    function test_data_ok() external returns (bool) {
-        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
-        // Test getting partial data
-        uint256 offset = 20;
-        uint256 length = 4;
-        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
-        require(success);
-        if (result.length == 0) {
-            return false;
-        }
-        if (result[0] != 0) {
-            return false;
-        }
-        byte r1 = 0x71;
-        byte r2 = 0x33;
-        byte r3 = 0xc6;
-        byte r4 = 0x12;
-        if (result[1] != r1) {
-            return false;
-        }
-        if (result[2] != r2) {
-            return false;
-        }
-        if (result[3] != r3) {
-            return false;
-        }
-        if (result[4] != r4) {
-            return false;
-        }
-        // Test getting full data
-        offset = 0;
-        length = 82;
-        (success, result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
-        require(success);
-        if (result.length != (1+82)) { // initial byte stores error code (0==success)
-            return false;
-        }
-        if (result[0] != 0) {
-            return false;
-        }
-        return true;
-    }
-
-    function test_data_nonexistent_account() external returns (bool) {
-        uint256 solana_address = 90000; // hopefully does not exist
-        uint256 offset = 0;
-        uint256 length = 1;
-        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
-        require(!success);
-        return true;
-    }
-
-    function test_data_too_big_offset() external returns (bool) {
-        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
-        uint256 offset = 200; // data len is 82
-        uint256 length = 1;
-        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
-        require(!success);
-        return true;
-    }
-
-    function test_data_too_big_length() external returns (bool) {
-        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
-        uint256 offset = 0;
-        uint256 length = 200; // data len is 82
-        (bool success, bytes memory result) = QueryAccount.delegatecall(abi.encodeWithSignature("data(uint256,uint256,uint256)", solana_address, offset, length));
-        require(!success);
-        return true;
-    }
-
-    function clone_slice(bytes memory source, uint64 left_index, uint64 right_index) private pure returns (bytes memory) {
-        require(right_index > left_index);
-        bytes memory result = new bytes(right_index - left_index);
-        for (uint64 i = left_index; i < right_index; i++) {
-            result[i - left_index] = source[i];
-        }
+    function data(uint256 solana_address, uint64 offset, uint64 len) public returns (bytes memory) {
+        (bool success, bytes memory result) = precompiled.delegatecall(abi.encodeWithSignature("data(uint256,uint64,uint64)", solana_address, offset, len));
+        require(success, "QueryAccount.data failed");
         return result;
     }
 
@@ -163,6 +71,118 @@ contract TestQueryAccount {
         assembly {
             result := mload(add(bb, 32))
         }
+    }
+}
+
+contract TestQueryAccount {
+    QueryAccount query;
+
+    constructor() {
+        query = new QueryAccount();
+    }
+
+    function test_metadata_ok() public returns (bool) {
+        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+
+        uint256 ownr = query.owner(solana_address);
+        uint256 golden_ownr = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
+        if (ownr != golden_ownr) {
+            return false;
+        }
+
+        uint64 len = query.length(solana_address);
+        uint64 golden_len = 82;
+        if (len != golden_len) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function test_metadata_nonexistent_account() public returns (bool) {
+        uint256 solana_address = 90000; // hopefully does not exist
+        try query.owner(solana_address) {
+            //
+        } catch {
+            return true; // expected exception
+        }
+        try query.length(solana_address) {
+            //
+        } catch {
+            return true; // expected exception
+        }
+        return false;
+    }
+
+    function test_data_ok() public returns (bool) {
+        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+        // Test getting subset of data
+        uint64 offset = 20;
+        uint64 len = 4;
+        bytes memory result = query.data(solana_address, offset, len);
+        if (result.length != 4) {
+            return false;
+        }
+        byte b0 = 0x71;
+        byte b1 = 0x33;
+        byte b2 = 0xc6;
+        byte b3 = 0x12;
+        if (result[0] != b0) {
+            return false;
+        }
+        if (result[1] != b1) {
+            return false;
+        }
+        if (result[2] != b2) {
+            return false;
+        }
+        if (result[3] != b3) {
+            return false;
+        }
+        // Test getting full data
+        offset = 0;
+        len = 82;
+        result = query.data(solana_address, offset, len);
+        if (result.length != 82) {
+            return false;
+        }
+        return true;
+    }
+
+    function test_data_nonexistent_account() public returns (bool) {
+        uint256 solana_address = 90000; // hopefully does not exist
+        uint64 offset = 0;
+        uint64 len = 1;
+        try query.data(solana_address, offset, len) {
+            //
+        } catch {
+            return true; // expected exception
+        }
+        return false;
+    }
+
+    function test_data_too_big_offset() public returns (bool) {
+        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+        uint64 offset = 200; // data len is 82
+        uint64 len = 1;
+        try query.data(solana_address, offset, len) {
+            //
+        } catch {
+            return true; // expected exception
+        }
+        return false;
+    }
+
+    function test_data_too_big_length() public returns (bool) {
+        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+        uint64 offset = 0;
+        uint64 len = 200; // data len is 82
+        try query.data(solana_address, offset, len) {
+            //
+        } catch {
+            return true; // expected exception
+        }
+        return false;
     }
 }
 '''
