@@ -56,10 +56,9 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         _, contract_interface = compile_result.popitem()
         contract_data = contract_interface.get("bin")
         self.assertIsNotNone(contract_data)
-        gas = self._web3.eth.estimate_gas({"from": owner_eth_account.address, "data": contract_data})
+        self._web3.eth.estimate_gas({"from": owner_eth_account.address, "data": contract_data})
         owner_balance = self._get_balance_wei(owner_eth_account.address)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, owner_balance)
-        self.assertIsNotNone(gas)
 
     def _compile_and_deploy_contract(self, contract_owner: LocalAccount, source: str) -> web3_eth.Contract:
         compile_result = solcx.compile_source(source)
