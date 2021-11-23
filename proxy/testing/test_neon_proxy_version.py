@@ -4,11 +4,11 @@ import requests
 import json
 import inspect
 
-from proxy.plugin.solana_rest_api import NEON_PROXY_PKG_VERSION, NEON_PROXY_REVISION
+from proxy.plugin.solana_rest_api import NEON_PROXY_PKG_VERSION
 
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 headers = {'Content-type': 'application/json'}
-
+NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 def get_line_number():
     cf = inspect.currentframe()
