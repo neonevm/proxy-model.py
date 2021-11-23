@@ -1,5 +1,6 @@
 ARG SOLANA_REVISION=v1.7.9-resources
 ARG EVM_LOADER_REVISION=latest
+ARG PROXY_REVISION=unknown
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 
@@ -40,9 +41,7 @@ COPY --from=spl /opt/solana_utils.py \
                 /spl/bin/
 COPY --from=spl /opt/neon-cli /spl/bin/emulator
 
-RUN export NEON_PROXY_REVISION_TO_BE_REPLACED=$(git rev-parse HEAD)
-RUN echo ${NEON_PROXY_REVISION_TO_BE_REPLACED}
-RUN sed -i 's/NEON_PROXY_REVISION_TO_BE_REPLACED/'"${NEON_PROXY_REVISION_TO_BE_REPLACED}"'/g' ./plugin/solana_rest_api.py
+RUN sed -i 's/NEON_PROXY_REVISION_TO_BE_REPLACED/'"${PROXY_REVISION}"'/g' ./plugin/solana_rest_api.py
 COPY . /opt
 COPY proxy/operator-keypair.json /root/.config/solana/id.json
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </opt/solana-py.patch
