@@ -1,8 +1,9 @@
 import json
 import logging
 import os
-import time
 import rlp
+import time
+
 from base58 import b58encode
 from sha3 import keccak_256
 from solana.publickey import PublicKey
@@ -10,17 +11,16 @@ from solana.rpc.api import SendTransactionError
 from solana.sysvar import *
 from solana.transaction import AccountMeta, Transaction
 
-from proxy.environment import EVM_LOADER_ID
-from proxy.plugin.eth_proto import Trx as EthTrx
+from proxy.core.acceptor.pool import new_acc_id_glob, acc_list_glob
 
-from proxy.common_neon.solana_interactor import SolanaInteractor, check_if_continue_returned, check_if_program_exceeded_instructions
-from proxy.common_neon.emulator_interactor import call_emulated
-from proxy.common_neon.neon_instruction import NeonInstruction
 from proxy.common_neon.address import accountWithSeed, AccountInfo, getTokenAddr
 from proxy.common_neon.constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, ACCOUNT_SEED_VERSION
+from proxy.common_neon.emulator_interactor import call_emulated
 from proxy.common_neon.layouts import ACCOUNT_INFO_LAYOUT
-
-from ..core.acceptor.pool import new_acc_id_glob, acc_list_glob
+from proxy.common_neon.neon_instruction import NeonInstruction
+from proxy.common_neon.solana_interactor import SolanaInteractor, check_if_continue_returned, check_if_program_exceeded_instructions
+from proxy.environment import EVM_LOADER_ID
+from proxy.plugin.eth_proto import Trx as EthTrx
 
 
 logger = logging.getLogger(__name__)

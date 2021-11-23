@@ -1,13 +1,14 @@
 import logging
 import random
-from hashlib import sha256
-from typing import NamedTuple
-from solana.publickey import PublicKey
-from eth_keys import keys as eth_keys
-from spl.token.instructions import get_associated_token_address
 
-from proxy.environment import neon_cli, ETH_TOKEN_MINT_ID, EVM_LOADER_ID
+from eth_keys import keys as eth_keys
+from hashlib import sha256
+from solana.publickey import PublicKey
+from spl.token.instructions import get_associated_token_address
+from typing import NamedTuple
+
 from proxy.common_neon.layouts import ACCOUNT_INFO_LAYOUT
+from proxy.environment import neon_cli, ETH_TOKEN_MINT_ID, EVM_LOADER_ID
 
 
 logger = logging.getLogger(__name__)

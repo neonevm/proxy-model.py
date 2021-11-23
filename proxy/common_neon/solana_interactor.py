@@ -4,10 +4,12 @@ import json
 import logging
 import re
 import time
+
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
+
+from proxy.common_neon.costs import update_transaction_cost
 from proxy.environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY
-from .costs import update_transaction_cost
 
 
 logger = logging.getLogger(__name__)

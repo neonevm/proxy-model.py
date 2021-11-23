@@ -1,8 +1,8 @@
+import eth_utils
 import logging
 import struct
-import eth_utils
-from construct import Bytes, Int8ul, Int64ul
-from construct import Struct as cStruct
+
+from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType
 from solana.publickey import PublicKey
 from solana.system_program import SYS_PROGRAM_ID
@@ -10,12 +10,11 @@ from solana.sysvar import SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID
 from spl.token.instructions import transfer2, Transfer2Params
-from sha3 import keccak_256
 
-from proxy.environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
-from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from proxy.common_neon.address import accountWithSeed, ether2program, getTokenAddr
+from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from proxy.common_neon.layouts import CREATE_ACCOUNT_LAYOUT
+from proxy.environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
 
 
 logger = logging.getLogger(__name__)
