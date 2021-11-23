@@ -4,7 +4,6 @@ import sys
 from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY
 from proxy.environment import ETH_TOKEN_MINT_ID, MINIMAL_GAS_PRICE
 
-sys.path.append("/spl/bin/")
 os.environ['SOLANA_URL'] = "http://solana:8899"
 os.environ['EVM_LOADER'] = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
 os.environ['ETH_TOKEN_MINT'] = "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU"

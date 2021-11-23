@@ -1,22 +1,11 @@
 import json
 import logging
 from proxy.environment import neon_cli
+from .errors import EthereumError
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
-class EthereumError(Exception):
-    def __init__(self, code, message, data=None):
-        self.code = code
-        self.message = message
-        self.data = data
-
-    def getError(self):
-        error = {'code': self.code, 'message': self.message}
-        if self.data: error['data'] = self.data
-        return error
 
 
 def call_emulated(contract_id, caller_id, data=None, value=None):

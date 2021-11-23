@@ -1,5 +1,6 @@
 import logging
 import struct
+import eth_utils
 from construct import Bytes, Int8ul, Int64ul
 from construct import Struct as cStruct
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType
@@ -8,9 +9,10 @@ from solana.system_program import SYS_PROGRAM_ID
 from solana.sysvar import SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID
+from spl.token.instructions import transfer2, Transfer2Params
 from sha3 import keccak_256
 
-from proxy.environment import evm_loader_id as EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE
+from proxy.environment import evm_loader_id as EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
 from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from .address import accountWithSeed, ether2program, getTokenAddr
 
@@ -148,16 +150,12 @@ class NeonInstruction:
         )
 
 
-    def createEtherAccountTrx(self, ether, code_acc=None):
-        if isinstance(ether, str):
-            if ether.startswith('0x'): ether = ether[2:]
-        else: ether = ether.hex()
-        (sol, nonce) = ether2program(ether)
-        associated_token = getTokenAddr(PublicKey(sol))
-        logger.debug('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
-        logger.debug('associatedTokenAccount: {}'.format(associated_token))
+    def make_create_eth_account_trx(self, eth_address, code_acc=None):
+        solana_address, nonce = ether2program(eth_address)
+        token_acc_address = getTokenAddr(PublicKey(solana_address))
+        logger.debug(f'Create eth account: {eth_address}, sol account: {solana_address}, token_acc_address: {token_acc_address}, nonce: {nonce}')
         base = self.operator
-        data=create_account_layout(0, 0, bytes.fromhex(ether), nonce)
+        data = create_account_layout(0, 0, bytes(eth_address), nonce)
         trx = Transaction()
         if code_acc is None:
             trx.add(TransactionInstruction(
@@ -165,8 +163,8 @@ class NeonInstruction:
                 data=data,
                 keys=[
                     AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=associated_token, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=PublicKey(solana_address), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=token_acc_address, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
@@ -179,8 +177,8 @@ class NeonInstruction:
                 data=data,
                 keys=[
                     AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=associated_token, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=PublicKey(solana_address), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=token_acc_address, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
                     AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
@@ -188,10 +186,10 @@ class NeonInstruction:
                     AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
                 ]))
-        return (trx, sol, associated_token)
+        return trx, token_acc_address
 
 
-    def createERC20TokenAccountTrx(self, token_info):
+    def createERC20TokenAccountTrx(self, token_info) -> Transaction:
         trx = Transaction()
         trx.add(TransactionInstruction(
             program_id=EVM_LOADER_ID,
@@ -211,7 +209,35 @@ class NeonInstruction:
         return trx
 
 
-    def make_write_transaction(self, offset: int, data: bytes):
+    def make_transfer_instruction(self, associated_token_account: PublicKey) -> TransactionInstruction:
+        owner_associated_token_account = getTokenAddr(self.operator)
+        transfer_instruction = transfer2(Transfer2Params(
+            source=owner_associated_token_account,
+            owner=self.operator,
+            dest=associated_token_account,
+            amount=NEW_USER_AIRDROP_AMOUNT * eth_utils.denoms.gwei,
+            decimals=9,
+            mint=ETH_TOKEN_MINT_ID,
+            program_id=TOKEN_PROGRAM_ID
+        ))
+        logger.debug(f"Token transfer from token: {owner_associated_token_account}, owned by: {self.operator}, to token: "
+                    f"{associated_token_account}, owned by: {associated_token_account} , value: {NEW_USER_AIRDROP_AMOUNT}")
+        return transfer_instruction
+
+
+    def trx_with_create_and_airdrop(self, eth_account, code_acc=None) -> Transaction:
+        trx = Transaction()
+        create_trx, associated_token_account = self.make_create_eth_account_trx(eth_account, code_acc)
+        trx.add(create_trx)
+        if NEW_USER_AIRDROP_AMOUNT <= 0:
+            return trx
+        transfer_instruction = self.make_transfer_instruction(associated_token_account)
+        trx.add(transfer_instruction)
+
+        return trx
+
+
+    def make_write_transaction(self, offset: int, data: bytes) -> Transaction:
         return Transaction().add(TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=write_holder_layout(self.perm_accs_id, offset, data),
@@ -222,7 +248,7 @@ class NeonInstruction:
         ))
 
 
-    def make_keccak_instruction(self, check_instruction_index, msg_len, data_start):
+    def make_keccak_instruction(self, check_instruction_index, msg_len, data_start) -> TransactionInstruction:
         return TransactionInstruction(
             program_id=KECCAK_PROGRAM,
             data=make_keccak_instruction_data(check_instruction_index, msg_len, data_start),
@@ -232,7 +258,7 @@ class NeonInstruction:
         )
 
 
-    def make_05_call_instruction(self):
+    def make_05_call_instruction(self) -> TransactionInstruction:
         return TransactionInstruction(
             program_id = EVM_LOADER_ID,
             data = bytearray.fromhex("05") + self.collateral_pool_index_buf + self.msg,
@@ -255,7 +281,7 @@ class NeonInstruction:
         return trx
 
 
-    def make_partial_call_instruction(self):
+    def make_partial_call_instruction(self) -> TransactionInstruction:
         return TransactionInstruction(
             program_id = EVM_LOADER_ID,
             data = bytearray.fromhex("13") + self.collateral_pool_index_buf + int(0).to_bytes(8, byteorder="little") + self.msg,
@@ -304,7 +330,7 @@ class NeonInstruction:
         ))
 
 
-    def make_continue_instruction(self, steps, index=None):
+    def make_continue_instruction(self, steps, index=None) -> Transaction:
         data = bytearray.fromhex("14") + self.collateral_pool_index_buf + steps.to_bytes(8, byteorder="little")
         if index:
             data = data + index.to_bytes(8, byteorder="little")
@@ -328,7 +354,7 @@ class NeonInstruction:
         ))
 
 
-    def make_cancel_instruction(self):
+    def make_cancel_instruction(self) -> Transaction:
         return Transaction().add(TransactionInstruction(
             program_id = EVM_LOADER_ID,
             data = bytearray.fromhex("15") + self.eth_trx.nonce.to_bytes(8, 'little'),

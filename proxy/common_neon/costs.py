@@ -51,12 +51,16 @@ class CostSingleton(object):
         return cls.instance
 
 
-def update_transaction_cost(receipt, eth_trx, reason=None, extra_sol_trx=False, ):
+def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
     cost = receipt['result']['meta']['preBalances'][0] - receipt['result']['meta']['postBalances'][0]
-
-    hash = eth_trx.hash_signed().hex()
-    sender = eth_trx.sender()
-    to_address = eth_trx.toAddress.hex() if eth_trx.toAddress else "None"
+    if eth_trx:
+        hash = eth_trx.hash_signed().hex()
+        sender = eth_trx.sender()
+        to_address = eth_trx.toAddress.hex() if eth_trx.toAddress else "None"
+    else:
+        hash = None
+        sender = None
+        to_address = None
 
     sig = receipt['result']['transaction']['signatures'][0]
     used_gas=None
