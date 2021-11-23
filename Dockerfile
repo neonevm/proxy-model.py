@@ -41,8 +41,8 @@ COPY --from=spl /opt/solana_utils.py \
                 /spl/bin/
 COPY --from=spl /opt/neon-cli /spl/bin/emulator
 
-RUN sed -i 's/NEON_PROXY_REVISION_TO_BE_REPLACED/'"${PROXY_REVISION}"'/g' proxy/plugin/solana_rest_api.py
 COPY . /opt
+RUN sed -i 's/NEON_PROXY_REVISION_TO_BE_REPLACED/'"${PROXY_REVISION}"'/g' /opt/proxy/plugin/solana_rest_api.py
 COPY proxy/operator-keypair.json /root/.config/solana/id.json
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </opt/solana-py.patch
 
