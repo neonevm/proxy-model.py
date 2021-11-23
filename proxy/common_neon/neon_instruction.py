@@ -76,9 +76,11 @@ def make_keccak_instruction_data(check_instruction_index, msg_len, data_start):
 
 
 class NeonInstruction:
-    def __init__(self, operator, eth_trx):
-        self.eth_trx = eth_trx
-        self.msg = bytes.fromhex(self.eth_trx.sender()) + self.eth_trx.signature() + self.eth_trx.unsigned_msg()
+    def __init__(self, operator, eth_trx = None):
+        self.operator = operator
+        self.operator_token = getTokenAddr(self.operator)
+
+        self.caller_token = None
 
         self.eth_accounts = None
 
@@ -86,16 +88,19 @@ class NeonInstruction:
         self.holder = None
         self.perm_accs_id = None
 
+        self.eth_trx = eth_trx
 
-        hash = keccak_256(self.eth_trx.unsigned_msg()).digest()
-        collateral_pool_index = int().from_bytes(hash[:4], "little") % COLLATERALL_POOL_MAX
-        self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
-        self.collateral_pool_address = self.create_collateral_pool_address(collateral_pool_index)
+        if eth_trx is not None:
+            self.msg = bytes.fromhex(self.eth_trx.sender()) + self.eth_trx.signature() + self.eth_trx.unsigned_msg()
 
-        self.operator = operator
-        self.operator_token = getTokenAddr(self.operator)
-
-        self.caller_token = None
+            hash = keccak_256(self.eth_trx.unsigned_msg()).digest()
+            collateral_pool_index = int().from_bytes(hash[:4], "little") % COLLATERALL_POOL_MAX
+            self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+            self.collateral_pool_address = self.create_collateral_pool_address(collateral_pool_index)
+        else:
+            self.msg = None
+            self.collateral_pool_index_buf = None
+            self.collateral_pool_address = None
 
 
     def set_accounts(self, eth_accounts, caller_token):
@@ -147,7 +152,7 @@ class NeonInstruction:
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
-        (sol, nonce) = ether2program(ether, EVM_LOADER_ID, self.operator)
+        (sol, nonce) = ether2program(ether)
         associated_token = getTokenAddr(PublicKey(sol))
         logger.debug('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         logger.debug('associatedTokenAccount: {}'.format(associated_token))

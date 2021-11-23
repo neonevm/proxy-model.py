@@ -31,6 +31,29 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
+class EthereumAddress:
+    def __init__(self, data, private=None):
+        if isinstance(data, str):
+            data = bytes(bytearray.fromhex(data[2:]))
+        self.data = data
+        self.private = private
+
+    @staticmethod
+    def random():
+        letters = '0123456789abcdef'
+        data = bytearray.fromhex(''.join([random.choice(letters) for k in range(64)]))
+        pk = eth_keys.PrivateKey(data)
+        return EthereumAddress(pk.public_key.to_canonical_address(), pk)
+
+    def __str__(self):
+        return '0x'+self.data.hex()
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __bytes__(self): return self.data
+
+
 def accountWithSeed(base, seed, program):
     # logger.debug(type(base), str(base), type(seed), str(seed), type(program), str(program))
     result = PublicKey(sha256(bytes(base) + bytes(seed) + bytes(program)).digest())
@@ -38,15 +61,16 @@ def accountWithSeed(base, seed, program):
     return result
 
 
-def ether2program(ether, program_id, base):
+def ether2program(ether):
     if isinstance(ether, str):
-        if ether.startswith('0x'):
-            ether = ether[2:]
+        pass
+    elif isinstance(ether, EthereumAddress):
+        ether = str(ether)
     else:
         ether = ether.hex()
     output = neon_cli().call("create-program-address", ether)
     items = output.rstrip().split(' ')
-    return (items[0], int(items[1]))
+    return items[0], int(items[1])
 
 
 def getTokenAddr(account):

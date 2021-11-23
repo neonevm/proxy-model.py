@@ -24,7 +24,7 @@ from solana.rpc.api import Client as SolanaClient
 import base58
 import traceback
 import threading
-from .solana_rest_api_tools import EthereumAddress, getTokens, getAccountInfo, \
+from .solana_rest_api_tools import getTokens, getAccountInfo, \
     call_signed, neon_config_load
 from solana.rpc.commitment import Commitment, Confirmed
 from web3 import Web3
@@ -35,6 +35,7 @@ from proxy.indexer.utils import get_trx_results, LogDB
 from proxy.indexer.sql_dict import SQLDict
 from proxy.environment import evm_loader_id, solana_cli, solana_url, MINIMAL_GAS_PRICE
 from proxy.common_neon.emulator_interactor import EthereumError, call_emulated
+from proxy.common_neon.address import EthereumAddress
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -251,7 +252,7 @@ class EthereumModel:
     def eth_getTransactionCount(self, account, tag):
         logger.debug('eth_getTransactionCount: %s', account)
         try:
-            acc_info = getAccountInfo(self.client, EthereumAddress(account), self.signer.public_key())
+            acc_info = getAccountInfo(self.client, EthereumAddress(account))
             return hex(int.from_bytes(acc_info.trx_count, 'little'))
         except Exception as err:
             print("Can't get account info: %s"%err)
@@ -380,8 +381,8 @@ class EthereumModel:
 
         nonce = int(self.eth_getTransactionCount('0x' + sender, None), base=16)
 
-        logger.debug('Eth Sender trx nonce: %s', nonce)
-        logger.debug('Operator nonce: %s', trx.nonce)
+        logger.debug('Eth Sender trx nonce in solana: %s', nonce)
+        logger.debug('Eth Sender trx nonce in transaction: %s', trx.nonce)
 
         if (int(nonce) != int(trx.nonce)):
             raise EthereumError(-32002, 'Verifying nonce before send transaction: Error processing Instruction 1: invalid program argument'

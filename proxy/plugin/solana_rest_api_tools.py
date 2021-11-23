@@ -11,33 +11,11 @@ from proxy.environment import read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, NE
 from proxy.common_neon.transaction_sender import TransactionSender
 from proxy.common_neon.solana_interactor import SolanaInteractor
 from proxy.common_neon.address import ether2program, getTokenAddr, ACCOUNT_INFO_LAYOUT, AccountInfo
+from proxy.common_neon.address import EthereumAddress
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
-class EthereumAddress:
-    def __init__(self, data, private=None):
-        if isinstance(data, str):
-            data = bytes(bytearray.fromhex(data[2:]))
-        self.data = data
-        self.private = private
-
-    @staticmethod
-    def random():
-        letters = '0123456789abcdef'
-        data = bytearray.fromhex(''.join([random.choice(letters) for k in range(64)]))
-        pk = eth_keys.PrivateKey(data)
-        return EthereumAddress(pk.public_key.to_canonical_address(), pk)
-
-    def __str__(self):
-        return '0x'+self.data.hex()
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __bytes__(self): return self.data
 
 
 def neon_config_load(ethereum_model):
@@ -86,7 +64,7 @@ def getAccountInfo(client, eth_account: EthereumAddress):
 
 
 def getTokens(client, signer, evm_loader, eth_acc, base_account):
-    (account, nonce) = ether2program(bytes(eth_acc).hex(), evm_loader, base_account)
+    (account, nonce) = ether2program(bytes(eth_acc).hex())
     token_account = getTokenAddr(PublicKey(account))
 
     balance = client.get_token_account_balance(token_account, commitment=Confirmed)

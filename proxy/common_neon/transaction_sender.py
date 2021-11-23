@@ -190,6 +190,9 @@ class TransactionSender:
             to_address_arg = self.eth_trx.toAddress.hex()
             to_address = self.eth_trx.toAddress
 
+        logger.debug("send_addr: %s", self.eth_trx.sender())
+        logger.debug("dest_addr: %s", to_address.hex())
+
         output_json = call_emulated(to_address_arg, sender_ether.hex(), self.eth_trx.callData.hex(), hex(self.eth_trx.value))
         logger.debug("emulator returns: %s", json.dumps(output_json, indent=3))
 
