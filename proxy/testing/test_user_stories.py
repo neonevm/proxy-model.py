@@ -100,7 +100,7 @@ class TestUserStories(unittest.TestCase):
                              "method": "eth_chainId"
                              })).text)
         print('response:', response)
-        chain_id = response['result']
+        chain_id = int(response['result'])
         print('chain_id:', chain_id)
         self.assertEqual(chain_id, 111)
 
