@@ -46,6 +46,8 @@ modelInstanceLock = threading.Lock()
 modelInstance = None
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
+NEON_PROXY_PKG_VERSION = '0.4.1-rc0'
+NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 class EthereumModel:
     def __init__(self):
@@ -85,6 +87,10 @@ class EthereumModel:
             values = bytes(nums)
             solana_account = sol_Account(values)
         return solana_account
+
+    def neon_proxy_version(self):
+        neon_config_load(self)
+        return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
 
     def web3_clientVersion(self):
         neon_config_load(self)
