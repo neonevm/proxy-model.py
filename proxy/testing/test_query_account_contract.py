@@ -84,14 +84,27 @@ contract TestQueryAccount {
     function test_metadata_ok() public returns (bool) {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
 
-        uint256 ownr = query.owner(solana_address);
         uint256 golden_ownr = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
+        uint64 golden_len = 82;
+
+        uint256 ownr = query.owner(solana_address);
         if (ownr != golden_ownr) {
             return false;
         }
 
         uint64 len = query.length(solana_address);
-        uint64 golden_len = 82;
+        if (len != golden_len) {
+            return false;
+        }
+
+        // Should return cached result
+        ownr = query.owner(solana_address);
+        if (ownr != golden_ownr) {
+            return false;
+        }
+
+        // Should return cached result
+        len = query.length(solana_address);
         if (len != golden_len) {
             return false;
         }
@@ -116,6 +129,11 @@ contract TestQueryAccount {
 
     function test_data_ok() public returns (bool) {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+        byte b0 = 0x71;
+        byte b1 = 0x33;
+        byte b2 = 0xc6;
+        byte b3 = 0x12;
+
         // Test getting subset of data
         uint64 offset = 20;
         uint64 len = 4;
@@ -123,10 +141,6 @@ contract TestQueryAccount {
         if (result.length != 4) {
             return false;
         }
-        byte b0 = 0x71;
-        byte b1 = 0x33;
-        byte b2 = 0xc6;
-        byte b3 = 0x12;
         if (result[0] != b0) {
             return false;
         }
@@ -146,6 +160,34 @@ contract TestQueryAccount {
         if (result.length != 82) {
             return false;
         }
+
+        // Test getting subset of data (cached)
+        offset = 20;
+        len = 4;
+        result = query.data(solana_address, offset, len);
+        if (result.length != 4) {
+            return false;
+        }
+        if (result[0] != b0) {
+            return false;
+        }
+        if (result[1] != b1) {
+            return false;
+        }
+        if (result[2] != b2) {
+            return false;
+        }
+        if (result[3] != b3) {
+            return false;
+        }
+        // Test getting full data (cached)
+        offset = 0;
+        len = 82;
+        result = query.data(solana_address, offset, len);
+        if (result.length != 82) {
+            return false;
+        }
+
         return true;
     }
 
