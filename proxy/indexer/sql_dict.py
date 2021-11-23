@@ -6,7 +6,7 @@ from collections.abc import MutableMapping
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy-pass")
-POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
+POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "postgres")
 
 try:
     from cPickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
