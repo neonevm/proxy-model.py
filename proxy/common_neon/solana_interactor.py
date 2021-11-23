@@ -6,7 +6,7 @@ import re
 import time
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
-from proxy.environment import EVM_LOADER_ID, confirmation_check_delay
+from proxy.environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY
 from .costs import update_transaction_cost
 
 
@@ -117,8 +117,8 @@ class SolanaInteractor:
                 status['confirmationStatus'] == 'confirmed' and status['confirmations'] >= confirmations):
     #            logger.debug('Confirmed transaction:', resp)
                     return
-            time.sleep(confirmation_check_delay)
-            elapsed_time += confirmation_check_delay
+            time.sleep(CONFIRMATION_CHECK_DELAY)
+            elapsed_time += CONFIRMATION_CHECK_DELAY
         #if not resp["result"]:
         raise RuntimeError("could not confirm transaction: ", tx_sig)
         #return resp
