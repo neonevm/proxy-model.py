@@ -56,6 +56,19 @@ class TransactionStruct:
         self.blocked_accounts = blocked_accounts
         self.slot = slot
 
+class InstructionFilter:
+    def __init__(self, *instructions):
+        self.instr_ids = instructions
+
+    def handle_instruction(self, instruction) -> bool:
+        if instruction in self.instr_ids:
+            self.process_instruction(instruction)
+
+class TransactionFilter:
+    def __init__(self, client):
+        self.client = client
+
+    def handle(self, trx):
 
 class Indexer:
     def __init__(self):
