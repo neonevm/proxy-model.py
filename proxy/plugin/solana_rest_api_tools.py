@@ -70,7 +70,7 @@ def getAccountInfo(client, eth_account: EthereumAddress):
 
 def create_eth_account_and_airdrop(client: SolanaClient, signer: SolanaAccount, eth_account: EthereumAddress):
     trx = NeonInstruction(signer.public_key()).trx_with_create_and_airdrop(eth_account)
-    result = SolanaInteractor(signer, client).send_transaction(trx, reason='create_eth_account_and_airdrop')
+    result = SolanaInteractor(signer, client).send_transaction(trx, None, reason='create_eth_account_and_airdrop')
     error = result.get("error")
     if error is not None:
         logger.error(f"Failed to create eth_account and airdrop: {eth_account}, error occurred: {error}")

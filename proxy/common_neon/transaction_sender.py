@@ -270,23 +270,8 @@ class TransactionSender:
                     # add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
                     code_account_writable = acc_desc["writable"]
 
-                (create_trx, solana_address, token_address) = self.instruction.createEtherAccountTrx(address, code_account)
+                create_trx = self.instruction.trx_with_create_and_airdrop(address, code_account)
                 self.create_acc_trx.add(create_trx)
-
-                if address == sender_ether and NEW_USER_AIRDROP_AMOUNT > 0:
-                    self.create_acc_trx.add(transfer2(Transfer2Params(
-                        amount=NEW_USER_AIRDROP_AMOUNT*1_000_000_000,
-                        decimals=9,
-                        dest=getTokenAddr(PublicKey(acc_desc["account"])),
-                        mint=ETH_TOKEN_MINT_ID,
-                        owner=self.sender.get_operator_key(),
-                        program_id=TOKEN_PROGRAM_ID,
-                        source=getTokenAddr(self.sender.get_operator_key()),
-                    )))
-                    logger.debug("Token transfer to %s as ethereum 0x%s amount %s",
-                                getTokenAddr(PublicKey(acc_desc["account"])),
-                                acc_desc["address"],
-                                str(NEW_USER_AIRDROP_AMOUNT))
 
             if address == to_address:
                 contract_sol = PublicKey(acc_desc["account"])
