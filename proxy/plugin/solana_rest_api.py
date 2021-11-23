@@ -89,7 +89,6 @@ class EthereumModel:
         return solana_account
 
     def neon_proxy_version(self):
-        neon_config_load(self)
         return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
 
     def web3_clientVersion(self):

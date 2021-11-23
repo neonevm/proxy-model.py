@@ -2,6 +2,7 @@
 set -euo pipefail
 
 REVISION=$(git rev-parse HEAD)
+
 set ${SOLANA_REVISION:=v1.7.9-resources}
 set ${EVM_LOADER_REVISION:=latest}
 

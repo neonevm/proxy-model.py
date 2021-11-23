@@ -9,6 +9,7 @@ from proxy.plugin.solana_rest_api import NEON_PROXY_PKG_VERSION, NEON_PROXY_REVI
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 headers = {'Content-type': 'application/json'}
 
+
 def get_line_number():
     cf = inspect.currentframe()
     return cf.f_back.f_lineno
