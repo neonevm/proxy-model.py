@@ -12,21 +12,14 @@ from spl.token.constants import ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID
 from spl.token.instructions import transfer2, Transfer2Params
 from sha3 import keccak_256
 
-from proxy.environment import evm_loader_id as EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
-from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
-from .address import accountWithSeed, ether2program, getTokenAddr
+from proxy.environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
+from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
+from proxy.common_neon.address import accountWithSeed, ether2program, getTokenAddr
+from proxy.common_neon.layouts import CREATE_ACCOUNT_LAYOUT
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
-CREATE_ACCOUNT_LAYOUT = cStruct(
-    "lamports" / Int64ul,
-    "space" / Int64ul,
-    "ether" / Bytes(20),
-    "nonce" / Int8ul
-)
 
 
 obligatory_accounts = [
@@ -35,6 +28,21 @@ obligatory_accounts = [
     AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
     AccountMeta(pubkey=SYSVAR_CLOCK_PUBKEY, is_signer=False, is_writable=False),
 ]
+
+
+def create_account_with_seed_layout(base, seed, lamports, space):
+    return SYSTEM_INSTRUCTIONS_LAYOUT.build(
+        dict(
+            instruction_type = InstructionType.CREATE_ACCOUNT_WITH_SEED,
+            args=dict(
+                base=bytes(base),
+                seed=dict(length=len(seed), chars=seed),
+                lamports=lamports,
+                space=space,
+                program_id=bytes(PublicKey(EVM_LOADER_ID))
+            )
+        )
+    )
 
 
 def create_account_layout(lamports, space, ether, nonce):
@@ -78,75 +86,52 @@ def make_keccak_instruction_data(check_instruction_index, msg_len, data_start):
 
 
 class NeonInstruction:
-    def __init__(self, operator, eth_trx = None):
+    def __init__(self, operator):
         self.operator = operator
         self.operator_token = getTokenAddr(self.operator)
 
-        self.caller_token = None
 
-        self.eth_accounts = None
-
-        self.storage = None
-        self.holder = None
-        self.perm_accs_id = None
-
-        self.eth_trx = eth_trx
-
-        if eth_trx is not None:
-            self.msg = bytes.fromhex(self.eth_trx.sender()) + self.eth_trx.signature() + self.eth_trx.unsigned_msg()
-
-            hash = keccak_256(self.eth_trx.unsigned_msg()).digest()
-            collateral_pool_index = int().from_bytes(hash[:4], "little") % COLLATERALL_POOL_MAX
-            self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
-            self.collateral_pool_address = self.create_collateral_pool_address(collateral_pool_index)
-        else:
-            self.msg = None
-            self.collateral_pool_index_buf = None
-            self.collateral_pool_address = None
-
-
-    def set_accounts(self, eth_accounts, caller_token):
+    def init_eth_trx(self, eth_trx, eth_accounts, caller_token):
         self.eth_accounts = eth_accounts
         self.caller_token = caller_token
 
+        self.eth_trx = eth_trx
 
-    def set_storage_and_holder(self, storage, holder, perm_accs_id):
+        self.msg = bytes.fromhex(self.eth_trx.sender()) + self.eth_trx.signature() + self.eth_trx.unsigned_msg()
+
+        hash = keccak_256(self.eth_trx.unsigned_msg()).digest()
+        collateral_pool_index = int().from_bytes(hash[:4], "little") % COLLATERALL_POOL_MAX
+        self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+        self.collateral_pool_address = self.create_collateral_pool_address(collateral_pool_index)
+
+        return self
+
+
+    def init_iterative(self, storage, holder, perm_accs_id):
         self.storage = storage
         self.holder = holder
         self.perm_accs_id = perm_accs_id
+
+        return self
 
 
     def create_collateral_pool_address(self, collateral_pool_index):
         COLLATERAL_SEED_PREFIX = "collateral_seed_"
         seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
-        return accountWithSeed(PublicKey(COLLATERAL_POOL_BASE), str.encode(seed), PublicKey(EVM_LOADER_ID))
+        return accountWithSeed(PublicKey(COLLATERAL_POOL_BASE), str.encode(seed))
 
 
-    def create_account_with_seed_trx(self, seed, lamports, space):
+    def create_account_with_seed_trx(self, account, seed, lamports, space):
         seed_str = str(seed, 'utf8')
-        data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
-            dict(
-                instruction_type = InstructionType.CREATE_ACCOUNT_WITH_SEED,
-                args=dict(
-                    base=bytes(self.operator),
-                    seed=dict(length=len(seed_str), chars=seed_str),
-                    lamports=lamports,
-                    space=space,
-                    program_id=bytes(PublicKey(EVM_LOADER_ID))
-                )
-            )
-        )
-        logger.debug("createAccountWithSeedTrx %s %s %s", type(self.operator), self.operator, data.hex())
-        created = accountWithSeed(self.operator, seed, PublicKey(EVM_LOADER_ID))
-        logger.debug("created %s", created)
+        logger.debug("createAccountWithSeedTrx base(%s) account(%s) seed(%s)", type(self.operator),account, seed_str)
         return TransactionInstruction(
             keys=[
                 AccountMeta(pubkey=self.operator, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=created, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.operator, is_signer=True, is_writable=False),
             ],
             program_id=SYS_PROGRAM_ID,
-            data=data
+            data=create_account_with_seed_layout(self.operator, seed_str, lamports, space)
         )
 
 
@@ -154,6 +139,7 @@ class NeonInstruction:
         solana_address, nonce = ether2program(eth_address)
         token_acc_address = getTokenAddr(PublicKey(solana_address))
         logger.debug(f'Create eth account: {eth_address}, sol account: {solana_address}, token_acc_address: {token_acc_address}, nonce: {nonce}')
+
         base = self.operator
         data = create_account_layout(0, 0, bytes(eth_address), nonce)
         trx = Transaction()
@@ -235,6 +221,23 @@ class NeonInstruction:
         trx.add(transfer_instruction)
 
         return trx
+
+
+    def make_resize_instruction(self, acc_desc, code_account_new, seed) -> TransactionInstruction:
+        return TransactionInstruction(
+            program_id = EVM_LOADER_ID,
+            data = bytearray.fromhex("11") + bytes(seed), # 17- ResizeStorageAccount
+            keys = [
+                AccountMeta(pubkey=PublicKey(acc_desc["account"]), is_signer=False, is_writable=True),
+                (
+                    AccountMeta(pubkey=acc_desc["contract"], is_signer=False, is_writable=True)
+                    if acc_desc["contract"] else
+                    AccountMeta(pubkey=PublicKey("11111111111111111111111111111111"), is_signer=False, is_writable=False)
+                ),
+                AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.operator, is_signer=True, is_writable=False)
+            ],
+        )
 
 
     def make_write_transaction(self, offset: int, data: bytes) -> Transaction:

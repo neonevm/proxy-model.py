@@ -7,7 +7,7 @@ import logging
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict, Union
-from proxy.environment import solana_url, evm_loader_id
+from proxy.environment import SOLANA_URL, EVM_LOADER_ID
 
 
 try:
@@ -59,7 +59,7 @@ class TransactionStruct:
 
 class Indexer:
     def __init__(self):
-        self.client = Client(solana_url)
+        self.client = Client(SOLANA_URL)
         self.canceller = Canceller()
         self.logs_db = LogDB()
         self.blocks_by_hash = SQLDict(tablename="solana_blocks_by_hash")
@@ -110,7 +110,7 @@ class Indexer:
             if minimal_tx:
                 opts["before"] = minimal_tx
             opts["commitment"] = "confirmed"
-            result = self.client._provider.make_request("getSignaturesForAddress", evm_loader_id, opts)
+            result = self.client._provider.make_request("getSignaturesForAddress", EVM_LOADER_ID, opts)
             logger.debug("{:>3} get_signatures_for_address {}".format(counter, len(result["result"])))
             counter += 1
 
@@ -209,7 +209,7 @@ class Indexer:
                 if trx['transaction']['message']['instructions'] is not None:
                     for instruction in trx['transaction']['message']['instructions']:
 
-                        if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] != evm_loader_id:
+                        if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] != EVM_LOADER_ID:
                             continue
 
                         if check_error(trx):

@@ -34,7 +34,7 @@ from web3 import Web3
 from proxy.core.acceptor.pool import proxy_id_glob
 from proxy.indexer.utils import get_trx_results, LogDB
 from proxy.indexer.sql_dict import SQLDict
-from proxy.environment import neon_cli, solana_cli, solana_url, MINIMAL_GAS_PRICE
+from proxy.environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
 from proxy.common_neon.emulator_interactor import call_emulated
 from proxy.common_neon.address import EthereumAddress
 from proxy.common_neon.errors import EthereumError
@@ -50,7 +50,7 @@ EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 class EthereumModel:
     def __init__(self):
         self.signer = self.get_solana_account()
-        self.client = SolanaClient(solana_url)
+        self.client = SolanaClient(SOLANA_URL)
 
         self.logs_db = LogDB()
         self.blocks_by_hash = SQLDict(tablename="solana_blocks_by_hash")

@@ -3,23 +3,22 @@ import logging
 import os
 import time
 import rlp
-from base58 import b58decode, b58encode
+from base58 import b58encode
 from sha3 import keccak_256
 from solana.publickey import PublicKey
 from solana.rpc.api import SendTransactionError
 from solana.sysvar import *
-from solana.transaction import AccountMeta, Transaction, TransactionInstruction
-from spl.token.constants import TOKEN_PROGRAM_ID
-from spl.token.instructions import transfer2, Transfer2Params
+from solana.transaction import AccountMeta, Transaction
 
-from proxy.environment import evm_loader_id, ETH_TOKEN_MINT_ID, NEW_USER_AIRDROP_AMOUNT
+from proxy.environment import EVM_LOADER_ID
 from proxy.plugin.eth_proto import Trx as EthTrx
 
-from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_if_program_exceeded_instructions
-from .emulator_interactor import call_emulated
-from .neon_instruction import NeonInstruction
-from .address import accountWithSeed, ACCOUNT_SEED_VERSION, ACCOUNT_INFO_LAYOUT, AccountInfo, getTokenAddr
-from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG
+from proxy.common_neon.solana_interactor import SolanaInteractor, check_if_continue_returned, check_if_program_exceeded_instructions
+from proxy.common_neon.emulator_interactor import call_emulated
+from proxy.common_neon.neon_instruction import NeonInstruction
+from proxy.common_neon.address import accountWithSeed, AccountInfo, getTokenAddr
+from proxy.common_neon.constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, ACCOUNT_SEED_VERSION
+from proxy.common_neon.layouts import ACCOUNT_INFO_LAYOUT
 
 from ..core.acceptor.pool import new_acc_id_glob, acc_list_glob
 
@@ -34,13 +33,11 @@ class TransactionSender:
         self.eth_trx = eth_trx
         self.steps = steps
 
-        self.instruction = NeonInstruction(self.sender.get_operator_key(), self.eth_trx)
+        self.instruction = NeonInstruction(self.sender.get_operator_key())
 
 
     def execute(self):
         self.create_account_list_by_emulate()
-
-        self.instruction.set_accounts(self.eth_accounts, self.caller_token)
 
         noniterative_executor = self.create_noniterative_executor()
 
@@ -90,11 +87,12 @@ class TransactionSender:
 
 
     def create_noniterative_executor(self):
+        self.instruction.init_eth_trx(self.eth_trx, self.eth_accounts, self.caller_token)
         return NoniterativeTransactionSender(self.sender, self.instruction, self.create_acc_trx, self.eth_trx)
 
 
     def create_iterative_executor(self):
-        self.instruction.set_storage_and_holder(self.storage, self.holder, self.perm_accs_id)
+        self.instruction.init_iterative(self.storage, self.holder, self.perm_accs_id)
         return IterativeTransactionSender(self.sender, self.instruction, self.create_acc_trx, self.eth_trx, self.steps)
 
 
@@ -135,14 +133,14 @@ class TransactionSender:
 
 
     def create_account_with_seed(self, seed, storage_size):
-        account = accountWithSeed(self.sender.get_operator_key(), seed, PublicKey(evm_loader_id))
+        account = accountWithSeed(self.sender.get_operator_key(), seed)
 
         if self.sender.get_sol_balance(account) == 0:
             minimum_balance = self.sender.get_rent_exempt_balance_for_size(storage_size)
             logger.debug("Minimum balance required for account {}".format(minimum_balance))
 
             trx = Transaction()
-            trx.add(self.instruction.create_account_with_seed_trx(seed, minimum_balance, storage_size))
+            trx.add(self.instruction.create_account_with_seed_trx(account, seed, minimum_balance, storage_size))
             self.sender.send_transaction(trx, eth_trx=self.eth_trx, reason='createAccountWithSeed')
 
         return account
@@ -153,7 +151,7 @@ class TransactionSender:
         trx = Transaction()
 
         for seed, storage_size in zip(seeds, sizes):
-            account = accountWithSeed(self.sender.get_operator_key(), seed, PublicKey(evm_loader_id))
+            account = accountWithSeed(self.sender.get_operator_key(), seed)
             accounts.append(account)
 
             minimum_balance = self.sender.get_rent_exempt_balance_for_size(storage_size)
@@ -162,12 +160,12 @@ class TransactionSender:
             if account_info is None:
                 logger.debug("Minimum balance required for account {}".format(minimum_balance))
 
-                trx.add(self.instruction.create_account_with_seed_trx(seed, minimum_balance, storage_size))
+                trx.add(self.instruction.create_account_with_seed_trx(account, seed, minimum_balance, storage_size))
             else:
                 (tag, lamports, owner) = account_info
                 if lamports < minimum_balance:
                     raise Exception("insufficient balance")
-                if PublicKey(owner) != PublicKey(evm_loader_id):
+                if PublicKey(owner) != PublicKey(EVM_LOADER_ID):
                     raise Exception("wrong owner")
                 if tag != EMPTY_STORAGE_TAG:
                     raise Exception("not empty")
@@ -206,26 +204,13 @@ class TransactionSender:
                     if acc_desc["code_size"] > acc_desc["code_size_current"]:
                         code_size = acc_desc["code_size"] + 2048
                         seed = b58encode(ACCOUNT_SEED_VERSION + os.urandom(20))
-                        code_account_new = accountWithSeed(self.sender.get_operator_key(), seed, PublicKey(evm_loader_id))
+                        code_account_new = accountWithSeed(self.sender.get_operator_key(), seed)
 
                         logger.debug("creating new code_account with increased size %s", code_account_new)
                         self.create_account_with_seed(seed, code_size)
                         logger.debug("resized account is created %s", code_account_new)
 
-                        resize_instr.append(TransactionInstruction(
-                            keys=[
-                                AccountMeta(pubkey=PublicKey(acc_desc["account"]), is_signer=False, is_writable=True),
-                                (
-                                    AccountMeta(pubkey=acc_desc["contract"], is_signer=False, is_writable=True)
-                                    if acc_desc["contract"] else
-                                    AccountMeta(pubkey=PublicKey("11111111111111111111111111111111"), is_signer=False, is_writable=False)
-                                ),
-                                AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
-                                AccountMeta(pubkey=self.sender.get_operator_key(), is_signer=True, is_writable=False)
-                            ],
-                            program_id=evm_loader_id,
-                            data=bytearray.fromhex("11")+bytes(seed) # 17- ResizeStorageAccount
-                        ))
+                        resize_instr.append(self.instruction.make_resize_instruction(acc_desc, code_account_new, seed))
                         # replace code_account
                         acc_desc["contract"] = code_account_new
 
@@ -262,11 +247,11 @@ class TransactionSender:
                 logger.debug("Create solana accounts for %s: %s %s", acc_desc["address"], acc_desc["account"], acc_desc["contract"])
                 if acc_desc["code_size"]:
                     seed = b58encode(ACCOUNT_SEED_VERSION+address)
-                    code_account = accountWithSeed(self.sender.get_operator_key(), seed, PublicKey(evm_loader_id))
+                    code_account = accountWithSeed(self.sender.get_operator_key(), seed)
                     logger.debug("     with code account %s", code_account)
                     code_size = acc_desc["code_size"] + 2048
                     code_account_balance = self.sender.get_rent_exempt_balance_for_size(code_size)
-                    self.create_acc_trx.add(self.instruction.create_account_with_seed_trx(seed, code_account_balance, code_size))
+                    self.create_acc_trx.add(self.instruction.create_account_with_seed_trx(code_account, seed, code_account_balance, code_size))
                     # add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
                     code_account_writable = acc_desc["writable"]
 

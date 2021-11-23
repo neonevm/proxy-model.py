@@ -1,7 +1,7 @@
 from ..indexer.sql_dict import POSTGRES_USER, POSTGRES_HOST, POSTGRES_DB, POSTGRES_PASSWORD
 import psycopg2
 import base58
-from proxy.environment import evm_loader_id
+from proxy.environment import EVM_LOADER_ID
 
 
 class SQLCost():
@@ -70,13 +70,13 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
     evm_loader_instructions = []
 
     for idx, instruction in enumerate(tx_info["transaction"]["message"]["instructions"]):
-        if accounts[instruction["programIdIndex"]] == evm_loader_id:
+        if accounts[instruction["programIdIndex"]] == EVM_LOADER_ID:
             evm_loader_instructions.append(idx)
 
     for inner in (tx_info['meta']['innerInstructions']):
         if inner["index"] in evm_loader_instructions:
             for event in inner['instructions']:
-                if accounts[event['programIdIndex']] == evm_loader_id:
+                if accounts[event['programIdIndex']] == EVM_LOADER_ID:
                     used_gas = base58.b58decode(event['data'])[2:10]
                     used_gas = int().from_bytes(used_gas, "little")
 

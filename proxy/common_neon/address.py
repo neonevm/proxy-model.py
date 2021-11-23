@@ -1,30 +1,13 @@
 import logging
+import random
 from hashlib import sha256
 from typing import NamedTuple
 from solana.publickey import PublicKey
 from eth_keys import keys as eth_keys
-from construct import Bytes, Int8ul
-from construct import Struct as cStruct
 from spl.token.instructions import get_associated_token_address
 
-from proxy.environment import ETH_TOKEN_MINT_ID
-from proxy.environment import neon_cli
-
-
-ACCOUNT_SEED_VERSION=b'\1'
-
-
-ACCOUNT_INFO_LAYOUT = cStruct(
-    "type" / Int8ul,
-    "ether" / Bytes(20),
-    "nonce" / Int8ul,
-    "trx_count" / Bytes(8),
-    "code_account" / Bytes(32),
-    "is_rw_blocked" / Int8ul,
-    "rw_blocked_acc" / Bytes(32),
-    "eth_token_account" / Bytes(32),
-    "ro_blocked_cnt" / Int8ul,
-)
+from proxy.environment import neon_cli, ETH_TOKEN_MINT_ID, EVM_LOADER_ID
+from proxy.common_neon.layouts import ACCOUNT_INFO_LAYOUT
 
 
 logger = logging.getLogger(__name__)
@@ -54,8 +37,7 @@ class EthereumAddress:
     def __bytes__(self): return self.data
 
 
-def accountWithSeed(base, seed, program):
-    # logger.debug(type(base), str(base), type(seed), str(seed), type(program), str(program))
+def accountWithSeed(base, seed, program=PublicKey(EVM_LOADER_ID)):
     result = PublicKey(sha256(bytes(base) + bytes(seed) + bytes(program)).digest())
     logger.debug('accountWithSeed %s', str(result))
     return result

@@ -172,7 +172,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         admin_token_key = PublicKey.find_program_address(admin_token_seeds, evm_loader_id)[0]
         admin_token_info = { "key": admin_token_key, "owner": admin_address_solana, "contract": contract_address_solana, "mint": self.token.pubkey }
 
-        instr = NeonInstruction(self.solana_account.public_key(), None).createERC20TokenAccountTrx(admin_token_info)
+        instr = NeonInstruction(self.solana_account.public_key()).createERC20TokenAccountTrx(admin_token_info)
         self.solana_client.send_transaction(instr, self.solana_account, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
         self.token.mint_to(admin_token_key, self.solana_account, 10_000_000_000_000, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
 

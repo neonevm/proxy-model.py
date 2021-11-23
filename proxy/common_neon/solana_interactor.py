@@ -6,8 +6,9 @@ import re
 import time
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
-from proxy.environment import evm_loader_id, confirmation_check_delay
+from proxy.environment import EVM_LOADER_ID, confirmation_check_delay
 from .costs import update_transaction_cost
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -95,7 +96,7 @@ class SolanaInteractor:
     # Do not rename this function! This name used in CI measurements (see function `cleanup_docker` in .buildkite/steps/deploy-test.sh)
     def get_measurements(self, result):
         try:
-            measurements = extract_measurements_from_receipt(result)
+            measurements = self.extract_measurements_from_receipt(result)
             for m in measurements: logger.info(json.dumps(m))
         except Exception as err:
             logger.error("Can't get measurements %s"%err)
@@ -130,57 +131,57 @@ class SolanaInteractor:
         return results
 
 
-def extract_measurements_from_receipt(receipt):
-    log_messages = receipt['result']['meta']['logMessages']
-    transaction = receipt['result']['transaction']
-    accounts = transaction['message']['accountKeys']
-    instructions = []
-    for instr in transaction['message']['instructions']:
-        program = accounts[instr['programIdIndex']]
-        instructions.append({
-            'accs': [accounts[acc] for acc in instr['accounts']],
-            'program': accounts[instr['programIdIndex']],
-            'data': base58.b58decode(instr['data']).hex()
-        })
+    def extract_measurements_from_receipt(self, receipt):
+        log_messages = receipt['result']['meta']['logMessages']
+        transaction = receipt['result']['transaction']
+        accounts = transaction['message']['accountKeys']
+        instructions = []
+        for instr in transaction['message']['instructions']:
+            program = accounts[instr['programIdIndex']]
+            instructions.append({
+                'accs': [accounts[acc] for acc in instr['accounts']],
+                'program': accounts[instr['programIdIndex']],
+                'data': base58.b58decode(instr['data']).hex()
+            })
 
-    pattern = re.compile('Program ([0-9A-Za-z]+) (.*)')
-    messages = []
-    for log in log_messages:
-        res = pattern.match(log)
-        if res:
-            (program, reason) = res.groups()
-            if reason == 'invoke [1]': messages.append({'program':program,'logs':[]})
-        messages[-1]['logs'].append(log)
+        pattern = re.compile('Program ([0-9A-Za-z]+) (.*)')
+        messages = []
+        for log in log_messages:
+            res = pattern.match(log)
+            if res:
+                (program, reason) = res.groups()
+                if reason == 'invoke [1]': messages.append({'program':program,'logs':[]})
+            messages[-1]['logs'].append(log)
 
-    for instr in instructions:
-        if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',): continue
-        if messages[0]['program'] != instr['program']:
-            raise Exception('Invalid program in log messages: expect %s, actual %s' % (messages[0]['program'], instr['program']))
-        instr['logs'] = messages.pop(0)['logs']
-        exit_result = re.match(r'Program %s (success)'%instr['program'], instr['logs'][-1])
-        if not exit_result: raise Exception("Can't get exit result")
-        instr['result'] = exit_result.group(1)
+        for instr in instructions:
+            if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',): continue
+            if messages[0]['program'] != instr['program']:
+                raise Exception('Invalid program in log messages: expect %s, actual %s' % (messages[0]['program'], instr['program']))
+            instr['logs'] = messages.pop(0)['logs']
+            exit_result = re.match(r'Program %s (success)'%instr['program'], instr['logs'][-1])
+            if not exit_result: raise Exception("Can't get exit result")
+            instr['result'] = exit_result.group(1)
 
-        if instr['program'] == evm_loader_id:
-            memory_result = re.match(r'Program log: Total memory occupied: ([0-9]+)', instr['logs'][-3])
-            instruction_result = re.match(r'Program %s consumed ([0-9]+) of ([0-9]+) compute units'%instr['program'], instr['logs'][-2])
-            if not (memory_result and instruction_result):
-                raise Exception("Can't parse measurements for evm_loader")
-            instr['measurements'] = {
-                    'instructions': instruction_result.group(1),
-                    'memory': memory_result.group(1)
-                }
+            if instr['program'] == EVM_LOADER_ID:
+                memory_result = re.match(r'Program log: Total memory occupied: ([0-9]+)', instr['logs'][-3])
+                instruction_result = re.match(r'Program %s consumed ([0-9]+) of ([0-9]+) compute units'%instr['program'], instr['logs'][-2])
+                if not (memory_result and instruction_result):
+                    raise Exception("Can't parse measurements for evm_loader")
+                instr['measurements'] = {
+                        'instructions': instruction_result.group(1),
+                        'memory': memory_result.group(1)
+                    }
 
-    result = []
-    for instr in instructions:
-        if instr['program'] == evm_loader_id:
-            result.append({
-                    'program':instr['program'],
-                    'measurements':instr['measurements'],
-                    'result':instr['result'],
-                    'data':instr['data']
-                })
-    return result
+        result = []
+        for instr in instructions:
+            if instr['program'] == EVM_LOADER_ID:
+                result.append({
+                        'program':instr['program'],
+                        'measurements':instr['measurements'],
+                        'result':instr['result'],
+                        'data':instr['data']
+                    })
+        return result
 
 
 def check_if_program_exceeded_instructions(err_result):
@@ -200,13 +201,13 @@ def check_if_continue_returned(result):
     evm_loader_instructions = []
 
     for idx, instruction in enumerate(tx_info["transaction"]["message"]["instructions"]):
-        if accounts[instruction["programIdIndex"]] == evm_loader_id:
+        if accounts[instruction["programIdIndex"]] == EVM_LOADER_ID:
             evm_loader_instructions.append(idx)
 
     for inner in (tx_info['meta']['innerInstructions']):
         if inner["index"] in evm_loader_instructions:
             for event in inner['instructions']:
-                if accounts[event['programIdIndex']] == evm_loader_id:
+                if accounts[event['programIdIndex']] == EVM_LOADER_ID:
                     instruction = base58.b58decode(event['data'])[:1]
                     if int().from_bytes(instruction, "little") == 6:  # OnReturn evmInstruction code
                         return tx_info['transaction']['signatures'][0]

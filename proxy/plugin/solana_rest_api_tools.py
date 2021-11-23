@@ -12,8 +12,8 @@ from proxy.common_neon.neon_instruction import NeonInstruction
 from proxy.environment import read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, NEW_USER_AIRDROP_AMOUNT
 from proxy.common_neon.transaction_sender import TransactionSender
 from proxy.common_neon.solana_interactor import SolanaInteractor
-from proxy.common_neon.address import ether2program, getTokenAddr, ACCOUNT_INFO_LAYOUT, AccountInfo
-from proxy.common_neon.address import EthereumAddress
+from proxy.common_neon.address import ether2program, getTokenAddr, EthereumAddress, AccountInfo
+from proxy.common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from proxy.common_neon.errors import SolanaAccountNotFoundError, SolanaErrors
 from proxy.common_neon.utils import get_from_dict
 

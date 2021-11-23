@@ -6,8 +6,8 @@ from solana.publickey import PublicKey
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
-evm_loader_id = os.environ.get("EVM_LOADER")
+SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
+EVM_LOADER_ID = os.environ.get("EVM_LOADER")
 neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
 
 NEW_USER_AIRDROP_AMOUNT = int(os.environ.get("NEW_USER_AIRDROP_AMOUNT", "0"))
@@ -21,7 +21,7 @@ class solana_cli:
     def call(self, *args):
         try:
             cmd = ["solana",
-                   "--url", solana_url,
+                   "--url", SOLANA_URL,
                    ] + list(args)
             logger.debug("Calling: " + " ".join(cmd))
             return subprocess.check_output(cmd, universal_newlines=True)
@@ -36,8 +36,8 @@ class neon_cli:
         try:
             cmd = ["neon-cli",
                    "--commitment=recent",
-                   "--url", solana_url,
-                   "--evm_loader={}".format(evm_loader_id),
+                   "--url", SOLANA_URL,
+                   "--evm_loader={}".format(EVM_LOADER_ID),
                    ] + list(args)
             logger.debug("Calling: " + " ".join(cmd))
             return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True)
@@ -47,15 +47,15 @@ class neon_cli:
             raise
 
 def read_elf_params(out_dict):
-    logger.debug('load for solana_url={} and evm_loader_id={}'.format(solana_url, evm_loader_id))
-    res = solana_cli().call('program', 'dump', evm_loader_id, './evm_loader.dump')
+    logger.debug('load for solana_url={} and evm_loader_id={}'.format(SOLANA_URL, EVM_LOADER_ID))
+    res = solana_cli().call('program', 'dump', EVM_LOADER_ID, './evm_loader.dump')
     substr = "Wrote program to "
     path = ""
     for line in res.splitlines():
         if line.startswith(substr):
             path = line[len(substr):].strip()
     if path == "":
-        raise Exception("cannot program dump for ", evm_loader_id)
+        raise Exception("cannot program dump for ", EVM_LOADER_ID)
     for param in neon_cli().call("neon-elf-params", path).splitlines():
         if param.startswith('NEON_') and '=' in param:
             v = param.split('=')
