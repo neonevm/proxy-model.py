@@ -5,7 +5,7 @@ import os
 import time
 import logging
 from solana.rpc.api import Client
-from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing.dummy import Pool as ThreadPool, Queue
 from typing import Dict, Union
 from proxy.environment import solana_url, evm_loader_id
 
@@ -56,19 +56,14 @@ class TransactionStruct:
         self.blocked_accounts = blocked_accounts
         self.slot = slot
 
-class InstructionFilter:
-    def __init__(self, *instructions):
-        self.instr_ids = instructions
+class IndexerEvent:
+    def __init__(self):
+        pass
 
-    def handle_instruction(self, instruction) -> bool:
-        if instruction in self.instr_ids:
-            self.process_instruction(instruction)
-
-class TransactionFilter:
-    def __init__(self, client):
-        self.client = client
-
-    def handle(self, trx):
+class NewTokenAccountEvent(IndexerEvent):
+    def __init__(self, address):
+        IndexerEvent.__init__(self)
+        self.address = address
 
 class Indexer:
     def __init__(self):
@@ -89,13 +84,14 @@ class Indexer:
         self.blocked_storages = {}
         self.counter_ = 0
 
-    def run(self, loop = True):
+    # event_queue - interchanges data between Indexer and external processes
+    def run(self, event_queue: Queue = None):
         while (True):
             try:
                 logger.debug("Start indexing")
                 self.gather_unknown_transactions()
                 logger.debug("Process receipts")
-                self.process_receipts()
+                self.process_receipts(event_queue)
                 logger.debug("Start getting blocks")
                 self.gather_blocks()
                 logger.debug("Unlock accounts")
@@ -197,7 +193,7 @@ class Indexer:
         # return (solana_signature, trx)
 
 
-    def process_receipts(self):
+    def process_receipts(self, event_queue):
         counter = 0
         holder_table = {}
         continue_table = {}
@@ -587,11 +583,11 @@ class Indexer:
         return (slot, block_hash)
 
 
-def run_indexer():
+def run_indexer(event_queue: Queue = None):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
     indexer = Indexer()
-    indexer.run(False)
+    indexer.run(event_queue)
 
 
 if __name__ == "__main__":
