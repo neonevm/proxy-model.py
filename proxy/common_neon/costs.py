@@ -1,8 +1,8 @@
 import base58
 import psycopg2
 
-from proxy.environment import EVM_LOADER_ID
-from proxy.indexer.sql_dict import POSTGRES_USER, POSTGRES_HOST, POSTGRES_DB, POSTGRES_PASSWORD
+from ..environment import EVM_LOADER_ID
+from ..indexer.sql_dict import POSTGRES_USER, POSTGRES_HOST, POSTGRES_DB, POSTGRES_PASSWORD
 
 class SQLCost():
     def __init__(self):

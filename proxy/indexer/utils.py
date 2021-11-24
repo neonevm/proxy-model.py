@@ -22,9 +22,9 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from web3.auto.gethdev import w3
 
-from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM
-from proxy.common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT
-from proxy.environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID
+from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM
+from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT
+from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID
 
 
 logger = logging.getLogger(__name__)

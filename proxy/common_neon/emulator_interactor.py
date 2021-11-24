@@ -1,8 +1,8 @@
 import json
 import logging
 
-from proxy.common_neon.errors import EthereumError
-from proxy.environment import neon_cli
+from .errors import EthereumError
+from ..environment import neon_cli
 
 
 logger = logging.getLogger(__name__)

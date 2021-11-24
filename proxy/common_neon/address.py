@@ -7,8 +7,8 @@ from solana.publickey import PublicKey
 from spl.token.instructions import get_associated_token_address
 from typing import NamedTuple
 
-from proxy.common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from proxy.environment import neon_cli, ETH_TOKEN_MINT_ID, EVM_LOADER_ID
+from .layouts import ACCOUNT_INFO_LAYOUT
+from ..environment import neon_cli, ETH_TOKEN_MINT_ID, EVM_LOADER_ID
 
 
 logger = logging.getLogger(__name__)

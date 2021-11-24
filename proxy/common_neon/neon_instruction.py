@@ -11,10 +11,10 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID
 from spl.token.instructions import transfer2, Transfer2Params
 
-from proxy.common_neon.address import accountWithSeed, ether2program, getTokenAddr
-from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
-from proxy.common_neon.layouts import CREATE_ACCOUNT_LAYOUT
-from proxy.environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
+from .address import accountWithSeed, ether2program, getTokenAddr
+from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
+from .layouts import CREATE_ACCOUNT_LAYOUT
+from ..environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
 
 
 logger = logging.getLogger(__name__)

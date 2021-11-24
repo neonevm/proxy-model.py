@@ -9,7 +9,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from solana.rpc.api import Client
 from typing import Dict, Union
 
-from proxy.environment import SOLANA_URL, EVM_LOADER_ID
+from ..environment import SOLANA_URL, EVM_LOADER_ID
 
 
 try:

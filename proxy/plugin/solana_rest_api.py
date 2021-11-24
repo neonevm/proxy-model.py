@@ -31,13 +31,13 @@ from web3 import Web3
 
 from .eth_proto import Trx as EthTrx
 from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, get_token_balance_or_airdrop
-from proxy.common_neon.address import EthereumAddress
-from proxy.common_neon.emulator_interactor import call_emulated
-from proxy.common_neon.errors import EthereumError
-from proxy.core.acceptor.pool import proxy_id_glob
-from proxy.environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE, EXTRA_GAS
-from proxy.indexer.sql_dict import SQLDict
-from proxy.indexer.utils import get_trx_results, LogDB
+from ..common_neon.address import EthereumAddress
+from ..common_neon.emulator_interactor import call_emulated
+from ..common_neon.errors import EthereumError
+from ..core.acceptor.pool import proxy_id_glob
+from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE, EXTRA_GAS
+from ..indexer.sql_dict import SQLDict
+from ..indexer.utils import get_trx_results, LogDB
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

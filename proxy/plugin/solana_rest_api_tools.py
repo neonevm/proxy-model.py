@@ -7,14 +7,14 @@ from solana.publickey import PublicKey
 from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Confirmed
 
-from proxy.common_neon.address import ether2program, getTokenAddr, EthereumAddress, AccountInfo
-from proxy.common_neon.errors import SolanaAccountNotFoundError, SolanaErrors
-from proxy.common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from proxy.common_neon.neon_instruction import NeonInstruction
-from proxy.common_neon.solana_interactor import SolanaInteractor
-from proxy.common_neon.transaction_sender import TransactionSender
-from proxy.common_neon.utils import get_from_dict
-from proxy.environment import read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, NEW_USER_AIRDROP_AMOUNT
+from ..common_neon.address import ether2program, getTokenAddr, EthereumAddress, AccountInfo
+from ..common_neon.errors import SolanaAccountNotFoundError, SolanaErrors
+from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
+from ..common_neon.neon_instruction import NeonInstruction
+from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.transaction_sender import TransactionSender
+from ..common_neon.utils import get_from_dict
+from ..environment import read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, NEW_USER_AIRDROP_AMOUNT
 
 
 logger = logging.getLogger(__name__)
