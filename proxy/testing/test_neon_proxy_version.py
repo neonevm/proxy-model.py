@@ -18,16 +18,7 @@ def get_line_number():
 class TestNeonProxyVersion(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        response = json.loads(requests.post(
-            proxy_url, headers=headers,
-            data=json.dumps({"jsonrpc": "2.0",
-                             "id": get_line_number(),
-                             "method": "eth_blockNumber",
-                             "params": []
-                             })).text)
-        print('response:', response)
-        block_number = response['result']
-        print('blockNumber:', int(block_number, 16))
+        pass
 
     def test_01_neon_proxy_version(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/320")
