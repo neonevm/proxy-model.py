@@ -30,12 +30,13 @@ from typing import List, Tuple, Optional
 from web3 import Web3
 
 from .eth_proto import Trx as EthTrx
-from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, get_token_balance_or_airdrop
+from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, \
+    get_token_balance_or_airdrop, estimate_gas
 from ..common_neon.address import EthereumAddress
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..core.acceptor.pool import proxy_id_glob
-from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE, EXTRA_GAS
+from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
 from ..indexer.sql_dict import SQLDict
 from ..indexer.utils import get_trx_results, LogDB
 
@@ -44,6 +45,7 @@ logger.setLevel(logging.DEBUG)
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
+
 
 class EthereumModel:
     def __init__(self):
@@ -103,12 +105,11 @@ class EthereumModel:
 
     def eth_estimateGas(self, param):
         try:
-            caller_id = param['from'] if 'from' in param else "0x0000000000000000000000000000000000000000"
-            contract_id = param['to'] if 'to' in param else "deploy"
-            data = param['data'] if 'data' in param else "None"
-            value = param['value'] if 'value' in param else ""
-            result = call_emulated(contract_id, caller_id, data, value)
-            return result['used_gas']+EXTRA_GAS
+            caller_id = param.get('from', "0x0000000000000000000000000000000000000000")
+            contract_id = param.get('to', "deploy")
+            data = param.get('data', "None")
+            value = param.get('value', "")
+            return estimate_gas(self.client, self.signer, contract_id, EthereumAddress(caller_id), data, value)
         except Exception as err:
             logger.debug("Exception on eth_estimateGas: %s", err)
             raise

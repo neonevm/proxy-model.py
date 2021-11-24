@@ -15,6 +15,7 @@ STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
     "evm_data_size" / Int64ul,
     "gas_used_and_paid" / Int64ul,
     "number_of_payments" / Int64ul,
+    "sign" / Bytes(65),
 )
 
 ACCOUNT_INFO_LAYOUT = Struct(

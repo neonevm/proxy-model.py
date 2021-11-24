@@ -13,8 +13,9 @@ from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from ..common_neon.neon_instruction import NeonInstruction
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.transaction_sender import TransactionSender
+from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_from_dict
-from ..environment import read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, NEW_USER_AIRDROP_AMOUNT
+from ..environment import read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS
 
 
 logger = logging.getLogger(__name__)
@@ -105,3 +106,23 @@ def get_token_balance_or_airdrop(client: SolanaClient, signer: SolanaAccount, et
         logger.debug(f"Account not found:  {eth_account} aka: {solana_account} - create")
         create_eth_account_and_airdrop(client, signer, eth_account)
         return get_token_balance_gwei(client, solana_account)
+
+
+def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> bool:
+    pda_account, nonce = ether2program(eth_account)
+    info = client.get_account_info(pda_account, commitment=Confirmed)
+    value = get_from_dict(info, "result", "value")
+    return value is not None
+
+
+def estimate_gas(client: SolanaClient, signer: SolanaAccount, contract_id: str, caller_eth_account: EthereumAddress,
+                 data: str = None, value: str = None):
+    if not is_account_exists(client, caller_eth_account):
+        create_eth_account_and_airdrop(client, signer, caller_eth_account)
+    result = call_emulated(contract_id, str(caller_eth_account), data, value)
+    used_gas = result.get("used_gas")
+    if used_gas is None:
+        logger.error(f"Failed estimate_gas, unexpected result, by contract_id: {contract_id}, caller_eth_account: "
+                     f"{caller_eth_account}, data: {data}, value: {value}, emulation result: {result}")
+        raise Exception("Bad estimate_gas result")
+    return used_gas + EXTRA_GAS

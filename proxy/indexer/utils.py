@@ -113,6 +113,7 @@ def get_trx_receipts(unsigned_msg, signature):
 
     return (trx_raw.hex(), eth_signature, from_address)
 
+
 def get_account_list(client, storage_account):
     opts = {
         "encoding": "base64",
@@ -158,7 +159,7 @@ class LogDB:
     def __init__(self):
         POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
         POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
-        POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy")
+        POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy-pass")
         POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 
         self.conn = psycopg2.connect(
