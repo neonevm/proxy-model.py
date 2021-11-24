@@ -14,7 +14,7 @@ from solana.transaction import AccountMeta, Transaction
 from ..core.acceptor.pool import new_acc_id_glob, acc_list_glob
 
 from .address import accountWithSeed, AccountInfo, getTokenAddr
-from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, ACCOUNT_SEED_VERSION
+from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
 from .emulator_interactor import call_emulated
 from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
@@ -167,8 +167,8 @@ class TransactionSender:
                     raise Exception("insufficient balance")
                 if PublicKey(owner) != PublicKey(EVM_LOADER_ID):
                     raise Exception("wrong owner")
-                if tag != EMPTY_STORAGE_TAG:
-                    raise Exception("not empty")
+                if tag not in {EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG}:
+                                raise Exception("not empty, not finalized")
 
         if len(trx.instructions) > 0:
             self.sender.send_transaction(trx, eth_trx=self.eth_trx, reason='createAccountWithSeed')
