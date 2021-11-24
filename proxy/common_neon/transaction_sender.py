@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import rlp
 import time
@@ -67,7 +68,10 @@ class TransactionSender:
         try:
             if call_iterative:
                 try:
-                    return iterative_executor.call_signed_iterative()
+                    if USE_COMBINED_START_CONTINUE:
+                        return iterative_executor.call_signed_iterative_combined()
+                    else:
+                        return iterative_executor.call_signed_iterative()
                 except Exception as err:
                     logger.debug(str(err))
                     if str(err).startswith("transaction too large:"):
@@ -77,7 +81,10 @@ class TransactionSender:
                         raise
 
             if call_from_holder:
-                return iterative_executor.call_signed_with_holder_acc()
+                if USE_COMBINED_START_CONTINUE:
+                    return iterative_executor.call_signed_with_holder_combined()
+                else:
+                    return iterative_executor.call_signed_with_holder_acc()
         finally:
             self.free_perm_accs()
 
@@ -93,7 +100,7 @@ class TransactionSender:
 
     def create_iterative_executor(self):
         self.instruction.init_iterative(self.storage, self.holder, self.perm_accs_id)
-        return IterativeTransactionSender(self.sender, self.instruction, self.create_acc_trx, self.eth_trx, self.steps)
+        return IterativeTransactionSender(self.sender, self.instruction, self.create_acc_trx, self.eth_trx, self.steps, self.steps_emulated)
 
 
     def init_perm_accs(self):
@@ -304,6 +311,8 @@ class TransactionSender:
                 AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
             ] + add_keys_05
 
+        self.steps_emulated = output_json["steps_executed"]
+
 
 class NoniterativeTransactionSender:
     def __init__(self, solana_interactor: SolanaInteractor, neon_instruction: NeonInstruction, create_acc_trx: Transaction, eth_trx: EthTrx):
@@ -323,41 +332,53 @@ class NoniterativeTransactionSender:
 
 
 class IterativeTransactionSender:
-    def __init__(self, solana_interactor: SolanaInteractor, neon_instruction: NeonInstruction, create_acc_trx: Transaction, eth_trx: EthTrx, steps: int):
+    def __init__(self, solana_interactor: SolanaInteractor, neon_instruction: NeonInstruction, create_acc_trx: Transaction, eth_trx: EthTrx, steps: int, steps_emulated: int):
         self.sender = solana_interactor
         self.instruction = neon_instruction
         self.create_acc_trx = create_acc_trx
         self.eth_trx = eth_trx
         self.steps = steps
+        self.steps_emulated = steps_emulated
 
 
     def call_signed_iterative(self):
-        if len(self.create_acc_trx.instructions):
-            precall_txs = Transaction()
-            precall_txs.add(self.create_acc_trx)
-            self.sender.send_measured_transaction(precall_txs, self.eth_trx, 'CreateAccountsForTrx')
-
-        call_txs = self.instruction.make_iterative_call_transaction()
+        self.create_accounts_for_trx_if_needed()
 
         logger.debug("Partial call")
+        call_txs = self.instruction.make_iterative_call_transaction()
         self.sender.send_measured_transaction(call_txs, self.eth_trx, 'PartialCallFromRawEthereumTXv02')
 
         return self.call_continue()
 
 
+    def call_signed_iterative_combined(self):
+        self.create_accounts_for_trx_if_needed()
+
+        return self.call_continue_combined()
+
+
     def call_signed_with_holder_acc(self):
         self.write_trx_to_holder_account()
-        if len(self.create_acc_trx.instructions):
-            precall_txs = Transaction()
-            precall_txs.add(self.create_acc_trx)
-            self.sender.send_measured_transaction(precall_txs, self.eth_trx, 'create_accounts_for_deploy')
+        self.create_accounts_for_trx_if_needed()
 
-        # ExecuteTrxFromAccountDataIterative
         logger.debug("ExecuteTrxFromAccountDataIterative:")
         call_txs = self.instruction.make_call_from_account_instruction()
         self.sender.send_measured_transaction(call_txs, self.eth_trx, 'ExecuteTrxFromAccountDataIterativeV02')
 
         return self.call_continue()
+
+    def call_signed_with_holder_combined(self):
+        self.write_trx_to_holder_account()
+        self.create_accounts_for_trx_if_needed()
+
+        return self.call_continue_with_holder_combined()
+
+
+    def create_accounts_for_trx_if_needed(self):
+        if len(self.create_acc_trx.instructions):
+            precall_txs = Transaction()
+            precall_txs.add(self.create_acc_trx)
+            self.sender.send_measured_transaction(precall_txs, self.eth_trx, 'CreateAccountsForTrx')
 
 
     def write_trx_to_holder_account(self):
