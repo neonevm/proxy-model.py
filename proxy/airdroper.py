@@ -1,4 +1,4 @@
-from proxy.indexer.solana_receipts_update import run_indexer, IndexerEvent, NewTokenAccountEvent
+from proxy.indexer.solana_receipts_update import run_indexer, NewTokenAccountEvent
 from multiprocessing import Process, Queue
 import requests, os, signal
 import logging
@@ -14,14 +14,14 @@ class Airdropper:
         self.event_queue = event_queue
         self.faucet_request_url = f'http://{faucet_addr}:{faucet_port}/request_eth_token'
         self.airdrop_amount = airdrop_amount
-        self.indexer = Process(target=run_indexer, args=(self.event_queue,))
 
     def should_process_address(self, address):
         return True
 
     def run(self):
-        self.indexer.start()
+        logger.info("Starting airdropper...")
         while (True):
+            return
             event = self.event_queue.get()
             if isinstance(event, NewTokenAccountEvent) and self.should_process_address(event.address):
                 data = f'{{"wallet": "{event.address}", "amount": {self.airdrop_amount}}}'
@@ -29,6 +29,7 @@ class Airdropper:
                 if not r.ok:
                     logger.warning('Faucet response:', r.status_code)
             elif isinstance(event, StopAirdropperEvent):
+                logger.info("Stopping airdropper...")
                 break
 
 def run_airdropper(faucet_addr, faucet_port, airdrop_amount, event_queue):
@@ -43,14 +44,18 @@ if __name__ == "__main__":
         event_queue = Queue()
 
         def stop_airdropper():
-            event_queue.put(StopAirdropperEvent)
+            event_queue.put(StopAirdropperEvent())
 
         signal.signal(signal.SIGINT, stop_airdropper)
         signal.signal(signal.SIGTERM, stop_airdropper)
         signal.signal(signal.SIGKILL, stop_airdropper)
 
-        p = Process(target=run_airdropper, args=(faucet_addr, faucet_port, airdrop_amount, event_queue))
-        p.start()
-        p.join()
+        airdropper_proc = Process(target=run_airdropper, args=(faucet_addr, faucet_port, airdrop_amount, event_queue))
+        #indexer_proc = Process(target=run_indexer, args=(event_queue,))
+
+        airdropper_proc.start()
+        #indexer_proc.start()
+        #indexer_proc.join()
+        airdropper_proc.join()
     except Exception as err:
         logger.error(f"Failed to start Airdropper: {err}")
