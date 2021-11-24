@@ -39,6 +39,17 @@ class neon_cli:
             logger.debug("ERR: neon-cli error {}".format(err))
             raise
 
+    def version(self):
+        try:
+            cmd = ["neon-cli",
+                   "--version"]
+            logger.debug("Calling: " + " ".join(cmd))
+            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True).split()[1]
+        except subprocess.CalledProcessError as err:
+            import sys
+            logger.debug("ERR: neon-cli error {}".format(err))
+            raise
+
 def read_elf_params(out_dict):
     logger.debug('load for solana_url={} and evm_loader_id={}'.format(solana_url, evm_loader_id))
     res = solana_cli().call('program', 'dump', evm_loader_id, './evm_loader.dump')
