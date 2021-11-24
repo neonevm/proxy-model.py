@@ -5,7 +5,6 @@ import json
 import inspect
 
 from proxy.environment import neon_cli
-from proxy.plugin.solana_rest_api import NEON_PROXY_PKG_VERSION, NEON_PROXY_REVISION
 
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 headers = {'Content-type': 'application/json'}
