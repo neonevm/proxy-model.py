@@ -255,7 +255,7 @@ class TransactionSender:
                     # add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
                     code_account_writable = acc_desc["writable"]
 
-                create_trx = self.instruction.trx_with_create_and_airdrop(address, code_account)
+                create_trx = self.instruction.make_trx_with_create_and_airdrop (address, code_account)
                 self.create_acc_trx.add(create_trx)
 
             if address == to_address:

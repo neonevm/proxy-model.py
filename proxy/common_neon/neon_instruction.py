@@ -210,7 +210,7 @@ class NeonInstruction:
         return transfer_instruction
 
 
-    def trx_with_create_and_airdrop(self, eth_account, code_acc=None) -> Transaction:
+    def make_trx_with_create_and_airdrop (self, eth_account, code_acc=None) -> Transaction:
         trx = Transaction()
         create_trx, associated_token_account = self.make_create_eth_account_trx(eth_account, code_acc)
         trx.add(create_trx)
