@@ -94,7 +94,7 @@ class EthereumModel:
         return hex(int(self.neon_config_dict['NEON_CHAIN_ID']))
 
     def neon_cli_version(self):
-        return neon_cli.version()
+        return neon_cli().version()
 
     def net_version(self):
         neon_config_load(self)

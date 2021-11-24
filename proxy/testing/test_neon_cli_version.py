@@ -32,7 +32,7 @@ class TestNeonProxyVersion(unittest.TestCase):
         print('response:', response)
         neon_cli_version = response['result']
         print('neon_cli_version:', neon_cli_version)
-        self.assertEqual(neon_cli_version, neon_cli.version())
+        self.assertEqual(neon_cli_version, neon_cli().version())
 
 
 if __name__ == '__main__':
