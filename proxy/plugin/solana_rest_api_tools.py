@@ -102,8 +102,6 @@ def get_token_balance_or_airdrop(client: SolanaClient, signer: SolanaAccount, et
     try:
         return get_token_balance_gwei(client, solana_account)
     except SolanaAccountNotFoundError:
-        if NEW_USER_AIRDROP_AMOUNT:
-            logger.debug(f"Account not found:  {eth_account} aka: {solana_account} - create")
-            create_eth_account_and_airdrop(client, signer, eth_account)
-            return get_token_balance_gwei(client, solana_account)
-        return 0
+        logger.debug(f"Account not found:  {eth_account} aka: {solana_account} - create")
+        create_eth_account_and_airdrop(client, signer, eth_account)
+        return get_token_balance_gwei(client, solana_account)
