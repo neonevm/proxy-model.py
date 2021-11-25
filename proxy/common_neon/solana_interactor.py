@@ -117,13 +117,10 @@ class SolanaInteractor:
                 status = resp['result']['value'][0]
                 if status and (status['confirmationStatus'] == 'finalized' or \
                 status['confirmationStatus'] == 'confirmed' and status['confirmations'] >= confirmations):
-    #            logger.debug('Confirmed transaction:', resp)
                     return
             time.sleep(CONFIRMATION_CHECK_DELAY)
             elapsed_time += CONFIRMATION_CHECK_DELAY
-        #if not resp["result"]:
         raise RuntimeError("could not confirm transaction: ", tx_sig)
-        #return resp
 
 
     def collect_results(self, receipts, eth_trx=None, reason=None):
@@ -132,8 +129,8 @@ class SolanaInteractor:
             results.append(self.collect_result(rcpt, eth_trx, reason))
         return results
 
-
-    def extract_measurements_from_receipt(self, receipt):
+    @staticmethod
+    def extract_measurements_from_receipt(receipt):
         log_messages = receipt['result']['meta']['logMessages']
         transaction = receipt['result']['transaction']
         accounts = transaction['message']['accountKeys']
