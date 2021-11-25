@@ -147,27 +147,36 @@ contract TestQueryAccount {
     function test_metadata_nonexistent_account() public returns (bool) {
         uint256 solana_address = 90000; // hopefully does not exist
 
+        bool ok = false;
         try query.owner(solana_address) { } catch {
-            return true; // expected exception
+            ok = true; // expected exception
         }
+        if (!ok) { return ok; }
 
+        ok = false;
         try query.length(solana_address) { } catch {
-            return true; // expected exception
+            ok = true; // expected exception
         }
+        if (!ok) { return ok; }
 
+        ok = false;
         try query.lamports(solana_address) { } catch {
-            return true; // expected exception
+            ok = true; // expected exception
         }
+        if (!ok) { return ok; }
 
+        ok = false;
         try query.executable(solana_address) { } catch {
-            return true; // expected exception
+            ok = true; // expected exception
         }
+        if (!ok) { return ok; }
 
+        ok = false;
         try query.rent_epoch(solana_address) { } catch {
-            return true; // expected exception
+            ok = true; // expected exception
         }
 
-        return false;
+        return ok;
     }
 
     function test_data_ok() public returns (bool) {
@@ -211,9 +220,7 @@ contract TestQueryAccount {
         uint256 solana_address = 90000; // hopefully does not exist
         uint64 offset = 0;
         uint64 len = 1;
-        try query.data(solana_address, offset, len) {
-            //
-        } catch {
+        try query.data(solana_address, offset, len) { } catch {
             return true; // expected exception
         }
         return false;
@@ -223,9 +230,7 @@ contract TestQueryAccount {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
         uint64 offset = 200; // data len is 82
         uint64 len = 1;
-        try query.data(solana_address, offset, len) {
-            //
-        } catch {
+        try query.data(solana_address, offset, len) { } catch {
             return true; // expected exception
         }
         return false;
@@ -235,9 +240,7 @@ contract TestQueryAccount {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
         uint64 offset = 0;
         uint64 len = 200; // data len is 82
-        try query.data(solana_address, offset, len) {
-            //
-        } catch {
+        try query.data(solana_address, offset, len) { } catch {
             return true; // expected exception
         }
         return false;
