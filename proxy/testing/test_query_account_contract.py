@@ -111,22 +111,22 @@ contract TestQueryAccount {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
 
         uint256 golden_ownr = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
-        uint64 golden_len = 82;
-        uint64 golden_lamp = 82;
+        uint256 golden_len = 82;
+        uint256 golden_lamp = 1461600;
         bool golden_exec = false;
-        uint64 golden_repoch = 82;
+        uint256 golden_repoch = 0;
 
         uint256 ownr = query.owner(solana_address);
         if (ownr != golden_ownr) {
             return false;
         }
 
-        uint64 len = query.length(solana_address);
+        uint len = query.length(solana_address);
         if (len != golden_len) {
             return false;
         }
 
-        uint64 lamp = query.lamports(solana_address);
+        uint256 lamp = query.lamports(solana_address);
         if (lamp != golden_lamp) {
             return false;
         }
@@ -136,7 +136,7 @@ contract TestQueryAccount {
             return false;
         }
 
-        uint64 repoch = query.rent_epoch(solana_address);
+        uint256 repoch = query.rent_epoch(solana_address);
         if (repoch != golden_repoch) {
             return false;
         }
