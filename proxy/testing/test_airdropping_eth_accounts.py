@@ -7,7 +7,7 @@ import eth_typing
 import eth_utils
 from eth_account.account import LocalAccount
 
-from web3 import Web3, eth as web3_eth
+from web3 import Web3, eth as web3_eth, exceptions as web3_exceptions
 from solana.rpc.api import Client as SolanaClient
 
 from ..plugin.solana_rest_api import EthereumModel
@@ -54,6 +54,16 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         contract_owner: LocalAccount = self._web3.eth.account.create()
         contract = self._compile_and_deploy_contract(contract_owner, self._WRAPPER_CONTRACT_STORAGE_SOURCE)
 
+    def test_eth_call_array_constructable_contract(self):
+        compile_result = solcx.compile_source(self._CONTRACT_LIST_CONSTRUCTABLE)
+        _, contract_interface = compile_result.popitem()
+        bytecode = contract_interface.get("bin")
+        abi = contract_interface.get("abi")
+        arr_constructable = self._web3.eth.contract(abi=abi, bytecode=bytecode)
+        with self.assertRaises(web3_exceptions.ContractLogicError) as cm:
+            arr_constructable.constructor([]).buildTransaction()
+        self.assertEqual("ListConstructable: empty list", str(cm.exception))
+
     def _compile_and_deploy_contract(self, contract_owner: LocalAccount, source: str) -> web3_eth.Contract:
         compiled_sol = solcx.compile_source(source)
         contract_id, contract_interface = compiled_sol.popitem()
@@ -74,6 +84,16 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         self.assertIsNotNone(balance)
         self.assertIsInstance(balance, int)
         return balance * eth_utils.denoms.gwei
+
+    _CONTRACT_LIST_CONSTRUCTABLE = '''
+        // SPDX-License-Identifier: GPL-3.0
+        pragma solidity >=0.7.0 <0.9.0;
+        contract ArrConstructable {
+            constructor(uint256[] memory vector_) payable {
+                require(vector_.length > 0, "ListConstructable: empty list");
+            }
+        }
+    '''
 
     _CONTRACT_STORAGE_SOURCE = '''
         // SPDX-License-Identifier: GPL-3.0
