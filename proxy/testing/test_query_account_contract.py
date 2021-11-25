@@ -5,7 +5,7 @@
 ##
 ## owner(uint256) returns (uint256)
 ##     Takes a Solana address, treats it as an address of an account.
-##     Returns the account's owner (32 bytes).
+##     Returns the account's owner Solana address (32 bytes).
 ##
 ## length(uint256) returns (uint64)
 ##     Takes a Solana address, treats it as an address of an account.
@@ -97,18 +97,6 @@ contract TestQueryAccount {
             return false;
         }
 
-        // Should return cached result
-        ownr = query.owner(solana_address);
-        if (ownr != golden_ownr) {
-            return false;
-        }
-
-        // Should return cached result
-        len = query.length(solana_address);
-        if (len != golden_len) {
-            return false;
-        }
-
         return true;
     }
 
@@ -154,33 +142,6 @@ contract TestQueryAccount {
             return false;
         }
         // Test getting full data
-        offset = 0;
-        len = 82;
-        result = query.data(solana_address, offset, len);
-        if (result.length != 82) {
-            return false;
-        }
-
-        // Test getting subset of data (cached)
-        offset = 20;
-        len = 4;
-        result = query.data(solana_address, offset, len);
-        if (result.length != 4) {
-            return false;
-        }
-        if (result[0] != b0) {
-            return false;
-        }
-        if (result[1] != b1) {
-            return false;
-        }
-        if (result[2] != b2) {
-            return false;
-        }
-        if (result[3] != b3) {
-            return false;
-        }
-        // Test getting full data (cached)
         offset = 0;
         len = 82;
         result = query.data(solana_address, offset, len);
