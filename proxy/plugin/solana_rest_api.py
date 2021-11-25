@@ -44,6 +44,8 @@ logger.setLevel(logging.DEBUG)
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
+NEON_PROXY_PKG_VERSION = '0.4.1-rc0'
+NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 class EthereumModel:
     def __init__(self):
@@ -84,6 +86,9 @@ class EthereumModel:
             solana_account = sol_Account(values)
         return solana_account
 
+    def neon_proxy_version(self):
+        return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
+
     def web3_clientVersion(self):
         neon_config_load(self)
         return self.neon_config_dict['web3_clientVersion']
@@ -92,6 +97,9 @@ class EthereumModel:
         neon_config_load(self)
         # NEON_CHAIN_ID is a string in decimal form
         return hex(int(self.neon_config_dict['NEON_CHAIN_ID']))
+
+    def neon_cli_version(self):
+        return neon_cli().version()
 
     def net_version(self):
         neon_config_load(self)
