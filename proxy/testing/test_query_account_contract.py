@@ -1,20 +1,15 @@
 ## File: test_query_account_contract.py
 ## Integration test for the QueryAccount smart contract.
 ##
-## QueryAccount precompiled contract supports three methods:
-##
-## owner(uint256) returns (uint256)
-##     Takes a Solana address, treats it as an address of an account.
-##     Returns the account's owner Solana address (32 bytes).
-##
-## length(uint256) returns (uint64)
-##     Takes a Solana address, treats it as an address of an account.
-##     Returns the length of the account's data (8 bytes).
-##
-## data(uint256, uint64, uint64) returns (bytes memory)
-##     Takes a Solana address, treats it as an address of an account,
-##     also takes an offset and length of the account's data.
-##     Returns a chunk of the data (length bytes).
+## QueryAccount precompiled contract methods:
+##------------------------------------------
+## owner(uint256)              => 0xa123c33e
+## length(uint256)             => 0xaa8b99d2
+## lamports(uint256)           => 0x748f2d8a
+## executable(uint256)         => 0xc219a785
+## rent_epoch(uint256)         => 0xc4d369b5
+## data(uint256,uint64,uint64) => 0x43ca5161
+##------------------------------------------
 
 import unittest
 import os
@@ -43,31 +38,62 @@ pragma solidity >=0.7.0;
 contract QueryAccount {
     address constant precompiled = 0xff00000000000000000000000000000000000002;
 
+    // Takes a Solana address, treats it as an address of an account.
+    // Returns the account's owner Solana address (32 bytes).
     function owner(uint256 solana_address) public returns (uint256) {
         (bool success, bytes memory result) = precompiled.delegatecall(abi.encodeWithSignature("owner(uint256)", solana_address));
         require(success, "QueryAccount.owner failed");
         return to_uint256(result);
     }
 
-    function length(uint256 solana_address) public returns (uint64) {
+    // Takes a Solana address, treats it as an address of an account.
+    // Returns the length of the account's data (8 bytes).
+    function length(uint256 solana_address) public returns (uint256) {
         (bool success, bytes memory result) = precompiled.delegatecall(abi.encodeWithSignature("length(uint256)", solana_address));
         require(success, "QueryAccount.length failed");
-        return to_uint64(result);
+        return to_uint256(result);
     }
 
+    // Takes a Solana address, treats it as an address of an account.
+    // Returns the funds in lamports of the account.
+    function lamports(uint256 solana_address) public returns (uint256) {
+        (bool success, bytes memory result) = precompiled.delegatecall(abi.encodeWithSignature("lamports(uint256)", solana_address));
+        require(success, "QueryAccount.lamports failed");
+        return to_uint256(result);
+    }
+
+    // Takes a Solana address, treats it as an address of an account.
+    // Returns the executable flag of the account.
+    function executable(uint256 solana_address) public returns (bool) {
+        (bool success, bytes memory result) = precompiled.delegatecall(abi.encodeWithSignature("executable(uint256)", solana_address));
+        require(success, "QueryAccount.executable failed");
+        return to_bool(result);
+    }
+
+    // Takes a Solana address, treats it as an address of an account.
+    // Returns the rent epoch of the account.
+    function rent_epoch(uint256 solana_address) public returns (uint256) {
+        (bool success, bytes memory result) = precompiled.delegatecall(abi.encodeWithSignature("rent_epoch(uint256)", solana_address));
+        require(success, "QueryAccount.rent_epoch failed");
+        return to_uint256(result);
+    }
+
+    // Takes a Solana address, treats it as an address of an account,
+    // also takes an offset and length of the account's data.
+    // Returns a chunk of the data (length bytes).
     function data(uint256 solana_address, uint64 offset, uint64 len) public returns (bytes memory) {
         (bool success, bytes memory result) = precompiled.delegatecall(abi.encodeWithSignature("data(uint256,uint64,uint64)", solana_address, offset, len));
         require(success, "QueryAccount.data failed");
         return result;
     }
 
-    function to_uint64(bytes memory bb) private pure returns (uint64 result) {
+    function to_uint256(bytes memory bb) private pure returns (uint256 result) {
         assembly {
-            result := mload(add(bb, 8))
+            result := mload(add(bb, 32))
         }
     }
 
-    function to_uint256(bytes memory bb) private pure returns (uint256 result) {
+    function to_bool(bytes memory bb) private pure returns (bool result) {
         assembly {
             result := mload(add(bb, 32))
         }
@@ -86,6 +112,9 @@ contract TestQueryAccount {
 
         uint256 golden_ownr = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
         uint64 golden_len = 82;
+        uint64 golden_lamp = 82;
+        bool golden_exec = false;
+        uint64 golden_repoch = 82;
 
         uint256 ownr = query.owner(solana_address);
         if (ownr != golden_ownr) {
@@ -97,21 +126,47 @@ contract TestQueryAccount {
             return false;
         }
 
+        uint64 lamp = query.lamports(solana_address);
+        if (lamp != golden_lamp) {
+            return false;
+        }
+
+        bool exec = query.executable(solana_address);
+        if (exec != golden_exec) {
+            return false;
+        }
+
+        uint64 repoch = query.rent_epoch(solana_address);
+        if (repoch != golden_repoch) {
+            return false;
+        }
+
         return true;
     }
 
     function test_metadata_nonexistent_account() public returns (bool) {
         uint256 solana_address = 90000; // hopefully does not exist
-        try query.owner(solana_address) {
-            //
-        } catch {
+
+        try query.owner(solana_address) { } catch {
             return true; // expected exception
         }
-        try query.length(solana_address) {
-            //
-        } catch {
+
+        try query.length(solana_address) { } catch {
             return true; // expected exception
         }
+
+        try query.lamports(solana_address) { } catch {
+            return true; // expected exception
+        }
+
+        try query.executable(solana_address) { } catch {
+            return true; // expected exception
+        }
+
+        try query.rent_epoch(solana_address) { } catch {
+            return true; // expected exception
+        }
+
         return false;
     }
 
