@@ -46,6 +46,8 @@ logger.setLevel(logging.DEBUG)
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
+NEON_PROXY_PKG_VERSION = '0.4.1-rc0'
+NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 class EthereumModel:
     def __init__(self):
@@ -86,6 +88,9 @@ class EthereumModel:
             solana_account = sol_Account(values)
         return solana_account
 
+    def neon_proxy_version(self):
+        return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
+
     def web3_clientVersion(self):
         neon_config_load(self)
         return self.neon_config_dict['web3_clientVersion']
@@ -125,8 +130,12 @@ class EthereumModel:
             slot = int(self.client.get_slot(commitment=Confirmed)["result"])
         elif tag in ('earliest', 'pending'):
             raise Exception("Invalid tag {}".format(tag))
-        else:
+        elif isinstance(tag, str):
             slot = int(tag, 16)
+        elif isinstance(tag, int):
+            slot = tag
+        else:
+            raise Exception(f'Failed to parse block tag: {tag}')
         return slot
 
     def eth_blockNumber(self):
