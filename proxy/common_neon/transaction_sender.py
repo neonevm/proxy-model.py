@@ -210,8 +210,6 @@ class TransactionSender:
         resize_instr = []
         for acc_desc in output_json["accounts"]:
             if acc_desc["new"] == False:
-
-                address = bytes.fromhex(acc_desc["address"][2:])
                 if acc_desc["code_size_current"] is not None and acc_desc["code_size"] is not None:
                     if acc_desc["code_size"] > acc_desc["code_size_current"]:
                         code_size = acc_desc["code_size"] + 2048
@@ -267,7 +265,7 @@ class TransactionSender:
                     # add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
                     code_account_writable = acc_desc["writable"]
 
-                create_trx = self.instruction.make_trx_with_create_and_airdrop (address, code_account)
+                create_trx = self.instruction.make_trx_with_create_and_airdrop(address, code_account)
                 self.create_acc_trx.add(create_trx)
 
             if address == to_address:
@@ -433,7 +431,7 @@ class IterativeTransactionSender:
             logger.debug("Continue iterative step:")
             result = self.call_continue_step()
             signature = check_if_continue_returned(result)
-            if signature:
+            if signature is not None:
                 return signature
 
 

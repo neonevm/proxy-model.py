@@ -38,9 +38,8 @@ class EthereumAddress:
     def __bytes__(self): return self.data
 
 
-def accountWithSeed(base, seed, program=PublicKey(EVM_LOADER_ID)):
-    result = PublicKey(sha256(bytes(base) + bytes(seed) + bytes(program)).digest())
-    logger.debug('accountWithSeed %s', str(result))
+def accountWithSeed(base, seed):
+    result = PublicKey(sha256(bytes(base) + bytes(seed) + bytes(PublicKey(EVM_LOADER_ID))).digest())
     return result
 
 
