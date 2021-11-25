@@ -134,6 +134,8 @@ STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
     "evm_data_size" / Int64ul,
     "gas_used_and_paid" / Int64ul,
     "number_of_payments" / Int64ul,
+    "sign" / Bytes(65),
+
 )
 
 def get_account_list(client, storage_account):
@@ -181,7 +183,7 @@ class LogDB:
     def __init__(self):
         POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
         POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
-        POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy")
+        POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy-pass")
         POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 
         self.conn = psycopg2.connect(
