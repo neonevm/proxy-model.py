@@ -7,11 +7,10 @@ import eth_typing
 import eth_utils
 
 from eth_account.account import LocalAccount
-from web3 import Web3, exceptions as web3_exceptions
+from web3 import Web3
 from solana.rpc.api import Client as SolanaClient
 
 from ..plugin.solana_rest_api_tools import get_token_balance_gwei, ether2program
-
 from .testing_helpers import compile_and_deploy_contract
 
 
@@ -58,16 +57,6 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         owner_balance = self._get_balance_wei(owner_eth_account.address)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, owner_balance)
 
-    def test_eth_call_array_constructable_contract(self):
-        compile_result = solcx.compile_source(self._CONTRACT_LIST_CONSTRUCTABLE)
-        _, contract_interface = compile_result.popitem()
-        bytecode = contract_interface.get("bin")
-        abi = contract_interface.get("abi")
-        arr_constructable = self._web3.eth.contract(abi=abi, bytecode=bytecode)
-        with self.assertRaises(web3_exceptions.ContractLogicError) as cm:
-            arr_constructable.constructor([]).buildTransaction()
-        self.assertEqual("ListConstructable: empty list", str(cm.exception))
-
     def _get_balance_wei(self, eth_account: str) -> int:
         token_owner_account, nonce = ether2program(eth_account)
         balance = get_token_balance_gwei(self._solana_client, token_owner_account)
@@ -75,15 +64,6 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         self.assertIsInstance(balance, int)
         return balance * eth_utils.denoms.gwei
 
-    _CONTRACT_LIST_CONSTRUCTABLE = '''
-        // SPDX-License-Identifier: GPL-3.0
-        pragma solidity >=0.7.0 <0.9.0;
-        contract ArrConstructable {
-            constructor(uint256[] memory vector_) payable {
-                require(vector_.length > 0, "ListConstructable: empty list");
-            }
-        }
-    '''
 
     _CONTRACT_STORAGE_SOURCE = '''
         // SPDX-License-Identifier: GPL-3.0
