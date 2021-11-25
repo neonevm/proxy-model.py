@@ -506,7 +506,7 @@ class IterativeTransactionSender:
         logger.debug("receipts %s", receipts)
         result_list = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason=reason)
         for result in result_list:
-            self.sender.get_measurements(result)
+            # self.sender.get_measurements(result)
             signature = check_if_continue_returned(result)
             if signature:
                 return signature
