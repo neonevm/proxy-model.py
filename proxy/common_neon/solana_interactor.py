@@ -5,6 +5,7 @@ import logging
 import re
 import time
 
+from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 
@@ -17,7 +18,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class SolanaInteractor:
-    def __init__(self, signer, client) -> None:
+    def __init__(self, signer, client: SolanaClient) -> None:
         self.signer = signer
         self.client = client
 

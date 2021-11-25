@@ -20,12 +20,17 @@ from .emulator_interactor import call_emulated
 from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_if_program_exceeded_instructions
-from ..environment import EVM_LOADER_ID
+from ..environment import EVM_LOADER_ID, USE_COMBINED_START_CONTINUE
 from ..plugin.eth_proto import Trx as EthTrx
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+CONTINUE_REGULAR = 'ContinueV02'
+CONTINUE_COMBINED = 'PartialCallOrContinueFromRawEthereumTX'
+CONTINUE_HOLDER_COMB = 'ExecuteTrxFromAccountDataIterativeOrContinue'
 
 
 class TransactionSender:
@@ -348,13 +353,13 @@ class IterativeTransactionSender:
         call_txs = self.instruction.make_iterative_call_transaction()
         self.sender.send_measured_transaction(call_txs, self.eth_trx, 'PartialCallFromRawEthereumTXv02')
 
-        return self.call_continue()
+        return self.call_continue(CONTINUE_REGULAR)
 
 
     def call_signed_iterative_combined(self):
         self.create_accounts_for_trx_if_needed()
 
-        return self.call_continue_combined()
+        return self.call_continue(CONTINUE_COMBINED)
 
 
     def call_signed_with_holder_acc(self):
@@ -365,13 +370,13 @@ class IterativeTransactionSender:
         call_txs = self.instruction.make_call_from_account_instruction()
         self.sender.send_measured_transaction(call_txs, self.eth_trx, 'ExecuteTrxFromAccountDataIterativeV02')
 
-        return self.call_continue()
+        return self.call_continue(CONTINUE_REGULAR)
 
     def call_signed_with_holder_combined(self):
         self.write_trx_to_holder_account()
         self.create_accounts_for_trx_if_needed()
 
-        return self.call_continue_with_holder_combined()
+        return self.call_continue(CONTINUE_HOLDER_COMB)
 
 
     def create_accounts_for_trx_if_needed(self):
@@ -399,7 +404,21 @@ class IterativeTransactionSender:
         self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason='WriteHolder')
 
 
-    def call_continue(self):
+    def call_continue(self, instruction_type):
+        return_result = None
+        try:
+            return_result = self.call_continue_bucked(instruction_type)
+        except Exception as err:
+            logger.debug("call_continue_bucked_combined exception:")
+            logger.debug(str(err))
+
+        if return_result is not None:
+            return return_result
+
+        return self.call_continue_iterative()
+
+
+    def call_continue_iterative(self):
         try:
             return self.call_continue_step_by_step()
         except Exception as err:
@@ -441,3 +460,53 @@ class IterativeTransactionSender:
         logger.debug("Cancel")
         result = self.sender.send_measured_transaction(trx, self.eth_trx, 'CancelWithNonce')
         return result['result']['transaction']['signatures'][0]
+
+
+    def call_continue_bucked(self, instruction_type):
+        logger.debug("Send bucked combined:")
+        steps = self.steps
+
+        addition_count = 0
+        if instruction_type == CONTINUE_COMBINED:
+            addition_count = 2
+        elif instruction_type == CONTINUE_HOLDER_COMB:
+            addition_count = 1
+
+        receipts = []
+        for index in range(math.ceil(self.steps_emulated/steps) + addition_count):
+            try:
+
+                if instruction_type == CONTINUE_REGULAR:
+                    trx = self.instruction.make_continue_instruction(steps, index)
+                elif instruction_type == CONTINUE_COMBINED:
+                    trx = self.instruction.make_partial_call_or_continue_transaction(steps - index)
+                elif instruction_type == CONTINUE_HOLDER_COMB:
+                    trx = self.instruction.make_partial_call_or_continue_from_account_data(steps, index)
+                else:
+                    raise Exception("Unknown contionue type: {}".format(instruction_type))
+
+                result = self.sender.send_transaction_unconfirmed(trx)
+                receipts.append(result)
+            except Exception as err:
+                logger.debug(str(err))
+                if str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1"):
+                    pass
+                elif str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
+                    pass
+                elif check_if_program_exceeded_instructions(err.result):
+                    steps = int(steps * 90 / 100)
+                else:
+                    raise
+
+        return self.collect_bucked_results(receipts, instruction_type)
+
+
+    def collect_bucked_results(self, receipts, reason):
+        logger.debug("Collect bucked results:")
+        logger.debug("receipts %s", receipts)
+        result_list = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason=reason)
+        for result in result_list:
+            self.sender.get_measurements(result)
+            signature = check_if_continue_returned(result)
+            if signature:
+                return signature
