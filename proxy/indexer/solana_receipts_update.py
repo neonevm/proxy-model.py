@@ -9,6 +9,7 @@ from multiprocessing.dummy import Pool as ThreadPool, Queue
 from typing import Dict, Union
 from proxy.environment import solana_url, evm_loader_id
 from spl.token.constants import TOKEN_PROGRAM_ID
+import requests
 
 try:
     from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
@@ -202,31 +203,51 @@ class Indexer:
 
 
     # helper function checking if given 'create account' corresponds to 'create erc20 token account' instruction
-    def _check_create_token_acc(self, account_keys, create_acc, create_token_acc):
+    def _check_create_instr(self, account_keys, create_acc, create_token_acc):
+        # Must use the same Ethereum account
         if account_keys[create_acc['accounts'][1]] != account_keys[create_token_acc['accounts'][2]]:
             return False
+        # Must use the same token program
         if account_keys[create_acc['accounts'][5]] != account_keys[create_token_acc['accounts'][6]]:
             return False
+        # Token program must be system token program
         if account_keys[create_acc['accounts'][5]] != TOKEN_PROGRAM_ID:
             return False
+        # CreateERC20TokenAccount instruction must use ERC20-wrapper from whitelist
         if not self._is_allowed_wrapper_contract(account_keys[create_token_acc['accounts'][3]]):
             return False
         return True
 
 
     # helper function checking if given 'create erc20 token account' corresponds to 'token transfer' instruction
-    def _check_transfer(create_token_acc, account_keys, token_transfer) -> bool:
+    def _check_transfer(self, account_keys, create_token_acc, token_transfer) -> bool:
         return account_keys[create_token_acc['accounts'][1]] == account_keys[token_transfer['accounts'][1]]
 
 
+    def _airdrop_to(self, create_acc):
+        eth_address = bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
+
+        json_data = { 'wallet': eth_address, 'amount': self.airdrop_amount }
+        resp = requests.post(self.faucet_url, json = json_data)
+        if not resp.ok:
+            logger.warning(f'Failed to airdrop: {resp.status_code}')
+
+
     def process_trx_airdropper_mode(self, trx):
+        if check_error(trx):
+            return
+
         # helper function finding all instructions that satisfies predicate
         def find_instructions(trx, predicate):
             return [instr for instr in trx['transaction']['message']['instructions'] if predicate(instr)]
 
         account_keys = trx["transaction"]["message"]["accountKeys"]
 
-        # finding instructions specific for airdrop
+        # Finding instructions specific for airdrop.
+        # Airdrop triggers on sequence:
+        # neon.CreateAccount -> neon.CreateERC20TokenAccount -> spl.Transfer (maybe shuffled)
+
+        # First: select all instructions that can form such chains
         predicate = lambda instr: account_keys[instr['programIdIndex']] == evm_loader_id \
                                   and base58.b58decode(instr['data'])[0] == 0x02
         create_acc_list = find_instructions(trx, predicate)
@@ -239,18 +260,15 @@ class Indexer:
                                   and base58.b58decode(instr['data'])[0] == 0x03
         token_transfer_list = find_instructions(trx, predicate)
 
-        # finding sequences of instructions
-        airdrop_list = []
+        # Second: Find exact chains of instructions in sets created previously
         for create_acc in create_acc_list:
             for create_token_acc in create_token_acc_list:
-                if not self._check_create_token_acc(account_keys, create_acc, create_token_acc):
+                if not self._check_create_instr(account_keys, create_acc, create_token_acc):
                     continue
                 for token_transfer in token_transfer_list:
                     if not self._check_transfer(account_keys, create_token_acc, token_transfer):
                         continue
-                    airdrop_list.append(account_keys[create_acc['accounts'][2]])
-
-        #TODO: Call faucet for all accounts in airdrop_list
+                    self._airdrop_to(create_acc)
 
 
     def process_receipts(self):
