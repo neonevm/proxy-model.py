@@ -582,7 +582,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
         }
         try:
             method = getattr(self.model, request['method'])
-            params = request['params'] if 'params' in request else []
+            params = request.get('params', [])
             response['result'] = method(*params)
         except SolanaTrxError as err:
             traceback.print_exc()
