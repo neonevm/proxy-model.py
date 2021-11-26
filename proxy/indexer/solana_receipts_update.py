@@ -85,6 +85,7 @@ class Indexer:
             self.constants['last_block'] = 0
         self.blocked_storages = {}
         self.counter_ = 0
+        self.wrapper_contract_whitelist = []
 
 
     def run(self):
@@ -196,26 +197,58 @@ class Indexer:
 
 
     def process_trx_airdropper_mode(self, trx):
-        if len(trx['transaction']['message']['instructions']) != 3:
-            return # There must be 3 instructions
+        # helper function finding all instructions that satisfies predicate
+        def find_instructions(trx, predicate):
+            return [instr for instr in trx['transaction']['message']['instructions'] if predicate(instr)]
 
-        create_acc_instr = trx['transaction']['message']['instructions'][0]
-        create_token_acc_instr = trx['transaction']['message']['instructions'][1]
-        transfer_token_instr = trx['transaction']['message']['instructions'][2]
         account_keys = trx["transaction"]["message"]["accountKeys"]
 
-        if account_keys[create_acc_instr["programIdIndex"]] != evm_loader_id\
-            or base58.b58decode(create_acc_instr['data'])[0] != 0x02: # Must be neon's CreateAccount
-            return
+        # helper function checking if given contract address is in whitelist
+        def is_allowed_wrapper_contract(contract_addr):
+            return contract_addr in self.wrapper_contract_whitelist
 
-        if account_keys[create_token_acc_instr["programIdIndex"]] != evm_loader_id\
-            or base58.b58decode(create_token_acc_instr['data'])[0] != 0x0f:  # Must be neon's ERC20CreateTokenAccount
-            return
 
-        if account_keys[transfer_token_instr["programIdIndex"]] != TOKEN_PROGRAM_ID\
-            or base58.b58decode(transfer_token_instr['data'])[0] != 0x03: # Must be spl's Transfer
-            return
+        # helper function checking if given 'create account' corresponds to 'create erc20 token account' instruction
+        def check_create_token_acc(create_acc, create_token_acc) -> bool:
+            if account_keys[create_acc['accounts'][1]] != account_keys[create_token_acc['accounts'][2]]:
+                return False
+            if account_keys[create_acc['accounts'][5]] != account_keys[create_token_acc['accounts'][6]]:
+                return False
+            if account_keys[create_acc['accounts'][5]] != TOKEN_PROGRAM_ID:
+                return False
+            if not is_allowed_wrapper_contract(account_keys[create_token_acc['accounts'][3]]):
+                return False
+            return True
 
+
+        # helper function checking if given 'create erc20 token account' corresponds to 'token transfer' instruction
+        def check_transfer(create_token_acc, token_transfer) -> bool:
+            return account_keys[create_token_acc['accounts'][1]] == account_keys[token_transfer['accounts'][1]]
+
+
+        predicate = lambda instr: account_keys[instr['programIdIndex']] == evm_loader_id \
+                                  and base58.b58decode(instr['data'])[0] == 0x02
+        create_acc_list = find_instructions(trx, predicate)
+
+        predicate = lambda  instr: account_keys[instr['programIdIndex']] == evm_loader_id \
+                                   and base58.b58decode(instr['data'])[0] == 0x0f
+        create_token_acc_list = find_instructions(trx, predicate)
+
+        predicate = lambda instr: account_keys[instr['programIdIndex']] == TOKEN_PROGRAM_ID \
+                                  and base58.b58decode(instr['data'])[0] == 0x03
+        token_transfer_list = find_instructions(trx, predicate)
+
+        airdrop_list = []
+        for create_acc in create_acc_list:
+            for create_token_acc in create_token_acc_list:
+                if not check_create_token_acc(create_acc, create_token_acc):
+                    continue
+                for token_transfer in token_transfer_list:
+                    if not check_transfer(create_token_acc, token_transfer):
+                        continue
+                    airdrop_list.append(account_keys[create_acc['accounts'][2]])
+
+        #TODO: Call faucet for all accounts in airdrop_list
 
 
     def process_receipts(self):
