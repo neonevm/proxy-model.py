@@ -145,36 +145,22 @@ contract TestQueryAccount {
     }
 
     function test_metadata_nonexistent_account() public returns (bool) {
-        uint256 solana_address = 90000; // hopefully does not exist
-
+        uint256 solana_address = 90000; // should not exist
         bool ok = false;
-        try query.owner(solana_address) { } catch {
-            ok = true; // expected exception
-        }
+
+        try query.owner(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
-        ok = false;
-        try query.length(solana_address) { } catch {
-            ok = true; // expected exception
-        }
+        try query.length(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
-        ok = false;
-        try query.lamports(solana_address) { } catch {
-            ok = true; // expected exception
-        }
+        try query.lamports(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
-        ok = false;
-        try query.executable(solana_address) { } catch {
-            ok = true; // expected exception
-        }
+        try query.executable(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
-        ok = false;
-        try query.rent_epoch(solana_address) { } catch {
-            ok = true; // expected exception
-        }
+        try query.rent_epoch(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
 
         return ok;
     }
