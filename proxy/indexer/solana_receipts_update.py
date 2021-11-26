@@ -8,7 +8,7 @@ from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool, Queue
 from typing import Dict, Union
 from proxy.environment import solana_url, evm_loader_id
-
+from spl.token.constants import TOKEN_PROGRAM_ID
 
 try:
     from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
@@ -66,7 +66,9 @@ class NewTokenAccountEvent(IndexerEvent):
         self.address = address
 
 class Indexer:
-    def __init__(self):
+    def __init__(self, airdropper_mode = False, event_queue: Queue = None):
+        self.airdropper_mode = airdropper_mode
+        self.event_queue = event_queue
         self.client = Client(solana_url)
         self.canceller = Canceller()
         self.logs_db = LogDB()
@@ -84,14 +86,14 @@ class Indexer:
         self.blocked_storages = {}
         self.counter_ = 0
 
-    # event_queue - interchanges data between Indexer and external processes
-    def run(self, event_queue: Queue = None):
+
+    def run(self):
         while (True):
             try:
                 logger.debug("Start indexing")
                 self.gather_unknown_transactions()
                 logger.debug("Process receipts")
-                self.process_receipts(event_queue)
+                self.process_receipts()
                 logger.debug("Start getting blocks")
                 self.gather_blocks()
                 logger.debug("Unlock accounts")
@@ -193,7 +195,30 @@ class Indexer:
         # return (solana_signature, trx)
 
 
-    def process_receipts(self, event_queue):
+    def process_trx_airdropper_mode(self, trx):
+        if len(trx['transaction']['message']['instructions']) != 3:
+            return # There must be 3 instructions
+
+        create_acc_instr = trx['transaction']['message']['instructions'][0]
+        create_token_acc_instr = trx['transaction']['message']['instructions'][1]
+        transfer_token_instr = trx['transaction']['message']['instructions'][2]
+        account_keys = trx["transaction"]["message"]["accountKeys"]
+
+        if account_keys[create_acc_instr["programIdIndex"]] != evm_loader_id\
+            or base58.b58decode(create_acc_instr['data'])[0] != 0x02: # Must be neon's CreateAccount
+            return
+
+        if account_keys[create_token_acc_instr["programIdIndex"]] != evm_loader_id\
+            or base58.b58decode(create_token_acc_instr['data'])[0] != 0x0f:  # Must be neon's ERC20CreateTokenAccount
+            return
+
+        if account_keys[transfer_token_instr["programIdIndex"]] != TOKEN_PROGRAM_ID\
+            or base58.b58decode(transfer_token_instr['data'])[0] != 0x03: # Must be spl's Transfer
+            return
+
+
+
+    def process_receipts(self):
         counter = 0
         holder_table = {}
         continue_table = {}
@@ -216,6 +241,11 @@ class Indexer:
                     exit()
                 slot = trx['slot']
                 if trx['transaction']['message']['instructions'] is not None:
+
+                    if self.airdropper_mode:
+                        self.process_trx_airdropper_mode(trx)
+                        continue # skip all further processing steps
+
                     for instruction in trx['transaction']['message']['instructions']:
 
                         if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] != evm_loader_id:
@@ -583,11 +613,11 @@ class Indexer:
         return (slot, block_hash)
 
 
-def run_indexer(event_queue: Queue = None):
+def run_indexer():
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
     indexer = Indexer()
-    indexer.run(event_queue)
+    indexer.run()
 
 
 if __name__ == "__main__":

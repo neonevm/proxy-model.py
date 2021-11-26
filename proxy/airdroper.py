@@ -21,16 +21,16 @@ class Airdropper:
     def run(self):
         logger.info("Starting airdropper...")
         while (True):
-            return
             event = self.event_queue.get()
             if isinstance(event, NewTokenAccountEvent) and self.should_process_address(event.address):
-                data = f'{{"wallet": "{event.address}", "amount": {self.airdrop_amount}}}'
-                r = requests.post(self.faucet_request_url, data=data)
+                print(f"NewTokenAccountEvent: address = {event.address}")
+                json = { 'wallet': event.address, 'amount': self.airdrop_amount }
+                r = requests.post(self.faucet_request_url, json=json)
                 if not r.ok:
                     logger.warning('Faucet response:', r.status_code)
             elif isinstance(event, StopAirdropperEvent):
                 logger.info("Stopping airdropper...")
-                break
+                return
 
 def run_airdropper(faucet_addr, faucet_port, airdrop_amount, event_queue):
     airdropper = Airdropper(faucet_addr, faucet_port, airdrop_amount, event_queue)
