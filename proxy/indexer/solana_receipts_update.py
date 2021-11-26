@@ -196,6 +196,29 @@ class Indexer:
         # return (solana_signature, trx)
 
 
+    # helper function checking if given contract address is in whitelist
+    def _is_allowed_wrapper_contract(self, contract_addr):
+        return contract_addr in self.wrapper_contract_whitelist
+
+
+    # helper function checking if given 'create account' corresponds to 'create erc20 token account' instruction
+    def _check_create_token_acc(self, account_keys, create_acc, create_token_acc):
+        if account_keys[create_acc['accounts'][1]] != account_keys[create_token_acc['accounts'][2]]:
+            return False
+        if account_keys[create_acc['accounts'][5]] != account_keys[create_token_acc['accounts'][6]]:
+            return False
+        if account_keys[create_acc['accounts'][5]] != TOKEN_PROGRAM_ID:
+            return False
+        if not self._is_allowed_wrapper_contract(account_keys[create_token_acc['accounts'][3]]):
+            return False
+        return True
+
+
+    # helper function checking if given 'create erc20 token account' corresponds to 'token transfer' instruction
+    def _check_transfer(create_token_acc, account_keys, token_transfer) -> bool:
+        return account_keys[create_token_acc['accounts'][1]] == account_keys[token_transfer['accounts'][1]]
+
+
     def process_trx_airdropper_mode(self, trx):
         # helper function finding all instructions that satisfies predicate
         def find_instructions(trx, predicate):
@@ -203,29 +226,7 @@ class Indexer:
 
         account_keys = trx["transaction"]["message"]["accountKeys"]
 
-        # helper function checking if given contract address is in whitelist
-        def is_allowed_wrapper_contract(contract_addr):
-            return contract_addr in self.wrapper_contract_whitelist
-
-
-        # helper function checking if given 'create account' corresponds to 'create erc20 token account' instruction
-        def check_create_token_acc(create_acc, create_token_acc) -> bool:
-            if account_keys[create_acc['accounts'][1]] != account_keys[create_token_acc['accounts'][2]]:
-                return False
-            if account_keys[create_acc['accounts'][5]] != account_keys[create_token_acc['accounts'][6]]:
-                return False
-            if account_keys[create_acc['accounts'][5]] != TOKEN_PROGRAM_ID:
-                return False
-            if not is_allowed_wrapper_contract(account_keys[create_token_acc['accounts'][3]]):
-                return False
-            return True
-
-
-        # helper function checking if given 'create erc20 token account' corresponds to 'token transfer' instruction
-        def check_transfer(create_token_acc, token_transfer) -> bool:
-            return account_keys[create_token_acc['accounts'][1]] == account_keys[token_transfer['accounts'][1]]
-
-
+        # finding instructions specific for airdrop
         predicate = lambda instr: account_keys[instr['programIdIndex']] == evm_loader_id \
                                   and base58.b58decode(instr['data'])[0] == 0x02
         create_acc_list = find_instructions(trx, predicate)
@@ -238,13 +239,14 @@ class Indexer:
                                   and base58.b58decode(instr['data'])[0] == 0x03
         token_transfer_list = find_instructions(trx, predicate)
 
+        # finding sequences of instructions
         airdrop_list = []
         for create_acc in create_acc_list:
             for create_token_acc in create_token_acc_list:
-                if not check_create_token_acc(create_acc, create_token_acc):
+                if not self._check_create_token_acc(account_keys, create_acc, create_token_acc):
                     continue
                 for token_transfer in token_transfer_list:
-                    if not check_transfer(create_token_acc, token_transfer):
+                    if not self._check_transfer(account_keys, create_token_acc, token_transfer):
                         continue
                     airdrop_list.append(account_keys[create_acc['accounts'][2]])
 
