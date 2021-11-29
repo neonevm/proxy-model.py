@@ -26,7 +26,7 @@ services:
 
   evm_loader:
     container_name: evm_loader
-    image: neonlabsorg/evm_loader:${EVM_LOADER_REVISION:-latest}
+    image: neonlabsorg/evm_loader:db7a59816a362acb74eb636fa5bc41616a6cd9cb
     environment:
       - SOLANA_URL=http://solana:8899
     networks:
@@ -58,7 +58,7 @@ services:
 
   proxy:
     container_name: proxy
-    image: neonlabsorg/proxy:db7a59816a362acb74eb636fa5bc41616a6cd9cb
+    image: neonlabsorg/proxy:${REVISION}
     environment:
       SOLANA_URL: http://solana:8899
       POSTGRES_DB: neon-db
