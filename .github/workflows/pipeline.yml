@@ -35,7 +35,7 @@ jobs:
           tags: |
             neonlabsorg/proxy:${{ github.sha }}
 
-      - name: "Run tests"
+      - name: "Prepare tests"
         env:
           PROXY_IMAGE: neonlabsorg/proxy:${{ github.sha }}
           PROXY_URL: http://127.0.0.1:9090/solana
@@ -43,7 +43,10 @@ jobs:
           docker pull neonlabsorg/uniswap-v2-core:stable
           docker-compose -f proxy/docker-compose-test.yml up -d
           /bin/bash proxy/wait-proxy.sh
-          docker run --rm -ti --network=container:proxy \
+
+      - name: "Run tests"
+        run: |
+          docker run --rm --network=container:proxy \
                -e PROXY_URL \
                -e EVM_LOADER \
                -e SOLANA_URL \
@@ -51,7 +54,7 @@ jobs:
                -e NEW_USER_AIRDROP_AMOUNT=100 \
                --entrypoint ./proxy/deploy-test.sh \
                neonlabsorg/proxy:${{ github.sha }}
-          docker run --rm -ti --network=host \
+          docker run --rm --network=host \
                --entrypoint ./deploy-test.sh \
                neonlabsorg/uniswap-v2-core:stable
           docker-compose -f proxy/docker-compose-test.yml down
