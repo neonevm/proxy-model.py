@@ -121,10 +121,10 @@ class NeonInstruction:
         return accountWithSeed(PublicKey(COLLATERAL_POOL_BASE), str.encode(seed))
 
 
-    def create_account_with_seed_trx(self, account, seed, lamports, space):
+    def create_account_with_seed_trx(self, account, seed, lamports, space) -> Transaction:
         seed_str = str(seed, 'utf8')
         logger.debug("createAccountWithSeedTrx base(%s) account(%s) seed(%s)", type(self.operator_pda_account),account, seed_str)
-        return TransactionInstruction(
+        return Transaction().add(TransactionInstruction(
             keys=[
                 AccountMeta(pubkey=self.operator_pda_account, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=account, is_signer=False, is_writable=True),
@@ -132,7 +132,7 @@ class NeonInstruction:
             ],
             program_id=SYS_PROGRAM_ID,
             data=create_account_with_seed_layout(self.operator_pda_account, seed_str, lamports, space)
-        )
+        ))
 
 
     def make_create_eth_account_trx(self, eth_address: EthereumAddress, code_acc=None) -> Tuple[Transaction, PublicKey]:
@@ -301,7 +301,7 @@ class NeonInstruction:
 
                 AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False),
             ] + obligatory_accounts
-            )
+        )
 
 
     def make_iterative_call_transaction(self, length_before: int = 0) -> Transaction:
@@ -311,7 +311,7 @@ class NeonInstruction:
         return trx
 
 
-    def make_call_from_account_instruction(self) -> Transaction:
+    def make_call_from_account_transaction(self) -> Transaction:
         return Transaction().add(TransactionInstruction(
             program_id = EVM_LOADER_ID,
             data = bytearray.fromhex("16") + self.collateral_pool_index_buf + int(0).to_bytes(8, byteorder="little"),
@@ -332,7 +332,7 @@ class NeonInstruction:
         ))
 
 
-    def make_continue_instruction(self, steps, index=None) -> Transaction:
+    def make_continue_transaction(self, steps, index=None) -> Transaction:
         data = bytearray.fromhex("14") + self.collateral_pool_index_buf + steps.to_bytes(8, byteorder="little")
         if index:
             data = data + index.to_bytes(8, byteorder="little")
@@ -356,7 +356,7 @@ class NeonInstruction:
         ))
 
 
-    def make_cancel_instruction(self) -> Transaction:
+    def make_cancel_transaction(self) -> Transaction:
         return Transaction().add(TransactionInstruction(
             program_id = EVM_LOADER_ID,
             data = bytearray.fromhex("15") + self.eth_trx.nonce.to_bytes(8, 'little'),
@@ -408,7 +408,7 @@ class NeonInstruction:
         data = bytearray.fromhex("0E") + self.collateral_pool_index_buf + steps.to_bytes(8, byteorder='little')
         if index:
             data = data + index.to_bytes(8, byteorder="little")
-        return TransactionInstruction(
+        return Transaction().add(TransactionInstruction(
             program_id = EVM_LOADER_ID,
             data = data,
             keys = [
@@ -425,4 +425,4 @@ class NeonInstruction:
 
                 AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False),
             ] + obligatory_accounts
-        )
+        ))

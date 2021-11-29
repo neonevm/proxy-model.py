@@ -365,7 +365,7 @@ class IterativeTransactionSender:
         self.create_accounts_for_trx_if_needed()
 
         logger.debug("ExecuteTrxFromAccountDataIterative:")
-        call_txs = self.instruction.make_call_from_account_instruction()
+        call_txs = self.instruction.make_call_from_account_transaction()
         self.sender.send_measured_transaction(call_txs, self.eth_trx, 'ExecuteTrxFromAccountDataIterativeV02')
 
         return self.call_continue(CONTINUE_REGULAR)
@@ -438,7 +438,7 @@ class IterativeTransactionSender:
     def call_continue_step(self):
         step_count = self.steps
         while step_count > 0:
-            trx = self.instruction.make_continue_instruction(step_count)
+            trx = self.instruction.make_continue_transaction(step_count)
 
             logger.debug("Step count {}".format(step_count))
             try:
@@ -453,7 +453,7 @@ class IterativeTransactionSender:
 
 
     def call_cancel(self):
-        trx = self.instruction.make_cancel_instruction()
+        trx = self.instruction.make_cancel_transaction()
 
         logger.debug("Cancel")
         result = self.sender.send_measured_transaction(trx, self.eth_trx, 'CancelWithNonce')
@@ -475,7 +475,7 @@ class IterativeTransactionSender:
             try:
                 trx = Transaction()
                 if instruction_type == CONTINUE_REGULAR:
-                    trx = self.instruction.make_continue_instruction(steps, index)
+                    trx = self.instruction.make_continue_transaction(steps, index)
                 elif instruction_type == CONTINUE_COMBINED:
                     trx = self.instruction.make_partial_call_or_continue_transaction(steps - index)
                 elif instruction_type == CONTINUE_HOLDER_COMB:
