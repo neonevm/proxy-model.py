@@ -31,15 +31,17 @@ jobs:
           build-args: |
             SOLANA_REVISION=${SOLANA_REVISION}
             EVM_LOADER_REVISION=${EVM_LOADER_REVISION}
-            PROXY_REVISION=${REVISION}
+            PROXY_REVISION=${{ github.sha }}
           tags: |
-            neonlabsorg/proxy:${{GITHUB_REVISION}}
+            neonlabsorg/proxy:${{ github.sha }}
 
       - name: "Run tests"
         env:
-          - PROXY_IMAGE: neonlabsorg/proxy:${REVISION}
+          - PROXY_IMAGE: neonlabsorg/proxy:${{ github.sha }}
         run: |
           docker pull neonlabsorg/uniswap-v2-core:stable
           docker-compose -f proxy/docker-compose-test.yml up -d
+          sleep 60
+          docker-compose -f proxy/docker-compose-test.yml down
 
 
