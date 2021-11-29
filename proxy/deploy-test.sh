@@ -15,12 +15,7 @@ solana address
 solana airdrop 1000
 solana balance
 
-if [ -z "$1" ]; then
-  python3 -m unittest discover -v -p 'test*.py'
-else
-  echo "Will start test $1"
-  python3 -m unittest discover -p "$1"
-fi
+python3 -m unittest discover -v -p 'test*.py'
 
 echo "Deploy test success"
 exit 0
