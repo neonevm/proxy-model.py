@@ -55,15 +55,7 @@ class TransactionStruct:
         self.storage = storage
         self.blocked_accounts = blocked_accounts
         self.slot = slot
-
-class IndexerEvent:
-    def __init__(self):
-        pass
-
-class NewTokenAccountEvent(IndexerEvent):
-    def __init__(self, address):
-        IndexerEvent.__init__(self)
-        self.address = address
+        
 
 class Indexer:
     def __init__(self,
