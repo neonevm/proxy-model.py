@@ -7,7 +7,6 @@ import logging
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool, Queue
 from typing import Dict, Union
-from proxy.environment import solana_url, evm_loader_id
 from spl.token.constants import TOKEN_PROGRAM_ID
 import requests
 
@@ -67,9 +66,13 @@ class NewTokenAccountEvent(IndexerEvent):
         self.address = address
 
 class Indexer:
-    def __init__(self, airdropper_mode = False, event_queue: Queue = None):
-        self.airdropper_mode = airdropper_mode
-        self.event_queue = event_queue
+    def __init__(self,
+                 solana_url,
+                 evm_loader_id,
+                 airdropper_mode = False,
+                 faucet_url = '',
+                 wrapper_whitelist = []):
+        self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
         self.canceller = Canceller()
         self.logs_db = LogDB()
@@ -86,7 +89,11 @@ class Indexer:
             self.constants['last_block'] = 0
         self.blocked_storages = {}
         self.counter_ = 0
-        self.wrapper_contract_whitelist = []
+
+        self.airdropper_mode = airdropper_mode
+        self.wrapper_contract_whitelist = wrapper_whitelist
+        self.airdrop_amount = 100
+        self.faucet_url = faucet_url
 
 
     def run(self):
@@ -123,7 +130,7 @@ class Indexer:
             if minimal_tx:
                 opts["before"] = minimal_tx
             opts["commitment"] = "confirmed"
-            result = self.client._provider.make_request("getSignaturesForAddress", evm_loader_id, opts)
+            result = self.client._provider.make_request("getSignaturesForAddress", self.evm_loader_id, opts)
             logger.debug("{:>3} get_signatures_for_address {}".format(counter, len(result["result"])))
             counter += 1
 
@@ -228,7 +235,7 @@ class Indexer:
         eth_address = bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
 
         json_data = { 'wallet': eth_address, 'amount': self.airdrop_amount }
-        resp = requests.post(self.faucet_url, json = json_data)
+        resp = requests.post(self.faucet_url + '/request_eth_token', json = json_data)
         if not resp.ok:
             logger.warning(f'Failed to airdrop: {resp.status_code}')
 
@@ -248,11 +255,11 @@ class Indexer:
         # neon.CreateAccount -> neon.CreateERC20TokenAccount -> spl.Transfer (maybe shuffled)
 
         # First: select all instructions that can form such chains
-        predicate = lambda instr: account_keys[instr['programIdIndex']] == evm_loader_id \
+        predicate = lambda instr: account_keys[instr['programIdIndex']] == self.evm_loader_id \
                                   and base58.b58decode(instr['data'])[0] == 0x02
         create_acc_list = find_instructions(trx, predicate)
 
-        predicate = lambda  instr: account_keys[instr['programIdIndex']] == evm_loader_id \
+        predicate = lambda  instr: account_keys[instr['programIdIndex']] == self.evm_loader_id \
                                    and base58.b58decode(instr['data'])[0] == 0x0f
         create_token_acc_list = find_instructions(trx, predicate)
 
@@ -301,7 +308,7 @@ class Indexer:
 
                     for instruction in trx['transaction']['message']['instructions']:
 
-                        if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] != evm_loader_id:
+                        if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] != self.evm_loader_id:
                             continue
 
                         if check_error(trx):
@@ -666,12 +673,37 @@ class Indexer:
         return (slot, block_hash)
 
 
-def run_indexer():
+def run_indexer(solana_url,
+                evm_loader_id,
+                airdropper_mode = False,
+                faucet_url = '',
+                wrapper_whitelist = []):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
-    indexer = Indexer()
+    logger.info(f"""Running indexer with params:
+        solana_url: {solana_url},
+        evm_loader_id: {evm_loader_id},
+        airdropper_mode: {airdropper_mode},
+        faucet_url: {faucet_url},
+        wrapper_whitelist: {wrapper_whitelist}""")
+
+    indexer = Indexer(solana_url,
+                      evm_loader_id,
+                      airdropper_mode,
+                      faucet_url,
+                      wrapper_whitelist)
+    logger.debug("After indexer construction")
     indexer.run()
 
 
 if __name__ == "__main__":
-    run_indexer()
+    solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
+    evm_loader_id = os.environ.get('EVM_LOADER_ID', '53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io')
+    faucet_url = os.environ.get('FAUCET_URL', 'http://localhost:3333')
+    airdropper_mode = os.environ.get('INDEXER_AIRDROPPER_MODE', False)
+    wrapper_whitelist = os.environ.get('INDEXER_ERC20_WRAPPER_WHITELIST', '').split(',')
+    run_indexer(solana_url,
+                evm_loader_id,
+                airdropper_mode,
+                faucet_url,
+                wrapper_whitelist)
