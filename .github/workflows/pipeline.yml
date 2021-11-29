@@ -1,0 +1,45 @@
+name: Verify proxy-model.py
+
+on: [push]
+
+jobs:
+  prepare:
+    name: "Prepare images"
+    runs-on: ubuntu-20.04
+    env:
+      - SOLANA_REVISION: "v1.7.9-resources"
+      - EVM_LOADER_REVISION: "latest"
+      - REVISION: ${{ github.SHA }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: "Pull dependency images"
+        runs: |
+          docker pull neonlabsorg/solana:${SOLANA_REVISION}
+          docker pull neonlabsorg/evm_loader:${EVM_LOADER_REVISION}
+
+      - name: "Build and push proxy docker image"
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          build-args: |
+            SOLANA_REVISION=${SOLANA_REVISION}
+            EVM_LOADER_REVISION=${EVM_LOADER_REVISION}
+            PROXY_REVISION=${REVISION}
+          tags: |
+            neonlabsorg/proxy:${{GITHUB_REVISION}}
+
+      - name: "Run tests"
+        env:
+          - PROXY_IMAGE: neonlabsorg/proxy:${REVISION}
+        runs: |
+          docker pull neonlabsorg/uniswap-v2-core:stable
+          docker-compose -f proxy/docker-compose-test.yml up -d
+
+
