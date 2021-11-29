@@ -21,7 +21,6 @@ class MockFaucet(MockServer):
 
     def request_eth_token(self):
         req = request.get_json()
-        print(f"REQUEST ETH TOKEN: {req}")
         return self.request_eth_token_mock(req)
 
 

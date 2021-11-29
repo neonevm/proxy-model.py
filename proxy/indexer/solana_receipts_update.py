@@ -74,6 +74,7 @@ class Indexer:
         self.eth_sol_trx = SQLDict(tablename="ethereum_solana_transactions")
         self.sol_eth_trx = SQLDict(tablename="solana_ethereum_transactions")
         self.constants = SQLDict(tablename="constants")
+        self.airdrop_ready = SQLDict(tablename="airdrop_ready")
         self.last_slot = 0
         self.current_slot = 0
         self.transaction_order = []
@@ -233,7 +234,7 @@ class Indexer:
             logger.warning(f'Failed to airdrop: {resp.status_code}')
 
 
-    def process_trx_airdropper_mode(self, trx):
+    def process_trx_airdropper_mode(self, trx, signature):
         if check_error(trx):
             return
 
@@ -268,8 +269,10 @@ class Indexer:
                 for token_transfer in token_transfer_list:
                     if not self._check_transfer(account_keys, create_token_acc, token_transfer):
                         continue
+                    if signature in self.airdrop_ready: # transaction already processed
+                        return
+                    self.airdrop_ready[signature] = trx
                     self._airdrop_to(create_acc)
-
 
     def process_receipts(self):
         counter = 0
@@ -295,8 +298,8 @@ class Indexer:
                 if trx['transaction']['message']['instructions'] is not None:
 
                     if self.airdropper_mode:
-                        self.process_trx_airdropper_mode(trx)
-                        continue # skip all further processing steps
+                        self.process_trx_airdropper_mode(trx, signature)
+                        continue
 
                     for instruction in trx['transaction']['message']['instructions']:
 
