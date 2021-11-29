@@ -379,21 +379,21 @@ class IterativeTransactionSender:
 
     def create_accounts_for_trx_if_needed(self):
         if len(self.create_acc_trx.instructions):
+            logger.debug('create_accounts_for_trx')
             precall_txs = Transaction()
             precall_txs.add(self.create_acc_trx)
             self.sender.send_measured_transaction(precall_txs, self.eth_trx, 'CreateAccountsForTrx')
 
 
     def write_trx_to_holder_account(self):
+        logger.debug('write_trx_to_holder_account')
         msg = self.eth_trx.signature() + len(self.eth_trx.unsigned_msg()).to_bytes(8, byteorder="little") + self.eth_trx.unsigned_msg()
 
-        # Write transaction to transaction holder account
         offset = 0
         receipts = []
         rest = msg
         while len(rest):
             (part, rest) = (rest[:1000], rest[1000:])
-            # logger.debug("sender_sol %s %s %s", sender_sol, holder, acc.public_key())
             trx = self.instruction.make_write_transaction(offset, part)
             receipts.append(self.sender.send_transaction_unconfirmed(trx))
             offset += len(part)
@@ -461,7 +461,7 @@ class IterativeTransactionSender:
 
 
     def call_continue_bucked(self, instruction_type):
-        logger.debug("Send bucked combined:")
+        logger.debug("Send bucked combined: %s", instruction_type)
         steps = self.steps
 
         addition_count = 0
@@ -471,9 +471,9 @@ class IterativeTransactionSender:
             addition_count = 1
 
         receipts = []
-        for index in range(math.ceil(self.steps_emulated/steps) + addition_count):
+        for index in range(math.ceil(self.steps_emulated/self.steps) + addition_count):
             try:
-
+                trx = Transaction()
                 if instruction_type == CONTINUE_REGULAR:
                     trx = self.instruction.make_continue_instruction(steps, index)
                 elif instruction_type == CONTINUE_COMBINED:
@@ -481,11 +481,10 @@ class IterativeTransactionSender:
                 elif instruction_type == CONTINUE_HOLDER_COMB:
                     trx = self.instruction.make_partial_call_or_continue_from_account_data(steps, index)
                 else:
-                    raise Exception("Unknown contionue type: {}".format(instruction_type))
+                    raise Exception("Unknown continue type: {}".format(instruction_type))
 
-                result = self.sender.send_transaction_unconfirmed(trx)
-                receipts.append(result)
-            except Exception as err:
+                receipts.append(self.sender.send_transaction_unconfirmed(trx))
+            except SendTransactionError as err:
                 logger.debug(str(err))
                 if str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1"):
                     pass
@@ -493,6 +492,12 @@ class IterativeTransactionSender:
                     pass
                 elif check_if_program_exceeded_instructions(err.result):
                     steps = int(steps * 90 / 100)
+                else:
+                    raise
+            except Exception as err:
+                logger.debug(str(err))
+                if str(err).startswith('failed to get recent blockhash'):
+                    pass
                 else:
                     raise
 

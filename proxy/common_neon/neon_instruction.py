@@ -384,9 +384,9 @@ class NeonInstruction:
                 AccountMeta(pubkey=self.storage, is_signer=False, is_writable=True),
 
                 AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=self.operator, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self.operator_pda_account, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_token, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.operator_associated_token_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
 
@@ -415,9 +415,9 @@ class NeonInstruction:
                 AccountMeta(pubkey=self.holder, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.storage, is_signer=False, is_writable=True),
 
-                AccountMeta(pubkey=self.operator, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self.operator_pda_account, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_token, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.operator_associated_token_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
 
