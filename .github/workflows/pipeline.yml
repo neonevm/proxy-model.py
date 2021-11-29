@@ -20,7 +20,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: "Pull dependency images"
-        runs: |
+        run: |
           docker pull neonlabsorg/solana:${SOLANA_REVISION}
           docker pull neonlabsorg/evm_loader:${EVM_LOADER_REVISION}
 
@@ -38,7 +38,7 @@ jobs:
       - name: "Run tests"
         env:
           - PROXY_IMAGE: neonlabsorg/proxy:${REVISION}
-        runs: |
+        run: |
           docker pull neonlabsorg/uniswap-v2-core:stable
           docker-compose -f proxy/docker-compose-test.yml up -d
 
