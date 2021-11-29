@@ -7,7 +7,6 @@ import logging
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool, Queue
 from typing import Dict, Union
-from spl.token.constants import TOKEN_PROGRAM_ID
 import requests
 
 try:
@@ -55,7 +54,7 @@ class TransactionStruct:
         self.storage = storage
         self.blocked_accounts = blocked_accounts
         self.slot = slot
-        
+
 
 class Indexer:
     def __init__(self,
@@ -63,7 +62,8 @@ class Indexer:
                  evm_loader_id,
                  airdropper_mode = False,
                  faucet_url = '',
-                 wrapper_whitelist = []):
+                 wrapper_whitelist = [],
+                 airdrop_amount = 10):
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
         self.canceller = Canceller()
@@ -84,7 +84,7 @@ class Indexer:
 
         self.airdropper_mode = airdropper_mode
         self.wrapper_contract_whitelist = wrapper_whitelist
-        self.airdrop_amount = 100
+        self.airdrop_amount = airdrop_amount
         self.faucet_url = faucet_url
 
 
@@ -210,7 +210,7 @@ class Indexer:
         if account_keys[create_acc['accounts'][5]] != account_keys[create_token_acc['accounts'][6]]:
             return False
         # Token program must be system token program
-        if account_keys[create_acc['accounts'][5]] != TOKEN_PROGRAM_ID:
+        if account_keys[create_acc['accounts'][5]] != 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA':
             return False
         # CreateERC20TokenAccount instruction must use ERC20-wrapper from whitelist
         if not self._is_allowed_wrapper_contract(account_keys[create_token_acc['accounts'][3]]):
@@ -224,7 +224,8 @@ class Indexer:
 
 
     def _airdrop_to(self, create_acc):
-        eth_address = bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
+        eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
+        logger.info(f"Airdrop to address: {eth_address}")
 
         json_data = { 'wallet': eth_address, 'amount': self.airdrop_amount }
         resp = requests.post(self.faucet_url + '/request_eth_token', json = json_data)
@@ -255,7 +256,7 @@ class Indexer:
                                    and base58.b58decode(instr['data'])[0] == 0x0f
         create_token_acc_list = find_instructions(trx, predicate)
 
-        predicate = lambda instr: account_keys[instr['programIdIndex']] == TOKEN_PROGRAM_ID \
+        predicate = lambda instr: account_keys[instr['programIdIndex']] == 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' \
                                   and base58.b58decode(instr['data'])[0] == 0x03
         token_transfer_list = find_instructions(trx, predicate)
 
@@ -275,7 +276,6 @@ class Indexer:
         holder_table = {}
         continue_table = {}
         trx_table = {}
-
         for signature in self.transaction_order:
             counter += 1
 
@@ -669,7 +669,8 @@ def run_indexer(solana_url,
                 evm_loader_id,
                 airdropper_mode = False,
                 faucet_url = '',
-                wrapper_whitelist = []):
+                wrapper_whitelist = [],
+                airdrop_amount = 10):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
     logger.info(f"""Running indexer with params:
@@ -677,14 +678,15 @@ def run_indexer(solana_url,
         evm_loader_id: {evm_loader_id},
         airdropper_mode: {airdropper_mode},
         faucet_url: {faucet_url},
-        wrapper_whitelist: {wrapper_whitelist}""")
+        wrapper_whitelist: {wrapper_whitelist},
+        airdrop_amount: {airdrop_amount}""")
 
     indexer = Indexer(solana_url,
                       evm_loader_id,
                       airdropper_mode,
                       faucet_url,
-                      wrapper_whitelist)
-    logger.debug("After indexer construction")
+                      wrapper_whitelist,
+                      airdrop_amount)
     indexer.run()
 
 
@@ -694,8 +696,10 @@ if __name__ == "__main__":
     faucet_url = os.environ.get('FAUCET_URL', 'http://localhost:3333')
     airdropper_mode = os.environ.get('INDEXER_AIRDROPPER_MODE', False)
     wrapper_whitelist = os.environ.get('INDEXER_ERC20_WRAPPER_WHITELIST', '').split(',')
+    airdrop_amount = os.environ.get('AIRDROP_AMOUNT', 0)
     run_indexer(solana_url,
                 evm_loader_id,
                 airdropper_mode,
                 faucet_url,
-                wrapper_whitelist)
+                wrapper_whitelist,
+                airdrop_amount)
