@@ -207,6 +207,7 @@ pre_token_airdrop_trx1 = {
 }
 
 token_airdrop_address2 = '0x8bd4991b9b81b3298fc6ac06b553b87c8e8582f0'
+token_airdrop_address3 = '0x67d9e53d5e747b36fa6587421114aa0b0ca39753'
 
 # This is transaction containing 2 addresses for airdrop
 # Instructions here mixed to test complex case
@@ -406,7 +407,7 @@ pre_token_airdrop_trx2 = {
                     {
                         # Create 2-nd account
                         'accounts': [13, 14, 15, 20, 21, 22, 23, 24],
-                        'data': 'SSX8YzB3JHrjo6vdi3AMoi7zpcPrQv1EF4uXaNUgBSq2E3sfp7PKeAH',
+                        'data': 'SSX8YzB3JHrjo6vdi3AMoi7zpcF3UcpFjrvswawEUuqDYcNbh7NZsuX',
                         'programIdIndex': 25
                     },
                     {

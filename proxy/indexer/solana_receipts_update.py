@@ -74,7 +74,11 @@ class Indexer:
         self.eth_sol_trx = SQLDict(tablename="ethereum_solana_transactions")
         self.sol_eth_trx = SQLDict(tablename="solana_ethereum_transactions")
         self.constants = SQLDict(tablename="constants")
+
+        # collection of eth-address-to-create-accout-trx mappings
+        # for every addresses that was already funded with airdrop
         self.airdrop_ready = SQLDict(tablename="airdrop_ready")
+
         self.last_slot = 0
         self.current_slot = 0
         self.transaction_order = []
@@ -226,6 +230,11 @@ class Indexer:
 
     def _airdrop_to(self, create_acc):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
+
+        if eth_address in self.airdrop_ready:  # transaction already processed
+            return
+        self.airdrop_ready[eth_address] = create_acc
+
         logger.info(f"Airdrop to address: {eth_address}")
 
         json_data = { 'wallet': eth_address, 'amount': self.airdrop_amount }
@@ -269,9 +278,6 @@ class Indexer:
                 for token_transfer in token_transfer_list:
                     if not self._check_transfer(account_keys, create_token_acc, token_transfer):
                         continue
-                    if signature in self.airdrop_ready: # transaction already processed
-                        return
-                    self.airdrop_ready[signature] = trx
                     self._airdrop_to(create_acc)
 
     def process_receipts(self):

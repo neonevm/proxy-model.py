@@ -4,19 +4,21 @@ from proxy.indexer.solana_receipts_update import run_indexer
 from multiprocessing import Process
 import time
 from flask import request
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from solana.rpc.api import Client
 from solana.rpc.types import RPCResponse
 from solana.rpc.providers.http import HTTPProvider
 from typing import cast
 import itertools
 from proxy.testing.transactions import pre_token_airdrop_trx1, pre_token_airdrop_trx2,\
-    create_sol_acc_and_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address1
+    create_sol_acc_and_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address1, \
+    token_airdrop_address2, token_airdrop_address3
 
 class MockFaucet(MockServer):
     def __init__(self, port):
         super().__init__(port)
         self.request_eth_token_mock = MagicMock()
+        self.request_eth_token_mock.side_effect = itertools.repeat({})
         self.add_url_rule("/request_eth_token", callback=self.request_eth_token, methods=['POST'])
 
     def request_eth_token(self):
@@ -35,11 +37,11 @@ def create_signature_for_address(signature: str):
     }
 
 
-def create_get_signatures_for_address(signatures: list, req_id: int):
+def create_get_signatures_for_address(signatures: list):
     return {
         'jsonrpc': '2.0',
         'result': [ create_signature_for_address(sign) for sign in signatures ],
-        'id': req_id
+        'id': 1
     }
 
 
@@ -55,37 +57,76 @@ class Test_Airdropper(unittest.TestCase):
         cls.faucet.start()
         time.sleep(0.2)
 
-    @patch.object(Client, 'get_confirmed_transaction')
-    @patch.object(HTTPProvider, 'make_request')
-    @patch.object(Client, 'get_slot')
-    def test_new_token_account(self, get_slot, make_request, get_confirmed_transaction):
-        # Return the same slot on every call (not make sense)
-        get_slot.side_effect = itertools.repeat(cast(RPCResponse, { 'error': None, 'id': 1, 'result': 1 }))
-        # Will return 2 signatures on first call, empty list all other times
-        make_request.side_effect = itertools.chain([create_get_signatures_for_address([ 'signature1', 'signature2' ], 2)],
-                                                   itertools.repeat(create_get_signatures_for_address([], 3)))
-        # Will return pre_token_airdrop_trx1 for signature1, create_sol_acc_and_airdrop_trx for signature2
-        get_confirmed_transaction.side_effect = [ pre_token_airdrop_trx1, create_sol_acc_and_airdrop_trx ]
-        self.faucet.request_eth_token_mock.side_effect = [{}]
-
-
+    def _run_test(self):
         indexer = Process(target=run_indexer,
-                          args=(f'http://localhost:8899', # solana_url
+                          args=(f'http://localhost:8899',  # solana_url
                                 evm_loader_addr,
                                 True,  # airdropper_mode
                                 f'http://{self.address}:{self.faucet_port}',  # faucet_url
                                 wrapper_whitelist,
                                 self.airdrop_amount))
         indexer.start()
-
-        time.sleep(1) # make sure airdropper processed event
-
+        time.sleep(2)  # make sure airdropper processed event
         indexer.terminate()
         indexer.join()
 
-        #make_request.assert_called()
+
+    @patch.object(Client, 'get_confirmed_transaction')
+    @patch.object(HTTPProvider, 'make_request')
+    @patch.object(Client, 'get_slot')
+    def test_simple_case_one_account_one_airdrop(self, get_slot, make_request, get_confirmed_transaction):
+        # Return the same slot on every call (not make sense)
+        get_slot.side_effect = itertools.repeat(cast(RPCResponse, { 'error': None, 'id': 1, 'result': 1 }))
+        # Will return 2 signatures on first call, empty list all other times
+        make_request.side_effect = itertools.chain([create_get_signatures_for_address([ 'signature1', 'signature2' ])],
+                                                   itertools.repeat(create_get_signatures_for_address([])))
+        # Will return same transaction (with same eth address) for every signature
+        get_confirmed_transaction.side_effect = [ pre_token_airdrop_trx1, pre_token_airdrop_trx1 ]
+
+        self._run_test()
+
+        # Should be only one call to faucet
         req_json = {"wallet": token_airdrop_address1, "amount": self.airdrop_amount}
-        self.faucet.request_eth_token_mock.assert_called_with(req_json)
+        self.faucet.request_eth_token_mock.assert_called_once_with(req_json)
+        self.faucet.request_eth_token_mock.reset_mock()
+
+
+    @patch.object(Client, 'get_confirmed_transaction')
+    @patch.object(HTTPProvider, 'make_request')
+    @patch.object(Client, 'get_slot')
+    def test_complex_case_two_accounts_two_airdrops(self, get_slot, make_request, get_confirmed_transaction):
+        # Return the same slot on every call (not make sense)
+        get_slot.side_effect = itertools.repeat(cast(RPCResponse, {'error': None, 'id': 1, 'result': 1}))
+        # Will return signature on first call, empty list all other times
+        make_request.side_effect = itertools.chain([create_get_signatures_for_address(['signature3'])],
+                                                   itertools.repeat(create_get_signatures_for_address([])))
+        # Will return complex transaction containing 2 account creations and transfers
+        get_confirmed_transaction.side_effect = [pre_token_airdrop_trx2]
+
+        self._run_test()
+
+        # Should be 2 calls to faucet with different addresses
+        calls = [ call({"wallet": token_airdrop_address3, "amount": self.airdrop_amount}),
+                  call({"wallet": token_airdrop_address2, "amount": self.airdrop_amount}) ]
+        self.faucet.request_eth_token_mock.assert_has_calls(calls)
+        self.faucet.request_eth_token_mock.reset_mock()
+
+    @patch.object(Client, 'get_confirmed_transaction')
+    @patch.object(HTTPProvider, 'make_request')
+    @patch.object(Client, 'get_slot')
+    def test_should_not_call_faucet(self, get_slot, make_request, get_confirmed_transaction):
+        # Return the same slot on every call (not make sense)
+        get_slot.side_effect = itertools.repeat(cast(RPCResponse, {'error': None, 'id': 1, 'result': 1}))
+        # Will return 2 signatures on first call, empty list all other times
+        make_request.side_effect = itertools.chain([create_get_signatures_for_address(['signature4'])],
+                                                   itertools.repeat(create_get_signatures_for_address([])))
+        # Will return not interesting create_sol_acc_and_airdrop_trx
+        get_confirmed_transaction.side_effect = [create_sol_acc_and_airdrop_trx]
+
+        self._run_test()
+
+        self.faucet.request_eth_token_mock.assert_not_called()
+        self.faucet.request_eth_token_mock.reset_mock()
 
     @classmethod
     def tearDownClass(cls) -> None:
