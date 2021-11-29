@@ -21,16 +21,16 @@ jobs:
 
       - name: "Pull dependency images"
         run: |
-          docker pull neonlabsorg/solana:${SOLANA_REVISION}
-          docker pull neonlabsorg/evm_loader:${EVM_LOADER_REVISION}
+          docker pull neonlabsorg/solana:${{ env.SOLANA_REVISION }}
+          docker pull neonlabsorg/evm_loader:${{ env.EVM_LOADER_REVISION }}
 
       - name: "Build and push proxy docker image"
         uses: docker/build-push-action@v2
         with:
           context: .
           build-args: |
-            SOLANA_REVISION=${SOLANA_REVISION}
-            EVM_LOADER_REVISION=${EVM_LOADER_REVISION}
+            SOLANA_REVISION=${{ env.SOLANA_REVISION }}
+            EVM_LOADER_REVISION=${{ env.EVM_LOADER_REVISION }}
             PROXY_REVISION=${{ github.sha }}
           tags: |
             neonlabsorg/proxy:${{ github.sha }}
@@ -43,5 +43,3 @@ jobs:
           docker-compose -f proxy/docker-compose-test.yml up -d
           sleep 60
           docker-compose -f proxy/docker-compose-test.yml down
-
-
