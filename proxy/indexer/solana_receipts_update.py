@@ -376,9 +376,9 @@ class Indexer:
                                 continue_result = continue_table[storage_account]
                                 if continue_result.accounts != blocked_accounts:
                                     logger.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
-                                continue_result.signatures.append(signature)
                                 trx_table[eth_signature].got_result = continue_result.results
-                                trx_table[eth_signature].signatures = continue_result.signatures
+                                trx_table[eth_signature].signatures += continue_result.signatures
+
                                 del continue_table[storage_account]
 
                         elif instruction_data[0] == 0x0a or instruction_data[0] == 0x14: # Continue or ContinueV02
@@ -395,8 +395,8 @@ class Indexer:
                             if storage_account in continue_table:
                                 continue_table[storage_account].signatures.append(signature)
 
-                                if got_result:
-                                    if continue_table[storage_account].results:
+                                if got_result is not None:
+                                    if continue_table[storage_account].results is not None:
                                         logger.error("Strange behavior. Pay attention. RESULT ALREADY EXISTS IN CONTINUE TABLE")
                                     if continue_table[storage_account].accounts != blocked_accounts:
                                         logger.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
@@ -436,7 +436,9 @@ class Indexer:
                             # logger.debug("{:>10} {:>6} Cancel 0x{}".format(slot, counter, instruction_data.hex()))
 
                             storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
-                            continue_table[storage_account] = ContinueStruct(signature, ([], "0x0", 0, [], trx['slot']))
+                            blocked_accounts = [trx['transaction']['message']['accountKeys'][acc_idx] for acc_idx in instruction['accounts'][6:]]
+
+                            continue_table[storage_account] = ContinueStruct(signature, ([], "0x0", 0, [], trx['slot']), blocked_accounts)
 
                         elif instruction_data[0] == 0x0d:
                             # logger.debug("{:>10} {:>6} PartialCallOrContinueFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
@@ -468,6 +470,14 @@ class Indexer:
                                         slot
                                     )
 
+                            if storage_account in continue_table:
+                                continue_result = continue_table[storage_account]
+                                trx_table[eth_signature].signatures += continue_result.signatures
+                                if continue_result.results is not None:
+                                    trx_table[eth_signature].got_result = continue_result.results
+
+                                del continue_table[storage_account]
+
                         elif instruction_data[0] == 0x0e:
                             # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeOrContinue 0x{}".format(slot, counter, instruction_data.hex()))
 
@@ -487,7 +497,7 @@ class Indexer:
                                     logger.error("Strange behavior. Pay attention. HOLDER ACCOUNT NOT FOUND")
                                     holder_table[holder_account] = HolderStruct(storage_account)
 
-                                if got_result:
+                                if got_result is not None:
                                     if continue_table[storage_account].results:
                                         logger.error("Strange behavior. Pay attention. RESULT ALREADY EXISTS IN CONTINUE TABLE")
                                     if continue_table[storage_account].accounts != blocked_accounts:
