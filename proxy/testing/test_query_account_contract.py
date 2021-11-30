@@ -103,8 +103,6 @@ contract QueryAccount {
 contract TestQueryAccount {
     QueryAccount query;
 
-    event QueryOwnerDebug(uint256 _value);
-
     constructor() {
         query = new QueryAccount();
     }
@@ -118,10 +116,7 @@ contract TestQueryAccount {
         bool golden_exec = false;
         uint256 golden_repoch = 0;
 
-        emit QueryOwnerDebug(golden_repoch);
         uint256 ownr = query.owner(solana_address);
-        emit QueryOwnerDebug(ownr);
-        require(false, uint2str(ownr));
         if (ownr != golden_ownr) {
             return false;
         }
@@ -236,28 +231,6 @@ contract TestQueryAccount {
         }
         return false;
     }
-
-function uint2str(uint _i) internal pure returns (string memory _uintAsString) {
-        if (_i == 0) {
-            return "0";
-        }
-        uint j = _i;
-        uint len;
-        while (j != 0) {
-            len++;
-            j /= 10;
-        }
-        bytes memory bstr = new bytes(len);
-        uint k = len;
-        while (_i != 0) {
-            k = k-1;
-            uint8 temp = (48 + uint8(_i - _i / 10 * 10));
-            bytes1 b1 = bytes1(temp);
-            bstr[k] = b1;
-            _i /= 10;
-        }
-        return string(bstr);
-    }
 }
 '''
 
@@ -288,35 +261,35 @@ class Test_Query_Account_Contract(unittest.TestCase):
         get_metadata_ok = query.functions.test_metadata_ok().call()
         assert(get_metadata_ok)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_metadata_nonexistent_account(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_metadata_nonexistent_account = query.functions.test_metadata_nonexistent_account().call()
         assert(get_metadata_nonexistent_account)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_data_ok(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_data_ok = query.functions.test_data_ok().call()
         assert(get_data_ok)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_data_nonexistent_account(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_data_nonexistent_account = query.functions.test_data_nonexistent_account().call()
         assert(get_data_nonexistent_account)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_data_too_big_offset(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         get_data_too_big_offset = query.functions.test_data_too_big_offset().call()
         assert(get_data_too_big_offset)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_data_too_big_length(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
