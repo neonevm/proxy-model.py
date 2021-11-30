@@ -48,7 +48,8 @@ jobs:
           echo "EVM_LOADER=$(docker exec proxy bash -c "solana address -k /spl/bin/evm_loader-keypair.json")" >> $GITHUB_ENV
 
       - name: "Run neon tests"
-        run: docker run --rm --network=container:proxy \
+        run: |
+          docker run --rm --network=container:proxy \
                -e PROXY_URL \
                -e EVM_LOADER \
                -e SOLANA_URL \
@@ -58,6 +59,7 @@ jobs:
                neonlabsorg/proxy:${{ github.sha }}
 
       - name: "Run Uniswap tests"
-        run: docker run --rm --network=host \
+        run: |
+          docker run --rm --network=host \
                --entrypoint ./deploy-test.sh \
                neonlabsorg/uniswap-v2-core:stable
