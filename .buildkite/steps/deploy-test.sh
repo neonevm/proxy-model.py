@@ -78,6 +78,7 @@ docker run --rm -ti --network=container:proxy \
      -e EVM_LOADER \
      -e SOLANA_URL \
      -e EXTRA_GAS=100000 \
+	 -e NEW_USER_AIRDROP_AMOUNT=100 \
      -e POSTGRES_DB="neon-db" \
      -e POSTGRES_USER="neon-proxy" \
      -e POSTGRES_PASSWORD="neon-proxy-pass" \
