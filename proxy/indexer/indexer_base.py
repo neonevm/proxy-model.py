@@ -7,10 +7,10 @@ from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict, Union
 
 try:
-    from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+    from utils import Canceller
     from sql_dict import SQLDict
 except ImportError:
-    from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+    from .utils import Canceller
     from .sql_dict import SQLDict
 
 

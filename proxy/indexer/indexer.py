@@ -1,32 +1,18 @@
 from proxy.indexer.indexer_base import logger, IndexerBase
-
 import base58
 import rlp
 import json
 import os
-import time
 import logging
-from multiprocessing.dummy import Pool as ThreadPool
-from typing import Dict, Union
 
 try:
-    from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+    from utils import check_error, get_trx_results, get_trx_receipts, LogDB
     from sql_dict import SQLDict
 except ImportError:
-    from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+    from .utils import check_error, get_trx_results, get_trx_receipts, LogDB
     from .sql_dict import SQLDict
 
-
-PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
 CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-DEVNET_HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn"
-HISTORY_START = [DEVNET_HISTORY_START]
-
-UPDATE_BLOCK_COUNT = PARALLEL_REQUESTS * 16
 
 class HolderStruct:
     def __init__(self, storage_account):
@@ -61,7 +47,7 @@ class Indexer(IndexerBase):
                  solana_url,
                  evm_loader_id,
                  log_level = 'INFO'):
-        super.__init__(self, solana_url, evm_loader_id, log_level)
+        IndexerBase.__init__(self, solana_url, evm_loader_id, log_level)
         self.logs_db = LogDB()
         self.ethereum_trx = SQLDict(tablename="ethereum_transactions")
         self.eth_sol_trx = SQLDict(tablename="ethereum_solana_transactions")

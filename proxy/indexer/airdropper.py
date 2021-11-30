@@ -20,7 +20,7 @@ class Airdropper(IndexerBase):
                  wrapper_whitelist = [],
                  airdrop_amount = 10,
                  log_level = 'INFO'):
-        super.__init__(self, solana_url, evm_loader_id, log_level)
+        IndexerBase.__init__(self, solana_url, evm_loader_id, log_level)
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -28,6 +28,7 @@ class Airdropper(IndexerBase):
         self.wrapper_contract_whitelist = wrapper_whitelist
         self.airdrop_amount = airdrop_amount
         self.faucet_url = faucet_url
+
 
     # helper function checking if given contract address is in whitelist
     def _is_allowed_wrapper_contract(self, contract_addr):
@@ -84,7 +85,6 @@ class Airdropper(IndexerBase):
         # Finding instructions specific for airdrop.
         # Airdrop triggers on sequence:
         # neon.CreateAccount -> neon.CreateERC20TokenAccount -> spl.Transfer (maybe shuffled)
-
         # First: select all instructions that can form such chains
         predicate = lambda instr: account_keys[instr['programIdIndex']] == self.evm_loader_id \
                                   and base58.b58decode(instr['data'])[0] == 0x02
@@ -107,6 +107,7 @@ class Airdropper(IndexerBase):
                     if not self._check_transfer(account_keys, create_token_acc, token_transfer):
                         continue
                     self._airdrop_to(create_acc)
+
 
     def process_receipts(self):
         counter = 0
