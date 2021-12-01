@@ -1,18 +1,22 @@
-from proxy.indexer.indexer_base import logger, IndexerBase
+from proxy.indexer.indexer_base import logger, IndexerBase, PARALLEL_REQUESTS
 import base58
 import rlp
 import json
 import os
+import time
 import logging
+from multiprocessing.dummy import Pool as ThreadPool
+
 
 try:
-    from utils import check_error, get_trx_results, get_trx_receipts, LogDB
+    from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
     from sql_dict import SQLDict
 except ImportError:
-    from .utils import check_error, get_trx_results, get_trx_receipts, LogDB
+    from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
     from .sql_dict import SQLDict
 
 CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
+UPDATE_BLOCK_COUNT = PARALLEL_REQUESTS * 16
 
 class HolderStruct:
     def __init__(self, storage_account):
@@ -48,10 +52,28 @@ class Indexer(IndexerBase):
                  evm_loader_id,
                  log_level = 'INFO'):
         IndexerBase.__init__(self, solana_url, evm_loader_id, log_level)
+
+        self.canceller = Canceller()
         self.logs_db = LogDB()
+        self.blocks_by_hash = SQLDict(tablename="solana_blocks_by_hash")
         self.ethereum_trx = SQLDict(tablename="ethereum_transactions")
         self.eth_sol_trx = SQLDict(tablename="ethereum_solana_transactions")
         self.sol_eth_trx = SQLDict(tablename="solana_ethereum_transactions")
+        self.constants = SQLDict(tablename="constants")
+        if 'last_block' not in self.constants:
+            self.constants['last_block'] = 0
+        self.blocked_storages = {}
+
+
+    def process_functions(self):
+        IndexerBase.process_functions(self)
+        logger.debug("Process receipts")
+        self.process_receipts()
+        logger.debug("Start getting blocks")
+        self.gather_blocks()
+        logger.debug("Unlock accounts")
+        self.canceller.unlock_accounts(self.blocked_storages)
+        self.blocked_storages = {}
 
 
     def process_receipts(self):
@@ -59,6 +81,7 @@ class Indexer(IndexerBase):
         holder_table = {}
         continue_table = {}
         trx_table = {}
+
         for signature in self.transaction_order:
             counter += 1
 
@@ -408,6 +431,39 @@ class Indexer(IndexerBase):
         self.blocks_by_hash[block_hash] = slot
 
         logger.debug(trx_struct.eth_signature + " " + status)
+
+
+    def gather_blocks(self):
+        max_slot = self.client.get_slot(commitment="recent")["result"]
+
+        last_block = self.constants['last_block']
+        if last_block + UPDATE_BLOCK_COUNT < max_slot:
+            max_slot = last_block + UPDATE_BLOCK_COUNT
+        slots = self.client._provider.make_request("getBlocks", last_block, max_slot, {"commitment": "confirmed"})["result"]
+
+        pool = ThreadPool(PARALLEL_REQUESTS)
+        results = pool.map(self.get_block, slots)
+
+        for block_result in results:
+            (slot, block_hash) = block_result
+            self.blocks_by_hash[block_hash] = slot
+
+        self.constants['last_block'] = max_slot
+
+
+    def get_block(self, slot):
+        retry = True
+
+        while retry:
+            try:
+                block = self.client._provider.make_request("getBlock", slot, {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
+                block_hash = '0x' + base58.b58decode(block['blockhash']).hex()
+                retry = False
+            except Exception as err:
+                logger.debug(err)
+                time.sleep(1)
+
+        return (slot, block_hash)
 
 
 def run_indexer(solana_url,
