@@ -55,6 +55,7 @@ class EthereumModel:
         self.logs_db = LogDB()
         self.blocks_by_hash = SQLDict(tablename="solana_blocks_by_hash")
         self.ethereum_trx = SQLDict(tablename="ethereum_transactions")
+        self.eth_sol_trx = SQLDict(tablename="ethereum_solana_transactions")
         self.sol_eth_trx = SQLDict(tablename="solana_ethereum_transactions")
 
         with proxy_id_glob.get_lock():
@@ -458,7 +459,12 @@ class EthereumModel:
                         'return_value': None,
                         'from_address': '0x'+sender,
                     }
+                self.eth_sol_trx[eth_signature] = [signature]
                 self.blocks_by_hash[block_hash] = slot
+                self.sol_eth_trx[signature] = {
+                    'idx': 0,
+                    'eth': eth_signature,
+                }
             except Exception as err:
                 logger.debug(err)
 

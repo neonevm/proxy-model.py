@@ -515,11 +515,12 @@ class Indexer:
             if trx_struct.got_result is not None:
                 self.submit_transaction(trx_struct)
             elif trx_struct.storage is not None:
-                if abs(trx_struct.slot - self.current_slot) > CANCEL_TIMEOUT:
-                    logger.debug("Probably blocked")
-                    logger.debug(trx_struct.eth_signature)
-                    logger.debug(trx_struct.signatures)
-                    self.blocked_storages[trx_struct.storage] = (trx_struct.eth_trx, trx_struct.blocked_accounts)
+                if not self.submit_transaction_part(trx_struct):
+                    if abs(trx_struct.slot - self.current_slot) > CANCEL_TIMEOUT:
+                        logger.debug("Probably blocked")
+                        logger.debug(trx_struct.eth_signature)
+                        logger.debug(trx_struct.signatures)
+                        self.blocked_storages[trx_struct.storage] = (trx_struct.eth_trx, trx_struct.blocked_accounts)
             else:
                 logger.error(trx_struct)
 
@@ -550,6 +551,23 @@ class Indexer:
         self.blocks_by_hash[block_hash] = slot
 
         logger.debug(trx_struct.eth_signature + " " + status)
+
+
+    def submit_transaction_part(self, trx_struct):
+        ''' Check if transaction was allready submitted by proxy. '''
+        eth_signature = trx_struct.eth_signature
+        ethereum_trx = self.ethereum_trx.get(eth_signature, None)
+        if ethereum_trx is not None:
+            signatures = self.eth_sol_trx.get(eth_signature, [])
+            signatures = signatures + trx_struct.signatures
+            self.eth_sol_trx[eth_signature] = signatures
+            for idx, sig in enumerate(signatures):
+                self.sol_eth_trx[sig] = {
+                    'idx': idx,
+                    'eth': eth_signature,
+                }
+            return True
+        return False
 
 
     def gather_blocks(self):
