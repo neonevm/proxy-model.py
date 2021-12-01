@@ -25,14 +25,14 @@ class Airdropper(IndexerBase):
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
         self.airdrop_ready = SQLDict(tablename="airdrop_ready")
-        self.wrapper_contract_whitelist = wrapper_whitelist
+        self.wrapper_whitelist = wrapper_whitelist
         self.airdrop_amount = airdrop_amount
         self.faucet_url = faucet_url
 
 
     # helper function checking if given contract address is in whitelist
     def _is_allowed_wrapper_contract(self, contract_addr):
-        return contract_addr in self.wrapper_contract_whitelist
+        return contract_addr in self.wrapper_whitelist
 
 
     # helper function checking if given 'create account' corresponds to 'create erc20 token account' instruction

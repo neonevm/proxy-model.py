@@ -1,6 +1,6 @@
 import unittest
 from proxy.testing.mock_server import MockServer
-from proxy.indexer.solana_receipts_update import run_indexer
+from proxy.indexer.airdropper import run_airdropper
 from multiprocessing import Process
 import time
 from flask import request
@@ -58,13 +58,13 @@ class Test_Airdropper(unittest.TestCase):
         time.sleep(0.2)
 
     def _run_test(self):
-        indexer = Process(target=run_indexer,
+        indexer = Process(target=run_airdropper,
                           args=(f'http://localhost:8899',  # solana_url
                                 evm_loader_addr,
-                                True,  # airdropper_mode
                                 f'http://{self.address}:{self.faucet_port}',  # faucet_url
                                 wrapper_whitelist,
-                                self.airdrop_amount))
+                                self.airdrop_amount,
+                                'INFO'))
         indexer.start()
         time.sleep(2)  # make sure airdropper processed event
         indexer.terminate()

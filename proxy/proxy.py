@@ -23,7 +23,7 @@ from .core.acceptor import AcceptorPool
 from .http.handler import HttpProtocolHandler
 
 from multiprocessing import Process
-from .indexer.solana_receipts_update import run_indexer
+from .indexer.indexer import run_indexer
 from proxy.environment import solana_url, evm_loader_id
 
 logger = logging.getLogger(__name__)

@@ -38,7 +38,7 @@ class IndexerBase:
     def __init__(self,
                  solana_url,
                  evm_loader_id,
-                 log_level = 'INFO'):
+                 log_level):
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
         self.canceller = Canceller()
