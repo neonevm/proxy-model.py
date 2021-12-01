@@ -30,8 +30,8 @@ jobs:
         uses: docker/build-push-action@v2
         with:
 #          context: .
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=user/app:buildcache
+          cache-to: type=inline
           build-args: |
             SOLANA_REVISION=${{ env.SOLANA_REVISION }}
             EVM_LOADER_REVISION=${{ env.EVM_LOADER_REVISION }}
