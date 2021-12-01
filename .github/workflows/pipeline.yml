@@ -63,3 +63,9 @@ jobs:
           docker run --rm --network=host \
                --entrypoint ./deploy-test.sh \
                neonlabsorg/uniswap-v2-core:stable
+
+      - name: "Push image"
+        if: ${{ github.ref_name == 'develop' || github.ref_name == 'master' || startsWith('github.ref_name', 'ci-') || startsWith('github.ref_name', 'v')}}
+        run: |
+          /bin/bash proxy/publish-image.sh
+
