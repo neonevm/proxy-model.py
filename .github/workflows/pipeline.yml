@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   prepare:
-    name: "Prepare images"
+    name: "Prepare images and run tests"
     runs-on: ubuntu-20.04
     env:
       SOLANA_REVISION: "v1.7.9-resources"
@@ -30,6 +30,8 @@ jobs:
         uses: docker/build-push-action@v2
         with:
 #          context: .
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             SOLANA_REVISION=${{ env.SOLANA_REVISION }}
             EVM_LOADER_REVISION=${{ env.EVM_LOADER_REVISION }}
