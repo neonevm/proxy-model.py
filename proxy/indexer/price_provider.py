@@ -15,15 +15,30 @@ field_info = {
   'agg.status': { 'pos': 224, 'len': 4, 'format': '<I' },
 }
 
+
+def _unpack_field(raw_data: bytes, field_name: str):
+    field = field_info.get(field_name, None)
+    if field is None:
+        raise Exception(f'Unknown field name: {field_name}')
+
+    start_idx = field['pos']
+    stop_idx = field['pos'] + field['len']
+    return struct.unpack(field['format'], raw_data[start_idx:stop_idx])[0]
+
+
 price_accounts = {
     'SOL/USD': 'H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG'
 }
 
+PRICE_STATUS_UNKNOWN = 0
+PRICE_STATUS_TRADING = 1
+
 class PriceProvider:
     def __init__(self, solana_url, default_upd_int):
-        self.client = client = Client(solana_url)
+        self.client = Client(solana_url)
         self.default_upd_int = default_upd_int
         self.prices = {}
+
 
     def _read_price(self, pairname):
         acc_id = price_accounts.get(pairname, None)
@@ -56,13 +71,13 @@ class PriceProvider:
             logger.warning(f'Unknown encoding {encoding}')
             return None
 
-        status = struct.unpack(data, 'agg.status')
-        if status != 1: # not Trading
+        status = _unpack_field(data, 'agg.status')
+        if status != PRICE_STATUS_TRADING: # not Trading
             logger.warning(f'Price status is {status}')
             return None
 
-        expo = struct.unpack(data, 'expo')
-        price = struct.unpack(data, 'agg.price')
+        expo = _unpack_field(data, 'expo')
+        price = _unpack_field(data, 'agg.price')
         return price * pow(10, expo)
 
 
