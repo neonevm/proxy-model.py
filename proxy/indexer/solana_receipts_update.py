@@ -286,8 +286,8 @@ class Indexer:
                                         # logger.debug("rlp.exceptions.RLPException")
                                         pass
                                     except Exception as err:
-                                        if str(err).startswith("unhashable type"):
-                                            # logger.debug("unhashable type")
+                                        if str(err).startswith("nonhashable type"):
+                                            # logger.debug("nonhashable type")
                                             pass
                                         elif str(err).startswith("unsupported operand type"):
                                             # logger.debug("unsupported operand type")
@@ -413,10 +413,8 @@ class Indexer:
                                 # logger.debug("{:>10} {:>6} ExecuteTrxFromAccountDataIterativeV02 0x{}".format(slot, counter, instruction_data.hex()))
                                 blocked_accounts = [trx['transaction']['message']['accountKeys'][acc_idx] for acc_idx in instruction['accounts'][7:]]
 
-
                             holder_account =  trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
                             storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][1]]
-                            blocked_accounts = [trx['transaction']['message']['accountKeys'][acc_idx] for acc_idx in instruction['accounts'][5:]]
 
                             if storage_account in continue_table:
                                 continue_table[storage_account].signatures.append(signature)
@@ -514,10 +512,13 @@ class Indexer:
                             pass
 
         for eth_signature, trx_struct in trx_table.items():
-            if trx_struct.got_result:
+            if trx_struct.got_result is not None:
                 self.submit_transaction(trx_struct)
-            elif trx_struct.storage:
+            elif trx_struct.storage is not None:
                 if abs(trx_struct.slot - self.current_slot) > CANCEL_TIMEOUT:
+                    logger.debug("Probably blocked")
+                    logger.debug(trx_struct.eth_signature)
+                    logger.debug(trx_struct.signatures)
                     self.blocked_storages[trx_struct.storage] = (trx_struct.eth_trx, trx_struct.blocked_accounts)
             else:
                 logger.error(trx_struct)
