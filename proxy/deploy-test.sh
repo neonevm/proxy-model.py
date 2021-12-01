@@ -15,7 +15,7 @@ solana address
 solana airdrop 1000
 solana balance
 
-python3 -m unittest discover -v proxy/testing/
+python3 -m unittest discover -v proxy.testing
 
 echo "Deploy test success"
 exit 0
