@@ -49,6 +49,8 @@ jobs:
 
       - name: "Run neon tests"
         run: |
+          docker ps -a
+          netstat -anp
           docker run --rm --network=container:proxy \
                -e PROXY_URL \
                -e EVM_LOADER \
