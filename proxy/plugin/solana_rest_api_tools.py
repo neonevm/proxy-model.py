@@ -565,6 +565,7 @@ def send_transaction(client, trx, signer, eth_trx=None, reason=None):
 
 
 def send_measured_transaction(client, trx, signer, eth_trx, reason):
+    logger.debug("send_measured_transaction: %s", str(trx))
     result = send_transaction(client, trx, signer, eth_trx=eth_trx, reason=reason)
     get_measurements(result)
     return result
@@ -1031,7 +1032,7 @@ def call_signed_with_holder_acc(signer, client, eth_trx, perm_accs, trx_info, st
     precall_txs.add(make_call_from_account_instruction(signer, perm_accs, trx_info))
 
     # ExecuteTrxFromAccountDataIterative
-    logger.debug("ExecuteTrxFromAccountDataIterative: %s", precall_txs)
+    logger.debug("ExecuteTrxFromAccountDataIterative: %s", str(precall_txs))
     send_measured_transaction(client, precall_txs, signer, eth_trx, 'ExecuteTrxFromAccountDataIterativeV02')
 
     return call_continue(signer, client, perm_accs, trx_info, steps)
