@@ -109,6 +109,12 @@ class Airdropper(IndexerBase):
                     self._airdrop_to(create_acc)
 
 
+    def process_functions(self):
+        IndexerBase.process_functions(self)
+        logger.debug("Process receipts")
+        self.process_receipts()
+
+
     def process_receipts(self):
         counter = 0
         for signature in self.transaction_order:

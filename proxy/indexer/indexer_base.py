@@ -1,4 +1,3 @@
-import base58
 import os
 import time
 import logging
@@ -7,10 +6,8 @@ from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict, Union
 
 try:
-    from utils import Canceller
     from sql_dict import SQLDict
 except ImportError:
-    from .utils import Canceller
     from .sql_dict import SQLDict
 
 
@@ -22,7 +19,6 @@ logger.setLevel(logging.INFO)
 DEVNET_HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn"
 HISTORY_START = [DEVNET_HISTORY_START]
 
-UPDATE_BLOCK_COUNT = PARALLEL_REQUESTS * 16
 
 log_levels = {
     'DEBUG': logging.DEBUG,
@@ -39,38 +35,28 @@ class IndexerBase:
                  solana_url,
                  evm_loader_id,
                  log_level):
-        self.evm_loader_id = evm_loader_id
-        self.client = Client(solana_url)
-        self.canceller = Canceller()
-        self.blocks_by_hash = SQLDict(tablename="solana_blocks_by_hash")
-        self.transaction_receipts = SQLDict(tablename="known_transactions")
-        self.constants = SQLDict(tablename="constants")
-
         logger.setLevel(log_levels.get(log_level, logging.INFO))
 
+        self.evm_loader_id = evm_loader_id
+        self.client = Client(solana_url)
+        self.transaction_receipts = SQLDict(tablename="known_transactions")
         self.last_slot = 0
         self.current_slot = 0
         self.transaction_order = []
-        if 'last_block' not in self.constants:
-            self.constants['last_block'] = 0
-        self.blocked_storages = {}
         self.counter_ = 0
 
 
     def run(self):
         while (True):
             try:
-                logger.debug("Start indexing")
-                self.gather_unknown_transactions()
-                logger.debug("Process receipts")
-                self.process_receipts()
-                logger.debug("Start getting blocks")
-                self.gather_blocks()
-                logger.debug("Unlock accounts")
-                self.canceller.unlock_accounts(self.blocked_storages)
-                self.blocked_storages = {}
+                self.process_functions()
             except Exception as err:
-                logger.debug("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
+                logger.warning("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
+
+
+    def process_functions(self):
+        logger.debug("Start indexing")
+        self.gather_unknown_transactions()
 
 
     def gather_unknown_transactions(self):
@@ -161,42 +147,3 @@ class IndexerBase:
             logger.debug(self.counter_)
 
         # return (solana_signature, trx)
-
-
-    def process_receipts(self): raise Exception('NotImplemented')
-
-    def gather_blocks(self):
-        max_slot = self.client.get_slot(commitment="recent")["result"]
-
-        last_block = self.constants['last_block']
-        if last_block + UPDATE_BLOCK_COUNT < max_slot:
-            max_slot = last_block + UPDATE_BLOCK_COUNT
-        slots = self.client._provider.make_request("getBlocks", last_block, max_slot, {"commitment": "confirmed"})["result"]
-
-        pool = ThreadPool(PARALLEL_REQUESTS)
-        results = pool.map(self.get_block, slots)
-
-        for block_result in results:
-            (slot, block_hash) = block_result
-            self.blocks_by_hash[block_hash] = slot
-
-        self.constants['last_block'] = max_slot
-
-
-    def get_block(self, slot):
-        retry = True
-
-        while retry:
-            try:
-                block = self.client._provider.make_request("getBlock", slot, {"commitment":"confirmed", "transactionDetails":"none", "rewards":False})['result']
-                block_hash = '0x' + base58.b58decode(block['blockhash']).hex()
-                retry = False
-            except Exception as err:
-                logger.debug(err)
-                time.sleep(1)
-
-        return (slot, block_hash)
-
-
-
-
