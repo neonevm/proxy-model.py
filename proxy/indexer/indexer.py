@@ -468,7 +468,7 @@ class Indexer(IndexerBase):
 
 def run_indexer(solana_url,
                 evm_loader_id,
-                log_level = 'INFO'):
+                log_level = 'DEBUG'):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
     logger.info(f"""Running indexer with params:
