@@ -9,6 +9,37 @@ from random import uniform
 import base58, base64
 
 
+def _create_price_account_info(price: float, status: int, enc: str):
+    # Follow link https://github.com/pyth-network/pyth-client-rs/blob/main/src/lib.rs
+    # for details on structure of pyth.network price accounts.
+    # Current implementation of PriceProvider uses only few fields of account
+    # so no need to generate all data in tests
+
+    exponent = -8  # use as default
+    # Fill gap between account data begining and expo field with zeros
+    data = b'\x00' * field_info['expo']['pos']
+    data += pack(field_info['expo']['format'], exponent)
+
+    raw_price = int(price / pow(10, exponent))
+    # fill gap between expo and agg.price fields with zeros
+    data += b'\x00' * (field_info['agg.price']['pos'] - len(data))
+    data += pack(field_info['agg.price']['format'], raw_price)
+
+    # fill gap between agg.price and agg.status fields with zeros
+    data += b'\x00' * (field_info['agg.status']['pos'] - len(data))
+    data += pack(field_info['agg.status']['format'], status)
+    # rest of data array is not used by PriceProvier so no need to fill it
+
+    if enc == 'base58':
+        data = base58.b58encode(data)
+    elif enc == 'base64':
+        data = base64.b64encode(data)
+    else:
+        raise Exception(f"Unsupported encoding: {enc}")
+
+    return {'result': {'value': {'data': [data, enc]}}}
+
+
 class TestPriceProvider(TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -19,44 +50,6 @@ class TestPriceProvider(TestCase):
     def setUp(self) -> None:
         self.testnet_price_provider = PriceProvider("testnet", self.default_upd_int)
 
-    def _create_price_account_info(self, price: float, status: int, enc: str):
-        # Follow link https://github.com/pyth-network/pyth-client-rs/blob/main/src/lib.rs
-        # for details on structure of pyth.network price accounts.
-        # Current implementation of PriceProvider uses only few fields of account
-        # so no need to generate all data in tests
-
-        exponent = -8 # use as default
-        # Fill gap between account data begining and expo field with zeros
-        data = b'\x00' * field_info['expo']['pos']
-        data += pack(field_info['expo']['format'], exponent)
-
-        raw_price = int(price / pow(10, exponent))
-        # fill gap between expo and agg.price fields with zeros
-        data += b'\x00' * (field_info['agg.price']['pos'] - len(data))
-        data += pack(field_info['agg.price']['format'], raw_price)
-
-        # fill gap between agg.price and agg.status fields with zeros
-        data += b'\x00' * (field_info['agg.status']['pos'] - len(data))
-        data += pack(field_info['agg.status']['format'], status)
-        # rest of data array is not used by PriceProvier so no need to fill it
-
-        if enc == 'base58':
-            data = base58.b58encode(data)
-        elif enc == 'base64':
-            data = base64.b64encode(data)
-        else:
-            raise Exception(f"Unsupported encoding: {enc}")
-
-        return {
-            'result': {
-                'value': {
-                    'data': [
-                        data,
-                        enc
-                    ]
-                }
-            }
-        }
 
     @patch.object(Client, 'get_account_info')
     @patch.object(PriceProvider, '_get_current_time')
@@ -70,9 +63,9 @@ class TestPriceProvider(TestCase):
         mock_get_current_time.side_effect = [ first_call_time, second_call_time]
 
         current_price = 315.0
-        mock_get_account_info.side_effect = [self._create_price_account_info(current_price,
-                                                                             PRICE_STATUS_TRADING,
-                                                                             'base58')]
+        mock_get_account_info.side_effect = [_create_price_account_info(current_price,
+                                                                        PRICE_STATUS_TRADING,
+                                                                        'base58')]
 
         pair_name = 'SOL/USD'
         self.assertEqual(self.testnet_price_provider.get_price(pair_name), current_price)
@@ -94,12 +87,12 @@ class TestPriceProvider(TestCase):
         mock_get_current_time.side_effect = [ first_call_time, second_call_time]
 
         current_price = 315.0
-        mock_get_account_info.side_effect = [self._create_price_account_info(current_price,
-                                                                             PRICE_STATUS_TRADING,
-                                                                             'base58'),
-                                             self._create_price_account_info(current_price,
-                                                                             PRICE_STATUS_TRADING,
-                                                                             'base64')]
+        mock_get_account_info.side_effect = [_create_price_account_info(current_price,
+                                                                        PRICE_STATUS_TRADING,
+                                                                        'base58'),
+                                             _create_price_account_info(current_price,
+                                                                        PRICE_STATUS_TRADING,
+                                                                        'base64')]
 
         pair_name = 'SOL/USD'
         self.assertEqual(self.testnet_price_provider.get_price(pair_name), current_price)
@@ -119,9 +112,9 @@ class TestPriceProvider(TestCase):
         mock_get_current_time.side_effect = [first_call_time]
 
         current_price = 315.0
-        mock_get_account_info.side_effect = [self._create_price_account_info(current_price,
-                                                                             PRICE_STATUS_UNKNOWN,
-                                                                             'base58')]
+        mock_get_account_info.side_effect = [_create_price_account_info(current_price,
+                                                                        PRICE_STATUS_UNKNOWN,
+                                                                        'base58')]
 
         pair_name = 'SOL/USD'
         self.assertEqual(self.testnet_price_provider.get_price(pair_name), None)
@@ -158,9 +151,9 @@ class TestPriceProvider(TestCase):
         mock_get_current_time.side_effect = [ first_call_time, second_call_time]
 
         current_price = 315.0
-        mock_get_account_info.side_effect = [self._create_price_account_info(current_price,
-                                                                             PRICE_STATUS_TRADING,
-                                                                             'base58'),
+        mock_get_account_info.side_effect = [_create_price_account_info(current_price,
+                                                                        PRICE_STATUS_TRADING,
+                                                                        'base58'),
                                              {'result':{}}] # << Wrong message format
 
         pair_name = 'SOL/USD'
