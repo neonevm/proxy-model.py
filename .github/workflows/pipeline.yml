@@ -29,17 +29,17 @@ jobs:
       - name: "Build and push proxy docker image"
         uses: docker/build-push-action@v2
         with:
-          push: true
+#          context: .
           build-args: |
             SOLANA_REVISION=${{ env.SOLANA_REVISION }}
             EVM_LOADER_REVISION=${{ env.EVM_LOADER_REVISION }}
             PROXY_REVISION=${{ github.sha }}
           tags: |
-            gigimon/proxy:${{ github.sha }}
+            neonlabsorg/proxy:${{ github.sha }}
 
       - name: "Prepare tests"
         env:
-          PROXY_IMAGE: gigimon/proxy:${{ github.sha }}
+          PROXY_IMAGE: neonlabsorg/proxy:${{ github.sha }}
           PROXY_URL: http://127.0.0.1:9090/solana
         run: |
           docker pull neonlabsorg/uniswap-v2-core:stable
@@ -56,7 +56,7 @@ jobs:
                -e EXTRA_GAS=100000 \
                -e NEW_USER_AIRDROP_AMOUNT=100 \
                --entrypoint ./proxy/deploy-test.sh \
-               gigimon/proxy:${{ github.sha }}
+               neonlabsorg/proxy:${{ github.sha }}
 
       - name: "Run Uniswap tests"
         run: |
