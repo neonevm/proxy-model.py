@@ -26,22 +26,49 @@ def _unpack_field(raw_data: bytes, field_name: str):
     return struct.unpack(field['format'], raw_data[start_idx:stop_idx])[0]
 
 
-price_accounts = {
-    'SOL/USD': 'H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG'
-}
+mainnet_solana = "https://api.mainnet-beta.solana.com"
+devnet_solana = "https://api.devnet.solana.com"
+testnet_solana = "https://api.testnet.solana.com"
+
+
+# See available price accounts at https://pyth.network/developers/accounts/
+mainnet_price_accounts = { 'SOL/USD': 'H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG' }
+devnet_price_accounts = { 'SOL/USD': "J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix" }
+testnet_price_accounts = { 'SOL/USD': "7VJsBtJzgTftYzEeooSDYyjKXvYRWJHdwvbwfBvTg9K" }
+
 
 PRICE_STATUS_UNKNOWN = 0
 PRICE_STATUS_TRADING = 1
 
+
 class PriceProvider:
-    def __init__(self, solana_url, default_upd_int):
-        self.client = Client(solana_url)
+    def __init__(self, net: str, default_upd_int: int, price_accounts=None):
         self.default_upd_int = default_upd_int
         self.prices = {}
 
+        if net == "mainnet":
+            self.client = Client(mainnet_solana)
+            self.price_accounts = mainnet_price_accounts
+        elif net == "devnet":
+            self.client = Client(devnet_solana)
+            self.price_accounts = devnet_price_accounts
+        elif net == "testnet":
+            self.client = Client(testnet_solana)
+            self.price_accounts = testnet_price_accounts
+        else:
+            self.client = Client(net)
+            if price_accounts is None:
+                self.price_accounts = {}
+            else:
+                self.price_accounts = price_accounts
+
+
+    def _get_current_time(self):
+        return datetime.now().timestamp()
+
 
     def _read_price(self, pairname):
-        acc_id = price_accounts.get(pairname, None)
+        acc_id = self.price_accounts.get(pairname, None)
         if acc_id is None:
             logger.warning(f'No account found for pair {pairname}')
             return None
@@ -83,7 +110,7 @@ class PriceProvider:
 
     def get_price(self, pairname):
         price_data = self.prices.get(pairname, None)
-        current_time = datetime.now().timestamp()
+        current_time = self._get_current_time()
 
         if price_data == None or current_time - price_data['last_update'] >= self.default_upd_int:
             current_price = self._read_price(pairname)
