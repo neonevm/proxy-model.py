@@ -8,9 +8,11 @@
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
 """
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+import copy
 import json
 import unittest
+import eth_utils
 import rlp
 import solana
 from solana.account import Account as sol_Account
@@ -20,21 +22,21 @@ from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
 from .eth_proto import Trx as EthTrx
-from solana.rpc.api import Client as SolanaClient
+from solana.rpc.api import Client as SolanaClient, SendTransactionError as SolanaTrxError
 from sha3 import keccak_256
 import base58
 import traceback
 import threading
-from .solana_rest_api_tools import EthereumAddress, getTokens, getAccountInfo, \
-    call_signed, call_emulated, EthereumError, neon_config_load, MINIMAL_GAS_PRICE
+
+from .solana_rest_api_tools import EthereumAddress, get_token_balance_or_airdrop, getAccountInfo, call_signed, \
+                                   call_emulated, EthereumError, neon_config_load, MINIMAL_GAS_PRICE, estimate_gas
 from solana.rpc.commitment import Commitment, Confirmed
 from web3 import Web3
 import logging
 from ..core.acceptor.pool import proxy_id_glob
-import os
 from ..indexer.utils import get_trx_results, LogDB
 from ..indexer.sql_dict import SQLDict
-from proxy.environment import evm_loader_id, solana_cli, solana_url
+from ..environment import evm_loader_id, solana_cli, solana_url, neon_cli
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -42,27 +44,12 @@ logger.setLevel(logging.DEBUG)
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
+NEON_PROXY_PKG_VERSION = '0.4.1-rc0'
+NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 class EthereumModel:
     def __init__(self):
-        # Initialize user account
-        res = solana_cli().call('config', 'get')
-        substr = "Keypair Path: "
-        path = ""
-        for line in res.splitlines():
-            if line.startswith(substr):
-                path = line[len(substr):].strip()
-        if path == "":
-            raise Exception("cannot get keypair path")
-
-        with open(path.strip(), mode='r') as file:
-            pk = (file.read())
-            nums = list(map(int, pk.strip("[] \n").split(',')))
-            nums = nums[0:32]
-            values = bytes(nums)
-            self.signer = sol_Account(values)
-
+        self.signer = self.get_solana_account()
         self.client = SolanaClient(solana_url)
 
         self.logs_db = LogDB()
@@ -77,7 +64,30 @@ class EthereumModel:
         logger.debug("worker id {}".format(self.proxy_id))
 
         neon_config_load(self)
-        pass
+
+
+    @staticmethod
+    def get_solana_account() -> Optional[sol_Account]:
+        solana_account: Optional[sol_Account] = None
+        res = solana_cli().call('config', 'get')
+        substr = "Keypair Path: "
+        path = ""
+        for line in res.splitlines():
+            if line.startswith(substr):
+                path = line[len(substr):].strip()
+        if path == "":
+            raise Exception("cannot get keypair path")
+
+        with open(path.strip(), mode='r') as file:
+            pk = (file.read())
+            nums = list(map(int, pk.strip("[] \n").split(',')))
+            nums = nums[0:32]
+            values = bytes(nums)
+            solana_account = sol_Account(values)
+        return solana_account
+
+    def neon_proxy_version(self):
+        return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
 
     def web3_clientVersion(self):
         neon_config_load(self)
@@ -87,6 +97,9 @@ class EthereumModel:
         neon_config_load(self)
         # NEON_CHAIN_ID is a string in decimal form
         return hex(int(self.neon_config_dict['NEON_CHAIN_ID']))
+
+    def neon_cli_version(self):
+        return neon_cli().version()
 
     def net_version(self):
         neon_config_load(self)
@@ -98,12 +111,11 @@ class EthereumModel:
 
     def eth_estimateGas(self, param):
         try:
-            caller_id = param['from'] if 'from' in param else "0x0000000000000000000000000000000000000000"
-            contract_id = param['to'] if 'to' in param else "deploy"
-            data = param['data'] if 'data' in param else "None"
-            value = param['value'] if 'value' in param else ""
-            result = call_emulated(contract_id, caller_id, data, value)
-            return result['used_gas']+EXTRA_GAS
+            caller_id = param.get('from', "0x0000000000000000000000000000000000000000")
+            contract_id = param.get('to', "deploy")
+            data = param.get('data', "None")
+            value = param.get('value', "")
+            return estimate_gas(self.client, self.signer, contract_id, EthereumAddress(caller_id), data, value)
         except Exception as err:
             logger.debug("Exception on eth_estimateGas: %s", err)
             raise
@@ -116,10 +128,13 @@ class EthereumModel:
             slot = int(self.client.get_slot(commitment=Confirmed)["result"])
         elif tag in ('earliest', 'pending'):
             raise Exception("Invalid tag {}".format(tag))
-        else:
+        elif isinstance(tag, str):
             slot = int(tag, 16)
+        elif isinstance(tag, int):
+            slot = tag
+        else:
+            raise Exception(f'Failed to parse block tag: {tag}')
         return slot
-
 
     def eth_blockNumber(self):
         slot = self.client.get_slot(commitment=Confirmed)['result']
@@ -132,9 +147,9 @@ class EthereumModel:
         """
         eth_acc = EthereumAddress(account)
         logger.debug('eth_getBalance: %s %s', account, eth_acc)
-        balance = getTokens(self.client, self.signer, evm_loader_id, eth_acc, self.signer.public_key())
+        balance = get_token_balance_or_airdrop(self.client, self.signer, eth_acc)
 
-        return hex(balance*10**9)
+        return hex(balance * eth_utils.denoms.gwei)
 
     def eth_getLogs(self, obj):
         fromBlock = None
@@ -195,6 +210,21 @@ class EthereumModel:
         }
         return ret
 
+    def eth_getStorageAt(self, account, position, block_identifier):
+        '''Retrieves storage data by given position
+        Currently supports only 'latest' block
+        '''
+        if block_identifier != "latest":
+            logger.debug(f"Block type '{block_identifier}' is not supported yet")
+            raise RuntimeError(f"Not supported block identifier: {block_identifier}")
+
+        try:
+            value = neon_cli().call('get-storage-at', account, position)
+            return value
+        except Exception as err:
+            logger.debug(f"Neon-cli failed to execute: {err}")
+            return '0x00'
+
     def eth_getBlockByHash(self, trx_hash, full):
         """Returns information about a block by hash.
             trx_hash - Hash of a block.
@@ -251,7 +281,7 @@ class EthereumModel:
     def eth_getTransactionCount(self, account, tag):
         logger.debug('eth_getTransactionCount: %s', account)
         try:
-            acc_info = getAccountInfo(self.client, EthereumAddress(account), self.signer.public_key())
+            acc_info = getAccountInfo(self.client, EthereumAddress(account))
             return hex(int.from_bytes(acc_info.trx_count, 'little'))
         except Exception as err:
             print("Can't get account info: %s"%err)
@@ -351,7 +381,7 @@ class EthereumModel:
             "s": eth_trx[8],
         }
 
-        logger.debug ("eth_getTransactionByHash: %s", json.dumps(ret, indent=3))
+        logger.debug("eth_getTransactionByHash: %s", json.dumps(ret, indent=3))
         return ret
 
     def eth_getCode(self, param,  param1):
@@ -440,8 +470,8 @@ class EthereumModel:
 
             return eth_signature
 
-        except solana.rpc.api.SendTransactionError as err:
-            logger.debug("eth_sendRawTransaction solana.rpc.api.SendTransactionError:%s", err.result)
+        except SolanaTrxError as err:
+            self._log_transaction_error(err, logger)
             raise
         except EthereumError as err:
             logger.debug("eth_sendRawTransaction EthereumError:%s", err)
@@ -449,6 +479,14 @@ class EthereumModel:
         except Exception as err:
             logger.debug("eth_sendRawTransaction type(err):%s, Exception:%s", type(err), err)
             raise
+
+    def _log_transaction_error(self, error: SolanaTrxError, logger):
+        result = copy.deepcopy(error.result)
+        logs = result.get("data", {}).get("logs", [])
+        result.get("data", {}).update({"logs": ["\n\t" + log for log in logs]})
+        log_msg = str(result).replace("\\n\\t", "\n\t")
+        logger.error(f"Got SendTransactionError: {log_msg}")
+
 
 class JsonEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -460,12 +498,11 @@ class JsonEncoder(json.JSONEncoder):
 
 
 class SolanaContractTests(unittest.TestCase):
+
     def setUp(self):
         self.model = EthereumModel()
         self.owner = '0xc1566af4699928fdf9be097ca3dc47ece39f8f8e'
         self.token1 = '0x49a449cd7fd8fbcf34d103d98f2c05245020e35b'
-#        self.assertEqual(self.getBalance(self.owner), 1000*10**18)
-#        self.assertEqual(self.getBalance(self.token1), 0)
 
     def getBalance(self, account):
         return int(self.model.eth_getBalance(account, 'latest'), 16)
@@ -519,7 +556,6 @@ class SolanaContractTests(unittest.TestCase):
         self.assertTrue(receiptId in block['transactions'])
 
 
-
 class SolanaProxyPlugin(HttpWebServerBasePlugin):
     """Extend in-built Web Server to add Reverse Proxy capabilities.
     """
@@ -555,8 +591,9 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
         }
         try:
             method = getattr(self.model, request['method'])
-            response['result'] = method(*request['params'])
-        except solana.rpc.api.SendTransactionError as err:
+            params = request.get('params', [])
+            response['result'] = method(*params)
+        except SolanaTrxError as err:
             traceback.print_exc()
             response['error'] = err.result
         except EthereumError as err:
@@ -580,7 +617,6 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 })))
             return
 
-        # print('headers', request.headers)
         logger.debug('<<< %s 0x%x %s', threading.get_ident(), id(self.model), request.body.decode('utf8'))
         response = None
 

@@ -16,10 +16,9 @@ class solana_cli:
             cmd = ["solana",
                    "--url", solana_url,
                    ] + list(args)
-            print(cmd)
+            logger.debug("Calling: " + " ".join(cmd))
             return subprocess.check_output(cmd, universal_newlines=True)
         except subprocess.CalledProcessError as err:
-            import sys
             logger.debug("ERR: solana error {}".format(err))
             raise
 
@@ -32,24 +31,24 @@ class neon_cli:
                    "--url", solana_url,
                    "--evm_loader={}".format(evm_loader_id),
                    ] + list(args)
-            print(cmd)
+            logger.debug("Calling: " + " ".join(cmd))
             return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True)
         except subprocess.CalledProcessError as err:
-            import sys
+            logger.debug("ERR: neon-cli error {}".format(err))
+            raise
+
+    def version(self):
+        try:
+            cmd = ["neon-cli",
+                   "--version"]
+            logger.debug("Calling: " + " ".join(cmd))
+            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True).split()[1]
+        except subprocess.CalledProcessError as err:
             logger.debug("ERR: neon-cli error {}".format(err))
             raise
 
 def read_elf_params(out_dict):
-    logger.debug('load for solana_url={} and evm_loader_id={}'.format(solana_url, evm_loader_id))
-    res = solana_cli().call('program', 'dump', evm_loader_id, './evm_loader.dump')
-    substr = "Wrote program to "
-    path = ""
-    for line in res.splitlines():
-        if line.startswith(substr):
-            path = line[len(substr):].strip()
-    if path == "":
-        raise Exception("cannot program dump for ", evm_loader_id)
-    for param in neon_cli().call("neon-elf-params", path).splitlines():
+    for param in neon_cli().call("neon-elf-params").splitlines():
         if param.startswith('NEON_') and '=' in param:
             v = param.split('=')
             out_dict[v[0]] = v[1]
