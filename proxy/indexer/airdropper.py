@@ -62,7 +62,6 @@ class Airdropper(IndexerBase):
 
         if eth_address in self.airdrop_ready:  # transaction already processed
             return
-        self.airdrop_ready[eth_address] = create_acc
 
         logger.info(f"Airdrop to address: {eth_address}")
 
@@ -70,9 +69,12 @@ class Airdropper(IndexerBase):
         resp = requests.post(self.faucet_url + '/request_eth_token', json = json_data)
         if not resp.ok:
             logger.warning(f'Failed to airdrop: {resp.status_code}')
+            return
+
+        self.airdrop_ready[eth_address] = create_acc
 
 
-    def process_trx_airdropper_mode(self, trx, signature):
+    def process_trx_airdropper_mode(self, trx):
         if check_error(trx):
             return
 
@@ -129,7 +131,7 @@ class Airdropper(IndexerBase):
                     logger.debug("\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
                     exit()
                 if trx['transaction']['message']['instructions'] is not None:
-                    self.process_trx_airdropper_mode(trx, signature)
+                    self.process_trx_airdropper_mode(trx)
 
 
 def run_airdropper(solana_url,

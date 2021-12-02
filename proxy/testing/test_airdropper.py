@@ -1,14 +1,10 @@
 import unittest
 from proxy.testing.mock_server import MockServer
-from proxy.indexer.airdropper import run_airdropper
-from multiprocessing import Process
+from proxy.indexer.airdropper import Airdropper
+from proxy.indexer.sql_dict import SQLDict
 import time
-from flask import request
-from unittest.mock import MagicMock, patch, call
-from solana.rpc.api import Client
-from solana.rpc.types import RPCResponse
-from solana.rpc.providers.http import HTTPProvider
-from typing import cast
+from flask import request, Response
+from unittest.mock import MagicMock, patch, call, ANY
 import itertools
 from proxy.testing.transactions import pre_token_airdrop_trx1, pre_token_airdrop_trx2,\
     create_sol_acc_and_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address1, \
@@ -57,79 +53,106 @@ class Test_Airdropper(unittest.TestCase):
         cls.faucet.start()
         time.sleep(0.2)
 
-    def _run_test(self):
-        indexer = Process(target=run_airdropper,
-                          args=(f'http://localhost:8899',  # solana_url
-                                evm_loader_addr,
-                                f'http://{self.address}:{self.faucet_port}',  # faucet_url
-                                wrapper_whitelist,
-                                self.airdrop_amount,
-                                'INFO'))
-        indexer.start()
-        time.sleep(2)  # make sure airdropper processed event
-        indexer.terminate()
-        indexer.join()
+        cls.evm_loader_id = evm_loader_addr
+        cls.wrapper_whitelist = wrapper_whitelist
+        cls.airdropper = Airdropper(f'http://{cls.address}:8899',
+                                    cls.evm_loader_id,
+                                    f'http://{cls.address}:{cls.faucet_port}',
+                                    cls.wrapper_whitelist,
+                                    cls.airdrop_amount,
+                                    'INFO')
 
-
-    @patch.object(Client, 'get_confirmed_transaction')
-    @patch.object(HTTPProvider, 'make_request')
-    @patch.object(Client, 'get_slot')
-    def test_simple_case_one_account_one_airdrop(self, get_slot, make_request, get_confirmed_transaction):
-        # Return the same slot on every call (not make sense)
-        get_slot.side_effect = itertools.repeat(cast(RPCResponse, { 'error': None, 'id': 1, 'result': 1 }))
-        # Will return 2 signatures on first call, empty list all other times
-        make_request.side_effect = itertools.chain([create_get_signatures_for_address([ 'signature1', 'signature2' ])],
-                                                   itertools.repeat(create_get_signatures_for_address([])))
-        # Will return same transaction (with same eth address) for every signature
-        get_confirmed_transaction.side_effect = [ pre_token_airdrop_trx1, pre_token_airdrop_trx1 ]
-
-        self._run_test()
-
-        # Should be only one call to faucet
-        req_json = {"wallet": token_airdrop_address1, "amount": self.airdrop_amount}
-        self.faucet.request_eth_token_mock.assert_called_once_with(req_json)
-        self.faucet.request_eth_token_mock.reset_mock()
-
-
-    @patch.object(Client, 'get_confirmed_transaction')
-    @patch.object(HTTPProvider, 'make_request')
-    @patch.object(Client, 'get_slot')
-    def test_complex_case_two_accounts_two_airdrops(self, get_slot, make_request, get_confirmed_transaction):
-        # Return the same slot on every call (not make sense)
-        get_slot.side_effect = itertools.repeat(cast(RPCResponse, {'error': None, 'id': 1, 'result': 1}))
-        # Will return signature on first call, empty list all other times
-        make_request.side_effect = itertools.chain([create_get_signatures_for_address(['signature3'])],
-                                                   itertools.repeat(create_get_signatures_for_address([])))
-        # Will return complex transaction containing 2 account creations and transfers
-        get_confirmed_transaction.side_effect = [pre_token_airdrop_trx2]
-
-        self._run_test()
-
-        # Should be 2 calls to faucet with different addresses
-        calls = [ call({"wallet": token_airdrop_address3, "amount": self.airdrop_amount}),
-                  call({"wallet": token_airdrop_address2, "amount": self.airdrop_amount}) ]
-        self.faucet.request_eth_token_mock.assert_has_calls(calls)
-        self.faucet.request_eth_token_mock.reset_mock()
-
-    @patch.object(Client, 'get_confirmed_transaction')
-    @patch.object(HTTPProvider, 'make_request')
-    @patch.object(Client, 'get_slot')
-    def test_should_not_call_faucet(self, get_slot, make_request, get_confirmed_transaction):
-        # Return the same slot on every call (not make sense)
-        get_slot.side_effect = itertools.repeat(cast(RPCResponse, {'error': None, 'id': 1, 'result': 1}))
-        # Will return 2 signatures on first call, empty list all other times
-        make_request.side_effect = itertools.chain([create_get_signatures_for_address(['signature4'])],
-                                                   itertools.repeat(create_get_signatures_for_address([])))
-        # Will return not interesting create_sol_acc_and_airdrop_trx
-        get_confirmed_transaction.side_effect = [create_sol_acc_and_airdrop_trx]
-
-        self._run_test()
-
-        self.faucet.request_eth_token_mock.assert_not_called()
-        self.faucet.request_eth_token_mock.reset_mock()
 
     @classmethod
     def tearDownClass(cls) -> None:
         cls.faucet.shutdown_server()
         cls.faucet.join()
+
+
+    @patch.object(SQLDict, '__setitem__')
+    @patch.object(SQLDict, '__contains__')
+    def test_success_process_trx_with_one_airdrop(self,
+                                                  mock_sql_dict_contains,
+                                                  mock_sql_dict_setitem):
+        print("\n\nShould airdrop to new address - one target in transaction")
+        mock_sql_dict_contains.side_effect = [False] # new eth address
+        self.faucet.request_eth_token_mock.side_effect = [Response("{}", status=200, mimetype='application/json')]
+
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx1)
+
+        mock_sql_dict_contains.assert_called_once_with(token_airdrop_address1)
+        mock_sql_dict_setitem.assert_has_calls([call(token_airdrop_address1, ANY)])
+        json_req = {'wallet': token_airdrop_address1, 'amount': self.airdrop_amount}
+        self.faucet.request_eth_token_mock.assert_called_once_with(json_req)
+        self.faucet.request_eth_token_mock.reset_mock()
+
+
+    @patch.object(SQLDict, '__setitem__')
+    @patch.object(SQLDict, '__contains__')
+    def test_faucet_failure(self,
+                            mock_sql_dict_contains,
+                            mock_sql_dict_setitem):
+        print("\n\nShould not add address to processed list due to faucet error")
+        mock_sql_dict_contains.side_effect = [False]  # new eth address
+        self.faucet.request_eth_token_mock.side_effect = [Response("{}", status=400, mimetype='application/json')]
+
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx1)
+
+        mock_sql_dict_contains.assert_called_once_with(token_airdrop_address1)
+        mock_sql_dict_setitem.assert_not_called()
+        json_req = {'wallet': token_airdrop_address1, 'amount': self.airdrop_amount}
+        self.faucet.request_eth_token_mock.assert_called_once_with(json_req)
+        self.faucet.request_eth_token_mock.reset_mock()
+
+
+    @patch.object(SQLDict, '__setitem__')
+    @patch.object(SQLDict, '__contains__')
+    def test_process_trx_with_one_airdrop_for_already_processed_address(self,
+                                                                        mock_sql_dict_contains,
+                                                                        mock_sql_dict_setitem):
+        print("\n\nShould not airdrop to repeated address")
+        mock_sql_dict_contains.side_effect = [True]  # eth address processed later
+
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx1)
+
+        mock_sql_dict_contains.assert_called_once_with(token_airdrop_address1)
+        mock_sql_dict_setitem.assert_not_called()
+        self.faucet.request_eth_token_mock.assert_not_called()
+        self.faucet.request_eth_token_mock.reset_mock()
+
+
+    @patch.object(SQLDict, '__setitem__')
+    @patch.object(SQLDict, '__contains__')
+    def test_complex_transation(self,
+                                mock_sql_dict_contains,
+                                mock_sql_dict_setitem):
+        print("\n\nShould airdrop to several targets in one transaction")
+        mock_sql_dict_contains.side_effect = [False, False] # both targets are new
+        self.faucet.request_eth_token_mock.side_effect = [Response("{}", status=200, mimetype='application/json'),
+                                                          Response("{}", status=200, mimetype='application/json')]
+
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx2)
+
+        mock_sql_dict_contains.assert_has_calls([call(token_airdrop_address3),
+                                                 call(token_airdrop_address2)])
+        mock_sql_dict_setitem.assert_has_calls([call(token_airdrop_address3, ANY),
+                                                call(token_airdrop_address2, ANY)])
+        json_req1 = {'wallet': token_airdrop_address2, 'amount': self.airdrop_amount}
+        json_req2 = {'wallet': token_airdrop_address3, 'amount': self.airdrop_amount}
+        self.faucet.request_eth_token_mock.assert_has_calls([call(json_req2), call(json_req1)])
+        self.faucet.request_eth_token_mock.reset_mock()
+
+
+    @patch.object(SQLDict, '__setitem__')
+    @patch.object(SQLDict, '__contains__')
+    def test_no_airdrop_instructions(self,
+                                     mock_sql_dict_contains,
+                                     mock_sql_dict_setitem):
+        print("\n\nShould not airdrop when instructions are inconsistent")
+        self.airdropper.process_trx_airdropper_mode(create_sol_acc_and_airdrop_trx)
+
+        mock_sql_dict_contains.assert_not_called()
+        mock_sql_dict_setitem.assert_not_called()
+        self.faucet.request_eth_token_mock.assert_not_called()
+        self.faucet.request_eth_token_mock.reset_mock()
 

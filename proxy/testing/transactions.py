@@ -8,8 +8,6 @@ token_airdrop_address1 = '0xf71c4daca893e5333982e2956c5ed9b648818376'
 
 # Solana transaction for simple case airdrop
 pre_token_airdrop_trx1 = {
-    'jsonrpc': '2.0',
-    'result': {
         'blockTime': 1637857371,
         'meta': {
             'err': None,
@@ -202,9 +200,7 @@ pre_token_airdrop_trx1 = {
             },
             'signatures': ['3np8r1PBJW9uuw7o7P86B46zH7nW4UufQa716NUsSscJ1mN5nG6K74JHcMb6YmTmu9Les2NSe1iQyLJZwgS5RpvE']
         }
-    },
-    'id': 3
-}
+    }
 
 token_airdrop_address2 = '0x8bd4991b9b81b3298fc6ac06b553b87c8e8582f0'
 token_airdrop_address3 = '0x67d9e53d5e747b36fa6587421114aa0b0ca39753'
@@ -212,8 +208,6 @@ token_airdrop_address3 = '0x67d9e53d5e747b36fa6587421114aa0b0ca39753'
 # This is transaction containing 2 addresses for airdrop
 # Instructions here mixed to test complex case
 pre_token_airdrop_trx2 = {
-    'jsonrpc': '2.0',
-    'result': {
         'blockTime': 1637857344,
         'meta': {
             'err': None,
@@ -438,13 +432,9 @@ pre_token_airdrop_trx2 = {
                 'recentBlockhash': 'DhuNa4ts1c8jnD1u55rvQd8YKQo8t4aHwt3jUd1Anexu'},
             'signatures': ['4WotQiXmE5AUjC9yoTE69C2CLmWa2Typ1mAuG4EzAkjYXSfYH6gQewkSfsEHGQjvXkANFKXtkUtvkqm7eq23M74V']
         }
-    },
-    'id': 3
-}
+    }
 
 create_sol_acc_and_airdrop_trx = {
-    'jsonrpc': '2.0',
-    'result': {
         'blockTime': 1638178743,
         'meta': {
             'err': None,
@@ -498,6 +488,4 @@ create_sol_acc_and_airdrop_trx = {
                 '4n6PzpFyQ5e9PTDFTUmHoPXUJYtNqsfQgwinu5ujYeY6EigseJHGgykmzMMb8exKsC45E7RjiyahLqhbR1uQo5V5'
             ]
         }
-    },
-    'id': 3
-}
+    }
