@@ -1,4 +1,5 @@
 from proxy.indexer.indexer_base import IndexerBase, logger
+from proxy.indexer.price_provider import PriceProvider, mainnet_solana, mainnet_price_accounts
 import os
 import requests
 import base58
@@ -12,13 +13,16 @@ except ImportError:
     from .utils import check_error
     from .sql_dict import SQLDict
 
+ACCOUNT_CREATION_PRICE_SOL = 0.00472692
+AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
+NEON_PRICE_USD = 0.25
+
 class Airdropper(IndexerBase):
     def __init__(self,
                  solana_url,
                  evm_loader_id,
                  faucet_url = '',
                  wrapper_whitelist = [],
-                 airdrop_amount = 10,
                  log_level = 'INFO'):
         IndexerBase.__init__(self, solana_url, evm_loader_id, log_level)
 
@@ -26,8 +30,12 @@ class Airdropper(IndexerBase):
         # for every addresses that was already funded with airdrop
         self.airdrop_ready = SQLDict(tablename="airdrop_ready")
         self.wrapper_whitelist = wrapper_whitelist
-        self.airdrop_amount = airdrop_amount
         self.faucet_url = faucet_url
+
+        # Price provider need pyth.network be deployed onto solana
+        # so using mainnet solana for simplicity
+        self.price_provider = PriceProvider(mainnet_solana,
+                                            mainnet_price_accounts)
 
 
     # helper function checking if given contract address is in whitelist
@@ -60,16 +68,29 @@ class Airdropper(IndexerBase):
     def _airdrop_to(self, create_acc):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
 
-        if eth_address in self.airdrop_ready:  # transaction already processed
+
+        if self.airdrop_ready.get(eth_address) is not None:  # transaction already processed
             return
 
-        logger.info(f"Airdrop to address: {eth_address}")
+        sol_price_usd = self.price_provider.get_price('SOL/USD')
+        if sol_price_usd is None:
+            logger.warning("Failed to get SOL/USD price")
+            return
 
-        json_data = { 'wallet': eth_address, 'amount': self.airdrop_amount }
+        logger.info(f'SOL/USD = ${sol_price_usd}')
+        airdrop_amount_usd = AIRDROP_AMOUNT_SOL * sol_price_usd
+        logger.info(f"Airdrop amount: ${airdrop_amount_usd}")
+        logger.info(f"NEON price: ${NEON_PRICE_USD}")
+        airdrop_amount_neon = airdrop_amount_usd / NEON_PRICE_USD
+        logger.info(f"Airdrop {airdrop_amount_neon} NEONs to address: {eth_address}")
+
+        json_data = { 'wallet': eth_address, 'amount': airdrop_amount_neon }
         resp = requests.post(self.faucet_url + '/request_eth_token', json = json_data)
         if not resp.ok:
             logger.warning(f'Failed to airdrop: {resp.status_code}')
             return
+
+        self.airdrop_ready[eth_address] = create_acc
 
         self.airdrop_ready[eth_address] = create_acc
 
@@ -138,7 +159,6 @@ def run_airdropper(solana_url,
                    evm_loader_id,
                    faucet_url = '',
                    wrapper_whitelist = [],
-                   airdrop_amount = 10,
                    log_level = 'INFO'):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
@@ -147,14 +167,12 @@ def run_airdropper(solana_url,
         evm_loader_id: {evm_loader_id},
         log_level: {log_level},
         faucet_url: {faucet_url},
-        wrapper_whitelist: {wrapper_whitelist},
-        airdrop_amount: {airdrop_amount}""")
+        wrapper_whitelist: {wrapper_whitelist}""")
 
     airdropper = Airdropper(solana_url,
                             evm_loader_id,
                             faucet_url,
                             wrapper_whitelist,
-                            airdrop_amount,
                             log_level)
     airdropper.run()
 
@@ -164,12 +182,10 @@ if __name__ == "__main__":
     evm_loader_id = os.environ.get('EVM_LOADER_ID', '53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io')
     faucet_url = os.environ.get('FAUCET_URL', 'http://localhost:3333')
     wrapper_whitelist = os.environ.get('INDEXER_ERC20_WRAPPER_WHITELIST', '').split(',')
-    airdrop_amount = os.environ.get('AIRDROP_AMOUNT', 0)
     log_level = os.environ.get('LOG_LEVEL', 'INFO')
 
     run_airdropper(solana_url,
                    evm_loader_id,
                    faucet_url,
                    wrapper_whitelist,
-                   airdrop_amount,
                    log_level)

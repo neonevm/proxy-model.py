@@ -42,25 +42,17 @@ PRICE_STATUS_TRADING = 1
 
 
 class PriceProvider:
-    def __init__(self, net: str, default_upd_int: int, price_accounts=None):
+    # One can provide ether net name as solana_net (mainnet, devnet, testnet)
+    # or specifit URL address (e.g. http://localhost:8899
+    # NOTE:
+    def __init__(self, solana_url: str, default_upd_int: int, price_accounts=None):
+        self.client = Client(solana_url)
         self.default_upd_int = default_upd_int
         self.prices = {}
-
-        if net == "mainnet":
-            self.client = Client(mainnet_solana)
-            self.price_accounts = mainnet_price_accounts
-        elif net == "devnet":
-            self.client = Client(devnet_solana)
-            self.price_accounts = devnet_price_accounts
-        elif net == "testnet":
-            self.client = Client(testnet_solana)
-            self.price_accounts = testnet_price_accounts
+        if price_accounts is not None:
+            self.price_accounts = price_accounts
         else:
-            self.client = Client(net)
-            if price_accounts is None:
-                self.price_accounts = {}
-            else:
-                self.price_accounts = price_accounts
+            self.price_accounts = {}
 
 
     def _get_current_time(self):

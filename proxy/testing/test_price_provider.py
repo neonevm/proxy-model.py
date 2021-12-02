@@ -1,5 +1,11 @@
 from proxy.indexer.price_provider import PriceProvider, field_info, PRICE_STATUS_TRADING,\
-    PRICE_STATUS_UNKNOWN, testnet_price_accounts, devnet_price_accounts
+    PRICE_STATUS_UNKNOWN, \
+    testnet_price_accounts, \
+    devnet_price_accounts, \
+    mainnet_price_accounts, \
+    mainnet_solana, \
+    testnet_solana, \
+    devnet_solana
 from unittest import TestCase
 from unittest.mock import patch, MagicMock, call
 from solana.rpc.api import Client
@@ -48,7 +54,9 @@ class TestPriceProvider(TestCase):
 
 
     def setUp(self) -> None:
-        self.testnet_price_provider = PriceProvider("testnet", self.default_upd_int)
+        self.testnet_price_provider = PriceProvider(testnet_solana,
+                                                    self.default_upd_int,
+                                                    testnet_price_accounts)
 
 
     @patch.object(Client, 'get_account_info')
@@ -169,8 +177,12 @@ class TestPriceProvider(TestCase):
         print("\n\nShould return correct prices on all Solana nets")
         pair_name = 'SOL/USD'
 
-        devnet_price_provider = PriceProvider("devnet", self.default_upd_int)
-        mainnet_price_provider = PriceProvider("mainnet", self.default_upd_int)
+        devnet_price_provider = PriceProvider(devnet_solana,
+                                              self.default_upd_int,
+                                              devnet_price_accounts)
+        mainnet_price_provider = PriceProvider(mainnet_solana,
+                                               self.default_upd_int,
+                                               mainnet_price_accounts)
 
         devnet_price = devnet_price_provider.get_price(pair_name)
         testnet_price = self.testnet_price_provider.get_price(pair_name)
