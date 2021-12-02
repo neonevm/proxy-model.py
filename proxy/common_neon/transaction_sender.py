@@ -462,24 +462,10 @@ class IterativeTransactionSender:
         logger.debug("Send bucked combined: %s", instruction_type)
         steps = self.steps
 
-        addition_count = 0
-        if instruction_type == CONTINUE_COMBINED:
-            addition_count = 2
-        elif instruction_type == CONTINUE_HOLDER_COMB:
-            addition_count = 1
-
         receipts = []
-        for index in range(math.ceil(self.steps_emulated/self.steps) + addition_count):
+        for index in range(math.ceil(self.steps_emulated/self.steps) + self.addition_count(instruction_type)):
             try:
-                trx = Transaction()
-                if instruction_type == CONTINUE_REGULAR:
-                    trx = self.instruction.make_continue_transaction(steps, index)
-                elif instruction_type == CONTINUE_COMBINED:
-                    trx = self.instruction.make_partial_call_or_continue_transaction(steps - index)
-                elif instruction_type == CONTINUE_HOLDER_COMB:
-                    trx = self.instruction.make_partial_call_or_continue_from_account_data(steps, index)
-                else:
-                    raise Exception("Unknown continue type: {}".format(instruction_type))
+                trx = self.make_bucked_trx()
 
                 receipts.append(self.sender.send_transaction_unconfirmed(trx))
             except SendTransactionError as err:
@@ -501,6 +487,33 @@ class IterativeTransactionSender:
                     raise
 
         return self.collect_bucked_results(receipts, instruction_type)
+
+
+    @staticmethod
+    def addition_count(instruction_type):
+        '''
+        How many transactions are needed depending on trx type:
+        CONTINUE_COMBINED: 2 (1 for begin and 1 for decreased steps)
+        CONTINUE_HOLDER_COMB: 1 for begin
+        0 otherwise
+        '''
+        addition_count = 0
+        if instruction_type == CONTINUE_COMBINED:
+            addition_count = 2
+        elif instruction_type == CONTINUE_HOLDER_COMB:
+            addition_count = 1
+        return addition_count
+
+
+    def make_bucked_trx(self, instruction_type, steps, index):
+        if instruction_type == CONTINUE_REGULAR:
+            return self.instruction.make_continue_transaction(steps, index)
+        elif instruction_type == CONTINUE_COMBINED:
+            return self.instruction.make_partial_call_or_continue_transaction(steps - index)
+        elif instruction_type == CONTINUE_HOLDER_COMB:
+            return self.instruction.make_partial_call_or_continue_from_account_data(steps, index)
+        else:
+            raise Exception("Unknown continue type: {}".format(instruction_type))
 
 
     def collect_bucked_results(self, receipts, reason):
