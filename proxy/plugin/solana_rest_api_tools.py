@@ -78,20 +78,20 @@ def create_eth_account_and_airdrop(client: SolanaClient, signer: SolanaAccount, 
 
 
 def get_token_balance_gwei(client: SolanaClient, pda_account: str) -> int:
-    associated_token_account = getTokenAddr(PublicKey(pda_account))
-    rpc_response = client.get_token_account_balance(associated_token_account, commitment=Confirmed)
+    neon_token_account = getTokenAddr(PublicKey(pda_account))
+    rpc_response = client.get_token_account_balance(neon_token_account, commitment=Confirmed)
     error = rpc_response.get('error')
     if error is not None:
         message = error.get("message")
         if message == SolanaErrors.AccountNotFound.value:
             raise SolanaAccountNotFoundError()
-        logger.error(f"Failed to get_token_balance_gwei by associated_token_account: {associated_token_account}, "
+        logger.error(f"Failed to get_token_balance_gwei by neon_token_account: {neon_token_account}, "
                      f"got get_token_account_balance error: \"{message}\"")
         raise Exception("Getting balance error")
 
     balance = get_from_dict(rpc_response, "result", "value", "amount")
     if balance is None:
-        logger.error(f"Failed to get_token_balance_gwei by associated_token_account: {associated_token_account}, response: {rpc_response}")
+        logger.error(f"Failed to get_token_balance_gwei by neon_token_account: {neon_token_account}, response: {rpc_response}")
         raise Exception("Unexpected get_balance response")
     return int(balance)
 
