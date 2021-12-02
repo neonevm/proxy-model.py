@@ -71,9 +71,12 @@ jobs:
         run: |
           /bin/bash proxy/publish-image.sh
 
-      - name: "LS dir"
+      - name: "Get logs from docker"
         run: |
-          ls -la
+          docker logs proxy > proxy.log 2>&1
+          grep 'get_measurements' < proxy.log > measurements.log
+          docker logs solana > solana.log 2>&1
+          docker logs evm_loader > evm_loader.log 2>&1
 
       - name: "Upload logs"
         uses: actions/upload-artifact@v2
