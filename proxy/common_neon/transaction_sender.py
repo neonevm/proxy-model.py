@@ -340,7 +340,7 @@ class IterativeTransactionSender:
 
     def call_signed_iterative(self):
         ''' Deprecated '''
-        self.create_accounts_for_trx_if_needed()
+        self.create_accounts_for_trx()
 
         logger.debug("Partial call")
         call_txs = self.instruction.make_iterative_call_transaction()
@@ -350,7 +350,7 @@ class IterativeTransactionSender:
 
 
     def call_signed_iterative_combined(self):
-        self.create_accounts_for_trx_if_needed()
+        self.create_accounts_for_trx()
 
         return self.call_continue(CONTINUE_COMBINED)
 
@@ -358,7 +358,7 @@ class IterativeTransactionSender:
     def call_signed_with_holder_acc(self):
         ''' Deprecated '''
         self.write_trx_to_holder_account()
-        self.create_accounts_for_trx_if_needed()
+        self.create_accounts_for_trx()
 
         logger.debug("ExecuteTrxFromAccountDataIterative:")
         call_txs = self.instruction.make_call_from_account_transaction()
@@ -368,17 +368,20 @@ class IterativeTransactionSender:
 
     def call_signed_with_holder_combined(self):
         self.write_trx_to_holder_account()
-        self.create_accounts_for_trx_if_needed()
+        self.create_accounts_for_trx()
 
         return self.call_continue(CONTINUE_HOLDER_COMB)
 
 
-    def create_accounts_for_trx_if_needed(self):
-        if len(self.create_acc_trx.instructions):
-            logger.debug('create_accounts_for_trx')
-            precall_txs = Transaction()
-            precall_txs.add(self.create_acc_trx)
-            self.sender.send_measured_transaction(precall_txs, self.eth_trx, 'CreateAccountsForTrx')
+    def create_accounts_for_trx(self):
+        length = len(self.create_acc_trx.instructions)
+        if length == 0:
+            return
+
+        logger.debug(f"Create account for trx: {length}")
+        precall_txs = Transaction()
+        precall_txs.add(self.create_acc_trx)
+        self.sender.send_measured_transaction(precall_txs, self.eth_trx, 'CreateAccountsForTrx')
 
 
     def write_trx_to_holder_account(self):
@@ -403,8 +406,7 @@ class IterativeTransactionSender:
         try:
             return_result = self.call_continue_bucked(instruction_type)
         except Exception as err:
-            logger.debug("call_continue_bucked_combined exception:")
-            logger.debug(str(err))
+            logger.debug("call_continue_bucked_combined exception: {}".format(str(err)))
 
         if return_result is not None:
             return return_result
@@ -481,6 +483,7 @@ class IterativeTransactionSender:
 
                 receipts.append(self.sender.send_transaction_unconfirmed(trx))
             except SendTransactionError as err:
+                logger.error(f"Failed to call continue bucked, error: {err}")
                 logger.debug(str(err))
                 if str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1"):
                     pass
@@ -501,8 +504,7 @@ class IterativeTransactionSender:
 
 
     def collect_bucked_results(self, receipts, reason):
-        logger.debug("Collect bucked results:")
-        logger.debug("receipts %s", receipts)
+        logger.debug(f"Collected bucked results: {receipts}")
         result_list = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason=reason)
         for result in result_list:
             # self.sender.get_measurements(result)
