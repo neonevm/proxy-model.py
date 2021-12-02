@@ -87,6 +87,24 @@ class Test_Airdropper(unittest.TestCase):
         self.faucet.request_eth_token_mock.reset_mock()
 
 
+    @patch.object(Airdropper, '_is_allowed_wrapper_contract')
+    @patch.object(SQLDict, '__setitem__')
+    @patch.object(SQLDict, '__contains__')
+    def test_failed_airdrop_contract_not_in_whitelist(self,
+                                                      mock_sql_dict_contains,
+                                                      mock_sql_dict_setitem,
+                                                      mock_is_allowed_contract):
+        print("\n\nShould not airdrop for contract that is not in whitelist")
+        mock_is_allowed_contract.side_effect = [False]
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx1)
+
+        mock_is_allowed_contract.assert_called_once()
+        mock_sql_dict_contains.assert_not_called()
+        mock_sql_dict_setitem.assert_not_called()
+        self.faucet.request_eth_token_mock.assert_not_called()
+        self.faucet.request_eth_token_mock.reset_mock()
+
+
     @patch.object(SQLDict, '__setitem__')
     @patch.object(SQLDict, '__contains__')
     def test_faucet_failure(self,
