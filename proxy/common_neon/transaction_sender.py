@@ -20,7 +20,7 @@ from .emulator_interactor import call_emulated
 from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_if_program_exceeded_instructions
-from ..environment import EVM_LOADER_ID, USE_COMBINED_START_CONTINUE
+from ..environment import EVM_LOADER_ID
 from ..plugin.eth_proto import Trx as EthTrx
 
 
@@ -73,10 +73,7 @@ class TransactionSender:
         try:
             if call_iterative:
                 try:
-                    if USE_COMBINED_START_CONTINUE:
-                        return iterative_executor.call_signed_iterative_combined()
-                    else:
-                        return iterative_executor.call_signed_iterative()
+                    return iterative_executor.call_signed_iterative_combined()
                 except Exception as err:
                     logger.debug(str(err))
                     if str(err).startswith("transaction too large:"):
@@ -86,10 +83,7 @@ class TransactionSender:
                         raise
 
             if call_from_holder:
-                if USE_COMBINED_START_CONTINUE:
-                    return iterative_executor.call_signed_with_holder_combined()
-                else:
-                    return iterative_executor.call_signed_with_holder_acc()
+                return iterative_executor.call_signed_with_holder_combined()
         finally:
             self.free_perm_accs()
 
@@ -345,6 +339,7 @@ class IterativeTransactionSender:
 
 
     def call_signed_iterative(self):
+        ''' Deprecated '''
         self.create_accounts_for_trx_if_needed()
 
         logger.debug("Partial call")
@@ -361,6 +356,7 @@ class IterativeTransactionSender:
 
 
     def call_signed_with_holder_acc(self):
+        ''' Deprecated '''
         self.write_trx_to_holder_account()
         self.create_accounts_for_trx_if_needed()
 
