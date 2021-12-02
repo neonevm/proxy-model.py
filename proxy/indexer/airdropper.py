@@ -67,9 +67,7 @@ class Airdropper(IndexerBase):
 
     def _airdrop_to(self, create_acc):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
-
-
-        if self.airdrop_ready.get(eth_address) is not None:  # transaction already processed
+        if eth_address in self.airdrop_ready:  # transaction already processed
             return
 
         sol_price_usd = self.price_provider.get_price('SOL/USD')

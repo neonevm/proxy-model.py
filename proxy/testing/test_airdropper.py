@@ -1,7 +1,8 @@
 import unittest
 from proxy.testing.mock_server import MockServer
-from proxy.indexer.airdropper import Airdropper
+from proxy.indexer.airdropper import Airdropper, AIRDROP_AMOUNT_SOL, NEON_PRICE_USD
 from proxy.indexer.sql_dict import SQLDict
+from proxy.indexer.price_provider import PriceProvider
 import time
 from flask import request, Response
 from unittest.mock import MagicMock, patch, call, ANY
@@ -47,7 +48,6 @@ class Test_Airdropper(unittest.TestCase):
         print("testing indexer in airdropper mode")
         cls.address = 'localhost'
         cls.faucet_port = 3333
-        cls.airdrop_amount = 10
 
         cls.faucet = MockFaucet(cls.faucet_port)
         cls.faucet.start()
@@ -59,7 +59,6 @@ class Test_Airdropper(unittest.TestCase):
                                     cls.evm_loader_id,
                                     f'http://{cls.address}:{cls.faucet_port}',
                                     cls.wrapper_whitelist,
-                                    cls.airdrop_amount,
                                     'INFO')
 
 
@@ -68,13 +67,18 @@ class Test_Airdropper(unittest.TestCase):
         cls.faucet.shutdown_server()
         cls.faucet.join()
 
-
+    @patch.object(PriceProvider, 'get_price')
     @patch.object(SQLDict, '__setitem__')
     @patch.object(SQLDict, '__contains__')
     def test_success_process_trx_with_one_airdrop(self,
                                                   mock_sql_dict_contains,
-                                                  mock_sql_dict_setitem):
+                                                  mock_sql_dict_setitem,
+                                                  mock_get_price):
         print("\n\nShould airdrop to new address - one target in transaction")
+
+        sol_price = 341
+        airdrop_amount = (AIRDROP_AMOUNT_SOL * sol_price) / NEON_PRICE_USD
+        mock_get_price.side_effect = [sol_price]
         mock_sql_dict_contains.side_effect = [False] # new eth address
         self.faucet.request_eth_token_mock.side_effect = [Response("{}", status=200, mimetype='application/json')]
 
@@ -82,8 +86,31 @@ class Test_Airdropper(unittest.TestCase):
 
         mock_sql_dict_contains.assert_called_once_with(token_airdrop_address1)
         mock_sql_dict_setitem.assert_has_calls([call(token_airdrop_address1, ANY)])
-        json_req = {'wallet': token_airdrop_address1, 'amount': self.airdrop_amount}
+        mock_get_price.assert_called_once_with('SOL/USD')
+        json_req = {'wallet': token_airdrop_address1, 'amount': airdrop_amount}
         self.faucet.request_eth_token_mock.assert_called_once_with(json_req)
+        self.faucet.request_eth_token_mock.reset_mock()
+
+
+    @patch.object(PriceProvider, 'get_price')
+    @patch.object(SQLDict, '__setitem__')
+    @patch.object(SQLDict, '__contains__')
+    def test_failed_process_trx_with_one_airdrop_price_provider_error(self,
+                                                                      mock_sql_dict_contains,
+                                                                      mock_sql_dict_setitem,
+                                                                      mock_get_price):
+        print("\n\nShould not airdrop to new address due to price provider error")
+
+        mock_get_price.side_effect = [None]
+        mock_sql_dict_contains.side_effect = [False] # new eth address
+        self.faucet.request_eth_token_mock.side_effect = [Response("{}", status=200, mimetype='application/json')]
+
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx1)
+
+        mock_sql_dict_contains.assert_called_once_with(token_airdrop_address1)
+        mock_sql_dict_setitem.assert_not_called()
+        mock_get_price.assert_called_once_with('SOL/USD')
+        self.faucet.request_eth_token_mock.assert_not_called()
         self.faucet.request_eth_token_mock.reset_mock()
 
 
@@ -105,20 +132,27 @@ class Test_Airdropper(unittest.TestCase):
         self.faucet.request_eth_token_mock.reset_mock()
 
 
+    @patch.object(PriceProvider, 'get_price')
     @patch.object(SQLDict, '__setitem__')
     @patch.object(SQLDict, '__contains__')
     def test_faucet_failure(self,
                             mock_sql_dict_contains,
-                            mock_sql_dict_setitem):
+                            mock_sql_dict_setitem,
+                            mock_get_price):
         print("\n\nShould not add address to processed list due to faucet error")
+
+        sol_price = 341
+        airdrop_amount = (AIRDROP_AMOUNT_SOL * sol_price) / NEON_PRICE_USD
+        mock_get_price.side_effect = [sol_price]
         mock_sql_dict_contains.side_effect = [False]  # new eth address
         self.faucet.request_eth_token_mock.side_effect = [Response("{}", status=400, mimetype='application/json')]
 
         self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx1)
 
         mock_sql_dict_contains.assert_called_once_with(token_airdrop_address1)
+        mock_get_price.assert_called_once_with('SOL/USD')
         mock_sql_dict_setitem.assert_not_called()
-        json_req = {'wallet': token_airdrop_address1, 'amount': self.airdrop_amount}
+        json_req = {'wallet': token_airdrop_address1, 'amount': airdrop_amount}
         self.faucet.request_eth_token_mock.assert_called_once_with(json_req)
         self.faucet.request_eth_token_mock.reset_mock()
 
@@ -139,12 +173,19 @@ class Test_Airdropper(unittest.TestCase):
         self.faucet.request_eth_token_mock.reset_mock()
 
 
+    @patch.object(PriceProvider, 'get_price')
     @patch.object(SQLDict, '__setitem__')
     @patch.object(SQLDict, '__contains__')
     def test_complex_transation(self,
                                 mock_sql_dict_contains,
-                                mock_sql_dict_setitem):
+                                mock_sql_dict_setitem,
+                                mock_get_price):
         print("\n\nShould airdrop to several targets in one transaction")
+        sol_price1 = 341
+        sol_price2 = 225
+        airdrop_amount1 = (AIRDROP_AMOUNT_SOL * sol_price1) / NEON_PRICE_USD
+        airdrop_amount2 = (AIRDROP_AMOUNT_SOL * sol_price2) / NEON_PRICE_USD
+        mock_get_price.side_effect = [sol_price1, sol_price2]
         mock_sql_dict_contains.side_effect = [False, False] # both targets are new
         self.faucet.request_eth_token_mock.side_effect = [Response("{}", status=200, mimetype='application/json'),
                                                           Response("{}", status=200, mimetype='application/json')]
@@ -153,10 +194,11 @@ class Test_Airdropper(unittest.TestCase):
 
         mock_sql_dict_contains.assert_has_calls([call(token_airdrop_address3),
                                                  call(token_airdrop_address2)])
+        mock_get_price.assert_has_calls([call('SOL/USD')]* 2)
         mock_sql_dict_setitem.assert_has_calls([call(token_airdrop_address3, ANY),
                                                 call(token_airdrop_address2, ANY)])
-        json_req1 = {'wallet': token_airdrop_address2, 'amount': self.airdrop_amount}
-        json_req2 = {'wallet': token_airdrop_address3, 'amount': self.airdrop_amount}
+        json_req1 = {'wallet': token_airdrop_address2, 'amount': airdrop_amount2}
+        json_req2 = {'wallet': token_airdrop_address3, 'amount': airdrop_amount1}
         self.faucet.request_eth_token_mock.assert_has_calls([call(json_req2), call(json_req1)])
         self.faucet.request_eth_token_mock.reset_mock()
 
