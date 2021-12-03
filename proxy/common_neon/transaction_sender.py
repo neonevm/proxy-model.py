@@ -19,7 +19,8 @@ from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, A
 from .emulator_interactor import call_emulated
 from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
-from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_if_program_exceeded_instructions
+from .solana_interactor import SolanaInteractor, check_if_continue_returned, \
+    check_if_program_exceeded_instructions, check_if_storage_is_empty_error
 from ..environment import EVM_LOADER_ID
 from ..plugin.eth_proto import Trx as EthTrx
 
@@ -443,14 +444,10 @@ class IterativeTransactionSender:
         for index in range(math.ceil(self.steps_emulated/self.steps) + self.addition_count()):
             try:
                 trx = self.make_bucked_trx(steps, index)
-
                 receipts.append(self.sender.send_transaction_unconfirmed(trx))
             except SendTransactionError as err:
-                logger.error(f"Failed to call continue bucked, error: {err}")
-                logger.debug(str(err))
-                if str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1"):
-                    pass
-                elif str(err).startswith("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
+                logger.error(f"Failed to call continue bucked, error: {err.result}")
+                if check_if_storage_is_empty_error(err.result):
                     pass
                 elif check_if_program_exceeded_instructions(err.result):
                     steps = int(steps * 90 / 100)
@@ -466,7 +463,6 @@ class IterativeTransactionSender:
         return self.collect_bucked_results(receipts, self.instruction_type)
 
 
-    @staticmethod
     def addition_count(self):
         '''
         How many transactions are needed depending on trx type:
