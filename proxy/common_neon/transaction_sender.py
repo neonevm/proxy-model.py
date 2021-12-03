@@ -28,11 +28,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-CONTINUE_REGULAR = 'ContinueV02'
-CONTINUE_COMBINED = 'PartialCallOrContinueFromRawEthereumTX'
-CONTINUE_HOLDER_COMB = 'ExecuteTrxFromAccountDataIterativeOrContinue'
-
-
 class TransactionSender:
     def __init__(self, solana_interactor: SolanaInteractor, eth_trx: EthTrx, steps: int) -> None:
         self.sender = solana_interactor
@@ -329,6 +324,10 @@ class NoniterativeTransactionSender:
 
 
 class IterativeTransactionSender:
+    CONTINUE_REGULAR = 'ContinueV02'
+    CONTINUE_COMBINED = 'PartialCallOrContinueFromRawEthereumTX'
+    CONTINUE_HOLDER_COMB = 'ExecuteTrxFromAccountDataIterativeOrContinue'
+
     def __init__(self, solana_interactor: SolanaInteractor, neon_instruction: NeonInstruction, create_acc_trx: Transaction, eth_trx: EthTrx, steps: int, steps_emulated: int):
         self.sender = solana_interactor
         self.instruction = neon_instruction
@@ -336,17 +335,20 @@ class IterativeTransactionSender:
         self.eth_trx = eth_trx
         self.steps = steps
         self.steps_emulated = steps_emulated
+        self.instruction_type = self.CONTINUE_REGULAR
 
 
     def call_signed_iterative_combined(self):
         self.create_accounts_for_trx()
-        return self.call_continue(CONTINUE_COMBINED)
+        self.instruction_type = self.CONTINUE_COMBINED
+        return self.call_continue()
 
 
     def call_signed_with_holder_combined(self):
         self.write_trx_to_holder_account()
         self.create_accounts_for_trx()
-        return self.call_continue(CONTINUE_HOLDER_COMB)
+        self.instruction_type = self.CONTINUE_HOLDER_COMB
+        return self.call_continue()
 
 
     def create_accounts_for_trx(self):
@@ -376,10 +378,10 @@ class IterativeTransactionSender:
         self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason='WriteHolder')
 
 
-    def call_continue(self, instruction_type):
+    def call_continue(self):
         return_result = None
         try:
-            return_result = self.call_continue_bucked(instruction_type)
+            return_result = self.call_continue_bucked()
         except Exception as err:
             logger.debug("call_continue_bucked_combined exception: {}".format(str(err)))
 
@@ -433,14 +435,14 @@ class IterativeTransactionSender:
         return result['result']['transaction']['signatures'][0]
 
 
-    def call_continue_bucked(self, instruction_type):
-        logger.debug("Send bucked combined: %s", instruction_type)
+    def call_continue_bucked(self):
+        logger.debug("Send bucked combined: %s", self.instruction_type)
         steps = self.steps
 
         receipts = []
-        for index in range(math.ceil(self.steps_emulated/self.steps) + self.addition_count(instruction_type)):
+        for index in range(math.ceil(self.steps_emulated/self.steps) + self.addition_count()):
             try:
-                trx = self.make_bucked_trx(instruction_type, steps, index)
+                trx = self.make_bucked_trx(steps, index)
 
                 receipts.append(self.sender.send_transaction_unconfirmed(trx))
             except SendTransactionError as err:
@@ -461,11 +463,11 @@ class IterativeTransactionSender:
                 else:
                     raise
 
-        return self.collect_bucked_results(receipts, instruction_type)
+        return self.collect_bucked_results(receipts, self.instruction_type)
 
 
     @staticmethod
-    def addition_count(instruction_type):
+    def addition_count(self):
         '''
         How many transactions are needed depending on trx type:
         CONTINUE_COMBINED: 2 (1 for begin and 1 for decreased steps)
@@ -473,22 +475,22 @@ class IterativeTransactionSender:
         0 otherwise
         '''
         addition_count = 0
-        if instruction_type == CONTINUE_COMBINED:
+        if self.instruction_type == self.CONTINUE_COMBINED:
             addition_count = 2
-        elif instruction_type == CONTINUE_HOLDER_COMB:
+        elif self.instruction_type == self.CONTINUE_HOLDER_COMB:
             addition_count = 1
         return addition_count
 
 
-    def make_bucked_trx(self, instruction_type, steps, index):
-        if instruction_type == CONTINUE_REGULAR:
+    def make_bucked_trx(self, steps, index):
+        if self.instruction_type == self.CONTINUE_REGULAR:
             return self.instruction.make_continue_transaction(steps, index)
-        elif instruction_type == CONTINUE_COMBINED:
+        elif self.instruction_type == self.CONTINUE_COMBINED:
             return self.instruction.make_partial_call_or_continue_transaction(steps - index)
-        elif instruction_type == CONTINUE_HOLDER_COMB:
+        elif self.instruction_type == self.CONTINUE_HOLDER_COMB:
             return self.instruction.make_partial_call_or_continue_from_account_data(steps, index)
         else:
-            raise Exception("Unknown continue type: {}".format(instruction_type))
+            raise Exception("Unknown continue type: {}".format(self.instruction_type))
 
 
     def collect_bucked_results(self, receipts, reason):
