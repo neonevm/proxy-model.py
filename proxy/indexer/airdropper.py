@@ -187,9 +187,11 @@ if __name__ == "__main__":
     faucet_url = os.environ.get('FAUCET_URL', 'http://localhost:3333')
     wrapper_whitelist = os.environ.get('INDEXER_ERC20_WRAPPER_WHITELIST', '').split(',')
     log_level = os.environ.get('LOG_LEVEL', 'INFO')
+    neon_decimals = int(os.environ.get('NEON_TOKEN_MINT_DECIMALS', '9'))
 
     run_airdropper(solana_url,
                    evm_loader_id,
                    faucet_url,
                    wrapper_whitelist,
-                   log_level)
+                   log_level,
+                   neon_decimals)
