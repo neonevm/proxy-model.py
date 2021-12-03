@@ -48,9 +48,6 @@ class Test_Airdropper(unittest.TestCase):
         print("testing indexer in airdropper mode")
         cls.address = 'localhost'
         cls.faucet_port = 3333
-
-
-
         cls.evm_loader_id = evm_loader_addr
         cls.wrapper_whitelist = wrapper_whitelist
         cls.neon_decimals = 9
@@ -61,11 +58,13 @@ class Test_Airdropper(unittest.TestCase):
                                     'INFO',
                                     cls.neon_decimals)
 
+
     def setUp(self) -> None:
         print(f"\n\n{self._testMethodName}\n{self._testMethodDoc}")
         self.faucet = MockFaucet(self.faucet_port)
         self.faucet.start()
         time.sleep(0.2)
+
 
     def tearDown(self) -> None:
         self.faucet.shutdown_server()

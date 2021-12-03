@@ -54,6 +54,7 @@ class TestPriceProvider(TestCase):
 
 
     def setUp(self) -> None:
+        print(f"\n\n{self._testMethodName}\n{self._testMethodDoc}")
         self.testnet_price_provider = PriceProvider(testnet_solana,
                                                     self.default_upd_int,
                                                     testnet_price_accounts)
@@ -62,9 +63,10 @@ class TestPriceProvider(TestCase):
     @patch.object(Client, 'get_account_info')
     @patch.object(PriceProvider, '_get_current_time')
     def test_success_read_price_two_times_with_small_interval(self, mock_get_current_time, mock_get_account_info):
-        print("\n\nTesting two sequential calls with small interval. Should read account once")
-        # some random time
-        first_call_time =  uniform(0, 100000)
+        """
+        Testing two sequential calls with small interval. Should read account once
+        """
+        first_call_time =  uniform(0, 100000) # some random time
         # not enough time left to cause second account reload
         second_call_time = first_call_time + self.default_upd_int - 1
 
@@ -86,9 +88,10 @@ class TestPriceProvider(TestCase):
     @patch.object(Client, 'get_account_info')
     @patch.object(PriceProvider, '_get_current_time')
     def test_success_read_price_two_times_with_long_interval_diff_encodings(self, mock_get_current_time, mock_get_account_info):
-        print("\n\nTesting two sequential calls with long interval. Should read account twice")
-        # some random time
-        first_call_time =  uniform(0, 100000)
+        """
+        Testing two sequential calls with long interval. Should read account twice
+        """
+        first_call_time =  uniform(0, 100000) # some random time
         # Time interval between 1st and 2nd calls are larger that reload interval
         second_call_time = first_call_time + self.default_upd_int + 2
 
@@ -113,9 +116,10 @@ class TestPriceProvider(TestCase):
     @patch.object(Client, 'get_account_info')
     @patch.object(PriceProvider, '_get_current_time')
     def test_faile_get_price_price_status_not_trading(self, mock_get_current_time, mock_get_account_info):
-        print("\n\nget_price call should return None because last price account data is not trading")
-        # some random time
-        first_call_time = uniform(0, 100000)
+        """
+        get_price call should return None because last price account data is not trading
+        """
+        first_call_time = uniform(0, 100000) # some random time
 
         mock_get_current_time.side_effect = [first_call_time]
 
@@ -135,9 +139,10 @@ class TestPriceProvider(TestCase):
     @patch.object(Client, 'get_account_info')
     @patch.object(PriceProvider, '_get_current_time')
     def test_failed_read_account_not_found(self, mock_get_current_time, mock_get_account_info):
-        print("\n\nAccount reading will fail due to unknown pair provided")
-        # some random time
-        first_call_time =  uniform(0, 100000)
+        """
+        Account reading will fail due to unknown pair provided
+        """
+        first_call_time =  uniform(0, 100000) # some random time
         mock_get_current_time.side_effect = [ first_call_time ]
 
         pair_name = 'RUB/USD' # Unknown pair
@@ -150,9 +155,10 @@ class TestPriceProvider(TestCase):
     @patch.object(Client, 'get_account_info')
     @patch.object(PriceProvider, '_get_current_time')
     def test_failed_second_acc_read_will_return_previous_result(self, mock_get_current_time, mock_get_account_info):
-        print("\n\nTesting two sequential calls with long interval. Second call will fail. Provider should return previous price")
-        # some random time
-        first_call_time =  uniform(0, 100000)
+        """
+        Testing two sequential calls with long interval. Second call will fail. Provider should return previous price
+        """
+        first_call_time =  uniform(0, 100000) # some random time
         # Time interval between 1st and 2nd calls are larger that reload interval
         second_call_time = first_call_time + self.default_upd_int + 2
 
@@ -174,7 +180,9 @@ class TestPriceProvider(TestCase):
 
 
     def test_compare_mainnet_testnet_data(self):
-        print("\n\nShould return correct prices on all Solana nets")
+        """
+        Should return correct prices on all Solana nets
+        """
         pair_name = 'SOL/USD'
 
         devnet_price_provider = PriceProvider(devnet_solana,
