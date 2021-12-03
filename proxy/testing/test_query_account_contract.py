@@ -22,7 +22,6 @@ issue = 'https://github.com/neonlabsorg/neon-evm/issues/360'
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
 admin = proxy.eth.account.create(issue + '/admin')
-user = proxy.eth.account.create(issue + '/user')
 proxy.eth.default_account = admin.address
 
 # Address: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU (a token mint account)
@@ -107,7 +106,7 @@ contract TestQueryAccount {
         query = new QueryAccount();
     }
 
-    function test_metadata_ok() public returns (bool) {
+    function test_metadata_ok() public view returns (bool) {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
 
         uint256 golden_ownr = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
@@ -144,7 +143,7 @@ contract TestQueryAccount {
         return true;
     }
 
-    function test_metadata_nonexistent_account() public returns (bool) {
+    function test_metadata_nonexistent_account() public view returns (bool) {
         uint256 solana_address = 90000; // should not exist
         bool ok = false;
 
@@ -165,7 +164,7 @@ contract TestQueryAccount {
         return ok;
     }
 
-    function test_data_ok() public returns (bool) {
+    function test_data_ok() public view returns (bool) {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
         byte b0 = 0x71;
         byte b1 = 0x33;
@@ -202,7 +201,7 @@ contract TestQueryAccount {
         return true;
     }
 
-    function test_data_nonexistent_account() public returns (bool) {
+    function test_data_nonexistent_account() public view returns (bool) {
         uint256 solana_address = 90000; // hopefully does not exist
         uint64 offset = 0;
         uint64 len = 1;
@@ -212,7 +211,7 @@ contract TestQueryAccount {
         return false;
     }
 
-    function test_data_too_big_offset() public returns (bool) {
+    function test_data_too_big_offset() public view returns (bool) {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
         uint64 offset = 200; // data len is 82
         uint64 len = 1;
@@ -222,7 +221,7 @@ contract TestQueryAccount {
         return false;
     }
 
-    function test_data_too_big_length() public returns (bool) {
+    function test_data_too_big_length() public view returns (bool) {
         uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
         uint64 offset = 0;
         uint64 len = 200; // data len is 82
@@ -238,7 +237,7 @@ class Test_Query_Account_Contract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print('\n\n' + issue)
-        print('user address:', user.address)
+        print('admin address:', admin.address)
         cls.deploy_contract(cls)
 
     def deploy_contract(self):
@@ -253,6 +252,7 @@ class Test_Query_Account_Contract(unittest.TestCase):
         tx_deploy_hash = proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
         tx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
         self.contract_address = tx_deploy_receipt.contractAddress
+        print('contract address:', self.contract_address)
 
     # @unittest.skip("a.i.")
     def test_metadata_ok(self):
