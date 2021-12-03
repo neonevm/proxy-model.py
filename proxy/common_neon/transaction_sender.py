@@ -465,7 +465,7 @@ class IterativeTransactionSender:
         receipts = []
         for index in range(math.ceil(self.steps_emulated/self.steps) + self.addition_count(instruction_type)):
             try:
-                trx = self.make_bucked_trx()
+                trx = self.make_bucked_trx(instruction_type, steps, index)
 
                 receipts.append(self.sender.send_transaction_unconfirmed(trx))
             except SendTransactionError as err:
