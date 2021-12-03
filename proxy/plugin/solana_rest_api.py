@@ -603,7 +603,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             traceback.print_exc()
             response['error'] = {'code': -32000, 'message': str(err)}
 
-        response['method'] = method
+        response['method'] = request['method']
 
         return response
 
