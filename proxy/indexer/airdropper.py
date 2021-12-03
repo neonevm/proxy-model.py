@@ -23,7 +23,8 @@ class Airdropper(IndexerBase):
                  evm_loader_id,
                  faucet_url = '',
                  wrapper_whitelist = [],
-                 log_level = 'INFO'):
+                 log_level = 'INFO',
+                 neon_decimals = 9):
         IndexerBase.__init__(self, solana_url, evm_loader_id, log_level)
 
         # collection of eth-address-to-create-accout-trx mappings
@@ -36,6 +37,7 @@ class Airdropper(IndexerBase):
         # so using mainnet solana for simplicity
         self.price_provider = PriceProvider(mainnet_solana,
                                             mainnet_price_accounts)
+        self.neon_decimals = neon_decimals
 
 
     # helper function checking if given contract address is in whitelist
@@ -81,9 +83,10 @@ class Airdropper(IndexerBase):
         logger.info(f"NEON price: ${NEON_PRICE_USD}")
         airdrop_amount_neon = airdrop_amount_usd / NEON_PRICE_USD
         logger.info(f"Airdrop {airdrop_amount_neon} NEONs to address: {eth_address}")
+        airdrop_galans = int(airdrop_amount_neon * pow(10, self.neon_decimals))
 
-        json_data = { 'wallet': eth_address, 'amount': airdrop_amount_neon }
-        resp = requests.post(self.faucet_url + '/request_eth_token', json = json_data)
+        json_data = { 'wallet': eth_address, 'amount': airdrop_galans }
+        resp = requests.post(self.faucet_url + '/request_neon_in_galans', json = json_data)
         if not resp.ok:
             logger.warning(f'Failed to airdrop: {resp.status_code}')
             return
@@ -157,7 +160,8 @@ def run_airdropper(solana_url,
                    evm_loader_id,
                    faucet_url = '',
                    wrapper_whitelist = [],
-                   log_level = 'INFO'):
+                   log_level = 'INFO',
+                   neon_decimals = 9):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
     logger.info(f"""Running indexer with params:
@@ -165,13 +169,15 @@ def run_airdropper(solana_url,
         evm_loader_id: {evm_loader_id},
         log_level: {log_level},
         faucet_url: {faucet_url},
-        wrapper_whitelist: {wrapper_whitelist}""")
+        wrapper_whitelist: {wrapper_whitelist},
+        NEON decimals: {neon_decimals}""")
 
     airdropper = Airdropper(solana_url,
                             evm_loader_id,
                             faucet_url,
                             wrapper_whitelist,
-                            log_level)
+                            log_level,
+                            neon_decimals)
     airdropper.run()
 
 
