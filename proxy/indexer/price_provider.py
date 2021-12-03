@@ -42,9 +42,6 @@ PRICE_STATUS_TRADING = 1
 
 
 class PriceProvider:
-    # One can provide ether net name as solana_net (mainnet, devnet, testnet)
-    # or specifit URL address (e.g. http://localhost:8899
-    # NOTE:
     def __init__(self, solana_url: str, default_upd_int: int, price_accounts=None):
         self.client = Client(solana_url)
         self.default_upd_int = default_upd_int
