@@ -62,6 +62,7 @@ class Test_Airdropper(unittest.TestCase):
                                     cls.neon_decimals)
 
     def setUp(self) -> None:
+        print(f"\n\n{self._testMethodName}\n{self._testMethodDoc}")
         self.faucet = MockFaucet(self.faucet_port)
         self.faucet.start()
         time.sleep(0.2)
@@ -78,8 +79,9 @@ class Test_Airdropper(unittest.TestCase):
                                                   mock_sql_dict_contains,
                                                   mock_sql_dict_setitem,
                                                   mock_get_price):
-        print("\n\nShould airdrop to new address - one target in transaction")
-
+        """
+        Should airdrop to new address - one target in transaction
+        """
         sol_price = 341
         airdrop_amount = int(pow(10, self.neon_decimals) * (AIRDROP_AMOUNT_SOL * sol_price) / NEON_PRICE_USD)
         mock_get_price.side_effect = [sol_price]
@@ -103,8 +105,9 @@ class Test_Airdropper(unittest.TestCase):
                                                                       mock_sql_dict_contains,
                                                                       mock_sql_dict_setitem,
                                                                       mock_get_price):
-        print("\n\nShould not airdrop to new address due to price provider error")
-
+        """
+        Should not airdrop to new address due to price provider error
+        """
         mock_get_price.side_effect = [None]
         mock_sql_dict_contains.side_effect = [False] # new eth address
         self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=200, mimetype='application/json')]
@@ -125,7 +128,9 @@ class Test_Airdropper(unittest.TestCase):
                                                       mock_sql_dict_contains,
                                                       mock_sql_dict_setitem,
                                                       mock_is_allowed_contract):
-        print("\n\nShould not airdrop for contract that is not in whitelist")
+        """
+        Should not airdrop for contract that is not in whitelist
+        """
         mock_is_allowed_contract.side_effect = [False]
         self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx1)
 
@@ -143,8 +148,9 @@ class Test_Airdropper(unittest.TestCase):
                             mock_sql_dict_contains,
                             mock_sql_dict_setitem,
                             mock_get_price):
-        print("\n\nShould not add address to processed list due to faucet error")
-
+        """
+        Should not add address to processed list due to faucet error
+        """
         sol_price = 341
         airdrop_amount = int(pow(10, self.neon_decimals) * (AIRDROP_AMOUNT_SOL * sol_price) / NEON_PRICE_USD)
         mock_get_price.side_effect = [sol_price]
@@ -166,7 +172,9 @@ class Test_Airdropper(unittest.TestCase):
     def test_process_trx_with_one_airdrop_for_already_processed_address(self,
                                                                         mock_sql_dict_contains,
                                                                         mock_sql_dict_setitem):
-        print("\n\nShould not airdrop to repeated address")
+        """
+        Should not airdrop to repeated address
+        """
         mock_sql_dict_contains.side_effect = [True]  # eth address processed later
 
         self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx1)
@@ -184,7 +192,9 @@ class Test_Airdropper(unittest.TestCase):
                                 mock_sql_dict_contains,
                                 mock_sql_dict_setitem,
                                 mock_get_price):
-        print("\n\nShould airdrop to several targets in one transaction")
+        """
+        Should airdrop to several targets in one transaction
+        """
         sol_price1 = 341
         sol_price2 = 225
         airdrop_amount1 = int(pow(10, self.neon_decimals) * (AIRDROP_AMOUNT_SOL * sol_price1) / NEON_PRICE_USD)
@@ -212,7 +222,9 @@ class Test_Airdropper(unittest.TestCase):
     def test_no_airdrop_instructions(self,
                                      mock_sql_dict_contains,
                                      mock_sql_dict_setitem):
-        print("\n\nShould not airdrop when instructions are inconsistent")
+        """
+        Should not airdrop when instructions are inconsistent
+        """
         self.airdropper.process_trx_airdropper_mode(create_sol_acc_and_airdrop_trx)
 
         mock_sql_dict_contains.assert_not_called()
