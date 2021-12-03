@@ -52,6 +52,7 @@ USE_COMBINED_START_CONTINUE = os.environ.get("USE_COMBINED_START_CONTINUE", "NO"
 CONTINUE_COUNT_FACTOR = int(os.environ.get("CONTINUE_COUNT_FACTOR", "3"))
 TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFIG", "3600"))
 MINIMAL_GAS_PRICE=int(os.environ.get("MINIMAL_GAS_PRICE", 1))*10**9
+DEBUG_SENDING_SOLANA_TRANSACTION = os.environ.get("DEBUG_SENDING_SOLANA_TRANSACTION", "NO") == "YES"
 
 ACCOUNT_SEED_VERSION=b'\1'
 
@@ -565,7 +566,8 @@ def send_transaction(client, trx, signer, eth_trx=None, reason=None):
 
 
 def send_measured_transaction(client, trx, signer, eth_trx, reason):
-    logger.debug("send_measured_transaction: %s", trx.__dict__)
+    if DEBUG_SENDING_SOLANA_TRANSACTION:
+        logger.debug("send_measured_transaction for reason %s: %s ", reason, trx.__dict__)
     result = send_transaction(client, trx, signer, eth_trx=eth_trx, reason=reason)
     get_measurements(result)
     return result
@@ -1032,7 +1034,7 @@ def call_signed_with_holder_acc(signer, client, eth_trx, perm_accs, trx_info, st
     precall_txs.add(make_call_from_account_instruction(signer, perm_accs, trx_info))
 
     # ExecuteTrxFromAccountDataIterative
-    logger.debug("ExecuteTrxFromAccountDataIterative: %s", precall_txs.__dict__)
+    logger.debug("ExecuteTrxFromAccountDataIterative")
     send_measured_transaction(client, precall_txs, signer, eth_trx, 'ExecuteTrxFromAccountDataIterativeV02')
 
     return call_continue(signer, client, perm_accs, trx_info, steps)
