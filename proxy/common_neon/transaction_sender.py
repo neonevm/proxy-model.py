@@ -338,38 +338,14 @@ class IterativeTransactionSender:
         self.steps_emulated = steps_emulated
 
 
-    def call_signed_iterative(self):
-        ''' Deprecated '''
-        self.create_accounts_for_trx()
-
-        logger.debug("Partial call")
-        call_txs = self.instruction.make_iterative_call_transaction()
-        self.sender.send_measured_transaction(call_txs, self.eth_trx, 'PartialCallFromRawEthereumTXv02')
-
-        return self.call_continue(CONTINUE_REGULAR)
-
-
     def call_signed_iterative_combined(self):
         self.create_accounts_for_trx()
-
         return self.call_continue(CONTINUE_COMBINED)
 
-
-    def call_signed_with_holder_acc(self):
-        ''' Deprecated '''
-        self.write_trx_to_holder_account()
-        self.create_accounts_for_trx()
-
-        logger.debug("ExecuteTrxFromAccountDataIterative:")
-        call_txs = self.instruction.make_call_from_account_transaction()
-        self.sender.send_measured_transaction(call_txs, self.eth_trx, 'ExecuteTrxFromAccountDataIterativeV02')
-
-        return self.call_continue(CONTINUE_REGULAR)
 
     def call_signed_with_holder_combined(self):
         self.write_trx_to_holder_account()
         self.create_accounts_for_trx()
-
         return self.call_continue(CONTINUE_HOLDER_COMB)
 
 
@@ -377,7 +353,6 @@ class IterativeTransactionSender:
         length = len(self.create_acc_trx.instructions)
         if length == 0:
             return
-
         logger.debug(f"Create account for trx: {length}")
         precall_txs = Transaction()
         precall_txs.add(self.create_acc_trx)
