@@ -246,6 +246,8 @@ class Test_Neon_Faucet(unittest.TestCase):
         self.assertEqual(a_after - a_before, 1000000000000000000)
         self.assertEqual(b_after - b_before, 1000000000000000000)
 
+    # Returns balance of a token account.
+    # Note: the result is in 10E-18 fractions.
     def get_token_balance(self, token_address, address):
         erc20 = proxy.eth.contract(address=token_address, abi=self.contract['abi'])
         return erc20.functions.balanceOf(address).call()
