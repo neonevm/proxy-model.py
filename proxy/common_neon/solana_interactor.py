@@ -87,7 +87,6 @@ class SolanaInteractor:
         update_transaction_cost(result, eth_trx, reason)
         return result
 
-
     def send_measured_transaction(self, trx, eth_trx, reason):
         if LOG_SENDING_SOLANA_TRANSACTION:
             logger.debug("send_measured_transaction for reason %s: %s ", reason, trx.__dict__)
@@ -95,8 +94,8 @@ class SolanaInteractor:
         self.get_measurements(result)
         return result
 
-
-    # Do not rename this function! This name used in CI measurements (see function `cleanup_docker` in .buildkite/steps/deploy-test.sh)
+    # Do not rename this function! This name used in CI measurements (see function `cleanup_docker` in
+    # .buildkite/steps/deploy-test.sh)
     def get_measurements(self, result):
         try:
             measurements = self.extract_measurements_from_receipt(result)
