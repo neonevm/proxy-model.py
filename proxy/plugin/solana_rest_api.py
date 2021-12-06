@@ -605,8 +605,6 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             traceback.print_exc()
             response['error'] = {'code': -32000, 'message': str(err)}
 
-        # response['method'] = request['method']
-
         return response
 
     def handle_request(self, request: HttpParser) -> None:
