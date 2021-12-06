@@ -2,8 +2,8 @@ import os
 from web3 import Web3
 import unittest
 from solana.publickey import PublicKey
-from solcx import compile_source
-from solcx import install_solc
+from solcx import compile_source, install_solc
+
 
 from proxy.plugin.solana_rest_api_tools import MINIMAL_GAS_PRICE
 
