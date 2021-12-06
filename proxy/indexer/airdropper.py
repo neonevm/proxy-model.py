@@ -171,6 +171,7 @@ def run_airdropper(solana_url,
         faucet_url: {faucet_url},
         wrapper_whitelist: {wrapper_whitelist},
         NEON decimals: {neon_decimals}""")
+        airdrop_amount: {airdrop_amount}""")
 
     airdropper = Airdropper(solana_url,
                             evm_loader_id,
@@ -179,19 +180,3 @@ def run_airdropper(solana_url,
                             log_level,
                             neon_decimals)
     airdropper.run()
-
-
-if __name__ == "__main__":
-    solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
-    evm_loader_id = os.environ.get('EVM_LOADER_ID', '53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io')
-    faucet_url = os.environ.get('FAUCET_URL', 'http://localhost:3333')
-    wrapper_whitelist = os.environ.get('INDEXER_ERC20_WRAPPER_WHITELIST', '').split(',')
-    log_level = os.environ.get('LOG_LEVEL', 'INFO')
-    neon_decimals = int(os.environ.get('NEON_TOKEN_MINT_DECIMALS', '9'))
-
-    run_airdropper(solana_url,
-                   evm_loader_id,
-                   faucet_url,
-                   wrapper_whitelist,
-                   log_level,
-                   neon_decimals)
