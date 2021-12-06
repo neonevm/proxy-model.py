@@ -171,7 +171,6 @@ def run_airdropper(solana_url,
         faucet_url: {faucet_url},
         wrapper_whitelist: {wrapper_whitelist},
         NEON decimals: {neon_decimals}""")
-        airdrop_amount: {airdrop_amount}""")
 
     airdropper = Airdropper(solana_url,
                             evm_loader_id,
