@@ -21,6 +21,7 @@ from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, \
     check_if_program_exceeded_instructions, check_if_storage_is_empty_error
+from .utils import get_from_dict
 from ..environment import EVM_LOADER_ID
 from ..plugin.eth_proto import Trx as EthTrx
 
@@ -321,6 +322,12 @@ class NoniterativeTransactionSender:
             call_txs_05.add(self.create_acc_trx)
         call_txs_05.add(self.instruction.make_noniterative_call_transaction(len(call_txs_05.instructions)))
         result = self.sender.send_measured_transaction(call_txs_05, self.eth_trx, 'CallFromRawEthereumTX')
+
+        if get_from_dict(result, 'result', 'meta', 'err') is not None:
+            if check_if_program_exceeded_instructions(result['result']['meta']):
+                raise Exception("Program failed to complete")
+            raise Exception(json.dumps(result['result']['meta']))
+
         return result['result']['transaction']['signatures'][0]
 
 
@@ -359,7 +366,9 @@ class IterativeTransactionSender:
         logger.debug(f"Create account for trx: {length}")
         precall_txs = Transaction()
         precall_txs.add(self.create_acc_trx)
-        self.sender.send_measured_transaction(precall_txs, self.eth_trx, 'CreateAccountsForTrx')
+        result = self.sender.send_measured_transaction(precall_txs, self.eth_trx, 'CreateAccountsForTrx')
+        if get_from_dict(result, 'result', 'meta', 'err', 'InstructionError') is not None:
+            raise Exception("Failed to create account for trx")
 
 
     def write_trx_to_holder_account(self):
@@ -421,7 +430,7 @@ class IterativeTransactionSender:
                 result = self.sender.send_measured_transaction(trx, self.eth_trx, 'ContinueV02')
                 return result
             except SendTransactionError as err:
-                if check_if_program_exceeded_instructions(err.result):
+                if check_if_program_exceeded_instructions(err.result['data']):
                     step_count = int(step_count * 90 / 100)
                 else:
                     raise
@@ -447,9 +456,9 @@ class IterativeTransactionSender:
                 receipts.append(self.sender.send_transaction_unconfirmed(trx))
             except SendTransactionError as err:
                 logger.error(f"Failed to call continue bucked, error: {err.result}")
-                if check_if_storage_is_empty_error(err.result):
+                if check_if_storage_is_empty_error(err.result['data']):
                     pass
-                elif check_if_program_exceeded_instructions(err.result):
+                elif check_if_program_exceeded_instructions(err.result['data']):
                     steps = int(steps * 90 / 100)
                 else:
                     raise

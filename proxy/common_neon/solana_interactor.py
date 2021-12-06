@@ -186,18 +186,19 @@ class SolanaInteractor:
 
 
 def check_if_program_exceeded_instructions(err_result):
-    err_instruction = "Program failed to complete: exceeded maximum number of instructions allowed"
-    err_budget = "failed: Computational budget exceeded"
-
-    if err_result['data']['logs'][-1].find(err_instruction) >= 0 or \
-        err_result['data']['logs'][-2].find(err_instruction) >= 0 or \
-        err_result['data']['logs'][-1].find(err_budget) >= 0:
-        return True
+    error_arr = get_from_dict(err_result, "err", "InstructionError")
+    if error_arr is not None and isinstance(error_arr, list):
+        error_type = error_arr[1]
+        if isinstance(error_type, str):
+            if error_type == 'ProgramFailedToComplete':
+                return True
+            if error_type == 'ComputationalBudgetExceeded':
+                return True
     return False
 
 
 def check_if_storage_is_empty_error(err_result):
-    error_arr = get_from_dict(err_result, "data", "err", "InstructionError")
+    error_arr = get_from_dict(err_result, "err", "InstructionError")
     if error_arr is not None and isinstance(error_arr, list):
         error_dict = error_arr[1]
         if isinstance(error_dict, dict) and 'Custom' in error_dict:
