@@ -9,8 +9,7 @@ from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 
 from .costs import update_transaction_cost
-from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY
-
+from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, LOG_SENDING_SOLANA_TRANSACTION
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -90,6 +89,8 @@ class SolanaInteractor:
 
 
     def send_measured_transaction(self, trx, eth_trx, reason):
+        if LOG_SENDING_SOLANA_TRANSACTION:
+            logger.debug("send_measured_transaction for reason %s: %s ", reason, trx.__dict__)
         result = self.send_transaction(trx, eth_trx, reason=reason)
         self.get_measurements(result)
         return result
