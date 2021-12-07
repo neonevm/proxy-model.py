@@ -11,30 +11,13 @@ from web3 import Web3
 from solcx import install_solc
 install_solc(version='0.7.6')
 from solcx import compile_source
-from proxy.environment import EVM_LOADER_ID, SOLANA_URL
-from proxy.indexer.airdropper import run_airdropper
-from solana.publickey import PublicKey
-from multiprocessing import Process
-from solana.rpc.api import Client as SolanaClient
-from solana.account import Account as SolanaAccount
-from spl.token.client import Token as SplToken
-from spl.token.constants import TOKEN_PROGRAM_ID
-from solana.rpc.commitment import Confirmed
-from proxy.common_neon.neon_instruction import NeonInstruction
-from solana.rpc.types import TxOpts
-from time import sleep
-import json
 
 issue = 'https://github.com/neonlabsorg/neon-evm/issues/166'
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
 admin = proxy.eth.account.create(issue + '/admin')
 user = proxy.eth.account.create(issue + '/user')
-airdrop_src_user = proxy.eth.account.create('airdrop_src_user')
-airdrop_trg_user = proxy.eth.account.create('airdrop_trg_user')
 proxy.eth.default_account = admin.address
-
-FAUCET_RPC_PORT = 3333
 
 ERC20_CONTRACT_SOURCE = '''
 // SPDX-License-Identifier: MIT
@@ -179,7 +162,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         return tx_deploy_receipt.contractAddress
 
     def start_faucet(self):
-        os.environ['FAUCET_RPC_PORT'] = str(FAUCET_RPC_PORT)
+        os.environ['FAUCET_RPC_PORT'] = '3333'
         os.environ['FAUCET_RPC_ALLOWED_ORIGINS'] = 'http://localhost'
         os.environ['FAUCET_WEB3_ENABLE'] = 'true'
         os.environ['WEB3_RPC_URL'] = proxy_url
@@ -195,50 +178,11 @@ class Test_Neon_Faucet(unittest.TestCase):
         os.environ['NEON_ETH_MAX_AMOUNT'] = '10'
         self.faucet = subprocess.Popen(['faucet', 'run', '--workers', '1'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-    def create_token_mint(self):
-        self.solana_client = SolanaClient(SOLANA_URL)
-
-        # with open("/root/.config/solana/id.json") as f:
-        with open("proxy/operator-keypair.json") as f:
-            d = json.load(f)
-        self.solana_account = SolanaAccount(d[0:32])
-        self.solana_client.request_airdrop(self.solana_account.public_key(), 1000_000_000_000, Confirmed)
-
-        while True:
-            balance = self.solana_client.get_balance(self.solana_account.public_key(), Confirmed)["result"]["value"]
-            if balance > 0:
-                break
-            sleep(1)
-        print('create_token_mint mint, SolanaAccount: ', self.solana_account.public_key())
-
-        self.token = SplToken.create_mint(
-            self.solana_client,
-            self.solana_account,
-            self.solana_account.public_key(),
-            9,
-            TOKEN_PROGRAM_ID,
-        )
-
-    def create_token_accounts(self):
-        contract_address_bytes = bytes.fromhex(self.token_a[2:])
-        contract_address_solana = PublicKey.find_program_address([b"\1", contract_address_bytes], EVM_LOADER_ID)[0]
-
-        admin_address_bytes = bytes.fromhex(admin.address[2:])
-        admin_address_solana = PublicKey.find_program_address([b"\1", admin_address_bytes], EVM_LOADER_ID)[0]
-
-        admin_token_seeds = [ b"\1", b"ERC20Balance", bytes(self.token.pubkey), contract_address_bytes, admin_address_bytes ]
-        admin_token_key = PublicKey.find_program_address(admin_token_seeds, EVM_LOADER_ID)[0]
-        admin_token_info = { "key": admin_token_key, "owner": admin_address_solana, "contract": contract_address_solana, "mint": self.token.pubkey }
-
-        instr = NeonInstruction(self.solana_account.public_key()).createERC20TokenAccountTrx(admin_token_info)
-        self.solana_client.send_transaction(instr, self.solana_account, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
-        self.token.mint_to(admin_token_key, self.solana_account, 10_000_000_000_000, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
-
     # @unittest.skip("a.i.")
     def test_neon_faucet_01_eth_token(self):
         print()
         # First request - trigger creation of the account without real transfer
-        url = f'http://localhost:{FAUCET_RPC_PORT}/request_eth_token'
+        url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
         data = '{"wallet": "' + user.address + '", "amount": 0}'
         r = requests.post(url, data=data)
         if not r.ok:
@@ -247,7 +191,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         # Second request - actual test
         balance_before = proxy.eth.get_balance(user.address)
         print('NEO balance before:', balance_before)
-        url = f'http://localhost:{FAUCET_RPC_PORT}/request_eth_token'
+        url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
         data = '{"wallet": "' + user.address + '", "amount": 1}'
         r = requests.post(url, data=data)
         if not r.ok:
@@ -266,7 +210,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         b_before = self.get_token_balance(self.token_b, user.address)
         print('token A balance before:', a_before)
         print('token B balance before:', b_before)
-        url = f'http://localhost:{FAUCET_RPC_PORT}/request_erc20_tokens'
+        url = 'http://localhost:{}/request_erc20_tokens'.format(os.environ['FAUCET_RPC_PORT'])
         data = '{"wallet": "' + user.address + '", "amount": 1}'
         r = requests.post(url, data=data)
         if not r.ok:
@@ -284,34 +228,14 @@ class Test_Neon_Faucet(unittest.TestCase):
         return erc20.functions.balanceOf(address).call()
 
     def stop_faucet(self):
-        url = f'http://localhost:{FAUCET_RPC_PORT}/request_stop'
+        url = 'http://localhost:{}/request_stop'.format(os.environ['FAUCET_RPC_PORT'])
         data = '{"delay": 1000}' # 1 second
         r = requests.post(url, data=data)
         if not r.ok:
-            self.faucet.terminate()
+            self.faucet.terminate
         with io.TextIOWrapper(self.faucet.stdout, encoding="utf-8") as out:
             for line in out:
                 print(line.strip())
-
-    def test_airdropper(self):
-        token_a_address_bytes = bytes.fromhex(self.token_a[2:])
-        token_a_address_solana = PublicKey.find_program_address([b"\1", token_a_address_bytes], EVM_LOADER_ID)[0]
-        wrapper_whitelist = [str(token_a_address_solana)]
-        print(f'Wrapper whitelist {wrapper_whitelist}')
-        log_level = 'INFO'
-        airdropper = Process(target=run_airdropper,
-                             args=(
-                                 SOLANA_URL,
-                                 EVM_LOADER_ID,
-                                 f'http://localhost:{FAUCET_RPC_PORT}',
-                                 wrapper_whitelist,
-                                 log_level
-                             ))
-        airdropper.start()
-
-
-        airdropper.terminate()
-        airdropper.join()
 
     @classmethod
     def tearDownClass(cls):
