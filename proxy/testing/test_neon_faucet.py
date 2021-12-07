@@ -288,7 +288,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         data = '{"delay": 1000}' # 1 second
         r = requests.post(url, data=data)
         if not r.ok:
-            self.faucet.terminate
+            self.faucet.terminate()
         with io.TextIOWrapper(self.faucet.stdout, encoding="utf-8") as out:
             for line in out:
                 print(line.strip())
