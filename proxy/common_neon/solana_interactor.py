@@ -199,17 +199,13 @@ def get_error_definition_from_reciept(receipt):
     if err_from_reciept_result is not None:
         return err_from_reciept_result
 
-    err_from_reciept_result_meta = get_from_dict(receipt, 'err', 'InstructionError')
-    if err_from_reciept_result_meta is not None:
-        return err_from_reciept_result_meta
-
     err_from_send_trx_error = get_from_dict(receipt, 'data', 'err', 'InstructionError')
     if err_from_send_trx_error is not None:
         return err_from_send_trx_error
 
-    err_from_send_trx_error_data = get_from_dict(receipt, 'err', 'InstructionError')
-    if err_from_send_trx_error_data is not None:
-        return err_from_send_trx_error_data
+    err_from_prepared_receipt = get_from_dict(receipt, 'err', 'InstructionError')
+    if err_from_prepared_receipt is not None:
+        return err_from_prepared_receipt
 
     return None
 
