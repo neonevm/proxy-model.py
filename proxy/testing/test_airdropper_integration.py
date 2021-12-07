@@ -26,126 +26,90 @@ import io
 install_solc(version='0.7.6')
 from solcx import compile_source
 
+EVM_LOADER_ID = PublicKey(EVM_LOADER_ID)
 PROXY_URL = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 FAUCET_RPC_PORT = 3333
-NAME = 'NEON'
-SYMBOL = 'NEO'
+NAME = 'TestToken'
+SYMBOL = 'TST'
 
 proxy = Web3(Web3.HTTPProvider(PROXY_URL))
 admin = proxy.eth.account.create('neonlabsorg/proxy-model.py/issues/344')
-account_from = proxy.eth.account.create('neonlabsorg/proxy-model.py/issues/344/account_from')
-account_to = proxy.eth.account.create('neonlabsorg/proxy-model.py/issues/344/account_to')
+proxy.eth.default_account = admin.address
 
+# Standard interface of ERC20 contract to generate ABI for wrapper
+ERC20_INTERFACE_SOURCE = '''
+pragma solidity >=0.7.0;
+
+interface IERC20 {
+    function decimals() external view returns (uint8);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address who) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function transfer(address to, uint256 value) external returns (bool);
+    function approve(address spender, uint256 value) external returns (bool);
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+
+    function approveSolana(bytes32 spender, uint64 value) external returns (bool);
+    event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 value);
+}
+'''
+
+# Copy of contract: https://github.com/neonlabsorg/neon-evm/blob/develop/evm_loader/SPL_ERC20_Wrapper.sol
 ERC20_CONTRACT_SOURCE = '''
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.7.0;
-// ----------------------------------------------------------------------------
-// Safe maths
-// ----------------------------------------------------------------------------
-contract SafeMath {
-    function safeAdd(uint a, uint b) public pure returns (uint c) {
-        c = a + b;
-        require(c >= a);
-    }
-    function safeSub(uint a, uint b) public pure returns (uint c) {
-        require(b <= a);
-        c = a - b;
-    }
+
+pragma solidity >=0.5.12;
+
+
+interface IERC20 {
+    function decimals() external view returns (uint8);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address who) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function transfer(address to, uint256 value) external returns (bool);
+    function approve(address spender, uint256 value) external returns (bool);
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+
+    function approveSolana(bytes32 spender, uint64 value) external returns (bool);
+    event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 value);
 }
-// ----------------------------------------------------------------------------
-// ERC Token Standard #20 Interface
-// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md
-// ----------------------------------------------------------------------------
-abstract contract ERC20Interface {
-    function totalSupply() virtual public view returns (uint);
-    function balanceOf(address tokenOwner) virtual public view returns (uint balance);
-    function allowance(address tokenOwner, address spender) virtual public view returns (uint remaining);
-    function transfer(address to, uint tokens) virtual public returns (bool success);
-    function approve(address spender, uint tokens) virtual public returns (bool success);
-    function transferFrom(address from, address to, uint tokens) virtual public returns (bool success);
-    event Transfer(address indexed from, address indexed to, uint tokens);
-    event Approval(address indexed tokenOwner, address indexed spender, uint tokens);
-}
-// ----------------------------------------------------------------------------
-// ERC20 Token, with the addition of symbol, name and decimals
-// assisted token transfers
-// ----------------------------------------------------------------------------
-contract TestToken is ERC20Interface, SafeMath {
+
+
+
+/*abstract*/ contract NeonERC20Wrapper /*is IERC20*/ {
+    address constant NeonERC20 = 0xff00000000000000000000000000000000000001;
+
+    string public name;
     string public symbol;
-    string public  name;
-    uint8 public decimals;
-    uint public _totalSupply;
-    mapping(address => uint) balances;
-    mapping(address => mapping(address => uint)) allowed;
-    // ------------------------------------------------------------------------
-    // Constructor
-    // ------------------------------------------------------------------------
-    constructor() {
-        symbol = "TST";
-        name = "TestToken";
-        decimals = 18;
-        _totalSupply = 100000000000000000000000000000000000000000;
-        balances[msg.sender] = _totalSupply;
-        emit Transfer(address(0), msg.sender, _totalSupply);
+    bytes32 public tokenMint;
+
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        bytes32 _tokenMint
+    ) {
+        name = _name;
+        symbol = _symbol;
+        tokenMint = _tokenMint;
     }
-    // ------------------------------------------------------------------------
-    // Total supply
-    // ------------------------------------------------------------------------
-    function totalSupply() public override view returns (uint) {
-        return _totalSupply - balances[address(0)];
-    }
-    // ------------------------------------------------------------------------
-    // Get the token balance for account tokenOwner
-    // ------------------------------------------------------------------------
-    function balanceOf(address tokenOwner) public override view returns (uint balance) {
-        return balances[tokenOwner];
-    }
-    // ------------------------------------------------------------------------
-    // Transfer the balance from token owner's account to receiver account
-    // - Owner's account must have sufficient balance to transfer
-    // - 0 value transfers are allowed
-    // ------------------------------------------------------------------------
-    function transfer(address receiver, uint tokens) public override returns (bool success) {
-        balances[msg.sender] = safeSub(balances[msg.sender], tokens);
-        balances[receiver] = safeAdd(balances[receiver], tokens);
-        emit Transfer(msg.sender, receiver, tokens);
-        return true;
-    }
-    // ------------------------------------------------------------------------
-    // Token owner can approve for spender to transferFrom(...) tokens
-    // from the token owner's account
-    //
-    // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md
-    // recommends that there are no checks for the approval double-spend attack
-    // as this should be implemented in user interfaces
-    // ------------------------------------------------------------------------
-    function approve(address spender, uint tokens) public override returns (bool success) {
-        allowed[msg.sender][spender] = tokens;
-        emit Approval(msg.sender, spender, tokens);
-        return true;
-    }
-    // ------------------------------------------------------------------------
-    // Transfer tokens from sender account to receiver account
-    //
-    // The calling account must already have sufficient tokens approve(...)-d
-    // for spending from sender account and
-    // - From account must have sufficient balance to transfer
-    // - Spender must have sufficient allowance to transfer
-    // - 0 value transfers are allowed
-    // ------------------------------------------------------------------------
-    function transferFrom(address sender, address receiver, uint tokens) public override returns (bool success) {
-        balances[sender] = safeSub(balances[sender], tokens);
-        allowed[sender][msg.sender] = safeSub(allowed[sender][msg.sender], tokens);
-        balances[receiver] = safeAdd(balances[receiver], tokens);
-        emit Transfer(sender, receiver, tokens);
-        return true;
-    }
-    // ------------------------------------------------------------------------
-    // Returns the amount of tokens approved by the owner that can be
-    // transferred to the spender's account
-    // ------------------------------------------------------------------------
-    function allowance(address tokenOwner, address spender) public override view returns (uint remaining) {
-        return allowed[tokenOwner][spender];
+
+    fallback() external {
+        bytes memory call_data = abi.encodePacked(tokenMint, msg.data);
+        (bool success, bytes memory result) = NeonERC20.delegatecall(call_data);
+
+        require(success, string(result));
+
+        assembly {
+            return(add(result, 0x20), mload(result))
+        }
     }
 }
 '''
@@ -175,6 +139,10 @@ class TestAirdropperIntegration(TestCase):
         )
 
     def deploy_erc20_wrapper_contract(self):
+        compiled_interface = compile_source(ERC20_INTERFACE_SOURCE)
+        interface_id, interface = compiled_interface.popitem()
+        self.interface = interface
+
         compiled_wrapper = compile_source(ERC20_CONTRACT_SOURCE)
         wrapper_id, wrapper_interface = compiled_wrapper.popitem()
         self.wrapper = wrapper_interface
@@ -202,7 +170,7 @@ class TestAirdropperIntegration(TestCase):
         faucet_env['NEON_ERC20_MAX_AMOUNT'] = '1000'
         faucet_env['FAUCET_SOLANA_ENABLE'] = 'true'
         faucet_env['SOLANA_URL'] = SOLANA_URL
-        faucet_env['EVM_LOADER'] = EVM_LOADER_ID
+        faucet_env['EVM_LOADER'] = str(EVM_LOADER_ID)
         faucet_env['NEON_TOKEN_MINT'] = str(ETH_TOKEN_MINT_ID)
         faucet_env['NEON_TOKEN_MINT_DECIMALS'] = '9'
         faucet_env['NEON_OPERATOR_KEYFILE'] = '/root/.config/solana/id.json'
@@ -230,7 +198,7 @@ class TestAirdropperIntegration(TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls.stop_faucet()
+        cls.stop_faucet(cls)
 
     def create_new_eth_account(self):
         seed = ''
@@ -245,16 +213,18 @@ class TestAirdropperIntegration(TestCase):
                                bytes(self.token.pubkey),
                                contract_address_bytes,
                                account_address_bytes]
-        return PublicKey.find_program_address(account_token_seeds, EVM_LOADER_ID)[0]
+        token_account = PublicKey.find_program_address(account_token_seeds, EVM_LOADER_ID)[0]
+        print(f"\n\n\nTOKEN ACCOUNT: {token_account}")
+        return token_account
 
     def create_eth_account_instr(self, eth_account):
         account_address_bytes = bytes.fromhex(eth_account.address[2:])
-        account_address_solana, nonce = PublicKey.find_program_address([b"\1", account_address_bytes], EVM_LOADER_ID)[0]
+        account_address_solana, nonce = PublicKey.find_program_address([b"\1", account_address_bytes], EVM_LOADER_ID)
         neon_token_account = get_associated_token_address(account_address_solana, ETH_TOKEN_MINT_ID)
 
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
-            data=create_account_layout(0, 0, bytes(eth_account.address), nonce),
+            data=create_account_layout(0, 0, account_address_bytes, nonce),
             keys=[
                 AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=True),
                 AccountMeta(pubkey=account_address_solana, is_signer=False, is_writable=True),
@@ -266,20 +236,21 @@ class TestAirdropperIntegration(TestCase):
                 AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
             ])
 
+    def get_neon_account_address(self, eth_address: str):
+        address_bytes = bytes.fromhex(eth_address[2:])
+        neon_acc = PublicKey.find_program_address([b"\1", address_bytes], EVM_LOADER_ID)[0]
+        print(f"\n\n\n\nNEON ACCOUNT: {neon_acc}")
+        return neon_acc
+
     def create_token_account_instr(self, eth_account):
-        contract_address_bytes = bytes.fromhex(self.contract_address[2:])
-        contract_address_solana = PublicKey.find_program_address([b"\1", contract_address_bytes], EVM_LOADER_ID)[0]
-        account_address_bytes = bytes.fromhex(eth_account.address[2:])
-        account_address_solana = PublicKey.find_program_address([b"\1", account_address_bytes], EVM_LOADER_ID)[0]
-        account_token_key = self.get_token_account_address(eth_account)
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=bytes.fromhex('0F'),
             keys=[
                 AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=True),
-                AccountMeta(pubkey=account_token_key, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=account_address_solana, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=contract_address_solana, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.get_token_account_address(eth_account), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.get_neon_account_address(eth_account.address), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.get_neon_account_address(self.contract_address), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.token.pubkey, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
@@ -289,11 +260,11 @@ class TestAirdropperIntegration(TestCase):
 
 
     def transfer_token_instr(self, from_eth_account, to_eth_account, amount):
-        transfer_params = TransferParams(self.token.pubkey,
-                                         self.get_token_account_address(from_eth_account),
-                                         self.get_token_account_address(to_eth_account),
-                                         self.get_token_account_address(from_eth_account),
-                                         amount)
+        transfer_params = TransferParams(program_id=self.token.pubkey,
+                                         source=self.get_token_account_address(from_eth_account),
+                                         dest=self.get_token_account_address(to_eth_account),
+                                         owner=self.solana_account.public_key(),
+                                         amount=amount)
         return transfer(transfer_params)
 
 
@@ -306,7 +277,7 @@ class TestAirdropperIntegration(TestCase):
 
 
     def get_token_balance(self, token_address, address):
-        erc20 = proxy.eth.contract(address=token_address, abi=self.contract['abi'])
+        erc20 = proxy.eth.contract(address=token_address, abi=self.interface['abi'])
         return erc20.functions.balanceOf(address).call()
 
 
@@ -321,13 +292,15 @@ class TestAirdropperIntegration(TestCase):
         transfer_amount = 100
 
         self.create_token_account(from_eth_account)
-        self.mint_to_account(from_eth_account, 1000)
+        #self.mint_to_account(from_eth_account, 1000000000)
 
-        trx = Transaction()
-        trx.add(self.create_eth_account_instr(to_eth_account))
-        trx.add(self.create_token_account_instr(to_eth_account))
-        trx.add(self.transfer_token_instr(from_eth_account, to_eth_account, transfer_amount))
-        self.solana_client.send_transaction(trx, self.solana_account,
-                                            opts=TxOpts(skip_preflight=True,
-                                                        skip_confirmation=False))
+        #print(f"From token balance: {self.get_token_balance(self.contract_address, from_eth_account.address)}")
+
+        #trx = Transaction()
+        #trx.add(self.create_eth_account_instr(to_eth_account))
+        #trx.add(self.create_token_account_instr(to_eth_account))
+        #trx.add(self.transfer_token_instr(from_eth_account, to_eth_account, transfer_amount))
+        #self.solana_client.send_transaction(trx, self.solana_account,
+        #                                    opts=TxOpts(skip_preflight=True,
+        #                                                skip_confirmation=False))
 
