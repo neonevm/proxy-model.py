@@ -40,7 +40,7 @@ class neon_cli:
                    "--url", SOLANA_URL,
                    "--evm_loader={}".format(EVM_LOADER_ID),
                    ]\
-                  + ["-vvv"] if LOG_NEON_CLI_DEBUG else []\
+                  + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
             logger.debug("Calling: " + " ".join(cmd))
             return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True)
