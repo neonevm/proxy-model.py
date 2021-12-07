@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from solcx import compile_source
+from solcx import install_solc
 from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from spl.token.client import Token as SplToken
@@ -22,6 +22,9 @@ import json
 import subprocess
 import requests
 import io
+
+install_solc(version='0.7.6')
+from solcx import compile_source
 
 PROXY_URL = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 FAUCET_RPC_PORT = 3333
@@ -219,11 +222,13 @@ class TestAirdropperIntegration(TestCase):
             for line in out:
                 print(line.strip())
 
+    @classmethod
     def setUpClass(cls) -> None:
-        cls.create_token_mint()
-        cls.deploy_erc20_wrapper_contract()
-        cls.start_faucet()
+        cls.create_token_mint(cls)
+        cls.deploy_erc20_wrapper_contract(cls)
+        cls.start_faucet(cls)
 
+    @classmethod
     def tearDownClass(cls) -> None:
         cls.stop_faucet()
 

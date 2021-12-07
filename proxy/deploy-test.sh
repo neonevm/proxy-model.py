@@ -15,7 +15,7 @@ solana address
 solana airdrop 1000
 solana balance
 
-python3 -m unittest discover -v -p 'test*.py'
+python3 -m unittest discover -p 'test_airdropper_integration.py'
 
 echo "Deploy test success"
 exit 0
