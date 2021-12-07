@@ -103,7 +103,7 @@ class SolanaInteractor:
             measurements = self.extract_measurements_from_receipt(result)
             for m in measurements: logger.info(json.dumps(m))
         except Exception as err:
-            logger.warning("Can't get measurements %s"%err)
+            logger.error("Can't get measurements %s"%err)
             logger.info("Failed result: %s"%json.dumps(result, indent=3))
 
 
@@ -133,6 +133,11 @@ class SolanaInteractor:
 
     @staticmethod
     def extract_measurements_from_receipt(receipt):
+        if check_for_errors(receipt):
+            logger.warning("Can't get measurements from receipt with error")
+            logger.info("Failed result: %s"%json.dumps(receipt, indent=3))
+            return []
+
         log_messages = receipt['result']['meta']['logMessages']
         transaction = receipt['result']['transaction']
         accounts = transaction['message']['accountKeys']
@@ -185,8 +190,39 @@ class SolanaInteractor:
         return result
 
 
-def check_if_program_exceeded_instructions(err_result):
-    error_arr = get_from_dict(err_result, "err", "InstructionError")
+def get_error_definition_from_reciept(receipt):
+    err_from_reciept = get_from_dict(receipt, 'result', 'meta', 'err', 'InstructionError')
+    if err_from_reciept is not None:
+        return err_from_reciept
+
+    err_from_reciept_result = get_from_dict(receipt, 'meta', 'err', 'InstructionError')
+    if err_from_reciept_result is not None:
+        return err_from_reciept_result
+
+    err_from_reciept_result_meta = get_from_dict(receipt, 'err', 'InstructionError')
+    if err_from_reciept_result_meta is not None:
+        return err_from_reciept_result_meta
+
+    err_from_send_trx_error = get_from_dict(receipt, 'data', 'err', 'InstructionError')
+    if err_from_send_trx_error is not None:
+        return err_from_send_trx_error
+
+    err_from_send_trx_error_data = get_from_dict(receipt, 'err', 'InstructionError')
+    if err_from_send_trx_error_data is not None:
+        return err_from_send_trx_error_data
+
+    return None
+
+
+
+def check_for_errors(receipt):
+    if get_error_definition_from_reciept(receipt) is not None:
+        return True
+    return False
+
+
+def check_if_program_exceeded_instructions(receipt):
+    error_arr = get_error_definition_from_reciept(receipt)
     if error_arr is not None and isinstance(error_arr, list):
         error_type = error_arr[1]
         if isinstance(error_type, str):
@@ -197,8 +233,8 @@ def check_if_program_exceeded_instructions(err_result):
     return False
 
 
-def check_if_storage_is_empty_error(err_result):
-    error_arr = get_from_dict(err_result, "err", "InstructionError")
+def check_if_storage_is_empty_error(receipt):
+    error_arr = get_error_definition_from_reciept(receipt)
     if error_arr is not None and isinstance(error_arr, list):
         error_dict = error_arr[1]
         if isinstance(error_dict, dict) and 'Custom' in error_dict:
