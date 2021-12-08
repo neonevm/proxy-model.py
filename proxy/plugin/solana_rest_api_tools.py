@@ -487,7 +487,7 @@ def call_emulated(contract_id, caller_id, data=None, value=None):
         offset = int(result_value[8:8+64], 16)
         length = int(result_value[8+64:8+64+64], 16)
         message = str(bytes.fromhex(result_value[8+offset*2+64:8+offset*2+64+length*2]), 'utf8')
-        raise EthereumError(code=3, message='execution reverted: '+message, data='0x'+result_value)
+        raise EthereumError(code=3, message=message, data='0x'+result_value)
     if result["exit_status"] != "succeed":
         raise Exception("evm emulator error ", result)
     return result

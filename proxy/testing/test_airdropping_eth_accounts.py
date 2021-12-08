@@ -1,17 +1,16 @@
 import unittest
 import os
-import solcx
+
 
 import eth_account
 import eth_typing
 import eth_utils
 
 from eth_account.account import LocalAccount
-from web3 import Web3
 from solana.rpc.api import Client as SolanaClient
 
 from ..plugin.solana_rest_api_tools import get_token_balance_gwei, ether2program
-from .testing_helpers import compile_and_deploy_contract
+from .testing_helpers import SolidityContractDeployer
 
 
 class TestAirdroppingEthAccounts(unittest.TestCase):
@@ -21,8 +20,9 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         new_user_airdrop_amount = int(os.environ.get("NEW_USER_AIRDROP_AMOUNT", "0"))
         cls._EXPECTED_BALANCE_WEI = eth_utils.to_wei(new_user_airdrop_amount, 'ether')
 
-        proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-        cls._web3 = Web3(Web3.HTTPProvider(proxy_url))
+        cls._contract_deployer = SolidityContractDeployer()
+        cls._web3 = cls._contract_deployer.web3
+
         solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
         cls._solana_client = SolanaClient(solana_url)
 
@@ -34,13 +34,13 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
 
     def test_airdrop_on_deploy(self):
         contract_owner: LocalAccount = self._web3.eth.account.create()
-        contract = compile_and_deploy_contract(contract_owner, self._CONTRACT_STORAGE_SOURCE)
+        contract = self._contract_deployer.compile_and_deploy_contract(contract_owner, self._CONTRACT_STORAGE_SOURCE)
         actual_balance_wei = self._get_balance_wei(contract.address)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, actual_balance_wei)
 
     def test_airdrop_onto_wrapped_new_address(self):
         contract_owner: LocalAccount = self._web3.eth.account.create()
-        contract = compile_and_deploy_contract(contract_owner, self._WRAPPER_CONTRACT_STORAGE_SOURCE)
+        contract = self._contract_deployer.compile_and_deploy_contract(contract_owner, self._WRAPPER_CONTRACT_STORAGE_SOURCE)
         nested_contract_address = contract.functions.getNested().call()
         nested_actual_balance = self._get_balance_wei(nested_contract_address)
         wrapper_actual_balance = self._get_balance_wei(contract.address)
@@ -49,9 +49,8 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
 
     def test_airdrop_on_deploy_estimation(self):
         owner_eth_account: LocalAccount = self._web3.eth.account.create()
-        compile_result = solcx.compile_source(self._CONTRACT_STORAGE_SOURCE)
-        _, contract_interface = compile_result.popitem()
-        contract_data = contract_interface.get("bin")
+        compiled_info = self._contract_deployer.compile_contract(self._CONTRACT_STORAGE_SOURCE)
+        contract_data = compiled_info.contract_interface.get("bin")
         self.assertIsNotNone(contract_data)
         self._web3.eth.estimate_gas({"from": owner_eth_account.address, "data": contract_data})
         owner_balance = self._get_balance_wei(owner_eth_account.address)
