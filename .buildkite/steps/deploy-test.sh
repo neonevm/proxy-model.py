@@ -79,6 +79,10 @@ docker run --rm -ti --network=container:proxy \
      -e SOLANA_URL \
      -e EXTRA_GAS=100000 \
      -e NEW_USER_AIRDROP_AMOUNT=100 \
+     -e POSTGRES_DB=neon-db \
+     -e POSTGRES_USER=neon-proxy \
+     -e POSTGRES_PASSWORD=neon-proxy-pass \
+     -e POSTGRES_HOST=postgres \
      --entrypoint ./proxy/deploy-test.sh \
      ${EXTRA_ARGS:-} \
      $PROXY_IMAGE \
@@ -88,6 +92,7 @@ docker run --rm -ti --network=host \
      --entrypoint ./deploy-test.sh \
      ${EXTRA_ARGS:-} \
      $UNISWAP_V2_CORE_IMAGE \
+     all
 
 echo "Run tests return"
 exit 0
