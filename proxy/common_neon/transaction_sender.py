@@ -21,7 +21,6 @@ from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_for_errors,\
     check_if_program_exceeded_instructions, check_if_storage_is_empty_error
-from .utils import get_from_dict
 from ..environment import EVM_LOADER_ID
 from ..plugin.eth_proto import Trx as EthTrx
 
@@ -432,7 +431,7 @@ class IterativeTransactionSender:
                 result = self.sender.send_measured_transaction(trx, self.eth_trx, 'ContinueV02')
                 return result
             except SendTransactionError as err:
-                if check_if_program_exceeded_instructions(err.result['data']):
+                if check_if_program_exceeded_instructions(err.result):
                     step_count = int(step_count * 90 / 100)
                 else:
                     raise
@@ -458,9 +457,9 @@ class IterativeTransactionSender:
                 receipts.append(self.sender.send_transaction_unconfirmed(trx))
             except SendTransactionError as err:
                 logger.error(f"Failed to call continue bucked, error: {err.result}")
-                if check_if_storage_is_empty_error(err.result['data']):
+                if check_if_storage_is_empty_error(err.result):
                     pass
-                elif check_if_program_exceeded_instructions(err.result['data']):
+                elif check_if_program_exceeded_instructions(err.result):
                     steps = int(steps * 90 / 100)
                 else:
                     raise
