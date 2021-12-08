@@ -307,6 +307,16 @@ class TestAirdropperIntegration(TestCase):
                            self.solana_account, amount,
                            opts=TxOpts(skip_preflight=True, skip_confirmation=False))
 
+    def get_token_address(self,
+                          eth_address,
+                          eth_contract_address,
+                          sol_contract_mint: PublicKey):
+        eth_contract_address_bytes = bytes.fromhex(eth_contract_address[2:])
+        eth_address_bytes = bytes.fromhex(eth_address[2:])
+        admin_token_seeds = [b"\1", b"ERC20Balance", bytes(sol_contract_mint), eth_contract_address_bytes,
+                             eth_address_bytes]
+        return PublicKey.find_program_address(admin_token_seeds, EVM_LOADER_ID)[0]
+
     def test_success_airdrop_simple_case(self):
         contract_address_bytes = bytes.fromhex(self.contract_address[2:])
         contract_address_solana = PublicKey.find_program_address([b"\1", contract_address_bytes], EVM_LOADER_ID)[0]
@@ -330,6 +340,9 @@ class TestAirdropperIntegration(TestCase):
 
 
         neon_token_account = get_associated_token_address(dest_address_solana, ETH_TOKEN_MINT_ID)
+
+
+        print(f"\n\n\nTOKEN BALANCE: {self.get_token_balance(self.contract_address, admin.address)}")
 
 
         trx = Transaction()
@@ -367,7 +380,7 @@ class TestAirdropperIntegration(TestCase):
                                          dest=dest_token_key,
                                          owner=self.solana_account.public_key(),
                                          amount=100000)
-        trx.add(transfer(transfer_params))
+        #trx.add(transfer(transfer_params))
 
 
         self.solana_client.send_transaction(trx, self.solana_account,
