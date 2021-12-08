@@ -288,57 +288,9 @@ class TestAirdropperIntegration(TestCase):
         )
 
     def test_success_airdrop_simple_case(self):
-        contract_address_solana = self.get_evm_loader_account_address(self.contract_address)[0]
-        dest_address_solana, nonce = self.get_evm_loader_account_address(dest.address)
-        dest_token_wallet = self.get_erc20_token_wallet_address(dest.address, self.contract_address, self.token.pubkey)
-        neon_token_account = get_associated_token_address(dest_address_solana, ETH_TOKEN_MINT_ID)
-
         trx = Transaction()
-        createAccountInstr = TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=create_account_layout(0, 0, bytes.fromhex(dest.address[2:]), nonce),
-            keys=[
-                AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=True),
-                AccountMeta(pubkey=dest_address_solana, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=neon_token_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
-            ])
-
-        #trx.add(createAccountInstr)
         trx.add(self.create_account_instruction(dest.address))
-
-        createErc20AccountInstr = TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=bytes.fromhex('0F'),
-            keys=[
-                AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=True),
-                AccountMeta(pubkey=dest_token_wallet, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=dest_address_solana, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=contract_address_solana, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.token.pubkey, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
-            ]
-        )
-
-        #trx.add(createErc20AccountInstr)
         trx.add(self.create_token_account_instruction(dest.address))
-
-        transferTokenInstr = TransactionInstruction(
-            program_id=TOKEN_PROGRAM_ID,
-            data=bytes.fromhex('0340420f0000000000'),
-            keys=[
-                AccountMeta(pubkey=self.source_token_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=dest_token_wallet, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=False)
-            ]
-        )
-        #trx.add(transferTokenInstr)
         trx.add(self.create_input_liquidity_instruction(self.source_token_account, dest.address, 100000))
 
         resp = self.solana_client.send_transaction(trx, self.solana_account,
