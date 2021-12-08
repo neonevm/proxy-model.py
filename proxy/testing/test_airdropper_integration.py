@@ -33,7 +33,8 @@ NAME = 'TestToken'
 SYMBOL = 'TST'
 
 proxy = Web3(Web3.HTTPProvider(PROXY_URL))
-admin = proxy.eth.account.create('neonlabsorg/proxy-model.py/issues/344')
+admin = proxy.eth.account.create('neonlabsorg/proxy-model.py/issues/344/admin')
+dest = proxy.eth.account.create('neonlabsorg/proxy-model.py/issues/344/dest')
 proxy.eth.default_account = admin.address
 
 # Standard interface of ERC20 contract to generate ABI for wrapper
@@ -159,6 +160,25 @@ class TestAirdropperIntegration(TestCase):
         print('deploy status:', tx_deploy_receipt.status)
         self.contract_address = tx_deploy_receipt.contractAddress
 
+    def create_token_accounts(self):
+        contract_address_bytes = bytes.fromhex(self.contract_address[2:])
+        contract_address_solana = PublicKey.find_program_address([b"\1", contract_address_bytes], EVM_LOADER_ID)[0]
+
+        admin_address_bytes = bytes.fromhex(admin.address[2:])
+        admin_address_solana = PublicKey.find_program_address([b"\1", admin_address_bytes], EVM_LOADER_ID)[0]
+
+        admin_token_seeds = [b"\1", b"ERC20Balance", bytes(self.token.pubkey), contract_address_bytes,
+                             admin_address_bytes]
+        admin_token_key = PublicKey.find_program_address(admin_token_seeds, EVM_LOADER_ID)[0]
+        admin_token_info = {"key": admin_token_key, "owner": admin_address_solana, "contract": contract_address_solana,
+                            "mint": self.token.pubkey}
+
+        instr = NeonInstruction(self.solana_account.public_key()).createERC20TokenAccountTrx(admin_token_info)
+        self.solana_client.send_transaction(instr, self.solana_account,
+                                            opts=TxOpts(skip_preflight=True, skip_confirmation=False))
+        self.token.mint_to(admin_token_key, self.solana_account, 10_000_000_000_000,
+                           opts=TxOpts(skip_preflight=True, skip_confirmation=False))
+
     def start_faucet(self):
         faucet_env = os.environ.copy()
         faucet_env['FAUCET_RPC_PORT'] = str(FAUCET_RPC_PORT)
@@ -194,6 +214,7 @@ class TestAirdropperIntegration(TestCase):
     def setUpClass(cls) -> None:
         cls.create_token_mint(cls)
         cls.deploy_erc20_wrapper_contract(cls)
+        cls.create_token_accounts(cls)
         cls.start_faucet(cls)
 
     @classmethod
@@ -287,20 +308,68 @@ class TestAirdropperIntegration(TestCase):
                            opts=TxOpts(skip_preflight=True, skip_confirmation=False))
 
     def test_success_airdrop_simple_case(self):
-        from_eth_account = self.create_new_eth_account()
-        to_eth_account = self.create_new_eth_account()
-        transfer_amount = 100
+        contract_address_bytes = bytes.fromhex(self.contract_address[2:])
+        contract_address_solana = PublicKey.find_program_address([b"\1", contract_address_bytes], EVM_LOADER_ID)[0]
 
-        self.create_token_account(from_eth_account)
-        #self.mint_to_account(from_eth_account, 1000000000)
 
-        #print(f"From token balance: {self.get_token_balance(self.contract_address, from_eth_account.address)}")
 
-        #trx = Transaction()
-        #trx.add(self.create_eth_account_instr(to_eth_account))
-        #trx.add(self.create_token_account_instr(to_eth_account))
-        #trx.add(self.transfer_token_instr(from_eth_account, to_eth_account, transfer_amount))
-        #self.solana_client.send_transaction(trx, self.solana_account,
-        #                                    opts=TxOpts(skip_preflight=True,
-        #                                                skip_confirmation=False))
+        dest_address_bytes = bytes.fromhex(dest.address[2:])
+        dest_address_solana, nonce = PublicKey.find_program_address([b"\1", dest_address_bytes], EVM_LOADER_ID)
+        dest_token_seeds = [b"\1", b"ERC20Balance", bytes(self.token.pubkey), contract_address_bytes,
+                             dest_address_bytes]
+        dest_token_key = PublicKey.find_program_address(dest_token_seeds, EVM_LOADER_ID)[0]
+        dest_token_info = {"key": dest_token_key, "owner": dest_address_solana, "contract": contract_address_solana,
+                            "mint": self.token.pubkey}
 
+
+        admin_address_bytes = bytes.fromhex(admin.address[2:])
+        admin_token_seeds = [b"\1", b"ERC20Balance", bytes(self.token.pubkey), contract_address_bytes,
+                             admin_address_bytes]
+        admin_token_key = PublicKey.find_program_address(admin_token_seeds, EVM_LOADER_ID)[0]
+
+
+
+        neon_token_account = get_associated_token_address(dest_address_solana, ETH_TOKEN_MINT_ID)
+
+
+        trx = Transaction()
+        trx.add(TransactionInstruction(
+            program_id=EVM_LOADER_ID,
+            data=create_account_layout(0, 0, dest_address_bytes, nonce),
+            keys=[
+                AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=dest_address_solana, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=neon_token_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
+            ]))
+
+        trx.add(TransactionInstruction(
+            program_id=EVM_LOADER_ID,
+            data=bytes.fromhex('0F'),
+            keys=[
+                AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=dest_token_info["key"], is_signer=False, is_writable=True),
+                AccountMeta(pubkey=dest_token_info["owner"], is_signer=False, is_writable=True),
+                AccountMeta(pubkey=dest_token_info["contract"], is_signer=False, is_writable=True),
+                AccountMeta(pubkey=dest_token_info["mint"], is_signer=False, is_writable=True),
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
+            ]
+        ))
+
+        transfer_params = TransferParams(program_id=self.token.pubkey,
+                                         source=admin_token_key,
+                                         dest=dest_token_key,
+                                         owner=self.solana_account.public_key(),
+                                         amount=100000)
+        trx.add(transfer(transfer_params))
+
+
+        self.solana_client.send_transaction(trx, self.solana_account,
+                                            opts=TxOpts(skip_preflight=True,
+                                                        skip_confirmation=False))
