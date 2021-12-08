@@ -4,13 +4,12 @@ import solcx
 from eth_account.account import LocalAccount
 from web3 import Web3, eth as web3_eth
 import eth_utils
-from typing import Union, Type, Any, Tuple
+from typing import Union, Type, Any, Dict
 
 
 @dataclasses.dataclass
 class ContractCompiledInfo:
-    contract_id: Any
-    contract_interface: Any
+    contract_interface: Dict
     contract: web3_eth.Contract
 
 
@@ -25,9 +24,9 @@ class SolidityContractDeployer:
     def compile_contract(self, solidity_source_code: str) -> ContractCompiledInfo:
         """Returns tuple of """
         compile_result = solcx.compile_source(solidity_source_code)
-        contract_id, contract_interface = compile_result.popitem()
+        _, contract_interface = compile_result.popitem()
         contract = self._web3.eth.contract(abi=contract_interface['abi'], bytecode=contract_interface['bin'])
-        return ContractCompiledInfo(contract_id, contract_interface, contract)
+        return ContractCompiledInfo(contract_interface, contract)
 
     def compile_and_deploy_contract(self, contract_owner: LocalAccount, solidity_source_code: str) -> _CONTRACT_TYPE:
         compiled_info = self.compile_contract(solidity_source_code)
