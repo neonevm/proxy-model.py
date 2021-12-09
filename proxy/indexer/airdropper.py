@@ -73,7 +73,6 @@ class Airdropper(IndexerBase):
 
     def _airdrop_to(self, create_acc):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
-        print(f"call _airdrop_to({eth_address})")
         if eth_address in self.airdrop_ready:  # transaction already processed
             return
 

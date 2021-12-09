@@ -136,15 +136,7 @@ class TestAirdropperIntegration(TestCase):
     def setUpClass(cls) -> None:
         cls.create_token_mint(cls)
         cls.deploy_erc20_wrapper_contract(cls)
-        cls.start_faucet(cls)
-        #cls.start_airdropper(cls)
         cls.acc_num = 0
-
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        #cls.stop_airdropper(cls)
-        cls.stop_faucet(cls)
 
 
     def create_token_mint(self):
@@ -192,55 +184,6 @@ class TestAirdropperIntegration(TestCase):
         print('tx_deploy_receipt:', tx_deploy_receipt)
         print('deploy status:', tx_deploy_receipt.status)
         self.contract_address = tx_deploy_receipt.contractAddress
-
-
-    def start_airdropper(self):
-        contract_sol_address, nonce = get_evm_loader_account_address(self.contract_address)
-        self.airdropper = Process(target=run_airdropper,
-                                  args=(SOLANA_URL,
-                                        EVM_LOADER_ID,
-                                        f'http://localhost:{FAUCET_RPC_PORT}',
-                                        [contract_sol_address.to_base58()],
-                                        'DEBUG'))
-        self.airdropper.start()
-
-
-    def stop_airdropper(self):
-        self.airdropper.terminate()
-        self.airdropper.join()
-
-
-    def start_faucet(self):
-        faucet_env = os.environ.copy()
-        faucet_env['FAUCET_RPC_PORT'] = str(FAUCET_RPC_PORT)
-        faucet_env['FAUCET_RPC_ALLOWED_ORIGINS'] = 'http://localhost'
-        faucet_env['FAUCET_WEB3_ENABLE'] = 'true'
-        faucet_env['WEB3_RPC_URL'] = PROXY_URL
-        faucet_env['WEB3_PRIVATE_KEY'] = admin.key.hex()
-        faucet_env['NEON_ERC20_TOKENS'] = self.contract_address
-        faucet_env['NEON_ERC20_MAX_AMOUNT'] = '1000'
-        faucet_env['FAUCET_SOLANA_ENABLE'] = 'true'
-        faucet_env['SOLANA_URL'] = SOLANA_URL
-        faucet_env['EVM_LOADER'] = str(EVM_LOADER_ID)
-        faucet_env['NEON_TOKEN_MINT'] = str(ETH_TOKEN_MINT_ID)
-        faucet_env['NEON_TOKEN_MINT_DECIMALS'] = '9'
-        faucet_env['NEON_OPERATOR_KEYFILE'] = '/root/.config/solana/id.json'
-        faucet_env['NEON_ETH_MAX_AMOUNT'] = '10'
-        self.faucet = subprocess.Popen(['faucet', 'run', '--workers', '1'],
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.STDOUT,
-                                       env=faucet_env)
-
-
-    def stop_faucet(self):
-        url = f'http://localhost:{FAUCET_RPC_PORT}/request_stop'
-        data = '{"delay": 1000}' # 1 second
-        r = requests.post(url, data=data)
-        if not r.ok:
-            self.faucet.terminate()
-        with io.TextIOWrapper(self.faucet.stdout, encoding="utf-8") as out:
-            for line in out:
-                print(line.strip())
 
 
     def get_token_balance(self, token_address, address):
@@ -333,7 +276,6 @@ class TestAirdropperIntegration(TestCase):
         from_token = self.create_token_account(from_owner.public_key(), self.token, self.mint_authority)
         to_eth_account = self.create_eth_account()
 
-        #self.assertEqual(proxy.eth.get_balance(to_eth_account.address), 0)
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account.address), 0)
 
         trx = Transaction()
@@ -355,4 +297,5 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account.address), 123456)
         sleep(10)
         eth_balance = proxy.eth.get_balance(to_eth_account.address)
-        self.assertTrue(eth_balance > 0 and eth_balance < 10)
+        print("NEON balance is: ", eth_balance)
+        self.assertTrue(eth_balance > 0 and eth_balance < 10 * pow(10, 18)) # 10 NEON is a max airdrop amount
