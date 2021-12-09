@@ -117,17 +117,33 @@ interface IERC20 {
 }
 '''
 
+# Helper function calculating solana address and nonce from given NEON(Ethereum) address
+def get_evm_loader_account_address(eth_address: str):
+    eth_addressbytes = bytes.fromhex(eth_address[2:])
+    return PublicKey.find_program_address([b"\1", eth_addressbytes], EVM_LOADER_ID)
+
+# Helper function calculating ERC20 wallet solana address
+def get_erc20_token_wallet_address(eth_address: str,
+                                   eth_contract_address: str,
+                                   mint_pubkey: PublicKey):
+    eth_contract_address_bytes = bytes.fromhex(eth_contract_address[2:])
+    eth_address_bytes = bytes.fromhex(eth_address[2:])
+    seeds = [b"\1", b"ERC20Balance", bytes(mint_pubkey), eth_contract_address_bytes, eth_address_bytes]
+    return PublicKey.find_program_address(seeds, EVM_LOADER_ID)[0]
+
 class TestAirdropperIntegration(TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.create_token_mint(cls)
         cls.deploy_erc20_wrapper_contract(cls)
         cls.start_faucet(cls)
+        #cls.start_airdropper(cls)
         cls.acc_num = 0
 
 
     @classmethod
     def tearDownClass(cls) -> None:
+        #cls.stop_airdropper(cls)
         cls.stop_faucet(cls)
 
 
@@ -179,12 +195,13 @@ class TestAirdropperIntegration(TestCase):
 
 
     def start_airdropper(self):
-        contract_sol_address = self.get_evm_loader_account_address(self.contract_address)[0].to_base58()
+        contract_sol_address, nonce = get_evm_loader_account_address(self.contract_address)
         self.airdropper = Process(target=run_airdropper,
                                   args=(SOLANA_URL,
                                         EVM_LOADER_ID,
                                         f'http://localhost:{FAUCET_RPC_PORT}',
-                                        [contract_sol_address]))
+                                        [contract_sol_address.to_base58()],
+                                        'DEBUG'))
         self.airdropper.start()
 
 
@@ -231,23 +248,8 @@ class TestAirdropperIntegration(TestCase):
         return erc20.functions.balanceOf(address).call()
 
 
-
-    def get_evm_loader_account_address(self, eth_address: str):
-        eth_addressbytes = bytes.fromhex(eth_address[2:])
-        return PublicKey.find_program_address([b"\1", eth_addressbytes], EVM_LOADER_ID)
-
-
-    def get_erc20_token_wallet_address(self,
-                                       eth_address: str,
-                                       eth_contract_address: str,
-                                       mint_pubkey: PublicKey):
-        eth_contract_address_bytes = bytes.fromhex(eth_contract_address[2:])
-        eth_address_bytes = bytes.fromhex(eth_address[2:])
-        seeds = [b"\1", b"ERC20Balance", bytes(mint_pubkey), eth_contract_address_bytes, eth_address_bytes]
-        return PublicKey.find_program_address(seeds, EVM_LOADER_ID)[0]
-
     def create_account_instruction(self, eth_address: str, payer: PublicKey):
-        dest_address_solana, nonce = self.get_evm_loader_account_address(eth_address)
+        dest_address_solana, nonce = get_evm_loader_account_address(eth_address)
         neon_token_account = get_associated_token_address(dest_address_solana, ETH_TOKEN_MINT_ID)
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
@@ -268,9 +270,9 @@ class TestAirdropperIntegration(TestCase):
                                                eth_contract_address: str,
                                                token_mint: PublicKey,
                                                payer: PublicKey):
-        dest_address_solana, nonce = self.get_evm_loader_account_address(eth_address)
-        contract_address_solana = self.get_evm_loader_account_address(eth_contract_address)[0]
-        dest_token_wallet = self.get_erc20_token_wallet_address(eth_address, eth_contract_address, token_mint)
+        dest_address_solana, nonce = get_evm_loader_account_address(eth_address)
+        contract_address_solana = get_evm_loader_account_address(eth_contract_address)[0]
+        dest_token_wallet = get_erc20_token_wallet_address(eth_address, eth_contract_address, token_mint)
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=bytes.fromhex('0F'),
@@ -293,7 +295,7 @@ class TestAirdropperIntegration(TestCase):
                                            eth_contract_address: str,
                                            token_mint: PublicKey,
                                            payer: PublicKey):
-        dest_token_wallet = self.get_erc20_token_wallet_address(eth_to_address, eth_contract_address, token_mint)
+        dest_token_wallet = get_erc20_token_wallet_address(eth_to_address, eth_contract_address, token_mint)
         return TransactionInstruction(
             program_id=TOKEN_PROGRAM_ID,
             data=b'\3' + struct.pack('<Q', amount),
@@ -351,3 +353,6 @@ class TestAirdropperIntegration(TestCase):
                                                                skip_confirmation=False))
 
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account.address), 123456)
+        sleep(10)
+        eth_balance = proxy.eth.get_balance(to_eth_account.address)
+        self.assertTrue(eth_balance > 0 and eth_balance < 10)
