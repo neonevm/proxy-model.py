@@ -294,8 +294,53 @@ class TestAirdropperIntegration(TestCase):
                                                    opts=TxOpts(skip_preflight=True,
                                                                skip_confirmation=False))
 
+        sleep(15)
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account.address), 123456)
-        sleep(10)
         eth_balance = proxy.eth.get_balance(to_eth_account.address)
         print("NEON balance is: ", eth_balance)
         self.assertTrue(eth_balance > 0 and eth_balance < 10 * pow(10, 18)) # 10 NEON is a max airdrop amount
+
+    def test_success_airdrop_complex_case(self):
+        from_owner = self.create_sol_account()
+        from_token = self.create_token_account(from_owner.public_key(), self.token, self.mint_authority)
+        to_eth_account1 = self.create_eth_account()
+        to_eth_account2 = self.create_eth_account()
+
+        self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account1.address), 0)
+        self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account2.address), 0)
+
+        trx = Transaction()
+        trx.add(self.create_account_instruction(to_eth_account1.address, from_owner.public_key()))
+        trx.add(self.create_account_instruction(to_eth_account2.address, from_owner.public_key()))
+        trx.add(self.create_erc20_token_account_instruction(to_eth_account1.address,
+                                                            self.contract_address,
+                                                            self.token.pubkey,
+                                                            from_owner.public_key()))
+        trx.add(self.create_erc20_token_account_instruction(to_eth_account2.address,
+                                                            self.contract_address,
+                                                            self.token.pubkey,
+                                                            from_owner.public_key()))
+        trx.add(self.create_input_liquidity_instruction(from_token,
+                                                        to_eth_account1.address, 123456,
+                                                        self.contract_address,
+                                                        self.token.pubkey,
+                                                        from_owner.public_key()))
+        trx.add(self.create_input_liquidity_instruction(from_token,
+                                                        to_eth_account2.address, 654321,
+                                                        self.contract_address,
+                                                        self.token.pubkey,
+                                                        from_owner.public_key()))
+
+        resp = self.solana_client.send_transaction(trx, from_owner,
+                                                   opts=TxOpts(skip_preflight=True,
+                                                               skip_confirmation=False))
+
+        sleep(45)
+        self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account1.address), 123456)
+        self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account2.address), 654321)
+        eth_balance1 = proxy.eth.get_balance(to_eth_account1.address)
+        eth_balance2 = proxy.eth.get_balance(to_eth_account2.address)
+        print("NEON balance 1 is: ", eth_balance1)
+        print("NEON balance 2 is: ", eth_balance2)
+        self.assertTrue(eth_balance1 > 0 and eth_balance1 < 10 * pow(10, 18)) # 10 NEON is a max airdrop amount
+        self.assertTrue(eth_balance2 > 0 and eth_balance2 < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
