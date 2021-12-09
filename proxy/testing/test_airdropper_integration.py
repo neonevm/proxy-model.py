@@ -4,7 +4,7 @@ from solcx import install_solc
 from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from spl.token.client import Token as SplToken
-from spl.token.instructions import get_associated_token_address, transfer, TransferParams
+from spl.token.instructions import get_associated_token_address
 from proxy.environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID
 from solana.system_program import SYS_PROGRAM_ID
 from solana.sysvar import SYSVAR_RENT_PUBKEY
@@ -13,9 +13,11 @@ from solana.rpc.commitment import Confirmed
 from solana.publickey import PublicKey
 from solana.rpc.types import TxOpts
 from solana.transaction import TransactionInstruction, Transaction, AccountMeta
-from proxy.common_neon.neon_instruction import NeonInstruction, create_account_layout
+from proxy.common_neon.neon_instruction import create_account_layout
 from time import sleep
 from web3 import Web3
+from proxy.indexer.airdropper import run_airdropper
+from multiprocessing import Process
 import struct
 import os
 import json
@@ -120,8 +122,8 @@ class TestAirdropperIntegration(TestCase):
     def setUpClass(cls) -> None:
         cls.create_token_mint(cls)
         cls.deploy_erc20_wrapper_contract(cls)
-        cls.create_token_accounts(cls)
         cls.start_faucet(cls)
+        cls.acc_num = 0
 
 
     @classmethod
@@ -134,20 +136,20 @@ class TestAirdropperIntegration(TestCase):
 
         with open("proxy/operator-keypair.json") as f:
             d = json.load(f)
-        self.solana_account = SolanaAccount(d[0:32])
-        self.solana_client.request_airdrop(self.solana_account.public_key(), 1000_000_000_000, Confirmed)
+        self.mint_authority = SolanaAccount(d[0:32])
+        self.solana_client.request_airdrop(self.mint_authority.public_key(), 1000_000_000_000, Confirmed)
 
         while True:
-            balance = self.solana_client.get_balance(self.solana_account.public_key(), Confirmed)["result"]["value"]
+            balance = self.solana_client.get_balance(self.mint_authority.public_key(), Confirmed)["result"]["value"]
             if balance > 0:
                 break
             sleep(1)
-        print('create_token_mint mint, SolanaAccount: ', self.solana_account.public_key())
+        print('create_token_mint mint, SolanaAccount: ', self.mint_authority.public_key())
 
         self.token = SplToken.create_mint(
             self.solana_client,
-            self.solana_account,
-            self.solana_account.public_key(),
+            self.mint_authority,
+            self.mint_authority.public_key(),
             9,
             TOKEN_PROGRAM_ID,
         )
@@ -176,26 +178,19 @@ class TestAirdropperIntegration(TestCase):
         self.contract_address = tx_deploy_receipt.contractAddress
 
 
-    def create_token_accounts(self):
-        print('MINT: ', self.token.pubkey)
-        print('SOLANA ACCOUNT: ', self.solana_account.public_key())
+    def start_airdropper(self):
+        contract_sol_address = self.get_evm_loader_account_address(self.contract_address)[0].to_base58()
+        self.airdropper = Process(target=run_airdropper,
+                                  args=(SOLANA_URL,
+                                        EVM_LOADER_ID,
+                                        f'http://localhost:{FAUCET_RPC_PORT}',
+                                        [contract_sol_address]))
+        self.airdropper.start()
 
-        self.source_token_account = self.token.create_associated_token_account(self.solana_account.public_key())
-        print('SOURCE TOKEN ACCOUNT: ', self.source_token_account.to_base58())
-        print('MINT TO RESULT: ', self.token.mint_to(self.source_token_account,
-                           self.solana_account,
-                           10_000_000_000_000,
-                           opts=TxOpts(skip_preflight=True)))
 
-    def create_token_account(self, owner: PublicKey, token: SplToken, mint_aithority: PublicKey):
-        print(f'Creating new solana account for token {token.pubkey}. Account owner {owner} ')
-        new_token_account = token.create_associated_token_account(owner)
-        print('SOURCE TOKEN ACCOUNT: ', self.source_token_account.to_base58())
-        self.token.mint_to(new_token_account,
-                           mint_aithority,
-                           10_000_000_000_000,
-                           opts=TxOpts(skip_preflight=True))
-        return new_token_account
+    def stop_airdropper(self):
+        self.airdropper.terminate()
+        self.airdropper.join()
 
 
     def start_faucet(self):
@@ -251,14 +246,14 @@ class TestAirdropperIntegration(TestCase):
         seeds = [b"\1", b"ERC20Balance", bytes(mint_pubkey), eth_contract_address_bytes, eth_address_bytes]
         return PublicKey.find_program_address(seeds, EVM_LOADER_ID)[0]
 
-    def create_account_instruction(self, eth_address: str):
+    def create_account_instruction(self, eth_address: str, payer: PublicKey):
         dest_address_solana, nonce = self.get_evm_loader_account_address(eth_address)
         neon_token_account = get_associated_token_address(dest_address_solana, ETH_TOKEN_MINT_ID)
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
-            data=create_account_layout(0, 0, bytes.fromhex(dest.address[2:]), nonce),
+            data=create_account_layout(0, 0, bytes.fromhex(eth_address[2:]), nonce),
             keys=[
-                AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=payer, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=dest_address_solana, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=neon_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
@@ -271,7 +266,8 @@ class TestAirdropperIntegration(TestCase):
     def create_erc20_token_account_instruction(self,
                                                eth_address,
                                                eth_contract_address: str,
-                                               token_mint: PublicKey):
+                                               token_mint: PublicKey,
+                                               payer: PublicKey):
         dest_address_solana, nonce = self.get_evm_loader_account_address(eth_address)
         contract_address_solana = self.get_evm_loader_account_address(eth_contract_address)[0]
         dest_token_wallet = self.get_erc20_token_wallet_address(eth_address, eth_contract_address, token_mint)
@@ -279,7 +275,7 @@ class TestAirdropperIntegration(TestCase):
             program_id=EVM_LOADER_ID,
             data=bytes.fromhex('0F'),
             keys=[
-                AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=payer, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=dest_token_wallet, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=dest_address_solana, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=contract_address_solana, is_signer=False, is_writable=True),
@@ -295,7 +291,8 @@ class TestAirdropperIntegration(TestCase):
                                            eth_to_address: str,
                                            amount: int,
                                            eth_contract_address: str,
-                                           token_mint: PublicKey):
+                                           token_mint: PublicKey,
+                                           payer: PublicKey):
         dest_token_wallet = self.get_erc20_token_wallet_address(eth_to_address, eth_contract_address, token_mint)
         return TransactionInstruction(
             program_id=TOKEN_PROGRAM_ID,
@@ -303,26 +300,54 @@ class TestAirdropperIntegration(TestCase):
             keys=[
                 AccountMeta(pubkey=sol_from_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=dest_token_wallet, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.solana_account.public_key(), is_signer=True, is_writable=False)
+                AccountMeta(pubkey=payer, is_signer=True, is_writable=False)
             ]
         )
 
+    def create_sol_account(self):
+        account = SolanaAccount()
+        print(f"New solana account created: {account.public_key().to_base58()}. Airdropping...")
+        self.solana_client.request_airdrop(account.public_key(), 1000_000_000_000, Confirmed)
+        return account
+
+    def create_token_account(self, owner: PublicKey, token: SplToken, mint_aithority: PublicKey):
+        print(f'Creating new token account. Token {token.pubkey}. Account owner {owner} ')
+        new_token_account = token.create_associated_token_account(owner)
+        print(f'New token account created: {new_token_account.to_base58()}')
+        self.token.mint_to(new_token_account,
+                           mint_aithority,
+                           10_000_000_000_000,
+                           opts=TxOpts(skip_preflight=True))
+        return new_token_account
+
+    def create_eth_account(self):
+        self.acc_num += 1
+        account = proxy.eth.account.create(f'neonlabsorg/proxy-model.py/issues/344/eth_account{self.acc_num}')
+        print(f"NEON account created: {account.address}")
+        return account
+
     def test_success_airdrop_simple_case(self):
-        from_token_account_owner = SolanaAccount()
-        from_token_account = self.create_token_account(from_token_account_owner.public_key(),
-                                                       self.token,
-                                                       self.solana_account)
+        from_owner = self.create_sol_account()
+        from_token = self.create_token_account(from_owner.public_key(), self.token, self.mint_authority)
+        to_eth_account = self.create_eth_account()
+
+        #self.assertEqual(proxy.eth.get_balance(to_eth_account.address), 0)
+        self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account.address), 0)
 
         trx = Transaction()
-        trx.add(self.create_account_instruction(dest.address))
-        trx.add(self.create_erc20_token_account_instruction(dest.address,
+        trx.add(self.create_account_instruction(to_eth_account.address, from_owner.public_key()))
+        trx.add(self.create_erc20_token_account_instruction(to_eth_account.address,
                                                             self.contract_address,
-                                                            self.token.pubkey))
-        trx.add(self.create_input_liquidity_instruction(self.source_token_account,
-                                                        dest.address, 100000,
+                                                            self.token.pubkey,
+                                                            from_owner.public_key()))
+        trx.add(self.create_input_liquidity_instruction(from_token,
+                                                        to_eth_account.address, 123456,
                                                         self.contract_address,
-                                                        self.token.pubkey))
+                                                        self.token.pubkey,
+                                                        from_owner.public_key()))
 
-        resp = self.solana_client.send_transaction(trx, self.solana_account,
+        resp = self.solana_client.send_transaction(trx, from_owner,
                                                    opts=TxOpts(skip_preflight=True,
                                                                skip_confirmation=False))
+
+        self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account.address), 123456)
