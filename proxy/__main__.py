@@ -25,6 +25,7 @@ if __name__ == '__main__':
         if wrapper_whitelist != 'ANY':
             wrapper_whitelist = wrapper_whitelist.split(',')
         log_level = os.environ['LOG_LEVEL']
+        price_update_interval = int(os.environ.get('PRICE_UPDATE_INTERVAL', '60'))
         neon_decimals = int(os.environ.get('NEON_DECIMALS', '9'))
 
         start_slot = os.environ.get('START_SLOT', None)
@@ -41,6 +42,7 @@ if __name__ == '__main__':
                        faucet_url,
                        wrapper_whitelist,
                        log_level,
+                       price_update_interval,
                        neon_decimals,
                        start_slot)
     else:
