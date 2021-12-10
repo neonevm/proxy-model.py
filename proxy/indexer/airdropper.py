@@ -24,6 +24,7 @@ class Airdropper(IndexerBase):
                  faucet_url = '',
                  wrapper_whitelist = [],
                  log_level = 'INFO',
+                 price_upd_interval=60,
                  neon_decimals = 9):
         IndexerBase.__init__(self, solana_url, evm_loader_id, log_level)
 
@@ -36,6 +37,7 @@ class Airdropper(IndexerBase):
         # Price provider need pyth.network be deployed onto solana
         # so using mainnet solana for simplicity
         self.price_provider = PriceProvider(mainnet_solana,
+                                            price_upd_interval,
                                             mainnet_price_accounts)
         self.neon_decimals = neon_decimals
 
@@ -161,6 +163,7 @@ def run_airdropper(solana_url,
                    faucet_url = '',
                    wrapper_whitelist = [],
                    log_level = 'INFO',
+                   price_update_interval = 60,
                    neon_decimals = 9):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
@@ -170,6 +173,7 @@ def run_airdropper(solana_url,
         log_level: {log_level},
         faucet_url: {faucet_url},
         wrapper_whitelist: {wrapper_whitelist},
+        price update interval: {price_update_interval},
         NEON decimals: {neon_decimals}""")
 
     airdropper = Airdropper(solana_url,
@@ -177,5 +181,6 @@ def run_airdropper(solana_url,
                             faucet_url,
                             wrapper_whitelist,
                             log_level,
+                            price_update_interval,
                             neon_decimals)
     airdropper.run()
