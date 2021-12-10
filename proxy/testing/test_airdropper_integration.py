@@ -255,13 +255,13 @@ class TestAirdropperIntegration(TestCase):
         self.solana_client.request_airdrop(account.public_key(), 1000_000_000_000, Confirmed)
         return account
 
-    def create_token_account(self, owner: PublicKey, token: SplToken, mint_aithority: PublicKey):
+    def create_token_account(self, owner: PublicKey, token: SplToken, mint_aithority: PublicKey, mint_amount):
         print(f'Creating new token account. Token {token.pubkey}. Account owner {owner} ')
         new_token_account = token.create_associated_token_account(owner)
         print(f'New token account created: {new_token_account.to_base58()}')
         self.token.mint_to(new_token_account,
                            mint_aithority,
-                           10_000_000_000_000,
+                           mint_amount,
                            opts=TxOpts(skip_preflight=True))
         return new_token_account
 
@@ -273,9 +273,12 @@ class TestAirdropperIntegration(TestCase):
 
     def test_success_airdrop_simple_case(self):
         from_owner = self.create_sol_account()
-        from_token = self.create_token_account(from_owner.public_key(), self.token, self.mint_authority)
+        mint_amount = 1000_000_000_000
+        from_token = self.create_token_account(from_owner.public_key(), self.token, self.mint_authority, mint_amount)
         to_eth_account = self.create_eth_account()
-
+        sleep(15)
+        balance_resp = self.token.get_balance(from_token, Confirmed)
+        self.assertEqual(int(balance_resp['result']['value']['amount']), mint_amount)
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account.address), 0)
 
         trx = Transaction()
@@ -290,11 +293,12 @@ class TestAirdropperIntegration(TestCase):
                                                         self.token.pubkey,
                                                         from_owner.public_key()))
 
-        resp = self.solana_client.send_transaction(trx, from_owner,
-                                                   opts=TxOpts(skip_preflight=True,
-                                                               skip_confirmation=False))
+        opts = TxOpts(skip_preflight=True, skip_confirmation=False)
+        print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
 
         sleep(15)
+        balance_resp = self.token.get_balance(from_token, Confirmed)
+        self.assertEqual(int(balance_resp['result']['value']['amount']), mint_amount - 123456)
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account.address), 123456)
         eth_balance = proxy.eth.get_balance(to_eth_account.address)
         print("NEON balance is: ", eth_balance)
@@ -302,10 +306,13 @@ class TestAirdropperIntegration(TestCase):
 
     def test_success_airdrop_complex_case(self):
         from_owner = self.create_sol_account()
-        from_token = self.create_token_account(from_owner.public_key(), self.token, self.mint_authority)
+        mint_amount = 1000_000_000_000
+        from_token = self.create_token_account(from_owner.public_key(), self.token, self.mint_authority, mint_amount)
         to_eth_account1 = self.create_eth_account()
         to_eth_account2 = self.create_eth_account()
-
+        sleep(15)
+        balance_resp = self.token.get_balance(from_token, Confirmed)
+        self.assertEqual(int(balance_resp['result']['value']['amount']), mint_amount)
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account1.address), 0)
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account2.address), 0)
 
@@ -331,11 +338,12 @@ class TestAirdropperIntegration(TestCase):
                                                         self.token.pubkey,
                                                         from_owner.public_key()))
 
-        resp = self.solana_client.send_transaction(trx, from_owner,
-                                                   opts=TxOpts(skip_preflight=True,
-                                                               skip_confirmation=False))
+        opts = TxOpts(skip_preflight=True, skip_confirmation=False)
+        print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
 
         sleep(45)
+        balance_resp = self.token.get_balance(from_token, Confirmed)
+        self.assertEqual(int(balance_resp['result']['value']['amount']), mint_amount - 123456 - 654321)
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account1.address), 123456)
         self.assertEqual(self.get_token_balance(self.contract_address, to_eth_account2.address), 654321)
         eth_balance1 = proxy.eth.get_balance(to_eth_account1.address)
