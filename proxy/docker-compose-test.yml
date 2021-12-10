@@ -95,9 +95,6 @@ services:
       NEON_ERC20_MAX_AMOUNT: 1000
       FAUCET_SOLANA_ENABLE: true
       SOLANA_URL: http://solana:8899
-      #EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
-      #NEON_TOKEN_MINT: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU
-      #NEON_TOKEN_MINT_DECIMALS: 9
       NEON_OPERATOR_KEYFILE: /root/.config/solana/id.json
       NEON_ETH_MAX_AMOUNT: 10
     hostname: faucet
@@ -105,7 +102,6 @@ services:
       - "3333"
     networks:
       - net
-    #entrypoint: faucet run --workers 1
     entrypoint: ./run-test-faucet.sh
     depends_on:
       proxy:
@@ -141,7 +137,6 @@ services:
       POSTGRES_PASSWORD: neon-airdropper-pass
       POSTGRES_HOST: airdropper-postgres
       SOLANA_URL: http://solana:8899
-      #EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
       FAUCET_URL: http://faucet:3333
       NEON_CLI_TIMEOUT: 0.9
       INDEXER_ERC20_WRAPPER_WHITELIST: ANY
@@ -149,7 +144,6 @@ services:
       PRICE_UPDATE_INTERVAL: 10
       START_SLOT: LATEST
     hostname: airdropper
-    #entrypoint: python3 -m proxy
     entrypoint: ./run-test-airdropper.sh
     networks:
       - net
