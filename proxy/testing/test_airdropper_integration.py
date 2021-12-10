@@ -16,14 +16,9 @@ from solana.transaction import TransactionInstruction, Transaction, AccountMeta
 from proxy.common_neon.neon_instruction import create_account_layout
 from time import sleep
 from web3 import Web3
-from proxy.indexer.airdropper import run_airdropper
-from multiprocessing import Process
 import struct
 import os
 import json
-import subprocess
-import requests
-import io
 
 install_solc(version='0.7.6')
 from solcx import compile_source
