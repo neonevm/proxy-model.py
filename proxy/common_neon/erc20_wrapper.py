@@ -8,10 +8,12 @@ from solana.publickey import PublicKey
 from solana.transaction import AccountMeta, TransactionInstruction
 from solana.system_program import SYS_PROGRAM_ID
 from solana.sysvar import SYSVAR_RENT_PUBKEY
-from spl.token.instructions import create_associated_token_account
 from solana.rpc.types import TxOpts, RPCResponse, Commitment
 from typing import Union, Dict
+from logging import getLogger
 import struct
+
+logger = getLogger('__name__')
 
 install_solc(version='0.7.6')
 from solcx import compile_source
@@ -140,10 +142,10 @@ class ERC20Wrapper:
         tx_constructor = erc20.constructor(self.name, self.symbol, bytes(self.token.pubkey)).buildTransaction(tx)
         tx_deploy = self.proxy.eth.account.sign_transaction(tx_constructor, self.admin.key)
         tx_deploy_hash = self.proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
-        print('tx_deploy_hash:', tx_deploy_hash.hex())
+        logger.debug(f'tx_deploy_hash: {tx_deploy_hash.hex()}')
         tx_deploy_receipt = self.proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
-        print('tx_deploy_receipt:', tx_deploy_receipt)
-        print('deploy status:', tx_deploy_receipt.status)
+        logger.debug(f'tx_deploy_receipt: {tx_deploy_receipt}')
+        logger.debug(f'deploy status: {tx_deploy_receipt.status}')
         self.neon_contract_address = tx_deploy_receipt.contractAddress
         self.solana_contract_address = self.get_neon_account_address(self.neon_contract_address)
 
@@ -156,8 +158,8 @@ class ERC20Wrapper:
                  neon_account_address_bytes]
         return PublicKey.find_program_address(seeds, self.evm_loader_id)[0]
 
-    def create_accociated_account_instruction(self, payer: PublicKey, owner: PublicKey):
-        return create_associated_token_account(payer, owner, self.token.pubkey)
+    def create_associated_token_account(self, owner: PublicKey):
+        return self.token.create_associated_token_account(owner)
 
     def create_neon_erc20_account_instruction(self, payer: PublicKey, eth_address: str):
         return TransactionInstruction(
@@ -189,8 +191,7 @@ class ERC20Wrapper:
     def mint_to(self, destination: Union[PublicKey, str], amount: int) -> RPCResponse:
         """
         Method mints given amount of tokens to a given address - either in NEON or Solana format
-        NOTE: destination account must be previously created using instructions
-        create_accociated_account_instruction or create_neon_erc20_account_instruction
+        NOTE: destination account must be previously created
         """
         if isinstance(destination, str):
             destination = self.get_neon_erc20_account_address(destination)
