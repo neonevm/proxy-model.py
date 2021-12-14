@@ -212,7 +212,7 @@ class NeonInstruction:
         trx = Transaction()
         create_trx, associated_token_account = self.make_create_eth_account_trx(eth_account, code_acc)
         trx.add(create_trx)
-        if NEW_USER_AIRDROP_AMOUNT <= 0:
+        if NEW_USER_AIRDROP_AMOUNT <= 0 or code_acc:
             return trx
         transfer_instruction = self.make_transfer_instruction(associated_token_account)
         trx.add(transfer_instruction)
