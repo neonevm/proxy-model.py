@@ -5,13 +5,15 @@ import logging
 import re
 import time
 
+from solana.blockhash import Blockhash
 from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
+from solana.transaction import Transaction
 
 from .costs import update_transaction_cost
 from .utils import get_from_dict
-from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, LOG_SENDING_SOLANA_TRANSACTION
+from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, LOG_SENDING_SOLANA_TRANSACTION, RETRY_ON_FAIL
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -79,15 +81,32 @@ class SolanaInteractor:
         return result
 
 
-    def send_transaction_unconfirmed(self, trx):
-        result = self.client.send_transaction(trx, self.signer, opts=TxOpts(preflight_commitment=Confirmed))["result"]
-        return result
+    def send_transaction_unconfirmed(self, txn: Transaction):
+        for _i in range(RETRY_ON_FAIL):
+            # TODO: Cache recent blockhash
+            blockhash_resp = self.client.get_recent_blockhash() # commitment=Confirmed
+            if not blockhash_resp["result"]:
+                raise RuntimeError("failed to get recent blockhash")
+            blockhash = blockhash_resp["result"]["value"]["blockhash"]
+            txn.recent_blockhash = Blockhash(blockhash)
+            txn.sign(self.signer)
+            try:
+                return self.client.send_raw_transaction(txn.serialize(), opts=TxOpts(preflight_commitment=Confirmed))["result"]
+            except Exception as err:
+                err_type = get_from_dict(err.result, "data", "err")
+                if err_type is not None and isinstance(err_type, str) and err_type == "BlockhashNotFound":
+                    logger.debug("BlockhashNotFound {}".format(blockhash))
+                    continue
+                raise
+        raise RuntimeError("Transaction simulation failed: Blockhash not found")
+
 
     def collect_result(self, reciept, eth_trx, reason=None):
         self.confirm_transaction(reciept)
         result = self.client.get_confirmed_transaction(reciept)
         update_transaction_cost(result, eth_trx, reason)
         return result
+
 
     def send_measured_transaction(self, trx, eth_trx, reason):
         if LOG_SENDING_SOLANA_TRANSACTION:
