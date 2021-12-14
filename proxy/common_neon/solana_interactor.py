@@ -98,7 +98,7 @@ class SolanaInteractor:
                     logger.debug("BlockhashNotFound {}".format(blockhash))
                     continue
                 raise
-        raise RuntimeError("Transaction simulation failed: Blockhash not found")
+        raise RuntimeError("Failed trying {} times to get Blockhash for transaction {}".format(RETRY_ON_FAIL, txn.__dict__))
 
 
     def collect_result(self, reciept, eth_trx, reason=None):
