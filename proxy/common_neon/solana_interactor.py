@@ -82,6 +82,7 @@ class SolanaInteractor:
                 return self.collect_result(reciept, eth_trx, reason)
             except RuntimeError as err:
                 if str(err).find("could not confirm transaction") > 0:
+                    time.sleep(0.1)
                     continue
                 raise
         RuntimeError("Failed {} times to send transaction or get confirmnation {}".format(RETRY_ON_FAIL, trx.__dict__))
@@ -102,6 +103,7 @@ class SolanaInteractor:
                 err_type = get_from_dict(err.result, "data", "err")
                 if err_type is not None and isinstance(err_type, str) and err_type == "BlockhashNotFound":
                     logger.debug("BlockhashNotFound {}".format(blockhash))
+                    time.sleep(0.1)
                     continue
                 raise
         raise RuntimeError("Failed trying {} times to get Blockhash for transaction {}".format(RETRY_ON_FAIL, txn.__dict__))
