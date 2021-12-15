@@ -9,7 +9,7 @@ from eth_account.account import LocalAccount
 from .testing_helpers import SolidityContractDeployer
 
 
-class TestAirdroppingEthAccounts(unittest.TestCase):
+class TestContractReverting(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
