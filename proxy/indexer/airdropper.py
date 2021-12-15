@@ -95,9 +95,7 @@ class Airdropper(IndexerBase):
         if not resp.ok:
             logger.warning(f'Failed to airdrop: {resp.status_code}')
             return
-
-        self.airdrop_ready[eth_address] = create_acc
-
+        
         self.airdrop_ready[eth_address] = create_acc
 
 
