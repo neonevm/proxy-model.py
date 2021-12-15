@@ -76,9 +76,15 @@ class SolanaInteractor:
 
 
     def send_transaction(self, trx, eth_trx, reason=None):
-        reciept = self.send_transaction_unconfirmed(trx)
-        result = self.collect_result(reciept, eth_trx, reason)
-        return result
+        for _i in range(RETRY_ON_FAIL):
+            reciept = self.send_transaction_unconfirmed(trx)
+            try:
+                return self.collect_result(reciept, eth_trx, reason)
+            except RuntimeError as err:
+                if str(err).find("could not confirm transaction") > 0:
+                    continue
+                raise
+        RuntimeError("Failed {} times to send transaction or get confirmnation {}".format(RETRY_ON_FAIL, trx.__dict__))
 
 
     def send_transaction_unconfirmed(self, txn: Transaction):
