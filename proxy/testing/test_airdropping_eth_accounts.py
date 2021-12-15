@@ -36,11 +36,11 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         actual_balance_wei = self._web3.eth.get_balance(account.address, block_identifier=block_number)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, actual_balance_wei)
 
-    def test_airdrop_on_deploy(self):
+    def test_not_airdrop_on_deploy(self):
         contract_owner: LocalAccount = self._web3.eth.account.create()
         contract = self._compile_and_deploy_contract(contract_owner, self._CONTRACT_STORAGE_SOURCE)
         actual_balance_wei = self._get_balance_wei(contract.address)
-        self.assertEqual(self._EXPECTED_BALANCE_WEI, actual_balance_wei)
+        self.assertEqual(0, actual_balance_wei)
 
     def test_airdrop_onto_wrapped_new_address(self):
         contract_owner: LocalAccount = self._web3.eth.account.create()
@@ -48,8 +48,8 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         nested_contract_address = contract.functions.getNested().call()
         nested_actual_balance = self._get_balance_wei(nested_contract_address)
         wrapper_actual_balance = self._get_balance_wei(contract.address)
-        self.assertEqual(self._EXPECTED_BALANCE_WEI, wrapper_actual_balance)
-        self.assertEqual(self._EXPECTED_BALANCE_WEI, nested_actual_balance)
+        self.assertEqual(0, wrapper_actual_balance)
+        self.assertEqual(0, nested_actual_balance)
 
     def test_airdrop_on_deploy_estimation(self):
         owner_eth_account: LocalAccount = self._web3.eth.account.create()
