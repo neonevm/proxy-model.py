@@ -7,6 +7,7 @@ import time
 
 from solana.blockhash import Blockhash
 from solana.rpc.api import Client as SolanaClient
+from solana.rpc.api import SendTransactionError
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import Transaction
@@ -99,7 +100,7 @@ class SolanaInteractor:
             txn.sign(self.signer)
             try:
                 return self.client.send_raw_transaction(txn.serialize(), opts=TxOpts(preflight_commitment=Confirmed))["result"]
-            except Exception as err:
+            except SendTransactionError as err:
                 err_type = get_from_dict(err.result, "data", "err")
                 if err_type is not None and isinstance(err_type, str) and err_type == "BlockhashNotFound":
                     logger.debug("BlockhashNotFound {}".format(blockhash))
