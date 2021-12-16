@@ -53,7 +53,7 @@ def ether2program(ether):
 
     if ether[0:2] == '0x':
         ether = ether[2:]
-    (pda, nonce) = PublicKey.find_program_address(ether, PublicKey(EVM_LOADER_ID))
+    (pda, nonce) = PublicKey.find_program_address(bytes.fromhex(ether), PublicKey(EVM_LOADER_ID))
     return str(pda), nonce
 
 
