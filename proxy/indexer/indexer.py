@@ -7,6 +7,7 @@ import rlp
 import time
 import logging
 from multiprocessing.dummy import Pool as ThreadPool
+from typing import List, Dict
 
 
 try:
@@ -65,6 +66,8 @@ class Indexer(IndexerBase):
         if 'last_block' not in self.constants:
             self.constants['last_block'] = 0
         self.blocked_storages = {}
+        self.transaction_order = []
+        self.transaction_receipts = SQLDict(tablename="known_transactions")
 
 
     def process_functions(self):
@@ -76,6 +79,29 @@ class Indexer(IndexerBase):
         logger.debug("Unlock accounts")
         self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
+
+
+    def handle_new_transactions(self, ordered_signs, receipts):
+        # Combine transactions received just now with previous ones
+        for signature in ordered_signs:
+            if signature not in self.transaction_receipts:
+                trx = receipts.get(signature, None)
+                if not trx: #Normally, this will not happen (means error in upper level logic)
+                    logger.error(f'Signature {signature} not found in receipts dictionary')
+                    continue
+                self.transaction_receipts[signature] = trx
+
+        # merge current transaction sequence with rest of the history
+        if len(self.transaction_order):
+            index = 0
+            try:
+                index = ordered_signs.index(self.transaction_order[0])
+            except ValueError:
+                self.transaction_order = ordered_signs + self.transaction_order
+            else:
+                self.transaction_order = ordered_signs[:index] + self.transaction_order
+        else:
+            self.transaction_order = ordered_signs
 
 
     def process_receipts(self):

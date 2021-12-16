@@ -1,10 +1,13 @@
+from web3 import eth
 from proxy.indexer.indexer_base import IndexerBase, logger
 from proxy.indexer.price_provider import PriceProvider, mainnet_solana, mainnet_price_accounts
+from typing import List, Dict
 import os
 import requests
 import base58
 import json
 import logging
+from datetime import date, datetime
 
 try:
     from utils import check_error
@@ -16,6 +19,7 @@ except ImportError:
 ACCOUNT_CREATION_PRICE_SOL = 0.00472692
 AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 NEON_PRICE_USD = 0.25
+
 
 class Airdropper(IndexerBase):
     def __init__(self,
@@ -32,6 +36,7 @@ class Airdropper(IndexerBase):
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
         self.airdrop_ready = SQLDict(tablename="airdrop_ready")
+        self.airdrop_scheduled = SQLDict(tablename="airdrop_scheduled")
         self.wrapper_whitelist = wrapper_whitelist
         self.faucet_url = faucet_url
 
@@ -72,15 +77,18 @@ class Airdropper(IndexerBase):
         return account_keys[create_token_acc['accounts'][1]] == account_keys[token_transfer['accounts'][1]]
 
 
-    def _airdrop_to(self, create_acc):
+    def _schedule_airdrop(self, create_acc):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
         if eth_address in self.airdrop_ready:  # transaction already processed
             return
+        self.airdrop_scheduled[eth_address] = { 'scheduled': datetime.now().timestamp() }
 
+
+    def _airdrop_to(self, eth_address, schedule_time):
         sol_price_usd = self.price_provider.get_price('SOL/USD')
         if sol_price_usd is None:
             logger.warning("Failed to get SOL/USD price")
-            return
+            return False
 
         logger.info(f'SOL/USD = ${sol_price_usd}')
         airdrop_amount_usd = AIRDROP_AMOUNT_SOL * sol_price_usd
@@ -94,12 +102,15 @@ class Airdropper(IndexerBase):
         resp = requests.post(self.faucet_url + '/request_neon_in_galans', json = json_data)
         if not resp.ok:
             logger.warning(f'Failed to airdrop: {resp.status_code}')
-            return
+            return False
         
-        self.airdrop_ready[eth_address] = create_acc
+        self.airdrop_ready[eth_address] = { 'amount': airdrop_galans, 
+                                            'scheduled': schedule_time,
+                                            'finished': datetime.now().timestamp() }
+        return True
 
 
-    def process_trx_airdropper_mode(self, trx):
+    def _process_trx_airdropper_mode(self, trx):
         if check_error(trx):
             return
 
@@ -133,30 +144,29 @@ class Airdropper(IndexerBase):
                 for token_transfer in token_transfer_list:
                     if not self._check_transfer(account_keys, create_token_acc, token_transfer):
                         continue
-                    self._airdrop_to(create_acc)
+                    self._schedule_airdrop(create_acc)
+
+
+    def _process_scheduled_trxs(self):
+        success_addresses = set()
+        for eth_address, sched_info in self.airdrop_scheduled.items():
+            if not self._airdrop_to(eth_address, sched_info['scheduled']):
+                continue
+            success_addresses.add(eth_address)
+
+        for eth_address in success_addresses:
+            del self.airdrop_scheduled[eth_address]
 
 
     def process_functions(self):
         IndexerBase.process_functions(self)
-        logger.debug("Process receipts")
-        self.process_receipts()
+        logger.debug("Airdropping...")
+        self._process_scheduled_trxs()
 
 
-    def process_receipts(self):
-        counter = 0
-        for signature in self.transaction_order:
-            counter += 1
-            if signature in self.transaction_receipts:
-                trx = self.transaction_receipts[signature]
-                if trx is None:
-                    logger.error("trx is None")
-                    del self.transaction_receipts[signature]
-                    continue
-                if 'slot' not in trx:
-                    logger.debug("\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
-                    exit()
-                if trx['transaction']['message']['instructions'] is not None:
-                    self.process_trx_airdropper_mode(trx)
+    def handle_new_transactions(self, ordered_signs, receipts):
+        for signature in ordered_signs:
+            self._process_trx_airdropper_mode(receipts[signature]) 
 
 
 def run_airdropper(solana_url,

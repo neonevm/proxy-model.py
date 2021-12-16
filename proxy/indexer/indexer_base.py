@@ -3,7 +3,7 @@ import time
 import logging
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
-from typing import Dict, Union
+from typing import Dict, List, Set, Union
 
 try:
     from sql_dict import SQLDict
@@ -40,10 +40,9 @@ class IndexerBase:
 
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
-        self.transaction_receipts = SQLDict(tablename="known_transactions")
         self.last_slot = start_slot
         self.current_slot = 0
-        self.transaction_order = []
+        
         self.counter_ = 0
 
 
@@ -62,7 +61,7 @@ class IndexerBase:
 
     def gather_unknown_transactions(self):
         poll_txs = set()
-        ordered_txs = []
+        ordered_signs = []
 
         minimal_tx = None
         continue_flag = True
@@ -93,10 +92,8 @@ class IndexerBase:
                     continue_flag = False
                     break
 
-                ordered_txs.append(solana_signature)
-
-                if solana_signature not in self.transaction_receipts:
-                    poll_txs.add(solana_signature)
+                ordered_signs.append(solana_signature)
+                poll_txs.add(solana_signature)
 
                 if slot < minimal_slot:
                     minimal_slot = slot
@@ -111,33 +108,26 @@ class IndexerBase:
 
         logger.debug("start getting receipts")
         pool = ThreadPool(PARALLEL_REQUESTS)
-        pool.map(self.get_tx_receipts, poll_txs)
-
-        if len(self.transaction_order):
-            index = 0
-            try:
-                index = ordered_txs.index(self.transaction_order[0])
-            except ValueError:
-                self.transaction_order = ordered_txs + self.transaction_order
-            else:
-                self.transaction_order = ordered_txs[:index] + self.transaction_order
-        else:
-            self.transaction_order = ordered_txs
+        receipts = { entry[0]:entry[1] for entry in pool.map(self.get_tx_receipts, poll_txs) } 
 
         self.last_slot = maximum_slot
         self.current_slot = current_slot
-
         self.counter_ = 0
+
+        logger.debug("Start processing received receipts")
+        self.handle_new_transactions(ordered_signs, receipts)
+
+    
+    def handle_new_transactions(self, ordered_signs, receipts): None
 
 
     def get_tx_receipts(self, solana_signature):
-        # trx = None
+        trx = None
         retry = True
 
         while retry:
             try:
                 trx = self.client.get_confirmed_transaction(solana_signature)['result']
-                self.transaction_receipts[solana_signature] = trx
                 retry = False
             except Exception as err:
                 logger.debug(err)
@@ -147,4 +137,4 @@ class IndexerBase:
         if self.counter_ % 100 == 0:
             logger.debug(self.counter_)
 
-        # return (solana_signature, trx)
+        return (solana_signature, trx)
