@@ -50,9 +50,11 @@ def ether2program(ether):
         ether = str(ether)
     else:
         ether = ether.hex()
-    output = neon_cli().call("create-program-address", ether)
-    items = output.rstrip().split(' ')
-    return items[0], int(items[1])
+
+    if ether[0:2] == '0x':
+        ether = ether[2:]
+    (pda, nonce) = PublicKey.find_program_address(ether, PublicKey(EVM_LOADER_ID))
+    return str(pda), nonce
 
 
 def getTokenAddr(account):
