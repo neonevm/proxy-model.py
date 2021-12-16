@@ -5,11 +5,6 @@ from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict, List, Set, Union
 
-try:
-    from sql_dict import SQLDict
-except ImportError:
-    from .sql_dict import SQLDict
-
 
 PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
 
