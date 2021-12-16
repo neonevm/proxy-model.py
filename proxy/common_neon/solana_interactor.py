@@ -257,3 +257,41 @@ def check_if_continue_returned(result):
                         return tx_info['transaction']['signatures'][0]
 
     return None
+
+
+def get_logs_from_reciept(receipt):
+    log_from_reciept = get_from_dict(receipt, 'result', 'meta', 'logMessages')
+    if log_from_reciept is not None:
+        return log_from_reciept
+
+    log_from_reciept_result = get_from_dict(receipt, 'meta', 'logMessages')
+    if log_from_reciept_result is not None:
+        return log_from_reciept_result
+
+    log_from_reciept_result_meta = get_from_dict(receipt, 'logMessages')
+    if log_from_reciept_result_meta is not None:
+        return log_from_reciept_result_meta
+
+    log_from_send_trx_error = get_from_dict(receipt, 'data', 'logs')
+    if log_from_send_trx_error is not None:
+        return log_from_send_trx_error
+
+    log_from_prepared_receipt = get_from_dict(receipt, 'logs')
+    if log_from_prepared_receipt is not None:
+        return log_from_prepared_receipt
+
+    return None
+
+
+def check_if_accounts_blocked(receipt):
+    logs = get_logs_from_reciept(receipt)
+    if logs is None:
+        logger.error("Can't get logs")
+        logger.info("Failed result: %s"%json.dumps(receipt, indent=3))
+
+    ro_blocked = "trying to execute transaction on ro locked account"
+    rw_blocked = "trying to execute transaction on rw locked account"
+    for log in logs:
+        if log.find(ro_blocked) >= 0 or log.find(rw_blocked) >= 0:
+            return True
+    return False

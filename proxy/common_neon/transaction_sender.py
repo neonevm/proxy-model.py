@@ -20,8 +20,8 @@ from .emulator_interactor import call_emulated
 from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_for_errors,\
-    check_if_program_exceeded_instructions, check_if_storage_is_empty_error
-from ..environment import EVM_LOADER_ID
+    check_if_program_exceeded_instructions, check_if_storage_is_empty_error, check_if_accounts_blocked
+from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED
 from ..plugin.eth_proto import Trx as EthTrx
 
 
@@ -57,7 +57,10 @@ class TransactionSender:
                 errStr = str(err)
                 if "Program failed to complete" in errStr or "Computational budget exceeded" in errStr:
                     logger.debug("Program exceeded instructions")
-                    call_iterative = True
+                    if self.steps_emulated / self.steps > self.steps / 2:
+                        call_from_holder = True
+                    else:
+                        call_iterative = True
                 elif str(err).startswith("transaction too large:"):
                     logger.debug("Transaction too large, call call_signed_with_holder_acc():")
                     call_from_holder = True
@@ -320,14 +323,27 @@ class NoniterativeTransactionSender:
         if len(self.create_acc_trx.instructions) > 0:
             call_txs_05.add(self.create_acc_trx)
         call_txs_05.add(self.instruction.make_noniterative_call_transaction(len(call_txs_05.instructions)))
-        result = self.sender.send_measured_transaction(call_txs_05, self.eth_trx, 'CallFromRawEthereumTX')
 
-        if check_for_errors(result):
-            if check_if_program_exceeded_instructions(result):
-                raise Exception("Program failed to complete")
-            raise Exception(json.dumps(result['result']['meta']))
+        for _i in range(RETRY_ON_BLOCKED):
+            try:
+                result = self.sender.send_measured_transaction(call_txs_05, self.eth_trx, 'CallFromRawEthereumTX')
+            except Exception as err:
+                if check_if_accounts_blocked(err.result):
+                    time.sleep(0.5)
+                    continue
+                else:
+                    raise
 
-        return result['result']['transaction']['signatures'][0]
+            if check_for_errors(result):
+                if check_if_program_exceeded_instructions(result):
+                    raise Exception("Program failed to complete")
+                elif check_if_accounts_blocked(result):
+                    time.sleep(0.5)
+                    continue
+                else:
+                    raise Exception(json.dumps(result['result']['meta']))
+            else:
+                return result['result']['transaction']['signatures'][0]
 
 
 class IterativeTransactionSender:
@@ -388,6 +404,7 @@ class IterativeTransactionSender:
 
 
     def call_continue(self):
+        retry_unblock = False
         return_result = None
         try:
             return_result = self.call_continue_bucked()
@@ -395,14 +412,30 @@ class IterativeTransactionSender:
             logger.debug("call_continue_bucked_combined exception: {}".format(str(err)))
             if str(err).startswith("transaction too large:"):
                 raise
+            elif check_if_accounts_blocked(err.result):
+                retry_unblock = True
+
+        if retry_unblock:
+            for _i in range(RETRY_ON_BLOCKED):
+                try:
+                    self.call_continue_step()
+                except Exception as err:
+                    if check_if_accounts_blocked(err.result):
+                        pass
+                    else:
+                        raise
+                else:
+                    break
+                time.sleep(0.5)
+
+            try:
+                return_result = self.call_continue_bucked()
+            except Exception as err:
+                logger.debug("call_continue_bucked_combined exception: {}".format(str(err)))
 
         if return_result is not None:
             return return_result
 
-        return self.call_continue_iterative()
-
-
-    def call_continue_iterative(self):
         try:
             return self.call_continue_step_by_step()
         except Exception as err:
