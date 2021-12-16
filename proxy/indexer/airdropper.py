@@ -47,6 +47,10 @@ class Airdropper(IndexerBase):
                                             mainnet_price_accounts)
         self.neon_decimals = neon_decimals
 
+        self.sol_price_usd = None
+        self.airdrop_amount_usd = None
+        self.airdrop_amount_neon = None
+
 
     # helper function checking if given contract address is in whitelist
     def _is_allowed_wrapper_contract(self, contract_addr):
@@ -77,36 +81,15 @@ class Airdropper(IndexerBase):
         return account_keys[create_token_acc['accounts'][1]] == account_keys[token_transfer['accounts'][1]]
 
 
-    def _schedule_airdrop(self, create_acc):
-        eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
-        if eth_address in self.airdrop_ready:  # transaction already processed
-            return
-        self.airdrop_scheduled[eth_address] = { 'scheduled': datetime.now().timestamp() }
-
-
-    def _airdrop_to(self, eth_address, schedule_time):
-        sol_price_usd = self.price_provider.get_price('SOL/USD')
-        if sol_price_usd is None:
-            logger.warning("Failed to get SOL/USD price")
-            return False
-
-        logger.info(f'SOL/USD = ${sol_price_usd}')
-        airdrop_amount_usd = AIRDROP_AMOUNT_SOL * sol_price_usd
-        logger.info(f"Airdrop amount: ${airdrop_amount_usd}")
-        logger.info(f"NEON price: ${NEON_PRICE_USD}")
-        airdrop_amount_neon = airdrop_amount_usd / NEON_PRICE_USD
-        logger.info(f"Airdrop {airdrop_amount_neon} NEONs to address: {eth_address}")
-        airdrop_galans = int(airdrop_amount_neon * pow(10, self.neon_decimals))
+    def _airdrop_to(self, eth_address, airdrop_galans):
+        logger.info(f"Airdrop {airdrop_galans} Galans to address: {eth_address}")
 
         json_data = { 'wallet': eth_address, 'amount': airdrop_galans }
         resp = requests.post(self.faucet_url + '/request_neon_in_galans', json = json_data)
         if not resp.ok:
             logger.warning(f'Failed to airdrop: {resp.status_code}')
             return False
-        
-        self.airdrop_ready[eth_address] = { 'amount': airdrop_galans, 
-                                            'scheduled': schedule_time,
-                                            'finished': datetime.now().timestamp() }
+
         return True
 
 
@@ -147,12 +130,44 @@ class Airdropper(IndexerBase):
                     self._schedule_airdrop(create_acc)
 
 
+    def _get_airdrop_amount_galans(self):
+        new_sol_price_usd = self.price_provider.get_price('SOL/USD')
+        if new_sol_price_usd is None:
+            logger.warning("Failed to get SOL/USD price")
+            return None
+
+        if new_sol_price_usd != self.sol_price_usd:
+            self.sol_price_usd = new_sol_price_usd
+            logger.info(f"NEON price: ${NEON_PRICE_USD}\n")
+            logger.info(f'SOL/USD = ${self.sol_price_usd}')
+            self.airdrop_amount_usd = AIRDROP_AMOUNT_SOL * self.sol_price_usd
+            self.airdrop_amount_neon = self.airdrop_amount_usd / NEON_PRICE_USD
+            logger.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)")
+
+        return int(self.airdrop_amount_neon * pow(10, self.neon_decimals))
+
+
+    def _schedule_airdrop(self, create_acc):
+        eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
+        if eth_address in self.airdrop_ready:  # transaction already processed
+            return
+        self.airdrop_scheduled[eth_address] = { 'scheduled': datetime.now().timestamp() }
+
+
     def _process_scheduled_trxs(self):
+        airdrop_galans = self._get_airdrop_amount_galans()
+        if airdrop_galans is None:
+            logger.warning('Failed to estimate airdrop amount. Defer scheduled airdrops.')
+            return
+
         success_addresses = set()
         for eth_address, sched_info in self.airdrop_scheduled.items():
-            if not self._airdrop_to(eth_address, sched_info['scheduled']):
+            if not self._airdrop_to(eth_address, airdrop_galans):
                 continue
             success_addresses.add(eth_address)
+            self.airdrop_ready[eth_address] = { 'amount': airdrop_galans, 
+                                                'scheduled': sched_info['scheduled'],
+                                                'finished': datetime.now().timestamp() }
 
         for eth_address in success_addresses:
             del self.airdrop_scheduled[eth_address]
@@ -160,7 +175,6 @@ class Airdropper(IndexerBase):
 
     def process_functions(self):
         IndexerBase.process_functions(self)
-        logger.debug("Airdropping...")
         self._process_scheduled_trxs()
 
 
