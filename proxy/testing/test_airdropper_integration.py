@@ -1,5 +1,4 @@
 from unittest import TestCase
-
 from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from spl.token.client import Token as SplToken
@@ -133,7 +132,7 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(self.wrapper.get_balance(to_neon_acc), 123456)
         eth_balance = proxy.eth.get_balance(to_neon_acc)
         print("NEON balance is: ", eth_balance)
-        self.assertTrue(eth_balance > 0 and eth_balance < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
+        self.assertGreater(eth_balance, 0)
 
     def test_success_airdrop_complex_case(self):
         from_owner = self.create_sol_account()
@@ -172,8 +171,8 @@ class TestAirdropperIntegration(TestCase):
         eth_balance2 = proxy.eth.get_balance(to_neon_acc2)
         print("NEON balance 1 is: ", eth_balance1)
         print("NEON balance 2 is: ", eth_balance2)
-        self.assertTrue(eth_balance1 > 0 and eth_balance1 < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
-        self.assertTrue(eth_balance2 > 0 and eth_balance2 < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
+        self.assertGreater(eth_balance1, 0)
+        self.assertGreater(eth_balance2, 0)
 
     def test_no_airdrop(self):
         from_owner = self.create_sol_account()
@@ -193,8 +192,6 @@ class TestAirdropperIntegration(TestCase):
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
 
         sleep(15)
-        self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - 123456)
-        self.assertEqual(self.wrapper.get_balance(to_neon_acc), 123456)
         eth_balance = proxy.eth.get_balance(to_neon_acc)
         print("NEON balance is: ", eth_balance)
         self.assertEqual(eth_balance, 0)
