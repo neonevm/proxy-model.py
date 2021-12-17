@@ -138,11 +138,11 @@ class Airdropper(IndexerBase):
 
         if new_sol_price_usd != self.sol_price_usd:
             self.sol_price_usd = new_sol_price_usd
-            logger.info(f"NEON price: ${NEON_PRICE_USD}\n")
+            logger.info(f"NEON price: ${NEON_PRICE_USD}")
             logger.info(f'SOL/USD = ${self.sol_price_usd}')
             self.airdrop_amount_usd = AIRDROP_AMOUNT_SOL * self.sol_price_usd
             self.airdrop_amount_neon = self.airdrop_amount_usd / NEON_PRICE_USD
-            logger.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)")
+            logger.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
 
         return int(self.airdrop_amount_neon * pow(10, self.neon_decimals))
 
@@ -151,6 +151,7 @@ class Airdropper(IndexerBase):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
         if eth_address in self.airdrop_ready:  # transaction already processed
             return
+        logger.info(f'Scheduling airdrop for {eth_address}')
         self.airdrop_scheduled[eth_address] = { 'scheduled': datetime.now().timestamp() }
 
 
