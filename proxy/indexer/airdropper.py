@@ -83,7 +83,6 @@ class Airdropper(IndexerBase):
 
     def _airdrop_to(self, eth_address, airdrop_galans):
         logger.info(f"Airdrop {airdrop_galans} Galans to address: {eth_address}")
-
         json_data = { 'wallet': eth_address, 'amount': airdrop_galans }
         resp = requests.post(self.faucet_url + '/request_neon_in_galans', json = json_data)
         if not resp.ok:
@@ -149,7 +148,7 @@ class Airdropper(IndexerBase):
 
     def _schedule_airdrop(self, create_acc):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
-        if eth_address in self.airdrop_ready:  # transaction already processed
+        if eth_address in self.airdrop_ready:  # Target account already supplied with airdrop
             return
         logger.info(f'Scheduling airdrop for {eth_address}')
         self.airdrop_scheduled[eth_address] = { 'scheduled': datetime.now().timestamp() }
@@ -175,11 +174,17 @@ class Airdropper(IndexerBase):
 
 
     def process_functions(self):
+        """
+        Overrides IndexerBase.process_functions
+        """
         IndexerBase.process_functions(self)
         self._process_scheduled_trxs()
 
 
     def handle_new_transactions(self, ordered_signs, receipts):
+        """
+        Overrides IndexerBase.handle_new_transactions
+        """
         for signature in ordered_signs:
             self._process_trx_airdropper_mode(receipts[signature]) 
 
