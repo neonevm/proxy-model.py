@@ -120,23 +120,19 @@ contract TestQueryAccount {
     function test_cache() public returns (bool) {
         bool ok = false;
 
-        // Redundant insert
-        query.cache(solana_account, 0, 0); // delete from cache if any
-        query.cache(solana_account, 0, 64); // first insert
-        try query.cache(solana_account, 0, 32) { ok = false; } catch { ok = true; /* expected exception */ }
+        // Normal
+        try query.cache(solana_account, 0, 64) { ok = true; } catch { ok = false; }
         if (!ok) { return ok; }
 
         // Length too long
-        query.cache(solana_account, 0, 0); // delete from cache if any
         try query.cache(solana_account, 0, 200) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
         // Offset too big
-        query.cache(solana_account, 0, 0); // delete from cache if any
         try query.cache(solana_account, 200, 16) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
-        // Insert nonexistent account
+        // Nonexistent account
         try query.cache(missing_account, 0, 1) { ok = false; } catch { ok = true; /* expected exception */ }
 
         return ok;
@@ -144,12 +140,28 @@ contract TestQueryAccount {
 
     function test_noncached() public returns (bool) {
         bool ok = false;
+
+        try query.owner(solana_account) { ok = false; } catch { ok = true; /* expected exception */ }
+        if (!ok) { return ok; }
+
         try query.length(solana_account) { ok = false; } catch { ok = true; /* expected exception */ }
+        if (!ok) { return ok; }
+
+        try query.lamports(solana_account) { ok = false; } catch { ok = true; /* expected exception */ }
+        if (!ok) { return ok; }
+
+        try query.executable(solana_account) { ok = false; } catch { ok = true; /* expected exception */ }
+        if (!ok) { return ok; }
+
+        try query.rent_epoch(solana_account) { ok = false; } catch { ok = true; /* expected exception */ }
+        if (!ok) { return ok; }
+
+        try query.data(solana_account, 0, 1) { ok = false; } catch { ok = true; /* expected exception */ }
+
         return ok;
     }
 
     function test_metadata_ok() public returns (bool) {
-        query.cache(solana_account, 0, 0); // delete from cache if any
         query.cache(solana_account, 0, 64);
 
         uint256 golden_owner = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
@@ -186,30 +198,7 @@ contract TestQueryAccount {
         return true;
     }
 
-    function test_metadata_nonexistent_account() public returns (bool) {
-        bool ok = false;
-
-        query.cache(missing_account, 0, 0); // delete from cache if any
-
-        try query.owner(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
-        if (!ok) { return ok; }
-
-        try query.length(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
-        if (!ok) { return ok; }
-
-        try query.lamports(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
-        if (!ok) { return ok; }
-
-        try query.executable(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
-        if (!ok) { return ok; }
-
-        try query.rent_epoch(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
-
-        return ok;
-    }
-
     function test_data_ok() public returns (bool) {
-        query.cache(solana_account, 0, 0); // delete from cache if any
         query.cache(solana_account, 0, 64);
 
         byte b0 = 0x71;
@@ -247,19 +236,7 @@ contract TestQueryAccount {
         return true;
     }
 
-    function test_data_nonexistent_account() public returns (bool) {
-        query.cache(missing_account, 0, 0); // delete from cache if any
-
-        uint64 offset = 0;
-        uint64 len = 1;
-        try query.data(missing_account, offset, len) { } catch {
-            return true; // expected exception
-        }
-        return false;
-    }
-
     function test_data_too_big_offset() public returns (bool) {
-        query.cache(solana_account, 0, 0); // delete from cache if any
         query.cache(solana_account, 0, 82);
 
         uint64 offset = 200; // data len is 82
@@ -271,7 +248,6 @@ contract TestQueryAccount {
     }
 
     function test_data_too_big_length() public returns (bool) {
-        query.cache(solana_account, 0, 0); // delete from cache if any
         query.cache(solana_account, 0, 82);
 
         uint64 offset = 0;
@@ -327,24 +303,10 @@ class Test_Query_Account_Contract(unittest.TestCase):
         assert(ok)
 
     # @unittest.skip("a.i.")
-    def test_metadata_nonexistent_account(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_metadata_nonexistent_account().call()
-        assert(ok)
-
-    # @unittest.skip("a.i.")
     def test_data_ok(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         ok = query.functions.test_data_ok().call()
-        assert(ok)
-
-    # @unittest.skip("a.i.")
-    def test_data_nonexistent_account(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_data_nonexistent_account().call()
         assert(ok)
 
     # @unittest.skip("a.i.")
