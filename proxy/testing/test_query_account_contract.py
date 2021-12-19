@@ -110,44 +110,69 @@ contract QueryAccount {
 contract TestQueryAccount {
     QueryAccount query;
 
+    uint256 constant solana_account = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+    uint256 constant missing_account = 90000;
+
     constructor() {
         query = new QueryAccount();
     }
 
-    function test_cache() public view returns (bool) {
-        return false;
+    function test_cache() public returns (bool) {
+        bool ok = false;
+
+        // Redundant insert
+        query.cache(solana_account, 0, 0); // delete from cache if any
+        query.cache(solana_account, 0, 64);
+        try query.cache(solana_account, 0, 32) { ok = false; } catch { ok = true; /* expected exception */ }
+        if (!ok) { return ok; }
+
+        // Length too long
+        query.cache(solana_account, 0, 0); // delete from cache if any
+        try query.cache(solana_account, 0, 200) { ok = false; } catch { ok = true; /* expected exception */ }
+        if (!ok) { return ok; }
+
+        // Offset too big
+        query.cache(solana_account, 0, 0); // delete from cache if any
+        try query.cache(solana_account, 200, 16) { ok = false; } catch { ok = true; /* expected exception */ }
+        if (!ok) { return ok; }
+
+        // Insert nonexistent account
+        try query.cache(missing_account, 0, 1) { ok = false; } catch { ok = true; /* expected exception */ }
+
+        return ok;
     }
 
-    function test_metadata_ok() public view returns (bool) {
-        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+    function test_metadata_ok() public returns (bool) {
+        query.cache(solana_account, 0, 0); // delete from cache if any
+        query.cache(solana_account, 0, 64);
 
-        uint256 golden_ownr = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
+        uint256 golden_owner = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
         uint256 golden_len = 82;
         uint256 golden_lamp = 1461600;
         bool golden_exec = false;
         uint256 golden_repoch = 0;
 
-        uint256 ownr = query.owner(solana_address);
-        if (ownr != golden_ownr) {
+        uint256 ownr = query.owner(solana_account);
+        if (ownr != golden_owner) {
             return false;
         }
 
-        uint len = query.length(solana_address);
+        uint len = query.length(solana_account);
         if (len != golden_len) {
             return false;
         }
 
-        uint256 lamp = query.lamports(solana_address);
+        uint256 lamp = query.lamports(solana_account);
         if (lamp != golden_lamp) {
             return false;
         }
 
-        bool exec = query.executable(solana_address);
+        bool exec = query.executable(solana_account);
         if (exec != golden_exec) {
             return false;
         }
 
-        uint256 repoch = query.rent_epoch(solana_address);
+        uint256 repoch = query.rent_epoch(solana_account);
         if (repoch != golden_repoch) {
             return false;
         }
@@ -155,29 +180,32 @@ contract TestQueryAccount {
         return true;
     }
 
-    function test_metadata_nonexistent_account() public view returns (bool) {
-        uint256 solana_address = 90000; // should not exist
+    function test_metadata_nonexistent_account() public returns (bool) {
         bool ok = false;
 
-        try query.owner(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
+        query.cache(missing_account, 0, 0); // delete from cache if any
+
+        try query.owner(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
-        try query.length(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
+        try query.length(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
-        try query.lamports(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
+        try query.lamports(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
-        try query.executable(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
+        try query.executable(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
-        try query.rent_epoch(solana_address) { ok = false; } catch { ok = true; /* expected exception */ }
+        try query.rent_epoch(missing_account) { ok = false; } catch { ok = true; /* expected exception */ }
 
         return ok;
     }
 
-    function test_data_ok() public view returns (bool) {
-        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+    function test_data_ok() public returns (bool) {
+        query.cache(solana_account, 0, 0); // delete from cache if any
+        query.cache(solana_account, 0, 64);
+
         byte b0 = 0x71;
         byte b1 = 0x33;
         byte b2 = 0xc6;
@@ -186,7 +214,7 @@ contract TestQueryAccount {
         // Test getting subset of data
         uint64 offset = 20;
         uint64 len = 4;
-        bytes memory result = query.data(solana_address, offset, len);
+        bytes memory result = query.data(solana_account, offset, len);
         if (result.length != 4) {
             return false;
         }
@@ -204,40 +232,45 @@ contract TestQueryAccount {
         }
         // Test getting full data
         offset = 0;
-        len = 82;
-        result = query.data(solana_address, offset, len);
-        if (result.length != 82) {
+        len = 64;
+        result = query.data(solana_account, offset, len);
+        if (result.length != 64) {
             return false;
         }
 
         return true;
     }
 
-    function test_data_nonexistent_account() public view returns (bool) {
-        uint256 solana_address = 90000; // hopefully does not exist
+    function test_data_nonexistent_account() public returns (bool) {
+        query.cache(missing_account, 0, 0); // delete from cache if any
+
         uint64 offset = 0;
         uint64 len = 1;
-        try query.data(solana_address, offset, len) { } catch {
+        try query.data(missing_account, offset, len) { } catch {
             return true; // expected exception
         }
         return false;
     }
 
-    function test_data_too_big_offset() public view returns (bool) {
-        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+    function test_data_too_big_offset() public returns (bool) {
+        query.cache(solana_account, 0, 0); // delete from cache if any
+        query.cache(solana_account, 0, 64);
+
         uint64 offset = 200; // data len is 82
         uint64 len = 1;
-        try query.data(solana_address, offset, len) { } catch {
+        try query.data(solana_account, offset, len) { } catch {
             return true; // expected exception
         }
         return false;
     }
 
-    function test_data_too_big_length() public view returns (bool) {
-        uint256 solana_address = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
+    function test_data_too_big_length() public returns (bool) {
+        query.cache(solana_account, 0, 0); // delete from cache if any
+        query.cache(solana_account, 0, 64);
+
         uint64 offset = 0;
         uint64 len = 200; // data len is 82
-        try query.data(solana_address, offset, len) { } catch {
+        try query.data(solana_account, offset, len) { } catch {
             return true; // expected exception
         }
         return false;
