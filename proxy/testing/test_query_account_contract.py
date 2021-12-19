@@ -122,7 +122,7 @@ contract TestQueryAccount {
 
         // Redundant insert
         query.cache(solana_account, 0, 0); // delete from cache if any
-        query.cache(solana_account, 0, 64);
+        query.cache(solana_account, 0, 64); // first insert
         try query.cache(solana_account, 0, 32) { ok = false; } catch { ok = true; /* expected exception */ }
         if (!ok) { return ok; }
 
@@ -139,6 +139,12 @@ contract TestQueryAccount {
         // Insert nonexistent account
         try query.cache(missing_account, 0, 1) { ok = false; } catch { ok = true; /* expected exception */ }
 
+        return ok;
+    }
+
+    function test_noncached() public returns (bool) {
+        bool ok = false;
+        try query.length(solana_account) { ok = false; } catch { ok = true; /* expected exception */ }
         return ok;
     }
 
@@ -254,7 +260,7 @@ contract TestQueryAccount {
 
     function test_data_too_big_offset() public returns (bool) {
         query.cache(solana_account, 0, 0); // delete from cache if any
-        query.cache(solana_account, 0, 64);
+        query.cache(solana_account, 0, 82);
 
         uint64 offset = 200; // data len is 82
         uint64 len = 1;
@@ -266,7 +272,7 @@ contract TestQueryAccount {
 
     function test_data_too_big_length() public returns (bool) {
         query.cache(solana_account, 0, 0); // delete from cache if any
-        query.cache(solana_account, 0, 64);
+        query.cache(solana_account, 0, 82);
 
         uint64 offset = 0;
         uint64 len = 200; // data len is 82
@@ -307,46 +313,53 @@ class Test_Query_Account_Contract(unittest.TestCase):
         assert(ok)
 
     # @unittest.skip("a.i.")
-#    def test_metadata_ok(self):
-#        print
-#        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-#        get_metadata_ok = query.functions.test_metadata_ok().call()
-#        assert(get_metadata_ok)
+    def test_noncached(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        ok = query.functions.test_noncached().call()
+        assert(ok)
 
     # @unittest.skip("a.i.")
-#    def test_metadata_nonexistent_account(self):
-#        print
-#        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-#        get_metadata_nonexistent_account = query.functions.test_metadata_nonexistent_account().call()
-#        assert(get_metadata_nonexistent_account)
+    def test_metadata_ok(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        ok = query.functions.test_metadata_ok().call()
+        assert(ok)
 
     # @unittest.skip("a.i.")
-#    def test_data_ok(self):
-#        print
-#        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-#        get_data_ok = query.functions.test_data_ok().call()
-#        assert(get_data_ok)
+    def test_metadata_nonexistent_account(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        ok = query.functions.test_metadata_nonexistent_account().call()
+        assert(ok)
 
     # @unittest.skip("a.i.")
-#    def test_data_nonexistent_account(self):
-#        print
-#        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-#        get_data_nonexistent_account = query.functions.test_data_nonexistent_account().call()
-#        assert(get_data_nonexistent_account)
+    def test_data_ok(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        ok = query.functions.test_data_ok().call()
+        assert(ok)
 
     # @unittest.skip("a.i.")
-#    def test_data_too_big_offset(self):
-#        print
-#        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-#        get_data_too_big_offset = query.functions.test_data_too_big_offset().call()
-#        assert(get_data_too_big_offset)
+    def test_data_nonexistent_account(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        ok = query.functions.test_data_nonexistent_account().call()
+        assert(ok)
 
     # @unittest.skip("a.i.")
-#    def test_data_too_big_length(self):
-#        print
-#        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-#        get_data_too_big_length = query.functions.test_data_too_big_length().call()
-#        assert(get_data_too_big_length)
+    def test_data_too_big_offset(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        ok = query.functions.test_data_too_big_offset().call()
+        assert(ok)
+
+    # @unittest.skip("a.i.")
+    def test_data_too_big_length(self):
+        print
+        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
+        ok = query.functions.test_data_too_big_length().call()
+        assert(ok)
 
 if __name__ == '__main__':
     unittest.main()
