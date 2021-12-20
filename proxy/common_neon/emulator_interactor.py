@@ -21,8 +21,10 @@ def check_emulated_exit_status(result: Dict[str, Any]):
     exit_status = result['exit_status']
     if exit_status == 'revert':
         result_value = decode_revert_message(result['result'])
-        message = 'execution reverted: ' + result_value if result_value is not None else 'execution reverted'
-        raise EthereumError(code=3, message=message, data='0x' + result_value)
+        if result_value is None:
+            raise EthereumError(code=3, message='execution reverted')
+        else:
+            raise EthereumError(code=3, message='execution reverted: ' + result_value, data='0x' + result_value)
 
     if result["exit_status"] != "succeed":
         raise Exception("evm emulator error ", result)
