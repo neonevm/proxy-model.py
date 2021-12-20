@@ -37,14 +37,6 @@ def decode_revert_message(data) -> Optional[str]:
     return message
 
 
-def raise_eth_err_by_revert(result_value: str):
-    if len(result_value) < 8 or result_value[:8] != '08c379a0':
-        raise EthereumError(code=3, message='execution reverted')
-
-
-    raise EthereumError(code=3, message='execution reverted: ' + message, data='0x' + result_value)
-
-
 def emulator(contract, sender, data, value):
     data = data or "none"
     value = value or ""
