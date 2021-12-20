@@ -309,14 +309,14 @@ class Test_Query_Account_Contract(unittest.TestCase):
         ok = query.functions.test_data_ok().call()
         assert(ok)
 
-    @unittest.skip("Temporatily")
+    # @unittest.skip("Temporatily")
     def test_data_too_big_offset(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         ok = query.functions.test_data_too_big_offset().call()
         assert(ok)
 
-    @unittest.skip("Temporatily")
+    # @unittest.skip("Temporatily")
     def test_data_too_big_length(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
