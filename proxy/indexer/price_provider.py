@@ -5,11 +5,15 @@ import base58
 import struct
 from datetime import datetime
 from logging import Logger
+from decimal import Decimal
 
 logger = Logger(__name__)
 
+# Follow link https://github.com/pyth-network/pyth-client-rs/blob/main/src/lib.rs
+# for details on structure of pyth.network price accounts.
 field_info = {
   'expo': { 'pos': 20, 'len': 4, 'format': '<i' },
+  'valid_slot': { 'pos': 40, 'len': 8, 'format': '<Q' },
   'agg.price': { 'pos': 208, 'len': 8, 'format': '<q' },
   'agg.conf': { 'pos': 216, 'len': 8, 'format': '<Q' },
   'agg.status': { 'pos': 224, 'len': 4, 'format': '<I' },
@@ -94,7 +98,8 @@ class PriceProvider:
 
         expo = _unpack_field(data, 'expo')
         price = _unpack_field(data, 'agg.price')
-        return price * pow(10, expo)
+        valid_slot = _unpack_field(data, 'valid_slot')
+        return Decimal(price) * pow(Decimal(10), expo)
 
 
     def get_price(self, pairname):

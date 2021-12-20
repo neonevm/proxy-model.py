@@ -8,6 +8,7 @@ import base58
 import json
 import logging
 from datetime import date, datetime
+from decimal import Decimal
 
 try:
     from utils import check_error
@@ -16,9 +17,9 @@ except ImportError:
     from .utils import check_error
     from .sql_dict import SQLDict
 
-ACCOUNT_CREATION_PRICE_SOL = 0.00472692
+ACCOUNT_CREATION_PRICE_SOL = Decimal('0.00472692')
 AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
-NEON_PRICE_USD = 0.25
+NEON_PRICE_USD = Decimal('0.25')
 
 
 class Airdropper(IndexerBase):
@@ -143,7 +144,7 @@ class Airdropper(IndexerBase):
             self.airdrop_amount_neon = self.airdrop_amount_usd / NEON_PRICE_USD
             logger.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
 
-        return int(self.airdrop_amount_neon * pow(10, self.neon_decimals))
+        return int(self.airdrop_amount_neon * pow(Decimal(10), self.neon_decimals))
 
 
     def _schedule_airdrop(self, create_acc):

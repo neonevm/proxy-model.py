@@ -6,6 +6,7 @@ from proxy.indexer.price_provider import PriceProvider
 import time
 from flask import request, Response
 from unittest.mock import Mock, MagicMock, patch, call, ANY
+from decimal import Decimal
 import itertools
 from proxy.testing.transactions import pre_token_airdrop_trx1, pre_token_airdrop_trx2,\
     create_sol_acc_and_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address1, \
@@ -102,7 +103,7 @@ class Test_Airdropper(unittest.TestCase):
         """
         Should not airdrop for contract that is not in whitelist
         """
-        mock_get_price.side_effect = [235.0]
+        mock_get_price.side_effect = [Decimal('235.0')]
         mock_is_allowed_contract.side_effect = [False]
         self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx1)
         self.airdropper._process_scheduled_trxs()
@@ -118,8 +119,8 @@ class Test_Airdropper(unittest.TestCase):
         """
         Should not add address to processed list due to faucet error
         """
-        sol_price = 341
-        airdrop_amount = int(pow(10, self.neon_decimals) * (AIRDROP_AMOUNT_SOL * sol_price) / NEON_PRICE_USD)
+        sol_price = Decimal('341.5')
+        airdrop_amount = int(pow(Decimal(10), self.neon_decimals) * (AIRDROP_AMOUNT_SOL * sol_price) / NEON_PRICE_USD)
         mock_get_price.side_effect = [sol_price]
         self.mock_airdrop_ready.__contains__.side_effect = [False]  # new eth address
         self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=400, mimetype='application/json')]
