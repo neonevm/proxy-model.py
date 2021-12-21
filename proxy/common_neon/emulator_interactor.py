@@ -40,7 +40,7 @@ def decode_revert_message(data) -> Optional[str]:
         return None
 
     if len(data) < 8:
-        raise Exception(f"To less bytes to decode reverting signature: {len(data)}, data: 0x{data}")
+        raise Exception(f"To less bytes to decode revert signature: {len(data)}, data: 0x{data}")
 
     if data[:8] != '08c379a0':
         logger.debug(f"Failed to decode revert_message, unknown revert signature: {data[:8]}")
