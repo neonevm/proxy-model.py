@@ -1,3 +1,4 @@
+from os import device_encoding
 from proxy.indexer.price_provider import PriceProvider, field_info, PRICE_STATUS_TRADING,\
     PRICE_STATUS_UNKNOWN, \
     testnet_price_accounts, \
@@ -16,7 +17,7 @@ from decimal import Decimal
 import base58, base64
 
 
-def _create_price_account_info(price: Decimal, status: int, enc: str):
+def _create_price_account_info(valid_slot: int, price: Decimal, conf: Decimal, status: int, enc: str):
     # Follow link https://github.com/pyth-network/pyth-client-rs/blob/main/src/lib.rs
     # for details on structure of pyth.network price accounts.
     # Current implementation of PriceProvider uses only few fields of account
@@ -27,12 +28,22 @@ def _create_price_account_info(price: Decimal, status: int, enc: str):
     data = b'\x00' * field_info['expo']['pos']
     data += pack(field_info['expo']['format'], exponent)
 
-    raw_price = int(price / pow(Decimal(10), exponent))
-    # fill gap between expo and agg.price fields with zeros
+    # Fill gap between expo and valid_slot fields with zeros
+    data += b'\x00' * (field_info['valid_slot']['pos'] - len(data))
+    # set valid slot
+    data += pack(field_info['valid_slot']['format'], valid_slot)
+
+    # fill gap between valid_slot and agg.price fields with zeros
     data += b'\x00' * (field_info['agg.price']['pos'] - len(data))
+    # set price
+    raw_price = int(price / pow(Decimal(10), exponent))
     data += pack(field_info['agg.price']['format'], raw_price)
 
-    # fill gap between agg.price and agg.status fields with zeros
+    # set agg.conf
+    raw_conf = int(conf / pow(Decimal(10), exponent))
+    data += pack(field_info['agg.conf']['format'], raw_conf)
+
+    # fill gap between agg.conf and agg.status fields with zeros
     data += b'\x00' * (field_info['agg.status']['pos'] - len(data))
     data += pack(field_info['agg.status']['format'], status)
     # rest of data array is not used by PriceProvier so no need to fill it
@@ -73,14 +84,24 @@ class TestPriceProvider(TestCase):
 
         mock_get_current_time.side_effect = [ first_call_time, second_call_time]
 
+        valid_slot = 123
         current_price = Decimal('315.0')
-        mock_get_account_info.side_effect = [_create_price_account_info(current_price,
+        conf = Decimal('0.04')
+        mock_get_account_info.side_effect = [_create_price_account_info(valid_slot,
+                                                                        current_price,
+                                                                        conf,
                                                                         PRICE_STATUS_TRADING,
                                                                         'base58')]
 
+        get_price_result = {
+            'valid_slot': valid_slot,
+            'price': current_price,
+            'conf': conf
+        }
+
         pair_name = 'SOL/USD'
-        self.assertEqual(self.testnet_price_provider.get_price(pair_name), current_price)
-        self.assertEqual(self.testnet_price_provider.get_price(pair_name), current_price)
+        self.assertEqual(self.testnet_price_provider.get_price(pair_name), get_price_result)
+        self.assertEqual(self.testnet_price_provider.get_price(pair_name), get_price_result)
 
         mock_get_current_time.assert_has_calls([call(), call()])
         mock_get_account_info.assert_called_once_with(PublicKey(testnet_price_accounts[pair_name]))
@@ -98,17 +119,29 @@ class TestPriceProvider(TestCase):
 
         mock_get_current_time.side_effect = [ first_call_time, second_call_time]
 
+        valid_slot = 123
         current_price = Decimal('315.0')
-        mock_get_account_info.side_effect = [_create_price_account_info(current_price,
+        conf = Decimal('0.04')
+        mock_get_account_info.side_effect = [_create_price_account_info(valid_slot,
+                                                                        current_price,
+                                                                        conf,
                                                                         PRICE_STATUS_TRADING,
                                                                         'base58'),
-                                             _create_price_account_info(current_price,
+                                             _create_price_account_info(valid_slot,
+                                                                        current_price,
+                                                                        conf,
                                                                         PRICE_STATUS_TRADING,
                                                                         'base64')]
 
+        get_price_result = {
+            'valid_slot': valid_slot,
+            'price': current_price,
+            'conf': conf
+        }
+
         pair_name = 'SOL/USD'
-        self.assertEqual(self.testnet_price_provider.get_price(pair_name), current_price)
-        self.assertEqual(self.testnet_price_provider.get_price(pair_name), current_price)
+        self.assertEqual(self.testnet_price_provider.get_price(pair_name), get_price_result)
+        self.assertEqual(self.testnet_price_provider.get_price(pair_name), get_price_result)
 
         price_acc_key = PublicKey(testnet_price_accounts[pair_name])
         mock_get_current_time.assert_has_calls([call(), call()])
@@ -124,8 +157,12 @@ class TestPriceProvider(TestCase):
 
         mock_get_current_time.side_effect = [first_call_time]
 
+        valid_slot = 123
         current_price = Decimal('315.0')
-        mock_get_account_info.side_effect = [_create_price_account_info(current_price,
+        conf = Decimal('0.04')
+        mock_get_account_info.side_effect = [_create_price_account_info(valid_slot,
+                                                                        current_price,
+                                                                        conf,
                                                                         PRICE_STATUS_UNKNOWN,
                                                                         'base58')]
 
@@ -165,15 +202,25 @@ class TestPriceProvider(TestCase):
 
         mock_get_current_time.side_effect = [ first_call_time, second_call_time]
 
+        valid_slot = 123
         current_price = Decimal('315.0')
-        mock_get_account_info.side_effect = [_create_price_account_info(current_price,
+        conf = Decimal('0.04')
+        mock_get_account_info.side_effect = [_create_price_account_info(valid_slot,
+                                                                        current_price,
+                                                                        conf,
                                                                         PRICE_STATUS_TRADING,
                                                                         'base58'),
                                              {'result':{}}] # << Wrong message format
 
+        get_price_result = {
+            'valid_slot': valid_slot,
+            'price': current_price,
+            'conf': conf
+        }
+
         pair_name = 'SOL/USD'
-        self.assertEqual(self.testnet_price_provider.get_price(pair_name), current_price)
-        self.assertEqual(self.testnet_price_provider.get_price(pair_name), current_price)
+        self.assertEqual(self.testnet_price_provider.get_price(pair_name), get_price_result)
+        self.assertEqual(self.testnet_price_provider.get_price(pair_name), get_price_result)
 
         price_acc_key = PublicKey(testnet_price_accounts[pair_name])
         mock_get_current_time.assert_has_calls([call(), call()])
