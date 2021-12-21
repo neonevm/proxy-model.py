@@ -2,7 +2,7 @@ import json
 import logging
 
 from .errors import EthereumError
-from ..environment import neon_cli
+from ..environment import neon_cli, ETH_TOKEN_MINT_ID
 
 
 logger = logging.getLogger(__name__)
@@ -31,4 +31,4 @@ def call_emulated(contract_id, caller_id, data=None, value=None):
 def emulator(contract, sender, data, value):
     data = data or "none"
     value = value or ""
-    return neon_cli().call("emulate", sender, contract, data, value)
+    return neon_cli().call("--token_mint", ETH_TOKEN_MINT_ID, "emulate", sender, contract, data, value)
