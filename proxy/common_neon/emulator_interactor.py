@@ -20,19 +20,23 @@ def call_emulated(contract_id, caller_id, data=None, value=None):
 def check_emulated_exit_status(result: Dict[str, Any]):
     exit_status = result['exit_status']
     if exit_status == 'revert':
-        result_value = decode_revert_message(result['result'])
+        revert_data = result['result']
+        logger.debug(f"Got revert call emulated result with data: {revert_data}")
+        result_value = decode_revert_message(revert_data)
         if result_value is None:
-            raise EthereumError(code=3, message='execution reverted')
+            raise EthereumError(code=3, message='')
         else:
             raise EthereumError(code=3, message='execution reverted: ' + result_value, data='0x' + result_value)
 
-    if result["exit_status"] != "succeed":
+    exit_status = result["exit_status"]
+    if exit_status != "succeed":
+        logger.debug(f"Got emulate exit_status: {exit_status}")
         raise Exception("evm emulator error ", result)
 
 
 def decode_revert_message(data) -> Optional[str]:
     if len(data) == 0:
-        logger.debug(f"Empty reverting signature: {len(data)}, data: 0x{data}")
+        logger.debug(f"Empty revert data")
         return None
 
     if len(data) < 8:
