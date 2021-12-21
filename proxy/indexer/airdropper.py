@@ -1,9 +1,10 @@
 from web3 import eth
+import psycopg2
 from proxy.indexer.indexer_base import IndexerBase, logger
 from proxy.indexer.price_provider import PriceProvider
 import requests
 import base58
-import json
+import os
 import logging
 from datetime import date, datetime
 from decimal import Decimal
@@ -18,6 +19,46 @@ except ImportError:
 ACCOUNT_CREATION_PRICE_SOL = Decimal('0.00472692')
 AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 NEON_PRICE_USD = Decimal('0.25')
+
+POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
+POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
+POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy-pass")
+POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
+
+class AirdropReadySet:
+    def __init__(self) -> None:
+        self.conn = psycopg2.connect(
+            dbname=POSTGRES_DB,
+            user=POSTGRES_USER,
+            password=POSTGRES_PASSWORD,
+            host=POSTGRES_HOST
+        )
+        self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        cur = self.conn.cursor()
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS
+        airdrop_ready (
+            eth_address     TEXT UNIQUE,
+            scheduled_ts    BIGINT,
+            finished_ts     BIGINT,
+            duration        INTEGER,
+            amount_galans   INTEGER
+        )
+        ''')
+
+    def register_airdrop(self, eth_address: str, airdrop_info: dict):
+        finished = int(datetime.now().timestamp())
+        duration = finished - airdrop_info['scheduled'];
+        cur = self.conn.cursor()
+        cur.execute(f'''
+        INSERT INTO airdrop_ready (eth_address, scheduled_ts, finished_ts, duration, amount_galans)
+        VALUES ('{eth_address}', {airdrop_info['scheduled']}, {finished}, {duration}, {airdrop_info['amount']})
+        ''')
+
+    def is_airdrop_ready(self, eth_address):
+        cur = self.conn.cursor()
+        cur.execute(f"SELECT 1 FROM airdrop_ready WHERE eth_address = '{eth_address}'")
+        return cur.fetchone() is not None
 
 
 class Airdropper(IndexerBase):
@@ -37,7 +78,7 @@ class Airdropper(IndexerBase):
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
-        self.airdrop_ready = SQLDict(tablename="airdrop_ready")
+        self.airdrop_ready = AirdropReadySet()
         self.airdrop_scheduled = SQLDict(tablename="airdrop_scheduled")
         self.wrapper_whitelist = wrapper_whitelist
         self.faucet_url = faucet_url
@@ -163,7 +204,7 @@ class Airdropper(IndexerBase):
 
     def _schedule_airdrop(self, create_acc):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
-        if eth_address in self.airdrop_ready:  # Target account already supplied with airdrop
+        if self.airdrop_ready.is_airdrop_ready(eth_address):  # Target account already supplied with airdrop
             return
         logger.info(f'Scheduling airdrop for {eth_address}')
         self.airdrop_scheduled[eth_address] = { 'scheduled': datetime.now().timestamp() }
@@ -180,9 +221,11 @@ class Airdropper(IndexerBase):
             if not self._airdrop_to(eth_address, airdrop_galans):
                 continue
             success_addresses.add(eth_address)
-            self.airdrop_ready[eth_address] = { 'amount': airdrop_galans, 
-                                                'scheduled': sched_info['scheduled'],
-                                                'finished': datetime.now().timestamp() }
+            self.airdrop_ready.register_airdrop(eth_address,
+                                                { 
+                                                    'amount': airdrop_galans, 
+                                                    'scheduled': sched_info['scheduled']
+                                                })
 
         for eth_address in success_addresses:
             del self.airdrop_scheduled[eth_address]
