@@ -42,6 +42,13 @@ def create_get_signatures_for_address(signatures: list):
         'id': 1
     }
 
+def create_price_info(valid_slot: int, price: Decimal, conf: Decimal):
+    return {
+        'valid_slot':   valid_slot,
+        'price':        price,
+        'conf':         conf
+    }
+
 
 class Test_Airdropper(unittest.TestCase):
     @classmethod
@@ -103,7 +110,10 @@ class Test_Airdropper(unittest.TestCase):
         """
         Should not airdrop for contract that is not in whitelist
         """
-        mock_get_price.side_effect = [Decimal('235.0')]
+        self.airdropper.current_slot = 1234
+        mock_get_price.side_effect = [create_price_info(self.airdropper.current_slot,
+                                                        Decimal('235.0'),
+                                                        Decimal('1.3'))]
         mock_is_allowed_contract.side_effect = [False]
         self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx1)
         self.airdropper._process_scheduled_trxs()
@@ -121,7 +131,10 @@ class Test_Airdropper(unittest.TestCase):
         """
         sol_price = Decimal('341.5')
         airdrop_amount = int(pow(Decimal(10), self.neon_decimals) * (AIRDROP_AMOUNT_SOL * sol_price) / NEON_PRICE_USD)
-        mock_get_price.side_effect = [sol_price]
+        self.airdropper.current_slot = 1234
+        mock_get_price.side_effect = [create_price_info(self.airdropper.current_slot,
+                                                        sol_price,
+                                                        Decimal('1.3'))]
         self.mock_airdrop_ready.__contains__.side_effect = [False]  # new eth address
         self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=400, mimetype='application/json')]
 
@@ -147,4 +160,19 @@ class Test_Airdropper(unittest.TestCase):
         self.mock_airdrop_ready.__setitem__.assert_not_called()
         self.faucet.request_neon_in_galans_mock.assert_not_called()
     
+    @patch.object(PriceProvider, 'get_price')
+    def test_failed_airdrop_confidence_interval_too_large(self, mock_get_price):
+        """
+        Should not airdrop because confidence interval too large
+        """
+        self.airdropper.current_slot = 1234
+        mock_get_price.side_effect = [create_price_info(self.airdropper.current_slot,
+                                                        Decimal('235.0'),
+                                                        Decimal('54.0'))] # << BIG CONFIDENCE INTERVAL
+        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx1)
+        self.airdropper._process_scheduled_trxs()
 
+        mock_get_price.assert_called_once_with('SOL/USD')
+        self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address1)
+        self.mock_airdrop_ready.__setitem__.assert_not_called()
+        self.faucet.request_neon_in_galans_mock.assert_not_called()

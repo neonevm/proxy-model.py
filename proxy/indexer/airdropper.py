@@ -31,7 +31,8 @@ class Airdropper(IndexerBase):
                  log_level = 'INFO',
                  price_upd_interval=60,
                  neon_decimals = 9,
-                 start_slot = 0):
+                 start_slot = 0,
+                 max_conf = 0.1): # maximum confidence interval deviation related to price
         IndexerBase.__init__(self, solana_url, evm_loader_id, log_level, start_slot)
 
         # collection of eth-address-to-create-accout-trx mappings
@@ -47,6 +48,7 @@ class Airdropper(IndexerBase):
                                             price_upd_interval, # seconds
                                             mainnet_price_accounts)
         self.neon_decimals = neon_decimals
+        self.max_conf = Decimal(max_conf)
 
         self.sol_price_usd = None
         self.airdrop_amount_usd = None
@@ -139,8 +141,14 @@ class Airdropper(IndexerBase):
         if new_sol_price_usd != self.sol_price_usd:
             self.sol_price_usd = new_sol_price_usd
             logger.info(f"NEON price: ${NEON_PRICE_USD}")
-            logger.info(f'SOL/USD = ${self.sol_price_usd}')
-            self.airdrop_amount_usd = AIRDROP_AMOUNT_SOL * self.sol_price_usd
+            logger.info(f"Price valid slot: {self.sol_price_usd['valid_slot']}")
+            logger.info(f"Price confidence interval: ${self.sol_price_usd['conf']}")
+            logger.info(f"SOL/USD = ${self.sol_price_usd['price']}")
+            if self.sol_price_usd['conf'] / self.sol_price_usd['price'] > self.max_conf:
+                logger.warning(f"Confidence interval too large. Airdrops will deferred.")
+                return None
+
+            self.airdrop_amount_usd = AIRDROP_AMOUNT_SOL * self.sol_price_usd['price']
             self.airdrop_amount_neon = self.airdrop_amount_usd / NEON_PRICE_USD
             logger.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
 

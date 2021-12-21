@@ -97,9 +97,12 @@ class PriceProvider:
             return None
 
         expo = _unpack_field(data, 'expo')
-        price = _unpack_field(data, 'agg.price')
-        valid_slot = _unpack_field(data, 'valid_slot')
-        return Decimal(price) * pow(Decimal(10), expo)
+        result = {
+            'valid_slot':   _unpack_field(data, 'valid_slot'),
+            'price':        Decimal(_unpack_field(data, 'agg.price')) * pow(Decimal(10), expo),
+            'conf':         Decimal(_unpack_field(data, 'agg.conf')) * pow(Decimal(10), expo)
+        }
+        return result
 
 
     def get_price(self, pairname):
