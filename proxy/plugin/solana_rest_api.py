@@ -642,7 +642,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
         resp_time_ms = (time.time() - start_time)*1000  # convert this into milliseconds
         logger.debug('>>> %s 0x%0x %s %s resp_time_ms= %s', threading.get_ident(), id(self.model), json.dumps(response),
-                     request['method'] if 'method' in request else '---',
+                     request.get('method', '---'),
                      resp_time_ms)
 
         self.client.queue(memoryview(build_http_response(
