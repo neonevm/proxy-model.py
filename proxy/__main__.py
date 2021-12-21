@@ -37,6 +37,10 @@ if __name__ == '__main__':
         else: # try to convert into integer
             start_slot = int(start_slot)
 
+        pp_solana_url = os.environ.get('PP_SOLANA_URL', None)
+        sol_usd_price_acc = os.environ.get('SOL_USD_PRICE_ACC', None)
+        max_conf = float(os.environ.get('MAX_CONFIDENCE_INTERVAL', 0.02))
+
         run_airdropper(solana_url,
                        evm_loader_id,
                        faucet_url,
@@ -44,6 +48,9 @@ if __name__ == '__main__':
                        log_level,
                        price_update_interval,
                        neon_decimals,
-                       start_slot)
+                       start_slot,
+                       pp_solana_url,
+                       sol_usd_price_acc,
+                       max_conf)
     else:
         entry_point()

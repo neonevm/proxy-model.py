@@ -1,8 +1,6 @@
 from web3 import eth
 from proxy.indexer.indexer_base import IndexerBase, logger
-from proxy.indexer.price_provider import PriceProvider, mainnet_solana, mainnet_price_accounts
-from typing import List, Dict
-import os
+from proxy.indexer.price_provider import PriceProvider
 import requests
 import base58
 import json
@@ -32,6 +30,8 @@ class Airdropper(IndexerBase):
                  price_upd_interval=60,
                  neon_decimals = 9,
                  start_slot = 0,
+                 pp_solana_url = None,
+                 sol_usd_price_acc = None,
                  max_conf = 0.1): # maximum confidence interval deviation related to price
         IndexerBase.__init__(self, solana_url, evm_loader_id, log_level, start_slot)
 
@@ -42,11 +42,17 @@ class Airdropper(IndexerBase):
         self.wrapper_whitelist = wrapper_whitelist
         self.faucet_url = faucet_url
 
-        # Price provider need pyth.network be deployed onto solana
-        # so using mainnet solana for simplicity
-        self.price_provider = PriceProvider(mainnet_solana,
+        # Configure price provider
+        if pp_solana_url is None:
+            pp_solana_url = solana_url
+
+        price_accounts = {}
+        if sol_usd_price_acc is not None:
+            price_accounts['SOL/USD'] = sol_usd_price_acc
+
+        self.price_provider = PriceProvider(pp_solana_url,
                                             price_upd_interval, # seconds
-                                            mainnet_price_accounts)
+                                            price_accounts)
         self.neon_decimals = neon_decimals
         self.max_conf = Decimal(max_conf)
 
@@ -205,7 +211,10 @@ def run_airdropper(solana_url,
                    log_level = 'INFO',
                    price_update_interval = 60,
                    neon_decimals = 9,
-                   start_slot = 0):
+                   start_slot = 0,
+                   pp_solana_url = None,
+                   sol_usd_price_acc = None,
+                   max_conf = 0.1):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
     logger.setLevel(logging.DEBUG)
     logger.info(f"""Running indexer with params:
@@ -216,7 +225,10 @@ def run_airdropper(solana_url,
         wrapper_whitelist: {wrapper_whitelist},
         price update interval: {price_update_interval},
         NEON decimals: {neon_decimals},
-        Start slot: {start_slot}""")
+        Start slot: {start_slot},
+        Price provider solana: {pp_solana_url},
+        SOL/USD price account: {sol_usd_price_acc},
+        Max confidence interval: {max_conf}""")
 
     airdropper = Airdropper(solana_url,
                             evm_loader_id,
@@ -225,5 +237,8 @@ def run_airdropper(solana_url,
                             log_level,
                             price_update_interval,
                             neon_decimals,
-                            start_slot)
+                            start_slot,
+                            pp_solana_url,
+                            sol_usd_price_acc,
+                            max_conf)
     airdropper.run()
