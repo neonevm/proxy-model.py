@@ -65,7 +65,6 @@ class TestAirdropperIntegration(TestCase):
             9,
             TOKEN_PROGRAM_ID,
         )
-        sleep(20)
 
     def deploy_erc20_wrapper_contract(self):
         self.wrapper = ERC20Wrapper(proxy, NAME, SYMBOL,
@@ -98,7 +97,7 @@ class TestAirdropperIntegration(TestCase):
         return account
 
     def create_token_account(self, owner: PublicKey, mint_amount: int):
-        new_token_account = self.wrapper.create_associated_token_account(owner)
+        new_token_account = self.wrapper.create_associated_token_account(owner, self.mint_authority)
         self.wrapper.mint_to(new_token_account, mint_amount)
         return new_token_account
 
@@ -113,7 +112,7 @@ class TestAirdropperIntegration(TestCase):
         mint_amount = 1000_000_000_000
         from_spl_token_acc = self.create_token_account(from_owner.public_key(), mint_amount)
         to_neon_acc = self.create_eth_account().address
-        sleep(15)
+
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc), 0)
 
@@ -141,7 +140,6 @@ class TestAirdropperIntegration(TestCase):
         from_spl_token_acc = self.create_token_account(from_owner.public_key(), mint_amount)
         to_neon_acc1 = self.create_eth_account().address
         to_neon_acc2 = self.create_eth_account().address
-        sleep(15)
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc1), 0)

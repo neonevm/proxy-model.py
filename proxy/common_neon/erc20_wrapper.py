@@ -9,6 +9,8 @@ from solana.transaction import AccountMeta, TransactionInstruction
 from solana.system_program import SYS_PROGRAM_ID
 from solana.sysvar import SYSVAR_RENT_PUBKEY
 from solana.rpc.types import TxOpts, RPCResponse, Commitment
+from solana.transaction import Transaction
+import spl.token.instructions as spl_token
 from typing import Union, Dict
 from logging import getLogger
 import struct
@@ -138,8 +140,17 @@ class ERC20Wrapper:
                  neon_account_address_bytes]
         return PublicKey.find_program_address(seeds, self.evm_loader_id)[0]
 
-    def create_associated_token_account(self, owner: PublicKey):
-        return self.token.create_associated_token_account(owner)
+    def create_associated_token_account(self, owner: PublicKey, payer: SolanaAccount):
+        # Construct transaction
+        # This part of code is based on original implementation of Token.create_associated_token_account
+        # except that skip_preflight is set to True
+        txn = Transaction()
+        create_txn = spl_token.create_associated_token_account(
+            payer=payer.public_key(), owner=owner, mint=self.token.pubkey
+        )
+        txn.add(create_txn)
+        self.token._conn.send_transaction(txn, payer, opts=TxOpts(skip_preflight = True, skip_confirmation=False))
+        return create_txn.keys[1].pubkey
 
     def create_neon_erc20_account_instruction(self, payer: PublicKey, eth_address: str):
         return TransactionInstruction(
