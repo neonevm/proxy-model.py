@@ -1,7 +1,6 @@
 import unittest
 import os
 
-
 import eth_account
 import eth_typing
 import eth_utils
