@@ -5,7 +5,7 @@ if [ -z "$SOLANA_URL" ]; then
   exit 1
 fi
 
-if [ -z "$TEST_FAUCET_INIT_NEON_BALANCE"]; then
+if [ -z "$TEST_FAUCET_INIT_NEON_BALANCE" ]; then
     echo "TEST_FAUCET_INIT_NEON_BALANCE is not set"
     exit 1
 fi
@@ -18,21 +18,7 @@ export $(/spl/bin/neon-cli --commitment confirmed --url $SOLANA_URL --evm_loader
 
 echo "Generating new account for operate with faucet service"
 rm /$HOME/.config/solana/id.json
-solana-keygen new --no-passphrase -o "$HOME/.config/solana/id.json"
-
-ACCOUNT=$(solana address -k "/$HOME/.config/solana/id.json")
-echo "New account $ACCOUNT"
-if ! solana account "$ACCOUNT"; then
-    echo "airdropping..."
-    solana airdrop 5000 "$ACCOUNT"
-    # check that balance >= 10 otherwise airdroping by 1 SOL up to 10
-    BALANCE=$(solana balance "$ACCOUNT" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
-    while [ "$BALANCE" -lt 10 ]; do
-      solana airdrop 1 "$ACCOUNT"
-      sleep 1
-      BALANCE=$(solana balance "$ACCOUNT" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
-    done
-fi
+/spl/bin/create-test-accounts.sh 1
 
 if [ "$(spl-token balance "$NEON_TOKEN_MINT" || echo 0)" -eq 0 ]; then
     echo 'Create balance and mint token'
