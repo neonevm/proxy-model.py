@@ -5,7 +5,7 @@ from time import sleep
 import unittest
 import os
 import json
-from solana.rpc.commitment import Confirmed, Recent
+from solana.rpc.commitment import Commitment, Confirmed, Recent
 from solana.rpc.types import TxOpts
 from web3 import Web3
 from spl.token.client import Token as SplToken
@@ -111,15 +111,144 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         self.assertEqual(b, 0)
 
     def test_erc20_transfer(self):
-        erc20 = proxy.eth.contract(address=self.wrapper.neon_contract_address, abi=self.wrapper.interface['abi'])
+        transfer_value = 1000
+        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+
+        admin_balance_before = erc20.functions.balanceOf(admin.address).call()
+        user_balance_before = erc20.functions.balanceOf(user.address).call()
+
         nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         tx = {'nonce': nonce}
-        tx = erc20.functions.transfer(user.address, 1000).buildTransaction(tx)
         tx = proxy.eth.account.sign_transaction(tx, admin.key)
         tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
-        print('tx_hash:',tx_hash)
         tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
         self.assertIsNotNone(tx_receipt)
+        self.assertEqual(tx_receipt.status, 1)
+
+        admin_balance_after = erc20.functions.balanceOf(admin.address).call()
+        user_balance_after = erc20.functions.balanceOf(user.address).call()
+
+        self.assertEqual(admin_balance_after, admin_balance_before - transfer_value)
+        self.assertEqual(user_balance_after, user_balance_before + transfer_value)
+
+    def test_erc20_transfer_not_enough_funds(self):
+        transfer_value = 100_000_000_000_000
+        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+
+        admin_balance_before = erc20.functions.balanceOf(admin.address).call()
+        user_balance_before = erc20.functions.balanceOf(user.address).call()
+
+        with self.assertRaisesRegex(Exception, "ERC20 transfer failed"):
+            erc20.functions.transfer(user.address, transfer_value).buildTransaction()
+
+        admin_balance_after = erc20.functions.balanceOf(admin.address).call()
+        user_balance_after = erc20.functions.balanceOf(user.address).call()
+
+        self.assertEqual(admin_balance_after, admin_balance_before)
+        self.assertEqual(user_balance_after, user_balance_before)
+
+    def test_erc20_transfer_out_of_bounds(self):
+        transfer_value = 0xFFFF_FFFF_FFFF_FFFF + 1
+        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+
+        with self.assertRaisesRegex(Exception, "ERC20 transfer failed"):
+            erc20.functions.transfer(user.address, transfer_value).buildTransaction()
+
+    def test_erc20_approve(self):
+        approve_value = 1000
+        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+
+        allowance_before = erc20.functions.allowance(admin.address, user.address).call()
+
+        nonce = proxy.eth.get_transaction_count(admin.address)
+        tx = erc20.functions.approve(user.address, approve_value).buildTransaction({'nonce': nonce})
+        tx = proxy.eth.account.sign_transaction(tx, admin.key)
+        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
+        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+        self.assertEqual(tx_receipt.status, 1)
+
+        self.assertIsNotNone(tx_receipt)
+
+        allowance_after = erc20.functions.allowance(admin.address, user.address).call()
+        self.assertEqual(allowance_after, allowance_before + approve_value)
+
+    def test_erc20_transferFrom(self):
+        approve_value = 1000
+        transfer_value = 100        
+        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+
+        nonce = proxy.eth.get_transaction_count(admin.address)
+        tx = erc20.functions.approve(user.address, approve_value).buildTransaction({'nonce': nonce})
+        tx = proxy.eth.account.sign_transaction(tx, admin.key)
+        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
+        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+        self.assertIsNotNone(tx_receipt)
+        self.assertEqual(tx_receipt.status, 1)
+
+        allowance_before = erc20.functions.allowance(admin.address, user.address).call()
+        admin_balance_before = erc20.functions.balanceOf(admin.address).call()
+        user_balance_before = erc20.functions.balanceOf(user.address).call()
+
+        nonce = proxy.eth.get_transaction_count(user.address)
+        tx = erc20.functions.transferFrom(admin.address, user.address, transfer_value).buildTransaction(
+            {'nonce': nonce, 'from': user.address}
+        )
+        tx = proxy.eth.account.sign_transaction(tx, user.key)
+        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
+        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+        self.assertIsNotNone(tx_receipt)
+        self.assertEqual(tx_receipt.status, 1)
+
+        allowance_after = erc20.functions.allowance(admin.address, user.address).call()
+        admin_balance_after = erc20.functions.balanceOf(admin.address).call()
+        user_balance_after = erc20.functions.balanceOf(user.address).call()
+
+        self.assertEqual(allowance_after, allowance_before - transfer_value)
+        self.assertEqual(admin_balance_after, admin_balance_before - transfer_value)
+        self.assertEqual(user_balance_after, user_balance_before + transfer_value)
+
+    def test_erc20_transferFrom_beyond_approve(self):
+        transfer_value = 10_000_000
+        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+
+        with self.assertRaisesRegex(Exception, "ERC20 transferFrom failed"):
+            erc20.functions.transferFrom(admin.address, user.address, transfer_value).buildTransaction(
+                {'from': user.address}
+            )
+
+    def test_erc20_transferFrom_out_of_bounds(self):
+        transfer_value = 0xFFFF_FFFF_FFFF_FFFF + 1
+        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+
+        with self.assertRaisesRegex(Exception, "ERC20 transferFrom failed"):
+            erc20.functions.transferFrom(admin.address, user.address, transfer_value).buildTransaction(
+                {'from': user.address}
+            )
+
+    def test_erc20_approveSolana(self):
+        delegate = SolanaAccount()
+        approve_value = 1000
+        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+
+        nonce = proxy.eth.get_transaction_count(admin.address)
+        tx = erc20.functions.approveSolana(bytes(delegate.public_key()), approve_value).buildTransaction({'nonce': nonce})
+        tx = proxy.eth.account.sign_transaction(tx, admin.key)
+        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
+        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+        self.assertEqual(tx_receipt.status, 1)
+
+        self.assertIsNotNone(tx_receipt)
+
+        contract_address_bytes = bytes.fromhex(self.contract_address[2:])
+        admin_address_bytes = bytes.fromhex(admin.address[2:])
+        admin_token_seeds = [ b"\1", b"ERC20Balance", bytes(self.token.pubkey), contract_address_bytes, admin_address_bytes ]
+        admin_solana_token = PublicKey.find_program_address(admin_token_seeds, evm_loader_id)[0]
+
+        accounts = self.solana_client.get_token_accounts_by_delegate(delegate.public_key(), TokenAccountOpts(mint=self.token.pubkey), commitment=Recent)
+        accounts = list(map(lambda a: PublicKey(a['pubkey']), accounts['result']['value']))
+
+        self.assertIn(admin_solana_token, accounts)
+
 
 if __name__ == '__main__':
     unittest.main()
