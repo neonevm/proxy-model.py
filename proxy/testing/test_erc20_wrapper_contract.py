@@ -16,6 +16,7 @@ from solana.publickey import PublicKey
 from proxy.environment import EVM_LOADER_ID
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from proxy.common_neon.neon_instruction import NeonInstruction
+from solana.rpc.types import TokenAccountOpts
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
@@ -94,17 +95,17 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         self.assertEqual(sym, SYMBOL)
 
     def test_erc20_decimals(self):
-        erc20 = proxy.eth.contract(address=self.wrapper.neon_contract_address, abi=self.wrapper.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
         decs = erc20.functions.decimals().call()
         self.assertEqual(decs, 9)
 
     def test_erc20_totalSupply(self):
-        erc20 = proxy.eth.contract(address=self.wrapper.neon_contract_address, abi=self.wrapper.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
         ts = erc20.functions.totalSupply().call()
         self.assertGreater(ts, 0)
 
     def test_erc20_balanceOf(self):
-        erc20 = proxy.eth.contract(address=self.wrapper.neon_contract_address, abi=self.wrapper.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
         b = erc20.functions.balanceOf(admin.address).call()
         self.assertGreater(b, 0)
         b = erc20.functions.balanceOf(user.address).call()
@@ -112,13 +113,14 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
 
     def test_erc20_transfer(self):
         transfer_value = 1000
-        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
 
         admin_balance_before = erc20.functions.balanceOf(admin.address).call()
         user_balance_before = erc20.functions.balanceOf(user.address).call()
 
         nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         tx = {'nonce': nonce}
+        tx = erc20.functions.transfer(user.address, transfer_value).buildTransaction(tx)
         tx = proxy.eth.account.sign_transaction(tx, admin.key)
         tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
         tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
@@ -133,7 +135,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
 
     def test_erc20_transfer_not_enough_funds(self):
         transfer_value = 100_000_000_000_000
-        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
 
         admin_balance_before = erc20.functions.balanceOf(admin.address).call()
         user_balance_before = erc20.functions.balanceOf(user.address).call()
@@ -149,14 +151,14 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
 
     def test_erc20_transfer_out_of_bounds(self):
         transfer_value = 0xFFFF_FFFF_FFFF_FFFF + 1
-        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
 
         with self.assertRaisesRegex(Exception, "ERC20 transfer failed"):
             erc20.functions.transfer(user.address, transfer_value).buildTransaction()
 
     def test_erc20_approve(self):
         approve_value = 1000
-        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
 
         allowance_before = erc20.functions.allowance(admin.address, user.address).call()
 
@@ -175,7 +177,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
     def test_erc20_transferFrom(self):
         approve_value = 1000
         transfer_value = 100        
-        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
 
         nonce = proxy.eth.get_transaction_count(admin.address)
         tx = erc20.functions.approve(user.address, approve_value).buildTransaction({'nonce': nonce})
@@ -209,7 +211,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
 
     def test_erc20_transferFrom_beyond_approve(self):
         transfer_value = 10_000_000
-        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
 
         with self.assertRaisesRegex(Exception, "ERC20 transferFrom failed"):
             erc20.functions.transferFrom(admin.address, user.address, transfer_value).buildTransaction(
@@ -218,7 +220,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
 
     def test_erc20_transferFrom_out_of_bounds(self):
         transfer_value = 0xFFFF_FFFF_FFFF_FFFF + 1
-        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
 
         with self.assertRaisesRegex(Exception, "ERC20 transferFrom failed"):
             erc20.functions.transferFrom(admin.address, user.address, transfer_value).buildTransaction(
@@ -228,7 +230,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
     def test_erc20_approveSolana(self):
         delegate = SolanaAccount()
         approve_value = 1000
-        erc20 = proxy.eth.contract(address=self.contract_address, abi=self.interface['abi'])
+        erc20 = self.wrapper.erc20_interface()
 
         nonce = proxy.eth.get_transaction_count(admin.address)
         tx = erc20.functions.approveSolana(bytes(delegate.public_key()), approve_value).buildTransaction({'nonce': nonce})
@@ -238,16 +240,10 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         self.assertEqual(tx_receipt.status, 1)
 
         self.assertIsNotNone(tx_receipt)
-
-        contract_address_bytes = bytes.fromhex(self.contract_address[2:])
-        admin_address_bytes = bytes.fromhex(admin.address[2:])
-        admin_token_seeds = [ b"\1", b"ERC20Balance", bytes(self.token.pubkey), contract_address_bytes, admin_address_bytes ]
-        admin_solana_token = PublicKey.find_program_address(admin_token_seeds, evm_loader_id)[0]
-
         accounts = self.solana_client.get_token_accounts_by_delegate(delegate.public_key(), TokenAccountOpts(mint=self.token.pubkey), commitment=Recent)
         accounts = list(map(lambda a: PublicKey(a['pubkey']), accounts['result']['value']))
 
-        self.assertIn(admin_solana_token, accounts)
+        self.assertIn(self.wrapper.get_neon_erc20_account_address(admin.address), accounts)
 
 
 if __name__ == '__main__':

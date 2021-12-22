@@ -46,26 +46,6 @@ ERC20_CONTRACT_SOURCE = '''
 
 pragma solidity >=0.5.12;
 
-
-interface IERC20 {
-    function decimals() external view returns (uint8);
-    function totalSupply() external view returns (uint256);
-    function balanceOf(address who) external view returns (uint256);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function transfer(address to, uint256 value) external returns (bool);
-    function approve(address spender, uint256 value) external returns (bool);
-    function transferFrom(address from, address to, uint256 value) external returns (bool);
-
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-
-
-    function approveSolana(bytes32 spender, uint64 value) external returns (bool);
-    event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 value);
-}
-
-
-
 /*abstract*/ contract NeonERC20Wrapper /*is IERC20*/ {
     address constant NeonERC20 = 0xff00000000000000000000000000000000000001;
 
@@ -197,6 +177,9 @@ class ERC20Wrapper:
             destination = self.get_neon_erc20_account_address(destination)
         return self.token.mint_to(destination, self.mint_authority, amount,
                                   opts=TxOpts(skip_preflight=True, skip_confirmation=False))
+
+    def erc20_interface(self):
+        return self.proxy.eth.contract(address=self.neon_contract_address, abi=self.interface['abi'])
 
     def get_balance(self, address: Union[PublicKey, str]) -> int:
         if isinstance(address, PublicKey):
