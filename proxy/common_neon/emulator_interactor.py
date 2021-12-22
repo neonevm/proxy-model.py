@@ -33,7 +33,7 @@ def check_emulated_exit_status(result: Dict[str, Any]):
         raise Exception("evm emulator error ", result)
 
 
-def decode_revert_message(data) -> Optional[str]:
+def decode_revert_message(data: str) -> Optional[str]:
     data_len = len(data)
     if data_len == 0:
         return None
