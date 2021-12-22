@@ -51,12 +51,12 @@ def decode_revert_message(data) -> Optional[str]:
 
     if data_len < 8 + offset * 2 + 64:
         raise Exception(f"Too less bytes to decode revert msg len: {data_len}, data: 0x{data}")
-    length = int(data[8 + offset:8 + offset + 64], 16)
+    length = int(data[8 + offset:8 + offset + 64], 16) * 2
 
-    if data_len < 8 + offset + 64 + length * 2:
+    if data_len < 8 + offset + 64 + length:
         raise Exception(f"Too less bytes to decode revert msg: {data_len}, data: 0x{data}")
 
-    message = str(bytes.fromhex(data[8 + offset + 64:8 + offset + 64 + length * 2]), 'utf8')
+    message = str(bytes.fromhex(data[8 + offset + 64:8 + offset + 64 + length]), 'utf8')
     return message
 
 
