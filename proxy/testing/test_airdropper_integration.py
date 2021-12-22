@@ -19,6 +19,7 @@ import os
 import json
 
 
+MAX_AIRDROP_WAIT_TIME = 45
 EVM_LOADER_ID = PublicKey(EVM_LOADER_ID)
 PROXY_URL = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 FAUCET_RPC_PORT = 3333
@@ -64,7 +65,6 @@ class TestAirdropperIntegration(TestCase):
             9,
             TOKEN_PROGRAM_ID,
         )
-        sleep(20)
 
     def deploy_erc20_wrapper_contract(self):
         self.wrapper = ERC20Wrapper(proxy, NAME, SYMBOL,
@@ -97,7 +97,7 @@ class TestAirdropperIntegration(TestCase):
         return account
 
     def create_token_account(self, owner: PublicKey, mint_amount: int):
-        new_token_account = self.wrapper.create_associated_token_account(owner)
+        new_token_account = self.wrapper.create_associated_token_account(owner, self.mint_authority)
         self.wrapper.mint_to(new_token_account, mint_amount)
         return new_token_account
 
@@ -112,27 +112,39 @@ class TestAirdropperIntegration(TestCase):
         mint_amount = 1000_000_000_000
         from_spl_token_acc = self.create_token_account(from_owner.public_key(), mint_amount)
         to_neon_acc = self.create_eth_account().address
-        sleep(15)
+
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc), 0)
 
+        TRANSFER_AMOUNT = 123456
         trx = Transaction()
         trx.add(self.create_account_instruction(to_neon_acc, from_owner.public_key()))
         trx.add(self.wrapper.create_neon_erc20_account_instruction(from_owner.public_key(), to_neon_acc))
         trx.add(self.wrapper.create_input_liquidity_instruction(from_owner.public_key(),
                                                                 from_spl_token_acc,
                                                                 to_neon_acc,
-                                                                123456))
+                                                                TRANSFER_AMOUNT))
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
 
-        sleep(15)
-        self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - 123456)
-        self.assertEqual(self.wrapper.get_balance(to_neon_acc), 123456)
+        self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - TRANSFER_AMOUNT)
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc), TRANSFER_AMOUNT)
+
+        wait_time = 0
+        eth_balance = 0
+        while wait_time < MAX_AIRDROP_WAIT_TIME:
+            eth_balance = proxy.eth.get_balance(to_neon_acc)
+            balance_ready = eth_balance > 0 and eth_balance < 10 * pow(10, 18)
+            if balance_ready:
+                break
+            sleep(1)
+            wait_time += 1
+        print(f"Wait time for simple transaction (1 airdrop): {wait_time}")
+
         eth_balance = proxy.eth.get_balance(to_neon_acc)
         print("NEON balance is: ", eth_balance)
-        self.assertGreater(eth_balance, 0)
+        self.assertTrue(eth_balance > 0 and eth_balance < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
 
     def test_success_airdrop_complex_case(self):
         from_owner = self.create_sol_account()
@@ -140,12 +152,13 @@ class TestAirdropperIntegration(TestCase):
         from_spl_token_acc = self.create_token_account(from_owner.public_key(), mint_amount)
         to_neon_acc1 = self.create_eth_account().address
         to_neon_acc2 = self.create_eth_account().address
-        sleep(15)
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc1), 0)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc2), 0)
 
+        TRANSFER_AMOUNT1 = 123456
+        TRANSFER_AMOUNT2 = 654321
         trx = Transaction()
         trx.add(self.create_account_instruction(to_neon_acc1, from_owner.public_key()))
         trx.add(self.create_account_instruction(to_neon_acc2, from_owner.public_key()))
@@ -154,25 +167,40 @@ class TestAirdropperIntegration(TestCase):
         trx.add(self.wrapper.create_input_liquidity_instruction(from_owner.public_key(),
                                                                 from_spl_token_acc,
                                                                 to_neon_acc1,
-                                                                123456))
+                                                                TRANSFER_AMOUNT1))
         trx.add(self.wrapper.create_input_liquidity_instruction(from_owner.public_key(),
                                                                 from_spl_token_acc,
                                                                 to_neon_acc2,
-                                                                654321))
+                                                                TRANSFER_AMOUNT2))
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
 
-        sleep(45)
-        self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - 123456 - 654321)
-        self.assertEqual(self.wrapper.get_balance(to_neon_acc1), 123456)
-        self.assertEqual(self.wrapper.get_balance(to_neon_acc2), 654321)
+        self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - TRANSFER_AMOUNT1 - TRANSFER_AMOUNT2)
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc1), TRANSFER_AMOUNT1)
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc2), TRANSFER_AMOUNT2)
+
+
+        wait_time = 0
+        eth_balance1 = 0
+        eth_balance2 = 0
+        while wait_time < MAX_AIRDROP_WAIT_TIME:
+            eth_balance1 = proxy.eth.get_balance(to_neon_acc1)
+            eth_balance2 = proxy.eth.get_balance(to_neon_acc2)
+            balance1_ready = eth_balance1 > 0 and eth_balance1 < 10 * pow(10, 18)
+            balance2_ready = eth_balance2 > 0 and eth_balance2 < 10 * pow(10, 18)
+            if balance1_ready and balance2_ready:
+                break
+            sleep(1)
+            wait_time += 1
+        print(f"Wait time for complex transaction (2 airdrops): {wait_time}")
+
         eth_balance1 = proxy.eth.get_balance(to_neon_acc1)
         eth_balance2 = proxy.eth.get_balance(to_neon_acc2)
         print("NEON balance 1 is: ", eth_balance1)
         print("NEON balance 2 is: ", eth_balance2)
-        self.assertGreater(eth_balance1, 0)
-        self.assertGreater(eth_balance2, 0)
+        self.assertTrue(eth_balance1 > 0 and eth_balance1 < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
+        self.assertTrue(eth_balance2 > 0 and eth_balance2 < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
 
     def test_no_airdrop(self):
         from_owner = self.create_sol_account()

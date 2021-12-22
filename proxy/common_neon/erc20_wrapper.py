@@ -9,6 +9,8 @@ from solana.transaction import AccountMeta, TransactionInstruction
 from solana.system_program import SYS_PROGRAM_ID
 from solana.sysvar import SYSVAR_RENT_PUBKEY
 from solana.rpc.types import TxOpts, RPCResponse, Commitment
+from solana.transaction import Transaction
+import spl.token.instructions as spl_token
 from typing import Union, Dict
 from logging import getLogger
 import struct
@@ -45,26 +47,6 @@ ERC20_CONTRACT_SOURCE = '''
 // SPDX-License-Identifier: MIT
 
 pragma solidity >=0.5.12;
-
-
-interface IERC20 {
-    function decimals() external view returns (uint8);
-    function totalSupply() external view returns (uint256);
-    function balanceOf(address who) external view returns (uint256);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function transfer(address to, uint256 value) external returns (bool);
-    function approve(address spender, uint256 value) external returns (bool);
-    function transferFrom(address from, address to, uint256 value) external returns (bool);
-
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-
-
-    function approveSolana(bytes32 spender, uint64 value) external returns (bool);
-    event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 value);
-}
-
-
 
 /*abstract*/ contract NeonERC20Wrapper /*is IERC20*/ {
     address constant NeonERC20 = 0xff00000000000000000000000000000000000001;
@@ -158,8 +140,17 @@ class ERC20Wrapper:
                  neon_account_address_bytes]
         return PublicKey.find_program_address(seeds, self.evm_loader_id)[0]
 
-    def create_associated_token_account(self, owner: PublicKey):
-        return self.token.create_associated_token_account(owner)
+    def create_associated_token_account(self, owner: PublicKey, payer: SolanaAccount):
+        # Construct transaction
+        # This part of code is based on original implementation of Token.create_associated_token_account
+        # except that skip_preflight is set to True
+        txn = Transaction()
+        create_txn = spl_token.create_associated_token_account(
+            payer=payer.public_key(), owner=owner, mint=self.token.pubkey
+        )
+        txn.add(create_txn)
+        self.token._conn.send_transaction(txn, payer, opts=TxOpts(skip_preflight = True, skip_confirmation=False))
+        return create_txn.keys[1].pubkey
 
     def create_neon_erc20_account_instruction(self, payer: PublicKey, eth_address: str):
         return TransactionInstruction(
@@ -197,6 +188,9 @@ class ERC20Wrapper:
             destination = self.get_neon_erc20_account_address(destination)
         return self.token.mint_to(destination, self.mint_authority, amount,
                                   opts=TxOpts(skip_preflight=True, skip_confirmation=False))
+
+    def erc20_interface(self):
+        return self.proxy.eth.contract(address=self.neon_contract_address, abi=self.interface['abi'])
 
     def get_balance(self, address: Union[PublicKey, str]) -> int:
         if isinstance(address, PublicKey):

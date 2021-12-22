@@ -97,6 +97,7 @@ services:
       SOLANA_URL: http://solana:8899
       NEON_OPERATOR_KEYFILE: /root/.config/solana/id.json
       NEON_ETH_MAX_AMOUNT: 10
+      TEST_FAUCET_INIT_NEON_BALANCE: 10000
     hostname: faucet
     expose:
       - "3333"
@@ -111,7 +112,6 @@ services:
     container_name: airdropper
     image: neonlabsorg/proxy:${REVISION}
     environment:
-      AIRDROPPER_MODE: 'true'
       POSTGRES_DB: neon-db
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
@@ -124,7 +124,7 @@ services:
       PRICE_UPDATE_INTERVAL: 10
       START_SLOT: LATEST
     hostname: airdropper
-    entrypoint: ./run-test-airdropper.sh
+    entrypoint: ./run-airdropper.sh
     networks:
       - net
     depends_on:
