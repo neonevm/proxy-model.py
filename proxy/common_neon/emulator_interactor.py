@@ -49,7 +49,7 @@ def decode_revert_message(data) -> Optional[str]:
         raise Exception(f"Too less bytes to decode revert msg offset: {data_len}, data: 0x{data}")
     offset = int(data[8:8 + 64], 16) * 2
 
-    if data_len < 8 + offset * 2 + 64:
+    if data_len < 8 + offset + 64:
         raise Exception(f"Too less bytes to decode revert msg len: {data_len}, data: 0x{data}")
     length = int(data[8 + offset:8 + offset + 64], 16) * 2
 
