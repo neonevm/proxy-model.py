@@ -31,4 +31,4 @@ def call_emulated(contract_id, caller_id, data=None, value=None):
 def emulator(contract, sender, data, value):
     data = data or "none"
     value = value or ""
-    return neon_cli().call("--token_mint", str(ETH_TOKEN_MINT_ID), "emulate", sender, contract, data, value)
+    return neon_cli().call("emulate", "--token_mint", str(ETH_TOKEN_MINT_ID), sender, contract, data, value)
