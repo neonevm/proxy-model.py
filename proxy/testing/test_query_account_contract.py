@@ -167,7 +167,6 @@ contract TestQueryAccount is QueryAccount {
         uint256 golden_len = 82;
         uint256 golden_lamp = 1461600;
         bool golden_exec = false;
-        uint256 golden_repoch = 0;
 
         uint256 ownr;
         (ok, ownr) = super.owner(solana_account);
@@ -193,9 +192,9 @@ contract TestQueryAccount is QueryAccount {
             return false;
         }
 
-        uint256 repoch;
-        (ok, repoch) = super.rent_epoch(solana_account);
-        if (!ok || repoch != golden_repoch) {
+        uint256 _repoch; // epoch may change, so there is no golden value
+        (ok, _repoch) = super.rent_epoch(solana_account);
+        if (!ok) {
             return false;
         }
 
