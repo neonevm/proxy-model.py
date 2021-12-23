@@ -58,6 +58,14 @@ class TransactionSender:
                 if "Program failed to complete" in errStr or "Computational budget exceeded" in errStr:
                     logger.debug("Program exceeded instructions")
                     if self.steps_emulated / self.steps > self.steps / 2:
+                        """
+                            An iterative call from instruction data can be performed in batches only
+                            with a change in the number of steps in the iteration.
+                            Each next iteration the number of steps decreases.
+                            Thus, starting from a certain number of steps,
+                            it is appropriate to use a call from the account data,
+                            since there the number of steps is unchanged.
+                        """
                         call_from_holder = True
                     else:
                         call_iterative = True

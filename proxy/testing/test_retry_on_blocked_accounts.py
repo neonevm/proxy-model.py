@@ -56,7 +56,7 @@ contract BlockForAWhile {
 '''
 
 
-def send_in_parallel(acc_seed, contractAddress, abi, loop, return_dict):
+def send_routine(acc_seed, contractAddress, abi, loop, return_dict):
     print("Send parallel transaction from {}".format(acc_seed))
     print(datetime.datetime.now().time())
     storage_contract = proxy.eth.contract(
@@ -248,7 +248,7 @@ class BlockedTest(unittest.TestCase):
         caller_seed = "long"
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
-        p2 = multiprocessing.Process(target=send_in_parallel, args=(caller_seed, self.contractAddress, self.abi, 1000, return_dict))
+        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 1000, return_dict))
         p2.start()
         while True:
             try:
@@ -265,7 +265,7 @@ class BlockedTest(unittest.TestCase):
         caller_seed = "short"
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
-        p2 = multiprocessing.Process(target=send_in_parallel, args=(caller_seed, self.contractAddress, self.abi, 10, return_dict))
+        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 10, return_dict))
         p2.start()
         while True:
             try:
