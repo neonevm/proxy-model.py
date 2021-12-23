@@ -118,7 +118,11 @@ contract TestQueryAccount is QueryAccount {
         ok = super.cache(solana_account, 0, 0);
         if (ok) { return false; }
 
-        // Length too long
+        // Length more than maximal limit (8kB)
+        ok = super.cache(solana_account, 0, 10*1024);
+        if (ok) { return false; }
+
+        // Length more than length of the account data
         ok = super.cache(solana_account, 0, 200);
         if (ok) { return false; }
 
