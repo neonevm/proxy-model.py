@@ -95,10 +95,6 @@ class TransactionSender:
             self.free_perm_accs()
 
 
-    def create_instruction_constructor(self):
-        return NeonInstruction(self.sender.get_operator_key(), self.eth_trx, self.eth_accounts, self.caller_token)
-
-
     def create_noniterative_executor(self):
         self.instruction.init_eth_trx(self.eth_trx, self.eth_accounts, self.caller_token)
         return NoniterativeTransactionSender(self.sender, self.instruction, self.create_acc_trx, self.eth_trx)

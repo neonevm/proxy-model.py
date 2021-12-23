@@ -172,6 +172,13 @@ class BlockedTest(unittest.TestCase):
         self.combined_trx = self.make_combined_transaction(self.storage, 500, msg, instruction)
         return send_transaction(client, self.combined_trx, self.acc)
 
+    def finish_blocker_transaction(self):
+        while True:
+            try:
+                send_transaction(client, self.combined_trx, self.acc)
+            except:
+                break
+
     def get_trx_receipts(self, unsigned_msg, signature):
         trx = rlp.decode(unsigned_msg, EthTrx)
 
@@ -250,11 +257,7 @@ class BlockedTest(unittest.TestCase):
         return_dict = manager.dict()
         p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 1000, return_dict))
         p2.start()
-        while True:
-            try:
-                send_transaction(client, self.combined_trx, self.acc)
-            except:
-                break
+        self.finish_blocker_transaction()
         p2.join()
         print('return_dict:', return_dict)
         self.assertEqual(return_dict[caller_seed]['status'], 1)
@@ -267,11 +270,7 @@ class BlockedTest(unittest.TestCase):
         return_dict = manager.dict()
         p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 10, return_dict))
         p2.start()
-        while True:
-            try:
-                send_transaction(client, self.combined_trx, self.acc)
-            except:
-                break
+        self.finish_blocker_transaction()
         p2.join()
         print('return_dict:', return_dict)
         self.assertEqual(return_dict[caller_seed]['status'], 1)
