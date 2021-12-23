@@ -20,6 +20,7 @@ LOG_SENDING_SOLANA_TRANSACTION = os.environ.get("LOG_SENDING_SOLANA_TRANSACTION"
 LOG_NEON_CLI_DEBUG = os.environ.get("LOG_NEON_CLI_DEBUG", "NO") == "YES"
 WRITE_TRANSACTION_COST_IN_DB = os.environ.get("WRITE_TRANSACTION_COST_IN_DB", "NO") == "YES"
 RETRY_ON_BLOCKED = int(os.environ.get("RETRY_ON_BLOCKED", "32"))
+RETRY_ON_FAIL = int(os.environ.get("RETRY_ON_FAIL", "2"))
 
 class solana_cli:
     def call(self, *args):
