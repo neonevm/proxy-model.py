@@ -103,6 +103,7 @@ contract QueryAccount {
 contract TestQueryAccount is QueryAccount {
     uint256 constant solana_account = 110178555362476360822489549210862241441608066866019832842197691544474470948129;
     uint256 constant missing_account = 90000;
+    uint64 constant golden_data_len = 82;
 
     function test_cache() public returns (bool) {
         // Put
@@ -110,7 +111,7 @@ contract TestQueryAccount is QueryAccount {
         if (!ok) { return false; }
 
         // Replace
-        ok = super.cache(solana_account, 0, 82);
+        ok = super.cache(solana_account, 0, golden_data_len);
         if (!ok) { return false; }
 
         // Zero length
@@ -164,7 +165,6 @@ contract TestQueryAccount is QueryAccount {
         if (!ok) { return false; }
 
         uint256 golden_owner = 3106054211088883198575105191760876350940303353676611666299516346430146937001;
-        uint256 golden_len = 82;
         uint256 golden_lamp = 1461600;
         bool golden_exec = false;
 
@@ -176,7 +176,7 @@ contract TestQueryAccount is QueryAccount {
 
         uint len;
         (ok, len) = super.length(solana_account);
-        if (!ok || len != golden_len) {
+        if (!ok || len != golden_data_len) {
             return false;
         }
 
@@ -202,43 +202,27 @@ contract TestQueryAccount is QueryAccount {
     }
 
     function test_data_ok() public returns (bool) {
-        bool ok = super.cache(solana_account, 0, 64);
+        bool ok = super.cache(solana_account, 0, golden_data_len);
         if (!ok) { return false; }
 
-        byte b0 = 0x71;
-        byte b1 = 0x33;
-        byte b2 = 0xc6;
-        byte b3 = 0x12;
-
-        // Get subset of data
-        uint64 offset = 20;
-        uint64 len = 4;
+        bytes1[golden_data_len] memory golden = [to_byte(1), to_byte(0), to_byte(0), to_byte(0), to_byte(60), to_byte(0), to_byte(57), to_byte(43), to_byte(120), to_byte(125), to_byte(56), to_byte(168), to_byte(83), to_byte(209), to_byte(36), to_byte(5), to_byte(118), to_byte(52), to_byte(196), to_byte(60), to_byte(113), to_byte(51), to_byte(198), to_byte(18), to_byte(70), to_byte(29), to_byte(116), to_byte(254), to_byte(177), to_byte(127), to_byte(66), to_byte(72), to_byte(21), to_byte(82), to_byte(134), to_byte(192), to_byte(0), to_byte(0), to_byte(193), to_byte(111), to_byte(242), to_byte(134), to_byte(35), to_byte(0), to_byte(9), to_byte(1), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0)];
+        uint64 offset;
+        uint64 len;
         bytes memory result;
-        (ok, result) = super.data(solana_account, offset, len);
-        if (!ok) {
-            return false;
-        }
-        if (result.length != 4) {
-            return false;
-        }
-        if (result[0] != b0) {
-            return false;
-        }
-        if (result[1] != b1) {
-            return false;
-        }
-        if (result[2] != b2) {
-            return false;
-        }
-        if (result[3] != b3) {
-            return false;
-        }
 
         // Get full data
         offset = 0;
-        len = 64;
+        len = golden_data_len;
         (ok, result) = super.data(solana_account, offset, len);
-        if (!ok || result.length != 64) {
+        if (!ok || !equals(result, golden, offset, len)) {
+            return false;
+        }
+
+        // Get subset of data
+        offset = 20;
+        len = 40;
+        (ok, result) = super.data(solana_account, offset, len);
+        if (!ok || !equals(result, golden, offset, len)) {
             return false;
         }
 
@@ -246,10 +230,10 @@ contract TestQueryAccount is QueryAccount {
     }
 
     function test_data_too_big_offset() public returns (bool) {
-        bool ok = super.cache(solana_account, 0, 82);
+        bool ok = super.cache(solana_account, 0, golden_data_len);
         if (!ok) { return false; }
 
-        uint64 offset = 200; // data len is 82
+        uint64 offset = 200; // data len is less than 200
         uint64 len = 1;
         bytes memory _m;
         (ok, _m) = super.data(solana_account, offset, len);
@@ -259,14 +243,30 @@ contract TestQueryAccount is QueryAccount {
     }
 
     function test_data_too_big_length() public returns (bool) {
-        bool ok = super.cache(solana_account, 0, 82);
+        bool ok = super.cache(solana_account, 0, golden_data_len);
         if (!ok) { return false; }
 
         uint64 offset = 0;
-        uint64 len = 200; // data len is 82
+        uint64 len = 200; // data len is less than 200
         bytes memory _m;
         (ok, _m) = super.data(solana_account, offset, len);
         if (ok) { return false; }
+
+        return true;
+    }
+
+    function to_byte(uint8 i) public pure returns (bytes1) {
+        return abi.encodePacked(i)[0];
+    }
+
+    function equals(bytes memory data, bytes1[golden_data_len] memory golden, uint64 offset, uint64 length) private pure returns (bool) {
+        if (data.length != length) { return false; }
+
+        for (uint i = 0; i < length; i++) {
+            if (data[i] != golden[i+offset]) {
+                return false;
+            }
+        }
 
         return true;
     }
