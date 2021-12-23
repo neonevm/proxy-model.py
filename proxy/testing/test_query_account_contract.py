@@ -205,22 +205,48 @@ contract TestQueryAccount is QueryAccount {
         bool ok = super.cache(solana_account, 0, golden_data_len);
         if (!ok) { return false; }
 
-        bytes1[golden_data_len] memory golden = [to_byte(1), to_byte(0), to_byte(0), to_byte(0), to_byte(60), to_byte(0), to_byte(57), to_byte(43), to_byte(120), to_byte(125), to_byte(56), to_byte(168), to_byte(83), to_byte(209), to_byte(36), to_byte(5), to_byte(118), to_byte(52), to_byte(196), to_byte(60), to_byte(113), to_byte(51), to_byte(198), to_byte(18), to_byte(70), to_byte(29), to_byte(116), to_byte(254), to_byte(177), to_byte(127), to_byte(66), to_byte(72), to_byte(21), to_byte(82), to_byte(134), to_byte(192), to_byte(0), to_byte(0), to_byte(193), to_byte(111), to_byte(242), to_byte(134), to_byte(35), to_byte(0), to_byte(9), to_byte(1), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0)];
-        uint64 offset;
+        bytes1[golden_data_len] memory golden =
+            [to_byte(1), to_byte(0), to_byte(0), to_byte(0), to_byte(60), to_byte(0), to_byte(57), to_byte(43), to_byte(120), to_byte(125),
+             to_byte(56), to_byte(168), to_byte(83), to_byte(209), to_byte(36), to_byte(5), to_byte(118), to_byte(52), to_byte(196),
+             to_byte(60), to_byte(113), to_byte(51), to_byte(198), to_byte(18), to_byte(70), to_byte(29), to_byte(116), to_byte(254),
+             to_byte(177), to_byte(127), to_byte(66), to_byte(72), to_byte(21), to_byte(82), to_byte(134), to_byte(192), to_byte(0),
+             to_byte(0), to_byte(193), to_byte(111), to_byte(242), to_byte(134), to_byte(35), to_byte(0), to_byte(9), to_byte(1), to_byte(0),
+             to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0),
+             to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0),
+             to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0), to_byte(0),
+             to_byte(0), to_byte(0)];
+
         uint64 len;
+        uint64 offset;
         bytes memory result;
 
         // Get full data
-        offset = 0;
         len = golden_data_len;
+        offset = 0;
         (ok, result) = super.data(solana_account, offset, len);
         if (!ok || !equals(result, golden, offset, len)) {
             return false;
         }
 
-        // Get subset of data
-        offset = 20;
+        // Get mid-subset of data
         len = 40;
+        offset = 20;
+        (ok, result) = super.data(solana_account, offset, len);
+        if (!ok || !equals(result, golden, offset, len)) {
+            return false;
+        }
+
+        // Get head of data
+        len = 40;
+        offset = 0;
+        (ok, result) = super.data(solana_account, offset, len);
+        if (!ok || !equals(result, golden, offset, len)) {
+            return false;
+        }
+
+        // Get tail of data
+        len = 40;
+        offset = golden_data_len - len;
         (ok, result) = super.data(solana_account, offset, len);
         if (!ok || !equals(result, golden, offset, len)) {
             return false;
@@ -229,26 +255,47 @@ contract TestQueryAccount is QueryAccount {
         return true;
     }
 
-    function test_data_too_big_offset() public returns (bool) {
-        bool ok = super.cache(solana_account, 0, golden_data_len);
+    function test_data_wrong_range() public returns (bool) {
+        bool ok = super.cache(solana_account, 30, 20);
         if (!ok) { return false; }
 
-        uint64 offset = 200; // data len is less than 200
-        uint64 len = 1;
+        uint64 len;
+        uint64 offset;
         bytes memory _m;
+
+        // Query empty chunk (meaningless, but acceptable)
+        len = 0;
+        offset = 30;
+        (ok, _m) = super.data(solana_account, offset, len);
+        if (ok && _m.length == 0) { return true; }
+
+        // Query chunk wholly before the cached region
+        len = 10;
+        offset = 1;
         (ok, _m) = super.data(solana_account, offset, len);
         if (ok) { return false; }
 
-        return true;
-    }
+        // Query chunk wholly after the cached region
+        len = 10;
+        offset = 55;
+        (ok, _m) = super.data(solana_account, offset, len);
+        if (ok) { return false; }
 
-    function test_data_too_big_length() public returns (bool) {
-        bool ok = super.cache(solana_account, 0, golden_data_len);
-        if (!ok) { return false; }
+        // Query chunk overlapping the head of the cached region
+        len = 20;
+        offset = 20;
+        (ok, _m) = super.data(solana_account, offset, len);
+        if (ok) { return false; }
 
-        uint64 offset = 0;
-        uint64 len = 200; // data len is less than 200
-        bytes memory _m;
+        // Query chunk overlapping the tail of the cached region
+        len = 20;
+        offset = 40;
+        (ok, _m) = super.data(solana_account, offset, len);
+        if (ok) { return false; }
+
+        // Query big chunk overlapping entire cached region
+        len = 40;
+        offset = 20;
         (ok, _m) = super.data(solana_account, offset, len);
         if (ok) { return false; }
 
@@ -323,17 +370,10 @@ class Test_Query_Account_Contract(unittest.TestCase):
         assert(ok)
 
     # @unittest.skip("a.i.")
-    def test_data_too_big_offset(self):
+    def test_data_wrong_range(self):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_data_too_big_offset().call()
-        assert(ok)
-
-    # @unittest.skip("a.i.")
-    def test_data_too_big_length(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_data_too_big_length().call()
+        ok = query.functions.test_data_wrong_range().call()
         assert(ok)
 
 if __name__ == '__main__':
