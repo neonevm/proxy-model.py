@@ -263,11 +263,11 @@ contract TestQueryAccount is QueryAccount {
         uint64 offset;
         bytes memory _m;
 
-        // Query empty chunk (meaningless, but acceptable)
+        // Query empty chunk
         len = 0;
-        offset = 30;
+        offset = 35;
         (ok, _m) = super.data(solana_account, offset, len);
-        if (ok && _m.length == 0) { return true; }
+        if (ok) { return false; }
 
         // Query chunk wholly before the cached region
         len = 10;
