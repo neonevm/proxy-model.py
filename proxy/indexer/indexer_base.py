@@ -66,7 +66,10 @@ class IndexerBase:
 
     def run(self):
         while (True):
-            self.process_functions()
+            try:
+                self.process_functions()
+            except Exception as err:
+                logger.warning("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
             time.sleep(1.0)
 
 
