@@ -36,12 +36,14 @@ class IndexerBase:
     def __init__(self,
                  solana_url,
                  evm_loader_id,
-                 log_level):
+                 log_level,
+                 start_slot):
         logger.setLevel(log_levels.get(log_level, logging.INFO))
 
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
         self.transaction_receipts = SQLDictBinKey(tablename="known_transactions")
+        self.last_slot = start_slot
         self.current_slot = 0
         self.counter_ = 0
 
@@ -84,7 +86,7 @@ class IndexerBase:
 
         counter = 0
         while (continue_flag):
-            results = self.get_signatures(minimal_tx, self.max_known_tx[1])
+            results = self._get_signatures(minimal_tx, self.max_known_tx[1])
             logger.debug("{:>3} get_signatures_for_address {}".format(counter, len(results)))
             counter += 1
 
@@ -119,7 +121,7 @@ class IndexerBase:
         self.max_known_tx = max_known_tx
 
 
-    def get_signatures(self, before, until):
+    def _get_signatures(self, before, until):
         opts: Dict[str, Union[int, str]] = {}
         if until is not None:
             opts["until"] = until
