@@ -6,10 +6,8 @@ from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict, Union
 
 try:
-    from sql_dict_bin_key import SQLDictBinKey
     from sql_dict import SQLDict
 except ImportError:
-    from .sql_dict_bin_key import SQLDictBinKey
     from .sql_dict import SQLDict
 
 
@@ -42,6 +40,7 @@ class IndexerBase:
 
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
+        self.transaction_receipts = SQLDict(tablename="known_transactions", bin_key=True)
         self.last_slot = start_slot
         self.current_slot = 0
         self.counter_ = 0
