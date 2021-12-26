@@ -91,7 +91,6 @@ class Indexer(IndexerBase):
         for slot_sig, trx in sorted(self.transaction_receipts.iteritems(), reverse=True):
             slot, signature = slot_sig
             max_slot = max(max_slot, slot)
-            logger.debug(slot)
             counter += 1
 
             if slot < self.processed_slot:
