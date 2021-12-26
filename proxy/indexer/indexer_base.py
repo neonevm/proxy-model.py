@@ -43,15 +43,12 @@ class IndexerBase:
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
         self.transaction_receipts = SQLDictBinKey(tablename="known_transactions")
-        self.last_slot = start_slot
         self.current_slot = 0
         self.counter_ = 0
 
         if len(self.transaction_receipts) > 0:
-            self.min_known_tx = min(self.transaction_receipts)
             self.max_known_tx = max(self.transaction_receipts)
         else:
-            self.min_known_tx = (0, None)
             self.max_known_tx = (0, None)
 
         self._move_data_from_old_table()
