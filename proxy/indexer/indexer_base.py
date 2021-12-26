@@ -42,7 +42,7 @@ class IndexerBase:
 
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
-        self.transaction_receipts = SQLDictBinKey(tablename="known_transactions")
+        self.last_slot = start_slot
         self.current_slot = 0
         self.counter_ = 0
 
@@ -102,6 +102,10 @@ class IndexerBase:
                 solana_signature = tx["signature"]
                 slot = tx["slot"]
                 slot_sig = (slot, solana_signature)
+
+                if slot < self.last_slot:
+                    continue_flag = False
+                    break
 
                 if solana_signature in HISTORY_START:
                     logger.debug(solana_signature)
