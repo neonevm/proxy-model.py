@@ -1,13 +1,12 @@
-from proxy.indexer.indexer_base import logger, IndexerBase, PARALLEL_REQUESTS
+from proxy.indexer.indexer_base import IndexerBase, PARALLEL_REQUESTS
 import base58
 import json
-import logging
 import os
 import rlp
 import time
-import logging
-from multiprocessing.dummy import Pool as ThreadPool
 
+from multiprocessing.dummy import Pool as ThreadPool
+from logged_based_class import logged_based
 
 try:
     from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
@@ -48,6 +47,7 @@ class TransactionStruct:
         self.slot = slot
 
 
+@logged_based("Indexer")
 class Indexer(IndexerBase):
     def __init__(self,
                  solana_url,
@@ -66,14 +66,13 @@ class Indexer(IndexerBase):
             self.constants['last_block'] = 0
         self.blocked_storages = {}
 
-
     def process_functions(self):
         IndexerBase.process_functions(self)
-        logger.debug("Process receipts")
+        self.debug("Process receipts")
         self.process_receipts()
-        logger.debug("Start getting blocks")
+        self.debug("Start getting blocks")
         self.gather_blocks()
-        logger.debug("Unlock accounts")
+        self.debug("Unlock accounts")
         self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
 
@@ -93,11 +92,11 @@ class Indexer(IndexerBase):
             if signature in self.transaction_receipts:
                 trx = self.transaction_receipts[signature]
                 if trx is None:
-                    logger.error("trx is None")
+                    self.error("trx is None")
                     del self.transaction_receipts[signature]
                     continue
                 if 'slot' not in trx:
-                    logger.debug("\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
+                    self.debug("\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
                     exit()
                 slot = trx['slot']
                 if trx['transaction']['message']['instructions'] is not None:
@@ -151,7 +150,7 @@ class Indexer(IndexerBase):
                                     try:
                                         (eth_trx, eth_signature, from_address) = get_trx_receipts(unsigned_msg, signature)
                                         if len(eth_trx) / 2 > holder_table[write_account].max_written:
-                                            logger.debug("WRITE got {} exp {}".format(len(eth_trx), holder_table[write_account].max_written))
+                                            self.debug("WRITE got {} exp {}".format(len(eth_trx), holder_table[write_account].max_written))
                                             continue
 
                                         if storage_account in continue_table:
@@ -171,8 +170,8 @@ class Indexer(IndexerBase):
 
                                             del continue_table[storage_account]
                                         else:
-                                            logger.error("Storage not found")
-                                            logger.error(eth_signature, "unknown")
+                                            self.error("Storage not found")
+                                            self.error(eth_signature, "unknown")
                                             # raise
 
                                         del holder_table[write_account]
@@ -187,7 +186,7 @@ class Indexer(IndexerBase):
                                             # logger.debug("unsupported operand type")
                                             pass
                                         else:
-                                            logger.debug("could not parse trx {}".format(err))
+                                            self.debug("could not parse trx {}".format(err))
                                             raise
 
                         elif instruction_data[0] == 0x01: # Finalize
@@ -234,7 +233,7 @@ class Indexer(IndexerBase):
                                         slot
                                     )
                             else:
-                                logger.error("RESULT NOT FOUND IN 05\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
+                                self.error("RESULT NOT FOUND IN 05\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
 
                         elif instruction_data[0] == 0x09 or instruction_data[0] == 0x13: # PartialCallFromRawEthereumTX PartialCallFromRawEthereumTXv02
                             # if instruction_data[0] == 0x09:
@@ -269,7 +268,7 @@ class Indexer(IndexerBase):
                             if storage_account in continue_table:
                                 continue_result = continue_table[storage_account]
                                 if continue_result.accounts != blocked_accounts:
-                                    logger.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
+                                    self.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
                                 trx_table[eth_signature].got_result = continue_result.results
                                 trx_table[eth_signature].signatures += continue_result.signatures
                                 trx_table[eth_signature].slot = max(trx_table[eth_signature].slot, continue_result.slot)
@@ -292,9 +291,9 @@ class Indexer(IndexerBase):
 
                                 if got_result is not None:
                                     if continue_table[storage_account].results is not None:
-                                        logger.error("Strange behavior. Pay attention. RESULT ALREADY EXISTS IN CONTINUE TABLE")
+                                        self.error("Strange behavior. Pay attention. RESULT ALREADY EXISTS IN CONTINUE TABLE")
                                     if continue_table[storage_account].accounts != blocked_accounts:
-                                        logger.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
+                                        self.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
 
                                     continue_table[storage_account].results = got_result
                             else:
@@ -316,7 +315,7 @@ class Indexer(IndexerBase):
 
                                 if holder_account in holder_table:
                                     if holder_table[holder_account].storage_account != storage_account:
-                                        logger.error("Strange behavior. Pay attention. STORAGE_ACCOUNT != STORAGE_ACCOUNT")
+                                        self.error("Strange behavior. Pay attention. STORAGE_ACCOUNT != STORAGE_ACCOUNT")
                                         holder_table[holder_account] = HolderStruct(storage_account)
                                 else:
                                     holder_table[holder_account] = HolderStruct(storage_account)
@@ -385,17 +384,17 @@ class Indexer(IndexerBase):
 
                                 if holder_account in holder_table:
                                     if holder_table[holder_account].storage_account != storage_account:
-                                        logger.error("Strange behavior. Pay attention. STORAGE_ACCOUNT != STORAGE_ACCOUNT")
+                                        self.error("Strange behavior. Pay attention. STORAGE_ACCOUNT != STORAGE_ACCOUNT")
                                         holder_table[holder_account] = HolderStruct(storage_account)
                                 else:
-                                    logger.error("Strange behavior. Pay attention. HOLDER ACCOUNT NOT FOUND")
+                                    self.error("Strange behavior. Pay attention. HOLDER ACCOUNT NOT FOUND")
                                     holder_table[holder_account] = HolderStruct(storage_account)
 
                                 if got_result is not None:
                                     if continue_table[storage_account].results:
-                                        logger.error("Strange behavior. Pay attention. RESULT ALREADY EXISTS IN CONTINUE TABLE")
+                                        self.error("Strange behavior. Pay attention. RESULT ALREADY EXISTS IN CONTINUE TABLE")
                                     if continue_table[storage_account].accounts != blocked_accounts:
-                                        logger.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
+                                        self.error("Strange behavior. Pay attention. BLOCKED ACCOUNTS NOT EQUAL")
 
                                     continue_table[storage_account].results = got_result
                             else:
@@ -403,7 +402,7 @@ class Indexer(IndexerBase):
                                 holder_table[holder_account] = HolderStruct(storage_account)
 
                         if instruction_data[0] > 0x16:
-                            logger.debug("{:>10} {:>6} Unknown 0x{}".format(slot, counter, instruction_data.hex()))
+                            self.debug("{:>10} {:>6} Unknown 0x{}".format(slot, counter, instruction_data.hex()))
 
                             pass
 
@@ -413,12 +412,12 @@ class Indexer(IndexerBase):
             elif trx_struct.storage is not None:
                 if not self.submit_transaction_part(trx_struct):
                     if abs(trx_struct.slot - self.current_slot) > CANCEL_TIMEOUT:
-                        logger.debug("Probably blocked")
-                        logger.debug(trx_struct.eth_signature)
-                        logger.debug(trx_struct.signatures)
+                        self.debug("Probably blocked")
+                        self.debug(trx_struct.eth_signature)
+                        self.debug(trx_struct.signatures)
                         self.blocked_storages[trx_struct.storage] = (trx_struct.eth_trx, trx_struct.blocked_accounts)
             else:
-                logger.error(trx_struct)
+                self.error(trx_struct)
 
 
     def submit_transaction(self, trx_struct):
@@ -446,7 +445,7 @@ class Indexer(IndexerBase):
             }
         self.blocks_by_hash[block_hash] = slot
 
-        logger.debug(trx_struct.eth_signature + " " + status)
+        self.debug(trx_struct.eth_signature + " " + status)
 
 
     def submit_transaction_part(self, trx_struct):
@@ -493,7 +492,7 @@ class Indexer(IndexerBase):
                 block_hash = '0x' + base58.b58decode(block['blockhash']).hex()
                 retry = False
             except Exception as err:
-                logger.debug(err)
+                self.debug(err)
                 time.sleep(1)
 
         return (slot, block_hash)
@@ -502,12 +501,7 @@ class Indexer(IndexerBase):
 def run_indexer(solana_url,
                 evm_loader_id,
                 log_level = 'DEBUG'):
-    logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
-    logger.setLevel(logging.DEBUG)
-    logger.info(f"""Running indexer with params:
-        solana_url: {solana_url},
-        evm_loader_id: {evm_loader_id},
-        log_level: {log_level}""")
+
 
     indexer = Indexer(solana_url,
                       evm_loader_id,

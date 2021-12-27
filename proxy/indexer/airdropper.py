@@ -1,10 +1,11 @@
-from proxy.indexer.indexer_base import IndexerBase, logger
+from proxy.indexer.indexer_base import IndexerBase
 from proxy.indexer.price_provider import PriceProvider, mainnet_solana, mainnet_price_accounts
 import os
 import requests
 import base58
 import json
 import logging
+from logged_based_class import logged_based
 
 try:
     from utils import check_error
@@ -17,6 +18,8 @@ ACCOUNT_CREATION_PRICE_SOL = 0.00472692
 AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 NEON_PRICE_USD = 0.25
 
+
+@logged_based("Indexer")
 class Airdropper(IndexerBase):
     def __init__(self,
                  solana_url,
@@ -76,23 +79,23 @@ class Airdropper(IndexerBase):
 
         sol_price_usd = self.price_provider.get_price('SOL/USD')
         if sol_price_usd is None:
-            logger.warning("Failed to get SOL/USD price")
+            self.warning("Failed to get SOL/USD price")
             return
 
-        logger.info(f'SOL/USD = ${sol_price_usd}')
+        self.info(f'SOL/USD = ${sol_price_usd}')
         airdrop_amount_usd = AIRDROP_AMOUNT_SOL * sol_price_usd
-        logger.info(f"Airdrop amount: ${airdrop_amount_usd}")
-        logger.info(f"NEON price: ${NEON_PRICE_USD}")
+        self.info(f"Airdrop amount: ${airdrop_amount_usd}")
+        self.info(f"NEON price: ${NEON_PRICE_USD}")
         airdrop_amount_neon = airdrop_amount_usd / NEON_PRICE_USD
-        logger.info(f"Airdrop {airdrop_amount_neon} NEONs to address: {eth_address}")
+        self.info(f"Airdrop {airdrop_amount_neon} NEONs to address: {eth_address}")
         airdrop_galans = int(airdrop_amount_neon * pow(10, self.neon_decimals))
 
         json_data = { 'wallet': eth_address, 'amount': airdrop_galans }
         resp = requests.post(self.faucet_url + '/request_neon_in_galans', json = json_data)
         if not resp.ok:
-            logger.warning(f'Failed to airdrop: {resp.status_code}')
+            self.warning(f'Failed to airdrop: {resp.status_code}')
             return
-        
+
         self.airdrop_ready[eth_address] = create_acc
 
 
@@ -135,7 +138,7 @@ class Airdropper(IndexerBase):
 
     def process_functions(self):
         IndexerBase.process_functions(self)
-        logger.debug("Process receipts")
+        self.debug("Process receipts")
         self.process_receipts()
 
 
@@ -146,11 +149,11 @@ class Airdropper(IndexerBase):
             if signature in self.transaction_receipts:
                 trx = self.transaction_receipts[signature]
                 if trx is None:
-                    logger.error("trx is None")
+                    self.error("trx is None")
                     del self.transaction_receipts[signature]
                     continue
                 if 'slot' not in trx:
-                    logger.debug("\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
+                    self.debug("\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
                     exit()
                 if trx['transaction']['message']['instructions'] is not None:
                     self.process_trx_airdropper_mode(trx)
@@ -164,8 +167,8 @@ def run_airdropper(solana_url,
                    price_update_interval = 60,
                    neon_decimals = 9):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
-    logger.setLevel(logging.DEBUG)
-    logger.info(f"""Running indexer with params:
+    self.setLevel(logging.DEBUG)
+    self.info(f"""Running indexer with params:
         solana_url: {solana_url},
         evm_loader_id: {evm_loader_id},
         log_level: {log_level},
