@@ -430,8 +430,10 @@ class IterativeTransactionSender:
                         if signature:
                             return signature
                     elif check_if_accounts_blocked(result):
+                        logger.debug("Blocked account")
                         try_one_step = True
                     elif check_if_program_exceeded_instructions(result):
+                        logger.debug("Compute Limit")
                         try_one_step = True
                     else:
                         logs += get_logs_from_reciept(result)
@@ -451,8 +453,10 @@ class IterativeTransactionSender:
                         if signature:
                             return signature
                     elif check_if_accounts_blocked(result):
+                        logger.debug("Blocked account")
                         time.sleep(0.5)
                     elif check_if_program_exceeded_instructions(result):
+                        logger.debug("Compute Limit")
                         step_count = int(step_count * 90 / 100)
                     else:
                         logs = get_logs_from_reciept(result)
