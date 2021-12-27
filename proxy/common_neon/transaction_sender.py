@@ -12,6 +12,8 @@ from solana.rpc.api import SendTransactionError
 from solana.sysvar import *
 from solana.transaction import AccountMeta, Transaction
 
+from proxy.indexer.utils import check_error
+
 from ..core.acceptor.pool import new_acc_id_glob, acc_list_glob
 
 from .address import accountWithSeed, AccountInfo, getTokenAddr
@@ -20,7 +22,7 @@ from .emulator_interactor import call_emulated
 from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_for_errors,\
-    check_if_program_exceeded_instructions, check_if_accounts_blocked
+    check_if_program_exceeded_instructions, check_if_accounts_blocked, get_logs_from_reciept
 from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED
 from ..plugin.eth_proto import Trx as EthTrx
 
@@ -325,14 +327,7 @@ class NoniterativeTransactionSender:
         call_txs_05.add(self.instruction.make_noniterative_call_transaction(len(call_txs_05.instructions)))
 
         for _i in range(RETRY_ON_BLOCKED):
-            try:
-                result = self.sender.send_measured_transaction(call_txs_05, self.eth_trx, 'CallFromRawEthereumTX')
-            except Exception as err:
-                if check_if_accounts_blocked(err.result):
-                    time.sleep(0.5)
-                    continue
-                else:
-                    raise
+            result = self.sender.send_measured_transaction(call_txs_05, self.eth_trx, 'CallFromRawEthereumTX')
 
             if check_for_errors(result):
                 if check_if_program_exceeded_instructions(result):
@@ -341,9 +336,9 @@ class NoniterativeTransactionSender:
                     time.sleep(0.5)
                     continue
                 else:
-                    raise Exception(json.dumps(result['result']['meta']))
+                    raise Exception(json.dumps(result['meta']))
             else:
-                return result['result']['transaction']['signatures'][0]
+                return result['transaction']['signatures'][0]
 
 
 class IterativeTransactionSender:
@@ -358,6 +353,7 @@ class IterativeTransactionSender:
         self.eth_trx = eth_trx
         self.steps = steps
         self.steps_emulated = steps_emulated
+        self.success_steps = 0
         self.instruction_type = self.CONTINUE_REGULAR
 
 
@@ -407,80 +403,72 @@ class IterativeTransactionSender:
 
             logger.debug("receipts %s", receipts)
             for rcpt, trx in receipts.items():
-                try:
-                    self.sender.collect_result(rcpt, eth_trx=self.eth_trx, reason='WriteHolder')
-                except Exception as err:
-                    logger.debug("collect_result exception: {}".format(str(err)))
-                else:
+                result = self.sender.collect_result(rcpt, eth_trx=self.eth_trx, reason='WriteHolder')
+                if result is not None:
                     trxs.remove(trx)
 
 
     def call_continue(self):
-        retry_unblock = False
-        return_result = None
-        try:
-            return_result = self.call_continue_bucked()
-        except Exception as err:
-            logger.debug("call_continue_bucked_combined exception: {}".format(str(err)))
-            if str(err).startswith("transaction too large:"):
-                raise
-            elif check_if_accounts_blocked(err.result):
-                retry_unblock = True
+        while True:
+            logs = []
+            try_one_step = False
+            found_errors = False
+            logger.debug("Send bucked combined: %s", self.instruction_type)
+            receipts = []
+            for index in range(math.ceil(self.steps_emulated/self.steps) + self.addition_count() - self.success_steps):
+                trx = self.make_combined_trx(self.steps, index)
+                receipts.append(self.sender.send_transaction_unconfirmed(trx))
 
-        if retry_unblock:
-            for _i in range(RETRY_ON_BLOCKED):
-                try:
-                    self.call_continue_step()
-                except Exception as err:
-                    if check_if_accounts_blocked(err.result):
-                        pass
-                    else:
-                        raise
+            logger.debug(f"Collected bucked results: {receipts}")
+            result_list = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason=self.instruction_type)
+            for result in result_list:
+                if not check_error(result):
+                    self.success_steps += 1
+                    self.sender.get_measurements(result)
+                    signature = check_if_continue_returned(result)
+                    if signature:
+                        return signature
+                elif check_if_accounts_blocked(result):
+                    try_one_step = True
+                elif check_if_program_exceeded_instructions(result):
+                    try_one_step = True
                 else:
+                    logs += get_logs_from_reciept(result)
+                    found_errors = True
+
+            if try_one_step:
+                step_count = self.steps
+                retry_on_blocked = RETRY_ON_BLOCKED
+                while step_count > 0 and retry_on_blocked > 0:
+                    logger.debug("Step count {}".format(step_count))
+                    trx = self.make_combined_trx(step_count, 0)
+                    result = self.sender.send_transaction(trx, self.eth_trx, self.instruction_type)
+                    if not check_error(result):
+                        self.success_steps += 1
+                        self.sender.get_measurements(result)
+                        signature = check_if_continue_returned(result)
+                        if signature:
+                            return signature
+                    elif check_if_accounts_blocked(result):
+                        time.sleep(0.5)
+                    elif check_if_program_exceeded_instructions(result):
+                        step_count = int(step_count * 90 / 100)
+                    else:
+                        logs = get_logs_from_reciept(result)
+                        found_errors = True
+                        break
+                if step_count == 0:
+                    raise Exception("Can't execute even one EVM instruction")
+                if retry_on_blocked == 0:
+                    found_errors = True
+
+            if found_errors:
+                if self.success_steps > 0:
                     break
-                time.sleep(0.5)
-
-            try:
-                return_result = self.call_continue_bucked()
-            except Exception as err:
-                logger.debug("call_continue_bucked_combined exception: {}".format(str(err)))
-
-        if return_result is not None:
-            return return_result
-
-        try:
-            return self.call_continue_step_by_step()
-        except Exception as err:
-            logger.error("call_continue_step_by_step exception:")
-            logger.debug(str(err))
+                else:
+                    raise Exception(str(logs))
 
         return self.call_cancel()
-
-
-    def call_continue_step_by_step(self):
-        while True:
-            logger.debug("Continue iterative step:")
-            result = self.call_continue_step()
-            signature = check_if_continue_returned(result)
-            if signature is not None:
-                return signature
-
-
-    def call_continue_step(self):
-        step_count = self.steps
-        while step_count > 0:
-            trx = self.make_combined_trx(step_count, 0)
-
-            logger.debug("Step count {}".format(step_count))
-            try:
-                result = self.sender.send_measured_transaction(trx, self.eth_trx, self.instruction_type)
-                return result
-            except SendTransactionError as err:
-                if check_if_program_exceeded_instructions(err.result):
-                    step_count = int(step_count * 90 / 100)
-                else:
-                    raise
-        raise Exception("Can't execute even one EVM instruction")
 
 
     def call_cancel(self):
@@ -488,24 +476,7 @@ class IterativeTransactionSender:
 
         logger.debug("Cancel")
         result = self.sender.send_measured_transaction(trx, self.eth_trx, 'CancelWithNonce')
-        return result['result']['transaction']['signatures'][0]
-
-
-    def call_continue_bucked(self):
-        logger.debug("Send bucked combined: %s", self.instruction_type)
-        receipts = []
-        for index in range(math.ceil(self.steps_emulated/self.steps) + self.addition_count()):
-            try:
-                trx = self.make_combined_trx(self.steps, index)
-                receipts.append(self.sender.send_transaction_unconfirmed(trx))
-            except Exception as err:
-                logger.debug(str(err))
-                if len(receipts) > 0:
-                    break
-                else:
-                    raise
-
-        return self.collect_bucked_results(receipts, self.instruction_type)
+        return result['transaction']['signatures'][0]
 
 
     def addition_count(self):
@@ -530,13 +501,3 @@ class IterativeTransactionSender:
             return self.instruction.make_partial_call_or_continue_from_account_data(steps, index)
         else:
             raise Exception("Unknown continue type: {}".format(self.instruction_type))
-
-
-    def collect_bucked_results(self, receipts, reason):
-        logger.debug(f"Collected bucked results: {receipts}")
-        result_list = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason=reason)
-        for result in result_list:
-            self.sender.get_measurements(result)
-            signature = check_if_continue_returned(result)
-            if signature:
-                return signature

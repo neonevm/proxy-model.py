@@ -79,13 +79,10 @@ class SolanaInteractor:
     def send_transaction(self, trx, eth_trx, reason=None):
         for _i in range(RETRY_ON_FAIL):
             reciept = self.send_transaction_unconfirmed(trx)
-            try:
-                return self.collect_result(reciept, eth_trx, reason)
-            except RuntimeError as err:
-                if str(err).find("could not confirm transaction") > 0:
-                    time.sleep(0.1)
-                    continue
-                raise
+            result = self.collect_result(reciept, eth_trx, reason)
+            if result is not None:
+                return result
+            time.sleep(0.1)
         RuntimeError("Failed {} times to send transaction or get confirmnation {}".format(RETRY_ON_FAIL, trx.__dict__))
 
 
@@ -99,7 +96,7 @@ class SolanaInteractor:
             txn.recent_blockhash = Blockhash(blockhash)
             txn.sign(self.signer)
             try:
-                return self.client.send_raw_transaction(txn.serialize(), opts=TxOpts(preflight_commitment=Confirmed))["result"]
+                return self.client.send_raw_transaction(txn.serialize(), opts=TxOpts(skip_preflight=True, preflight_commitment=Confirmed))["result"]
             except SendTransactionError as err:
                 err_type = get_from_dict(err.result, "data", "err")
                 if err_type is not None and isinstance(err_type, str) and err_type == "BlockhashNotFound":
@@ -114,7 +111,7 @@ class SolanaInteractor:
         self.confirm_transaction(reciept)
         result = self.client.get_confirmed_transaction(reciept)
         update_transaction_cost(result, eth_trx, reason)
-        return result
+        return result['result']
 
 
     def send_measured_transaction(self, trx, eth_trx, reason):
@@ -137,7 +134,8 @@ class SolanaInteractor:
 
     def confirm_transaction(self, tx_sig, confirmations=0):
         """Confirm a transaction."""
-        TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
+        # TODO should be set as predefined constant
+        TIMEOUT = 5  # 30 seconds  pylint: disable=invalid-name
         elapsed_time = 0
         while elapsed_time < TIMEOUT:
             logger.debug('confirm_transaction for %s', tx_sig)
@@ -150,7 +148,6 @@ class SolanaInteractor:
                     return
             time.sleep(CONFIRMATION_CHECK_DELAY)
             elapsed_time += CONFIRMATION_CHECK_DELAY
-        raise RuntimeError("could not confirm transaction: ", tx_sig)
 
 
     def collect_results(self, receipts, eth_trx=None, reason=None):
@@ -166,8 +163,8 @@ class SolanaInteractor:
             logger.info("Failed result: %s"%json.dumps(receipt, indent=3))
             return []
 
-        log_messages = receipt['result']['meta']['logMessages']
-        transaction = receipt['result']['transaction']
+        log_messages = receipt['meta']['logMessages']
+        transaction = receipt['transaction']
         accounts = transaction['message']['accountKeys']
         instructions = []
         for instr in transaction['message']['instructions']:
@@ -268,7 +265,7 @@ def check_if_storage_is_empty_error(receipt):
 
 
 def check_if_continue_returned(result):
-    tx_info = result['result']
+    tx_info = result
     accounts = tx_info["transaction"]["message"]["accountKeys"]
     evm_loader_instructions = []
 
