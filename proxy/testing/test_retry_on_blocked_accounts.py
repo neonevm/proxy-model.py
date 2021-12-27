@@ -255,7 +255,7 @@ class BlockedTest(unittest.TestCase):
         caller_seed = "long"
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
-        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 1000, return_dict,
+        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 50, return_dict,
         """
         1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
         1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
