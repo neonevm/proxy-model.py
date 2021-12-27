@@ -381,21 +381,29 @@ class IterativeTransactionSender:
 
         offset = 0
         rest = msg
-        trxs = []
+        write_trxs = []
         if create_acc_trx is not None:
-            trxs.append(create_acc_trx)
+            write_trxs.append(create_acc_trx)
         while len(rest):
             (part, rest) = (rest[:1000], rest[1000:])
             trx = self.instruction.make_write_transaction(offset, part)
-            trxs.append(trx)
+            write_trxs.append(trx)
             offset += len(part)
 
-        while len(trxs) > 0:
-            receipts = self.sender.send_multiple_transactions_unconfirmed(trxs)
-            results = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason='WriteHolder')
-            for result, trx in zip(results, trxs):
-                if result is not None:
-                    trxs.remove(trx)
+        while len(write_trxs) > 0:
+            (trxs, write_trxs) = (write_trxs[:20], write_trxs[20:])
+            logger.debug(f'write_trxs {len(write_trxs)} trxs {len(trxs)}')
+
+            while len(trxs) > 0:
+                logger.debug(f'write {len(trxs)} trxs')
+                receipts = self.sender.send_multiple_transactions_unconfirmed(trxs)
+                results = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason='WriteHolder')
+                logger.debug(f'trxs {len(trxs)} receipts {len(receipts)} write {len(results)} ')
+
+                for result, trx in zip(results, trxs):
+                    logger.debug(f'result {result}')
+                    if result is not None:
+                        trxs.remove(trx)
 
 
     def call_continue(self):

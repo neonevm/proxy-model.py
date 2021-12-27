@@ -197,7 +197,7 @@ class SolanaInteractor:
     def confirm_multiple_transactions(self, signatures: List[Union[str, bytes]]):
         """Confirm a transaction."""
         # TODO should be set as predefined constant
-        TIMEOUT = 5  # 30 seconds  pylint: disable=invalid-name
+        TIMEOUT = 10  # 30 seconds  pylint: disable=invalid-name
         elapsed_time = 0
         while elapsed_time < TIMEOUT:
             response = self.client.get_signature_statuses(signatures)
