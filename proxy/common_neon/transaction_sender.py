@@ -415,7 +415,7 @@ class IterativeTransactionSender:
             found_errors = False
             logger.debug("Send bucked combined: %s", self.instruction_type)
             receipts = []
-            for index in range(math.ceil(self.steps_emulated/self.steps) + self.addition_count() - self.success_steps):
+            for index in range(self.steps_count()):
                 trx = self.make_combined_trx(self.steps, index)
                 receipts.append(self.sender.send_transaction_unconfirmed(trx))
 
@@ -477,6 +477,14 @@ class IterativeTransactionSender:
         logger.debug("Cancel")
         result = self.sender.send_measured_transaction(trx, self.eth_trx, 'CancelWithNonce')
         return result['transaction']['signatures'][0]
+
+
+    def steps_count(self):
+        counted_steps = math.ceil(self.steps_emulated/self.steps) + self.addition_count()
+        if self.success_steps >= counted_steps:
+            return counted_steps
+        else:
+            counted_steps - self.success_steps
 
 
     def addition_count(self):
