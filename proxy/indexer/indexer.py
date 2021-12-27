@@ -81,6 +81,8 @@ class Indexer(IndexerBase):
 
 
     def process_receipts(self):
+        start_time = time.time()
+
         counter = 0
         holder_table = {}
         continue_table = {}
@@ -441,6 +443,9 @@ class Indexer(IndexerBase):
             self.processed_slot = min(seen_slots)
         else:
             self.processed_slot = max(self.processed_slot, max_slot)
+
+        process_receipts_ms = (time.time() - start_time)*1000  # convert this into milliseconds
+        logger.debug(f"process_receipts_ms: {process_receipts_ms} transaction_receipts.len: {len(self.transaction_receipts)} from {self.processed_slot} to {self.current_slot} slots")
 
 
 
