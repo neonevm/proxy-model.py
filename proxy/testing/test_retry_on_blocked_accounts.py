@@ -47,7 +47,7 @@ pragma solidity >=0.5.12;
 contract BlockForAWhile {
     uint32 counter = 0;
 
-    function add_some(uint32 some, uint32 loop) public {
+    function add_some(uint32 some, uint32 loop, string memory _padding) public {
         for(uint32 i = 0; i < loop; i++){
             counter += some + i;
         }
@@ -56,7 +56,7 @@ contract BlockForAWhile {
 '''
 
 
-def send_routine(acc_seed, contractAddress, abi, loop, return_dict):
+def send_routine(acc_seed, contractAddress, abi, loop, return_dict, padding_string):
     print("Send parallel transaction from {}".format(acc_seed))
     print(datetime.datetime.now().time())
     storage_contract = proxy.eth.contract(
@@ -65,7 +65,7 @@ def send_routine(acc_seed, contractAddress, abi, loop, return_dict):
         )
     new_eth_account = proxy.eth.account.create(acc_seed)
     right_nonce = proxy.eth.get_transaction_count(new_eth_account.address)
-    trx_store = storage_contract.functions.add_some(2, loop).buildTransaction(
+    trx_store = storage_contract.functions.add_some(2, loop, padding_string).buildTransaction(
         {
             "chainId": proxy.eth.chain_id,
             "gas": 987654321,
@@ -157,7 +157,7 @@ class BlockedTest(unittest.TestCase):
     def create_blocked_transaction(self):
         print("\ncreate_blocked_transaction")
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        trx_store = self.storage_contract.functions.add_some(1, 30).buildTransaction({'nonce': right_nonce, 'gasPrice': MINIMAL_GAS_PRICE})
+        trx_store = self.storage_contract.functions.add_some(1, 30, "").buildTransaction({'nonce': right_nonce, 'gasPrice': MINIMAL_GAS_PRICE})
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_store_signed.rawTransaction.hex())
@@ -255,7 +255,19 @@ class BlockedTest(unittest.TestCase):
         caller_seed = "long"
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
-        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 1000, return_dict))
+        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 1000, return_dict,
+        """
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+        """))
         p2.start()
         self.finish_blocker_transaction()
         p2.join()
@@ -268,7 +280,7 @@ class BlockedTest(unittest.TestCase):
         caller_seed = "short"
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
-        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 10, return_dict))
+        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 10, return_dict, ""))
         p2.start()
         self.finish_blocker_transaction()
         p2.join()
