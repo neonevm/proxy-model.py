@@ -398,12 +398,12 @@ class IterativeTransactionSender:
                 logger.debug(f'write {len(trxs)} trxs')
                 receipts = self.sender.send_multiple_transactions_unconfirmed(trxs)
                 results = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason='WriteHolder')
-                logger.debug(f'trxs {len(trxs)} receipts {len(receipts)} write {len(results)} ')
 
+                success_trxs = []
                 for result, trx in zip(results, trxs):
-                    logger.debug(f'result {result}')
                     if result is not None:
-                        trxs.remove(trx)
+                        success_trxs.append(trx)
+                trxs = [trx for trx in trxs if trx not in success_trxs]
 
 
     def call_continue(self):
