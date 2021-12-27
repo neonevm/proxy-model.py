@@ -2,6 +2,7 @@ import json
 import logging
 import math
 import os
+from typing import List
 import rlp
 import time
 
@@ -147,7 +148,7 @@ class TransactionSender:
         account = accountWithSeed(self.sender.get_operator_key(), seed)
 
         if self.sender.get_sol_balance(account) == 0:
-            minimum_balance = self.sender.get_rent_exempt_balance_for_size(storage_size)
+            minimum_balance = self.sender.get_multiple_rent_exempt_balances_for_size([storage_size])[0]
             logger.debug("Minimum balance required for account {}".format(minimum_balance))
 
             trx = Transaction()
@@ -157,29 +158,24 @@ class TransactionSender:
         return account
 
 
-    def create_multiple_accounts_with_seed(self, seeds, sizes):
-        accounts = []
+    def create_multiple_accounts_with_seed(self, seeds: List[bytes], sizes: List[int]) -> List[PublicKey]:
+        accounts = list(map(lambda seed: accountWithSeed(self.sender.get_operator_key(), seed), seeds))
+        accounts_info = self.sender.get_multiple_accounts_info(accounts)
+        minimum_balances = self.sender.get_multiple_rent_exempt_balances_for_size(sizes)
+
         trx = Transaction()
 
-        for seed, storage_size in zip(seeds, sizes):
-            account = accountWithSeed(self.sender.get_operator_key(), seed)
-            accounts.append(account)
-
-            minimum_balance = self.sender.get_rent_exempt_balance_for_size(storage_size)
-
-            account_info = self.sender.get_account_info(account)
+        for account_key, account_info, seed, minimum_balance, storage_size in zip(accounts, accounts_info, seeds, minimum_balances, sizes):
             if account_info is None:
                 logger.debug("Minimum balance required for account {}".format(minimum_balance))
-
-                trx.add(self.instruction.create_account_with_seed_trx(account, seed, minimum_balance, storage_size))
+                trx.add(self.instruction.create_account_with_seed_trx(account_key, seed, minimum_balance, storage_size))
             else:
-                (tag, lamports, owner) = account_info
-                if lamports < minimum_balance:
+                if account_info.lamports < minimum_balance:
                     raise Exception("insufficient balance")
-                if PublicKey(owner) != PublicKey(EVM_LOADER_ID):
+                if PublicKey(account_info.owner) != PublicKey(EVM_LOADER_ID):
                     raise Exception("wrong owner")
-                if tag not in {EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG}:
-                                raise Exception("not empty, not finalized")
+                if account_info.tag not in {EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG}:
+                    raise Exception("not empty, not finalized")
 
         if len(trx.instructions) > 0:
             self.sender.send_transaction(trx, eth_trx=self.eth_trx, reason='createAccountWithSeed')
@@ -259,7 +255,7 @@ class TransactionSender:
                     code_account = accountWithSeed(self.sender.get_operator_key(), seed)
                     logger.debug("     with code account %s", code_account)
                     code_size = acc_desc["code_size"] + 2048
-                    code_account_balance = self.sender.get_rent_exempt_balance_for_size(code_size)
+                    code_account_balance = self.sender.get_multiple_rent_exempt_balances_for_size([code_size])[0]
                     self.create_acc_trx.add(self.instruction.create_account_with_seed_trx(code_account, seed, code_account_balance, code_size))
                     # add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
                     code_account_writable = acc_desc["writable"]
@@ -359,38 +355,35 @@ class IterativeTransactionSender:
 
 
     def call_signed_iterative_combined(self):
-        self.create_accounts_for_trx()
+        if len(self.create_acc_trx.instructions) > 0:
+            create_accounts_siganture = self.sender.send_transaction_unconfirmed(self.create_acc_trx)
+            self.sender.confirm_multiple_transactions([create_accounts_siganture])
+            self.create_acc_trx = Transaction()
+
         self.instruction_type = self.CONTINUE_COMBINED
         return self.call_continue()
 
 
     def call_signed_with_holder_combined(self):
-        self.write_trx_to_holder_account()
-        self.create_accounts_for_trx()
+        if len(self.create_acc_trx.instructions) > 0:
+            self.write_to_holder_account_trx(self.create_acc_trx)
+            self.create_acc_trx = Transaction()
+        else:
+            self.write_to_holder_account_trx()
+
         self.instruction_type = self.CONTINUE_HOLDER_COMB
         return self.call_continue()
 
 
-    def create_accounts_for_trx(self):
-        length = len(self.create_acc_trx.instructions)
-        if length == 0:
-            return
-        logger.debug(f"Create account for trx: {length}")
-        precall_txs = Transaction()
-        precall_txs.add(self.create_acc_trx)
-        result = self.sender.send_measured_transaction(precall_txs, self.eth_trx, 'CreateAccountsForTrx')
-        if check_for_errors(result):
-            raise Exception("Failed to create account for trx")
-        self.create_acc_trx = Transaction()
-
-
-    def write_trx_to_holder_account(self):
+    def write_to_holder_account_trx(self, create_acc_trx = None) -> List[Transaction]:
         logger.debug('write_trx_to_holder_account')
         msg = self.eth_trx.signature() + len(self.eth_trx.unsigned_msg()).to_bytes(8, byteorder="little") + self.eth_trx.unsigned_msg()
 
         offset = 0
         rest = msg
         trxs = []
+        if create_acc_trx is not None:
+            trxs.append(create_acc_trx)
         while len(rest):
             (part, rest) = (rest[:1000], rest[1000:])
             trx = self.instruction.make_write_transaction(offset, part)
@@ -398,13 +391,9 @@ class IterativeTransactionSender:
             offset += len(part)
 
         while len(trxs) > 0:
-            receipts = {}
-            for trx in trxs:
-                receipts[self.sender.send_transaction_unconfirmed(trx)] = trx
-
-            logger.debug("receipts %s", receipts)
-            for rcpt, trx in receipts.items():
-                result = self.sender.collect_result(rcpt, eth_trx=self.eth_trx, reason='WriteHolder')
+            receipts = self.sender.send_multiple_transactions_unconfirmed(trxs)
+            results = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason='WriteHolder')
+            for result, trx in zip(results, trxs):
                 if result is not None:
                     trxs.remove(trx)
 
@@ -414,28 +403,31 @@ class IterativeTransactionSender:
             logs = []
             try_one_step = False
             found_errors = False
+
             logger.debug("Send bucked combined: %s", self.instruction_type)
-            receipts = []
+            trxs = []
             for index in range(self.steps_count()):
-                trx = self.make_combined_trx(self.steps, index)
-                receipts.append(self.sender.send_transaction_unconfirmed(trx))
+                trxs.append(self.make_combined_trx(self.steps, index))
+            receipts = self.sender.send_multiple_transactions_unconfirmed(trxs)
 
             logger.debug(f"Collected bucked results: {receipts}")
             result_list = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason=self.instruction_type)
+
             for result in result_list:
-                if not check_error(result):
-                    self.success_steps += 1
-                    self.sender.get_measurements(result)
-                    signature = check_if_continue_returned(result)
-                    if signature:
-                        return signature
-                elif check_if_accounts_blocked(result):
-                    try_one_step = True
-                elif check_if_program_exceeded_instructions(result):
-                    try_one_step = True
-                else:
-                    logs += get_logs_from_reciept(result)
-                    found_errors = True
+                if result is not None:
+                    if not check_error(result):
+                        self.success_steps += 1
+                        self.sender.get_measurements(result)
+                        signature = check_if_continue_returned(result)
+                        if signature:
+                            return signature
+                    elif check_if_accounts_blocked(result):
+                        try_one_step = True
+                    elif check_if_program_exceeded_instructions(result):
+                        try_one_step = True
+                    else:
+                        logs += get_logs_from_reciept(result)
+                        found_errors = True
 
             if try_one_step:
                 step_count = self.steps
@@ -481,11 +473,14 @@ class IterativeTransactionSender:
 
 
     def steps_count(self):
+        MAX_STEPS_IN_PACK = 16
         counted_steps = math.ceil(self.steps_emulated/self.steps) + self.addition_count()
         if self.success_steps >= counted_steps:
-            return counted_steps
-        else:
+            return MAX_STEPS_IN_PACK
+        elif (counted_steps - self.success_steps) <= MAX_STEPS_IN_PACK:
             return counted_steps - self.success_steps
+        else:
+            return MAX_STEPS_IN_PACK
 
 
     def addition_count(self):
