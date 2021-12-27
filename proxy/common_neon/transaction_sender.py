@@ -484,7 +484,7 @@ class IterativeTransactionSender:
         if self.success_steps >= counted_steps:
             return counted_steps
         else:
-            counted_steps - self.success_steps
+            return counted_steps - self.success_steps
 
 
     def addition_count(self):
