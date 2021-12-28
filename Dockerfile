@@ -1,5 +1,5 @@
 ARG SOLANA_REVISION=v1.7.9-testnet
-ARG EVM_LOADER_REVISION=latest
+ARG EVM_LOADER_REVISION=stable
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 
