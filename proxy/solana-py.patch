@@ -1,7 +1,7 @@
 diff --git a/solana/rpc/providers/http.py b/solana/rpc/providers/http.py
 index 5fb68dd..e7ebafe 100644
---- a/solana/rpc/providers/http.py
-+++ b/solana/rpc/providers/http.py
+--- solana/rpc/providers/http.py
++++ solana/rpc/providers/http.py
 @@ -25,6 +25,7 @@ class HTTPProvider(BaseProvider, FriendlyJsonSerde):
          """Init HTTPProvider."""
          self._request_counter = itertools.count()
