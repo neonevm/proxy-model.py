@@ -26,7 +26,6 @@ class IndexerBase:
                  evm_loader_id,
                  log_level,
                  start_slot):
-        logger.setLevel(log_levels.get(log_level, logging.INFO))
 
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
