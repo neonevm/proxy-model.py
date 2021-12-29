@@ -26,6 +26,9 @@ from multiprocessing import Process
 from .indexer.indexer import run_indexer
 from proxy.environment import SOLANA_URL, EVM_LOADER_ID
 
+logger = logging.getLogger(__name__)
+
+
 class Proxy:
 
     def __init__(self, input_args: Optional[List[str]], **opts: Any) -> None:
