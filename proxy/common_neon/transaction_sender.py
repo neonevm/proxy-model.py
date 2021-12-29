@@ -498,7 +498,7 @@ class IterativeTransactionSender:
                     self.success_steps += 1
                     self.sender.get_measurements(result)
                     signature = check_if_continue_returned(result)
-                    if success_signature is not None:
+                    if signature is not None:
                         success_signature = signature
                 elif check_if_accounts_blocked(result):
                     logger.debug("Blocked account")
