@@ -1,7 +1,6 @@
 import base58
 import base64
 import json
-import logging
 import re
 import time
 import requests
