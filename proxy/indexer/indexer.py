@@ -499,8 +499,7 @@ class Indexer(IndexerBase):
 def run_indexer(solana_url, evm_loader_id, *, logger):
     logger.info(f"""Running indexer with params:
         solana_url: {solana_url},
-        evm_loader_id: {evm_loader_id},
-        log_level: {log_level}""")
+        evm_loader_id: {evm_loader_id}""")
 
     indexer = Indexer(solana_url, evm_loader_id)
     indexer.run()
