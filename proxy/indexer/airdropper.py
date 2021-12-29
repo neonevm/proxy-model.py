@@ -5,7 +5,7 @@ import requests
 import base58
 import json
 import logging
-from logged_based_class import logged_based
+from logged_groups import logged_group
 
 try:
     from utils import check_error
@@ -19,7 +19,7 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 NEON_PRICE_USD = 0.25
 
 
-@logged_based("Indexer")
+@logged_group("Indexer")
 class Airdropper(IndexerBase):
     def __init__(self,
                  solana_url,
@@ -30,6 +30,16 @@ class Airdropper(IndexerBase):
                  price_upd_interval=60,
                  neon_decimals = 9):
         IndexerBase.__init__(self, solana_url, evm_loader_id, log_level)
+
+        self.setLevel(logging.DEBUG)
+        self.info(f"""Running indexer with params:
+                                                                            solana_url: {solana_url},
+                                                                            evm_loader_id: {evm_loader_id},
+                                                                            log_level: {log_level},
+                                                                            faucet_url: {faucet_url},
+                                                                            wrapper_whitelist: {wrapper_whitelist},
+                                                                            price update interval: {price_upd_interval},
+                                                                            NEON decimals: {neon_decimals}""")
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -167,15 +177,6 @@ def run_airdropper(solana_url,
                    price_update_interval = 60,
                    neon_decimals = 9):
     logging.basicConfig(format='%(asctime)s - pid:%(process)d [%(levelname)-.1s] %(funcName)s:%(lineno)d - %(message)s')
-    self.setLevel(logging.DEBUG)
-    self.info(f"""Running indexer with params:
-        solana_url: {solana_url},
-        evm_loader_id: {evm_loader_id},
-        log_level: {log_level},
-        faucet_url: {faucet_url},
-        wrapper_whitelist: {wrapper_whitelist},
-        price update interval: {price_update_interval},
-        NEON decimals: {neon_decimals}""")
 
     airdropper = Airdropper(solana_url,
                             evm_loader_id,

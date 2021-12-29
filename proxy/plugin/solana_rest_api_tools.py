@@ -6,6 +6,7 @@ from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Confirmed
+from logged_groups import logged_group
 
 from ..common_neon.address import ether2program, getTokenAddr, EthereumAddress, AccountInfo
 from ..common_neon.errors import SolanaAccountNotFoundError, SolanaErrors
@@ -18,11 +19,8 @@ from ..common_neon.utils import get_from_dict
 from ..environment import read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-
-def neon_config_load(ethereum_model):
+@logged_group("Proxy")
+def neon_config_load(ethereum_model, *, logger):
     try:
         ethereum_model.neon_config_dict
     except AttributeError:
@@ -68,8 +66,9 @@ def getAccountInfo(client, eth_account: EthereumAddress):
     return AccountInfo.frombytes(info)
 
 
-def create_eth_account_and_airdrop(client: SolanaClient, signer: SolanaAccount, eth_account: EthereumAddress):
-    trx = NeonInstruction(signer.public_key()).make_trx_with_create_and_airdrop (eth_account)
+@logged_group("Proxy")
+def create_eth_account_and_airdrop(client: SolanaClient, signer: SolanaAccount, eth_account: EthereumAddress, *, logger):
+    trx = NeonInstruction(signer.public_key()).make_trx_with_create_and_airdrop(eth_account)
     result = SolanaInteractor(signer, client).send_transaction(trx, None, reason='create_eth_account_and_airdrop')
     error = result.get("error")
     if error is not None:
@@ -77,7 +76,8 @@ def create_eth_account_and_airdrop(client: SolanaClient, signer: SolanaAccount, 
         raise Exception("Create eth_account error")
 
 
-def get_token_balance_gwei(client: SolanaClient, pda_account: str) -> int:
+@logged_group("Proxy")
+def get_token_balance_gwei(client: SolanaClient, pda_account: str, *, logger) -> int:
     neon_token_account = getTokenAddr(PublicKey(pda_account))
     rpc_response = client.get_token_account_balance(neon_token_account, commitment=Confirmed)
     error = rpc_response.get('error')
@@ -96,7 +96,8 @@ def get_token_balance_gwei(client: SolanaClient, pda_account: str) -> int:
     return int(balance)
 
 
-def get_token_balance_or_airdrop(client: SolanaClient, signer: SolanaAccount, eth_account: EthereumAddress) -> int:
+@logged_group("Proxy")
+def get_token_balance_or_airdrop(client: SolanaClient, signer: SolanaAccount, eth_account: EthereumAddress, *, logger) -> int:
     solana_account, nonce = ether2program(eth_account)
     logger.debug(f"Get balance for eth account: {eth_account} aka: {solana_account}")
 
@@ -115,8 +116,10 @@ def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> boo
     return value is not None
 
 
+@logged_group("Proxy")
 def estimate_gas(client: SolanaClient, signer: SolanaAccount, contract_id: str, caller_eth_account: EthereumAddress,
-                 data: str = None, value: str = None):
+                 data: str = None, value: str = None, *, logger):
+
     if not is_account_exists(client, caller_eth_account):
         create_eth_account_and_airdrop(client, signer, caller_eth_account)
     result = call_emulated(contract_id, str(caller_eth_account), data, value)

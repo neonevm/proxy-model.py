@@ -4,7 +4,7 @@ import time
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict, Union
-from logged_based_class import logged_based
+from logged_groups import logged_group
 
 try:
     from sql_dict import SQLDict
@@ -19,7 +19,7 @@ DEVNET_HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47R
 HISTORY_START = [DEVNET_HISTORY_START]
 
 
-@logged_based("Indexer")
+@logged_group("Indexer")
 class IndexerBase:
     def __init__(self,
                  solana_url,
@@ -62,7 +62,6 @@ class IndexerBase:
                 opts["before"] = minimal_tx
             opts["commitment"] = "confirmed"
             result = self.client._provider.make_request("getSignaturesForAddress", self.evm_loader_id, opts)
-            self.info("!!!!!!!!!!!!!!!!!!!!!!!!!!")
             self.debug("{:>3} get_signatures_for_address {}".format(counter, len(result["result"])))
             counter += 1
 

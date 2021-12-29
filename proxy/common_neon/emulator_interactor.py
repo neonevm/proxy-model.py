@@ -1,15 +1,12 @@
 import json
-import logging
+from logged_groups import logged_group
 
 from .errors import EthereumError
 from ..environment import neon_cli
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-
-def call_emulated(contract_id, caller_id, data=None, value=None):
+@logged_group("Proxy")
+def call_emulated(contract_id, caller_id, data=None, value=None, *, logger):
     output = emulator(contract_id, caller_id, data, value)
     logger.debug("call_emulated %s %s %s %s return %s", contract_id, caller_id, data, value, output)
     result = json.loads(output)

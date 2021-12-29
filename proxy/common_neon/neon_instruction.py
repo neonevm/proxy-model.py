@@ -18,9 +18,7 @@ from .layouts import CREATE_ACCOUNT_LAYOUT
 from ..environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
+from logged_groups import logged_group
 
 obligatory_accounts = [
     AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False),
@@ -83,6 +81,7 @@ def make_keccak_instruction_data(check_instruction_index, msg_len, data_start):
     return data
 
 
+@logged_group("Proxy")
 class NeonInstruction:
     def __init__(self, operator):
         self.operator_account = operator
@@ -121,7 +120,7 @@ class NeonInstruction:
 
     def create_account_with_seed_trx(self, account, seed, lamports, space):
         seed_str = str(seed, 'utf8')
-        logger.debug("createAccountWithSeedTrx base(%s) account(%s) seed(%s)", type(self.operator_account),account, seed_str)
+        self.debug("createAccountWithSeedTrx base(%s) account(%s) seed(%s)", type(self.operator_account),account, seed_str)
         return TransactionInstruction(
             keys=[
                 AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
@@ -136,7 +135,7 @@ class NeonInstruction:
     def make_create_eth_account_trx(self, eth_address: EthereumAddress, code_acc=None) -> Tuple[Transaction, PublicKey]:
         pda_account, nonce = ether2program(eth_address)
         neon_token_account = getTokenAddr(PublicKey(pda_account))
-        logger.debug(f'Create eth account: {eth_address}, sol account: {pda_account}, neon_token_account: {neon_token_account}, nonce: {nonce}')
+        self.debug(f'Create eth account: {eth_address}, sol account: {pda_account}, neon_token_account: {neon_token_account}, nonce: {nonce}')
 
         base = self.operator_account
         data = create_account_layout(0, 0, bytes(eth_address), nonce)
@@ -203,7 +202,7 @@ class NeonInstruction:
             mint=ETH_TOKEN_MINT_ID,
             program_id=TOKEN_PROGRAM_ID
         ))
-        logger.debug(f"Token transfer from token: {self.operator_neon_address}, owned by: {self.operator_account}, to token: "
+        self.debug(f"Token transfer from token: {self.operator_neon_address}, owned by: {self.operator_account}, to token: "
                     f"{associated_token_account}, owned by: {associated_token_account} , value: {NEW_USER_AIRDROP_AMOUNT}")
         return transfer_instruction
 

@@ -6,14 +6,14 @@ import rlp
 import time
 
 from multiprocessing.dummy import Pool as ThreadPool
-from logged_based_class import logged_based
+from logged_groups import logged_group
 
-try:
-    from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
-    from sql_dict import SQLDict
-except ImportError:
-    from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
-    from .sql_dict import SQLDict
+# try:
+#     from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+#     from sql_dict import SQLDict
+# except ImportError:
+from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+from .sql_dict import SQLDict
 
 CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
 UPDATE_BLOCK_COUNT = PARALLEL_REQUESTS * 16
@@ -47,13 +47,17 @@ class TransactionStruct:
         self.slot = slot
 
 
-@logged_based("Indexer")
+@logged_group("Indexer")
 class Indexer(IndexerBase):
     def __init__(self,
                  solana_url,
                  evm_loader_id,
                  log_level = 'INFO'):
         IndexerBase.__init__(self, solana_url, evm_loader_id, log_level)
+        self.info(f"""Running indexer with params:
+                                                                            solana_url: {solana_url},
+                                                                            evm_loader_id: {evm_loader_id},
+                                                                            log_level: {log_level}""")
 
         self.canceller = Canceller()
         self.logs_db = LogDB()
@@ -498,14 +502,8 @@ class Indexer(IndexerBase):
         return (slot, block_hash)
 
 
-def run_indexer(solana_url,
-                evm_loader_id,
-                log_level = 'DEBUG'):
-
-
-    indexer = Indexer(solana_url,
-                      evm_loader_id,
-                      log_level)
+def run_indexer(solana_url, evm_loader_id, log_level='DEBUG'):
+    indexer = Indexer(solana_url, evm_loader_id, log_level)
     indexer.run()
 
 
@@ -514,6 +512,4 @@ if __name__ == "__main__":
     evm_loader_id = os.environ.get('EVM_LOADER_ID', '53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io')
     log_level = os.environ.get('LOG_LEVEL', 'INFO')
 
-    run_indexer(solana_url,
-                evm_loader_id,
-                log_level)
+    run_indexer(solana_url, evm_loader_id, log_level)
