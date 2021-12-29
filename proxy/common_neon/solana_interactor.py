@@ -56,7 +56,6 @@ class SolanaInteractor:
 
         return response_data
 
-
     def get_operator_key(self):
         return self.signer.public_key()
 
