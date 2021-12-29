@@ -58,11 +58,14 @@ class TestTrxReceiptsStorage(TestCase):
             self.testee.add_trx(slot, signature, trx)
             expected_items.append((slot, signature, trx))
 
-        start_slot = 34
-        retrieved_trxs = [item for item in self.testee.get_trxs(start_slot, False)]
-        self.assertEqual(retrieved_trxs[0][0], start_slot)
-        self.assertEqual(retrieved_trxs[-1][0], max_slot)
+        start_slot = randint(0, 50)
 
+        # query in ascending order
+        retrieved_trxs = [item for item in self.testee.get_trxs(start_slot, False)]
+        self.assertGreaterEqual(retrieved_trxs[0][0], start_slot)
+        self.assertLessEqual(retrieved_trxs[-1][0], max_slot)
+
+        # query in descending order
         retrieved_trxs = [item for item in self.testee.get_trxs(start_slot, True)]
-        self.assertEqual(retrieved_trxs[0][0], max_slot)
-        self.assertEqual(retrieved_trxs[-1][0], start_slot)
+        self.assertLessEqual(retrieved_trxs[0][0], max_slot)
+        self.assertGreaterEqual(retrieved_trxs[-1][0], start_slot)
