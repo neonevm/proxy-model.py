@@ -16,6 +16,8 @@ RUN apt update && \
 
 COPY ./requirements.txt /opt
 COPY ./proxy/solana-py.patch /opt
+COPY ./log_cfg.json /opt
+
 WORKDIR /opt
 
 RUN python3 -m venv venv && \

@@ -4,9 +4,7 @@ import base64
 import base58
 import struct
 from datetime import datetime
-from logging import Logger
-
-logger = Logger(__name__)
+from logged_groups import logged_group
 
 field_info = {
   'expo': { 'pos': 20, 'len': 4, 'format': '<i' },
@@ -41,6 +39,7 @@ PRICE_STATUS_UNKNOWN = 0
 PRICE_STATUS_TRADING = 1
 
 
+@logged_group("Indexer")
 class PriceProvider:
     def __init__(self, solana_url: str, default_upd_int: int, price_accounts=None):
         self.client = Client(solana_url)
@@ -59,23 +58,23 @@ class PriceProvider:
     def _read_price(self, pairname):
         acc_id = self.price_accounts.get(pairname, None)
         if acc_id is None:
-            logger.warning(f'No account found for pair {pairname}')
+            self.warning(f'No account found for pair {pairname}')
             return None
 
         response = self.client.get_account_info(PublicKey(acc_id))
         result = response.get('result', None)
         if result is None:
-            logger.warning(f'Failed to read account data for account {acc_id}')
+            self.warning(f'Failed to read account data for account {acc_id}')
             return None
 
         value = result.get('value', None)
         if value is None:
-            logger.warning(f'Failed to read account data for account {acc_id}')
+            self.warning(f'Failed to read account data for account {acc_id}')
             return None
 
         data = value.get('data', None)
         if not isinstance(data, list) or len(data) != 2:
-            logger.warning(f'Failed to read account data for account {acc_id}')
+            self.warning(f'Failed to read account data for account {acc_id}')
             return None
 
         encoding = data[1]
@@ -84,12 +83,12 @@ class PriceProvider:
         elif encoding == 'base64':
             data = base64.b64decode(data[0])
         else:
-            logger.warning(f'Unknown encoding {encoding}')
+            self.warning(f'Unknown encoding {encoding}')
             return None
 
         status = _unpack_field(data, 'agg.status')
         if status != PRICE_STATUS_TRADING: # not Trading
-            logger.warning(f'Price status is {status}')
+            self.warning(f'Price status is {status}')
             return None
 
         expo = _unpack_field(data, 'expo')

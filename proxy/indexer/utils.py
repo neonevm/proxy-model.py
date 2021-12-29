@@ -21,14 +21,11 @@ from solana.transaction import AccountMeta, Transaction, TransactionInstruction
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from web3.auto.gethdev import w3
+from logged_groups import logged_group
 
 from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT
 from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID
-
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 def check_error(trx):
@@ -114,7 +111,8 @@ def get_trx_receipts(unsigned_msg, signature):
     return (trx_raw.hex(), eth_signature, from_address)
 
 
-def get_account_list(client, storage_account):
+@logged_group("Indexer")
+def get_account_list(client, storage_account, *, logger):
     opts = {
         "encoding": "base64",
         "commitment": "confirmed",
@@ -153,8 +151,7 @@ def get_account_list(client, storage_account):
         return None
 
 
-
-
+@logged_group("Indexer")
 class LogDB:
     def __init__(self):
         POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
@@ -202,12 +199,12 @@ class LogDB:
                     )
                 )
         if len(rows):
-            # logger.debug(rows)
+            # self.debug(rows)
             cur = self.conn.cursor()
             cur.executemany('INSERT INTO logs VALUES (%s, %s, %s, %s,  %s, %s,  %s) ON CONFLICT DO NOTHING', rows)
             self.conn.commit()
         else:
-            logger.debug("NO LOGS")
+            self.debug("NO LOGS")
 
 
     def get_logs(self, fromBlock = None, toBlock = None, address = None, topics = None, blockHash = None):
@@ -254,8 +251,8 @@ class LogDB:
             if idx < len(queries) - 1:
                 query_string += " AND "
 
-        logger.debug(query_string)
-        logger.debug(params)
+        self.debug(query_string)
+        self.debug(params)
 
         cur = self.conn.cursor()
         cur.execute(query_string, tuple(params))
@@ -304,10 +301,10 @@ class Canceller:
             cmd = ["solana",
                    "--url", SOLANA_URL,
                    ] + list(args)
-            logger.debug(cmd)
+            self.debug(cmd)
             return subprocess.check_output(cmd, universal_newlines=True)
         except subprocess.CalledProcessError as err:
-            logger.debug("ERR: solana error {}".format(err))
+            self.debug("ERR: solana error {}".format(err))
             raise
 
 
@@ -327,19 +324,19 @@ class Canceller:
             (eth_trx, blocked_accs) = trx_accs
             acc_list = get_account_list(self.client, storage)
             if eth_trx is None:
-                logger.error("trx is None")
+                self.error("trx is None")
                 continue
             if blocked_accs is None:
-                logger.error("blocked_accs is None")
+                self.error("blocked_accs is None")
                 continue
             if acc_list is None:
-                logger.error("acc_list is None. Storage is empty")
-                logger.error(storage)
+                self.error("acc_list is None. Storage is empty")
+                self.error(storage)
                 continue
 
             eth_trx = rlp.decode(bytes.fromhex(eth_trx), EthTrx)
             if acc_list != blocked_accs:
-                logger.error("acc_list != blocked_accs")
+                self.error("acc_list != blocked_accs")
                 continue
 
             if acc_list is not None:
@@ -361,11 +358,11 @@ class Canceller:
                     keys=keys
                 ))
 
-                logger.debug("Send Cancel")
+                self.debug("Send Cancel")
                 try:
                     self.client.send_transaction(trx, self.signer, opts=TxOpts(preflight_commitment=Confirmed))
                 except Exception as err:
-                    logger.error(err)
+                    self.error(err)
                 else:
-                    logger.debug("Canceled")
-                    logger.debug(acc_list)
+                    self.debug("Canceled")
+                    self.debug(acc_list)

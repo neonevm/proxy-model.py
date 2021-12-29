@@ -1,6 +1,5 @@
 import psycopg2
 import os
-import logging
 from collections.abc import MutableMapping
 
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
@@ -12,10 +11,6 @@ try:
     from cPickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
 except ImportError:
     from pickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
-
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 def encode(obj):

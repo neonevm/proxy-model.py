@@ -8,12 +8,12 @@ import time
 from multiprocessing.dummy import Pool as ThreadPool
 from logged_groups import logged_group
 
-# try:
-#     from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
-#     from sql_dict import SQLDict
-# except ImportError:
-from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
-from .sql_dict import SQLDict
+try:
+    from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+    from sql_dict import SQLDict
+except ImportError:
+    from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
+    from .sql_dict import SQLDict
 
 CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
 UPDATE_BLOCK_COUNT = PARALLEL_REQUESTS * 16

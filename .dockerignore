@@ -6,6 +6,7 @@
 !requirements.txt
 !setup.py
 !README.md
+!log_cfg.json
 
 # Ignore __pycache__ directory
 proxy/__pycache__
