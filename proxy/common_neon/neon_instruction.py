@@ -1,5 +1,4 @@
 import eth_utils
-import logging
 import struct
 
 from sha3 import keccak_256
@@ -11,14 +10,13 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID
 from spl.token.instructions import transfer2, Transfer2Params
 from typing import Tuple
+from logged_groups import logged_group
 
 from .address import accountWithSeed, ether2program, getTokenAddr, EthereumAddress
 from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from .layouts import CREATE_ACCOUNT_LAYOUT
 from ..environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
 
-
-from logged_groups import logged_group
 
 obligatory_accounts = [
     AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False),
