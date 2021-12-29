@@ -24,7 +24,6 @@ if __name__ == '__main__':
         wrapper_whitelist = os.environ['INDEXER_ERC20_WRAPPER_WHITELIST']
         if wrapper_whitelist != 'ANY':
             wrapper_whitelist = wrapper_whitelist.split(',')
-        log_level = os.environ['LOG_LEVEL']
         price_update_interval = int(os.environ.get('PRICE_UPDATE_INTERVAL', '60'))
         neon_decimals = int(os.environ.get('NEON_DECIMALS', '9'))
 
@@ -41,7 +40,6 @@ if __name__ == '__main__':
                        evm_loader_id,
                        faucet_url,
                        wrapper_whitelist,
-                       log_level,
                        price_update_interval,
                        neon_decimals,
                        start_slot)

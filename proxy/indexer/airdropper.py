@@ -26,11 +26,10 @@ class Airdropper(IndexerBase):
                  evm_loader_id,
                  faucet_url = '',
                  wrapper_whitelist = 'ANY',
-                 log_level = 'INFO',
                  price_upd_interval=60,
                  neon_decimals = 9,
                  start_slot = 0):
-        IndexerBase.__init__(self, solana_url, evm_loader_id, log_level, start_slot)
+        IndexerBase.__init__(self, solana_url, evm_loader_id, start_slot)
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -167,7 +166,6 @@ def run_airdropper(solana_url,
                    evm_loader_id,
                    faucet_url = '',
                    wrapper_whitelist = 'ANY',
-                   log_level = 'INFO',
                    price_update_interval = 60,
                    neon_decimals = 9,
                    start_slot = 0, *, logger):
@@ -176,7 +174,6 @@ def run_airdropper(solana_url,
     logger.info(f"""Running indexer with params:
         solana_url: {solana_url},
         evm_loader_id: {evm_loader_id},
-        log_level: {log_level},
         faucet_url: {faucet_url},
         wrapper_whitelist: {wrapper_whitelist},
         price update interval: {price_update_interval},
@@ -186,7 +183,6 @@ def run_airdropper(solana_url,
                             evm_loader_id,
                             faucet_url,
                             wrapper_whitelist,
-                            log_level,
                             price_update_interval,
                             neon_decimals,
                             start_slot)

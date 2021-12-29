@@ -35,7 +35,6 @@ class TransactionSender:
 
         self.instruction = NeonInstruction(self.sender.get_operator_key())
 
-
     def execute(self):
         self.create_account_list_by_emulate()
 
@@ -81,20 +80,16 @@ class TransactionSender:
         finally:
             self.free_perm_accs()
 
-
     def create_instruction_constructor(self):
         return NeonInstruction(self.sender.get_operator_key(), self.eth_trx, self.eth_accounts, self.caller_token)
-
 
     def create_noniterative_executor(self):
         self.instruction.init_eth_trx(self.eth_trx, self.eth_accounts, self.caller_token)
         return NoniterativeTransactionSender(self.sender, self.instruction, self.create_acc_trx, self.eth_trx)
 
-
     def create_iterative_executor(self):
         self.instruction.init_iterative(self.storage, self.holder, self.perm_accs_id)
         return IterativeTransactionSender(self.sender, self.instruction, self.create_acc_trx, self.eth_trx, self.steps, self.steps_emulated)
-
 
     def init_perm_accs(self):
         while True:
@@ -125,12 +120,10 @@ class TransactionSender:
             else:
                 break
 
-
     def free_perm_accs(self):
         self.debug("FREE RESOURCES {}".format(self.perm_accs_id))
         with new_acc_id_glob.get_lock():
             acc_list_glob.append(self.perm_accs_id)
-
 
     def create_account_with_seed(self, seed, storage_size):
         account = accountWithSeed(self.sender.get_operator_key(), seed)
@@ -144,7 +137,6 @@ class TransactionSender:
             self.sender.send_transaction(trx, eth_trx=self.eth_trx, reason='createAccountWithSeed')
 
         return account
-
 
     def create_multiple_accounts_with_seed(self, seeds: List[bytes], sizes: List[int]) -> List[PublicKey]:
         accounts = list(map(lambda seed: accountWithSeed(self.sender.get_operator_key(), seed), seeds))
@@ -169,7 +161,6 @@ class TransactionSender:
             self.sender.send_transaction(trx, eth_trx=self.eth_trx, reason='createAccountWithSeed')
 
         return accounts
-
 
     def create_account_list_by_emulate(self):
         sender_ether = bytes.fromhex(self.eth_trx.sender())
@@ -304,7 +295,6 @@ class NoniterativeTransactionSender:
         self.create_acc_trx = create_acc_trx
         self.eth_trx = eth_trx
 
-
     def call_signed_noniterative(self):
         call_txs_05 = Transaction()
         if len(self.create_acc_trx.instructions) > 0:
@@ -320,6 +310,7 @@ class NoniterativeTransactionSender:
         return result['result']['transaction']['signatures'][0]
 
 
+@logged_group("Proxy")
 class IterativeTransactionSender:
     CONTINUE_REGULAR = 'ContinueV02'
     CONTINUE_COMBINED = 'PartialCallOrContinueFromRawEthereumTX'
@@ -334,7 +325,6 @@ class IterativeTransactionSender:
         self.steps_emulated = steps_emulated
         self.instruction_type = self.CONTINUE_REGULAR
 
-
     def call_signed_iterative_combined(self):
         if len(self.create_acc_trx.instructions) > 0:
             create_accounts_siganture = self.sender.send_transaction_unconfirmed(self.create_acc_trx)
@@ -343,7 +333,6 @@ class IterativeTransactionSender:
 
         self.instruction_type = self.CONTINUE_COMBINED
         return self.call_continue()
-
 
     def call_signed_with_holder_combined(self):
         precall_transactions = self.make_write_to_holder_account_trx()
@@ -356,7 +345,6 @@ class IterativeTransactionSender:
 
         self.instruction_type = self.CONTINUE_HOLDER_COMB
         return self.call_continue()
-
 
     def make_write_to_holder_account_trx(self) -> List[Transaction]:
         self.debug('write_trx_to_holder_account')
@@ -373,7 +361,6 @@ class IterativeTransactionSender:
 
         return trxs
 
-
     def call_continue(self):
         return_result = None
         try:
@@ -388,7 +375,6 @@ class IterativeTransactionSender:
 
         return self.call_continue_iterative()
 
-
     def call_continue_iterative(self):
         try:
             return self.call_continue_step_by_step()
@@ -398,7 +384,6 @@ class IterativeTransactionSender:
 
         return self.call_cancel()
 
-
     def call_continue_step_by_step(self):
         while True:
             self.debug("Continue iterative step:")
@@ -406,7 +391,6 @@ class IterativeTransactionSender:
             signature = check_if_continue_returned(result)
             if signature is not None:
                 return signature
-
 
     def call_continue_step(self):
         step_count = self.steps
@@ -424,14 +408,12 @@ class IterativeTransactionSender:
                     raise
         raise Exception("Can't execute even one EVM instruction")
 
-
     def call_cancel(self):
         trx = self.instruction.make_cancel_transaction()
 
         self.debug("Cancel")
         result = self.sender.send_measured_transaction(trx, self.eth_trx, 'CancelWithNonce')
         return result['result']['transaction']['signatures'][0]
-
 
     def call_continue_bucked(self):
         self.debug("Send bucked combined: %s", self.instruction_type)
@@ -449,7 +431,6 @@ class IterativeTransactionSender:
 
         return self.collect_bucked_results(receipts, self.instruction_type)
 
-
     def addition_count(self):
         '''
         How many transactions are needed depending on trx type:
@@ -464,7 +445,6 @@ class IterativeTransactionSender:
             addition_count = 1
         return addition_count
 
-
     def make_combined_trx(self, steps, index):
         if self.instruction_type == self.CONTINUE_COMBINED:
             return self.instruction.make_partial_call_or_continue_transaction(steps - index)
@@ -472,7 +452,6 @@ class IterativeTransactionSender:
             return self.instruction.make_partial_call_or_continue_from_account_data(steps, index)
         else:
             raise Exception("Unknown continue type: {}".format(self.instruction_type))
-
 
     def collect_bucked_results(self, receipts, reason):
         self.debug(f"Collected bucked results: {receipts}")

@@ -24,7 +24,6 @@ class IndexerBase:
     def __init__(self,
                  solana_url,
                  evm_loader_id,
-                 log_level,
                  start_slot):
 
         self.evm_loader_id = evm_loader_id
