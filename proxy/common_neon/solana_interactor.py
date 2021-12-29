@@ -174,7 +174,6 @@ class SolanaInteractor:
         response = self._send_rpc_batch_request("sendTransaction", request)
         return list(map(lambda r: r["result"], response))
 
-
     def send_measured_transaction(self, trx, eth_trx, reason):
         if LOG_SENDING_SOLANA_TRANSACTION:
             logger.debug("send_measured_transaction for reason %s: %s ", reason, trx.__dict__)
