@@ -1,5 +1,4 @@
 import base64
-import logging
 
 from datetime import datetime
 from solana.account import Account as SolanaAccount
@@ -107,7 +106,7 @@ def get_token_balance_or_airdrop(client: SolanaClient, signer: SolanaAccount, et
         logger.debug(f"Account not found:  {eth_account} aka: {solana_account} - create")
         if NEW_USER_AIRDROP_AMOUNT == 0:
             return 0
-            
+
         create_eth_account_and_airdrop(client, signer, eth_account)
         return get_token_balance_gwei(client, solana_account)
 
