@@ -49,11 +49,8 @@ class TransactionStruct:
 
 @logged_group("Indexer")
 class Indexer(IndexerBase):
-    def __init__(self,
-                 solana_url,
-                 evm_loader_id,
-                 log_level = 'INFO'):
-        IndexerBase.__init__(self, solana_url, evm_loader_id, log_level, 0)
+    def __init__(self, solana_url, evm_loader_id):
+        IndexerBase.__init__(self, solana_url, evm_loader_id, 0)
 
         self.canceller = Canceller()
         self.logs_db = LogDB()
@@ -497,16 +494,15 @@ class Indexer(IndexerBase):
 
         return (slot, block_hash)
 
+
 @logged_group("Indexer")
-def run_indexer(solana_url, evm_loader_id, log_level = 'DEBUG', *, logger):
+def run_indexer(solana_url, evm_loader_id, *, logger):
     logger.info(f"""Running indexer with params:
         solana_url: {solana_url},
         evm_loader_id: {evm_loader_id},
         log_level: {log_level}""")
 
-    indexer = Indexer(solana_url,
-                      evm_loader_id,
-                      log_level)
+    indexer = Indexer(solana_url, evm_loader_id)
     indexer.run()
 
 
