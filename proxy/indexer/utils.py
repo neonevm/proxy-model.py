@@ -271,6 +271,7 @@ class LogDB:
         self.conn.close()
 
 
+@logged_group("Indexer")
 class Canceller:
     def __init__(self):
         # Initialize user account
@@ -295,7 +296,6 @@ class Canceller:
         self.operator = self.signer.public_key()
         self.operator_token = get_associated_token_address(PublicKey(self.operator), ETH_TOKEN_MINT_ID)
 
-
     def call(self, *args):
         try:
             cmd = ["solana",
@@ -306,7 +306,6 @@ class Canceller:
         except subprocess.CalledProcessError as err:
             self.debug("ERR: solana error {}".format(err))
             raise
-
 
     def unlock_accounts(self, blocked_storages):
         readonly_accs = [

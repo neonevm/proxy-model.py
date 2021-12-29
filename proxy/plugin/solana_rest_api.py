@@ -500,6 +500,7 @@ class JsonEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
+@logged_group("TestCases")
 class SolanaContractTests(unittest.TestCase):
 
     def setUp(self):
@@ -557,6 +558,7 @@ class SolanaContractTests(unittest.TestCase):
         self.debug('Block:', block)
 
         self.assertTrue(receiptId in block['transactions'])
+
 
 @logged_group("Proxy")
 class SolanaProxyPlugin(HttpWebServerBasePlugin):

@@ -4,6 +4,7 @@
   "logged_groups": {
     "Indexer": "CRITICAL",
     "Proxy": "DEBUG",
-    "Airdropper": "DEBUG"
+    "Airdropper": "DEBUG",
+    "TestCases": "DEBUG"
   }
 }

@@ -39,7 +39,7 @@ PRICE_STATUS_UNKNOWN = 0
 PRICE_STATUS_TRADING = 1
 
 
-@logged_group("Indexer")
+@logged_group("Airdropper")
 class PriceProvider:
     def __init__(self, solana_url: str, default_upd_int: int, price_accounts=None):
         self.client = Client(solana_url)
