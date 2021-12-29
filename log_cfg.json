@@ -3,6 +3,7 @@
   "colored": false,
   "logged_groups": {
     "Indexer": "CRITICAL",
-    "Proxy": "DEBUG"
+    "Proxy": "DEBUG",
+    "Airdropper": "DEBUG"
   }
 }

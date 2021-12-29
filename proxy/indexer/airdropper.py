@@ -19,7 +19,7 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 NEON_PRICE_USD = 0.25
 
 
-@logged_group("Indexer")
+@logged_group("Airdropper")
 class Airdropper(IndexerBase):
     def __init__(self,
                  solana_url,
