@@ -53,11 +53,7 @@ class Indexer(IndexerBase):
                  solana_url,
                  evm_loader_id,
                  log_level = 'INFO'):
-        IndexerBase.__init__(self, solana_url, evm_loader_id, log_level)
-        self.info(f"""Running indexer with params:
-                                                                            solana_url: {solana_url},
-                                                                            evm_loader_id: {evm_loader_id},
-                                                                            log_level: {log_level}""")
+        IndexerBase.__init__(self, solana_url, evm_loader_id, log_level, 0)
 
         self.canceller = Canceller()
         self.logs_db = LogDB()
@@ -175,7 +171,7 @@ class Indexer(IndexerBase):
                                             del continue_table[storage_account]
                                         else:
                                             self.error("Storage not found")
-                                            self.error(eth_signature, "unknown")
+                                            self.error(f"{eth_signature} unknown")
                                             # raise
 
                                         del holder_table[write_account]
@@ -449,7 +445,7 @@ class Indexer(IndexerBase):
             }
         self.blocks_by_hash[block_hash] = slot
 
-        self.debug(trx_struct.eth_signature + " " + status)
+        self.debug(f"{trx_struct.eth_signature} {status}")
 
 
     def submit_transaction_part(self, trx_struct):
@@ -501,9 +497,16 @@ class Indexer(IndexerBase):
 
         return (slot, block_hash)
 
+@logged_group("Indexer")
+def run_indexer(solana_url, evm_loader_id, log_level = 'DEBUG', *, logger):
+    logger.info(f"""Running indexer with params:
+        solana_url: {solana_url},
+        evm_loader_id: {evm_loader_id},
+        log_level: {log_level}""")
 
-def run_indexer(solana_url, evm_loader_id, log_level='DEBUG'):
-    indexer = Indexer(solana_url, evm_loader_id, log_level)
+    indexer = Indexer(solana_url,
+                      evm_loader_id,
+                      log_level)
     indexer.run()
 
 

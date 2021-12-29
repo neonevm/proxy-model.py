@@ -6,6 +6,9 @@
 !requirements.txt
 !setup.py
 !README.md
+!run-test-faucet.sh
+!run-faucet.sh
+!run-airdropper.sh
 !log_cfg.json
 
 # Ignore __pycache__ directory
