@@ -90,8 +90,7 @@ class Indexer(IndexerBase):
         seen_slots = set()
         max_slot = 0
 
-        for slot_sig, trx in self.transaction_receipts.get_trxs(self.processed_slot, reverse=True):
-            slot, signature = slot_sig
+        for slot, signature, trx in self.transaction_receipts.get_trxs(self.processed_slot, reverse=True):
             max_slot = max(max_slot, slot)
             counter += 1
 
