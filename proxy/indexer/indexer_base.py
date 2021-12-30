@@ -30,7 +30,7 @@ class IndexerBase:
 
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
-        self.transaction_receipts = TrxReceiptsStorage('transaction_receipts', log_level)
+        self.transaction_receipts = TrxReceiptsStorage('transaction_receipts')
         self.last_slot = start_slot
         self.current_slot = 0
         self.counter_ = 0

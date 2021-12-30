@@ -3,6 +3,7 @@ from collections.abc import MutableMapping
 from proxy.indexer.pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD\
     , POSTGRES_HOST, encode, decode, dummy
 
+
 class SQLDict(MutableMapping):
     """Serialize an object using pickle to a binary format accepted by SQLite."""
 
