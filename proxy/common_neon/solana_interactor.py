@@ -191,7 +191,8 @@ class SolanaInteractor:
     def get_measurements(self, result):
         try:
             measurements = self.extract_measurements_from_receipt(result)
-            for m in measurements: self.info(json.dumps(m))
+            for m in measurements:
+                self.info("get_measurements: " + json.dumps(m))
         except Exception as err:
             self.error("Can't get measurements %s"%err)
             self.info("Failed result: %s"%json.dumps(result, indent=3))
