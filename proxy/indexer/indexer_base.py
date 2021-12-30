@@ -7,8 +7,10 @@ from typing import Dict, Union
 
 try:
     from sql_dict import SQLDict
+    from trx_receipts_storage import TrxReceiptsStorage
 except ImportError:
     from .sql_dict import SQLDict
+    from .trx_receipts_storage import TrxReceiptsStorage
 
 
 PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
@@ -40,21 +42,16 @@ class IndexerBase:
 
         self.evm_loader_id = evm_loader_id
         self.client = Client(solana_url)
-        self.transaction_receipts = SQLDict(tablename="known_transactions", bin_key=True)
+        self.transaction_receipts = TrxReceiptsStorage('transaction_receipts', log_level)
         self.last_slot = start_slot
         self.current_slot = 0
         self.counter_ = 0
-
-        if len(self.transaction_receipts) > 0:
-            self.max_known_tx = max(self.transaction_receipts)
-        else:
-            self.max_known_tx = (0, None)
-
+        self.max_known_tx = self.transaction_receipts.max_known_trx()
         self._move_data_from_old_table()
 
 
     def _move_data_from_old_table(self):
-        if len(self.transaction_receipts) == 0:
+        if self.transaction_receipts.size() == 0:
             transaction_receipts_old = SQLDict(tablename="known_transactions")
             for signature, trx in transaction_receipts_old.iteritems():
                 self._add_trx(signature, trx)
@@ -100,7 +97,6 @@ class IndexerBase:
             for tx in results:
                 solana_signature = tx["signature"]
                 slot = tx["slot"]
-                slot_sig = (slot, solana_signature)
 
                 if slot < self.last_slot:
                     continue_flag = False
@@ -111,7 +107,7 @@ class IndexerBase:
                     continue_flag = False
                     break
 
-                if slot_sig not in self.transaction_receipts:
+                if not self.transaction_receipts.contains(slot, solana_signature):
                     poll_txs.add(solana_signature)
 
         logger.debug("start getting receipts")
@@ -161,7 +157,7 @@ class IndexerBase:
                     add = True
             if add:
                 logger.debug((trx['slot'], solana_signature))
-                self.transaction_receipts[(trx['slot'], solana_signature)] = trx
+                self.transaction_receipts.add_trx(trx['slot'], solana_signature, trx)
         else:
             logger.debug(f"trx is None {solana_signature}")
 
