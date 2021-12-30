@@ -8,11 +8,11 @@ from multiprocessing.dummy import Pool as ThreadPool
 from logged_groups import logged_group
 
 try:
-    from indexer_base import logger, IndexerBase, PARALLEL_REQUESTS
+    from indexer_base import IndexerBase, PARALLEL_REQUESTS
     from utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
     from sql_dict import SQLDict
 except ImportError:
-    from .indexer_base import logger, IndexerBase, PARALLEL_REQUESTS
+    from .indexer_base import IndexerBase, PARALLEL_REQUESTS
     from .utils import check_error, get_trx_results, get_trx_receipts, LogDB, Canceller
     from .sql_dict import SQLDict
 
