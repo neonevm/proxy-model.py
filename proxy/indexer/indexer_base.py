@@ -141,8 +141,8 @@ class IndexerBase:
                 if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] == self.evm_loader_id:
                     add = True
             if add:
-                logger.debug((trx['slot'], solana_signature))
+                self.debug((trx['slot'], solana_signature))
                 self.transaction_receipts.add_trx(trx['slot'], solana_signature, trx)
         else:
-            logger.debug(f"trx is None {solana_signature}")
+            self.debug(f"trx is None {solana_signature}")
 
