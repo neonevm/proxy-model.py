@@ -9,7 +9,7 @@ FROM ubuntu:20.04
 ARG PROXY_REVISION
 
 RUN apt update && \
-    DEBIAN_FRONTEND=noninteractive apt -y install \
+    apt -y install \
             software-properties-common openssl curl \
             ca-certificates python3-pip python3-venv && \
     rm -rf /var/lib/apt/lists/*
@@ -23,8 +23,10 @@ WORKDIR /opt
 RUN python3 -m venv venv && \
     pip3 install --upgrade pip && \
     /bin/bash -c "source venv/bin/activate" && \
+    apt install -y git && \
     pip install -r requirements.txt && \
-    pip install py-solc-x
+    apt remove -y git && \
+    pip install py-solc-x &&
 
 COPY --from=cli /opt/solana/bin/solana \
                 /opt/solana/bin/solana-faucet \
