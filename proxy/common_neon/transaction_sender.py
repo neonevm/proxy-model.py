@@ -424,7 +424,7 @@ class IterativeTransactionSender:
             try_one_step = False
             found_errors = False
 
-            logger.debug(f"Send bucked combined: {self.instruction_type}")
+            logger.debug(f"Send pack of combined: {self.instruction_type}")
             trxs = []
             for index in range(self.steps_count()):
                 trxs.append(self.make_combined_trx(self.steps, index))
