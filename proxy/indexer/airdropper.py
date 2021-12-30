@@ -30,6 +30,7 @@ class Airdropper(IndexerBase):
                  neon_decimals = 9,
                  start_slot = 0):
         IndexerBase.__init__(self, solana_url, evm_loader_id, start_slot)
+        self.latest_processed_slot = 0
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -146,20 +147,12 @@ class Airdropper(IndexerBase):
 
 
     def process_receipts(self):
-        counter = 0
-        for signature in self.transaction_order:
-            counter += 1
-            if signature in self.transaction_receipts:
-                trx = self.transaction_receipts[signature]
-                if trx is None:
-                    self.error("trx is None")
-                    del self.transaction_receipts[signature]
-                    continue
-                if 'slot' not in trx:
-                    self.debug("\n{}".format(json.dumps(trx, indent=4, sort_keys=True)))
-                    exit()
-                if trx['transaction']['message']['instructions'] is not None:
-                    self.process_trx_airdropper_mode(trx)
+        max_slot = 0
+        for slot, _, trx in self.transaction_receipts.get_trxs(self.latest_processed_slot, reverse=True):
+            max_slot = max(max_slot, slot)
+            if trx['transaction']['message']['instructions'] is not None:
+                self.process_trx_airdropper_mode(trx)
+        self.latest_processed_slot = max(self.latest_processed_slot, max_slot)
 
 @logged_group("Airdropper")
 def run_airdropper(solana_url,
