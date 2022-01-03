@@ -55,14 +55,14 @@ class Airdropper(IndexerBase):
 
 
     # helper function checking if given contract address is in whitelist
-    def _is_allowed_wrapper_contract(self, contract_addr):
+    def is_allowed_wrapper_contract(self, contract_addr):
         if self.wrapper_whitelist == 'ANY':
             return True
         return contract_addr in self.wrapper_whitelist
 
 
     # helper function checking if given 'create account' corresponds to 'create erc20 token account' instruction
-    def _check_create_instr(self, account_keys, create_acc, create_token_acc):
+    def check_create_instr(self, account_keys, create_acc, create_token_acc):
         # Must use the same Ethereum account
         if account_keys[create_acc['accounts'][1]] != account_keys[create_token_acc['accounts'][2]]:
             return False
@@ -73,17 +73,17 @@ class Airdropper(IndexerBase):
         if account_keys[create_acc['accounts'][5]] != 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA':
             return False
         # CreateERC20TokenAccount instruction must use ERC20-wrapper from whitelist
-        if not self._is_allowed_wrapper_contract(account_keys[create_token_acc['accounts'][3]]):
+        if not self.is_allowed_wrapper_contract(account_keys[create_token_acc['accounts'][3]]):
             return False
         return True
 
 
     # helper function checking if given 'create erc20 token account' corresponds to 'token transfer' instruction
-    def _check_transfer(self, account_keys, create_token_acc, token_transfer) -> bool:
+    def check_transfer(self, account_keys, create_token_acc, token_transfer) -> bool:
         return account_keys[create_token_acc['accounts'][1]] == account_keys[token_transfer['accounts'][1]]
 
 
-    def _airdrop_to(self, eth_address, airdrop_galans):
+    def airdrop_to(self, eth_address, airdrop_galans):
         logger.info(f"Airdrop {airdrop_galans} Galans to address: {eth_address}")
         json_data = { 'wallet': eth_address, 'amount': airdrop_galans }
         resp = self.session.post(self.faucet_url + '/request_neon_in_galans', json = json_data)
@@ -94,7 +94,7 @@ class Airdropper(IndexerBase):
         return True
 
 
-    def _process_trx_airdropper_mode(self, trx):
+    def process_trx_airdropper_mode(self, trx):
         if check_error(trx):
             return
 
@@ -123,15 +123,15 @@ class Airdropper(IndexerBase):
         # Second: Find exact chains of instructions in sets created previously
         for create_acc in create_acc_list:
             for create_token_acc in create_token_acc_list:
-                if not self._check_create_instr(account_keys, create_acc, create_token_acc):
+                if not self.check_create_instr(account_keys, create_acc, create_token_acc):
                     continue
                 for token_transfer in token_transfer_list:
-                    if not self._check_transfer(account_keys, create_token_acc, token_transfer):
+                    if not self.check_transfer(account_keys, create_token_acc, token_transfer):
                         continue
-                    self._schedule_airdrop(create_acc)
+                    self.schedule_airdrop(create_acc)
 
 
-    def _get_airdrop_amount_galans(self):
+    def get_airdrop_amount_galans(self):
         new_sol_price_usd = self.price_provider.get_price('SOL/USD')
         if new_sol_price_usd is None:
             logger.warning("Failed to get SOL/USD price")
@@ -148,23 +148,24 @@ class Airdropper(IndexerBase):
         return int(self.airdrop_amount_neon * pow(10, self.neon_decimals))
 
 
-    def _schedule_airdrop(self, create_acc):
+    def schedule_airdrop(self, create_acc):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
-        if eth_address in self.airdrop_ready:  # Target account already supplied with airdrop
+        if eth_address in self.airdrop_ready or eth_address in self.airdrop_scheduled:
+            # Target account already supplied with airdrop or airdrop already scheduled
             return
         logger.info(f'Scheduling airdrop for {eth_address}')
         self.airdrop_scheduled[eth_address] = { 'scheduled': datetime.now().timestamp() }
 
 
-    def _process_scheduled_trxs(self):
-        airdrop_galans = self._get_airdrop_amount_galans()
+    def process_scheduled_trxs(self):
+        airdrop_galans = self.get_airdrop_amount_galans()
         if airdrop_galans is None:
             logger.warning('Failed to estimate airdrop amount. Defer scheduled airdrops.')
             return
 
         success_addresses = set()
         for eth_address, sched_info in self.airdrop_scheduled.items():
-            if not self._airdrop_to(eth_address, airdrop_galans):
+            if not self.airdrop_to(eth_address, airdrop_galans):
                 continue
             success_addresses.add(eth_address)
             self.airdrop_ready[eth_address] = { 'amount': airdrop_galans, 
@@ -182,6 +183,7 @@ class Airdropper(IndexerBase):
         IndexerBase.process_functions(self)
         logger.debug("Process receipts")
         self.process_receipts()
+        self.process_scheduled_trxs()
 
 
     def process_receipts(self):
