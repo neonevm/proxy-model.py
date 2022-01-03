@@ -32,6 +32,7 @@ class Airdropper(IndexerBase):
                  neon_decimals = 9,
                  start_slot = 0):
         IndexerBase.__init__(self, solana_url, evm_loader_id, log_level, start_slot)
+        self.latest_processed_slot = 0
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -46,6 +47,7 @@ class Airdropper(IndexerBase):
                                             price_upd_interval, # seconds
                                             mainnet_price_accounts)
         self.neon_decimals = neon_decimals
+        self.session = requests.Session()
 
         self.sol_price_usd = None
         self.airdrop_amount_usd = None
@@ -84,7 +86,7 @@ class Airdropper(IndexerBase):
     def _airdrop_to(self, eth_address, airdrop_galans):
         logger.info(f"Airdrop {airdrop_galans} Galans to address: {eth_address}")
         json_data = { 'wallet': eth_address, 'amount': airdrop_galans }
-        resp = requests.post(self.faucet_url + '/request_neon_in_galans', json = json_data)
+        resp = self.session.post(self.faucet_url + '/request_neon_in_galans', json = json_data)
         if not resp.ok:
             logger.warning(f'Failed to airdrop: {resp.status_code}')
             return False
@@ -178,15 +180,17 @@ class Airdropper(IndexerBase):
         Overrides IndexerBase.process_functions
         """
         IndexerBase.process_functions(self)
-        self._process_scheduled_trxs()
+        logger.debug("Process receipts")
+        self.process_receipts()
 
 
-    def handle_new_transactions(self, ordered_signs, receipts):
-        """
-        Overrides IndexerBase.handle_new_transactions
-        """
-        for signature in ordered_signs:
-            self._process_trx_airdropper_mode(receipts[signature]) 
+    def process_receipts(self):
+        max_slot = 0
+        for slot, _, trx in self.transaction_receipts.get_trxs(self.latest_processed_slot, reverse=True):
+            max_slot = max(max_slot, slot)
+            if trx['transaction']['message']['instructions'] is not None:
+                self.process_trx_airdropper_mode(trx)
+        self.latest_processed_slot = max(self.latest_processed_slot, max_slot)
 
 
 def run_airdropper(solana_url,
