@@ -86,8 +86,8 @@ class Test_Airdropper(unittest.TestCase):
         self.mock_airdrop_ready.__contains__.side_effect = [False] # new eth address
         self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=200, mimetype='application/json')]
 
-        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx)
-        self.airdropper._process_scheduled_trxs()
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
         self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address)
         self.mock_airdrop_ready.__setitem__.assert_not_called()
@@ -95,15 +95,15 @@ class Test_Airdropper(unittest.TestCase):
         self.faucet.request_neon_in_galans_mock.assert_not_called()
 
     @patch.object(PriceProvider, 'get_price')
-    @patch.object(Airdropper, '_is_allowed_wrapper_contract')
+    @patch.object(Airdropper, 'is_allowed_wrapper_contract')
     def test_failed_airdrop_contract_not_in_whitelist(self, mock_is_allowed_contract, mock_get_price):
         """
         Should not airdrop for contract that is not in whitelist
         """
         mock_get_price.side_effect = [235.0]
         mock_is_allowed_contract.side_effect = [False]
-        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx)
-        self.airdropper._process_scheduled_trxs()
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
         mock_is_allowed_contract.assert_called_once()
         mock_get_price.assert_called_once_with('SOL/USD')
@@ -122,8 +122,8 @@ class Test_Airdropper(unittest.TestCase):
         self.mock_airdrop_ready.__contains__.side_effect = [False]  # new eth address
         self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=400, mimetype='application/json')]
 
-        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx)
-        self.airdropper._process_scheduled_trxs()
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
         self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address)
         mock_get_price.assert_called_once_with('SOL/USD')
@@ -137,8 +137,8 @@ class Test_Airdropper(unittest.TestCase):
         """
         self.mock_airdrop_ready.__contains__.side_effect = [True]  # eth address processed earlier
 
-        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx)
-        self.airdropper._process_scheduled_trxs()
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
         self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address)
         self.mock_airdrop_ready.__setitem__.assert_not_called()
