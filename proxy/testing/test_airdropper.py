@@ -8,9 +8,7 @@ from flask import request, Response
 from unittest.mock import Mock, MagicMock, patch, call, ANY
 from decimal import Decimal
 import itertools
-from proxy.testing.transactions import pre_token_airdrop_trx1, pre_token_airdrop_trx2,\
-    create_sol_acc_and_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address1, \
-    token_airdrop_address2, token_airdrop_address3
+from proxy.testing.transactions import pre_token_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address
 
 class MockFaucet(MockServer):
     def __init__(self, port):
@@ -96,16 +94,16 @@ class Test_Airdropper(unittest.TestCase):
         self.mock_airdrop_ready.__contains__.side_effect = [False] # new eth address
         self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=200, mimetype='application/json')]
 
-        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx1)
-        self.airdropper._process_scheduled_trxs()
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
-        self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address1)
+        self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address)
         self.mock_airdrop_ready.__setitem__.assert_not_called()
         mock_get_price.assert_called_once_with('SOL/USD')
         self.faucet.request_neon_in_galans_mock.assert_not_called()
 
     @patch.object(PriceProvider, 'get_price')
-    @patch.object(Airdropper, '_is_allowed_wrapper_contract')
+    @patch.object(Airdropper, 'is_allowed_wrapper_contract')
     def test_failed_airdrop_contract_not_in_whitelist(self, mock_is_allowed_contract, mock_get_price):
         """
         Should not airdrop for contract that is not in whitelist
@@ -115,8 +113,8 @@ class Test_Airdropper(unittest.TestCase):
                                                         Decimal('235.0'),
                                                         Decimal('1.3'))]
         mock_is_allowed_contract.side_effect = [False]
-        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx1)
-        self.airdropper._process_scheduled_trxs()
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
         mock_is_allowed_contract.assert_called_once()
         mock_get_price.assert_called_once_with('SOL/USD')
@@ -138,13 +136,13 @@ class Test_Airdropper(unittest.TestCase):
         self.mock_airdrop_ready.__contains__.side_effect = [False]  # new eth address
         self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=400, mimetype='application/json')]
 
-        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx1)
-        self.airdropper._process_scheduled_trxs()
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
-        self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address1)
+        self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address)
         mock_get_price.assert_called_once_with('SOL/USD')
         self.mock_airdrop_ready.__setitem__.assert_not_called()
-        json_req = {'wallet': token_airdrop_address1, 'amount': airdrop_amount}
+        json_req = {'wallet': token_airdrop_address, 'amount': airdrop_amount}
         self.faucet.request_neon_in_galans_mock.assert_called_once_with(json_req)
     
     def test_process_trx_with_one_airdrop_for_already_processed_address(self):
@@ -153,10 +151,10 @@ class Test_Airdropper(unittest.TestCase):
         """
         self.mock_airdrop_ready.__contains__.side_effect = [True]  # eth address processed earlier
 
-        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx1)
-        self.airdropper._process_scheduled_trxs()
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
-        self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address1)
+        self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address)
         self.mock_airdrop_ready.__setitem__.assert_not_called()
         self.faucet.request_neon_in_galans_mock.assert_not_called()
     
