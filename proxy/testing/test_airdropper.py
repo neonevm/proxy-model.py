@@ -167,10 +167,10 @@ class Test_Airdropper(unittest.TestCase):
         mock_get_price.side_effect = [create_price_info(self.airdropper.current_slot,
                                                         Decimal('235.0'),
                                                         Decimal('54.0'))] # << BIG CONFIDENCE INTERVAL
-        self.airdropper._process_trx_airdropper_mode(pre_token_airdrop_trx1)
-        self.airdropper._process_scheduled_trxs()
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
         mock_get_price.assert_called_once_with('SOL/USD')
-        self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address1)
+        self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address)
         self.mock_airdrop_ready.__setitem__.assert_not_called()
         self.faucet.request_neon_in_galans_mock.assert_not_called()
