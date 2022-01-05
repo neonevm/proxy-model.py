@@ -162,19 +162,20 @@ class Test_Neon_Faucet(unittest.TestCase):
         return tx_deploy_receipt.contractAddress
 
     def start_faucet(self):
+        os.environ['FAUCET_RPC_BIND'] = '"0.0.0.0"'
         os.environ['FAUCET_RPC_PORT'] = '3333'
-        os.environ['FAUCET_RPC_ALLOWED_ORIGINS'] = 'http://localhost'
+        os.environ['FAUCET_RPC_ALLOWED_ORIGINS'] = '["http://localhost"]'
         os.environ['FAUCET_WEB3_ENABLE'] = 'true'
-        os.environ['WEB3_RPC_URL'] = proxy_url
-        os.environ['WEB3_PRIVATE_KEY'] = admin.key.hex()
-        os.environ['NEON_ERC20_TOKENS'] = self.token_a + ',' + self.token_b
+        os.environ['WEB3_RPC_URL'] = '"' + proxy_url + '"'
+        os.environ['WEB3_PRIVATE_KEY'] = '"' + admin.key.hex() + '"'
+        os.environ['NEON_ERC20_TOKENS'] = '["' + self.token_a + '", "' + self.token_b + '"]'
         os.environ['NEON_ERC20_MAX_AMOUNT'] = '1000'
         os.environ['FAUCET_SOLANA_ENABLE'] = 'true'
-        os.environ['SOLANA_URL'] = os.environ.get('SOLANA_URL', 'http://solana:8899')
-        os.environ['EVM_LOADER'] = os.environ.get('EVM_LOADER', '53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io')
-        os.environ['NEON_TOKEN_MINT'] = 'HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU'
+        os.environ['SOLANA_URL'] = '"' + os.environ.get('SOLANA_URL', 'http://solana:8899') + '"'
+        os.environ['EVM_LOADER'] = '"' + os.environ.get('EVM_LOADER', '53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io') + '"'
+        os.environ['NEON_TOKEN_MINT'] = '"HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU"'
         os.environ['NEON_TOKEN_MINT_DECIMALS'] = '9'
-        os.environ['NEON_OPERATOR_KEYFILE'] = '/root/.config/solana/id.json'
+        os.environ['NEON_OPERATOR_KEYFILE'] = '"/root/.config/solana/id.json"'
         os.environ['NEON_ETH_MAX_AMOUNT'] = '10'
         self.faucet = subprocess.Popen(['faucet', 'run', '--workers', '1'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -203,9 +204,9 @@ class Test_Neon_Faucet(unittest.TestCase):
         self.assertEqual(balance_after - balance_before, 99999000000000)
 
     # @unittest.skip("a.i.")
-    def test_neon_faucet_02_eth_token(self):
+    def test_neon_faucet_02_neon(self):
         print()
-        url = 'http://localhost:{}/request_eth_token'.format(os.environ['FAUCET_RPC_PORT'])
+        url = 'http://localhost:{}/request_neon'.format(os.environ['FAUCET_RPC_PORT'])
         # First request - trigger creation of the account without real transfer
         data = '{"wallet": "' + user.address + '", "amount": 0}'
         r = requests.post(url, data=data)
@@ -229,7 +230,7 @@ class Test_Neon_Faucet(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_neon_faucet_03_erc20_tokens(self):
         print()
-        url = 'http://localhost:{}/request_erc20_tokens'.format(os.environ['FAUCET_RPC_PORT'])
+        url = 'http://localhost:{}/request_erc20'.format(os.environ['FAUCET_RPC_PORT'])
         a_before = self.get_token_balance(self.token_a, user.address)
         b_before = self.get_token_balance(self.token_b, user.address)
         print('token A balance before:', a_before)
