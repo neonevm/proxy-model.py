@@ -336,7 +336,7 @@ class Indexer(IndexerBase):
 
                     elif instruction_data[0] == 0x0d:
                         seen_slots.add(slot)
-                        logger.debug("{:>10} {:>6} PartialCallOrContinueFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
+                        self.debug("{:>10} {:>6} PartialCallOrContinueFromRawEthereumTX 0x{}".format(slot, counter, instruction_data.hex()))
 
                         storage_account = trx['transaction']['message']['accountKeys'][instruction['accounts'][0]]
                         blocked_accounts = [trx['transaction']['message']['accountKeys'][acc_idx] for acc_idx in instruction['accounts'][7:]]
@@ -437,7 +437,7 @@ class Indexer(IndexerBase):
             self.processed_slot = max(self.processed_slot, max_slot)
 
         process_receipts_ms = (time.time() - start_time)*1000  # convert this into milliseconds
-        logger.debug(f"process_receipts_ms: {process_receipts_ms} transaction_receipts.len: {self.transaction_receipts.size()} from {self.processed_slot} to {self.current_slot} slots")
+        self.debug(f"process_receipts_ms: {process_receipts_ms} transaction_receipts.len: {self.transaction_receipts.size()} from {self.processed_slot} to {self.current_slot} slots")
 
 
 

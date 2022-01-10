@@ -388,10 +388,10 @@ class IterativeTransactionSender:
 
         while len(write_trxs) > 0:
             (trxs, write_trxs) = (write_trxs[:20], write_trxs[20:])
-            logger.debug(f'write_trxs {len(write_trxs)} trxs {len(trxs)}')
+            self.debug(f'write_trxs {len(write_trxs)} trxs {len(trxs)}')
 
             while len(trxs) > 0:
-                logger.debug(f'write {len(trxs)} trxs')
+                self.debug(f'write {len(trxs)} trxs')
                 receipts = self.sender.send_multiple_transactions_unconfirmed(trxs)
                 results = self.sender.collect_results(receipts, eth_trx=self.eth_trx, reason='WriteHolder')
 
