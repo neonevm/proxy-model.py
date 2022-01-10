@@ -84,7 +84,7 @@ services:
 
   faucet:
     container_name: faucet
-    image: neonlabsorg/proxy:${REVISION}
+    image: neonlabsorg/proxy:8e69e54c9c5ce82475e5898ffeb93b5f17eedab2
     environment:
       FAUCET_RPC_PORT: 3333
       FAUCET_RPC_ALLOWED_ORIGINS: '["http://airdropper"]'
