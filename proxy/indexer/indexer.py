@@ -532,6 +532,4 @@ def run_indexer(solana_url, evm_loader_id, *, logger):
 if __name__ == "__main__":
     solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
     evm_loader_id = os.environ.get('EVM_LOADER_ID', '53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io')
-    log_level = os.environ.get('LOG_LEVEL', 'INFO')
-
-    run_indexer(solana_url, evm_loader_id, log_level)
+    run_indexer(solana_url, evm_loader_id)
