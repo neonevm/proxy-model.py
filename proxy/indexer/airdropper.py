@@ -135,16 +135,16 @@ class Airdropper(IndexerBase):
     def get_airdrop_amount_galans(self):
         new_sol_price_usd = self.price_provider.get_price('SOL/USD')
         if new_sol_price_usd is None:
-            logger.warning("Failed to get SOL/USD price")
+            self.warning("Failed to get SOL/USD price")
             return None
 
         if new_sol_price_usd != self.sol_price_usd:
             self.sol_price_usd = new_sol_price_usd
-            logger.info(f"NEON price: ${NEON_PRICE_USD}")
-            logger.info(f'SOL/USD = ${self.sol_price_usd}')
+            self.info(f"NEON price: ${NEON_PRICE_USD}")
+            self.info(f'SOL/USD = ${self.sol_price_usd}')
             self.airdrop_amount_usd = AIRDROP_AMOUNT_SOL * self.sol_price_usd
             self.airdrop_amount_neon = self.airdrop_amount_usd / NEON_PRICE_USD
-            logger.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
+            self.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
 
         return int(self.airdrop_amount_neon * pow(10, self.neon_decimals))
 
@@ -154,14 +154,14 @@ class Airdropper(IndexerBase):
         if eth_address in self.airdrop_ready or eth_address in self.airdrop_scheduled:
             # Target account already supplied with airdrop or airdrop already scheduled
             return
-        logger.info(f'Scheduling airdrop for {eth_address}')
+        self.info(f'Scheduling airdrop for {eth_address}')
         self.airdrop_scheduled[eth_address] = { 'scheduled': datetime.now().timestamp() }
 
 
     def process_scheduled_trxs(self):
         airdrop_galans = self.get_airdrop_amount_galans()
         if airdrop_galans is None:
-            logger.warning('Failed to estimate airdrop amount. Defer scheduled airdrops.')
+            self.warning('Failed to estimate airdrop amount. Defer scheduled airdrops.')
             return
 
         success_addresses = set()
