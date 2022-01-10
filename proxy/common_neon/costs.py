@@ -52,7 +52,7 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
     if not WRITE_TRANSACTION_COST_IN_DB:
         return
 
-    cost = receipt['result']['meta']['preBalances'][0] - receipt['result']['meta']['postBalances'][0]
+    cost = receipt['meta']['preBalances'][0] - receipt['meta']['postBalances'][0]
     if eth_trx:
         hash = eth_trx.hash_signed().hex()
         sender = eth_trx.sender()
@@ -62,10 +62,10 @@ def update_transaction_cost(receipt, eth_trx, extra_sol_trx=False, reason=None):
         sender = None
         to_address = None
 
-    sig = receipt['result']['transaction']['signatures'][0]
+    sig = receipt['transaction']['signatures'][0]
     used_gas=None
 
-    tx_info = receipt['result']
+    tx_info = receipt
     accounts = tx_info["transaction"]["message"]["accountKeys"]
     evm_loader_instructions = []
 
