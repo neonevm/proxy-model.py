@@ -94,7 +94,7 @@ services:
       NEON_ERC20_TOKENS:
       NEON_ERC20_MAX_AMOUNT: 1000
       FAUCET_SOLANA_ENABLE: 'true'
-      SOLANA_URL: '"http://solana:8899"'
+      SOLANA_URL: 'http://solana:8899'
       NEON_OPERATOR_KEYFILE: '"/root/.config/solana/id.json"'
       NEON_ETH_MAX_AMOUNT: 10
       TEST_FAUCET_INIT_NEON_BALANCE: 10000
