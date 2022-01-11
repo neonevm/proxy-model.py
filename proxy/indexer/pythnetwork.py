@@ -1,4 +1,4 @@
-from solana.rpc.api import Client
+from solana.rpc.api import Client as SolanaClient
 from solana.publickey import PublicKey
 from solana.system_program import SYS_PROGRAM_ID
 from decimal import Decimal
@@ -86,7 +86,7 @@ class PythNetworkClient:
     }
 
 
-    def __init__(self, client: Client):
+    def __init__(self, client: SolanaClient):
         self.client = client
         self.price_accounts = {}
     

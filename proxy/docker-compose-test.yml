@@ -124,7 +124,6 @@ services:
       PRICE_UPDATE_INTERVAL: 10
       START_SLOT: LATEST
       PP_SOLANA_URL: https://api.mainnet-beta.solana.com
-      SOL_USD_PRICE_ACC: H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG
       MAX_CONFIDENCE_INTERVAL: 0.01
     hostname: airdropper
     entrypoint: ./run-airdropper.sh
