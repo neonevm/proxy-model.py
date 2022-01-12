@@ -160,7 +160,6 @@ class Airdropper(IndexerBase):
 
     def get_sol_usd_price(self):
         should_reload = self.always_reload_price
-
         if not should_reload:
             if self.recent_price == None or self.recent_price['valid_slot'] < self.latest_processed_slot:
                 should_reload = True
