@@ -175,25 +175,22 @@ class Airdropper(IndexerBase):
 
 
     def get_airdrop_amount_galans(self):
-        new_sol_price_usd = self.get_sol_usd_price()
-        if new_sol_price_usd is None:
+        self.sol_price_usd = self.get_sol_usd_price()
+        if self.sol_price_usd is None:
             logger.warning("Failed to get SOL/USD price")
             return None
 
-        if new_sol_price_usd != self.sol_price_usd:
-            self.sol_price_usd = new_sol_price_usd
-            logger.info(f"NEON price: ${NEON_PRICE_USD}")
-            logger.info(f"Price valid slot: {self.sol_price_usd['valid_slot']}")
-            logger.info(f"Price confidence interval: ${self.sol_price_usd['conf']}")
-            logger.info(f"SOL/USD = ${self.sol_price_usd['price']}")
-            if self.sol_price_usd['conf'] / self.sol_price_usd['price'] > self.max_conf:
-                logger.warning(f"Confidence interval too large. Airdrops will deferred.")
-                return None
+        logger.info(f"NEON price: ${NEON_PRICE_USD}")
+        logger.info(f"Price valid slot: {self.sol_price_usd['valid_slot']}")
+        logger.info(f"Price confidence interval: ${self.sol_price_usd['conf']}")
+        logger.info(f"SOL/USD = ${self.sol_price_usd['price']}")
+        if self.sol_price_usd['conf'] / self.sol_price_usd['price'] > self.max_conf:
+            logger.warning(f"Confidence interval too large. Airdrops will deferred.")
+            return None
 
-            self.airdrop_amount_usd = AIRDROP_AMOUNT_SOL * self.sol_price_usd['price']
-            self.airdrop_amount_neon = self.airdrop_amount_usd / NEON_PRICE_USD
-            logger.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
-
+        self.airdrop_amount_usd = AIRDROP_AMOUNT_SOL * self.sol_price_usd['price']
+        self.airdrop_amount_neon = self.airdrop_amount_usd / NEON_PRICE_USD
+        logger.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
         return int(self.airdrop_amount_neon * pow(Decimal(10), self.neon_decimals))
 
 
