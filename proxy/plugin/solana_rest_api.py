@@ -32,7 +32,7 @@ from web3 import Web3
 
 from .eth_proto import Trx as EthTrx
 from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, \
-    get_token_balance_or_airdrop, estimate_gas
+    get_token_balance_or_airdrop, estimate_gas, EVM_STEPS
 from ..common_neon.address import EthereumAddress
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
@@ -426,7 +426,7 @@ class EthereumModel:
                                     ]
                                 })
         try:
-            signature = call_signed(self.signer, self.client, trx, steps=250)
+            signature = call_signed(self.signer, self.client, trx, steps=EVM_STEPS)
 
             logger.debug('Transaction signature: %s %s', signature, eth_signature)
 

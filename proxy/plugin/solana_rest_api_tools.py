@@ -1,5 +1,6 @@
 import base64
 import logging
+import math
 
 from datetime import datetime
 from solana.account import Account as SolanaAccount
@@ -21,6 +22,8 @@ from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_R
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+EVM_STEPS = 250 # number of steps of the rust-evm per transaction
+TRANSACTION_COST = 15000 # amount of gas per transaction
 
 def neon_config_load(ethereum_model):
     try:
@@ -123,9 +126,11 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, contract_id: str, 
     if not is_account_exists(client, caller_eth_account):
         create_eth_account_and_airdrop(client, signer, caller_eth_account)
     result = call_emulated(contract_id, str(caller_eth_account), data, value)
-    used_gas = result.get("used_gas")
-    if used_gas is None:
+    steps_emulated = result.get("steps_executed")
+    if steps_emulated is None:
         logger.error(f"Failed estimate_gas, unexpected result, by contract_id: {contract_id}, caller_eth_account: "
                      f"{caller_eth_account}, data: {data}, value: {value}, emulation result: {result}")
         raise Exception("Bad estimate_gas result")
-    return used_gas + EXTRA_GAS
+
+    transaction_count = math.ceil(int(steps_emulated)/EVM_STEPS) + 2
+    return transaction_count * TRANSACTION_COST + EXTRA_GAS
