@@ -19,7 +19,7 @@ import os
 import json
 
 
-MAX_AIRDROP_WAIT_TIME = 120
+MAX_AIRDROP_WAIT_TIME = 360
 EVM_LOADER_ID = PublicKey(EVM_LOADER_ID)
 PROXY_URL = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 FAUCET_RPC_PORT = 3333
