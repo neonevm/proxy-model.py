@@ -241,7 +241,7 @@ class Airdropper(IndexerBase):
             # Target account already supplied with airdrop or airdrop already scheduled
             return
         logger.info(f'Scheduling airdrop for {eth_address}')
-        self.airdrop_scheduled[eth_address] = { 'scheduled': datetime.now().timestamp() }
+        self.airdrop_scheduled[eth_address] = { 'scheduled': self.get_current_time() }
 
 
     def process_scheduled_trxs(self):
