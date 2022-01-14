@@ -99,6 +99,8 @@ class Test_Airdropper(unittest.TestCase):
         self.airdropper.airdrop_scheduled.clear()
         self.mock_airdrop_ready.is_airdrop_ready.reset_mock()
         self.mock_airdrop_ready.register_airdrop.reset_mock()
+        self.mock_pyth_client.get_price.reset_mock()
+        self.mock_pyth_client.update_mapping.reset_mock()
 
     @patch.object(PriceProvider, 'get_price')
     def test_failed_process_trx_with_one_airdrop_price_provider_error(self, mock_get_price):
@@ -163,6 +165,8 @@ class Test_Airdropper(unittest.TestCase):
         self.mock_airdrop_ready.__contains__.side_effect = [False]  # new eth address
         self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=400, mimetype='application/json')]
 
+        self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_scheduled_trxs()
 
         self.mock_pyth_client.update_mapping.assert_called_once()
         self.mock_airdrop_ready.__contains__.assert_called_once_with(token_airdrop_address)
