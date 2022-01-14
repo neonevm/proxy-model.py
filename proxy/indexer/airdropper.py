@@ -1,4 +1,3 @@
-from time import time
 from solana.publickey import PublicKey
 from proxy.indexer.indexer_base import IndexerBase, logger
 from proxy.indexer.pythnetwork import PythNetworkClient
@@ -8,6 +7,8 @@ import base58
 import logging
 from datetime import datetime
 from decimal import Decimal
+import psycopg2
+import os
 
 try:
     from utils import check_error
