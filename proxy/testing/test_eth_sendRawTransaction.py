@@ -8,6 +8,7 @@ from solcx import install_solc
 # install_solc(version='latest')
 install_solc(version='0.7.0')
 from solcx import compile_source
+from proxy.plugin.solana_rest_api_tools import TRANSACTION_COST
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
@@ -190,7 +191,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         trx_store = self.storage_contract.functions.store(148).buildTransaction({'nonce': right_nonce, 'gasPrice': 1})
         print('trx_store:', trx_store)
-        trx_store['gas'] = trx_store['gas'] - 2 - EXTRA_GAS # less than estimated
+        trx_store['gas'] = trx_store['gas'] - TRANSACTION_COST - EXTRA_GAS # less than estimated
         print('trx_store:', trx_store)
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
         print('trx_store_signed:', trx_store_signed)

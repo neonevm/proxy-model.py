@@ -17,6 +17,7 @@ from time import sleep
 from web3 import Web3
 import os
 import json
+import unittest
 
 
 MAX_AIRDROP_WAIT_TIME = 45
@@ -107,6 +108,7 @@ class TestAirdropperIntegration(TestCase):
         print(f"NEON account created: {account.address}")
         return account
 
+    @unittest.skip("")
     def test_success_airdrop_simple_case(self):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
@@ -146,6 +148,7 @@ class TestAirdropperIntegration(TestCase):
         print("NEON balance is: ", eth_balance)
         self.assertTrue(eth_balance > 0 and eth_balance < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
 
+    @unittest.skip("")
     def test_success_airdrop_complex_case(self):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000

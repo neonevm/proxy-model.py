@@ -3,6 +3,7 @@ import os
 import requests
 import json
 import inspect
+from proxy.plugin.solana_rest_api_tools import TRANSACTION_COST
 
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 headers = {'Content-type': 'application/json'}
@@ -42,7 +43,7 @@ class TestUserStories(unittest.TestCase):
         print('response:', response)
         used_gas = response['result']
         print('used_gas:', used_gas)
-        self.assertEqual(used_gas, 89078 + EXTRA_GAS)
+        self.assertEqual(used_gas, TRANSACTION_COST*3 + EXTRA_GAS)
 
     def test_02_check_eth_estimateGas_on_deploying_a_contract_with_the_empty_value(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/122")
@@ -58,7 +59,7 @@ class TestUserStories(unittest.TestCase):
         print('response:', response)
         used_gas = response['result']
         print('used_gas:', used_gas)
-        self.assertEqual(used_gas, 89078 + EXTRA_GAS)
+        self.assertEqual(used_gas, TRANSACTION_COST*3 + EXTRA_GAS)
 
     def test_03_check_eth_estimateGas_on_deploying_a_contract_with_the_empty_data(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/122")
@@ -74,7 +75,7 @@ class TestUserStories(unittest.TestCase):
         print('response:', response)
         used_gas = response['result']
         print('used_gas:', used_gas)
-        self.assertEqual(used_gas, 53001 + EXTRA_GAS)
+        self.assertEqual(used_gas, TRANSACTION_COST*2 + EXTRA_GAS)
 
     def test_04_check_eth_estimateGas_on_deploying_a_contract_with_the_empty_data_and_value(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/122")
@@ -89,7 +90,7 @@ class TestUserStories(unittest.TestCase):
         print('response:', response)
         used_gas = response['result']
         print('used_gas:', used_gas)
-        self.assertEqual(used_gas, 53001 + EXTRA_GAS)
+        self.assertEqual(used_gas, TRANSACTION_COST*2 + EXTRA_GAS)
 
     def test_05_check_params_omitted(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/318")
