@@ -80,6 +80,10 @@ class Test_Airdropper(unittest.TestCase):
         cls.mock_airdrop_ready.is_airdrop_ready = MagicMock()
         cls.airdropper.airdrop_ready = cls.mock_airdrop_ready
 
+        cls.mock_failed_attempts = Mock()
+        cls.mock_failed_attempts.airdrop_failed = MagicMock()
+        cls.airdropper.failed_attempts = cls.mock_failed_attempts
+
 
     def setUp(self) -> None:
         print(f"\n\n{self._testMethodName}\n{self._testMethodDoc}")
@@ -97,6 +101,7 @@ class Test_Airdropper(unittest.TestCase):
         self.mock_airdrop_ready.register_airdrop.reset_mock()
         self.mock_pyth_client.get_price.reset_mock()
         self.mock_pyth_client.update_mapping.reset_mock()
+        self.mock_failed_attempts.airdrop_failed.reset_mock()
 
 
     def test_failed_process_trx_with_one_airdrop_price_provider_error(self):
@@ -111,6 +116,7 @@ class Test_Airdropper(unittest.TestCase):
         self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
         self.airdropper.process_scheduled_trxs()
 
+        self.mock_failed_attempts.airdrop_failed.assert_called_once_with('ALL', ANY)
         self.mock_pyth_client.update_mapping.assert_called_once()
         self.mock_airdrop_ready.is_airdrop_ready.assert_called_once_with(token_airdrop_address)
         self.mock_airdrop_ready.register_airdrop.assert_not_called()
@@ -136,6 +142,7 @@ class Test_Airdropper(unittest.TestCase):
         self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
         self.airdropper.process_scheduled_trxs()
 
+        self.mock_failed_attempts.airdrop_failed.assert_not_called()
         self.mock_pyth_client.update_mapping.assert_called_once()
         mock_is_allowed_contract.assert_called_once()
         self.mock_pyth_client.get_price.assert_called_once_with('SOL/USD')
@@ -164,6 +171,7 @@ class Test_Airdropper(unittest.TestCase):
         self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
         self.airdropper.process_scheduled_trxs()
 
+        self.mock_failed_attempts.airdrop_failed.assert_called_once_with(str(token_airdrop_address), ANY)
         self.mock_pyth_client.update_mapping.assert_called_once()
         self.mock_airdrop_ready.is_airdrop_ready.assert_called_once_with(token_airdrop_address)
         self.mock_pyth_client.get_price.assert_called_once_with('SOL/USD')
@@ -176,11 +184,22 @@ class Test_Airdropper(unittest.TestCase):
         """
         Should not airdrop to repeated address
         """
+        self.airdropper.current_slot = 1
+        self.mock_pyth_client.get_price.side_effect = [{
+            'valid_slot': self.airdropper.current_slot,
+            'price': Decimal('235.0'),
+            'conf': Decimal('1.3'),
+            'status': 1
+        }]
+
         self.mock_airdrop_ready.is_airdrop_ready.side_effect = [True]  # eth address processed earlier
 
         self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
         self.airdropper.process_scheduled_trxs()
 
+        self.mock_pyth_client.update_mapping.assert_called_once()
+        self.mock_pyth_client.get_price.assert_called_once_with('SOL/USD')
+        self.mock_failed_attempts.airdrop_failed.assert_not_called()
         self.mock_airdrop_ready.is_airdrop_ready.assert_called_once_with(token_airdrop_address)
         self.mock_airdrop_ready.register_airdrop.assert_not_called()
         self.faucet.request_neon_in_galans_mock.assert_not_called()

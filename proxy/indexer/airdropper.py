@@ -1,3 +1,4 @@
+from calendar import c
 from solana.publickey import PublicKey
 from proxy.indexer.indexer_base import IndexerBase, logger
 from proxy.indexer.pythnetwork import PythNetworkClient
@@ -26,6 +27,36 @@ POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy-pass")
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 
+
+class FailedAttempts:
+    def __init__(self) -> None:
+        self.conn = psycopg2.connect(
+            dbname=POSTGRES_DB,
+            user=POSTGRES_USER,
+            password=POSTGRES_PASSWORD,
+            host=POSTGRES_HOST
+        )
+        self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        cur = self.conn.cursor()
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS
+        failed_airdrop_attempts (
+            attempt_time    BIGINT,
+            eth_address     TEXT,
+            reason          TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS failed_attempt_time_idx ON failed_airdrop_attempts (attempt_time);
+        ''')
+
+    def airdrop_failed(self, eth_address, reason):
+        cur = self.conn.cursor()
+        cur.execute(f'''
+        INSERT INTO failed_airdrop_attempts (attempt_time, eth_address, reason)
+        VALUES ({datetime.now().timestamp()}, '{eth_address}', '{reason}')
+        ''')
+
+
 class AirdropReadySet:
     def __init__(self) -> None:
         self.conn = psycopg2.connect(
@@ -49,7 +80,7 @@ class AirdropReadySet:
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):
         finished = int(datetime.now().timestamp())
-        duration = finished - airdrop_info['scheduled'];
+        duration = finished - airdrop_info['scheduled']
         cur = self.conn.cursor()
         cur.execute(f'''
         INSERT INTO airdrop_ready (eth_address, scheduled_ts, finished_ts, duration, amount_galans)
@@ -80,6 +111,7 @@ class Airdropper(IndexerBase):
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
         self.airdrop_ready = AirdropReadySet()
+        self.failed_attempts = FailedAttempts()
         self.airdrop_scheduled = SQLDict(tablename="airdrop_scheduled")
         self.wrapper_whitelist = wrapper_whitelist
         self.faucet_url = faucet_url
@@ -247,16 +279,19 @@ class Airdropper(IndexerBase):
     def process_scheduled_trxs(self):
         # Pyth.network mapping account was never updated 
         if not self.try_update_pyth_mapping() and self.last_update_pyth_mapping is None:
+            self.failed_attempts.airdrop_failed('ALL', 'mapping is empty')
             return
 
         airdrop_galans = self.get_airdrop_amount_galans()
         if airdrop_galans is None:
             logger.warning('Failed to estimate airdrop amount. Defer scheduled airdrops.')
+            self.failed_attempts.airdrop_failed('ALL', 'fail to estimate amount')
             return
 
         success_addresses = set()
         for eth_address, sched_info in self.airdrop_scheduled.items():
             if not self.airdrop_to(eth_address, airdrop_galans):
+                self.failed_attempts.airdrop_failed(str(eth_address), 'airdrop failed')
                 continue
             success_addresses.add(eth_address)
             self.airdrop_ready.register_airdrop(eth_address,
