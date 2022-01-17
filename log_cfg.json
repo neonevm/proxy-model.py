@@ -1,10 +1,39 @@
 {
-  "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(class)30s:%(class_id)-8s %(message)s",
-  "colored": false,
-  "logged_groups": {
-    "Indexer": "CRITICAL",
-    "Proxy": "DEBUG",
-    "Airdropper": "INFO",
-    "TestCases": "DEBUG"
-  }
+    "version": 1,
+    "handlers": {
+        "colored": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG",
+            "formatter": "colored"
+        }
+    },
+    "formatters": {
+        "colored": {
+            "class": "logged_groups.logging.ColoredFormatter",
+            "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(class)30s:%(class_id)-8s %(message)s",
+            "style": "%"
+        }
+    },
+    "loggers": {
+        "Indexer": {
+            "level": "CRITICAL",
+            "handlers": ["colored"],
+            "propagate": false
+        },
+        "Proxy": {
+            "level": "DEBUG",
+            "handlers": ["colored"],
+            "propagate": false
+        },
+        "Airdropper": {
+            "level": "INFO",
+            "handlers": ["colored"],
+            "propagate": false
+        },
+        "TestCases": {
+            "level": "CRITICAL",
+            "handlers": ["colored"],
+            "propagate": false
+        }
+    }
 }
