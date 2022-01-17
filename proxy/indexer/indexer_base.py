@@ -1,6 +1,6 @@
 import os
 import time
-
+import traceback
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict, Union
@@ -21,7 +21,6 @@ DEVNET_HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47R
 HISTORY_START = [DEVNET_HISTORY_START]
 
 
-@logged_group("Indexer")
 class IndexerBase:
     def __init__(self,
                  solana_url,
@@ -49,7 +48,9 @@ class IndexerBase:
             try:
                 self.process_functions()
             except Exception as err:
-                self.warning("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
+                err_tb = "".join(traceback.format_tb(err.__traceback__))
+                self.warning('Exception on submitting transaction. ' +
+                               f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
             time.sleep(1.0)
 
     def process_functions(self):
@@ -61,7 +62,7 @@ class IndexerBase:
 
         minimal_tx = None
         continue_flag = True
-        current_slot = self.client.get_slot(commitment="confirmed")["result"]
+        current_slot = self.client.get_slot(commitment="finalized")["result"]
 
         max_known_tx = self.max_known_tx
 
@@ -111,7 +112,7 @@ class IndexerBase:
             opts["until"] = until
         if before is not None:
             opts["before"] = before
-        opts["commitment"] = "confirmed"
+        opts["commitment"] = "finalized"
         result = self.client._provider.make_request("getSignaturesForAddress", self.evm_loader_id, opts)
         return result['result']
 
