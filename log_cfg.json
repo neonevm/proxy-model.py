@@ -9,7 +9,7 @@
     },
     "formatters": {
         "standard": {
-            "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(class)30s:%(class_id)-8s %(message)s",
+            "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(class)30s %(message)s",
             "style": "%"
         }
     },
