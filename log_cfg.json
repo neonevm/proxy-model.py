@@ -1,15 +1,14 @@
 {
     "version": 1,
     "handlers": {
-        "colored": {
+        "standard": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
-            "formatter": "colored"
+            "formatter": "standard"
         }
     },
     "formatters": {
-        "colored": {
-            "class": "logged_groups.logging.ColoredFormatter",
+        "standard": {
             "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(class)30s:%(class_id)-8s %(message)s",
             "style": "%"
         }
@@ -17,22 +16,22 @@
     "loggers": {
         "Indexer": {
             "level": "CRITICAL",
-            "handlers": ["colored"],
+            "handlers": ["standard"],
             "propagate": false
         },
         "Proxy": {
             "level": "DEBUG",
-            "handlers": ["colored"],
+            "handlers": ["standard"],
             "propagate": false
         },
         "Airdropper": {
             "level": "INFO",
-            "handlers": ["colored"],
+            "handlers": ["standard"],
             "propagate": false
         },
         "TestCases": {
             "level": "CRITICAL",
-            "handlers": ["colored"],
+            "handlers": ["standard"],
             "propagate": false
         }
     }
