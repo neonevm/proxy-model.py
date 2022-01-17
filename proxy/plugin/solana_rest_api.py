@@ -550,7 +550,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
         try:
             request = json.loads(request.body)
-            print('type(request) = ', type(request), request)
+            self.debug(f'Request payload: {request}')
             if isinstance(request, list):
                 response = []
                 if len(request) == 0:
