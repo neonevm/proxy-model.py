@@ -16,14 +16,11 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.transaction_sender import TransactionSender
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_from_dict
-from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS
+from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, EVM_STEP_COST
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-EVM_STEPS = 250 # number of steps of the rust-evm per transaction
-TRANSACTION_COST = 15000 # amount of gas per transaction
 
 def neon_config_load(ethereum_model):
     try:
@@ -132,5 +129,6 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, contract_id: str, 
                      f"{caller_eth_account}, data: {data}, value: {value}, emulation result: {result}")
         raise Exception("Bad estimate_gas result")
 
-    transaction_count = math.ceil(int(steps_emulated)/EVM_STEPS) + 2
-    return transaction_count * TRANSACTION_COST + EXTRA_GAS
+    # transaction_count = math.ceil(int(steps_emulated)/EVM_STEPS) + 2
+    # return transaction_count * TRANSACTION_COST + EXTRA_GAS
+    return (steps_emulated + EVM_STEPS) * EVM_STEP_COST + EXTRA_GAS
