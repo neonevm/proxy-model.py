@@ -43,7 +43,7 @@
             "handlers": ["standard"],
             "propagate": false
         },
-        "root": {
+        "": {
             "level": "DEBUG",
             "handlers": ["root"],
             "propagate": false
