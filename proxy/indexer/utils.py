@@ -150,6 +150,7 @@ class NeonTxResultInfo:
         return (self.slot != -1)
 
 
+@logged_group("Indexer")
 class NeonTxInfo:
     def __init__(self, rlp_sign=None, rlp_data=None):
         self._set_defaults()
@@ -211,7 +212,7 @@ class NeonTxInfo:
 
             return None
         except Exception as e:
-            logger.warning(f'Exception on RLP decoding: {e}')
+            self.warning(f'Exception on RLP decoding: {e}')
             self.error = e
             return self.error
 

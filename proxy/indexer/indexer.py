@@ -139,6 +139,7 @@ class NeonTxObject(BaseEvmObject):
         return str_fmt_object(self)
 
 
+@logged_group("Indexer")
 class ReceiptsParserState:
     """
     Each instruction is passed to a decoder (see DummyIxDecoder bellow).
@@ -203,7 +204,7 @@ class ReceiptsParserState:
 
     def add_holder(self, account: str) -> NeonHolderObject:
         if account in self._holder_table:
-            logger.debug(f'{self.ix} ATTENTION: the holder {account} is already used!')
+            self.debug(f'{self.ix} ATTENTION: the holder {account} is already used!')
 
         holder = NeonHolderObject(account=account)
         self._holder_table[account] = holder
@@ -217,7 +218,7 @@ class ReceiptsParserState:
 
     def add_tx(self, storage_account: str, neon_tx=None, neon_res=None) -> NeonTxObject:
         if storage_account in self._tx_table:
-            logger.debug(f'{self.ix} ATTENTION: the tx {storage_account} is already used!')
+            self.debug(f'{self.ix} ATTENTION: the tx {storage_account} is already used!')
 
         tx = NeonTxObject(storage_account=storage_account, neon_tx=neon_tx, neon_res=neon_res)
         self._tx_table[storage_account] = tx
