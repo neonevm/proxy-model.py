@@ -13,10 +13,12 @@ from ..common_neon.errors import SolanaAccountNotFoundError, SolanaErrors
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from ..common_neon.neon_instruction import NeonInstruction
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.transaction_sender import TransactionSender
+from ..common_neon.transaction_sender import TransactionSender, TransactionEmulator
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_from_dict
 from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, EVM_STEP_COST
+from .eth_proto import Trx as EthTrx
+from typing import Optional
 
 
 logger = logging.getLogger(__name__)
@@ -106,7 +108,7 @@ def get_token_balance_or_airdrop(client: SolanaClient, signer: SolanaAccount, et
         logger.debug(f"Account not found:  {eth_account} aka: {solana_account} - create")
         if NEW_USER_AIRDROP_AMOUNT == 0:
             return 0
-            
+
         create_eth_account_and_airdrop(client, signer, eth_account)
         return get_token_balance_gwei(client, solana_account)
 
@@ -118,17 +120,16 @@ def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> boo
     return value is not None
 
 
-def estimate_gas(client: SolanaClient, signer: SolanaAccount, contract_id: str, caller_eth_account: EthereumAddress,
-                 data: str = None, value: str = None):
-    if not is_account_exists(client, caller_eth_account):
-        create_eth_account_and_airdrop(client, signer, caller_eth_account)
-    result = call_emulated(contract_id, str(caller_eth_account), data, value)
-    steps_emulated = result.get("steps_executed")
-    if steps_emulated is None:
+def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, contract_id: Optional[bytes],
+                  value: Optional[int], data: Optional[bytes], nonce: int):
+
+    solana_interactor = SolanaInteractor(signer, client)
+    transaction_emulator = TransactionEmulator(solana_interactor)
+    transaction_emulator.create_account_list_by_emulate(caller, contract_id, value, data, nonce)
+
+    if transaction_emulator.steps_emulated is None:
         logger.error(f"Failed estimate_gas, unexpected result, by contract_id: {contract_id}, caller_eth_account: "
-                     f"{caller_eth_account}, data: {data}, value: {value}, emulation result: {result}")
+                     f"{caller}, data: {data}, value: {value}")
         raise Exception("Bad estimate_gas result")
 
-    # transaction_count = math.ceil(int(steps_emulated)/EVM_STEPS) + 2
-    # return transaction_count * TRANSACTION_COST + EXTRA_GAS
-    return (steps_emulated + EVM_STEPS) * EVM_STEP_COST + EXTRA_GAS
+    return (transaction_emulator.steps_emulated + EVM_STEPS) * EVM_STEP_COST + EXTRA_GAS

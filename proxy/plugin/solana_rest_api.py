@@ -115,11 +115,23 @@ class EthereumModel:
 
     def eth_estimateGas(self, param):
         try:
-            caller_id = param.get('from', "0x0000000000000000000000000000000000000000")
-            contract_id = param.get('to', "deploy")
-            data = param.get('data', "None")
-            value = param.get('value', "")
-            return estimate_gas(self.client, self.signer, contract_id, EthereumAddress(caller_id), data, value)
+            caller_id : bytes = bytes.fromhex(param.get('from', "0x0000000000000000000000000000000000000000")[2:])
+
+            contract_id = param.get('to', None)
+            if contract_id:
+                contract_id = bytes.fromhex(contract_id[2:])
+
+            value = param.get('value', None)
+            if value:
+                value = int(value, 16)
+
+            data = param.get('data', None)
+            if data:
+                data = bytes.fromhex(data[2:])
+
+            nonce = int(self.eth_getTransactionCount(caller_id, None), base=16)
+
+            return estimate_gas(self.client, self.signer, caller_id, contract_id, value, data, nonce)
         except Exception as err:
             logger.debug("Exception on eth_estimateGas: %s", err)
             raise
