@@ -17,7 +17,7 @@
             "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(name)15s:%(class)-30s %(message)s",
             "style": "%"
         },
-        "no_class": {
+        "root": {
             "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s           core:core               %(message)s",
             "style": "%"
         }
@@ -41,6 +41,11 @@
         "TestCases": {
             "level": "DEBUG",
             "handlers": ["standard"],
+            "propagate": false
+        },
+        "root": {
+            "level": "DEBUG",
+            "handlers": ["root"],
             "propagate": false
         }
     }
