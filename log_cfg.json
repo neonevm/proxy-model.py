@@ -5,11 +5,20 @@
             "class": "logging.StreamHandler",
             "level": "DEBUG",
             "formatter": "standard"
+        },
+        "root": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG",
+            "formatter": "no_class"
         }
     },
     "formatters": {
         "standard": {
             "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(name)15s %(class)30s %(message)s",
+            "style": "%"
+        },
+        "no_class": {
+            "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s           core:core               %(message)s",
             "style": "%"
         }
     },
