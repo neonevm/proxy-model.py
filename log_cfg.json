@@ -14,7 +14,7 @@
     },
     "formatters": {
         "standard": {
-            "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(name)15s %(class)30s %(message)s",
+            "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(name)15s:%(class)-30s %(message)s",
             "style": "%"
         },
         "no_class": {
