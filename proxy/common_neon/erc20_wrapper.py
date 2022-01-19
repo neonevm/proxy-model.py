@@ -77,7 +77,7 @@ pragma solidity >=0.5.12;
 '''
 
 
-@logged_group("Proxy")
+@logged_group("neon.proxy")
 class ERC20Wrapper:
     proxy: Web3
     name: str

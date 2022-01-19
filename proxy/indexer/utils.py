@@ -45,7 +45,7 @@ def str_fmt_object(obj):
     name = f'{type(obj)}'
     name = name[name.rfind('.') + 1:-2]
     lookup = lambda o: o.__dict__ if hasattr(o, '__dict__') else None
-    members = ""#"{json.dumps(obj, default=lookup, sort_keys=True)}
+    members = {json.dumps(obj, skipkeys=True, default=lookup, sort_keys=True)}
     return f'{name}: {members}'
 
 
@@ -150,7 +150,7 @@ class NeonTxResultInfo:
         return (self.slot != -1)
 
 
-@logged_group("Indexer")
+@logged_group("neon.indexer")
 class NeonTxInfo:
     def __init__(self, rlp_sign=None, rlp_data=None):
         self._set_defaults()
@@ -223,7 +223,7 @@ class NeonTxInfo:
         return (self.addr is not None) and (not self.error)
 
 
-@logged_group("Indexer")
+@logged_group("neon.indexer")
 def get_account_list(client, storage_account, *, logger):
     opts = {
         "encoding": "base64",
@@ -263,7 +263,7 @@ def get_account_list(client, storage_account, *, logger):
         return None
 
 
-@logged_group("Indexer")
+@logged_group("neon.indexer")
 class BaseDB:
     def __init__(self):
         self._conn = psycopg2.connect(
@@ -424,7 +424,7 @@ class LogDB(BaseDB):
                        (from_slot, to_slot))
 
 
-@logged_group("Indexer")
+@logged_group("neon.indexer")
 class Canceller:
     def __init__(self):
         # Initialize user account

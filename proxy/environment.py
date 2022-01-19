@@ -20,7 +20,7 @@ RETRY_ON_BLOCKED = max(int(os.environ.get("RETRY_ON_BLOCKED", "32")), 1)
 RETRY_ON_FAIL = int(os.environ.get("RETRY_ON_FAIL", "2"))
 
 
-@logged_group("Proxy")
+@logged_group("neon.proxy")
 class solana_cli:
     def call(self, *args):
         try:
@@ -34,7 +34,7 @@ class solana_cli:
             raise
 
 
-@logged_group("Proxy")
+@logged_group("neon.proxy")
 class neon_cli:
     def call(self, *args):
         try:

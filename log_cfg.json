@@ -1,10 +1,10 @@
 {
     "version": 1,
     "handlers": {
-        "standard": {
+        "neon": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
-            "formatter": "standard"
+            "formatter": "neon"
         },
         "root": {
             "class": "logging.StreamHandler",
@@ -13,7 +13,7 @@
         }
     },
     "formatters": {
-        "standard": {
+        "neon": {
             "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(name)15s:%(class)-30s %(message)s",
             "style": "%"
         },
@@ -23,25 +23,10 @@
         }
     },
     "loggers": {
-        "Indexer": {
+        "neon": {
             "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "Proxy": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "Airdropper": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "TestCases": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
+            "handlers": ["neon"],
+            "propagate": true
         },
         "": {
             "level": "DEBUG",

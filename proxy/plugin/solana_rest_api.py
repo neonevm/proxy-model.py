@@ -46,7 +46,7 @@ NEON_PROXY_PKG_VERSION = '0.5.4-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
-@logged_group("Proxy")
+@logged_group("neon.proxy")
 class EthereumModel:
     def __init__(self):
         self.signer = self.get_solana_account()
@@ -418,7 +418,7 @@ class JsonEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-@logged_group("TestCases")
+@logged_group("neon.test_cases")
 class SolanaContractTests(unittest.TestCase):
 
     def setUp(self):
@@ -478,7 +478,7 @@ class SolanaContractTests(unittest.TestCase):
         self.assertTrue(receiptId in block['transactions'])
 
 
-@logged_group("Proxy")
+@logged_group("neon.proxy")
 class SolanaProxyPlugin(HttpWebServerBasePlugin):
     """Extend in-built Web Server to add Reverse Proxy capabilities.
     """
