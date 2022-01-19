@@ -9,7 +9,7 @@
         "root": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
-            "formatter": "no_class"
+            "formatter": "root"
         }
     },
     "formatters": {
