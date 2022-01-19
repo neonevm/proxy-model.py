@@ -25,14 +25,12 @@ from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_for_errors,\
     check_if_program_exceeded_instructions, check_if_accounts_blocked, get_logs_from_reciept
-from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED
+from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED, HOLDER_MSG_SIZE
 from ..plugin.eth_proto import Trx as EthTrx
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-HOLDER_MSG_SIZE = 1000
 
 class TransactionEmulator:
     def __init__ (self, solana_interactor: SolanaInteractor) -> None:

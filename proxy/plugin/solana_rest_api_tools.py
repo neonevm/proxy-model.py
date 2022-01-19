@@ -17,12 +17,11 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.transaction_sender import TransactionSender, TransactionEmulator
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_from_dict, get_holder_msg
-from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, EVM_STEP_COST
+from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, EVM_STEP_COST, HOLDER_MSG_SIZE
 from .eth_proto import Trx as EthTrx
 from typing import Optional
 from eth_keys import keys as eth_keys
 from web3.auto import w3
-from ..common_neon.transaction_sender import HOLDER_MSG_SIZE
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
