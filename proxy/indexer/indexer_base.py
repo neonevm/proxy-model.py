@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import traceback
 from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict, Union
@@ -8,15 +9,17 @@ from typing import Dict, Union
 try:
     from sql_dict import SQLDict
     from trx_receipts_storage import TrxReceiptsStorage
+    from utils import FINALIZED
 except ImportError:
     from .sql_dict import SQLDict
     from .trx_receipts_storage import TrxReceiptsStorage
+    from .utils import FINALIZED
 
 
 PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 DEVNET_HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn"
 HISTORY_START = [DEVNET_HISTORY_START]
@@ -62,7 +65,9 @@ class IndexerBase:
             try:
                 self.process_functions()
             except Exception as err:
-                logger.warning("Got exception while indexing. Type(err):%s, Exception:%s", type(err), err)
+                err_tb = "".join(traceback.format_tb(err.__traceback__))
+                logger.warning('Exception on submitting transaction. ' +
+                               f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
             time.sleep(1.0)
 
 
@@ -76,7 +81,7 @@ class IndexerBase:
 
         minimal_tx = None
         continue_flag = True
-        current_slot = self.client.get_slot(commitment="confirmed")["result"]
+        current_slot = self.client.get_slot(commitment=FINALIZED)["result"]
 
         max_known_tx = self.max_known_tx
 
@@ -126,7 +131,7 @@ class IndexerBase:
             opts["until"] = until
         if before is not None:
             opts["before"] = before
-        opts["commitment"] = "confirmed"
+        opts["commitment"] = FINALIZED
         result = self.client._provider.make_request("getSignaturesForAddress", self.evm_loader_id, opts)
         return result['result']
 
