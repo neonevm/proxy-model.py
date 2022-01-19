@@ -45,7 +45,7 @@ def str_fmt_object(obj):
     name = f'{type(obj)}'
     name = name[name.rfind('.') + 1:-2]
     lookup = lambda o: o.__dict__ if hasattr(o, '__dict__') else None
-    members = {json.dumps(obj, default=lookup, sort_keys=True)}
+    members = ""#"{json.dumps(obj, default=lookup, sort_keys=True)}
     return f'{name}: {members}'
 
 
