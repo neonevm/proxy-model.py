@@ -214,7 +214,8 @@ class TransactionSender:
         self.transaction_emulator.create_account_list_by_emulate(bytes.fromhex(self.eth_trx.sender()) , self.eth_trx.toAddress,
                                                                  self.eth_trx.value,  self.eth_trx.callData, self.eth_trx.nonce)
         # create accounts for ResizeStorageAccount transactions
-        self.sender.send_transaction(self.transaction_emulator.create_resize_acc_trx, eth_trx=self.eth_trx, reason='createAccountWithSeed')
+        if len(self.transaction_emulator.create_resize_acc_trx.instructions):
+            self.sender.send_transaction(self.transaction_emulator.create_resize_acc_trx, eth_trx=self.eth_trx, reason='createAccountWithSeed')
         self.execute_resize_storage_account()
 
         noniterative_executor = self.create_noniterative_executor()
@@ -272,13 +273,13 @@ class TransactionSender:
 
 
     def create_noniterative_executor(self):
-        self.instruction.init_eth_trx(self.eth_trx, self.eth_accounts, self.caller_token)
-        return NoniterativeTransactionSender(self.sender, self.instruction, self.create_acc_trx, self.eth_trx)
+        self.instruction.init_eth_trx(self.eth_trx, self.transaction_emulator.eth_accounts, self.transaction_emulator.caller_token)
+        return NoniterativeTransactionSender(self.sender, self.instruction, self.transaction_emulator.create_acc_trx, self.eth_trx)
 
 
     def create_iterative_executor(self):
         self.instruction.init_iterative(self.storage, self.holder, self.perm_accs_id)
-        return IterativeTransactionSender(self.sender, self.instruction, self.create_acc_trx, self.eth_trx, self.steps, self.steps_emulated)
+        return IterativeTransactionSender(self.sender, self.instruction, self.transaction_emulator.create_acc_trx, self.eth_trx, self.steps, self.transaction_emulator.steps_emulated)
 
 
     def init_perm_accs(self):
