@@ -18,7 +18,7 @@
             "style": "%"
         },
         "root": {
-            "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(name)15s:undefined                %(message)s",
+            "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(name)15s:undefined                      %(message)s",
             "style": "%"
         }
     },
