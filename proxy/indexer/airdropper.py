@@ -4,7 +4,6 @@ from proxy.indexer.pythnetwork import PythNetworkClient
 from solana.rpc.api import Client as SolanaClient
 import requests
 import base58
-import logging
 from datetime import datetime
 from decimal import Decimal
 import os
