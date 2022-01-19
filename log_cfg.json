@@ -5,20 +5,11 @@
             "class": "logging.StreamHandler",
             "level": "DEBUG",
             "formatter": "standard"
-        },
-        "root": {
-            "class": "logging.StreamHandler",
-            "level": "DEBUG",
-            "formatter": "root"
         }
     },
     "formatters": {
         "standard": {
             "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(name)15s:%(class)-30s %(message)s",
-            "style": "%"
-        },
-        "root": {
-            "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s           core:core               %(message)s",
             "style": "%"
         }
     },
@@ -41,11 +32,6 @@
         "TestCases": {
             "level": "DEBUG",
             "handlers": ["standard"],
-            "propagate": false
-        },
-        "": {
-            "level": "DEBUG",
-            "handlers": ["root"],
             "propagate": false
         }
     }
