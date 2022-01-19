@@ -1,10 +1,10 @@
 {
     "version": 1,
     "handlers": {
-        "neon": {
+        "standard": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
-            "formatter": "neon"
+            "formatter": "standard"
         },
         "root": {
             "class": "logging.StreamHandler",
@@ -13,7 +13,7 @@
         }
     },
     "formatters": {
-        "neon": {
+        "standard": {
             "format": "%(asctime)23s %(levelname)8s %(process)6d:%(threadName)-10s %(name)15s:%(class)-30s %(message)s",
             "style": "%"
         },
@@ -25,8 +25,8 @@
     "loggers": {
         "neon": {
             "level": "DEBUG",
-            "handlers": ["neon"],
-            "propagate": true
+            "handlers": ["standard"],
+            "propagate": false
         },
         "": {
             "level": "DEBUG",
