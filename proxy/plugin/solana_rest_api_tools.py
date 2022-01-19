@@ -1,6 +1,7 @@
 import base64
 import logging
 import math
+import os
 
 from datetime import datetime
 from solana.account import Account as SolanaAccount
@@ -15,11 +16,13 @@ from ..common_neon.neon_instruction import NeonInstruction
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.transaction_sender import TransactionSender, TransactionEmulator
 from ..common_neon.emulator_interactor import call_emulated
-from ..common_neon.utils import get_from_dict
+from ..common_neon.utils import get_from_dict, get_holder_msg
 from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, EVM_STEP_COST
 from .eth_proto import Trx as EthTrx
 from typing import Optional
-
+from eth_keys import keys as eth_keys
+from web3.auto import w3
+from ..common_neon.transaction_sender import HOLDER_MSG_SIZE
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -121,7 +124,7 @@ def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> boo
 
 
 def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, contract_id: Optional[bytes],
-                  value: Optional[int], data: Optional[bytes], nonce: int):
+                  value: Optional[int], data: Optional[bytes], nonce: int, chain_id: int):
 
     solana_interactor = SolanaInteractor(signer, client)
     transaction_emulator = TransactionEmulator(solana_interactor)
@@ -132,4 +135,22 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, con
                      f"{caller}, data: {data}, value: {value}")
         raise Exception("Bad estimate_gas result")
 
-    return (transaction_emulator.steps_emulated + EVM_STEPS) * EVM_STEP_COST + EXTRA_GAS
+    trx = {
+        'to': contract_id.hex() if contract_id else "",
+        'value': value if value else 0,
+        'gas': 9999999,
+        'gasPrice': 1_000_000_000,
+        'nonce': nonce,
+        'data': data.hex(),
+        'chainId': chain_id
+    }
+
+    signed_trx = w3.eth.account.sign_transaction(trx, eth_keys.PrivateKey(os.urandom(32)))
+    msg = get_holder_msg(EthTrx.fromString(signed_trx.rawTransaction))
+
+    # holder account write + begin_iteration
+    count_trx_without_evm = math.ceil(len(msg)/HOLDER_MSG_SIZE) + 1
+
+    gas = (transaction_emulator.steps_emulated + count_trx_without_evm * EVM_STEPS) * EVM_STEP_COST + EXTRA_GAS
+    logger.debug("estimate gas: %s", gas)
+    return gas

@@ -14,6 +14,7 @@ from solana.sysvar import *
 from solana.transaction import AccountMeta, Transaction, TransactionInstruction
 
 from proxy.indexer.utils import check_error
+from proxy.common_neon.utils import get_holder_msg
 
 from ..core.acceptor.pool import new_acc_id_glob, acc_list_glob
 
@@ -31,6 +32,7 @@ from ..plugin.eth_proto import Trx as EthTrx
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+HOLDER_MSG_SIZE = 1000
 
 class TransactionEmulator:
     def __init__ (self, solana_interactor: SolanaInteractor) -> None:
@@ -423,7 +425,8 @@ class IterativeTransactionSender:
 
     def write_to_holder_account_trx(self, create_acc_trx = None) -> List[Transaction]:
         logger.debug('write_trx_to_holder_account')
-        msg = self.eth_trx.signature() + len(self.eth_trx.unsigned_msg()).to_bytes(8, byteorder="little") + self.eth_trx.unsigned_msg()
+
+        msg = get_holder_msg(self.eth_trx)
 
         offset = 0
         rest = msg
@@ -431,7 +434,7 @@ class IterativeTransactionSender:
         if create_acc_trx is not None:
             write_trxs.append(create_acc_trx)
         while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
+            (part, rest) = (rest[:HOLDER_MSG_SIZE], rest[HOLDER_MSG_SIZE:])
             trx = self.instruction.make_write_transaction(offset, part)
             write_trxs.append(trx)
             offset += len(part)

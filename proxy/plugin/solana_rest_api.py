@@ -131,7 +131,7 @@ class EthereumModel:
 
             nonce = int(self.eth_getTransactionCount(caller_id, None), base=16)
 
-            return estimate_gas(self.client, self.signer, caller_id, contract_id, value, data, nonce)
+            return estimate_gas(self.client, self.signer, caller_id, contract_id, value, data, nonce, int(self.neon_config_dict['NEON_CHAIN_ID']))
         except Exception as err:
             logger.debug("Exception on eth_estimateGas: %s", err)
             raise
