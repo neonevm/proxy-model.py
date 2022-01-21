@@ -35,8 +35,9 @@ from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..core.acceptor.pool import proxy_id_glob
-from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
+from ..environment import neon_cli, solana_cli, SOLANA_URL
 from ..indexer.indexer_db import IndexerDB, PendingTxError
+from .gas_price_calculator import GasPriceCalculator
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -53,6 +54,8 @@ class EthereumModel:
 
         self.db = IndexerDB()
         self.db.set_client(self.client)
+        
+        self.gas_price_calculator = GasPriceCalculator(self.client)
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
@@ -103,7 +106,7 @@ class EthereumModel:
         return self.neon_config_dict['NEON_CHAIN_ID']
 
     def eth_gasPrice(self):
-        return hex(MINIMAL_GAS_PRICE)
+        return self.gas_price_calculator.get_min_gas_price()
 
     def eth_estimateGas(self, param):
         try:
@@ -364,8 +367,9 @@ class EthereumModel:
         self.debug('eth_sendRawTransaction rawTrx=%s', rawTrx)
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug("%s", json.dumps(trx.as_dict(), cls=JsonEncoder, indent=3))
-        if trx.gasPrice < MINIMAL_GAS_PRICE:
-            raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, MINIMAL_GAS_PRICE))
+        min_gas_price = self.gas_price_calculator.get_min_gas_price()
+        if trx.gasPrice < min_gas_price:
+            raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, min_gas_price))
 
         eth_signature = '0x' + trx.hash_signed().hex()
         sender = trx.sender()
