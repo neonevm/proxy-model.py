@@ -9,6 +9,8 @@
     :license: BSD, see LICENSE for more details.
 """
 import copy
+from coincurve import PublicKey
+from django.test import client
 import eth_utils
 import json
 import threading
@@ -30,14 +32,17 @@ from web3 import Web3
 
 from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, \
     get_token_balance_or_airdrop, estimate_gas
-from ..common_neon.address import EthereumAddress
+from ..common_neon.address import EthereumAddress, getAllowanceTokenAccount
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..core.acceptor.pool import proxy_id_glob
-from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
+from ..environment import NEON_CLIENT_ALLOWANCE_TOKEN, neon_cli, solana_cli, \
+    SOLANA_URL, MINIMAL_GAS_PRICE, NEON_MINIMAL_ALLOWANCE_BALANCE
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import NeonTxInfo
+from spl.token.client import Token as SplToken
+from spl.token.constants import TOKEN_PROGRAM_ID
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -51,8 +56,13 @@ class EthereumModel:
     def __init__(self):
         self.signer = self.get_solana_account()
         self.client = SolanaClient(SOLANA_URL)
-
         self.db = IndexerDB(self.client)
+        self.client_allowance_token = None
+        if NEON_CLIENT_ALLOWANCE_TOKEN is not None:
+            self.client_allowance_token = SplToken(self.client, 
+                                                   PublicKey(NEON_CLIENT_ALLOWANCE_TOKEN), 
+                                                   TOKEN_PROGRAM_ID,
+                                                   self.signer)
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
@@ -356,16 +366,26 @@ class EthereumModel:
         self.debug("eth_sendTransaction: trx=%s", json.dumps(trx, cls=JsonEncoder, indent=3))
         raise Exception("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
 
+    def check_client_allowance(self, sender):
+        if self.client_allowance_token is None:
+            return True
+        allowance_token_acc = getAllowanceTokenAccount(sender, self.client_allowance_token.pubkey)
+        return self.client_allowance_token.get_balance(allowance_token_acc) > NEON_MINIMAL_ALLOWANCE_BALANCE
+
     def eth_sendRawTransaction(self, rawTrx):
         self.debug('eth_sendRawTransaction rawTrx=%s', rawTrx)
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug("%s", json.dumps(trx.as_dict(), cls=JsonEncoder, indent=3))
+        sender = trx.sender()
+
+        if not self.check_client_allowance(sender):
+            raise Exception(f'Sender account {sender} is not allowed to execute transactions')
+
         if trx.gasPrice < MINIMAL_GAS_PRICE:
             raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, MINIMAL_GAS_PRICE))
 
         eth_signature = '0x' + bytes(Web3.keccak(bytes.fromhex(rawTrx[2:]))).hex()
 
-        sender = trx.sender()
         self.debug('Eth Sender: %s', sender)
         self.debug('Eth Signature: %s', trx.signature().hex())
         self.debug('Eth Hash: %s', eth_signature)
