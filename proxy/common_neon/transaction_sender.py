@@ -7,9 +7,11 @@ import rlp
 import time
 
 from base58 import b58encode
+import base64
 from sha3 import keccak_256
 from solana.publickey import PublicKey
 from solana.rpc.api import SendTransactionError
+from solana.rpc.commitment import Confirmed
 from solana.sysvar import *
 from solana.transaction import AccountMeta, Transaction, TransactionInstruction
 
@@ -25,12 +27,31 @@ from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_for_errors,\
     check_if_program_exceeded_instructions, check_if_accounts_blocked, get_logs_from_reciept
-from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED, HOLDER_MSG_SIZE, CONTRACT_EXTRA_SPACE
+from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED, HOLDER_MSG_SIZE, CONTRACT_EXTRA_SPACE, INIT_TRX_COUNT, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
 from ..plugin.eth_proto import Trx as EthTrx
+from .address import EthereumAddress, ether2program
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+def _getAccountData(client, account, expected_length, owner=None):
+    info = client.get_account_info(account, commitment=Confirmed)['result']['value']
+    if info is None:
+        raise Exception("Can't get information about {}".format(account))
+
+    data = base64.b64decode(info['data'][0])
+    if len(data) < expected_length:
+        raise Exception("Wrong data length for account data {}".format(account))
+    return data
+
+
+def getAccountInfo(client, eth_account: EthereumAddress):
+    account_sol, nonce = ether2program(eth_account)
+    info = _getAccountData(client, account_sol, ACCOUNT_INFO_LAYOUT.sizeof())
+    return AccountInfo.frombytes(info)
+
 
 class TransactionEmulator:
     def __init__ (self, solana_interactor: SolanaInteractor) -> None:
@@ -118,6 +139,16 @@ class TransactionEmulator:
 
                 create_trx = self.instruction.make_trx_with_create_and_airdrop(address, code_account)
                 self.create_acc_trx.add(create_trx)
+            else:
+                acc_info: AccountInfo = getAccountInfo(self.sender.client, EthereumAddress(address))
+                if int.from_bytes(acc_info.trx_count, 'little') == INIT_TRX_COUNT:
+                    logger.debug("found created ether_account")
+                    self.instruction.add_allocated_space(ACCOUNT_MAX_SIZE)
+                    self.instruction.add_allocated_space(SPL_TOKEN_ACCOUNT_SIZE)
+
+                    if acc_desc["code_size"]:
+                        logger.debug("found created code account")
+                        self.instruction.add_allocated_space(acc_desc["code_size"] + CONTRACT_EXTRA_SPACE)
 
             if address == to_address:
                 contract_sol = PublicKey(acc_desc["account"])

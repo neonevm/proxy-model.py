@@ -54,24 +54,6 @@ def call_signed(signer, client, eth_trx, steps):
     return trx_sender.execute()
 
 
-
-def _getAccountData(client, account, expected_length, owner=None):
-    info = client.get_account_info(account, commitment=Confirmed)['result']['value']
-    if info is None:
-        raise Exception("Can't get information about {}".format(account))
-
-    data = base64.b64decode(info['data'][0])
-    if len(data) < expected_length:
-        raise Exception("Wrong data length for account data {}".format(account))
-    return data
-
-
-def getAccountInfo(client, eth_account: EthereumAddress):
-    account_sol, nonce = ether2program(eth_account)
-    info = _getAccountData(client, account_sol, ACCOUNT_INFO_LAYOUT.sizeof())
-    return AccountInfo.frombytes(info)
-
-
 def create_eth_account_and_airdrop(client: SolanaClient, signer: SolanaAccount, eth_account: EthereumAddress):
     trx = NeonInstruction(signer.public_key()).make_trx_with_create_and_airdrop (eth_account)
     result = SolanaInteractor(signer, client).send_transaction(trx, None, reason='create_eth_account_and_airdrop')
@@ -152,14 +134,15 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, con
     begin_iterations = 1
 
     allocated_space = 0
-    for space in transaction_emulator.instruction.allocated_storage:
+    for space in transaction_emulator.instruction.allocated_space:
         allocated_space = allocated_space + space
 
-    gas_for_storage = allocated_space * EVM_BYTE_COST
+    gas_for_space = allocated_space * EVM_BYTE_COST
     gas_for_trx = transaction_emulator.steps_emulated + (holder_iterations + begin_iterations) * EVM_STEPS
-    gas = gas_for_trx + gas_for_storage + EXTRA_GAS
+    gas = gas_for_trx + gas_for_space + EXTRA_GAS
 
     logger.debug("gas_for_trx: %s", gas_for_trx)
-    logger.debug("gas_for_storage: %s", gas_for_storage)
-    logger.debug("estimate gas: %s", gas)
+    logger.debug("allocated space: %s", allocated_space)
+    logger.debug("gas_for_space: %s", gas_for_space)
+    logger.debug("estimated gas: %s", gas)
     return gas

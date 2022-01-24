@@ -31,13 +31,15 @@ from typing import List, Tuple, Optional
 from web3 import Web3
 
 from .eth_proto import Trx as EthTrx
-from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, \
+from .solana_rest_api_tools import call_signed, neon_config_load, \
     get_token_balance_or_airdrop, estimate_gas, EVM_STEPS
+from ..common_neon.transaction_sender import getAccountInfo
+from ..common_neon.address import AccountInfo
 from ..common_neon.address import EthereumAddress
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..core.acceptor.pool import proxy_id_glob
-from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
+from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE, INIT_TRX_COUNT
 from ..indexer.sql_dict import SQLDict
 from ..indexer.utils import get_trx_results, LogDB
 
@@ -297,12 +299,13 @@ class EthereumModel:
     def eth_getTransactionCount(self, account, tag):
         logger.debug('eth_getTransactionCount: %s', account)
         try:
-            acc_info = getAccountInfo(self.client, EthereumAddress(account))
+            acc_info: AccountInfo  = getAccountInfo(self.client, EthereumAddress(account))
             # https://app.zenhub.com/workspaces/solana-evm-6007c75a9dc141001100ccb8/issues/neonlabsorg/solana-evm/275
             #  value 0xff_ff_ff_ff_ff_ff_ff_ff is used for charging gas when creating an account
-            if acc_info.trx_count == 0xff_ff_ff_ff_ff_ff_ff_ff:
-                acc_info.trx_count = 0
-            return hex(acc_info.trx_count)
+            trx_count = int.from_bytes(acc_info.trx_count, 'little')
+            if trx_count == INIT_TRX_COUNT:
+                trx_count = 0
+            return hex(trx_count)
         except Exception as err:
             print("Can't get account info: %s"%err)
             return hex(0)
