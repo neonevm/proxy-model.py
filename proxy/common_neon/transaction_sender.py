@@ -25,7 +25,7 @@ from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_for_errors,\
     check_if_program_exceeded_instructions, check_if_accounts_blocked, get_logs_from_reciept
-from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED, HOLDER_MSG_SIZE
+from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED, HOLDER_MSG_SIZE, CONTRACT_EXTRA_SPACE
 from ..plugin.eth_proto import Trx as EthTrx
 
 
@@ -77,7 +77,7 @@ class TransactionEmulator:
             if acc_desc["new"] == False:
                 if acc_desc["code_size_current"] is not None and acc_desc["code_size"] is not None:
                     if acc_desc["code_size"] > acc_desc["code_size_current"]:
-                        code_size = acc_desc["code_size"] + 2048
+                        code_size = acc_desc["code_size"] + CONTRACT_EXTRA_SPACE
                         seed = b58encode(ACCOUNT_SEED_VERSION + os.urandom(20))
                         code_account_new = accountWithSeed(self.sender.get_operator_key(), seed)
 
@@ -108,7 +108,7 @@ class TransactionEmulator:
                     seed = b58encode(ACCOUNT_SEED_VERSION + address)
                     code_account = accountWithSeed(self.sender.get_operator_key(), seed)
                     logger.debug("     with code account %s", code_account)
-                    code_size = acc_desc["code_size"] + 2048
+                    code_size = acc_desc["code_size"] + CONTRACT_EXTRA_SPACE
                     code_account_balance = self.sender.get_multiple_rent_exempt_balances_for_size([code_size])[0]
                     self.create_acc_trx.add(
                         self.instruction.create_account_with_seed_trx(code_account, seed, code_account_balance,

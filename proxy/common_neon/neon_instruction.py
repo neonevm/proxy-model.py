@@ -15,7 +15,8 @@ from typing import Tuple
 from .address import accountWithSeed, ether2program, getTokenAddr, EthereumAddress
 from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from .layouts import CREATE_ACCOUNT_LAYOUT
-from ..environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT
+from ..environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT, \
+    ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
 
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,7 @@ class NeonInstruction:
     def __init__(self, operator):
         self.operator_account = operator
         self.operator_neon_address = getTokenAddr(self.operator_account)
+        self.allocated_storage = [];
 
 
     def init_eth_trx(self, eth_trx, eth_accounts, caller_token):
@@ -122,6 +124,7 @@ class NeonInstruction:
     def create_account_with_seed_trx(self, account, seed, lamports, space):
         seed_str = str(seed, 'utf8')
         logger.debug("createAccountWithSeedTrx base(%s) account(%s) seed(%s)", type(self.operator_account),account, seed_str)
+        self.allocated_storage.append(space)
         return TransactionInstruction(
             keys=[
                 AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
@@ -170,6 +173,8 @@ class NeonInstruction:
                     AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
                 ]))
+        self.allocated_storage.append(ACCOUNT_MAX_SIZE)
+        self.allocated_storage.append(SPL_TOKEN_ACCOUNT_SIZE)
         return trx, neon_token_account
 
 
@@ -189,7 +194,7 @@ class NeonInstruction:
                 AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
             ]
         ))
-
+        # self.allocated_storage.append(SPL_TOKEN_ACCOUNT_SIZE)
         return trx
 
 

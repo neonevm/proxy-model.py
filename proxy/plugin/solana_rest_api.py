@@ -298,7 +298,11 @@ class EthereumModel:
         logger.debug('eth_getTransactionCount: %s', account)
         try:
             acc_info = getAccountInfo(self.client, EthereumAddress(account))
-            return hex(int.from_bytes(acc_info.trx_count, 'little'))
+            # https://app.zenhub.com/workspaces/solana-evm-6007c75a9dc141001100ccb8/issues/neonlabsorg/solana-evm/275
+            #  value 0xff_ff_ff_ff_ff_ff_ff_ff is used for charging gas when creating an account
+            if acc_info.trx_count == 0xff_ff_ff_ff_ff_ff_ff_ff:
+                acc_info.trx_count = 0
+            return hex(acc_info.trx_count)
         except Exception as err:
             print("Can't get account info: %s"%err)
             return hex(0)

@@ -17,7 +17,7 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.transaction_sender import TransactionSender, TransactionEmulator
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_from_dict, get_holder_msg
-from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, EVM_STEP_COST, HOLDER_MSG_SIZE
+from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, EVM_BYTE_COST, HOLDER_MSG_SIZE
 from .eth_proto import Trx as EthTrx
 from typing import Optional
 from eth_keys import keys as eth_keys
@@ -147,9 +147,19 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, con
     signed_trx = w3.eth.account.sign_transaction(trx, eth_keys.PrivateKey(os.urandom(32)))
     msg = get_holder_msg(EthTrx.fromString(signed_trx.rawTransaction))
 
-    # holder account write + begin_iteration
-    count_trx_without_evm = math.ceil(len(msg)/HOLDER_MSG_SIZE) + 1
+    # holder account write
+    holder_iterations = math.ceil(len(msg)/HOLDER_MSG_SIZE)
+    begin_iterations = 1
 
-    gas = (transaction_emulator.steps_emulated + count_trx_without_evm * EVM_STEPS) * EVM_STEP_COST + EXTRA_GAS
+    allocated_space = 0
+    for space in transaction_emulator.instruction.allocated_storage:
+        allocated_space = allocated_space + space
+
+    gas_for_storage = allocated_space * EVM_BYTE_COST
+    gas_for_trx = transaction_emulator.steps_emulated + (holder_iterations + begin_iterations) * EVM_STEPS
+    gas = gas_for_trx + gas_for_storage + EXTRA_GAS
+
+    logger.debug("gas_for_trx: %s", gas_for_trx)
+    logger.debug("gas_for_storage: %s", gas_for_storage)
     logger.debug("estimate gas: %s", gas)
     return gas
