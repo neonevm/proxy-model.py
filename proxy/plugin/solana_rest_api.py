@@ -395,7 +395,6 @@ class EthereumModel:
         self.debug('eth_sendRawTransaction rawTrx=%s', rawTrx)
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug("%s", json.dumps(trx.as_dict(), cls=JsonEncoder, indent=3))
-
         if trx.gasPrice < MINIMAL_GAS_PRICE:
             raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, MINIMAL_GAS_PRICE))
 
