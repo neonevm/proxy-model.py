@@ -388,7 +388,7 @@ class EthereumModel:
             return True
         if self.contract_allowance_token is None:
             return True
-        allowance_token_acc = getAllowanceTokenAccount(contract, self.check_contract_allowance)
+        allowance_token_acc = getAllowanceTokenAccount(contract, self.contract_allowance_token.pubkey)
         return self.contract_allowance_token.get_balance(allowance_token_acc) >= NEON_MINIMAL_ALLOWANCE_BALANCE
 
     def eth_sendRawTransaction(self, rawTrx):
