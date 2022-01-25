@@ -36,12 +36,13 @@ from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..core.acceptor.pool import proxy_id_glob
-from ..environment import NEON_CLIENT_ALLOWANCE_TOKEN, neon_cli, solana_cli, \
+from ..environment import NEON_CLIENT_ALLOWANCE_TOKEN, NEON_CONTRACT_ALLOWANCE_TOKEN, neon_cli, solana_cli, \
     SOLANA_URL, MINIMAL_GAS_PRICE, NEON_MINIMAL_ALLOWANCE_BALANCE
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import NeonTxInfo
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
+from solana.publickey import PublicKey
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -62,6 +63,13 @@ class EthereumModel:
                                                    PublicKey(NEON_CLIENT_ALLOWANCE_TOKEN), 
                                                    TOKEN_PROGRAM_ID,
                                                    self.signer)
+
+        self.contract_allowance_token = None
+        if NEON_CONTRACT_ALLOWANCE_TOKEN is not None:
+            self.contract_allowance_token = SplToken(self.client, 
+                                                     PublicKey(NEON_CONTRACT_ALLOWANCE_TOKEN), 
+                                                     TOKEN_PROGRAM_ID,
+                                                     self.signer)
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
@@ -375,17 +383,29 @@ class EthereumModel:
         allowance_token_acc = getAllowanceTokenAccount(sender, self.client_allowance_token.pubkey)
         return self.client_allowance_token.get_balance(allowance_token_acc) >= NEON_MINIMAL_ALLOWANCE_BALANCE
 
+    def check_contract_allowance(self, contract):
+        if contract is None:
+            return True
+        if self.contract_allowance_token is None:
+            return True
+        allowance_token_acc = getAllowanceTokenAccount(contract, self.check_contract_allowance)
+        return self.contract_allowance_token.get_balance(allowance_token_acc) >= NEON_MINIMAL_ALLOWANCE_BALANCE
+
     def eth_sendRawTransaction(self, rawTrx):
         self.debug('eth_sendRawTransaction rawTrx=%s', rawTrx)
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug("%s", json.dumps(trx.as_dict(), cls=JsonEncoder, indent=3))
-        sender = trx.sender()
-
-        if not self.check_client_allowance(sender):
-            raise Exception(f'Sender account {sender} is not allowed to execute transactions')
 
         if trx.gasPrice < MINIMAL_GAS_PRICE:
             raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, MINIMAL_GAS_PRICE))
+
+        sender = trx.sender()
+        if not self.check_client_allowance(sender):
+            raise Exception(f'Sender account {sender} is not allowed to execute transactions')
+
+        contract = trx.contract()
+        if not self.check_contract_allowance(contract):
+            raise Exception(f'Contract account {contract} is not allowed for deployment')
 
         eth_signature = '0x' + bytes(Web3.keccak(bytes.fromhex(rawTrx[2:]))).hex()
 

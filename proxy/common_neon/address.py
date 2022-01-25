@@ -65,11 +65,7 @@ def getTokenAddr(account):
 
 def getAllowanceTokenAccount(ether: Union[str, EthereumAddress], 
                              allowance_token_mint: PublicKey):
-    seeds = [ACCOUNT_SEED_VERSION, 
-             b"AllowanceTokenBalance",
-             bytes(allowance_token_mint),
-             ether2Bytes(ether)]
-    return PublicKey.find_program_address(seeds, PublicKey(EVM_LOADER_ID))[0]
+    return get_associated_token_address(PublicKey(ether2program(ether)[0]), allowance_token_mint)
 
 
 class AccountInfo(NamedTuple):
