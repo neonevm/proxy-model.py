@@ -53,7 +53,8 @@ class EthereumModel:
         self.signer = self.get_solana_account()
         self.client = SolanaClient(SOLANA_URL)
 
-        self.db = IndexerDB(self.client)
+        self.db = IndexerDB()
+        self.db.set_client(self.client)
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
