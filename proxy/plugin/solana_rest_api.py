@@ -36,7 +36,8 @@ from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..core.acceptor.pool import proxy_id_glob
-from ..environment import NEON_CLIENT_ALLOWANCE_TOKEN, NEON_CONTRACT_ALLOWANCE_TOKEN, neon_cli, solana_cli, \
+from ..environment import NEON_CLIENT_ALLOWANCE_TOKEN, NEON_CONTRACT_ALLOWANCE_TOKEN, \
+    NEON_CLIENT_DENIAL_TOKEN, NEON_CONTRACT_DENIAL_TOKEN, neon_cli, solana_cli, \
     SOLANA_URL, MINIMAL_GAS_PRICE, NEON_MINIMAL_ALLOWANCE_BALANCE
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import NeonTxInfo
@@ -59,17 +60,35 @@ class EthereumModel:
         self.db = IndexerDB(self.client)
         self.client_allowance_token = None
         if NEON_CLIENT_ALLOWANCE_TOKEN is not None:
+            self.info(f'Client allowance token: {NEON_CLIENT_ALLOWANCE_TOKEN}')
             self.client_allowance_token = SplToken(self.client, 
                                                    PublicKey(NEON_CLIENT_ALLOWANCE_TOKEN), 
                                                    TOKEN_PROGRAM_ID,
                                                    self.signer)
 
+        self.client_denial_token = None
+        if NEON_CLIENT_DENIAL_TOKEN is not None:
+            self.info(f'Client denial token: {NEON_CLIENT_DENIAL_TOKEN}')
+            self.client_denial_token = SplToken(self.client, 
+                                                PublicKey(NEON_CLIENT_DENIAL_TOKEN), 
+                                                TOKEN_PROGRAM_ID,
+                                                self.signer)
+
         self.contract_allowance_token = None
         if NEON_CONTRACT_ALLOWANCE_TOKEN is not None:
+            self.info(f'Contract allowance token: {NEON_CLIENT_ALLOWANCE_TOKEN}')
             self.contract_allowance_token = SplToken(self.client, 
                                                      PublicKey(NEON_CONTRACT_ALLOWANCE_TOKEN), 
                                                      TOKEN_PROGRAM_ID,
                                                      self.signer)
+
+        self.contract_denial_token = None
+        if NEON_CONTRACT_DENIAL_TOKEN is not None:
+            self.info(f'Contract denial token: {NEON_CLIENT_DENIAL_TOKEN}')
+            self.contract_denial_token = SplToken(self.client, 
+                                                  PublicKey(NEON_CONTRACT_DENIAL_TOKEN), 
+                                                  TOKEN_PROGRAM_ID,
+                                                  self.signer)
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
@@ -378,18 +397,22 @@ class EthereumModel:
         raise Exception("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
 
     def check_client_allowance(self, sender):
-        if self.client_allowance_token is None:
+        if self.client_allowance_token is None or self.client_denial_token is None:
             return True
         allowance_token_acc = getAllowanceTokenAccount(sender, self.client_allowance_token.pubkey)
-        return self.client_allowance_token.get_balance(allowance_token_acc) >= NEON_MINIMAL_ALLOWANCE_BALANCE
+        denial_token_acc = getAllowanceTokenAccount(sender, self.client_denial_token.pubkey)
+        diff = self.client_allowance_token.get_balance(allowance_token_acc) - self.client_denial_token.get_balance(denial_token_acc)
+        return diff >= NEON_MINIMAL_ALLOWANCE_BALANCE
 
     def check_contract_allowance(self, contract):
         if contract is None:
             return True
-        if self.contract_allowance_token is None:
+        if self.contract_allowance_token is None or self.contract_denial_token is None:
             return True
         allowance_token_acc = getAllowanceTokenAccount(contract, self.contract_allowance_token.pubkey)
-        return self.contract_allowance_token.get_balance(allowance_token_acc) >= NEON_MINIMAL_ALLOWANCE_BALANCE
+        denial_token_acc = getAllowanceTokenAccount(contract, self.contract_denial_token.pubkey)
+        diff = self.contract_allowance_token.get_balance(allowance_token_acc) - self.contract_denial_token.get_balance(denial_token_acc)
+        return diff >= NEON_MINIMAL_ALLOWANCE_BALANCE
 
     def eth_sendRawTransaction(self, rawTrx):
         self.debug('eth_sendRawTransaction rawTrx=%s', rawTrx)
@@ -400,10 +423,12 @@ class EthereumModel:
 
         sender = trx.sender()
         if not self.check_client_allowance(sender):
+            self.warning(f'Sender account {sender} is not allowed to execute transactions')
             raise Exception(f'Sender account {sender} is not allowed to execute transactions')
 
         contract = trx.contract()
         if not self.check_contract_allowance(contract):
+            self.warning(f'Contract account {contract} is not allowed for deployment')
             raise Exception(f'Contract account {contract} is not allowed for deployment')
 
         eth_signature = '0x' + bytes(Web3.keccak(bytes.fromhex(rawTrx[2:]))).hex()
