@@ -27,7 +27,7 @@ from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonInstruction
 from .solana_interactor import SolanaInteractor, check_if_continue_returned, check_for_errors,\
     check_if_program_exceeded_instructions, check_if_accounts_blocked, get_logs_from_reciept
-from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED, HOLDER_MSG_SIZE, CONTRACT_EXTRA_SPACE, INIT_TRX_COUNT, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
+from ..environment import EVM_LOADER_ID, RETRY_ON_BLOCKED, HOLDER_MSG_SIZE, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
 from ..plugin.eth_proto import Trx as EthTrx
 from .address import EthereumAddress, ether2program
 
@@ -78,6 +78,7 @@ class TransactionEmulator:
         self.create_acc_trx = Transaction()
         self.create_resize_acc_trx = Transaction()
         self.resize_trx  =  Transaction()
+        self.allocates_space = 0
 
         output_json = call_emulated(
             to_address.hex() if to_address else "deploy",
@@ -93,12 +94,15 @@ class TransactionEmulator:
         logger.debug("send_addr: %s", sender_ether.hex())
         logger.debug("dest_addr: %s", to_address.hex())
 
+        contract_extra_space = 2048
+
+        resized_acc = {}
         # resize storage account
         for acc_desc in output_json["accounts"]:
             if acc_desc["new"] == False:
                 if acc_desc["code_size_current"] is not None and acc_desc["code_size"] is not None:
                     if acc_desc["code_size"] > acc_desc["code_size_current"]:
-                        code_size = acc_desc["code_size"] + CONTRACT_EXTRA_SPACE
+                        code_size = acc_desc["code_size"] + contract_extra_space
                         seed = b58encode(ACCOUNT_SEED_VERSION + os.urandom(20))
                         code_account_new = accountWithSeed(self.sender.get_operator_key(), seed)
 
@@ -115,6 +119,7 @@ class TransactionEmulator:
                             self.instruction.make_resize_instruction(acc_desc, code_account_new, seed))
                         # replace code_account
                         acc_desc["contract"] = code_account_new
+                        resized_acc[acc_desc["account"]] = code_size
 
 
         for acc_desc in output_json["accounts"]:
@@ -129,8 +134,9 @@ class TransactionEmulator:
                     seed = b58encode(ACCOUNT_SEED_VERSION + address)
                     code_account = accountWithSeed(self.sender.get_operator_key(), seed)
                     logger.debug("     with code account %s", code_account)
-                    code_size = acc_desc["code_size"] + CONTRACT_EXTRA_SPACE
+                    code_size = acc_desc["code_size"] + contract_extra_space
                     code_account_balance = self.sender.get_multiple_rent_exempt_balances_for_size([code_size])[0]
+                    self.allocates_space += code_size
                     self.create_acc_trx.add(
                         self.instruction.create_account_with_seed_trx(code_account, seed, code_account_balance,
                                                                       code_size))
@@ -138,17 +144,31 @@ class TransactionEmulator:
                     code_account_writable = acc_desc["writable"]
 
                 create_trx = self.instruction.make_trx_with_create_and_airdrop(address, code_account)
+                self.allocates_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
                 self.create_acc_trx.add(create_trx)
             else:
-                acc_info: AccountInfo = getAccountInfo(self.sender.client, EthereumAddress(address))
-                if int.from_bytes(acc_info.trx_count, 'little') == INIT_TRX_COUNT:
-                    logger.debug("found created ether_account")
-                    self.instruction.add_allocated_space(ACCOUNT_MAX_SIZE)
-                    self.instruction.add_allocated_space(SPL_TOKEN_ACCOUNT_SIZE)
+                # TODO: discuss it:
+                if acc_desc["writable"]:
+                    acc_info: AccountInfo = getAccountInfo(self.sender.client, EthereumAddress(address))
+                    # losted account
+                    if int.from_bytes(acc_info.state, 'little') == 0:
+                        logger.debug("found losted ether_account %s", acc_desc["account"])
+                        self.allocates_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
 
-                    if acc_desc["code_size"]:
-                        logger.debug("found created code account")
-                        self.instruction.add_allocated_space(acc_desc["code_size"] + CONTRACT_EXTRA_SPACE)
+                        # it is necessary to write to the contract
+                        if  acc_desc["code_size_current"] is not None and acc_desc["code_size"] is not None:
+                            contract_space =  resized_acc.get(acc_desc["account"], acc_desc["code_size_current"])
+                            # TODO: Is it necessarry to implement a case where a user account is transformed to a contract account" ?
+                            if contract_space > 0 :
+                                logger.debug("found losted code account %s", acc_desc["contract"] )
+                                self.allocates_space += contract_space
+                            # elif contract_space == 0:
+                            #     logger.debug("user account -> code account")
+                            #     self.allocates_space += acc_desc["code_size"] + contract_extra_space
+
+                     else:
+                         # contract storage is incremented
+                            
 
             if address == to_address:
                 contract_sol = PublicKey(acc_desc["account"])

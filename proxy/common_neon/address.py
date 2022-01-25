@@ -66,8 +66,9 @@ class AccountInfo(NamedTuple):
     ether: eth_keys.PublicKey
     trx_count: int
     code_account: PublicKey
+    state: int
 
     @staticmethod
     def frombytes(data):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
+        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account), cont.state)

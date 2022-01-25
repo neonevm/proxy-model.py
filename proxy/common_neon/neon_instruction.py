@@ -88,10 +88,6 @@ class NeonInstruction:
     def __init__(self, operator):
         self.operator_account = operator
         self.operator_neon_address = getTokenAddr(self.operator_account)
-        self.allocated_space = [];
-
-    def add_allocated_space(self, space):
-        self.allocated_space.append(space)
 
     def init_eth_trx(self, eth_trx, eth_accounts, caller_token):
         self.eth_accounts = eth_accounts
@@ -126,7 +122,6 @@ class NeonInstruction:
     def create_account_with_seed_trx(self, account, seed, lamports, space):
         seed_str = str(seed, 'utf8')
         logger.debug("createAccountWithSeedTrx base(%s) account(%s) seed(%s)", type(self.operator_account),account, seed_str)
-        self.add_allocated_space(space)
         return TransactionInstruction(
             keys=[
                 AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
@@ -175,8 +170,6 @@ class NeonInstruction:
                     AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
                 ]))
-        self.add_allocated_space(ACCOUNT_MAX_SIZE)
-        self.add_allocated_space(SPL_TOKEN_ACCOUNT_SIZE)
         return trx, neon_token_account
 
 
