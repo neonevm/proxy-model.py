@@ -6,20 +6,18 @@ import time
 from logged_groups import logged_group
 
 try:
-    from indexer_base import IndexerBase, PARALLEL_REQUESTS
+    from indexer_base import IndexerBase
     from indexer_db import IndexerDB
-    from utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object, FINALIZED
+    from utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object
     from utils import get_accounts_from_storage
 except ImportError:
-    from .indexer_base import IndexerBase, PARALLEL_REQUESTS
-    from .indexer_db import IndexerDB, FINALIZED
-    from .utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object, FINALIZED
+    from .indexer_base import IndexerBase
+    from .indexer_db import IndexerDB
+    from .utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object
     from .utils import get_accounts_from_storage
 
-from ..environment import EVM_LOADER_ID
+from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
 
-CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
-UPDATE_BLOCK_COUNT = PARALLEL_REQUESTS * 16
 
 
 @logged_group("neon.Indexer")
@@ -773,6 +771,6 @@ def run_indexer(solana_url, evm_loader_id, *, logger):
 
 
 if __name__ == "__main__":
-    solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
-    evm_loader_id = os.environ.get('EVM_LOADER_ID', '53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io')
+    solana_url = SOLANA_URL
+    evm_loader_id = EVM_LOADER_ID
     run_indexer(solana_url, evm_loader_id)

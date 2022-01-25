@@ -25,12 +25,8 @@ from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT
 from ..common_neon.eth_proto import Trx as EthTx
 from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID
 
-
 from proxy.indexer.pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
 from proxy.indexer.pg_common import encode, decode
-
-
-FINALIZED = os.environ.get('FINALIZED', 'finalized')
 
 
 def check_error(trx):
