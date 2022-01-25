@@ -112,7 +112,7 @@ class Airdropper(IndexerBase):
             self.info('Trying to use latest processed slot from previous run')
             start_slot = self._constants.get('latest_processed_slot', None)
             if start_slot is None:
-                raise Exception('START_SLOT set to CONINUE but recent slot number not found in DB')
+                raise Exception('START_SLOT set to CONTINUE but recent slot number not found in DB')
         elif start_slot == 'LATEST':
             self.info('Airdropper will start at latest blockchain slot')
             client = SolanaClient(solana_url)
