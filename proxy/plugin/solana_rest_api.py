@@ -384,23 +384,17 @@ class EthereumModel:
         self.debug("eth_sendTransaction: trx=%s", json.dumps(trx, cls=JsonEncoder, indent=3))
         raise Exception("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
 
-    def check_client_allowance(self, sender):
+    def check_account_permissions(self, ether_addr, min_balance):
         if self.permission_allowance_token is None or self.permission_denial_token is None:
             return True
-        allowance_token_acc = getPermissionTokenAccount(sender, self.permission_allowance_token.pubkey)
-        denial_token_acc = getPermissionTokenAccount(sender, self.permission_denial_token.pubkey)
-        diff = self.permission_allowance_token.get_balance(allowance_token_acc) - self.permission_denial_token.get_balance(denial_token_acc)
-        return diff >= NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE
-
-    def check_contract_allowance(self, contract):
-        if contract is None:
-            return True
-        if self.permission_allowance_token is None or self.permission_denial_token is None:
-            return True
-        allowance_token_acc = getPermissionTokenAccount(contract, self.permission_allowance_token.pubkey)
-        denial_token_acc = getPermissionTokenAccount(contract, self.permission_denial_token.pubkey)
-        diff = self.permission_allowance_token.get_balance(allowance_token_acc) - self.permission_denial_token.get_balance(denial_token_acc)
-        return diff >= NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE
+        allowance_token_acc = getPermissionTokenAccount(ether_addr, self.permission_allowance_token.pubkey)
+        allowance_token_balance = self.permission_allowance_token.get_balance(allowance_token_acc)
+        denial_token_acc = getPermissionTokenAccount(ether_addr, self.permission_denial_token.pubkey)
+        denial_token_balance = self.permission_denial_token.get_balance(denial_token_acc)
+        self.debug(f"""Permission tokens for {ether_addr}\n
+        Allowance token account {allowance_token_acc} balance is {allowance_token_balance}\n
+        Denial token account {denial_token_acc} balance is {allowance_token_balance}""")
+        return allowance_token_balance - denial_token_balance >= min_balance
 
     def eth_sendRawTransaction(self, rawTrx):
         self.debug('eth_sendRawTransaction rawTrx=%s', rawTrx)
@@ -410,12 +404,12 @@ class EthereumModel:
             raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, MINIMAL_GAS_PRICE))
 
         sender = trx.sender()
-        if not self.check_client_allowance(sender):
+        if not self.check_account_permissions(sender, NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE):
             self.warning(f'Sender account {sender} is not allowed to execute transactions')
             raise Exception(f'Sender account {sender} is not allowed to execute transactions')
 
         contract = trx.contract()
-        if not self.check_contract_allowance(contract):
+        if contract is not None and not self.check_account_permissions(contract, NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE):
             self.warning(f'Contract account {contract} is not allowed for deployment')
             raise Exception(f'Contract account {contract} is not allowed for deployment')
 
