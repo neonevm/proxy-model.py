@@ -117,7 +117,7 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, con
         raise Exception("Bad estimate_gas result")
 
     trx = {
-        'to': contract_id.hex() if contract_id else "",
+        'to': contract_id if contract_id else "",
         'value': value if value else 0,
         'gas': 9999999,
         'gasPrice': 1_000_000_000,
