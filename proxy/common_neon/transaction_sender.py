@@ -12,6 +12,7 @@ import traceback
 from logged_groups import logged_group
 
 from solana.transaction import AccountMeta, Transaction, PublicKey
+from solana.blockhash import Blockhash
 
 from .address import accountWithSeed, getTokenAddr
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
@@ -215,7 +216,6 @@ class NeonTxSender:
         self.steps_emulated = 0
         self.create_account_tx = Transaction()
         self.account_txs_name = ''
-        self.blockhash = None
 
         self._resize_contract_list = []
         self._create_account_list = []
@@ -540,13 +540,11 @@ class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
     def _validate_txsize(self) -> bool:
         tx = self.build_tx()
 
-        if not self.s.blockhash:
-            self.s.blockhash = self.s.solana.get_recent_blockhash()
-        tx.recent_blockhash = self.s.blockhash
+        # Predefined blockhash is used only to check transaction size, this transaction won't be send to network
+        tx.recent_blockhash = Blockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
         self.s.solana.sign_transaction(tx)
         try:
             tx.serialize()
-            self._tx = tx
             return True
         except Exception as err:
             if check_if_big_transaction(err):
@@ -617,7 +615,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
             SolTxListSender(self.s, tx_list, self.s.account_txs_name).send()
             self.s.done_account_txs(self._skip_create_account)
 
-        tx_sender = SimpleNeonTxSender(self, self.s, [self._tx], self.NAME).send()
+        tx_sender = SimpleNeonTxSender(self, self.s, [self.build_tx()], self.NAME).send()
         if not tx_sender.neon_res.is_valid():
             raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
         return tx_sender.neon_res
