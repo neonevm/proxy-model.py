@@ -212,7 +212,8 @@ class SolanaInteractor:
 
         if debug_measurements:
             for receipt in receipt_list:
-                self.get_measurements(receipt)
+                if receipt is not None:
+                    self.get_measurements(receipt)
 
         return receipt_list
 
