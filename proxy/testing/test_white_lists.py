@@ -1,7 +1,7 @@
 import os
 import unittest
 import json
-from environment import NEON_PERMISSION_ALLOWANCE_TOKEN, NEON_PERMISSION_DENIAL_TOKEN
+from proxy.environment import NEON_PERMISSION_ALLOWANCE_TOKEN, NEON_PERMISSION_DENIAL_TOKEN
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.publickey import PublicKey
@@ -46,7 +46,7 @@ class TestWhiteLists(unittest.TestCase):
         cls.solana = SolanaClient(os.environ['SOLANA_URL'])
         cls.signer = SolanaAccount()
         cls.solana.request_airdrop(cls.signer.public_key(), 1000_000_000_000, Confirmed)
-        with open("proxy/evm_loader-keypair.json") as f:
+        with open("/spl/bin/evm_loader-keypair.json") as f:
             d = json.load(f)
         cls.mint_authority = SolanaAccount(d[0:32])
 

@@ -388,12 +388,22 @@ class EthereumModel:
         if self.permission_allowance_token is None or self.permission_denial_token is None:
             return True
         allowance_token_acc = getPermissionTokenAccount(ether_addr, self.permission_allowance_token.pubkey)
-        allowance_token_balance = self.permission_allowance_token.get_balance(allowance_token_acc)
+        allowance_token_balance = self.permission_allowance_token.get_balance(allowance_token_acc).get('result', None)
+        if allowance_token_balance is None:
+            allowance_token_balance = 0
+        else:
+            allowance_token_balance = allowance_token_balance['value']['amount']
+
         denial_token_acc = getPermissionTokenAccount(ether_addr, self.permission_denial_token.pubkey)
-        denial_token_balance = self.permission_denial_token.get_balance(denial_token_acc)
-        self.debug(f"""Permission tokens for {ether_addr}\n
-        Allowance token account {allowance_token_acc} balance is {allowance_token_balance}\n
-        Denial token account {denial_token_acc} balance is {allowance_token_balance}""")
+        denial_token_balance = self.permission_denial_token.get_balance(denial_token_acc).get('result', None)
+        if denial_token_balance is None:
+            denial_token_balance = 0
+        else:
+            denial_token_balance = denial_token_balance['value']['amount']
+
+        self.debug(f"""Permission tokens for {ether_addr}
+                       Allowance token account {allowance_token_acc} balance is {allowance_token_balance}
+                       Denial token account {denial_token_acc} balance is {allowance_token_balance}""")
         return allowance_token_balance - denial_token_balance >= min_balance
 
     def eth_sendRawTransaction(self, rawTrx):
