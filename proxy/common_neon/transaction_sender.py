@@ -78,7 +78,7 @@ class TransactionEmulator:
         self.create_acc_trx = Transaction()
         self.create_resize_acc_trx = Transaction()
         self.resize_trx  =  Transaction()
-        self.allocates_space = 0
+        self.allocated_space = 0
 
         output_json = call_emulated(
             to_address.hex() if to_address else "deploy",
@@ -136,7 +136,7 @@ class TransactionEmulator:
                     logger.debug("     with code account %s", code_account)
                     code_size = acc_desc["code_size"] + contract_extra_space
                     code_account_balance = self.sender.get_multiple_rent_exempt_balances_for_size([code_size])[0]
-                    self.allocates_space += code_size
+                    self.allocated_space += code_size
                     self.create_acc_trx.add(
                         self.instruction.create_account_with_seed_trx(code_account, seed, code_account_balance,
                                                                       code_size))
@@ -145,22 +145,22 @@ class TransactionEmulator:
 
                 # TODO: is it need to create only writable new-accounts?
                 create_trx = self.instruction.make_trx_with_create_and_airdrop(address, code_account)
-                self.allocates_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
+                self.allocated_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
                 self.create_acc_trx.add(create_trx)
             else:
                 # gas estimation
                 if acc_desc["writable"]:
                     if acc_desc["deploy"]:
                         actual_contract_space = resized_acc.get(acc_desc["account"], acc_desc["code_size_current"])
-                        self.allocates_space += actual_contract_space
+                        self.allocated_space += actual_contract_space
                     elif acc_desc["storage_increment"] is not None:
-                        self.allocates_space += acc_desc["storage_increment"]
+                        self.allocated_space += acc_desc["storage_increment"]
 
                     acc_info: AccountInfo = getAccountInfo(self.sender.client, EthereumAddress(address))
                     # losted account
-                    if int.from_bytes(acc_info.state, 'little') == 0:
+                    if acc_info.state == 0:
                         logger.debug("found losted ether_account %s", acc_desc["account"])
-                        self.allocates_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
+                        self.allocated_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
 
             if address == to_address:
                 contract_sol = PublicKey(acc_desc["account"])
