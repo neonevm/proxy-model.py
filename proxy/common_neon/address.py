@@ -63,9 +63,9 @@ def getTokenAddr(account):
     return get_associated_token_address(PublicKey(account), ETH_TOKEN_MINT_ID)
 
 
-def getAllowanceTokenAccount(ether: Union[str, EthereumAddress], 
-                             allowance_token_mint: PublicKey):
-    return get_associated_token_address(PublicKey(ether2program(ether)[0]), allowance_token_mint)
+def getPermissionTokenAccount(ether: Union[str, EthereumAddress], 
+                              permission_token_mint: PublicKey):
+    return get_associated_token_address(PublicKey(ether2program(ether)[0]), permission_token_mint)
 
 
 class AccountInfo(NamedTuple):

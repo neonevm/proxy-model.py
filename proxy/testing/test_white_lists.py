@@ -1,8 +1,7 @@
 import os
 import unittest
 import json
-from environment import NEON_CLIENT_ALLOWANCE_TOKEN, NEON_CLIENT_DENIAL_TOKEN, \
-    NEON_CONTRACT_ALLOWANCE_TOKEN, NEON_CONTRACT_DENIAL_TOKEN
+from environment import NEON_PERMISSION_ALLOWANCE_TOKEN, NEON_PERMISSION_DENIAL_TOKEN
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.publickey import PublicKey
@@ -57,37 +56,25 @@ class TestWhiteLists(unittest.TestCase):
         cls.proxy.eth.default_account = cls.eth_account.address
         cls.deploy_storage_147_solidity_contract(cls)
 
-        cls.client_allowance_token = None
-        if NEON_CLIENT_ALLOWANCE_TOKEN is not None:
-            print(f'Client allowance token: {NEON_CLIENT_ALLOWANCE_TOKEN}')
-            cls.client_allowance_token = SplToken(cls.solana, 
-                                                  PublicKey(NEON_CLIENT_ALLOWANCE_TOKEN), 
-                                                  TOKEN_PROGRAM_ID,
-                                                  cls.signer)
+        cls.permission_allowance_token = None
+        if isinstance(NEON_PERMISSION_ALLOWANCE_TOKEN, PublicKey):
+            print(f'Permission allowance token: {NEON_PERMISSION_ALLOWANCE_TOKEN}')
+            cls.permission_allowance_token = SplToken(cls.solana, 
+                                                      NEON_PERMISSION_ALLOWANCE_TOKEN, 
+                                                      TOKEN_PROGRAM_ID,
+                                                      cls.signer)
+        else:
+            print('Permission allowance token is not set up')
 
-        cls.client_denial_token = None
-        if NEON_CLIENT_DENIAL_TOKEN is not None:
-            print(f'Client denial token: {NEON_CLIENT_DENIAL_TOKEN}')
-            cls.client_denial_token = SplToken(cls.solana, 
-                                               PublicKey(NEON_CLIENT_DENIAL_TOKEN), 
-                                               TOKEN_PROGRAM_ID,
-                                               cls.signer)
-
-        cls.contract_allowance_token = None
-        if NEON_CONTRACT_ALLOWANCE_TOKEN is not None:
-            print(f'Contract allowance token: {NEON_CLIENT_ALLOWANCE_TOKEN}')
-            cls.contract_allowance_token = SplToken(cls.solana, 
-                                                    PublicKey(NEON_CONTRACT_ALLOWANCE_TOKEN), 
-                                                    TOKEN_PROGRAM_ID,
-                                                    cls.signer)
-
-        cls.contract_denial_token = None
-        if NEON_CONTRACT_DENIAL_TOKEN is not None:
-            print(f'Contract denial token: {NEON_CLIENT_DENIAL_TOKEN}')
-            cls.contract_denial_token = SplToken(cls.solana, 
-                                                 PublicKey(NEON_CONTRACT_DENIAL_TOKEN), 
-                                                 TOKEN_PROGRAM_ID,
-                                                 cls.signer)
+        cls.permission_denial_token = None
+        if isinstance(NEON_PERMISSION_DENIAL_TOKEN, PublicKey):
+            print(f'Permission denial token: {NEON_PERMISSION_DENIAL_TOKEN}')
+            cls.permission_denial_token = SplToken(cls.solana, 
+                                                   NEON_PERMISSION_DENIAL_TOKEN, 
+                                                   TOKEN_PROGRAM_ID,
+                                                   cls.signer)
+        else:
+            print('Permission denial token is not set up')
 
 
     def deploy_storage_147_solidity_contract(self):
@@ -121,21 +108,14 @@ class TestWhiteLists(unittest.TestCase):
         )                                
     
 
-    def mint_client_allowance_token(self, target: PublicKey, amount: int):
-        self.client_allowance_token.mint_to(target, self.mint_authority, amount,
-                                            opts=TxOpts(skip_preflight=True, skip_confirmation=False))
+    def mint_permission_allowance_token(self, target: PublicKey, amount: int):
+        self.permission_allowance_token.mint_to(target, self.mint_authority, amount,
+                                                opts=TxOpts(skip_preflight=True, skip_confirmation=False))
 
-    def mint_client_denial_token(self, target: PublicKey, amount: int):
-        self.client_denial_token.mint_to(target, self.mint_authority, amount,
-                                         opts=TxOpts(skip_preflight=True, skip_confirmation=False))
+    def mint_permission_denial_token(self, target: PublicKey, amount: int):
+        self.permission_denial_token.mint_to(target, self.mint_authority, amount,
+                                             opts=TxOpts(skip_preflight=True, skip_confirmation=False))
 
-    def mint_contract_allowance_token(self, target: PublicKey, amount: int):
-        self.contract_allowance_token.mint_to(target, self.mint_authority, amount,
-                                              opts=TxOpts(skip_preflight=True, skip_confirmation=False))
-
-    def mint_contract_denial_token(self, target: PublicKey, amount: int):
-        self.contract_denial_token.mint_to(target, self.mint_authority, amount,
-                                           opts=TxOpts(skip_preflight=True, skip_confirmation=False))
 
     def test_reject_transaction_from_banned_sender(self):
         """
