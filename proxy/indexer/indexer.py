@@ -242,6 +242,10 @@ class ReceiptsParserState:
                 self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
             self.del_tx(tx)
         self._done_tx_list.clear()
+        self.debug('Receipt state stats: ' +
+                   f'holders {len(self._holder_table)}, ' +
+                   f'transactions {len(self._tx_table)}, ' +
+                   f'used ixs {len(self._used_ixs)}')
 
     def iter_txs(self):
         for tx in self._tx_table.values():
