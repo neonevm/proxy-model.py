@@ -130,7 +130,7 @@ class TransactionEmulator:
             if acc_desc["new"]:
                 logger.debug("Create solana accounts for %s: %s %s", acc_desc["address"], acc_desc["account"],
                              acc_desc["contract"])
-                if acc_desc["code_size"]:
+                if acc_desc["deploy"]:
                     seed = b58encode(ACCOUNT_SEED_VERSION + address)
                     code_account = accountWithSeed(self.sender.get_operator_key(), seed)
                     logger.debug("     with code account %s", code_account)
@@ -143,32 +143,24 @@ class TransactionEmulator:
                     # add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
                     code_account_writable = acc_desc["writable"]
 
+                # TODO: is it need to create only writable new-accounts?
                 create_trx = self.instruction.make_trx_with_create_and_airdrop(address, code_account)
                 self.allocates_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
                 self.create_acc_trx.add(create_trx)
             else:
-                # TODO: discuss it:
+                # gas estimation
                 if acc_desc["writable"]:
+                    if acc_desc["deploy"]:
+                        actual_contract_space = resized_acc.get(acc_desc["account"], acc_desc["code_size_current"])
+                        self.allocates_space += actual_contract_space
+                    elif acc_desc["storage_increment"] is not None:
+                        self.allocates_space += acc_desc["storage_increment"]
+
                     acc_info: AccountInfo = getAccountInfo(self.sender.client, EthereumAddress(address))
                     # losted account
                     if int.from_bytes(acc_info.state, 'little') == 0:
                         logger.debug("found losted ether_account %s", acc_desc["account"])
                         self.allocates_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
-
-                        # it is necessary to write to the contract
-                        if  acc_desc["code_size_current"] is not None and acc_desc["code_size"] is not None:
-                            contract_space =  resized_acc.get(acc_desc["account"], acc_desc["code_size_current"])
-                            # TODO: Is it necessarry to implement a case where a user account is transformed to a contract account" ?
-                            if contract_space > 0 :
-                                logger.debug("found losted code account %s", acc_desc["contract"] )
-                                self.allocates_space += contract_space
-                            # elif contract_space == 0:
-                            #     logger.debug("user account -> code account")
-                            #     self.allocates_space += acc_desc["code_size"] + contract_extra_space
-
-                     else:
-                         # contract storage is incremented
-                            
 
             if address == to_address:
                 contract_sol = PublicKey(acc_desc["account"])
