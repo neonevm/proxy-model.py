@@ -64,7 +64,7 @@ class TestWhiteLists(unittest.TestCase):
                                                       TOKEN_PROGRAM_ID,
                                                       cls.signer)
         else:
-            print('Permission allowance token is not set up')
+            print('Permission allowance token is not set')
 
         cls.permission_denial_token = None
         if isinstance(NEON_PERMISSION_DENIAL_TOKEN, PublicKey):
@@ -74,7 +74,7 @@ class TestWhiteLists(unittest.TestCase):
                                                    TOKEN_PROGRAM_ID,
                                                    cls.signer)
         else:
-            print('Permission denial token is not set up')
+            print('Permission denial token is not set')
 
 
     def deploy_storage_147_solidity_contract(self):

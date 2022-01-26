@@ -66,7 +66,7 @@ class EthereumModel:
                                                        TOKEN_PROGRAM_ID,
                                                        self.signer)
         else:
-            self.info('Permission allowance token is not set up')
+            self.info('Permission allowance token is not set')
 
         self.permission_denial_token = None
         if isinstance(NEON_PERMISSION_DENIAL_TOKEN, PublicKey):
@@ -76,7 +76,7 @@ class EthereumModel:
                                                     TOKEN_PROGRAM_ID,
                                                     self.signer)
         else:
-            self.info('Permission denial token is not set up')
+            self.info('Permission denial token is not set')
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
