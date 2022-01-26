@@ -15,7 +15,7 @@ except ImportError:
     from .utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object
     from .utils import get_accounts_from_storage
 
-from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL, START_SLOT
+from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
 
 
 @logged_group("neon.Indexer")

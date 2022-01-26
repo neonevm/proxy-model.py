@@ -8,11 +8,13 @@ try:
     from utils import LogDB, NeonTxInfo, NeonTxResultInfo, SolanaIxSignInfo
     from blocks_db import SolanaBlocksDB, SolanaBlockDBInfo
     from transactions_db import NeonTxsDB, NeonTxDBInfo
+    from pending_db import NeonPendingTxInfo, NeonPendingTxsDB, PendingTxError
     from sql_dict import SQLDict
 except ImportError:
     from .utils import LogDB, NeonTxInfo, NeonTxResultInfo, SolanaIxSignInfo
     from .blocks_db import SolanaBlocksDB, SolanaBlockDBInfo
     from .transactions_db import NeonTxsDB, NeonTxDBInfo
+    from .pending_db import NeonPendingTxInfo, NeonPendingTxsDB, PendingTxError
     from .sql_dict import SQLDict
 
 
@@ -22,6 +24,7 @@ class IndexerDB:
         self._logs_db = LogDB()
         self._blocks_db = SolanaBlocksDB()
         self._txs_db = NeonTxsDB()
+        self._pending_txs_db = NeonPendingTxsDB()
         self._client = None
 
         self._constants = SQLDict(tablename="constants")
@@ -31,6 +34,9 @@ class IndexerDB:
 
     def set_client(self, client):
         self._client = client
+
+    def pending_transaction(self, tx: NeonPendingTxInfo):
+        self._pending_txs_db.set_tx(tx)
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, used_ixs: [SolanaIxSignInfo]):
         try:
@@ -51,7 +57,7 @@ class IndexerDB:
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
             self.error('Exception on submitting transaction. ' +
-                           f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+                       f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
 
     def _fill_block_from_net(self, block: SolanaBlockDBInfo):
         opts = {"commitment": "confirmed", "transactionDetails": "signatures", "rewards": False}
@@ -107,24 +113,27 @@ class IndexerDB:
     def get_logs(self, fromBlock, toBlock, address, topics, blockHash):
         return self._logs_db.get_logs(fromBlock, toBlock, address, topics, blockHash)
 
-    def get_block_by_hash(self, block_hash):
+    def get_block_by_hash(self, block_hash: int) -> SolanaBlockDBInfo:
         return self._blocks_db.get_block_by_hash(block_hash)
 
-    def get_block_by_height(self, block_height):
+    def get_block_by_height(self, block_height: int) -> SolanaBlockDBInfo:
         return self._blocks_db.get_block_by_height(block_height)
 
-    def get_tx_by_sol_sign(self, sol_sign):
+    def get_pending_tx_slot(self, neon_sign: str) -> int:
+        return self._pending_txs_db.get_slot(neon_sign)
+
+    def get_tx_by_sol_sign(self, sol_sign: str) -> NeonTxDBInfo:
         tx = self._txs_db.get_tx_by_sol_sign(sol_sign)
         if tx:
             tx.block = self.get_block_by_slot(tx.neon_res.slot)
         return tx
 
-    def get_tx_by_neon_sign(self, neon_sign) -> NeonTxDBInfo:
+    def get_tx_by_neon_sign(self, neon_sign: str) -> NeonTxDBInfo:
         tx = self._txs_db.get_tx_by_neon_sign(neon_sign)
         if tx:
             tx.block = self.get_block_by_slot(tx.neon_res.slot)
         return tx
 
     def del_not_finalized(self, from_slot: int, to_slot: int):
-        for d in [self._logs_db, self._blocks_db, self._txs_db]:
+        for d in [self._logs_db, self._blocks_db, self._txs_db, self._pending_txs_db]:
             d.del_not_finalized(from_slot=from_slot, to_slot=to_slot)

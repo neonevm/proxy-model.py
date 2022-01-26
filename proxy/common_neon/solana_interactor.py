@@ -138,6 +138,12 @@ class SolanaInteractor:
             raise ValueError(f"Wrong data length for account data {account}")
         return data
 
+    def get_recent_blockslot(self) -> int:
+        blockhash_resp = self.client.get_recent_blockhash(commitment=Confirmed)
+        if not blockhash_resp["result"]:
+            raise RuntimeError("failed to get recent blockhash")
+        return blockhash_resp['result']['context']['slot']
+
     def get_recent_blockhash(self) -> Blockhash:
         blockhash_resp = self.client.get_recent_blockhash(commitment=Confirmed)
         if not blockhash_resp["result"]:
@@ -190,14 +196,14 @@ class SolanaInteractor:
         response_list = self._send_rpc_batch_request('sendTransaction', request_list)
         return [r['result'] for r in response_list]
 
-    def send_multiple_transactions(self, tx_list, eth_tx, reason, skip_preflight=True) -> [{}]:
+    def send_multiple_transactions(self, tx_list, eth_tx, reason, waiter=None, skip_preflight=True) -> [{}]:
         debug_measurements = LOG_SENDING_SOLANA_TRANSACTION and (reason in ['CancelWithNonce', 'CallFromRawEthereumTX'])
 
         if debug_measurements:
             self.debug(f"send multiple transactions for reason {reason}: {eth_tx.__dict__}")
 
         sign_list = self.send_multiple_transactions_unconfirmed(tx_list, skip_preflight=skip_preflight)
-        self.confirm_multiple_transactions(sign_list)
+        self.confirm_multiple_transactions(sign_list, waiter)
         receipt_list = self.get_multiple_confirmed_transactions(sign_list)
 
         if WRITE_TRANSACTION_COST_IN_DB:
@@ -224,11 +230,13 @@ class SolanaInteractor:
             self.error(f"get_measurements: can't get measurements {err}")
             self.info(f"get measurements: failed result {json.dumps(receipt, indent=3)}")
 
-    def confirm_multiple_transactions(self, sign_list: [str]):
+    def confirm_multiple_transactions(self, sign_list: [str], waiter=None):
         """Confirm a transaction."""
-        TIMEOUT = CONFIRM_TIMEOUT  # 30 seconds  pylint: disable=invalid-name
         elapsed_time = 0
         while elapsed_time < CONFIRM_TIMEOUT:
+            if waiter:
+                waiter.on_wait_confirm(elapsed_time)
+
             response = self.client.get_signature_statuses(sign_list)
             result = response['result']
             if not result:

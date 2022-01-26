@@ -25,7 +25,8 @@ from .solana_interactor import get_error_definition_from_receipt, check_if_stora
 from ..common_neon.eth_proto import Trx as EthTx
 from ..core.acceptor.pool import new_acc_id_glob, acc_list_glob
 from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID
-from ..indexer.utils import NeonTxResultInfo
+from ..indexer.utils import NeonTxResultInfo, NeonTxInfo
+from ..indexer.indexer_db import IndexerDB, NeonPendingTxInfo
 
 
 class SolanaTxError(Exception):
@@ -207,9 +208,16 @@ def EthMeta(pubkey, is_writable) -> AccountMeta:
 
 @logged_group("neon.Proxy")
 class NeonTxSender:
-    def __init__(self, solana_interactor: SolanaInteractor, eth_tx: EthTx, steps: int):
-        self.solana = solana_interactor
+    def __init__(self, db: IndexerDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
+        self._perm_accounts_id = None
+        self._db = db
+        self.solana = solana
         self.eth_tx = eth_tx
+
+        self._neon_sign = eth_tx.hash_signed().hex()
+        self._pending_tx = NeonPendingTxInfo(neon_sign=self._neon_sign, slot=0, pid=os.getpid())
+        self.pending_tx_into_db()
+
         self.steps = steps
         self.operator_key = self.solana.get_operator_key()
         self.builder = NeonIxBuilder(self.operator_key)
@@ -220,14 +228,13 @@ class NeonTxSender:
         self._resize_contract_list = []
         self._create_account_list = []
         self._eth_meta_list = []
-        self._perm_accounts_id = None
         self._storage_account = None
         self._holder_account = None
 
     def __del__(self):
         self._free_perm_accounts()
 
-    def execute(self):
+    def execute(self) -> NeonTxResultInfo:
         self._prepare_execution()
 
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy]:
@@ -241,13 +248,33 @@ class NeonTxSender:
                     self.debug(f'Skip strategy {Strategy.NAME}: {strategy.error}')
                 else:
                     self.debug(f'Use strategy {Strategy.NAME}')
-                    return strategy.execute()
+                    neon_res = strategy.execute()
+                    return self._submit_tx_into_db(neon_res)
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not check_if_program_exceeded_instructions(e)):
                     raise
 
         self.error(f'No strategy to execute the Neon transaction: {self.eth_tx}')
         raise RuntimeError('No strategy to execute the Neon transaction')
+
+    def pending_tx_into_db(self):
+        """
+        Transaction sender doesn't remove pending transactions!!!
+        This protects the neon transaction execution from race conditions, when user tries to send transaction
+        multiple time. User can send the same transaction after it complete too.
+
+        Indexer will purge old pending transactions after finalizing slot.
+        """
+        slot = self.solana.get_recent_blockslot()
+        if slot != self._pending_tx.slot != slot:
+            self._pending_tx.slot = slot
+            self._db.pending_transaction(self._pending_tx)
+
+    def _submit_tx_into_db(self, neon_res: NeonTxResultInfo) -> NeonTxResultInfo:
+        neon_tx = NeonTxInfo()
+        neon_tx.init_from_eth_tx(self.eth_tx)
+        self._db.submit_transaction(neon_tx, neon_res, [])
+        return neon_res
 
     def _prepare_execution(self):
         self._call_emulated()
@@ -443,7 +470,7 @@ class SolTxListSender:
 
         while (self._retry_idx < RETRY_ON_FAIL) and (len(self._tx_list)):
             self._retry_idx += 1
-            receipt_list = solana.send_multiple_transactions(self._tx_list, eth_tx, self._name, skip_preflight)
+            receipt_list = solana.send_multiple_transactions(self._tx_list, eth_tx, self._name, self, skip_preflight)
 
             for receipt, tx in zip(receipt_list, self._tx_list):
                 if not receipt:
@@ -472,6 +499,9 @@ class SolTxListSender:
         if len(self._tx_list):
             raise RuntimeError('Run out of attempts to execute transaction')
         return self
+
+    def on_wait_confirm(self, _):
+        self._s.pending_tx_into_db()
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         """Store the last successfully blockhash and set it in _set_tx_blockhash"""
