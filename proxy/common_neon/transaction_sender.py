@@ -565,7 +565,8 @@ class SimpleNeonTxSender(SolTxListSender):
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         if not self.neon_res.is_valid():
-            self.neon_res.decode(receipt)
+            if self.neon_res.decode(receipt).is_valid():
+                self._s.solana.get_measurements(receipt)
 
         super()._on_success_send(tx, receipt)
 
