@@ -54,22 +54,22 @@ class IndexerBase:
 
         if start_slot == 'CONTINUE':
             if last_known_slot > 0:
-                print(f'START_SLOT={START_SLOT}: started the {name} from previous run {last_known_slot}')
+                self.info(f'START_SLOT={START_SLOT}: started the {name} from previous run {last_known_slot}')
                 return last_known_slot
             else:
-                print(f'START_SLOT={START_SLOT}: forced the {name} from the latest Solana slot')
+                self.info(f'START_SLOT={START_SLOT}: forced the {name} from the latest Solana slot')
                 start_slot = 'LATEST'
 
         if start_slot == 'LATEST':
-            print(f'START_SLOT={START_SLOT}: started the {name} from the latest Solana slot {latest_slot}')
+            self.info(f'START_SLOT={START_SLOT}: started the {name} from the latest Solana slot {latest_slot}')
             return latest_slot
 
         if start_int_slot < last_known_slot:
-            print(f'START_SLOT={START_SLOT}: started the {name} from previous run, ' +
+            self.info(f'START_SLOT={START_SLOT}: started the {name} from previous run, ' +
                       f'because {start_int_slot} < {last_known_slot}')
             return last_known_slot
 
-        print(f'START_SLOT={START_SLOT}: started the {name} from {start_int_slot}')
+        self.info(f'START_SLOT={START_SLOT}: started the {name} from {start_int_slot}')
         return start_int_slot
 
     def _move_data_from_old_table(self):
