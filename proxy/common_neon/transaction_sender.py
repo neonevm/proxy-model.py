@@ -136,10 +136,10 @@ class NeonCreateERC20TxStage(NeonTxStage, abc.ABC):
         assert self._is_empty()
 
         self.debug(f'Create ERC20 token account:' +
-                     f' key {self._token_account["key"]}' +
-                     f', owner: {self._token_account["owner"]}' +
-                     f', contact: {self._token_account["contract"]}' +
-                     f', mint: {self._token_account["mint"]}')
+                   f' key {self._token_account["key"]}' +
+                   f', owner: {self._token_account["owner"]}' +
+                   f', contact: {self._token_account["contract"]}' +
+                   f', mint: {self._token_account["mint"]}')
 
         self.tx.add(self._create_erc20_account())
 
