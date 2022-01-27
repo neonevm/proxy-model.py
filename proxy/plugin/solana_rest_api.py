@@ -35,9 +35,8 @@ from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..core.acceptor.pool import proxy_id_glob
-from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
+from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE, ACCOUNT_PERMISSION_UPDATE_INT
 from ..indexer.indexer_db import IndexerDB, PendingTxError
-from ..indexer.utils import NeonTxInfo
 from ..common_neon.account_whitelist import AccountWhitelist
 
 modelInstanceLock = threading.Lock()
@@ -56,8 +55,7 @@ class EthereumModel:
         self.db = IndexerDB(self.client)
         self.db.set_client(self.client)
         
-        self.account_whitelist = AccountWhitelist(self.client, self.signer, None)
-        raise RuntimeError("NOT READY!")
+        self.account_whitelist = AccountWhitelist(self.client, self.signer, ACCOUNT_PERMISSION_UPDATE_INT)
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
