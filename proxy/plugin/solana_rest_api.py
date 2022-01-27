@@ -39,6 +39,7 @@ from ..core.acceptor.pool import proxy_id_glob
 from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import NeonTxInfo
+from ..common_neon.account_whitelist import AccountWhitelist
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -52,8 +53,9 @@ class EthereumModel:
     def __init__(self):
         self.signer = self.get_solana_account()
         self.client = SolanaClient(SOLANA_URL)
-
         self.db = IndexerDB(self.client)
+        self.account_whitelist = AccountWhitelist(self.client, self.signer, None)
+        raise RuntimeError("NOT READY!")
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
@@ -369,12 +371,12 @@ class EthereumModel:
             raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, MINIMAL_GAS_PRICE))
 
         sender = trx.sender()
-        if not self.check_account_permissions(sender, NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE):
+        if not self.account_whitelist.has_client_permission(sender):
             self.warning(f'Sender account {sender} is not allowed to execute transactions')
             raise Exception(f'Sender account {sender} is not allowed to execute transactions')
 
         contract = trx.contract()
-        if contract is not None and not self.check_account_permissions(contract, NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE):
+        if contract is not None and not self.account_whitelist.has_contract_permission(contract):
             self.warning(f'Contract account {contract} is not allowed for deployment')
             raise Exception(f'Contract account {contract} is not allowed for deployment')
 
