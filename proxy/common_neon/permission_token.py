@@ -13,6 +13,8 @@ from solana.transaction import Transaction
 from solana.rpc.types import TxOpts
 import spl.token.instructions as spl_token
 from proxy.common_neon.utils import get_from_dict
+from decimal import Decimal
+import os
 
 class PermissionToken:
     def __init__(self, 
@@ -57,8 +59,7 @@ class PermissionToken:
     def mint_to(self, 
                 amount: int,
                 ether_addr: Union[str, EthereumAddress],
-                mint_authority: SolanaAccount):
+                mint_authority_file: str):
         token_account = self.create_account_if_needed(ether_addr)
-        return self.token.mint_to(token_account, mint_authority.public_key(), amount,
-                                  opts=TxOpts(skip_preflight=True, skip_confirmation=False),
-                                  multi_signers=[self.payer, mint_authority])
+        mint_command = f'spl-token mint "{str(self.token.pubkey)}" {Decimal(amount) * pow(Decimal(10), -9)} --owner {mint_authority_file} -- "{str(token_account)}"'
+        os.system(mint_command)

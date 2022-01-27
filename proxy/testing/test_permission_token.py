@@ -12,10 +12,7 @@ class TestPermissionToken(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.solana = SolanaClient(os.environ['SOLANA_URL'])
-        with open("/spl/bin/evm_loader-keypair.json") as f:
-            d = json.load(f)
-        cls.mint_authority = SolanaAccount(d[0:32])
-        
+        cls.mint_authority_file = "/spl/bin/evm_loader-keypair.json"
         proxy_url = os.environ['PROXY_URL']
         cls.proxy = Web3(Web3.HTTPProvider(proxy_url))
         cls.eth_account = cls.proxy.eth.account.create('https://github.com/neonlabsorg/proxy-model.py/issues/468')
@@ -45,7 +42,7 @@ class TestPermissionToken(unittest.TestCase):
         new_acc = self.proxy.eth.account.create(f'test_mint_permission_tokens')
         allowance_amount = 1234
         denial_amount = 4321
-        self.allowance_token.mint_to(allowance_amount, new_acc.address, self.mint_authority)
-        self.denial_token.mint_to(denial_amount, new_acc.address, self.mint_authority)
+        self.allowance_token.mint_to(allowance_amount, new_acc.address, self.mint_authority_file)
+        self.denial_token.mint_to(denial_amount, new_acc.address, self.mint_authority_file)
         self.assertEqual(self.allowance_token.get_balance(new_acc.address), allowance_amount)
         self.assertEqual(self.denial_token.get_balance(new_acc.address), denial_amount)
