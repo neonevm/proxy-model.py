@@ -1,10 +1,7 @@
 import os
 import subprocess
-import logging
+from logged_groups import logged_group, LogMng
 from solana.publickey import PublicKey
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER_ID = os.environ.get("EVM_LOADER")
@@ -19,52 +16,68 @@ EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 LOG_SENDING_SOLANA_TRANSACTION = os.environ.get("LOG_SENDING_SOLANA_TRANSACTION", "NO") == "YES"
 LOG_NEON_CLI_DEBUG = os.environ.get("LOG_NEON_CLI_DEBUG", "NO") == "YES"
 WRITE_TRANSACTION_COST_IN_DB = os.environ.get("WRITE_TRANSACTION_COST_IN_DB", "NO") == "YES"
-RETRY_ON_FAIL = int(os.environ.get("RETRY_ON_FAIL", "2"))
+RETRY_ON_FAIL = int(os.environ.get("RETRY_ON_FAIL", "10"))
+RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION = max(int(os.environ.get("RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION", "1000")), 1)
+FUZZING_BLOCKHASH = os.environ.get("FUZZING_BLOCKHASH", "NO") == "YES"
+CONFIRM_TIMEOUT = max(int(os.environ.get("CONFIRM_TIMEOUT", 10)), 10)
+PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
+DEVNET_HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn"
+HISTORY_START = [DEVNET_HISTORY_START]
+START_SLOT = os.environ.get('START_SLOT', 0)
+FINALIZED = os.environ.get('FINALIZED', 'finalized')
+CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
 
+
+@logged_group("neon.Proxy")
 class solana_cli:
     def call(self, *args):
         try:
             cmd = ["solana",
                    "--url", SOLANA_URL,
                    ] + list(args)
-            logger.debug("Calling: " + " ".join(cmd))
+            self.debug("Calling: " + " ".join(cmd))
             return subprocess.check_output(cmd, universal_newlines=True)
         except subprocess.CalledProcessError as err:
-            logger.debug("ERR: solana error {}".format(err))
+            self.error("ERR: solana error {}".format(err))
             raise
 
 
+@logged_group("neon.Proxy")
 class neon_cli:
     def call(self, *args):
         try:
+            ctx = str(LogMng.get_logging_context())
             cmd = ["neon-cli",
                    "--commitment=recent",
                    "--url", SOLANA_URL,
-                   "--evm_loader={}".format(EVM_LOADER_ID),
+                   f"--evm_loader={EVM_LOADER_ID}",
+                   f"--logging_ctx={ctx}"
                    ]\
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
-            logger.debug("Calling: " + " ".join(cmd))
+            self.debug("Calling: " + " ".join(cmd))
             return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True)
         except subprocess.CalledProcessError as err:
-            logger.debug("ERR: neon-cli error {}".format(err))
+            self.error("ERR: neon-cli error {}".format(err))
             raise
 
     def version(self):
         try:
             cmd = ["neon-cli",
                    "--version"]
-            logger.debug("Calling: " + " ".join(cmd))
+            self.debug("Calling: " + " ".join(cmd))
             return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True).split()[1]
         except subprocess.CalledProcessError as err:
-            logger.debug("ERR: neon-cli error {}".format(err))
+            self.error("ERR: neon-cli error {}".format(err))
             raise
+
 
 def read_elf_params(out_dict):
     for param in neon_cli().call("neon-elf-params").splitlines():
         if param.startswith('NEON_') and '=' in param:
             v = param.split('=')
             out_dict[v[0]] = v[1]
+
 
 ELF_PARAMS = {}
 read_elf_params(ELF_PARAMS)
