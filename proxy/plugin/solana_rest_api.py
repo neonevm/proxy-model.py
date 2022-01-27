@@ -30,20 +30,15 @@ from web3 import Web3
 
 from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, \
     get_token_balance_or_airdrop, estimate_gas
-from ..common_neon.address import EthereumAddress, getPermissionTokenAccount
+from ..common_neon.address import EthereumAddress
 from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..core.acceptor.pool import proxy_id_glob
-from ..environment import NEON_PERMISSION_ALLOWANCE_TOKEN, NEON_PERMISSION_DENIAL_TOKEN, \
-    neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE, \
-    NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE
+from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import NeonTxInfo
-from spl.token.client import Token as SplToken
-from spl.token.constants import TOKEN_PROGRAM_ID
-from solana.publickey import PublicKey
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -57,26 +52,8 @@ class EthereumModel:
     def __init__(self):
         self.signer = self.get_solana_account()
         self.client = SolanaClient(SOLANA_URL)
-        self.db = IndexerDB(self.client)
-        self.permission_allowance_token = None
-        if isinstance(NEON_PERMISSION_ALLOWANCE_TOKEN, PublicKey):
-            self.info(f'Permission allowance token: {NEON_PERMISSION_ALLOWANCE_TOKEN}')
-            self.permission_allowance_token = SplToken(self.client, 
-                                                       NEON_PERMISSION_ALLOWANCE_TOKEN, 
-                                                       TOKEN_PROGRAM_ID,
-                                                       self.signer)
-        else:
-            self.info('Permission allowance token is not set')
 
-        self.permission_denial_token = None
-        if isinstance(NEON_PERMISSION_DENIAL_TOKEN, PublicKey):
-            self.info(f'Permission denial token: {NEON_PERMISSION_DENIAL_TOKEN}')
-            self.permission_denial_token = SplToken(self.client, 
-                                                    NEON_PERMISSION_DENIAL_TOKEN, 
-                                                    TOKEN_PROGRAM_ID,
-                                                    self.signer)
-        else:
-            self.info('Permission denial token is not set')
+        self.db = IndexerDB(self.client)
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
@@ -383,28 +360,6 @@ class EthereumModel:
         self.debug("eth_sendTransaction: str(trx):%s", str(trx))
         self.debug("eth_sendTransaction: trx=%s", json.dumps(trx, cls=JsonEncoder, indent=3))
         raise Exception("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
-
-    def check_account_permissions(self, ether_addr, min_balance):
-        if self.permission_allowance_token is None or self.permission_denial_token is None:
-            return True
-        allowance_token_acc = getPermissionTokenAccount(ether_addr, self.permission_allowance_token.pubkey)
-        allowance_token_balance = self.permission_allowance_token.get_balance(allowance_token_acc).get('result', None)
-        if allowance_token_balance is None:
-            allowance_token_balance = 0
-        else:
-            allowance_token_balance = allowance_token_balance['value']['amount']
-
-        denial_token_acc = getPermissionTokenAccount(ether_addr, self.permission_denial_token.pubkey)
-        denial_token_balance = self.permission_denial_token.get_balance(denial_token_acc).get('result', None)
-        if denial_token_balance is None:
-            denial_token_balance = 0
-        else:
-            denial_token_balance = denial_token_balance['value']['amount']
-
-        self.debug(f"""Permission tokens for {ether_addr}
-                       Allowance token account {allowance_token_acc} balance is {allowance_token_balance}
-                       Denial token account {denial_token_acc} balance is {allowance_token_balance}""")
-        return allowance_token_balance - denial_token_balance >= min_balance
 
     def eth_sendRawTransaction(self, rawTrx):
         self.debug('eth_sendRawTransaction rawTrx=%s', rawTrx)
