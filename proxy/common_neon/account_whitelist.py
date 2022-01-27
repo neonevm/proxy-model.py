@@ -8,8 +8,8 @@ from typing import Union
 from proxy.common_neon.address import EthereumAddress
 from logged_groups import logged_group
 
-NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE = int(ELF_PARAMS.get("NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE", None))
-NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE = int(ELF_PARAMS.get("NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE", None))
+NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE = int(ELF_PARAMS.get("NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE", 0))
+NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE = int(ELF_PARAMS.get("NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE", 0))
 
 @logged_group("neon.AccountWhitelist")
 class AccountWhitelist:
@@ -28,6 +28,13 @@ class AccountWhitelist:
             self.denial_token = PermissionToken(self.solana,
                                                 PublicKey(denial_token_addr),
                                                 payer)
+
+        if self.allowance_token is None and self.denial_token is None:
+            return
+
+        if self.allowance_token is None or self.denial_token is None:
+            self.error(f'Wrong proxy configuration: allowance and denial tokens must both exist or absent!')
+            raise Exception("NEON service is unhealthy. Try again later")
 
     def read_balance_diff(self, ether_addr: Union[str, EthereumAddress]):
         allowance_balance = self.allowance_token.get_balance(ether_addr)
@@ -65,31 +72,15 @@ class AccountWhitelist:
             return False
 
     def grant_client_permissions(self, ether_addr: Union[str, EthereumAddress]):
-        if NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE is None:
-            self.warning(f'NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE is None')
-            return False
-
         return self.grant_permissions(ether_addr, NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE)
 
     def grant_contract_permissions(self, ether_addr: Union[str, EthereumAddress]):
-        if NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE is None:
-            self.warning(f'NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE is None')
-            return False
-
         return self.grant_permissions(ether_addr, NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE)
 
     def deprive_client_permissions(self, ether_addr: Union[str, EthereumAddress]):
-        if NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE is None:
-            self.warning(f'NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE is None')
-            return False
-
         return self.deprive_permissions(ether_addr, NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE)
 
     def deprive_contract_permissions(self, ether_addr: Union[str, EthereumAddress]):
-        if NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE is None:
-            self.warning(f'NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE is None')
-            return False
-
         return self.deprive_permissions(ether_addr, NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE)
 
     def get_current_time(self):
@@ -98,10 +89,6 @@ class AccountWhitelist:
     def has_permission(self, ether_addr: Union[str, EthereumAddress], min_balance: int):
         if self.allowance_token is None and self.denial_token is None:
             return True
-
-        if self.allowance_token is None or self.denial_token is None:
-            self.error(f'Wrong proxy configuration: allowance and denial tokens must both exist or absent!')
-            raise Exception("NEON service is unhealthy. Try again later")
 
         cached = self.account_cache.get(ether_addr, None)
         current_time = self.get_current_time()
