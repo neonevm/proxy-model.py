@@ -41,7 +41,7 @@ def accountWithSeed(base, seed):
 def ether2Bytes(ether: Union[str, EthereumAddress]):
     ether_str = ""
     if isinstance(ether, str):
-        pass
+        ether_str = ether
     elif isinstance(ether, EthereumAddress):
         ether_str = str(ether)
     else:
