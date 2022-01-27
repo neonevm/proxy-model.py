@@ -7,11 +7,12 @@ from ..environment import neon_cli, ETH_TOKEN_MINT_ID
 
 
 @logged_group("neon.Proxy")
-def call_emulated(contract_id, caller_id, data=None, value=None, *, logger):
+def call_emulated(contract_id, caller_id, data=None, value=None, check=True, *, logger):
     output = emulator(contract_id, caller_id, data, value)
     logger.debug(f"Call emulated. contract_id: {contract_id}, caller_id: {caller_id}, data: {data}, value: {value}, return: {output}")
     result = json.loads(output)
-    check_emulated_exit_status(result)
+    if check:
+        check_emulated_exit_status(result)
     return result
 
 
