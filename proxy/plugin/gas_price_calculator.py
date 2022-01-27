@@ -16,7 +16,7 @@ class GasPriceCalculator:
 
     def get_min_gas_price(self):
         if MINIMAL_GAS_PRICE is not None:
-            return hex(MINIMAL_GAS_PRICE)
+            return int(MINIMAL_GAS_PRICE)
         self.try_update_gas_price()
         return self.min_gas_price
 

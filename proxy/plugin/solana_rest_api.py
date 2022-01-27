@@ -112,7 +112,7 @@ class EthereumModel:
         return self.neon_config_dict['NEON_CHAIN_ID']
 
     def eth_gasPrice(self):
-        return self.gas_price_calculator.get_min_gas_price()
+        return hex(self.gas_price_calculator.get_min_gas_price())
 
     def eth_estimateGas(self, param):
         try:
