@@ -32,6 +32,7 @@ HISTORY_START = [DEVNET_HISTORY_START]
 START_SLOT = os.environ.get('START_SLOT', 0)
 FINALIZED = os.environ.get('FINALIZED', 'finalized')
 CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
+ACCOUNT_PERMISSION_UPDATE_INT = int(os.environ.get("ACCOUNT_PERMISSION_UPDATE_INT", 60 * 5))
 OPERATOR_FEE = Decimal(os.environ.get("OPERATOR_FEE", "0.1"))
 NEON_PRICE_USD = Decimal('0.25')
 SOL_PRICE_UPDATE_INTERVAL = int(os.environ.get("SOL_PRICE_UPDATE_INTERVAL", 60))
