@@ -53,7 +53,7 @@ class TestAccountWhitelist(unittest.TestCase):
 
     def test_grant_permissions_positive_difference(self):
         """
-        Should NOT mint allowance token
+        Should NOT mint allowance token - positive difference
         """
         allowance_balance = 103
         denial_balance = 100
@@ -71,9 +71,9 @@ class TestAccountWhitelist(unittest.TestCase):
         self.testee.allowance_token.mint_to.assert_not_called()
 
 
-    def test_deprive_permissions_positive_balance(self):
+    def test_deprive_permissions_positive_difference(self):
         """
-        Should mint denial token
+        Should mint denial token - positive difference
         """
         allowance_balance = 143
         denial_balance = 103
@@ -94,7 +94,7 @@ class TestAccountWhitelist(unittest.TestCase):
 
     def test_deprive_permissions_negative_difference(self):
         """
-        Should NOT mint denial token 
+        Should NOT mint denial token - negative difference
         """
         allowance_balance = 14
         denial_balance = 103
