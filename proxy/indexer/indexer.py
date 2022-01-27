@@ -586,6 +586,7 @@ class CancelIxDecoder(DummyIxDecoder):
             return self._decoding_fail(tx, f'cannot find storage {tx}')
 
         tx.neon_res.clear()
+        tx.neon_res.sol_sign = self.ix.sign.slot
         tx.neon_res.slot = self.ix.sign.slot
         return self._decoding_done(tx, f'cancel success')
 
