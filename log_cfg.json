@@ -41,7 +41,7 @@
             "propagate": false
         },
         "": {
-            "level": "DEBUG",
+            "level": "ERROR",
             "handlers": ["root"],
             "propagate": false
         }
