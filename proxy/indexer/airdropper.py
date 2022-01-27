@@ -10,7 +10,7 @@ from decimal import Decimal
 import psycopg2
 import os
 from logged_groups import logged_group
-from environment import NEON_PRICE_USD
+from ..environment import NEON_PRICE_USD
 
 try:
     from utils import check_error
