@@ -35,7 +35,7 @@ from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..core.acceptor.pool import proxy_id_glob
-from ..environment import neon_cli, solana_cli, SOLANA_URL
+from ..environment import neon_cli, solana_cli, SOLANA_URL, PP_SOLANA_URL
 from ..indexer.indexer_db import IndexerDB, PendingTxError
 from .gas_price_calculator import GasPriceCalculator
 
@@ -55,7 +55,10 @@ class EthereumModel:
         self.db = IndexerDB()
         self.db.set_client(self.client)
         
-        self.gas_price_calculator = GasPriceCalculator(self.client)
+        if PP_SOLANA_URL == SOLANA_URL:
+            self.gas_price_calculator = GasPriceCalculator(self.client)
+        else:
+            self.gas_price_calculator = GasPriceCalculator(SolanaClient(PP_SOLANA_URL))
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value

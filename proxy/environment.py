@@ -1,9 +1,11 @@
+from decimal import Decimal
 import os
 import subprocess
 from logged_groups import logged_group, LogMng
 from solana.publickey import PublicKey
 
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
+PP_SOLANA_URL = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
 EVM_LOADER_ID = os.environ.get("EVM_LOADER")
 neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
 
@@ -30,7 +32,11 @@ HISTORY_START = [DEVNET_HISTORY_START]
 START_SLOT = os.environ.get('START_SLOT', 0)
 FINALIZED = os.environ.get('FINALIZED', 'finalized')
 CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
-
+OPERATOR_FEE = Decimal(os.environ.get("OPERATOR_FEE", "0.1"))
+NEON_PRICE_USD = Decimal('0.25')
+SOL_PRICE_UPDATE_INTERVAL = int(os.environ.get("SOL_PRICE_UPDATE_INTERVAL", 60))
+GET_SOL_PRICE_MAX_RETRIES = int(os.environ.get("GET_SOL_PRICE_MAX_RETRIES", 3))
+GET_SOL_PRICE_RETRY_INTERVAL = int(os.environ.get("GET_SOL_PRICE_RETRY_INTERVAL", 1))
 
 @logged_group("neon.Proxy")
 class solana_cli:
