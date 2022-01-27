@@ -85,7 +85,7 @@ def get_token_balance_gwei(client: SolanaClient, pda_account: str, *, logger) ->
 
 
 @logged_group("neon.Proxy")
-def get_token_balance_or_airdrop(client: SolanaClient, eth_account: EthereumAddress, *, logger) -> int:
+def get_token_balance_or_zero(client: SolanaClient, eth_account: EthereumAddress, *, logger) -> int:
     solana_account, nonce = ether2program(eth_account)
     logger.debug(f"Get balance for eth account: {eth_account} aka: {solana_account}")
 

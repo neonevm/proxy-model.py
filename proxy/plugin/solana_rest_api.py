@@ -28,7 +28,7 @@ from solana.rpc.api import Client as SolanaClient
 from typing import List, Tuple, Optional
 
 from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, \
-    get_token_balance_or_airdrop, estimate_gas
+    get_token_balance_or_zero, estimate_gas
 from ..common_neon.address import EthereumAddress
 from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
@@ -146,7 +146,7 @@ class EthereumModel:
         """
         eth_acc = EthereumAddress(account)
         self.debug(f'eth_getBalance: {account} {eth_acc}')
-        balance = get_token_balance_or_airdrop(self.client, eth_acc)
+        balance = get_token_balance_or_zero(self.client, eth_acc)
         return hex(balance * eth_utils.denoms.gwei)
 
     def eth_getLogs(self, obj):
