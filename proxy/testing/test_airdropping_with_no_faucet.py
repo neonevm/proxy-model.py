@@ -16,9 +16,6 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        new_user_airdrop_amount = int(os.environ.get("NEW_USER_AIRDROP_AMOUNT", "0"))
-        cls._EXPECTED_BALANCE_WEI = eth_utils.to_wei(new_user_airdrop_amount, 'ether')
-
         cls._contract_deployer = SolidityContractDeployer()
         cls._web3 = cls._contract_deployer.web3
 
