@@ -14,11 +14,10 @@ export $(/spl/bin/neon-cli --commitment confirmed --url $SOLANA_URL --evm_loader
 /spl/bin/create-test-accounts.sh 1
 
 if [ "$(spl-token balance "$NEON_TOKEN_MINT" || echo 0)" -eq 0 ]; then
-    NEW_USER_AMOUNT=100
     echo 'Create balance and mint token'
     TOKEN_ACCOUNT=$( (spl-token create-account "$NEON_TOKEN_MINT" || true) | grep -Po 'Creating account \K[^\n]*')
     echo "TOKEN_ACCOUNT=$TOKEN_ACCOUNT"
-    spl-token mint "$NEON_TOKEN_MINT" $(("$NEW_USER_AMOUNT"*100000)) --owner /spl/bin/evm_loader-keypair.json -- "$TOKEN_ACCOUNT"
+    spl-token mint "$NEON_TOKEN_MINT" 10000000 --owner /spl/bin/evm_loader-keypair.json -- "$TOKEN_ACCOUNT"
 fi
 
 proxy/run-proxy.sh

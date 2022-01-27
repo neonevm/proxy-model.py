@@ -186,12 +186,6 @@ class NeonInstruction:
 
         return trx
 
-    def make_trx_with_create(self, eth_account, code_acc=None) -> Transaction:
-        trx = Transaction()
-        create_trx, associated_token_account = self.make_create_eth_account_trx(eth_account, code_acc)
-        trx.add(create_trx)
-        return trx
-
     def make_resize_instruction(self, account, code_account_old, code_account_new, seed) -> TransactionInstruction:
         return TransactionInstruction(
             program_id = EVM_LOADER_ID,
