@@ -51,7 +51,7 @@ class PermissionToken:
             mint=self.token.pubkey
         )
         txn.add(create_txn)
-        self.token._conn.send_transaction(txn, self.payer, opts=TxOpts(skip_preflight = True, skip_confirmation=False))
+        self.token._conn.send_transaction(txn, self.payer, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
         return token_account
 
     def mint_to(self, 
@@ -60,5 +60,5 @@ class PermissionToken:
                 mint_authority: SolanaAccount):
         token_account = self.create_account_if_needed(ether_addr)
         return self.token.mint_to(token_account, mint_authority.public_key(), amount,
-                                  opts=TxOpts(skip_preflight=False, skip_confirmation=False),
+                                  opts=TxOpts(skip_preflight=True, skip_confirmation=False),
                                   multi_signers=[self.payer, mint_authority])
