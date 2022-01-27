@@ -35,8 +35,6 @@ FINALIZED = os.environ.get('FINALIZED', 'finalized')
 
 def check_error(trx):
     if 'meta' in trx and 'err' in trx['meta'] and trx['meta']['err'] is not None:
-        # logger.debug("Got err trx")
-        # logger.debug("\n{}".format(json.dumps(trx['meta']['err'])))
         return True
     return False
 
@@ -258,6 +256,22 @@ def get_accounts_from_storage(client, storage_account, *, logger):
     else:
         logger.debug("Not empty other")
         return None
+
+
+def get_code_from_account(client, address):
+    code_account_info = client.get_account_info(address)['result']['value']
+    if code_account_info is None:
+        return None
+    data = base64.b64decode(code_account_info['data'][0])
+    if len(data) < 26:
+        return None
+    _tag = data[0]
+    _public_key = data[1:21]
+    size_data = data[21:25]
+    code_size = int.from_bytes(size_data, "little")
+    if len(data) < 25 + code_size:
+        return None
+    return '0x' + data[25:25+code_size].hex()
 
 
 @logged_group("neon.Indexer")

@@ -4,14 +4,18 @@ import traceback
 
 try:
     from utils import LogDB, NeonTxInfo, NeonTxResultInfo, SolanaIxSignInfo, FINALIZED
+    from accounts_db import NeonAccountDB, NeonAccountInfo
     from blocks_db import SolanaBlocksDB, SolanaBlockDBInfo
     from transactions_db import NeonTxsDB, NeonTxDBInfo
     from sql_dict import SQLDict
+    from utils import get_code_from_account
 except ImportError:
     from .utils import LogDB, NeonTxInfo, NeonTxResultInfo, SolanaIxSignInfo, FINALIZED
+    from .accounts_db import NeonAccountDB, NeonAccountInfo
     from .blocks_db import SolanaBlocksDB, SolanaBlockDBInfo
     from .transactions_db import NeonTxsDB, NeonTxDBInfo
     from .sql_dict import SQLDict
+    from .utils import get_code_from_account
 
 
 @logged_group("neon.Indexer")
@@ -20,6 +24,7 @@ class IndexerDB:
         self._logs_db = LogDB()
         self._blocks_db = SolanaBlocksDB()
         self._txs_db = NeonTxsDB()
+        self._account_db = NeonAccountDB()
         self._client = client
 
         self._constants = SQLDict(tablename="constants")
@@ -41,7 +46,6 @@ class IndexerDB:
                     rec['blockNumber'] = hex(block.height)
                 self._logs_db.push_logs(neon_res.logs, block)
             tx = NeonTxDBInfo(neon_tx=neon_tx, neon_res=neon_res, block=block, used_ixs=used_ixs)
-            self.debug(f'submit_transaction NeonTxDBInfo {tx}')
             self._txs_db.set_tx(tx)
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
@@ -64,6 +68,19 @@ class IndexerDB:
         self.debug(f'{block}')
         self._blocks_db.set_block(block)
         return block
+
+    def _fill_account_data_from_net(self, account: NeonAccountInfo):
+        if account.code_account:
+            code = get_code_from_account(self._client, account.code_account)
+            if code:
+                account.code = code
+                self._account_db.set_acc(
+                    account.neon_account,
+                    account.pda_account,
+                    account.code_account,
+                    account.slot,
+                    account.code)
+        return account
 
     def get_block_by_slot(self, slot) -> SolanaBlockDBInfo:
         block = self._blocks_db.get_block_by_slot(slot)
@@ -119,6 +136,19 @@ class IndexerDB:
         if tx:
             tx.block = self.get_block_by_slot(tx.neon_res.slot)
         return tx
+
+    def get_contract_code(self, address) -> str:
+        account = self._account_db.get_account_info(address)
+        if not account:
+            return '0x'
+        if account.code_account and not account.code:
+            self._fill_account_data_from_net(account)
+        if account.code:
+            return account.code
+        return '0x'
+
+    def fill_account_info(self, neon_account: str, pda_account: str, code_account: str, slot: int):
+        self._account_db.set_acc(neon_account, pda_account, code_account, slot)
 
     def del_not_finalized(self, from_slot: int, to_slot: int):
         for d in [self._logs_db, self._blocks_db, self._txs_db]:

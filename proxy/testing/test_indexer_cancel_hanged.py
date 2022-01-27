@@ -240,7 +240,9 @@ class CancelTest(unittest.TestCase):
         trx_receipt = proxy.eth.wait_for_transaction_receipt(self.tx_hash)
         print('trx_receipt:', trx_receipt)
         self.assertEqual(trx_receipt['status'], 0)
-
+        code = proxy.eth.get_code(self.storage_contract.address)
+        print('code:', code)
+        print('code:', self.storage_contract.bytecode)
 
 
 if __name__ == '__main__':
