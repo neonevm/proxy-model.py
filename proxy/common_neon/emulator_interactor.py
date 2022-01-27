@@ -1,15 +1,13 @@
 import json
-import logging
+from logged_groups import logged_group
 
 from typing import Optional, Dict, Any
 from .errors import EthereumError
 from ..environment import neon_cli, ETH_TOKEN_MINT_ID
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
-
-def call_emulated(contract_id, caller_id, data=None, value=None):
+@logged_group("neon.Proxy")
+def call_emulated(contract_id, caller_id, data=None, value=None, *, logger):
     output = emulator(contract_id, caller_id, data, value)
     logger.debug(f"Call emulated. contract_id: {contract_id}, caller_id: {caller_id}, data: {data}, value: {value}, return: {output}")
     result = json.loads(output)
@@ -17,23 +15,25 @@ def call_emulated(contract_id, caller_id, data=None, value=None):
     return result
 
 
-def check_emulated_exit_status(result: Dict[str, Any]):
+@logged_group("neon.Proxy")
+def check_emulated_exit_status(result: Dict[str, Any], *, logger):
     exit_status = result['exit_status']
     if exit_status == 'revert':
         revert_data = result['result']
         logger.debug(f"Got revert call emulated result with data: {revert_data}")
         result_value = decode_revert_message(revert_data)
         if result_value is None:
-            raise EthereumError(code=3, message='')
+            raise EthereumError(code=3, message='execution reverted', data='0x' + revert_data)
         else:
-            raise EthereumError(code=3, message='execution reverted: ' + result_value, data='0x' + result_value)
+            raise EthereumError(code=3, message='execution reverted: ' + result_value, data='0x' + revert_data)
 
     if exit_status != "succeed":
         logger.debug(f"Got not succeed emulate exit_status: {exit_status}")
         raise Exception("evm emulator error ", result)
 
 
-def decode_revert_message(data: str) -> Optional[str]:
+@logged_group("neon.Proxy")
+def decode_revert_message(data: str, *, logger) -> Optional[str]:
     data_len = len(data)
     if data_len == 0:
         return None
@@ -41,7 +41,10 @@ def decode_revert_message(data: str) -> Optional[str]:
     if data_len < 8:
         raise Exception(f"Too less bytes to decode revert signature: {data_len}, data: 0x{data}")
 
-    if data[:8] != '08c379a0':
+    if data[:8] == '4e487b71': # keccak256("Panic(uint256)")
+        return None
+
+    if data[:8] != '08c379a0': # keccak256("Error(string)")
         logger.debug(f"Failed to decode revert_message, unknown revert signature: {data[:8]}")
         return None
 
