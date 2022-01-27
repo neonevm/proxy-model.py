@@ -4,7 +4,7 @@ from eth_keys import keys as eth_keys
 from hashlib import sha256
 from solana.publickey import PublicKey
 from spl.token.instructions import get_associated_token_address
-from typing import NamedTuple, Union
+from typing import NamedTuple
 
 from .layouts import ACCOUNT_INFO_LAYOUT
 from ..environment import neon_cli, ETH_TOKEN_MINT_ID, EVM_LOADER_ID
@@ -38,34 +38,23 @@ def accountWithSeed(base, seed):
     return result
 
 
-def ether2Bytes(ether: Union[str, EthereumAddress]):
-    ether_str = ""
-    if isinstance(ether, str):
-        ether_str = ether
-    elif isinstance(ether, EthereumAddress):
-        ether_str = str(ether)
-    else:
-        ether_str = ether.hex()
-
-    if ether_str[0:2] == '0x':
-        ether_str = ether_str[2:]
-
-    return bytes.fromhex(ether_str)
-
-
 def ether2program(ether):
-    seed = [ACCOUNT_SEED_VERSION,  ether2Bytes(ether)]
+    if isinstance(ether, str):
+        pass
+    elif isinstance(ether, EthereumAddress):
+        ether = str(ether)
+    else:
+        ether = ether.hex()
+
+    if ether[0:2] == '0x':
+        ether = ether[2:]
+    seed = [ACCOUNT_SEED_VERSION,  bytes.fromhex(ether)]
     (pda, nonce) = PublicKey.find_program_address(seed, PublicKey(EVM_LOADER_ID))
     return str(pda), nonce
 
 
 def getTokenAddr(account):
     return get_associated_token_address(PublicKey(account), ETH_TOKEN_MINT_ID)
-
-
-def getPermissionTokenAccount(ether: Union[str, EthereumAddress], 
-                              permission_token_mint: PublicKey):
-    return get_associated_token_address(PublicKey(ether2program(ether)[0]), permission_token_mint)
 
 
 class AccountInfo(NamedTuple):
