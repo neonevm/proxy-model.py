@@ -708,9 +708,7 @@ class Indexer(IndexerBase):
         # cancel transactions with long inactive time
         for tx in self.state.iter_txs():
             if tx.storage_account and abs(tx.slot - self.current_slot) > CANCEL_TIMEOUT:
-                if not self.unlock_accounts(tx):
-                    tx.neon_res.slot = self.indexed_slot
-                    self.state.done_tx(tx)
+                self.unlock_accounts(tx)
 
         # after last instruction and slot
         self.state.complete_done_txs()
@@ -732,6 +730,7 @@ class Indexer(IndexerBase):
         storage_accounts_list = get_accounts_from_storage(self.client, tx.storage_account)
         if storage_accounts_list is None:
             self.warning(f"Transaction {tx.neon_tx} has empty storage.")
+            tx.blocked_accounts.clear()
             return False
 
         if storage_accounts_list != tx.blocked_accounts:
