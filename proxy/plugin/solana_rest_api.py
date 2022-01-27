@@ -41,7 +41,7 @@ from ..indexer.indexer_db import IndexerDB, PendingTxError
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-NEON_PROXY_PKG_VERSION = '0.5.4-dev'
+NEON_PROXY_PKG_VERSION = '0.5.4-rc1'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
