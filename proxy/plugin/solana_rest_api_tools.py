@@ -105,7 +105,7 @@ def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> boo
 
 @logged_group("neon.Proxy")
 def estimate_gas(contract_id: str, caller_eth_account: EthereumAddress, data: str = None, value: str = None, *, logger):
-    result = call_emulated(contract_id, str(caller_eth_account), data, value, False)
+    result = call_emulated(contract_id, str(caller_eth_account), data, value)
     used_gas = result.get("used_gas")
     if used_gas is None:
         logger.error(f"Failed estimate_gas, unexpected result, by contract_id: {contract_id}, caller_eth_account: "
