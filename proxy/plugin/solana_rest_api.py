@@ -26,7 +26,6 @@ from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
 from solana.account import Account as sol_Account
 from solana.rpc.api import Client as SolanaClient
 from typing import List, Tuple, Optional
-from web3 import Web3
 
 from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, \
     get_token_balance_or_airdrop, estimate_gas
@@ -37,7 +36,7 @@ from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..core.acceptor.pool import proxy_id_glob
 from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
-from ..indexer.indexer_db import IndexerDB
+from ..indexer.indexer_db import IndexerDB, PendingTxError
 from ..indexer.utils import NeonTxInfo
 from ..common_neon.account_whitelist import AccountWhitelist
 
@@ -53,7 +52,10 @@ class EthereumModel:
     def __init__(self):
         self.signer = self.get_solana_account()
         self.client = SolanaClient(SOLANA_URL)
+
         self.db = IndexerDB(self.client)
+        self.db.set_client(self.client)
+        
         self.account_whitelist = AccountWhitelist(self.client, self.signer, None)
         raise RuntimeError("NOT READY!")
 
@@ -380,7 +382,7 @@ class EthereumModel:
             self.warning(f'Contract account {contract} is not allowed for deployment')
             raise Exception(f'Contract account {contract} is not allowed for deployment')
 
-        eth_signature = '0x' + bytes(Web3.keccak(bytes.fromhex(rawTrx[2:]))).hex()
+        eth_signature = '0x' + trx.hash_signed().hex()
 
         self.debug('Eth Sender: %s', sender)
         self.debug('Eth Signature: %s', trx.signature().hex())
@@ -400,13 +402,12 @@ class EthereumModel:
                                     ]
                                 })
         try:
-            neon_res = call_signed(self.signer, self.client, trx, steps=500)
-            self.debug('Transaction signature: %s %s', neon_res.sol_sign, eth_signature)
-            neon_tx = NeonTxInfo()
-            neon_tx.init_from_eth_tx(trx)
-            self.db.submit_transaction(neon_tx, neon_res, [])
+            call_signed(self.db, self.signer, self.client, trx, steps=500)
             return eth_signature
 
+        except PendingTxError:
+            self.debug(f'Transaction {eth_signature} is already in pending list')
+            return eth_signature
         except SolanaTxError as err:
             self._log_transaction_error(err)
             raise
