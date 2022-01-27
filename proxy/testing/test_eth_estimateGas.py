@@ -77,11 +77,11 @@ class Test_eth_estimateGas(unittest.TestCase):
             print('trx_revert:', trx_revert)
             trx_estimate_gas_response = proxy.eth.estimate_gas(trx_revert)
             print('trx_estimate_gas_response:', trx_estimate_gas_response)
-            self.assertTrue(True)
+            self.assertTrue(False)
         except Exception as e:
             print('type(e):', type(e))
             print('e:', e)
-            self.assertTrue(False)
+            self.assertTrue(True)
 
 
 if __name__ == '__main__':
