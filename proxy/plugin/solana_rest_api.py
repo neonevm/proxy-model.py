@@ -52,7 +52,7 @@ class EthereumModel:
         self.signer = self.get_solana_account()
         self.client = SolanaClient(SOLANA_URL)
 
-        self.db = IndexerDB(self.client)
+        self.db = IndexerDB()
         self.db.set_client(self.client)
         
         self.account_whitelist = AccountWhitelist(self.client, self.signer, ACCOUNT_PERMISSION_UPDATE_INT)
