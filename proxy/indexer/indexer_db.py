@@ -1,6 +1,5 @@
 import base58
 from logged_groups import logged_group
-import multiprocessing
 import traceback
 
 from ..environment import FINALIZED
@@ -19,24 +18,19 @@ except ImportError:
     from .sql_dict import SQLDict
 
 
-manager = multiprocessing.Manager()
-indexer_lock_glob = multiprocessing.Lock()
-
-
 @logged_group("neon.Indexer")
 class IndexerDB:
     def __init__(self):
-        with indexer_lock_glob:
-            self._logs_db = LogDB()
-            self._blocks_db = SolanaBlocksDB()
-            self._txs_db = NeonTxsDB()
-            self._pending_txs_db = NeonPendingTxsDB()
-            self._client = None
+        self._logs_db = LogDB()
+        self._blocks_db = SolanaBlocksDB()
+        self._txs_db = NeonTxsDB()
+        self._pending_txs_db = NeonPendingTxsDB()
+        self._client = None
 
-            self._constants = SQLDict(tablename="constants")
-            for k in ['last_block_slot', 'last_block_height', 'min_receipt_slot']:
-                if k not in self._constants:
-                    self._constants[k] = 0
+        self._constants = SQLDict(tablename="constants")
+        for k in ['last_block_slot', 'last_block_height', 'min_receipt_slot']:
+            if k not in self._constants:
+                self._constants[k] = 0
 
     def set_client(self, client):
         self._client = client
