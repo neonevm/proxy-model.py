@@ -203,11 +203,6 @@ class SolanaInteractor:
         return [SendResult(r) for r in response_list]
 
     def send_multiple_transactions(self, tx_list, eth_tx, reason, waiter=None, skip_preflight=False) -> [{}]:
-        debug_measurements = LOG_SENDING_SOLANA_TRANSACTION and (reason in ['CancelWithNonce', 'CallFromRawEthereumTX'])
-
-        if debug_measurements:
-            self.debug(f"send multiple transactions for reason {reason}: {eth_tx.__dict__}")
-
         send_result_list = self.send_multiple_transactions_unconfirmed(tx_list, skip_preflight=skip_preflight)
         sign_list = [s.result for s in send_result_list if s.result]
         self.confirm_multiple_transactions(sign_list, waiter)
@@ -224,11 +219,6 @@ class SolanaInteractor:
             for receipt in receipt_list:
                 update_transaction_cost(receipt, eth_tx, reason)
 
-        if debug_measurements:
-            for receipt in receipt_list:
-                if receipt is not None:
-                    self.get_measurements(receipt)
-
         return receipt_list
 
     def send_transaction(self, trx, eth_tx, reason=None):
@@ -236,8 +226,13 @@ class SolanaInteractor:
 
     # Do not rename this function! This name used in CI measurements (see function `cleanup_docker` in
     # .buildkite/steps/deploy-test.sh)
-    def get_measurements(self, receipt):
+    def get_measurements(self, reason, eth_tx, receipt):
+        if not LOG_SENDING_SOLANA_TRANSACTION:
+            return
+
         try:
+            self.debug(f"send multiple transactions for reason {reason}: {eth_tx.__dict__}")
+
             measurements = self.extract_measurements_from_receipt(receipt)
             for m in measurements:
                 self.info(f'get_measurements: {json.dumps(m)}')
