@@ -132,6 +132,7 @@ class NeonTxObject(BaseEvmObject):
         self.step_count = []
         self.holder_account = ''
         self.blocked_accounts = []
+        self.canceled = False
 
     def __str__(self):
         return str_fmt_object(self)
@@ -708,7 +709,9 @@ class Indexer(IndexerBase):
         # cancel transactions with long inactive time
         for tx in self.state.iter_txs():
             if tx.storage_account and abs(tx.slot - self.current_slot) > CANCEL_TIMEOUT:
-                self.unlock_accounts(tx)
+                if not self.unlock_accounts(tx):
+                    tx.neon_res.slot = self.indexed_slot
+                    self.state.done_tx(tx)
 
         # after last instruction and slot
         self.state.complete_done_txs()
@@ -723,6 +726,10 @@ class Indexer(IndexerBase):
         if tx.neon_res.is_valid():
             return True
 
+        # We already sent Cancel and waiting for reciept
+        if tx.canceled:
+            return True
+
         if not tx.blocked_accounts:
             self.warning(f"Transaction {tx.neon_tx} hasn't blocked accounts.")
             return False
@@ -730,7 +737,6 @@ class Indexer(IndexerBase):
         storage_accounts_list = get_accounts_from_storage(self.client, tx.storage_account)
         if storage_accounts_list is None:
             self.warning(f"Transaction {tx.neon_tx} has empty storage.")
-            tx.blocked_accounts.clear()
             return False
 
         if storage_accounts_list != tx.blocked_accounts:
@@ -739,6 +745,7 @@ class Indexer(IndexerBase):
 
         self.debug(f'Neon tx is blocked: storage {tx.storage_account}, {tx.neon_tx}')
         self.blocked_storages[tx.storage_account] = (tx.neon_tx, tx.blocked_accounts)
+        tx.canceled = True
         return True
 
     def gather_blocks(self):
