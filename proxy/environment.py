@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 from logged_groups import logged_group, LogMng
@@ -94,7 +95,7 @@ class neon_cli:
                    "--commitment=recent",
                    "--url", SOLANA_URL,
                    f"--evm_loader={EVM_LOADER_ID}",
-                   f"--logging_ctx={ctx}"
+                   f"--logging_ctx={json.dumps(ctx)}"
                    ]\
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
