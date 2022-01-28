@@ -27,6 +27,12 @@ class AccountInfo(NamedTuple):
     owner: PublicKey
 
 
+class SendResult:
+    def __init__(self, response):
+        self.error = response.get('error')
+        self.result = response.get('result')
+
+
 @logged_group("neon.Proxy")
 class SolanaInteractor:
     def __init__(self, signer, client: SolanaClient) -> None:
@@ -194,17 +200,25 @@ class SolanaInteractor:
             request_list.append((base64_tx, opts))
 
         response_list = self._send_rpc_batch_request('sendTransaction', request_list)
-        return [r['result'] for r in response_list]
+        return [SendResult(r) for r in response_list]
 
-    def send_multiple_transactions(self, tx_list, eth_tx, reason, waiter=None, skip_preflight=True) -> [{}]:
+    def send_multiple_transactions(self, tx_list, eth_tx, reason, waiter=None, skip_preflight=False) -> [{}]:
         debug_measurements = LOG_SENDING_SOLANA_TRANSACTION and (reason in ['CancelWithNonce', 'CallFromRawEthereumTX'])
 
         if debug_measurements:
             self.debug(f"send multiple transactions for reason {reason}: {eth_tx.__dict__}")
 
-        sign_list = self.send_multiple_transactions_unconfirmed(tx_list, skip_preflight=skip_preflight)
+        send_result_list = self.send_multiple_transactions_unconfirmed(tx_list, skip_preflight=skip_preflight)
+        sign_list = [s.result for s in send_result_list if s.result]
         self.confirm_multiple_transactions(sign_list, waiter)
-        receipt_list = self.get_multiple_confirmed_transactions(sign_list)
+        confirmed_list = self.get_multiple_confirmed_transactions(sign_list)
+        error_list = [s.error for s in send_result_list]
+        receipt_list = []
+        for error in error_list:
+            if error:
+                receipt_list.append(error)
+            else:
+                receipt_list.append(confirmed_list.pop(0))
 
         if WRITE_TRANSACTION_COST_IN_DB:
             for receipt in receipt_list:
@@ -233,6 +247,10 @@ class SolanaInteractor:
 
     def confirm_multiple_transactions(self, sign_list: [str], waiter=None):
         """Confirm a transaction."""
+        if not len(sign_list):
+            self.debug(f'Got confirmed status for transactions: {sign_list}')
+            return
+
         elapsed_time = 0
         while elapsed_time < CONFIRM_TIMEOUT:
             if waiter:
@@ -257,6 +275,8 @@ class SolanaInteractor:
         self.warning(f'No confirmed status for transactions: {sign_list}')
 
     def get_multiple_confirmed_transactions(self, sign_list: [str]) -> [Any]:
+        if not len(sign_list):
+            return []
         opts = {"encoding": "json", "commitment": "confirmed"}
         request_list = [(sign, opts) for sign in sign_list]
         response_list = self._send_rpc_batch_request("getTransaction", request_list)
@@ -330,6 +350,10 @@ def get_error_definition_from_receipt(receipt):
         return err_from_receipt_result
 
     err_from_send_trx_error = get_from_dict(receipt, 'data', 'err', 'InstructionError')
+    if err_from_send_trx_error is not None:
+        return err_from_send_trx_error
+
+    err_from_send_trx_error = get_from_dict(receipt, 'data', 'err')
     if err_from_send_trx_error is not None:
         return err_from_send_trx_error
 
@@ -415,3 +439,7 @@ def check_if_accounts_blocked(receipt, *, logger):
         if log.find(ro_blocked) >= 0 or log.find(rw_blocked) >= 0:
             return True
     return False
+
+
+def check_if_blockhash_notfound(receipt):
+    return (not receipt) or (get_from_dict(receipt, 'data', 'err') == 'BlockhashNotFound')

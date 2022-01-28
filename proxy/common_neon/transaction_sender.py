@@ -23,6 +23,7 @@ from .solana_interactor import COMPUTATION_BUDGET_EXCEEDED
 from .solana_interactor import SolanaInteractor, check_for_errors, check_if_accounts_blocked
 from .solana_interactor import check_if_big_transaction, check_if_program_exceeded_instructions
 from .solana_interactor import get_error_definition_from_receipt, check_if_storage_is_empty_error
+from .solana_interactor import check_if_blockhash_notfound
 from ..common_neon.eth_proto import Trx as EthTx
 from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID
 from ..indexer.utils import NeonTxResultInfo, NeonTxInfo
@@ -447,10 +448,9 @@ class NeonTxSender:
 
 @logged_group("neon.Proxy")
 class SolTxListSender:
-    def __init__(self, sender: NeonTxSender, tx_list: [Transaction], name: str, skip_preflight=True):
+    def __init__(self, sender: NeonTxSender, tx_list: [Transaction], name: str):
         self._s = sender
         self._name = name
-        self._skip_preflight = skip_preflight
 
         self._blockhash = None
         self._retry_idx = 0
@@ -478,14 +478,14 @@ class SolTxListSender:
     def send(self) -> SolTxListSender:
         solana = self._s.solana
         eth_tx = self._s.eth_tx
-        skip_preflight = self._skip_preflight
+        skip_preflight = False
 
         while (self._retry_idx < RETRY_ON_FAIL) and (len(self._tx_list)):
             self._retry_idx += 1
-            receipt_list = solana.send_multiple_transactions(self._tx_list, eth_tx, self._name, self, skip_preflight)
+            receipt_list = solana.send_multiple_transactions(self._tx_list, eth_tx, self._name, self)
 
             for receipt, tx in zip(receipt_list, self._tx_list):
-                if not receipt:
+                if check_if_blockhash_notfound(receipt):
                     self._bad_block_list.append(tx)
                 elif check_if_accounts_blocked(receipt):
                     self._blocked_account_list.append(tx)
