@@ -3,6 +3,7 @@ from __future__ import annotations
 import base58
 import base64
 import json
+import multiprocessing
 import psycopg2
 import subprocess
 import traceback
@@ -23,10 +24,13 @@ from logged_groups import logged_group
 from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT
 from ..common_neon.eth_proto import Trx as EthTx
-from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID
+from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID, get_solana_accounts
 
 from proxy.indexer.pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
 from proxy.indexer.pg_common import encode, decode
+
+
+basedb_lock_glob = multiprocessing.Lock()
 
 
 def check_error(trx):
@@ -140,8 +144,10 @@ class NeonTxResultInfo:
                             self._decode_return(log, ix_idx, tx)
         return self
 
-    def clear(self):
+    def canceled(self, tx: {}):
         self._set_defaults()
+        self.sol_sign = tx['transaction']['signatures'][0]
+        self.slot = tx['slot']
 
     def is_valid(self) -> bool:
         return self.slot != -1
@@ -266,8 +272,10 @@ class BaseDB:
             host=POSTGRES_HOST
         )
         self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        cursor = self._conn.cursor()
-        cursor.execute(self._create_table_sql())
+
+        with basedb_lock_glob:
+            cursor = self._conn.cursor()
+            cursor.execute(self._create_table_sql())
 
     def _create_table_sql(self) -> str:
         assert False, 'No script for the table'
@@ -428,37 +436,12 @@ class LogDB(BaseDB):
 class Canceller:
     def __init__(self):
         # Initialize user account
-        res = self.call('config', 'get')
-        substr = "Keypair Path: "
-        path = ""
-        for line in res.splitlines():
-            if line.startswith(substr):
-                path = line[len(substr):].strip()
-        if path == "":
-            raise Exception("cannot get keypair path")
-
-        with open(path.strip(), mode='r') as file:
-            pk = (file.read())
-            numbs = list(map(int, pk.strip("[] \n").split(',')))
-            numbs = numbs[0:32]
-            values = bytes(numbs)
-            self.signer = Account(values)
+        self.signer = get_solana_accounts()[0]
 
         self.client = Client(SOLANA_URL)
 
         self.operator = self.signer.public_key()
         self.operator_token = get_associated_token_address(PublicKey(self.operator), ETH_TOKEN_MINT_ID)
-
-    def call(self, *args):
-        try:
-            cmd = ["solana",
-                   "--url", SOLANA_URL,
-                   ] + list(args)
-            self.debug(cmd)
-            return subprocess.check_output(cmd, universal_newlines=True)
-        except subprocess.CalledProcessError as err:
-            self.error("ERR: solana error {}".format(err))
-            raise
 
     def unlock_accounts(self, blocked_storages):
         readonly_accs = [
