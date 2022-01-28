@@ -1,11 +1,7 @@
 import base58
-import multiprocessing
 
 from ..environment import EVM_LOADER_ID
 from ..indexer.utils import BaseDB
-
-
-costs_lock_glob = multiprocessing.Lock()
 
 
 class SQLCost(BaseDB):
