@@ -90,12 +90,12 @@ def get_solana_accounts(*, logger) -> [sol_Account]:
 class neon_cli:
     def call(self, *args):
         try:
-            ctx = str(LogMng.get_logging_context())
+            ctx = json.dumps(LogMng.get_logging_context())
             cmd = ["neon-cli",
                    "--commitment=recent",
                    "--url", SOLANA_URL,
                    f"--evm_loader={EVM_LOADER_ID}",
-                   f"--logging_ctx={json.dumps(ctx)}"
+                   f"--logging_ctx={ctx}"
                    ]\
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
