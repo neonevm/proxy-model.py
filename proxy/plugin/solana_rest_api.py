@@ -57,13 +57,13 @@ class EthereumModel:
         self.db = IndexerDB()
         self.db.set_client(self.client)
 
-        self.account_whitelist = AccountWhitelist(self.client, self.signer, ACCOUNT_PERMISSION_UPDATE_INT)
-
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
             proxy_id_glob.value += 1
         self.debug(f"Worker id {self.proxy_id}")
         self.signer = signer_list[self.proxy_id % len(signer_list)]
+
+        self.account_whitelist = AccountWhitelist(self.client, self.signer, ACCOUNT_PERMISSION_UPDATE_INT)
 
         neon_config_load(self)
 
