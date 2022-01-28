@@ -17,6 +17,9 @@ class AccountWhitelist:
         self.solana = solana
         self.account_cache = {}
         self.permission_update_int = permission_update_int
+        self.allowance_token = None
+        self.denial_token = None
+
         allowance_token_addr = ELF_PARAMS.get("NEON_PERMISSION_ALLOWANCE_TOKEN", '')
         if allowance_token_addr != '':
             self.allowance_token = PermissionToken(self.solana,
@@ -99,9 +102,9 @@ class AccountWhitelist:
 
         try:
             diff = self.read_balance_diff(ether_addr)
-            self.account_cache[ether_addr] = { 
-                'last_update': current_time, 
-                'diff': diff 
+            self.account_cache[ether_addr] = {
+                'last_update': current_time,
+                'diff': diff
             }
             return diff >= min_balance
         except Exception as err:
