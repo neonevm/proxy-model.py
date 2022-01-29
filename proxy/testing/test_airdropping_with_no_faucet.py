@@ -14,11 +14,9 @@ from .testing_helpers import SolidityContractDeployer
 
 def request_airdrop(address):
     print()
-    print('==== request_airdrop', address)
     url = 'http://faucet:3333/request_neon'
     data = '{"wallet": "' + address + '", "amount": 5}'
     r = requests.post(url, data=data)
-    print('==== result', r)
     if not r.ok:
         print('Response:', r.status_code)
     assert(r.ok)
@@ -43,7 +41,6 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         actual_balance_wei = self._web3.eth.get_balance(account.address, block_identifier=block_number)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, actual_balance_wei)
 
-    @unittest.skip("a.i.")
     def test_airdrop_on_deploy(self):
         contract_owner: LocalAccount = self._web3.eth.account.create()
         contract = self._contract_deployer.compile_and_deploy_contract(contract_owner, self._CONTRACT_STORAGE_SOURCE)
