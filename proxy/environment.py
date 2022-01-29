@@ -75,7 +75,6 @@ def get_solana_accounts(*, logger) -> [sol_Account]:
         i += 1
         full_path = file_name + (str(i) if i > 1 else '') + file_ext
         signer = read_sol_account(full_path)
-        logger.debug(f'singer path: {full_path}')
         if not signer:
             break
         signer_list.append(signer)

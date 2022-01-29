@@ -53,15 +53,17 @@ class EthereumModel:
     def __init__(self):
         signer_list = get_solana_accounts()
         self.client = SolanaClient(SOLANA_URL)
-
         self.db = IndexerDB()
         self.db.set_client(self.client)
 
         with proxy_id_glob.get_lock():
             self.proxy_id = proxy_id_glob.value
             proxy_id_glob.value += 1
-        self.debug(f"Worker id {self.proxy_id}")
-        self.signer = signer_list[self.proxy_id % len(signer_list)]
+
+        signer_idx = self.proxy_id % len(signer_list)
+        self.signer = signer_list[signer_idx]
+        self.debug(f"Worker id {self.proxy_id} -> " +
+                   f"signers {len(signer_list)}, signer {signer_idx}: {str(self.signer.public_key())}")
 
         self.account_whitelist = AccountWhitelist(self.client, self.signer, ACCOUNT_PERMISSION_UPDATE_INT)
 
