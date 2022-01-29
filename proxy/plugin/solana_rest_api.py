@@ -34,7 +34,6 @@ from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
-from ..core.acceptor.pool import proxy_id_glob
 from ..environment import neon_cli, get_solana_accounts, SOLANA_URL, PP_SOLANA_URL, ACCOUNT_PERMISSION_UPDATE_INT
 from ..indexer.indexer_db import IndexerDB, PendingTxError
 from .gas_price_calculator import GasPriceCalculator
