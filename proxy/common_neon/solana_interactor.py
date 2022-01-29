@@ -155,31 +155,47 @@ class SolanaInteractor:
         if not blockhash_resp["result"]:
             raise RuntimeError("failed to get recent blockhash")
         blockhash = blockhash_resp["result"]["value"]["blockhash"]
-
-        if not FUZZING_BLOCKHASH:
-            return Blockhash(blockhash)
-
-        slot = blockhash_resp['result']['context']['slot']
-        self._fuzzing_hash_cycle = not self._fuzzing_hash_cycle
-        if not self._fuzzing_hash_cycle:
-            self.debug(f"good block {blockhash} for the slot {slot}")
-            return Blockhash(blockhash)
-
-        # blockhash = '4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4'
-        opts = {
-            "encoding": "json",
-            "transactionDetails": "none",
-            "rewards": False
-        }
-        block = self.client._provider.make_request("getBlock", slot - 500, opts)
-        blockhash = block['result']['blockhash']
-        self.debug(f"fuzzing block {blockhash} for slot {slot}")
         return Blockhash(blockhash)
 
     def sign_transaction(self, tx: Transaction):
         tx.sign(self.signer)
 
-    def send_multiple_transactions_unconfirmed(self, tx_list: [Transaction], skip_preflight=True) -> [str]:
+    def _fuzzing_transactions(self, tx_list, tx_opts, request_list):
+        """
+        Make each second transaction a bad one.
+        This is used to test a transaction sending on a live cluster (testnet/devnet).
+        """
+        if not FUZZING_BLOCKHASH:
+            return request_list
+
+        self._fuzzing_hash_cycle = not self._fuzzing_hash_cycle
+        if not self._fuzzing_hash_cycle:
+            return request_list
+
+        # get bad block slot for sent transactions
+        slot = self.get_recent_blockslot()
+        # blockhash = '4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4'
+        block_opts = {
+            "encoding": "json",
+            "transactionDetails": "none",
+            "rewards": False
+        }
+        slot = max(slot - 500, 10)
+        block = self.client._provider.make_request("getBlock", slot, block_opts)
+        fuzzing_blockhash = Blockhash(block['result']['blockhash'])
+        self.debug(f"fuzzing block {fuzzing_blockhash} for slot {slot}")
+
+        # sign half of transactions with a bad blockhash
+        for idx, tx in enumerate(tx_list):
+            if idx % 2 == 1:
+                continue
+            tx.recent_blockhash = fuzzing_blockhash
+            self.sign_transaction(tx)
+            base64_tx = base64.b64encode(tx.serialize()).decode('utf-8')
+            request_list[idx] = (base64_tx, tx_opts)
+        return request_list
+
+    def _send_multiple_transactions_unconfirmed(self, tx_list: [Transaction], skip_preflight=False) -> [str]:
         opts = {
             "skipPreflight": skip_preflight,
             "encoding": "base64",
@@ -188,6 +204,7 @@ class SolanaInteractor:
 
         blockhash = None
         request_list = []
+
         for tx in tx_list:
             if not tx.recent_blockhash:
                 if not blockhash:
@@ -199,19 +216,22 @@ class SolanaInteractor:
             base64_tx = base64.b64encode(tx.serialize()).decode('utf-8')
             request_list.append((base64_tx, opts))
 
+        request_list = self._fuzzing_transactions(tx_list, opts, request_list)
         response_list = self._send_rpc_batch_request('sendTransaction', request_list)
         return [SendResult(r) for r in response_list]
 
     def send_multiple_transactions(self, tx_list, eth_tx, reason, waiter=None, skip_preflight=False) -> [{}]:
-        send_result_list = self.send_multiple_transactions_unconfirmed(tx_list, skip_preflight=skip_preflight)
+        send_result_list = self._send_multiple_transactions_unconfirmed(tx_list, skip_preflight=skip_preflight)
+        # Filter good transactions and wait the confirmations for them
         sign_list = [s.result for s in send_result_list if s.result]
-        self.confirm_multiple_transactions(sign_list, waiter)
-        confirmed_list = self.get_multiple_confirmed_transactions(sign_list)
-        error_list = [s.error for s in send_result_list]
+        self._confirm_multiple_transactions(sign_list, waiter)
+        # Get receipts for good transactions
+        confirmed_list = self._get_multiple_receipts(sign_list)
+        # Mix errors with receipts for good transactions
         receipt_list = []
-        for error in error_list:
-            if error:
-                receipt_list.append(error)
+        for s in send_result_list:
+            if s.error:
+                receipt_list.append(s.error)
             else:
                 receipt_list.append(confirmed_list.pop(0))
 
@@ -233,14 +253,14 @@ class SolanaInteractor:
         try:
             self.debug(f"send multiple transactions for reason {reason}: {eth_tx.__dict__}")
 
-            measurements = self.extract_measurements_from_receipt(receipt)
+            measurements = self._extract_measurements_from_receipt(receipt)
             for m in measurements:
                 self.info(f'get_measurements: {json.dumps(m)}')
         except Exception as err:
             self.error(f"get_measurements: can't get measurements {err}")
             self.info(f"get measurements: failed result {json.dumps(receipt, indent=3)}")
 
-    def confirm_multiple_transactions(self, sign_list: [str], waiter=None):
+    def _confirm_multiple_transactions(self, sign_list: [str], waiter=None):
         """Confirm a transaction."""
         if not len(sign_list):
             self.debug(f'Got confirmed status for transactions: {sign_list}')
@@ -269,11 +289,9 @@ class SolanaInteractor:
                 self.debug(f'Got confirmed status for transactions: {sign_list}')
                 return
 
-            time.sleep(CONFIRMATION_CHECK_DELAY)
-            elapsed_time += CONFIRMATION_CHECK_DELAY
         self.warning(f'No confirmed status for transactions: {sign_list}')
 
-    def get_multiple_confirmed_transactions(self, sign_list: [str]) -> [Any]:
+    def _get_multiple_receipts(self, sign_list: [str]) -> [Any]:
         if not len(sign_list):
             return []
         opts = {"encoding": "json", "commitment": "confirmed"}
@@ -281,7 +299,7 @@ class SolanaInteractor:
         response_list = self._send_rpc_batch_request("getTransaction", request_list)
         return [r['result'] for r in response_list]
 
-    def extract_measurements_from_receipt(self, receipt):
+    def _extract_measurements_from_receipt(self, receipt):
         if check_for_errors(receipt):
             self.warning("Can't get measurements from receipt with error")
             self.info(f"Failed result: {json.dumps(receipt, indent=3)}")

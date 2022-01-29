@@ -239,8 +239,13 @@ class NeonTxSender:
         self._holder_account = None
 
     def execute(self) -> NeonTxResultInfo:
-        self._prepare_execution()
+        try:
+            self._prepare_execution()
+            return self._execute()
+        finally:
+            self._free_perm_accounts()
 
+    def _execute(self) -> NeonTxResultInfo:
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy]:
             try:
                 if not Strategy.IS_SIMPLE:
@@ -250,20 +255,19 @@ class NeonTxSender:
                 strategy = Strategy(self)
                 if not strategy.is_valid:
                     self.debug(f'Skip strategy {Strategy.NAME}: {strategy.error}')
-                else:
-                    self.debug(f'Use strategy {Strategy.NAME}')
-                    neon_res = strategy.execute()
-                    return self._submit_tx_into_db(neon_res)
+                    continue
+
+                self.debug(f'Use strategy {Strategy.NAME}')
+                neon_res = strategy.execute()
+                return self._submit_tx_into_db(neon_res)
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not check_if_program_exceeded_instructions(e)):
                     raise
-            finally:
-                self._free_perm_accounts()
 
         self.error(f'No strategy to execute the Neon transaction: {self.eth_tx}')
         raise RuntimeError('No strategy to execute the Neon transaction')
 
-    def pending_tx_into_db(self):
+    def pending_tx_into_db(self, slot=None):
         """
         Transaction sender doesn't remove pending transactions!!!
         This protects the neon transaction execution from race conditions, when user tries to send transaction
@@ -755,9 +759,13 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         return self._validate_notdeploy_tx() and self._validate_txsize()
 
     def build_tx(self) -> Transaction:
-        self.steps = self.steps - 1  # generate unique tx
-        if self.steps < 5:   # protect from the impossible case
-            raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
+        # generate unique tx
+        if self.steps < 50:
+            self.steps += 1
+        else:
+            self.steps -= 1
+
+        self.steps = self.steps - 1
         return self.s.builder.make_partial_call_or_continue_transaction(self.steps)
 
     def _build_preparation_txs(self) -> [Transaction]:
