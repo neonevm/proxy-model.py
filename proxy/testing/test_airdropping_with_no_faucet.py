@@ -9,13 +9,14 @@ import eth_utils
 from eth_account.account import LocalAccount
 from solana.rpc.api import Client as SolanaClient
 
-from ..plugin.solana_rest_api_tools import get_token_balance_or_zero, ether2program
+from ..plugin.solana_rest_api_tools import get_token_balance_or_zero
 from .testing_helpers import SolidityContractDeployer
 
 def request_airdrop(address):
+    print()
     print('==== request_airdrop', address)
     url = os.environ['FAUCET_URL'] + '/request_neon'
-    data = '{"wallet": "' + address + '", "amount": 100}'
+    data = '{"wallet": "' + address + '", "amount": 5}'
     r = requests.post(url, data=data)
     print('==== result', r)
     if not r.ok:
@@ -26,7 +27,7 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        airdrop_amount = 100
+        airdrop_amount = 5
         cls._EXPECTED_BALANCE_WEI = eth_utils.to_wei(airdrop_amount, 'ether')
 
         cls._contract_deployer = SolidityContractDeployer()
