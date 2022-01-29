@@ -248,13 +248,17 @@ class SolanaInteractor:
 
         elapsed_time = 0
         while elapsed_time < CONFIRM_TIMEOUT:
-            if waiter:
-                waiter.on_wait_confirm(elapsed_time)
+            time.sleep(CONFIRMATION_CHECK_DELAY)
+            elapsed_time += CONFIRMATION_CHECK_DELAY
 
             response = self.client.get_signature_statuses(sign_list)
             result = response['result']
             if not result:
                 continue
+
+            if waiter:
+                slot = result['context']['slot']
+                waiter.on_wait_confirm(elapsed_time, slot)
 
             for status in result['value']:
                 if not status:

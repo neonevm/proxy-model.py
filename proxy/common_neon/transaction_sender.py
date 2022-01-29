@@ -271,8 +271,9 @@ class NeonTxSender:
 
         Indexer will purge old pending transactions after finalizing slot.
         """
-        slot = self.solana.get_recent_blockslot()
-        if slot != self._pending_tx.slot != slot:
+        if not slot:
+            slot = self.solana.get_recent_blockslot()
+        if (self._pending_tx.slot - slot) > 10:
             self._pending_tx.slot = slot
             self._db.pending_transaction(self._pending_tx)
 
@@ -510,8 +511,8 @@ class SolTxListSender:
             raise RuntimeError('Run out of attempts to execute transaction')
         return self
 
-    def on_wait_confirm(self, _):
-        self._s.pending_tx_into_db()
+    def on_wait_confirm(self, _, slot: int):
+        self._s.pending_tx_into_db(slot)
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         """Store the last successfully blockhash and set it in _set_tx_blockhash"""
