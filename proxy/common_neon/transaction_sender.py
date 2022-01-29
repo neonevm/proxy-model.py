@@ -238,9 +238,6 @@ class NeonTxSender:
         self._storage_account = None
         self._holder_account = None
 
-    def __del__(self):
-        self._free_perm_accounts()
-
     def execute(self) -> NeonTxResultInfo:
         self._prepare_execution()
 
@@ -260,6 +257,8 @@ class NeonTxSender:
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not check_if_program_exceeded_instructions(e)):
                     raise
+            finally:
+                self._free_perm_accounts()
 
         self.error(f'No strategy to execute the Neon transaction: {self.eth_tx}')
         raise RuntimeError('No strategy to execute the Neon transaction')
