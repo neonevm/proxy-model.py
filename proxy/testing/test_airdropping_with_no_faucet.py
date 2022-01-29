@@ -15,7 +15,7 @@ from .testing_helpers import SolidityContractDeployer
 def request_airdrop(address):
     print()
     print('==== request_airdrop', address)
-    url = os.environ['FAUCET_URL'] + '/request_neon'
+    url = 'http://faucet:3333/request_neon'
     data = '{"wallet": "' + address + '", "amount": 5}'
     r = requests.post(url, data=data)
     print('==== result', r)
