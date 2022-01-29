@@ -70,14 +70,16 @@ def get_solana_accounts(*, logger) -> [sol_Account]:
 
     signer_list = []
     (file_name, file_ext) = os.path.splitext(path)
-    i = -1
+    i = 0
     while True:
         i += 1
-        full_path = file_name + (str(i) if i > 0 else '') + file_ext
+        full_path = file_name + (str(i) if i > 1 else '') + file_ext
         signer = read_sol_account(full_path)
+        logger.debug(f'singer path: {full_path}')
         if not signer:
             break
         signer_list.append(signer)
+        logger.debug(f'Add signer: {signer.public_key()}')
 
     if not len(signer_list):
         raise Exception("not keypairs")
