@@ -13,12 +13,12 @@ from ..plugin.solana_rest_api_tools import get_token_balance_or_zero
 from .testing_helpers import SolidityContractDeployer
 
 def request_airdrop(address):
-    print()
     url = 'http://faucet:3333/request_neon'
     data = '{"wallet": "' + address + '", "amount": 5}'
     r = requests.post(url, data=data)
     if not r.ok:
-        print('Response:', r.status_code)
+        print()
+        print('Bad response:', r)
     assert(r.ok)
 
 class TestAirdroppingEthAccounts(unittest.TestCase):
@@ -51,10 +51,9 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
     @unittest.skip("a.i.")
     def test_airdrop_onto_wrapped_new_address(self):
         contract_owner: LocalAccount = self._web3.eth.account.create()
+        request_airdrop(contract_owner.address)
         contract = self._contract_deployer.compile_and_deploy_contract(contract_owner, self._WRAPPER_CONTRACT_STORAGE_SOURCE)
         nested_contract_address = contract.functions.getNested().call()
-        request_airdrop(nested_contract_address)
-        request_airdrop(contract.address)
         nested_actual_balance = self._get_balance_wei(nested_contract_address)
         wrapper_actual_balance = self._get_balance_wei(contract.address)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, wrapper_actual_balance)
@@ -63,15 +62,14 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
     @unittest.skip("a.i.")
     def test_airdrop_on_deploy_estimation(self):
         owner_eth_account: LocalAccount = self._web3.eth.account.create()
+        request_airdrop(owner_eth_account.address)
         compiled_info = self._contract_deployer.compile_contract(self._CONTRACT_STORAGE_SOURCE)
         contract_data = compiled_info.contract_interface.get("bin")
         self.assertIsNotNone(contract_data)
         self._web3.eth.estimate_gas({"from": owner_eth_account.address, "data": contract_data})
-        request_airdrop(owner_eth_account.address)
         owner_balance = self._get_balance_wei(owner_eth_account.address)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, owner_balance)
 
-    @unittest.skip("a.i.")
     def _get_balance_wei(self, eth_account: str) -> int:
         balance = get_token_balance_or_zero(self._solana_client, eth_account)
         self.assertIsNotNone(balance)
