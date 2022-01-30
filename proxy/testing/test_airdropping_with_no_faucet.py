@@ -44,7 +44,7 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
     def test_airdrop_on_deploy(self):
         contract_owner: LocalAccount = self._web3.eth.account.create()
         request_airdrop(contract_owner.address)
-        print('==== bal:', self._get_balance_wei(contract_owner.address)
+        print('==== bal:', self._get_balance_wei(contract_owner.address))
         contract = self._contract_deployer.compile_and_deploy_contract(contract_owner, self._CONTRACT_STORAGE_SOURCE)
         actual_balance_wei = self._get_balance_wei(contract.address)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, actual_balance_wei)
