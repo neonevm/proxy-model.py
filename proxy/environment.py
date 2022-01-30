@@ -2,7 +2,7 @@ import os
 import subprocess
 from logged_groups import logged_group, LogMng
 from solana.publickey import PublicKey
-from solana.account import Account as sol_Account
+from solana.account import Account as SolanaAccount
 from typing import Optional
 
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
@@ -46,8 +46,8 @@ class solana_cli:
 
 
 @logged_group("neon.Proxy")
-def get_solana_accounts(*, logger) -> [sol_Account]:
-    def read_sol_account(name) -> Optional[sol_Account]:
+def get_solana_accounts(*, logger) -> [SolanaAccount]:
+    def read_sol_account(name) -> Optional[SolanaAccount]:
         if not os.path.isfile(name):
             return None
 
@@ -55,7 +55,7 @@ def get_solana_accounts(*, logger) -> [sol_Account]:
             pkey = (d.read())
             num_list = [int(v) for v in pkey.strip("[] \n").split(',')]
             value_list = bytes(num_list[0:32])
-            return sol_Account(value_list)
+            return SolanaAccount(value_list)
 
     res = solana_cli().call('config', 'get')
     substr = "Keypair Path: "
@@ -81,7 +81,7 @@ def get_solana_accounts(*, logger) -> [sol_Account]:
         logger.debug(f'Add signer: {signer.public_key()}')
 
     if not len(signer_list):
-        raise Exception("not keypairs")
+        raise Exception("No keypairs")
 
     return signer_list
 

@@ -73,9 +73,6 @@ class SolanaInteractor:
 
         return full_response_data
 
-    def get_operator_key(self):
-        return self.signer.public_key()
-
     def get_account_info(self, storage_account) -> AccountInfo:
         opts = {
             "encoding": "base64",
@@ -144,8 +141,9 @@ class SolanaInteractor:
             raise ValueError(f"Wrong data length for account data {account}")
         return data
 
-    def get_recent_blockslot(self) -> int:
-        blockhash_resp = self.client.get_recent_blockhash(commitment=Confirmed)
+    @staticmethod
+    def get_recent_blockslot(client) -> int:
+        blockhash_resp = client.get_recent_blockhash(commitment=Confirmed)
         if not blockhash_resp["result"]:
             raise RuntimeError("failed to get recent blockhash")
         return blockhash_resp['result']['context']['slot']
@@ -173,7 +171,7 @@ class SolanaInteractor:
             return request_list
 
         # get bad block slot for sent transactions
-        slot = self.get_recent_blockslot()
+        slot = self.get_recent_blockslot(self.client)
         # blockhash = '4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4'
         block_opts = {
             "encoding": "json",

@@ -14,6 +14,8 @@ from logged_groups import logged_group
 
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
+from solana.account import Account as SolanaAccount
+from solana.rpc.api import Client as SolanaClient
 
 from .address import accountWithSeed, getTokenAddr
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
@@ -28,12 +30,61 @@ from ..common_neon.eth_proto import Trx as EthTx
 from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID
 from ..indexer.utils import NeonTxResultInfo, NeonTxInfo
 from ..indexer.indexer_db import IndexerDB, NeonPendingTxInfo
+from ..environment import get_solana_accounts
+
+from ..common_neon.account_whitelist import AccountWhitelist
 
 
-manager = multiprocessing.Manager()
-perm_account_lock_glob = multiprocessing.Lock()
-free_perm_account_dict_glob = manager.dict()
-new_perm_account_dict_glob = manager.dict()
+@logged_group("neon.Proxy")
+class SignerList:
+    manager = multiprocessing.Manager()
+    signer_list_len_glob = multiprocessing.Value('i', 0)
+    free_signer_list_glob = manager.list()
+
+    def __init__(self):
+        self.signer = None
+
+    def _init_signer_list(self):
+        with self.signer_list_len_glob.get_lock():
+            if self.signer_list_len_glob.value != 0:
+                return
+
+            signer_list = get_solana_accounts()
+            for s in signer_list:
+                self.free_signer_list_glob.append(s)
+            self.signer_list_len_glob.value = len(self.free_signer_list_glob)
+
+        if self.signer_list_len_glob.value == 0:
+            raise RuntimeError('No signers!')
+
+    def get_signer(self) -> SolanaAccount:
+        if self.signer:
+            return self.signer
+        self._init_signer_list()
+
+        timeout = 0.01
+        elapsed_time = 0
+        for i in range(100_000):
+            if elapsed_time > 0:
+                if i % 400 == 0:
+                    self.debug(f'Waiting for free signer...')
+                time.sleep(timeout)
+
+            with self.signer_list_len_glob.get_lock():
+                if len(self.free_signer_list_glob) == 0:
+                    elapsed_time += timeout
+                    continue
+
+                self.signer = self.free_signer_list_glob.pop(0)
+                self.debug(f'Signer is selected: {str(self.signer.public_key())}')
+                return self.signer
+        raise RuntimeError('No signers!')
+
+    def free_signer(self):
+        if not self.signer:
+            return
+        with self.signer_list_len_glob.get_lock():
+            self.free_signer_list_glob.append(self.signer)
 
 
 class SolanaTxError(Exception):
@@ -215,18 +266,35 @@ def EthMeta(pubkey, is_writable) -> AccountMeta:
 
 @logged_group("neon.Proxy")
 class NeonTxSender:
-    def __init__(self, db: IndexerDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
+    def __init__(self, db: IndexerDB, client: SolanaClient,
+                 signer_list: SignerList, whitelist: AccountWhitelist,
+                 eth_tx: EthTx, steps: int):
         self._perm_accounts_id = None
         self._db = db
-        self.solana = solana
-        self.eth_tx = eth_tx
 
         self._neon_sign = eth_tx.hash_signed().hex()
+        slot = SolanaInteractor.get_recent_blockslot(client)
         self._pending_tx = NeonPendingTxInfo(neon_sign=self._neon_sign, slot=0, pid=os.getpid())
-        self.pending_tx_into_db()
+        self.pending_tx_into_db(slot)
+
+        self.eth_tx = eth_tx
+        self.tx_sender = eth_tx.sender()
+        self.deployed_contract = eth_tx.contract()
+
+        signer = signer_list.get_signer()
+        self.solana = SolanaInteractor(signer, client)
+        whitelist.set_payer(signer)
+
+        if not whitelist.has_client_permission(self.tx_sender):
+            self.warning(f'Sender account {self.tx_sender} is not allowed to execute transactions')
+            raise Exception(f'Sender account {self.tx_sender} is not allowed to execute transactions')
+
+        if (self.deployed_contract is not None) and (not whitelist.has_contract_permission(self.deployed_contract)):
+            self.warning(f'Contract account {self.deployed_contract} is not allowed for deployment')
+            raise Exception(f'Contract account {self.deployed_contract} is not allowed for deployment')
 
         self.steps = steps
-        self.operator_key = self.solana.get_operator_key()
+        self.operator_key = signer.public_key()
         self.builder = NeonIxBuilder(self.operator_key)
         self.steps_emulated = 0
         self.create_account_tx = Transaction()
@@ -235,22 +303,13 @@ class NeonTxSender:
         self._resize_contract_list = []
         self._create_account_list = []
         self._eth_meta_list = []
-        self._storage_account = None
-        self._holder_account = None
 
     def execute(self) -> NeonTxResultInfo:
-        try:
-            self._prepare_execution()
-            return self._execute()
-        finally:
-            self._free_perm_accounts()
-
-    def _execute(self) -> NeonTxResultInfo:
+        self._prepare_execution()
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy]:
             try:
                 if not Strategy.IS_SIMPLE:
                     self._init_perm_accounts()
-                    self.builder.init_iterative(self._storage_account, self._holder_account, self._perm_accounts_id)
 
                 strategy = Strategy(self)
                 if not strategy.is_valid:
@@ -267,7 +326,7 @@ class NeonTxSender:
         self.error(f'No strategy to execute the Neon transaction: {self.eth_tx}')
         raise RuntimeError('No strategy to execute the Neon transaction')
 
-    def pending_tx_into_db(self, slot=None):
+    def pending_tx_into_db(self, slot: int):
         """
         Transaction sender doesn't remove pending transactions!!!
         This protects the neon transaction execution from race conditions, when user tries to send transaction
@@ -275,9 +334,7 @@ class NeonTxSender:
 
         Indexer will purge old pending transactions after finalizing slot.
         """
-        if not slot:
-            slot = self.solana.get_recent_blockslot()
-        if (self._pending_tx.slot - slot) > 10:
+        if (slot - self._pending_tx.slot) > 10:
             self._pending_tx.slot = slot
             self._db.pending_transaction(self._pending_tx)
 
@@ -303,8 +360,7 @@ class NeonTxSender:
         self.builder.init_eth_trx(self.eth_tx, self._eth_meta_list, self._caller_token)
 
     def _call_emulated(self):
-        self.debug(f'sender address: {self.eth_tx.sender()}')
-        self.deployed_contract = self.eth_tx.contract()
+        self.debug(f'sender address: {self.tx_sender}')
 
         if self.deployed_contract:
             dst = 'deploy'
@@ -314,7 +370,7 @@ class NeonTxSender:
             self.debug(f'destination address 0x{dst}')
 
         self._emulator_json = call_emulated(
-            dst, self.eth_tx.sender(), self.eth_tx.callData.hex(), hex(self.eth_tx.value))
+            dst, self.tx_sender, self.eth_tx.callData.hex(), hex(self.eth_tx.value))
         self.debug(f'emulator returns: {json.dumps(self._emulator_json, indent=3)}')
 
         self.steps_emulated = self._emulator_json['steps_executed']
@@ -323,7 +379,7 @@ class NeonTxSender:
         self._eth_meta_list.append(AccountMeta(pubkey=pubkey, is_signer=is_signer, is_writable=is_writable))
 
     def _parse_accounts_list(self):
-        src_address = self.eth_tx.sender()
+        src_address = self.tx_sender
         dst_address = (self.deployed_contract or self.eth_tx.toAddress.hex())
         src_meta_list = []
         dst_meta_list = []
@@ -380,29 +436,22 @@ class NeonTxSender:
         self.account_txs_name = ' + '.join(set([s.NAME for s in all_stages]))
 
     def _init_perm_accounts(self):
-        while self._perm_accounts_id is None:
-            with perm_account_lock_glob:
-                key = str(self.operator_key)
-                if key not in free_perm_account_dict_glob:
-                    free_perm_account_dict_glob.setdefault(key, manager.list())
+        if self._perm_accounts_id is not None:
+            return
 
-                free_list = free_perm_account_dict_glob[key]
-                if len(free_list):
-                    free_id = free_list.pop(0)
-                else:
-                    free_id = new_perm_account_dict_glob.setdefault(key, 0)
-                    new_perm_account_dict_glob[key] += 1
+        free_id = 0
+        self.debug(f"TO LOCK RESOURCES {free_id} for {self.operator_key}")
+        account_id = free_id.to_bytes(math.ceil(free_id.bit_length() / 8), 'big')
 
-            self.debug(f"TRY TO LOCK RESOURCES {free_id} for {self.operator_key}")
-            account_id = free_id.to_bytes(math.ceil(free_id.bit_length() / 8), 'big')
+        seed_list = [prefix + account_id for prefix in [b"storage", b"holder"]]
+        try:
+            storage_account, holder_account = self._create_perm_accounts(seed_list)
+            self._perm_accounts_id = free_id
 
-            seed_list = [prefix + account_id for prefix in [b"storage", b"holder"]]
-            try:
-                self._storage_account, self._holder_account = self._create_perm_accounts(seed_list)
-                self._perm_accounts_id = free_id
-            except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.warning(f"Account is locked err({err}) id({free_id}) owner({self.operator_key}): {err_tb}")
+            self.builder.init_iterative(storage_account, holder_account, free_id)
+        except Exception as err:
+            err_tb = "".join(traceback.format_tb(err.__traceback__))
+            self.warning(f"Account is locked err({err}) id({free_id}) owner({self.operator_key}): {err_tb}")
 
     def _create_perm_accounts(self, seed_list):
         tx = Transaction()
@@ -425,17 +474,6 @@ class NeonTxSender:
         if len(tx.instructions):
             SolTxListSender(self, [tx], NeonCreatePermAccount.NAME).send()
         return account_list
-
-    def _free_perm_accounts(self):
-        if self._perm_accounts_id is None:
-            return
-
-        self.debug(f"FREE RESOURCES {self._perm_accounts_id} for {self.operator_key}")
-        with perm_account_lock_glob:
-            key = str(self.operator_key)
-            free_perm_account_dict_glob[key].append(self._perm_accounts_id)
-
-        self._perm_accounts_id = None
 
     def build_account_txs(self, skip_create_accounts=False) -> [Transaction]:
         tx_list = [s.tx for s in self._resize_contract_list]
