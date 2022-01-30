@@ -14,7 +14,7 @@ if [ "$CONFIG" == "ci" ]; then
   [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=10
   [[ -z "$RETRY_ON_FAIL"                ]] && export RETRY_ON_FAIL=10
   [[ -z "$FINALIZED"                    ]] && export FINALIZED="finalized"
-  [[ -z "$START_SLOT"                   ]] && export START_SLOT=0
+  [[ -z "$START_SLOT"                   ]] && export START_SLOT="LATEST"
   [[ -z "$CONFIRM_TIMEOUT"              ]] && export CONFIRM_TIMEOUT=1
   [[ -z "$PERM_ACCOUNT_LIMIT"           ]] && export PERM_ACCOUNT_LIMIT=2
 elif [ "$CONFIG" == "local" ]; then
