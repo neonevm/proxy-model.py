@@ -7,6 +7,7 @@ import time
 from solana.blockhash import Blockhash
 from solana.publickey import PublicKey
 from solana.rpc.api import Client as SolanaClient
+from solana.account import Account as SolanaAccount
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import RPCResponse
 from solana.transaction import Transaction
@@ -27,16 +28,14 @@ class AccountInfo(NamedTuple):
     owner: PublicKey
 
 
-class SendResult:
-    def __init__(self, response):
-        self.error = response.get('error')
-        self.result = response.get('result')
+class SendResult(NamedTuple):
+    error: dict
+    result: dict
 
 
 @logged_group("neon.Proxy")
 class SolanaInteractor:
-    def __init__(self, signer, client: SolanaClient) -> None:
-        self.signer = signer
+    def __init__(self, client: SolanaClient) -> None:
         self.client = client
         self._fuzzing_hash_cycle = False
 
@@ -141,9 +140,8 @@ class SolanaInteractor:
             raise ValueError(f"Wrong data length for account data {account}")
         return data
 
-    @staticmethod
-    def get_recent_blockslot(client) -> int:
-        blockhash_resp = client.get_recent_blockhash(commitment=Confirmed)
+    def get_recent_blockslot(self) -> int:
+        blockhash_resp = self.client.get_recent_blockhash(commitment=Confirmed)
         if not blockhash_resp["result"]:
             raise RuntimeError("failed to get recent blockhash")
         return blockhash_resp['result']['context']['slot']
@@ -155,10 +153,7 @@ class SolanaInteractor:
         blockhash = blockhash_resp["result"]["value"]["blockhash"]
         return Blockhash(blockhash)
 
-    def sign_transaction(self, tx: Transaction):
-        tx.sign(self.signer)
-
-    def _fuzzing_transactions(self, tx_list, tx_opts, request_list):
+    def _fuzzing_transactions(self, signer: SolanaAccount, tx_list, tx_opts, request_list):
         """
         Make each second transaction a bad one.
         This is used to test a transaction sending on a live cluster (testnet/devnet).
@@ -171,7 +166,7 @@ class SolanaInteractor:
             return request_list
 
         # get bad block slot for sent transactions
-        slot = self.get_recent_blockslot(self.client)
+        slot = self.get_recent_blockslot()
         # blockhash = '4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4'
         block_opts = {
             "encoding": "json",
@@ -188,14 +183,14 @@ class SolanaInteractor:
             if idx % 2 == 1:
                 continue
             tx.recent_blockhash = fuzzing_blockhash
-            self.sign_transaction(tx)
+            tx.sign(signer)
             base64_tx = base64.b64encode(tx.serialize()).decode('utf-8')
             request_list[idx] = (base64_tx, tx_opts)
         return request_list
 
-    def _send_multiple_transactions_unconfirmed(self, tx_list: [Transaction], skip_preflight=False) -> [str]:
+    def _send_multiple_transactions_unconfirmed(self, signer: SolanaAccount, tx_list: [Transaction]) -> [str]:
         opts = {
-            "skipPreflight": skip_preflight,
+            "skipPreflight": False,
             "encoding": "base64",
             "preflightCommitment": "confirmed"
         }
@@ -210,16 +205,16 @@ class SolanaInteractor:
                 tx.recent_blockhash = blockhash
                 tx.signatures.clear()
             if not tx.signatures:
-                self.sign_transaction(tx)
+                tx.sign(signer)
             base64_tx = base64.b64encode(tx.serialize()).decode('utf-8')
             request_list.append((base64_tx, opts))
 
-        request_list = self._fuzzing_transactions(tx_list, opts, request_list)
+        request_list = self._fuzzing_transactions(signer, tx_list, opts, request_list)
         response_list = self._send_rpc_batch_request('sendTransaction', request_list)
-        return [SendResult(r) for r in response_list]
+        return [SendResult(result=r.get('result'), error=r.get('error')) for r in response_list]
 
-    def send_multiple_transactions(self, tx_list, eth_tx, reason, waiter=None, skip_preflight=False) -> [{}]:
-        send_result_list = self._send_multiple_transactions_unconfirmed(tx_list, skip_preflight=skip_preflight)
+    def send_multiple_transactions(self, signer, tx_list, eth_tx, reason, waiter=None) -> [{}]:
+        send_result_list = self._send_multiple_transactions_unconfirmed(signer, tx_list)
         # Filter good transactions and wait the confirmations for them
         sign_list = [s.result for s in send_result_list if s.result]
         self._confirm_multiple_transactions(sign_list, waiter)
@@ -238,9 +233,6 @@ class SolanaInteractor:
                 update_transaction_cost(receipt, eth_tx, reason)
 
         return receipt_list
-
-    def send_transaction(self, trx, eth_tx, reason=None):
-        return self.send_multiple_transactions([trx], eth_tx, reason)[0]
 
     # Do not rename this function! This name used in CI measurements (see function `cleanup_docker` in
     # .buildkite/steps/deploy-test.sh)
@@ -266,7 +258,8 @@ class SolanaInteractor:
 
         elapsed_time = 0
         while elapsed_time < CONFIRM_TIMEOUT:
-            time.sleep(CONFIRMATION_CHECK_DELAY)
+            if elapsed_time > 0:
+                time.sleep(CONFIRMATION_CHECK_DELAY)
             elapsed_time += CONFIRMATION_CHECK_DELAY
 
             response = self.client.get_signature_statuses(sign_list)

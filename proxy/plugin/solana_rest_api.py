@@ -29,7 +29,8 @@ from typing import List, Tuple
 
 from .solana_rest_api_tools import getAccountInfo, neon_config_load, \
     get_token_balance_or_airdrop, estimate_gas
-from ..common_neon.transaction_sender import NeonTxSender, SignerList
+from ..common_neon.transaction_sender import NeonTxSender, OperatorResourceList
+from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.address import EthereumAddress
 from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
@@ -371,7 +372,8 @@ class EthereumModel:
                                     ]
                                 })
         try:
-            self._call_signed(trx)
+            tx_sender = NeonTxSender(self.db, self.client, self.account_whitelist, trx, steps=500)
+            tx_sender.execute()
             return eth_signature
 
         except PendingTxError:
@@ -386,16 +388,6 @@ class EthereumModel:
         except Exception as err:
             self.error("eth_sendRawTransaction type(err):%s, Exception:%s", type(err), err)
             raise
-
-    def _call_signed(self, eth_tx):
-        signer_list = SignerList()
-        try:
-            tx_sender = NeonTxSender(self.db, self.client, signer_list, self.account_whitelist, eth_tx, steps=500)
-            tx_sender.execute()
-        finally:
-            signer_list.free_signer()
-            self.account_whitelist.clear_payer()
-
 
     def _log_transaction_error(self, error: SolanaTxError):
         err_msg = json.dumps(error.result, indent=3)
