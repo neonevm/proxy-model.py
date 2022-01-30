@@ -59,7 +59,8 @@ function cleanup_docker {
 }
 trap cleanup_docker EXIT
 
-docker-compose -f proxy/docker-compose-test.yml down --rmi 'all'
+echo "\nCleanup docker-compose..."
+docker-compose -f proxy/docker-compose-test.yml down
 if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
   echo "docker-compose failed to start"
   exit 1;
