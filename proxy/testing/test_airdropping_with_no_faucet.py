@@ -37,6 +37,7 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
         cls._solana_client = SolanaClient(solana_url)
 
+    @unittest.skip("a.i.")
     def test_airdrop_on_get_balance(self):
         account: LocalAccount = eth_account.account.Account.create()
         request_airdrop(account.address)
