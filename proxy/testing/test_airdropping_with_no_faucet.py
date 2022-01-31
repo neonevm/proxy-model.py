@@ -12,6 +12,9 @@ from solana.rpc.api import Client as SolanaClient
 from ..plugin.solana_rest_api_tools import get_token_balance_or_zero
 from .testing_helpers import SolidityContractDeployer
 
+from solcx import install_solc
+install_solc(version='0.7.6')
+
 def request_airdrop(address):
     url = 'http://faucet:3333/request_neon'
     data = '{"wallet": "' + address + '", "amount": 5}'
