@@ -17,6 +17,7 @@ class AccountWhitelist:
     def __init__(self, solana: SolanaClient, permission_update_int: int):
         self.info(f'GET_WHITE_LIST_BALANCE_MAX_RETRIES={GET_WHITE_LIST_BALANCE_MAX_RETRIES}')
         self.info(f'GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S={GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S} seconds')
+        self.info(f'permission_update_int={permission_update_int}')
 
         self.solana = solana
         self.account_cache = {}
