@@ -1,13 +1,12 @@
 import unittest
 import os
-import requests
 
 import eth_utils
 from web3 import Web3
 from solcx import install_solc
+from .testing_helpers import request_airdrop
 
-# install_solc(version='latest')
-install_solc(version='0.7.0')
+install_solc(version='0.7.6')
 from solcx import compile_source
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
@@ -81,16 +80,6 @@ contract test_185 {
 
 }
 '''
-
-
-def request_airdrop(address):
-    url = 'http://faucet:3333/request_neon'
-    data = '{"wallet": "' + address + '", "amount": 5}'
-    r = requests.post(url, data=data)
-    if not r.ok:
-        print()
-        print('Bad response:', r)
-    assert(r.ok)
 
 
 class Test_eth_sendRawTransaction(unittest.TestCase):
