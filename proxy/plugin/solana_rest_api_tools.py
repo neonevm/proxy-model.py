@@ -123,7 +123,7 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, con
         'gas': 999999999,
         'gasPrice': 1_000_000_000,
         'nonce': nonce,
-        'data': data.hex(),
+        'data': data.hex() if data else "",
         'chainId': chain_id
     }
 

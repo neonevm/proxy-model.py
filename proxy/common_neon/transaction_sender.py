@@ -277,7 +277,7 @@ class TransactionSender:
                 errStr = str(err)
                 if "Program failed to complete" in errStr or "Computational budget exceeded" in errStr:
                     logger.debug("Program exceeded instructions")
-                    if self.steps_emulated / self.steps > self.steps / 2:
+                    if self.transaction_emulator.steps_emulated / self.steps > self.steps / 2:
                         """
                             An iterative call from instruction data can be performed in batches only
                             with a change in the number of steps in the iteration.
