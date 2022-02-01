@@ -253,7 +253,7 @@ class ReceiptsParserState:
             yield tx
 
     def add_account_to_db(self, neon_account: str, pda_account: str, code_account: str, slot: int):
-        self._db.fill_account_info(neon_account, pda_account, code_account, slot)
+        self._db.fill_account_info_by_indexer(neon_account, pda_account, code_account, slot)
 
 
 @logged_group("neon.Indexer")
@@ -462,10 +462,10 @@ class CreateAccountIxDecoder(DummyIxDecoder):
         if check_error(self.ix.tx):
             return self._decoding_skip("Ignore failed create account")
 
-        if len(self.ix.ix_data) < 61:
-            return self._decoding_skip('not enough data to get the Neon account')
+        if len(self.ix.ix_data) < 41:
+            return self._decoding_skip(f'not enough data to get the Neon account {len(self.ix.ix_data)}')
 
-        neon_account = "0x" + self.ix.ix_data[20+8+8+4:60].hex()
+        neon_account = "0x" + self.ix.ix_data[8+8+4:][:20].hex()
         pda_account = self.ix.get_account(1)
         code_account = self.ix.get_account(3)
         if code_account == str(SYS_PROGRAM_ID) or code_account == '':

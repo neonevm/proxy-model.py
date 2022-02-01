@@ -8,14 +8,14 @@ try:
     from blocks_db import SolanaBlocksDB, SolanaBlockDBInfo
     from transactions_db import NeonTxsDB, NeonTxDBInfo
     from sql_dict import SQLDict
-    from utils import get_code_from_account
+    from utils import get_code_from_account, get_accounts_by_neon_address
 except ImportError:
     from .utils import LogDB, NeonTxInfo, NeonTxResultInfo, SolanaIxSignInfo, FINALIZED
     from .accounts_db import NeonAccountDB, NeonAccountInfo
     from .blocks_db import SolanaBlocksDB, SolanaBlockDBInfo
     from .transactions_db import NeonTxsDB, NeonTxDBInfo
     from .sql_dict import SQLDict
-    from .utils import get_code_from_account
+    from .utils import get_code_from_account, get_accounts_by_neon_address
 
 
 @logged_group("neon.Indexer")
@@ -70,16 +70,24 @@ class IndexerDB:
         return block
 
     def _fill_account_data_from_net(self, account: NeonAccountInfo):
+        got_changes = False
+        if not account.pda_account:
+            pda_account, code_account = get_accounts_by_neon_address(self._client, account.neon_account)
+            if pda_account:
+                account.pda_account = pda_account
+                account.code_account = code_account
+                got_changes = True
         if account.code_account:
             code = get_code_from_account(self._client, account.code_account)
             if code:
                 account.code = code
-                self._account_db.set_acc(
-                    account.neon_account,
-                    account.pda_account,
-                    account.code_account,
-                    account.slot,
-                    account.code)
+                got_changes = True
+        if got_changes:
+            self._account_db.set_acc_by_request(
+                account.neon_account,
+                account.pda_account,
+                account.code_account,
+                account.code)
         return account
 
     def get_block_by_slot(self, slot) -> SolanaBlockDBInfo:
@@ -139,16 +147,17 @@ class IndexerDB:
 
     def get_contract_code(self, address) -> str:
         account = self._account_db.get_account_info(address)
-        if not account:
-            return '0x'
+        if not account.neon_account:
+            account.neon_account = address
+            account = self._fill_account_data_from_net(account)
         if account.code_account and not account.code:
-            self._fill_account_data_from_net(account)
+            account = self._fill_account_data_from_net(account)
         if account.code:
             return account.code
         return '0x'
 
-    def fill_account_info(self, neon_account: str, pda_account: str, code_account: str, slot: int):
-        self._account_db.set_acc(neon_account, pda_account, code_account, slot)
+    def fill_account_info_by_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int):
+        self._account_db.set_acc_indexer(neon_account, pda_account, code_account, slot)
 
     def del_not_finalized(self, from_slot: int, to_slot: int):
         for d in [self._logs_db, self._blocks_db, self._txs_db]:

@@ -1,9 +1,8 @@
 from .utils import BaseDB, str_fmt_object
-from .pg_common import decode
 
 
 class NeonAccountInfo:
-    def __init__(self, neon_account: str, pda_account: str, code_account: str, slot: int, code: str = None):
+    def __init__(self, neon_account: str = None, pda_account: str = None, code_account: str = None, slot: int = 0, code: str = None):
         self.neon_account = neon_account
         self.pda_account = pda_account
         self.code_account = code_account
@@ -23,40 +22,56 @@ class NeonAccountDB(BaseDB):
         return f"""
             CREATE TABLE IF NOT EXISTS {self._table_name} (
                 neon_account CHAR(42),
-                pda_account CHAR(50) UNIQUE,
-                code_account CHAR(50),
+                pda_account TEXT,
+                code_account TEXT,
                 slot BIGINT,
-                code TEXT
+                code TEXT,
+
+                UNIQUE(pda_account, code_account)
             );"""
 
-    def set_acc(self, neon_account: str, pda_account: str, code_account: str, slot: int, code: str = None):
+    def set_acc_by_request(self, neon_account: str, pda_account: str, code_account: str, code: str):
+        self.debug(f"add account info {neon_account}, {pda_account}, {code_account}, {code}")
         with self._conn.cursor() as cursor:
             cursor.execute(f'''
                 INSERT INTO {self._table_name}(neon_account, pda_account, code_account, slot, code)
                 VALUES(%s, %s, %s, %s, %s)
-                ON CONFLICT (pda_account) DO UPDATE
+                ON CONFLICT (pda_account, code_account) DO UPDATE
                 SET
-                    code_account=EXCLUDED.code_account,
-                    slot=EXCLUDED.slot,
                     code=EXCLUDED.code
-                WHERE
-                    ({self._table_name}.slot<EXCLUDED.slot)
-                    OR
-                    ({self._table_name}.code=NULL AND EXCLUDED.code<>NULL)
-                ;
+                RETURNING *;
                 ''',
-                (neon_account, pda_account, code_account, slot, code))
+                (neon_account, pda_account, code_account, 0, code))
+            ret = cursor.fetchone()
+            self.debug(f"set_acc_by_request {ret}")
+
+    def set_acc_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int):
+        self.debug(f"add account info {neon_account}, {pda_account}, {code_account}, {slot}")
+        with self._conn.cursor() as cursor:
+            cursor.execute(f'''
+                INSERT INTO {self._table_name}(neon_account, pda_account, code_account, slot)
+                VALUES(%s, %s, %s, %s)
+                ON CONFLICT (pda_account, code_account) DO UPDATE
+                SET
+                    slot=EXCLUDED.slot
+                RETURNING *;
+                ''',
+                (neon_account, pda_account, code_account, slot))
+            ret = cursor.fetchone()
+            self.debug(f"set_acc_indexer {ret}")
 
     def _acc_from_value(self, value) -> NeonAccountInfo:
+        self.debug(f"accounts db returned {value}")
+
         if not value:
-            return None
+            return NeonAccountInfo()
 
         return NeonAccountInfo(
             neon_account=value[0],
             pda_account=value[1],
             code_account=value[2],
             slot=value[3],
-            code=decode(value[4])
+            code=value[4]
         )
 
     def get_account_info(self, account) -> NeonAccountInfo:

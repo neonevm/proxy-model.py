@@ -20,9 +20,11 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from logged_groups import logged_group
 
+from ..common_neon.address import ether2program
 from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM
-from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT
+from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, ACCOUNT_INFO_LAYOUT
 from ..common_neon.eth_proto import Trx as EthTx
+from ..common_neon.utils import get_from_dict
 from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID
 
 
@@ -258,20 +260,44 @@ def get_accounts_from_storage(client, storage_account, *, logger):
         return None
 
 
-def get_code_from_account(client, address):
-    code_account_info = client.get_account_info(address)['result']['value']
+@logged_group("neon.Indexer")
+def get_accounts_by_neon_address(client: Client, neon_address, *, logger):
+    pda_address, _nonce = ether2program(neon_address)
+    reciept = client.get_account_info(pda_address, commitment=Confirmed)
+    account_info = get_from_dict(reciept, 'result', 'value')
+    if account_info is None:
+        logger.debug(f"account_info is None")
+        logger.debug(f"pda_address({pda_address})")
+        logger.debug(f"reciept({reciept})")
+        return None, None
+    data = base64.b64decode(account_info['data'][0])
+    if len(data) < ACCOUNT_INFO_LAYOUT.sizeof():
+        logger.debug(f"{len(data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
+        return None, None
+    account = ACCOUNT_INFO_LAYOUT.parse(data)
+    code_account = None
+    if account.code_account != [0]*32:
+        code_account = str(PublicKey(account.code_account))
+    return pda_address, code_account
+
+
+@logged_group("neon.Indexer")
+def get_code_from_account(client: Client, address, *, logger):
+    reciept = client.get_account_info(address, commitment=Confirmed)
+    code_account_info = get_from_dict(reciept, 'result', 'value')
     if code_account_info is None:
+        logger.debug(f"code_account_info is None")
+        logger.debug(f"code_address({address})")
+        logger.debug(f"reciept({reciept})")
         return None
     data = base64.b64decode(code_account_info['data'][0])
-    if len(data) < 26:
+    if len(data) < CODE_ACCOUNT_INFO_LAYOUT.sizeof():
         return None
-    _tag = data[0]
-    _public_key = data[1:21]
-    size_data = data[21:25]
-    code_size = int.from_bytes(size_data, "little")
-    if len(data) < 25 + code_size:
+    storage = CODE_ACCOUNT_INFO_LAYOUT.parse(data)
+    offset = CODE_ACCOUNT_INFO_LAYOUT.sizeof()
+    if len(data) < offset + storage.code_size:
         return None
-    return '0x' + data[25:25+code_size].hex()
+    return '0x' + data[offset:][:storage.code_size].hex()
 
 
 @logged_group("neon.Indexer")
