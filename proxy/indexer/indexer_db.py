@@ -29,6 +29,7 @@ class IndexerDB:
         self._blocks_db = SolanaBlocksDB()
         self._txs_db = NeonTxsDB()
         self._pending_txs_db = NeonPendingTxsDB()
+        self._account_db = NeonAccountDB()
         self._client = None
 
         self._constants = SQLDict(tablename="constants")
