@@ -1,9 +1,14 @@
+from decimal import Decimal
+import json
 import os
 import subprocess
 from logged_groups import logged_group, LogMng
 from solana.publickey import PublicKey
+from solana.account import Account as SolanaAccount
+from typing import Optional
 
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
+PP_SOLANA_URL = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
 EVM_LOADER_ID = os.environ.get("EVM_LOADER")
 neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
 
@@ -11,7 +16,11 @@ NEW_USER_AIRDROP_AMOUNT = int(os.environ.get("NEW_USER_AIRDROP_AMOUNT", "0"))
 CONFIRMATION_CHECK_DELAY = float(os.environ.get("NEON_CONFIRMATION_CHECK_DELAY", "0.1"))
 CONTINUE_COUNT_FACTOR = int(os.environ.get("CONTINUE_COUNT_FACTOR", "3"))
 TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFIG", "3600"))
-MINIMAL_GAS_PRICE=int(os.environ.get("MINIMAL_GAS_PRICE", 1))*10**9
+
+MINIMAL_GAS_PRICE=os.environ.get("MINIMAL_GAS_PRICE", None)
+if MINIMAL_GAS_PRICE is not None:
+    MINIMAL_GAS_PRICE = int(MINIMAL_GAS_PRICE)*10**9
+
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 LOG_SENDING_SOLANA_TRANSACTION = os.environ.get("LOG_SENDING_SOLANA_TRANSACTION", "NO") == "YES"
 LOG_NEON_CLI_DEBUG = os.environ.get("LOG_NEON_CLI_DEBUG", "NO") == "YES"
@@ -19,6 +28,22 @@ WRITE_TRANSACTION_COST_IN_DB = os.environ.get("WRITE_TRANSACTION_COST_IN_DB", "N
 RETRY_ON_FAIL = int(os.environ.get("RETRY_ON_FAIL", "10"))
 RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION = max(int(os.environ.get("RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION", "1000")), 1)
 FUZZING_BLOCKHASH = os.environ.get("FUZZING_BLOCKHASH", "NO") == "YES"
+CONFIRM_TIMEOUT = max(int(os.environ.get("CONFIRM_TIMEOUT", 10)), 10)
+PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
+DEVNET_HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn"
+HISTORY_START = [DEVNET_HISTORY_START]
+START_SLOT = os.environ.get('START_SLOT', 0)
+FINALIZED = os.environ.get('FINALIZED', 'finalized')
+CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
+ACCOUNT_PERMISSION_UPDATE_INT = int(os.environ.get("ACCOUNT_PERMISSION_UPDATE_INT", 60 * 5))
+PERM_ACCOUNT_LIMIT = max(int(os.environ.get("PERM_ACCOUNT_LIMIT", 2)), 2)
+OPERATOR_FEE = Decimal(os.environ.get("OPERATOR_FEE", "0.1"))
+NEON_PRICE_USD = Decimal('0.25')
+SOL_PRICE_UPDATE_INTERVAL = int(os.environ.get("SOL_PRICE_UPDATE_INTERVAL", 60))
+GET_SOL_PRICE_MAX_RETRIES = int(os.environ.get("GET_SOL_PRICE_MAX_RETRIES", 3))
+GET_SOL_PRICE_RETRY_INTERVAL = int(os.environ.get("GET_SOL_PRICE_RETRY_INTERVAL", 1))
+GET_WHITE_LIST_BALANCE_MAX_RETRIES = int(os.environ.get("GET_WHITE_LIST_BALANCE_MAX_RETRIES", 3))
+GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S = int(os.environ.get("GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S", 1))
 
 @logged_group("neon.Proxy")
 class solana_cli:
@@ -35,10 +60,51 @@ class solana_cli:
 
 
 @logged_group("neon.Proxy")
+def get_solana_accounts(*, logger) -> [SolanaAccount]:
+    def read_sol_account(name) -> Optional[SolanaAccount]:
+        if not os.path.isfile(name):
+            return None
+
+        with open(name.strip(), mode='r') as d:
+            pkey = (d.read())
+            num_list = [int(v) for v in pkey.strip("[] \n").split(',')]
+            value_list = bytes(num_list[0:32])
+            return SolanaAccount(value_list)
+
+    res = solana_cli().call('config', 'get')
+    substr = "Keypair Path: "
+    path = ""
+    for line in res.splitlines():
+        if line.startswith(substr):
+            path = line[len(substr):].strip()
+    if path == "":
+        raise Exception("cannot get keypair path")
+
+    path = path.strip()
+
+    signer_list = []
+    (file_name, file_ext) = os.path.splitext(path)
+    i = 0
+    while True:
+        i += 1
+        full_path = file_name + (str(i) if i > 1 else '') + file_ext
+        signer = read_sol_account(full_path)
+        if not signer:
+            break
+        signer_list.append(signer)
+        logger.debug(f'Add signer: {signer.public_key()}')
+
+    if not len(signer_list):
+        raise Exception("No keypairs")
+
+    return signer_list
+
+
+@logged_group("neon.Proxy")
 class neon_cli:
     def call(self, *args):
         try:
-            ctx = str(LogMng.get_logging_context())
+            ctx = json.dumps(LogMng.get_logging_context())
             cmd = ["neon-cli",
                    "--commitment=recent",
                    "--url", SOLANA_URL,

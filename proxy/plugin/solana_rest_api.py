@@ -15,6 +15,7 @@ import traceback
 import unittest
 import time
 import hashlib
+import multiprocessing
 
 from logged_groups import logged_group, logging_context
 
@@ -23,22 +24,23 @@ from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-from solana.account import Account as sol_Account
 from solana.rpc.api import Client as SolanaClient
-from typing import List, Tuple, Optional
-from web3 import Web3
+from typing import List, Tuple
 
-from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, \
+from .solana_rest_api_tools import getAccountInfo, neon_config_load, \
     get_token_balance_or_airdrop, estimate_gas
+from ..common_neon.transaction_sender import NeonTxSender, OperatorResourceList
+from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.address import EthereumAddress
 from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
-from ..core.acceptor.pool import proxy_id_glob
-from ..environment import neon_cli, solana_cli, SOLANA_URL, MINIMAL_GAS_PRICE
-from ..indexer.indexer_db import IndexerDB
-from ..indexer.utils import NeonTxInfo
+from ..environment import SOLANA_URL, MINIMAL_GAS_PRICE, PP_SOLANA_URL, ACCOUNT_PERMISSION_UPDATE_INT
+from ..environment import neon_cli, get_solana_accounts
+from ..indexer.indexer_db import IndexerDB, PendingTxError
+from .gas_price_calculator import GasPriceCalculator
+from ..common_neon.account_whitelist import AccountWhitelist
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -49,39 +51,27 @@ NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 @logged_group("neon.Proxy")
 class EthereumModel:
+    proxy_id_glob = multiprocessing.Value('i', 0)
+
     def __init__(self):
-        self.signer = self.get_solana_account()
         self.client = SolanaClient(SOLANA_URL)
+        self.db = IndexerDB()
+        self.db.set_client(self.client)
 
-        self.db = IndexerDB(self.client)
+        if PP_SOLANA_URL == SOLANA_URL:
+            self.gas_price_calculator = GasPriceCalculator(self.client)
+        else:
+            self.gas_price_calculator = GasPriceCalculator(SolanaClient(PP_SOLANA_URL))
 
-        with proxy_id_glob.get_lock():
-            self.proxy_id = proxy_id_glob.value
-            proxy_id_glob.value += 1
-        self.debug("worker id {}".format(self.proxy_id))
+        with self.proxy_id_glob.get_lock():
+            self.proxy_id = self.proxy_id_glob.value
+            self.proxy_id_glob.value += 1
+
+        self.debug(f"Worker id {self.proxy_id}")
+
+        self.account_whitelist = AccountWhitelist(self.client, ACCOUNT_PERMISSION_UPDATE_INT)
 
         neon_config_load(self)
-
-
-    @staticmethod
-    def get_solana_account() -> Optional[sol_Account]:
-        solana_account: Optional[sol_Account] = None
-        res = solana_cli().call('config', 'get')
-        substr = "Keypair Path: "
-        path = ""
-        for line in res.splitlines():
-            if line.startswith(substr):
-                path = line[len(substr):].strip()
-        if path == "":
-            raise Exception("cannot get keypair path")
-
-        with open(path.strip(), mode='r') as file:
-            pk = (file.read())
-            nums = list(map(int, pk.strip("[] \n").split(',')))
-            nums = nums[0:32]
-            values = bytes(nums)
-            solana_account = sol_Account(values)
-        return solana_account
 
     def neon_proxy_version(self):
         return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
@@ -104,7 +94,7 @@ class EthereumModel:
         return self.neon_config_dict['NEON_CHAIN_ID']
 
     def eth_gasPrice(self):
-        return hex(MINIMAL_GAS_PRICE)
+        return hex(self.gas_price_calculator.get_min_gas_price())
 
     def eth_estimateGas(self, param):
         try:
@@ -287,7 +277,7 @@ class EthereumModel:
             acc_info = getAccountInfo(self.client, EthereumAddress(account))
             return hex(int.from_bytes(acc_info.trx_count, 'little'))
         except Exception as err:
-            self.error("eth_getTransactionCount: Can't get account info: %s", err)
+            self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
 
     def _getTransactionReceipt(self, tx):
@@ -366,12 +356,13 @@ class EthereumModel:
         self.debug('eth_sendRawTransaction rawTrx=%s', rawTrx)
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug("%s", json.dumps(trx.as_dict(), cls=JsonEncoder, indent=3))
-        if trx.gasPrice < MINIMAL_GAS_PRICE:
-            raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, MINIMAL_GAS_PRICE))
-
-        eth_signature = '0x' + bytes(Web3.keccak(bytes.fromhex(rawTrx[2:]))).hex()
+        min_gas_price = self.gas_price_calculator.get_min_gas_price()
+        if trx.gasPrice < min_gas_price:
+            raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, min_gas_price))
 
         sender = trx.sender()
+        eth_signature = '0x' + trx.hash_signed().hex()
+
         self.debug('Eth Sender: %s', sender)
         self.debug('Eth Signature: %s', trx.signature().hex())
         self.debug('Eth Hash: %s', eth_signature)
@@ -390,18 +381,18 @@ class EthereumModel:
                                     ]
                                 })
         try:
-            neon_res = call_signed(self.signer, self.client, trx, steps=500)
-            self.debug('Transaction signature: %s %s', neon_res.sol_sign, eth_signature)
-            neon_tx = NeonTxInfo()
-            neon_tx.init_from_eth_tx(trx)
-            self.db.submit_transaction(neon_tx, neon_res, [])
+            tx_sender = NeonTxSender(self.db, self.client, self.account_whitelist, trx, steps=500)
+            tx_sender.execute()
             return eth_signature
 
+        except PendingTxError:
+            self.debug(f'Transaction {eth_signature} is already in pending list')
+            return eth_signature
         except SolanaTxError as err:
             self._log_transaction_error(err)
             raise
         except EthereumError as err:
-            self.error("eth_sendRawTransaction EthereumError:%s", err)
+            self.debug("eth_sendRawTransaction EthereumError: {err}")
             raise
         except Exception as err:
             self.error("eth_sendRawTransaction type(err):%s, Exception:%s", type(err), err)

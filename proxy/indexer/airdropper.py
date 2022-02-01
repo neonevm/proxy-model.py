@@ -2,14 +2,15 @@ from calendar import c
 from solana.publickey import PublicKey
 from proxy.indexer.indexer_base import IndexerBase
 from proxy.indexer.pythnetwork import PythNetworkClient
+from proxy.indexer.utils import BaseDB
 from solana.rpc.api import Client as SolanaClient
 import requests
 import base58
 from datetime import datetime
 from decimal import Decimal
-import psycopg2
 import os
 from logged_groups import logged_group
+from ..environment import NEON_PRICE_USD
 
 try:
     from utils import check_error
@@ -20,77 +21,60 @@ except ImportError:
 
 ACCOUNT_CREATION_PRICE_SOL = Decimal('0.00472692')
 AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
-NEON_PRICE_USD = Decimal('0.25')
-
-POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
-POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
-POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy-pass")
-POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 
 
-class FailedAttempts:
+class FailedAttempts(BaseDB):
     def __init__(self) -> None:
-        self.conn = psycopg2.connect(
-            dbname=POSTGRES_DB,
-            user=POSTGRES_USER,
-            password=POSTGRES_PASSWORD,
-            host=POSTGRES_HOST
-        )
-        self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        cur = self.conn.cursor()
-        cur.execute('''
-        CREATE TABLE IF NOT EXISTS
-        failed_airdrop_attempts (
-            attempt_time    BIGINT,
-            eth_address     TEXT,
-            reason          TEXT
-        );
+        BaseDB.__init__(self)
 
-        CREATE INDEX IF NOT EXISTS failed_attempt_time_idx ON failed_airdrop_attempts (attempt_time);
-        ''')
+    def _create_table_sql(self) -> str:
+        self._table_name = 'failed_airdrop_attempts'
+        return f'''
+            CREATE TABLE IF NOT EXISTS {self._table_name} (
+                attempt_time    BIGINT,
+                eth_address     TEXT,
+                reason          TEXT
+            );
+            CREATE INDEX IF NOT EXISTS failed_attempt_time_idx ON {self._table_name} (attempt_time);
+            '''
 
     def airdrop_failed(self, eth_address, reason):
-        cur = self.conn.cursor()
-        cur.execute(f'''
-        INSERT INTO failed_airdrop_attempts (attempt_time, eth_address, reason)
-        VALUES ({datetime.now().timestamp()}, '{eth_address}', '{reason}')
-        ''')
+        with self._conn.cursor() as cur:
+            cur.execute(f'''
+            INSERT INTO {self._table_name} (attempt_time, eth_address, reason)
+            VALUES ({datetime.now().timestamp()}, '{eth_address}', '{reason}')
+            ''')
 
 
 class AirdropReadySet:
     def __init__(self) -> None:
-        self.conn = psycopg2.connect(
-            dbname=POSTGRES_DB,
-            user=POSTGRES_USER,
-            password=POSTGRES_PASSWORD,
-            host=POSTGRES_HOST
-        )
-        self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        cur = self.conn.cursor()
-        cur.execute('''
-        CREATE TABLE IF NOT EXISTS
-        airdrop_ready (
-            eth_address     TEXT UNIQUE,
-            scheduled_ts    BIGINT,
-            finished_ts     BIGINT,
-            duration        INTEGER,
-            amount_galans   INTEGER
-        )
-        ''')
+        BaseDB.__init__(self)
+
+    def _create_table_sql(self) -> str:
+        self._table_name = 'airdrop_ready'
+        return f'''
+            CREATE TABLE IF NOT EXISTS {self._table_name} (
+                eth_address     TEXT UNIQUE,
+                scheduled_ts    BIGINT,
+                finished_ts     BIGINT,
+                duration        INTEGER,
+                amount_galans   INTEGER
+            )
+            '''
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):
         finished = int(datetime.now().timestamp())
         duration = finished - airdrop_info['scheduled']
-        cur = self.conn.cursor()
-        cur.execute(f'''
-        INSERT INTO airdrop_ready (eth_address, scheduled_ts, finished_ts, duration, amount_galans)
-        VALUES ('{eth_address}', {airdrop_info['scheduled']}, {finished}, {duration}, {airdrop_info['amount']})
-        ''')
+        with self._conn.cursor() as cur:
+            cur.execute(f'''
+            INSERT INTO {self._table_name} (eth_address, scheduled_ts, finished_ts, duration, amount_galans)
+            VALUES ('{eth_address}', {airdrop_info['scheduled']}, {finished}, {duration}, {airdrop_info['amount']})
+            ''')
 
     def is_airdrop_ready(self, eth_address):
-        cur = self.conn.cursor()
-        cur.execute(f"SELECT 1 FROM airdrop_ready WHERE eth_address = '{eth_address}'")
-        return cur.fetchone() is not None
+        with self._conn.cursor() as cur:
+            cur.execute(f"SELECT 1 FROM {self._table_name} WHERE eth_address = '{eth_address}'")
+            return cur.fetchone() is not None
 
 FINALIZED = os.environ.get('FINALIZED', 'finalized')
 
@@ -104,29 +88,13 @@ class Airdropper(IndexerBase):
                  faucet_url = '',
                  wrapper_whitelist = 'ANY',
                  neon_decimals = 9,
-                 start_slot = 0,
                  pp_solana_url = None,
                  max_conf = 0.1): # maximum confidence interval deviation related to price
         self._constants = SQLDict(tablename="constants")
-        if start_slot == 'CONTINUE':
-            self.info('Trying to use latest processed slot from previous run')
-            start_slot = self._constants.get('latest_processed_slot', None)
-            if start_slot is None:
-                raise Exception('START_SLOT set to CONINUE but recent slot number not found in DB')
-        elif start_slot == 'LATEST':
-            self.info('Airdropper will start at latest blockchain slot')
-            client = SolanaClient(solana_url)
-            start_slot = client.get_slot(commitment=FINALIZED)["result"]
-        else:
-            try:
-                start_slot = int(start_slot)
-            except:
-                raise Exception(f'Failed to parse start_slot value: {start_slot}')
 
-        self.info(f'Start slot is {start_slot}')
-
-        IndexerBase.__init__(self, solana_url, evm_loader_id, start_slot)
-        self.latest_processed_slot = start_slot
+        last_known_slot = self._constants.get('latest_processed_slot', None)
+        IndexerBase.__init__(self, solana_url, evm_loader_id, last_known_slot)
+        self.latest_processed_slot = self.last_slot
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -313,8 +281,8 @@ class Airdropper(IndexerBase):
                 continue
             success_addresses.add(eth_address)
             self.airdrop_ready.register_airdrop(eth_address,
-                                                { 
-                                                    'amount': airdrop_galans, 
+                                                {
+                                                    'amount': airdrop_galans,
                                                     'scheduled': sched_info['scheduled']
                                                 })
 
@@ -349,7 +317,6 @@ def run_airdropper(solana_url,
                    faucet_url,
                    wrapper_whitelist = 'ANY',
                    neon_decimals = 9,
-                   start_slot = 0,
                    pp_solana_url = None,
                    max_conf = 0.1, *, logger):
     logger.info(f"""Running indexer with params:
@@ -359,7 +326,6 @@ def run_airdropper(solana_url,
         faucet_url: {faucet_url},
         wrapper_whitelist: {wrapper_whitelist},
         NEON decimals: {neon_decimals},
-        Start slot: {start_slot},
         Price provider solana: {pp_solana_url},
         Max confidence interval: {max_conf}""")
 
@@ -370,7 +336,6 @@ def run_airdropper(solana_url,
                                 faucet_url,
                                 wrapper_whitelist,
                                 neon_decimals,
-                                start_slot,
                                 pp_solana_url,
                                 max_conf)
         airdropper.run()

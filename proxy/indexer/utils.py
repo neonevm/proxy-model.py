@@ -3,9 +3,10 @@ from __future__ import annotations
 import base58
 import base64
 import json
+import multiprocessing
 import psycopg2
 import subprocess
-import os
+import traceback
 
 from eth_utils import big_endian_to_int
 from solana.account import Account
@@ -25,14 +26,13 @@ from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKE
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, ACCOUNT_INFO_LAYOUT
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import get_from_dict
-from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID
-
+from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID, get_solana_accounts
 
 from proxy.indexer.pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
 from proxy.indexer.pg_common import encode, decode
 
 
-FINALIZED = os.environ.get('FINALIZED', 'finalized')
+basedb_lock_glob = multiprocessing.Lock()
 
 
 def check_error(trx):
@@ -144,8 +144,10 @@ class NeonTxResultInfo:
                             self._decode_return(log, ix_idx, tx)
         return self
 
-    def clear(self):
+    def canceled(self, tx: {}):
         self._set_defaults()
+        self.sol_sign = tx['transaction']['signatures'][0]
+        self.slot = tx['slot']
 
     def is_valid(self) -> bool:
         return self.slot != -1
@@ -310,26 +312,33 @@ class BaseDB:
             host=POSTGRES_HOST
         )
         self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        cursor = self._conn.cursor()
-        cursor.execute(self._create_table_sql())
+
+        with basedb_lock_glob:
+            cursor = self._conn.cursor()
+            cursor.execute(self._create_table_sql())
 
     def _create_table_sql(self) -> str:
         assert False, 'No script for the table'
 
-    def _fetchone(self, values, keys, order_list=None) -> str:
+    def _fetchone(self, columns, keys, orders=None) -> str:
         cursor = self._conn.cursor()
 
-        where_cond = '1=1'
-        where_keys = []
-        for name, value in keys:
-            where_cond += f' AND {name} = %s'
-            where_keys.append(value)
+        column_expr = ','.join(columns)
 
-        order_cond = ''
-        if order_list:
-            order_cond = 'ORDER BY ' + ', '.join(order_list)
+        where_expr = ' AND '.join(['1=1'] + [f'{name}=%s' for name, _ in keys])
+        where_keys = [value for _, value in keys]
 
-        cursor.execute(f'SELECT {",".join(values)} FROM {self._table_name} WHERE {where_cond} {order_cond}', where_keys)
+        order_expr = 'ORDER BY ' + ', '.join(orders) if orders else ''
+
+        request = f'''
+            SELECT {column_expr}
+            FROM {self._table_name}
+            WHERE {where_expr}
+            {order_expr}
+            LIMIT 1
+        '''
+
+        cursor.execute(request, where_keys)
         return cursor.fetchone()
 
     def __del__(self):
@@ -439,6 +448,8 @@ class LogDB(BaseDB):
             if idx < len(queries) - 1:
                 query_string += " AND "
 
+        query_string += ' ORDER BY slot desc LIMIT 1000'
+
         self.debug(query_string)
         self.debug(params)
 
@@ -465,42 +476,17 @@ class LogDB(BaseDB):
 class Canceller:
     def __init__(self):
         # Initialize user account
-        res = self.call('config', 'get')
-        substr = "Keypair Path: "
-        path = ""
-        for line in res.splitlines():
-            if line.startswith(substr):
-                path = line[len(substr):].strip()
-        if path == "":
-            raise Exception("cannot get keypair path")
-
-        with open(path.strip(), mode='r') as file:
-            pk = (file.read())
-            numbs = list(map(int, pk.strip("[] \n").split(',')))
-            numbs = numbs[0:32]
-            values = bytes(numbs)
-            self.signer = Account(values)
+        self.signer = get_solana_accounts()[0]
 
         self.client = Client(SOLANA_URL)
 
         self.operator = self.signer.public_key()
         self.operator_token = get_associated_token_address(PublicKey(self.operator), ETH_TOKEN_MINT_ID)
 
-    def call(self, *args):
-        try:
-            cmd = ["solana",
-                   "--url", SOLANA_URL,
-                   ] + list(args)
-            self.debug(cmd)
-            return subprocess.check_output(cmd, universal_newlines=True)
-        except subprocess.CalledProcessError as err:
-            self.error("ERR: solana error {}".format(err))
-            raise
-
     def unlock_accounts(self, blocked_storages):
         readonly_accs = [
             PublicKey(EVM_LOADER_ID),
-            ETH_TOKEN_MINT_ID,
+            PublicKey(ETH_TOKEN_MINT_ID),
             PublicKey(TOKEN_PROGRAM_ID),
             PublicKey(SYSVAR_CLOCK_PUBKEY),
             PublicKey(SYSVAR_INSTRUCTION_PUBKEY),
@@ -524,7 +510,8 @@ class Canceller:
                         AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False)
                     ]
                 for acc in blocked_accounts:
-                    keys.append(AccountMeta(pubkey=acc, is_signer=False, is_writable=(False if acc in readonly_accs else True)))
+                    is_writable = False if PublicKey(acc) in readonly_accs else True
+                    keys.append(AccountMeta(pubkey=acc, is_signer=False, is_writable=is_writable))
 
                 trx = Transaction()
                 nonce = int(neon_tx.nonce, 16)
@@ -538,6 +525,8 @@ class Canceller:
                 try:
                     self.client.send_transaction(trx, self.signer, opts=TxOpts(preflight_commitment=Confirmed))
                 except Exception as err:
-                    self.error(err)
+                    err_tb = "".join(traceback.format_tb(err.__traceback__))
+                    self.error('Exception on submitting transaction. ' +
+                               f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
                 else:
                     self.debug(f"Canceled: {blocked_accounts}")
