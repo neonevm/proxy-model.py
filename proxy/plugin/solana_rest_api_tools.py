@@ -120,7 +120,7 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, con
     trx = {
         'to': contract_id if contract_id else "",
         'value': value if value else 0,
-        'gas': 9999999,
+        'gas': 999999999,
         'gasPrice': 1_000_000_000,
         'nonce': nonce,
         'data': data.hex(),

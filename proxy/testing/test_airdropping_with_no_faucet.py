@@ -46,6 +46,7 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
         self.assertEqual(self._EXPECTED_BALANCE_WEI, wrapper_actual_balance)
         self.assertEqual(self._EXPECTED_BALANCE_WEI, nested_actual_balance)
 
+    @unittest.skip("airdrop inside estimation was disabled")
     def test_airdrop_on_deploy_estimation(self):
         owner_eth_account: LocalAccount = self._web3.eth.account.create()
         compiled_info = self._contract_deployer.compile_contract(self._CONTRACT_STORAGE_SOURCE)
