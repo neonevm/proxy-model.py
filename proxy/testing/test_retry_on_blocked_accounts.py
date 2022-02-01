@@ -27,6 +27,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from web3 import Web3
 from web3.auto.gethdev import w3
+from .testing_helpers import request_airdrop
 
 install_solc(version='0.7.0')
 from solcx import compile_source
@@ -84,6 +85,7 @@ class BlockedTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_retry_on_blocked_accounts.py setUpClass")
+        request_airdrop(eth_account.address)
 
         cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
