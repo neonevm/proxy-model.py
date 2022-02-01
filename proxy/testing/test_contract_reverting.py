@@ -88,4 +88,3 @@ class TestContractReverting(unittest.TestCase):
             }
         }
     '''
-

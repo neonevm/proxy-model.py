@@ -1,6 +1,5 @@
 import unittest
 import os
-import requests
 
 import eth_account
 import eth_typing
@@ -10,19 +9,11 @@ from eth_account.account import LocalAccount
 from solana.rpc.api import Client as SolanaClient
 
 from ..plugin.solana_rest_api_tools import get_token_balance_or_zero
-from .testing_helpers import SolidityContractDeployer
+from .testing_helpers import SolidityContractDeployer, request_airdrop
 
 from solcx import install_solc
 install_solc(version='0.7.6')
 
-def request_airdrop(address):
-    url = 'http://faucet:3333/request_neon'
-    data = '{"wallet": "' + address + '", "amount": 5}'
-    r = requests.post(url, data=data)
-    if not r.ok:
-        print()
-        print('Bad response:', r)
-    assert(r.ok)
 
 class TestAirdroppingEthAccounts(unittest.TestCase):
 

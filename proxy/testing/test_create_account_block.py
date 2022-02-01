@@ -1,10 +1,10 @@
 import unittest
 import os
-import requests
 
 import rlp
 from web3 import Web3
 from solcx import install_solc
+from .testing_helpers import request_airdrop
 
 install_solc(version='0.7.6')
 from solcx import compile_source
@@ -14,14 +14,6 @@ proxy = Web3(Web3.HTTPProvider(proxy_url))
 eth_account = proxy.eth.account.create()
 proxy.eth.default_account = eth_account.address
 
-def request_airdrop(address):
-    url = 'http://faucet:3333/request_neon'
-    data = '{"wallet": "' + address + '", "amount": 5}'
-    r = requests.post(url, data=data)
-    if not r.ok:
-        print()
-        print('Bad response:', r)
-    assert(r.ok)
 
 STORAGE_SOLIDITY_SOURCE = '''
 pragma solidity >=0.7.0 <0.9.0;
