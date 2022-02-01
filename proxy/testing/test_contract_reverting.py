@@ -9,6 +9,17 @@ from eth_account.account import LocalAccount
 from .testing_helpers import SolidityContractDeployer
 from ..common_neon.emulator_interactor import decode_revert_message
 
+from solcx import install_solc
+install_solc(version='0.7.6')
+
+def request_airdrop(address):
+    url = 'http://faucet:3333/request_neon'
+    data = '{"wallet": "' + address + '", "amount": 5}'
+    r = requests.post(url, data=data)
+    if not r.ok:
+        print()
+        print('Bad response:', r)
+    assert(r.ok)
 
 class TestContractReverting(unittest.TestCase):
 
@@ -61,6 +72,7 @@ class TestContractReverting(unittest.TestCase):
 
     def test_method_raises_string_based_error(self):
         contract_owner: LocalAccount = self._web3.eth.account.create()
+        request_airdrop(contract_owner.address)
         contract = self._contract_deployer.compile_and_deploy_contract(contract_owner, self._CONTRACT_METHOD_STRING_BASED_REVERT)
         with self.assertRaises(web3_exceptions.ContractLogicError) as cm:
             contract.functions.do_string_based_revert().call()
@@ -68,6 +80,7 @@ class TestContractReverting(unittest.TestCase):
 
     def test_method_raises_trivial_error(self):
         contract_owner: LocalAccount = self._web3.eth.account.create()
+        request_airdrop(contract_owner.address)
         contract = self._contract_deployer.compile_and_deploy_contract(contract_owner, self._CONTRACT_METHOD_STRING_BASED_REVERT)
         with self.assertRaises(web3_exceptions.ContractLogicError) as cm:
             contract.functions.do_trivial_revert().call()
