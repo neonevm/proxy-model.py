@@ -31,7 +31,6 @@ class NeonAccountDB(BaseDB):
             );"""
 
     def set_acc_by_request(self, neon_account: str, pda_account: str, code_account: str, code: str):
-        self.debug(f"add account info {neon_account}, {pda_account}, {code_account}, {code}")
         with self._conn.cursor() as cursor:
             cursor.execute(f'''
                 INSERT INTO {self._table_name}(neon_account, pda_account, code_account, slot, code)
@@ -39,14 +38,11 @@ class NeonAccountDB(BaseDB):
                 ON CONFLICT (pda_account, code_account) DO UPDATE
                 SET
                     code=EXCLUDED.code
-                RETURNING *;
+                ;
                 ''',
                 (neon_account, pda_account, code_account, 0, code))
-            ret = cursor.fetchone()
-            self.debug(f"set_acc_by_request {ret}")
 
     def set_acc_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int):
-        self.debug(f"add account info {neon_account}, {pda_account}, {code_account}, {slot}")
         with self._conn.cursor() as cursor:
             cursor.execute(f'''
                 INSERT INTO {self._table_name}(neon_account, pda_account, code_account, slot)
@@ -54,11 +50,9 @@ class NeonAccountDB(BaseDB):
                 ON CONFLICT (pda_account, code_account) DO UPDATE
                 SET
                     slot=EXCLUDED.slot
-                RETURNING *;
+                ;
                 ''',
                 (neon_account, pda_account, code_account, slot))
-            ret = cursor.fetchone()
-            self.debug(f"set_acc_indexer {ret}")
 
     def _acc_from_value(self, value) -> NeonAccountInfo:
         self.debug(f"accounts db returned {value}")

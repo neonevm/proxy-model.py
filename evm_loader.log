@@ -1,0 +1,196 @@
+Config File: /root/.config/solana/cli/config.yml
+RPC URL: http://solana:8899 
+WebSocket URL: ws://solana:8900/ (computed)
+Keypair Path: /root/.config/solana/id.json 
+Commitment: confirmed 
+Creating test account-1
+ID file is /root/.config/solana/id.json
+New account BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih
+Error: AccountNotFound: pubkey=BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih
+airdropping...
+Requesting airdrop of 5000 SOL
+
+Signature: 51TNKRqGY5b6whCB2tPB7PusGqHE611gPFB8jXRmZPyMePi7i4VK2CuhCB1wGmS1fZpuqdcoWJqGMysdKUy8hD9V
+
+5000 SOL
+Config File: /root/.config/solana/cli/config.yml
+RPC URL: http://solana:8899 
+WebSocket URL: ws://solana:8900/ (computed)
+Keypair Path: /root/.config/solana/id.json 
+Commitment: confirmed 
+Deploying token Permission Allowance Token...
+Creating Permission Allowance Token B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1...
+Creating token B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1
+
+Signature: E3HJNhLKQwLpKUQJLuna2J128tC8TL4i1ZRjs8F5JcTatxzps72DJgUBkbGsr2A1UgDgrMCX4FdFwdRCKHLHMoR
+
+Permission Allowance Token successfully deployed
+Deploying token Permission Denial Token...
+Creating Permission Denial Token D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX...
+Creating token D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX
+
+Signature: 5eY7U3ivxYrj9d87UB9r3YTYXKAmzCReLn3bRkQVgnUJMtfjQQTMkQsD6gZGtNKeRpw2XaCErbBXPK4qbJ8mxdcB
+
+Permission Denial Token successfully deployed
+Deploying evm_loader at address 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io...
+Deploying token Neon Token...
+Creating Neon Token HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU...
+Creating token HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU
+
+Signature: sMYgqTP4rmE1QEY5pLQouoGts4LXBc4vbvU2P8SitEPZ8sAnZr7MKSc2gnkinhnBCbJMbDxGLSEnNTZP22K4QBG
+
+Neon Token successfully deployed
+Creating collateral pool 4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT...
+Requesting airdrop of 1000 SOL
+
+Signature: 3meb8t7j7EQUZJ1VXiMJKTU1arGsHTwL9BYHA3P28unhqdFZX4VEtkHtgDPHVsUAQcoEwrsnDTsoxRG7rnTkKUMx
+
+1000 SOL
+Public key: 4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT
+Private key: 3a1d092173151ac1d23947f5569deae6fc0324820d3b686ecb149ceec64f6d51
+4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT
+Collateral pool address:  7TUndyBSqVx4zeXVPMh2ChFNDCZBJpq7ADiDEWzqQUCw
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3000980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created 7TUndyBSqVx4zeXVPMh2ChFNDCZBJpq7ADiDEWzqQUCw
+confirm_transaction for %s 3UEhetZ8iFKGx1ELFvgByr3xnuPe6Zog4b4iiPHELbPcT9eyFVDyUeE473Fxbb4c1KD4EfTzhqJ736Jt6Rg44XZ1
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 145}, 'value': [None]}, 'id': 5}
+confirm_transaction for %s 3UEhetZ8iFKGx1ELFvgByr3xnuPe6Zog4b4iiPHELbPcT9eyFVDyUeE473Fxbb4c1KD4EfTzhqJ736Jt6Rg44XZ1
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 146}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 146, 'status': {'Ok': None}}]}, 'id': 6}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731282, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999999104120, 890880, 1], 'postTokenBalances': [], 'preBalances': [1000000000000, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 146, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', '7TUndyBSqVx4zeXVPMh2ChFNDCZBJpq7ADiDEWzqQUCw', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXpqntW234sCk5w8za6VNKaKvyE7QVvuNS3ZMHmTx2jcEYuv3LEaP7vY9PXx6QrpTi69M', 'programIdIndex': 2}], 'recentBlockhash': 'CihU8E4hf8EiqjuQRGsu6C2SSwV2EWBCzNw26YzpUfh3'}, 'signatures': ['3UEhetZ8iFKGx1ELFvgByr3xnuPe6Zog4b4iiPHELbPcT9eyFVDyUeE473Fxbb4c1KD4EfTzhqJ736Jt6Rg44XZ1']}}, 'id': 7}
+Collateral pool address:  CmZQkRssybuGKNG1DfKKwH5cuC2EC75eYHrvTUeVWKNm
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3100980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created CmZQkRssybuGKNG1DfKKwH5cuC2EC75eYHrvTUeVWKNm
+confirm_transaction for %s 2Y3V1vM3aHwCmfq99fL1PcAwHUp1MM23xLM8QViLqYz8u8LUbfWvyV75Zrgs5WSQHwdk5LrTYXCyDKvFCdpsvDvA
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 146}, 'value': [None]}, 'id': 12}
+confirm_transaction for %s 2Y3V1vM3aHwCmfq99fL1PcAwHUp1MM23xLM8QViLqYz8u8LUbfWvyV75Zrgs5WSQHwdk5LrTYXCyDKvFCdpsvDvA
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 146}, 'value': [None]}, 'id': 13}
+confirm_transaction for %s 2Y3V1vM3aHwCmfq99fL1PcAwHUp1MM23xLM8QViLqYz8u8LUbfWvyV75Zrgs5WSQHwdk5LrTYXCyDKvFCdpsvDvA
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 146}, 'value': [None]}, 'id': 14}
+confirm_transaction for %s 2Y3V1vM3aHwCmfq99fL1PcAwHUp1MM23xLM8QViLqYz8u8LUbfWvyV75Zrgs5WSQHwdk5LrTYXCyDKvFCdpsvDvA
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 146}, 'value': [None]}, 'id': 15}
+confirm_transaction for %s 2Y3V1vM3aHwCmfq99fL1PcAwHUp1MM23xLM8QViLqYz8u8LUbfWvyV75Zrgs5WSQHwdk5LrTYXCyDKvFCdpsvDvA
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 147}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 147, 'status': {'Ok': None}}]}, 'id': 16}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731282, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999998208240, 890880, 1], 'postTokenBalances': [], 'preBalances': [999999104120, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 147, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', 'CmZQkRssybuGKNG1DfKKwH5cuC2EC75eYHrvTUeVWKNm', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXq1BYsbYq4UH3fXXsN4K2u9ZVGLtF3QKxqXqQQja8o3MTfJKn2ERN3AXrbhw3RzYvzgF', 'programIdIndex': 2}], 'recentBlockhash': 'ENYHYjANe4dbASFGybHjL3oL15hWvvjL5oKLBMYxnMS'}, 'signatures': ['2Y3V1vM3aHwCmfq99fL1PcAwHUp1MM23xLM8QViLqYz8u8LUbfWvyV75Zrgs5WSQHwdk5LrTYXCyDKvFCdpsvDvA']}}, 'id': 17}
+Collateral pool address:  9o5E4FkcZWKwfUr7X9JRH1BDVbC9yEP94FgVSzZaMRrn
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3200980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created 9o5E4FkcZWKwfUr7X9JRH1BDVbC9yEP94FgVSzZaMRrn
+confirm_transaction for %s 5fbFaZcYK2gHSttrW1UQxi8ep1RjL8WQJ11yjRw6Cw1rQ9iDbfAHPCkSTnK5cLhe2gqWLn7ycQoZGsDTG3z3AJ3G
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 147}, 'value': [None]}, 'id': 22}
+confirm_transaction for %s 5fbFaZcYK2gHSttrW1UQxi8ep1RjL8WQJ11yjRw6Cw1rQ9iDbfAHPCkSTnK5cLhe2gqWLn7ycQoZGsDTG3z3AJ3G
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 147}, 'value': [None]}, 'id': 23}
+confirm_transaction for %s 5fbFaZcYK2gHSttrW1UQxi8ep1RjL8WQJ11yjRw6Cw1rQ9iDbfAHPCkSTnK5cLhe2gqWLn7ycQoZGsDTG3z3AJ3G
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 147}, 'value': [None]}, 'id': 24}
+confirm_transaction for %s 5fbFaZcYK2gHSttrW1UQxi8ep1RjL8WQJ11yjRw6Cw1rQ9iDbfAHPCkSTnK5cLhe2gqWLn7ycQoZGsDTG3z3AJ3G
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 147}, 'value': [None]}, 'id': 25}
+confirm_transaction for %s 5fbFaZcYK2gHSttrW1UQxi8ep1RjL8WQJ11yjRw6Cw1rQ9iDbfAHPCkSTnK5cLhe2gqWLn7ycQoZGsDTG3z3AJ3G
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 148}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 148, 'status': {'Ok': None}}]}, 'id': 26}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731283, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999997312360, 890880, 1], 'postTokenBalances': [], 'preBalances': [999998208240, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 148, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', '9o5E4FkcZWKwfUr7X9JRH1BDVbC9yEP94FgVSzZaMRrn', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXqAaDFB4bFjp1Pv5AddFkDyC1JaMz9uHVdWKX41CErUUNQgcDotTc9nvKfTmg1Ae9uD9', 'programIdIndex': 2}], 'recentBlockhash': 'HMtBPEoXv66JG96gF6v5rXcqJTuxjuw9gqak4qyGfqb5'}, 'signatures': ['5fbFaZcYK2gHSttrW1UQxi8ep1RjL8WQJ11yjRw6Cw1rQ9iDbfAHPCkSTnK5cLhe2gqWLn7ycQoZGsDTG3z3AJ3G']}}, 'id': 27}
+Collateral pool address:  FQnu9avZdLt41reMdFFbJ4f3joGvmYUUSA7mE79w2dLj
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3300980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created FQnu9avZdLt41reMdFFbJ4f3joGvmYUUSA7mE79w2dLj
+confirm_transaction for %s 5H7P1ZGr8naJDMJaDR3eq7LaQzBuvuTCCU9TNViAJipaTHBUSafDZ3DaokC89SS4oSe6uQ4soUgvwNd4pQQiBD84
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 148}, 'value': [None]}, 'id': 32}
+confirm_transaction for %s 5H7P1ZGr8naJDMJaDR3eq7LaQzBuvuTCCU9TNViAJipaTHBUSafDZ3DaokC89SS4oSe6uQ4soUgvwNd4pQQiBD84
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 148}, 'value': [None]}, 'id': 33}
+confirm_transaction for %s 5H7P1ZGr8naJDMJaDR3eq7LaQzBuvuTCCU9TNViAJipaTHBUSafDZ3DaokC89SS4oSe6uQ4soUgvwNd4pQQiBD84
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 148}, 'value': [None]}, 'id': 34}
+confirm_transaction for %s 5H7P1ZGr8naJDMJaDR3eq7LaQzBuvuTCCU9TNViAJipaTHBUSafDZ3DaokC89SS4oSe6uQ4soUgvwNd4pQQiBD84
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 148}, 'value': [None]}, 'id': 35}
+confirm_transaction for %s 5H7P1ZGr8naJDMJaDR3eq7LaQzBuvuTCCU9TNViAJipaTHBUSafDZ3DaokC89SS4oSe6uQ4soUgvwNd4pQQiBD84
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 149}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 149, 'status': {'Ok': None}}]}, 'id': 36}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731283, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999996416480, 890880, 1], 'postTokenBalances': [], 'preBalances': [999997312360, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 149, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', 'FQnu9avZdLt41reMdFFbJ4f3joGvmYUUSA7mE79w2dLj', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXqKxsckaMT1Ly8JcTuCCTYnpXLoqjGQF2RUodhGpLuubHA4tfbYVrGRJnjDcJaLjNok3', 'programIdIndex': 2}], 'recentBlockhash': 'HP61TzC5ddHEcYaVMs7x8tVohqJSvUxjtpnQSrnFRodL'}, 'signatures': ['5H7P1ZGr8naJDMJaDR3eq7LaQzBuvuTCCU9TNViAJipaTHBUSafDZ3DaokC89SS4oSe6uQ4soUgvwNd4pQQiBD84']}}, 'id': 37}
+Collateral pool address:  7zKsiPG3yfar6CceHyA4Xys3PaRRhEZ2wKmQHQ5GMQTL
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3400980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created 7zKsiPG3yfar6CceHyA4Xys3PaRRhEZ2wKmQHQ5GMQTL
+confirm_transaction for %s 1U6HpLVZgmQbs5a28UARNEA1geJKSdeRfBGSPb1hkBKvmRg8WpF2qVXw1A2RsbDuxbbuGARVhBPyNVZxLPzyuFv
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 149}, 'value': [None]}, 'id': 42}
+confirm_transaction for %s 1U6HpLVZgmQbs5a28UARNEA1geJKSdeRfBGSPb1hkBKvmRg8WpF2qVXw1A2RsbDuxbbuGARVhBPyNVZxLPzyuFv
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 149}, 'value': [None]}, 'id': 43}
+confirm_transaction for %s 1U6HpLVZgmQbs5a28UARNEA1geJKSdeRfBGSPb1hkBKvmRg8WpF2qVXw1A2RsbDuxbbuGARVhBPyNVZxLPzyuFv
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 149}, 'value': [None]}, 'id': 44}
+confirm_transaction for %s 1U6HpLVZgmQbs5a28UARNEA1geJKSdeRfBGSPb1hkBKvmRg8WpF2qVXw1A2RsbDuxbbuGARVhBPyNVZxLPzyuFv
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 149}, 'value': [None]}, 'id': 45}
+confirm_transaction for %s 1U6HpLVZgmQbs5a28UARNEA1geJKSdeRfBGSPb1hkBKvmRg8WpF2qVXw1A2RsbDuxbbuGARVhBPyNVZxLPzyuFv
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 150}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 150, 'status': {'Ok': None}}]}, 'id': 46}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731284, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999995520600, 890880, 1], 'postTokenBalances': [], 'preBalances': [999996416480, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 150, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', '7zKsiPG3yfar6CceHyA4Xys3PaRRhEZ2wKmQHQ5GMQTL', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXqVMXzL67eGsvrh9mAm9AscT3P3KUNuCZDTHkLYSSyLiBuTB7PCY6P3hFnySw9WpbiGw', 'programIdIndex': 2}], 'recentBlockhash': '78ZGjN5bUDfnzAszFLUwfxBG1chsFBjWBpLCF9V8mAfj'}, 'signatures': ['1U6HpLVZgmQbs5a28UARNEA1geJKSdeRfBGSPb1hkBKvmRg8WpF2qVXw1A2RsbDuxbbuGARVhBPyNVZxLPzyuFv']}}, 'id': 47}
+Collateral pool address:  A4VMp7vKB1AvEtxm692izqMd6yf6PCStgpnZqan7cRpE
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3500980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created A4VMp7vKB1AvEtxm692izqMd6yf6PCStgpnZqan7cRpE
+confirm_transaction for %s 2LqF5aD6pkZRhihgTczfNSSbT8DaGeV74ocBpi31fwVnQ7Qq72bs4SM5HKu7yzvZcLSjFNLQ99BaVag5sUcoyg2J
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 150}, 'value': [None]}, 'id': 52}
+confirm_transaction for %s 2LqF5aD6pkZRhihgTczfNSSbT8DaGeV74ocBpi31fwVnQ7Qq72bs4SM5HKu7yzvZcLSjFNLQ99BaVag5sUcoyg2J
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 150}, 'value': [None]}, 'id': 53}
+confirm_transaction for %s 2LqF5aD6pkZRhihgTczfNSSbT8DaGeV74ocBpi31fwVnQ7Qq72bs4SM5HKu7yzvZcLSjFNLQ99BaVag5sUcoyg2J
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 150}, 'value': [None]}, 'id': 54}
+confirm_transaction for %s 2LqF5aD6pkZRhihgTczfNSSbT8DaGeV74ocBpi31fwVnQ7Qq72bs4SM5HKu7yzvZcLSjFNLQ99BaVag5sUcoyg2J
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 150}, 'value': [None]}, 'id': 55}
+confirm_transaction for %s 2LqF5aD6pkZRhihgTczfNSSbT8DaGeV74ocBpi31fwVnQ7Qq72bs4SM5HKu7yzvZcLSjFNLQ99BaVag5sUcoyg2J
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 151}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 151, 'status': {'Ok': None}}]}, 'id': 56}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731284, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999994624720, 890880, 1], 'postTokenBalances': [], 'preBalances': [999995520600, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 151, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', 'A4VMp7vKB1AvEtxm692izqMd6yf6PCStgpnZqan7cRpE', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXqekCMubsqYQtb5h4SL5tCS5ZRGoDVQA61Rmryp4Z2mq6eqTZAraLVg5irjHZigupcoq', 'programIdIndex': 2}], 'recentBlockhash': '2cbMWwiUeRECjK3Ji8Mf5xJr69hM8MAUgW48CXvSm8kf'}, 'signatures': ['2LqF5aD6pkZRhihgTczfNSSbT8DaGeV74ocBpi31fwVnQ7Qq72bs4SM5HKu7yzvZcLSjFNLQ99BaVag5sUcoyg2J']}}, 'id': 57}
+Collateral pool address:  CjJnfcgbn3SMrop5jP61CoWkrNfoKyTgk4gJssvkXrWt
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3600980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created CjJnfcgbn3SMrop5jP61CoWkrNfoKyTgk4gJssvkXrWt
+confirm_transaction for %s 4F28tT1rE4c2dCErtXETyy5K3vX57Lmno8nykiYybSALVKtavNmQSWCAGv9j5dupFi6CtGhKBoiJnoThXVUw1cSz
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 151}, 'value': [None]}, 'id': 62}
+confirm_transaction for %s 4F28tT1rE4c2dCErtXETyy5K3vX57Lmno8nykiYybSALVKtavNmQSWCAGv9j5dupFi6CtGhKBoiJnoThXVUw1cSz
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 151}, 'value': [None]}, 'id': 63}
+confirm_transaction for %s 4F28tT1rE4c2dCErtXETyy5K3vX57Lmno8nykiYybSALVKtavNmQSWCAGv9j5dupFi6CtGhKBoiJnoThXVUw1cSz
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 151}, 'value': [None]}, 'id': 64}
+confirm_transaction for %s 4F28tT1rE4c2dCErtXETyy5K3vX57Lmno8nykiYybSALVKtavNmQSWCAGv9j5dupFi6CtGhKBoiJnoThXVUw1cSz
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 151}, 'value': [None]}, 'id': 65}
+confirm_transaction for %s 4F28tT1rE4c2dCErtXETyy5K3vX57Lmno8nykiYybSALVKtavNmQSWCAGv9j5dupFi6CtGhKBoiJnoThXVUw1cSz
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 152}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 152, 'status': {'Ok': None}}]}, 'id': 66}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731284, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999993728840, 890880, 1], 'postTokenBalances': [], 'preBalances': [999994624720, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 152, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', 'CjJnfcgbn3SMrop5jP61CoWkrNfoKyTgk4gJssvkXrWt', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXqp8rjV7e2owrKUEMhu2bXFi5TWGxbu7coQFyd5gf6Cx1QDjzxWcacJUBvV8CHs13XLj', 'programIdIndex': 2}], 'recentBlockhash': 'B7J5vR4PAevUDF1tbngLLByh27HQSB6Tg8jNxpcewFb1'}, 'signatures': ['4F28tT1rE4c2dCErtXETyy5K3vX57Lmno8nykiYybSALVKtavNmQSWCAGv9j5dupFi6CtGhKBoiJnoThXVUw1cSz']}}, 'id': 67}
+Collateral pool address:  7FjLWQ34Dwd7qR7f4azAPewJL8SMXr86XJUwBz1wXHn8
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3700980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created 7FjLWQ34Dwd7qR7f4azAPewJL8SMXr86XJUwBz1wXHn8
+confirm_transaction for %s 2AbMWMUNvTb6TnJ4nFssauHQKPvvgCkm7PkNp2tZYtRPhWCDKZ8jkyJ4J5kyG6fmNgMHeSQdjAvh3atkseHYYZBx
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 152}, 'value': [None]}, 'id': 72}
+confirm_transaction for %s 2AbMWMUNvTb6TnJ4nFssauHQKPvvgCkm7PkNp2tZYtRPhWCDKZ8jkyJ4J5kyG6fmNgMHeSQdjAvh3atkseHYYZBx
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 152}, 'value': [None]}, 'id': 73}
+confirm_transaction for %s 2AbMWMUNvTb6TnJ4nFssauHQKPvvgCkm7PkNp2tZYtRPhWCDKZ8jkyJ4J5kyG6fmNgMHeSQdjAvh3atkseHYYZBx
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 152}, 'value': [None]}, 'id': 74}
+confirm_transaction for %s 2AbMWMUNvTb6TnJ4nFssauHQKPvvgCkm7PkNp2tZYtRPhWCDKZ8jkyJ4J5kyG6fmNgMHeSQdjAvh3atkseHYYZBx
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 152}, 'value': [None]}, 'id': 75}
+confirm_transaction for %s 2AbMWMUNvTb6TnJ4nFssauHQKPvvgCkm7PkNp2tZYtRPhWCDKZ8jkyJ4J5kyG6fmNgMHeSQdjAvh3atkseHYYZBx
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 153}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 153, 'status': {'Ok': None}}]}, 'id': 76}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731285, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999992832960, 890880, 1], 'postTokenBalances': [], 'preBalances': [999993728840, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 153, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', '7FjLWQ34Dwd7qR7f4azAPewJL8SMXr86XJUwBz1wXHn8', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXqyXX74dQE5Up3rmeyTyJr5LbVjkhiQ59bNk6GMJm9e4v9c2SkAepivrezExps36GRsd', 'programIdIndex': 2}], 'recentBlockhash': '4PAA3rQm2eurMU3Nt5Kq68fLCtasHQ3FGWsHnEx8aiid'}, 'signatures': ['2AbMWMUNvTb6TnJ4nFssauHQKPvvgCkm7PkNp2tZYtRPhWCDKZ8jkyJ4J5kyG6fmNgMHeSQdjAvh3atkseHYYZBx']}}, 'id': 77}
+Collateral pool address:  AHtxTU3avoswonG9EygvXayrQGYnTxVxpeZNbBsWzkY2
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3800980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created AHtxTU3avoswonG9EygvXayrQGYnTxVxpeZNbBsWzkY2
+confirm_transaction for %s 3oqWTGEcNZze7yUEEYe1PFqur5wEUyempAZ7HacnLFSCn54nThTScyXa5thz9FcWYwrpdnoMGGgaBo6v8n1WiupT
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 153}, 'value': [None]}, 'id': 82}
+confirm_transaction for %s 3oqWTGEcNZze7yUEEYe1PFqur5wEUyempAZ7HacnLFSCn54nThTScyXa5thz9FcWYwrpdnoMGGgaBo6v8n1WiupT
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 153}, 'value': [None]}, 'id': 83}
+confirm_transaction for %s 3oqWTGEcNZze7yUEEYe1PFqur5wEUyempAZ7HacnLFSCn54nThTScyXa5thz9FcWYwrpdnoMGGgaBo6v8n1WiupT
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 153}, 'value': [None]}, 'id': 84}
+confirm_transaction for %s 3oqWTGEcNZze7yUEEYe1PFqur5wEUyempAZ7HacnLFSCn54nThTScyXa5thz9FcWYwrpdnoMGGgaBo6v8n1WiupT
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 153}, 'value': [None]}, 'id': 85}
+confirm_transaction for %s 3oqWTGEcNZze7yUEEYe1PFqur5wEUyempAZ7HacnLFSCn54nThTScyXa5thz9FcWYwrpdnoMGGgaBo6v8n1WiupT
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 154}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 154, 'status': {'Ok': None}}]}, 'id': 86}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731285, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999991937080, 890880, 1], 'postTokenBalances': [], 'preBalances': [999992832960, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 154, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', 'AHtxTU3avoswonG9EygvXayrQGYnTxVxpeZNbBsWzkY2', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXr8vBUe9ARM1mnFJxF2v2Aty7XyESpu2gPMECucvsD5BptzJtXph4qZF83zoTSDBVLQX', 'programIdIndex': 2}], 'recentBlockhash': 'ACgNu4nCQWbR74mdFjPSmncBpaqFJUqynZcoANtPpsry'}, 'signatures': ['3oqWTGEcNZze7yUEEYe1PFqur5wEUyempAZ7HacnLFSCn54nThTScyXa5thz9FcWYwrpdnoMGGgaBo6v8n1WiupT']}}, 'id': 87}
+Collateral pool address:  BTnEnoNFNnosnzM8n6c6fss4U8E3dw9mSaBEHYvQ3Ysm
+Creating...
+createAccountWithSeed 030000003982f070829c11e201cf503bf7c67d2101253375033b30c1e863b79d1e9099341100000000000000636f6c6c61746572616c5f736565645f3900980d000000000000000000000000003c00392b787d38a853d124057634c43c7133c612461d74feb17f4248155286c0
+created BTnEnoNFNnosnzM8n6c6fss4U8E3dw9mSaBEHYvQ3Ysm
+confirm_transaction for %s 3QGSKSSQPW583GpNL9JNoLRcUmvW2WTrrr2BT9kZ65hrXtq1HyCq2Tr57WEYcvLhmKJhmkL9xJdqmog7mj2KPBJJ
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 154}, 'value': [None]}, 'id': 92}
+confirm_transaction for %s 3QGSKSSQPW583GpNL9JNoLRcUmvW2WTrrr2BT9kZ65hrXtq1HyCq2Tr57WEYcvLhmKJhmkL9xJdqmog7mj2KPBJJ
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 154}, 'value': [None]}, 'id': 93}
+confirm_transaction for %s 3QGSKSSQPW583GpNL9JNoLRcUmvW2WTrrr2BT9kZ65hrXtq1HyCq2Tr57WEYcvLhmKJhmkL9xJdqmog7mj2KPBJJ
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 154}, 'value': [None]}, 'id': 94}
+confirm_transaction for %s 3QGSKSSQPW583GpNL9JNoLRcUmvW2WTrrr2BT9kZ65hrXtq1HyCq2Tr57WEYcvLhmKJhmkL9xJdqmog7mj2KPBJJ
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 154}, 'value': [None]}, 'id': 95}
+confirm_transaction for %s 3QGSKSSQPW583GpNL9JNoLRcUmvW2WTrrr2BT9kZ65hrXtq1HyCq2Tr57WEYcvLhmKJhmkL9xJdqmog7mj2KPBJJ
+confirm_transaction: %s {'jsonrpc': '2.0', 'result': {'context': {'slot': 155}, 'value': [{'confirmationStatus': 'confirmed', 'confirmations': 0, 'err': None, 'slot': 155, 'status': {'Ok': None}}]}, 'id': 96}
+{'jsonrpc': '2.0', 'result': {'blockTime': 1643731286, 'meta': {'err': None, 'fee': 5000, 'innerInstructions': [], 'logMessages': ['Program 11111111111111111111111111111111 invoke [1]', 'Program 11111111111111111111111111111111 success'], 'postBalances': [999991041200, 890880, 1], 'postTokenBalances': [], 'preBalances': [999991937080, 0, 1], 'preTokenBalances': [], 'rewards': [], 'status': {'Ok': None}}, 'slot': 155, 'transaction': {'message': {'accountKeys': ['4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT', 'BTnEnoNFNnosnzM8n6c6fss4U8E3dw9mSaBEHYvQ3Ysm', '11111111111111111111111111111111'], 'header': {'numReadonlySignedAccounts': 0, 'numReadonlyUnsignedAccounts': 1, 'numRequiredSignatures': 1}, 'instructions': [{'accounts': [0, 1, 0], 'data': 'P34Lzcs348XCoes7kXcyZwzyU75j3GRpkkYznwZHFX2UzdtBSn3jKJ6eN55mumwX389oQ7zCNRPme1AtXrJJqrDevccYjWdrFWbrjVibdaCiBwPzDBKiKYtYyGWJjeNbLKUjJxBdb7ke61PGiEwR', 'programIdIndex': 2}], 'recentBlockhash': 'FfVR8jSoTVUguG9vVEKihf3DMrsAUdsY3xrjwCSQUsXD'}, 'signatures': ['3QGSKSSQPW583GpNL9JNoLRcUmvW2WTrrr2BT9kZ65hrXtq1HyCq2Tr57WEYcvLhmKJhmkL9xJdqmog7mj2KPBJJ']}}, 'id': 97}
+4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT
