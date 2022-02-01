@@ -52,13 +52,15 @@ function cleanup_docker {
     echo "\nRemoving temporary data volumes..."
     docker volume prune -f
 
-    if grep '\[E\] get_measurements' <measurements.log; then
+    if grep 'ERROR.*get_measurements' <measurements.log; then
         echo 'Failed to get measurements'
         exit 1
     fi
 }
 trap cleanup_docker EXIT
 
+echo "\nCleanup docker-compose..."
+docker-compose -f proxy/docker-compose-test.yml down
 if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
   echo "docker-compose failed to start"
   exit 1;

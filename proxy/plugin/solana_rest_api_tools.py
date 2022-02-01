@@ -1,19 +1,17 @@
 import base64
-import logging
+import eth_utils
 import math
 import os
 
 from datetime import datetime
-from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Confirmed
+from logged_groups import logged_group
 
 from ..common_neon.address import ether2program, getTokenAddr, EthereumAddress, AccountInfo
 from ..common_neon.errors import SolanaAccountNotFoundError, SolanaErrors
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from ..common_neon.neon_instruction import NeonInstruction
-from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.transaction_sender import TransactionSender, TransactionEmulator
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_from_dict, get_holder_msg
@@ -24,10 +22,8 @@ from typing import Optional
 from eth_keys import keys as eth_keys
 from web3.auto import w3
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-def neon_config_load(ethereum_model):
+@logged_group("neon.Proxy")
+def neon_config_load(ethereum_model, *, logger):
     try:
         ethereum_model.neon_config_dict
     except AttributeError:
@@ -49,22 +45,10 @@ def neon_config_load(ethereum_model):
     logger.debug(ethereum_model.neon_config_dict)
 
 
-def call_signed(signer, client, eth_trx, steps):
-    solana_interactor = SolanaInteractor(signer, client)
-    trx_sender = TransactionSender(solana_interactor, eth_trx, steps)
-    return trx_sender.execute()
 
 
-def create_eth_account_and_airdrop(client: SolanaClient, signer: SolanaAccount, eth_account: EthereumAddress):
-    trx = NeonInstruction(signer.public_key()).make_trx_with_create_and_airdrop (eth_account)
-    result = SolanaInteractor(signer, client).send_transaction(trx, None, reason='create_eth_account_and_airdrop')
-    error = result.get("error")
-    if error is not None:
-        logger.error(f"Failed to create eth_account and airdrop: {eth_account}, error occurred: {error}")
-        raise Exception("Create eth_account error")
-
-
-def get_token_balance_gwei(client: SolanaClient, pda_account: str) -> int:
+@logged_group("neon.Proxy")
+def get_token_balance_gwei(client: SolanaClient, pda_account: str, *, logger) -> int:
     neon_token_account = getTokenAddr(PublicKey(pda_account))
     rpc_response = client.get_token_account_balance(neon_token_account, commitment=Confirmed)
     error = rpc_response.get('error')
@@ -78,24 +62,22 @@ def get_token_balance_gwei(client: SolanaClient, pda_account: str) -> int:
 
     balance = get_from_dict(rpc_response, "result", "value", "amount")
     if balance is None:
-        logger.error(f"Failed to get_token_balance_gwei by neon_token_account: {neon_token_account}, response: {rpc_response}")
+        logger.error(
+            f"Failed to get_token_balance_gwei by neon_token_account: {neon_token_account}, response: {rpc_response}")
         raise Exception("Unexpected get_balance response")
     return int(balance)
 
 
-def get_token_balance_or_airdrop(client: SolanaClient, signer: SolanaAccount, eth_account: EthereumAddress) -> int:
+@logged_group("neon.Proxy")
+def get_token_balance_or_airdrop(client: SolanaClient, eth_account: EthereumAddress, *, logger) -> int:
     solana_account, nonce = ether2program(eth_account)
     logger.debug(f"Get balance for eth account: {eth_account} aka: {solana_account}")
 
     try:
         return get_token_balance_gwei(client, solana_account)
     except SolanaAccountNotFoundError:
-        logger.debug(f"Account not found:  {eth_account} aka: {solana_account} - create")
-        if NEW_USER_AIRDROP_AMOUNT == 0:
-            return 0
-
-        create_eth_account_and_airdrop(client, signer, eth_account)
-        return get_token_balance_gwei(client, solana_account)
+        logger.debug(f"Account not found:  {eth_account} aka: {solana_account} - return airdrop amount")
+        return NEW_USER_AIRDROP_AMOUNT * eth_utils.denoms.gwei
 
 
 def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> bool:
@@ -105,6 +87,7 @@ def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> boo
     return value is not None
 
 
+@logged_group("neon.Proxy")
 def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, contract_id: Optional[bytes],
                   value: Optional[int], data: Optional[bytes], nonce: int, chain_id: int):
 
