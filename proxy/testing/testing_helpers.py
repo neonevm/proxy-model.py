@@ -49,9 +49,8 @@ class SolidityContractDeployer:
 
 
 def request_airdrop(address):
-    FAUCET_URL = os.environ.get('FAUCET_URL', 'http://faucet')
-    FAUCET_PORT = os.environ.get('FAUCET_PORT', '3333')
-    url = FAUCET_URL + ':' + FAUCET_PORT + '/request_neon'
+    FAUCET_URL = os.environ.get('FAUCET_URL', 'http://faucet:3333')
+    url = FAUCET_URL + '/request_neon'
     data = '{"wallet": "' + address + '", "amount": 5}'
     r = requests.post(url, data=data)
     if not r.ok:
