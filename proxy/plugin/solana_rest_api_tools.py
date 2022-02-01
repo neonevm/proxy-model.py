@@ -139,8 +139,10 @@ def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, con
     gas_for_trx = (transaction_emulator.steps_emulated + (holder_iterations + begin_iterations) * EVM_STEPS) * GAS_MULTIPLIER
     gas = gas_for_trx + gas_for_space + EXTRA_GAS
 
+    logger.debug("number of holder iterations: %s", holder_iterations)
     logger.debug("allocated space: %s", transaction_emulator.allocated_space)
     logger.debug("gas_for_space: %s", gas_for_space)
     logger.debug("gas_for_trx: %s", gas_for_trx)
+    logger.debug("extra_gas: %s", EXTRA_GAS)
     logger.debug("estimated gas: %s", gas)
     return gas
