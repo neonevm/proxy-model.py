@@ -37,6 +37,7 @@ class TestAccountWhitelist(unittest.TestCase):
         self.testee.allowance_token.mint_to.reset_mock()
         self.testee.denial_token.get_balance.reset_mock()
         self.testee.denial_token.mint_to.reset_mock()
+        self.testee.account_cache = {}
 
     def test_grant_permissions_negative_difference(self):
         """
@@ -146,7 +147,7 @@ class TestAccountWhitelist(unittest.TestCase):
         """
         self.assertGreaterEqual(GET_WHITE_LIST_BALANCE_MAX_RETRIES, 2)  # Condition required to start test
         ether_address = 'Ethereum-Address'
-        mock_get_current_time.side_effect = [self.permission_update_int + 1]
+        mock_get_current_time.side_effect = [0]
         mock_read_balance_diff.side_effect = [Exception('TestException'), 12.3]
 
         self.assertTrue(self.testee.has_permission(ether_address, 0))
