@@ -2,7 +2,6 @@ import unittest
 import os
 import requests
 
-import eth_utils
 from web3 import exceptions as web3_exceptions
 from solana.rpc.api import Client as SolanaClient
 from eth_account.account import LocalAccount
