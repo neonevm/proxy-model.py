@@ -1,5 +1,6 @@
 import unittest
 import os
+import requests
 
 import eth_utils
 from web3 import exceptions as web3_exceptions
