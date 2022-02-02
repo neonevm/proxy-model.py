@@ -27,10 +27,10 @@ from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
 from solana.rpc.api import Client as SolanaClient
 from typing import List, Tuple
 
-from .solana_rest_api_tools import getAccountInfo, call_signed, neon_config_load, \
-    get_token_balance_or_airdrop, estimate_gas, EVM_STEPS
+from .solana_rest_api_tools import  neon_config_load, \
+    get_token_balance_or_airdrop, estimate_gas
 from ..common_neon.transaction_sender import NeonTxSender
-from ..common_neon.address import EthereumAddress
+from ..common_neon.address import EthereumAddress, getAccountInfo
 from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
@@ -39,6 +39,11 @@ from ..environment import SOLANA_URL, PP_SOLANA_URL
 from ..environment import neon_cli
 from ..indexer.indexer_db import IndexerDB, PendingTxError
 from .gas_price_calculator import GasPriceCalculator
+from ..common_neon.eth_proto import Trx as EthTrx
+from typing import Optional
+from eth_keys import keys as eth_keys
+from web3.auto import w3
+import os
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -94,7 +99,7 @@ class EthereumModel:
 
     def eth_estimateGas(self, param):
         try:
-            caller_id : bytes = bytes.fromhex(param.get('from', "0x0000000000000000000000000000000000000000")[2:])
+            caller_id : bytes = bytes.fromhex(param.get('from', "0x%040x" % 0x0)[2:])
 
             contract_id = param.get('to', None)
             if contract_id:
@@ -108,12 +113,25 @@ class EthereumModel:
             if data:
                 data = bytes.fromhex(data[2:])
 
-            nonce = int(self.eth_getTransactionCount(caller_id, None), base=16)
+            unsigned_trx = {
+                'to': contract_id if contract_id else "",
+                'value': value if value else 0,
+                'gas': 999999999,
+                'gasPrice': 1_000_000_000,
+                'nonce': 0xffff,
+                'data': data.hex() if data else "",
+                'chainId': int(self.neon_config_dict['NEON_CHAIN_ID'])
+            }
+            signed_trx = w3.eth.account.sign_transaction(unsigned_trx, eth_keys.PrivateKey(os.urandom(32)))
+            trx = EthTrx.fromString(signed_trx.rawTransaction)
 
-            return estimate_gas(self.client, self.signer, caller_id, contract_id, value, data, nonce, int(self.neon_config_dict['NEON_CHAIN_ID']))
+            tx_sender = NeonTxSender(self.db, self.client, trx, steps=500)
+            return estimate_gas(tx_sender)
+
+        except EthereumError:
+            raise
         except Exception as err:
-            logger.debug("Exception on eth_estimateGas: %s", err)
-			err_tb = "".join(traceback.format_tb(err.__traceback__))
+            err_tb = "".join(traceback.format_tb(err.__traceback__))
             self.error(f"Exception on eth_estimateGas: {err}: {err_tb}")
             raise
 

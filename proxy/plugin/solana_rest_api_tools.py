@@ -1,7 +1,5 @@
-import base64
 import eth_utils
 import math
-import os
 
 from datetime import datetime
 from solana.publickey import PublicKey
@@ -9,18 +7,12 @@ from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Confirmed
 from logged_groups import logged_group
 
-from ..common_neon.address import ether2program, getTokenAddr, EthereumAddress, AccountInfo
+from ..common_neon.address import ether2program, getTokenAddr, EthereumAddress
 from ..common_neon.errors import SolanaAccountNotFoundError, SolanaErrors
-from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from ..common_neon.transaction_sender import TransactionSender, TransactionEmulator
-from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_from_dict, get_holder_msg
+from ..common_neon.transaction_sender import NeonTxSender, NeonCreateContractTxStage, NeonCreateAccountTxStage
 from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, \
-    EVM_BYTE_COST, HOLDER_MSG_SIZE, GAS_MULTIPLIER
-from .eth_proto import Trx as EthTrx
-from typing import Optional
-from eth_keys import keys as eth_keys
-from web3.auto import w3
+    EVM_BYTE_COST, HOLDER_MSG_SIZE, GAS_MULTIPLIER, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
 
 @logged_group("neon.Proxy")
 def neon_config_load(ethereum_model, *, logger):
@@ -43,8 +35,6 @@ def neon_config_load(ethereum_model, *, logger):
                                                             '-' \
                                                             + ethereum_model.neon_config_dict['NEON_REVISION']
     logger.debug(ethereum_model.neon_config_dict)
-
-
 
 
 @logged_group("neon.Proxy")
@@ -88,44 +78,32 @@ def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> boo
 
 
 @logged_group("neon.Proxy")
-def estimate_gas(client: SolanaClient, signer: SolanaAccount, caller: bytes, contract_id: Optional[bytes],
-                  value: Optional[int], data: Optional[bytes], nonce: int, chain_id: int):
+def estimate_gas(tx_sender: NeonTxSender, *, logger):
 
-    solana_interactor = SolanaInteractor(signer, client)
-    transaction_emulator = TransactionEmulator(solana_interactor)
-    transaction_emulator.create_account_list_by_emulate(caller, contract_id, value, data, nonce)
+    tx_sender._call_emulated()
+    tx_sender._parse_accounts_list();
 
-    if transaction_emulator.steps_emulated is None:
-        logger.error(f"Failed estimate_gas, unexpected result, by contract_id: {contract_id}, caller_eth_account: "
-                     f"{caller}, data: {data}, value: {value}")
-        raise Exception("Bad estimate_gas result")
-
-    trx = {
-        'to': contract_id if contract_id else "",
-        'value': value if value else 0,
-        'gas': 999999999,
-        'gasPrice': 1_000_000_000,
-        'nonce': nonce,
-        'data': data.hex() if data else "",
-        'chainId': chain_id
-    }
-
-    signed_trx = w3.eth.account.sign_transaction(trx, eth_keys.PrivateKey(os.urandom(32)))
-    msg = get_holder_msg(EthTrx.fromString(signed_trx.rawTransaction))
-
-    # holder account write
+    msg = get_holder_msg(tx_sender.eth_tx)
     holder_iterations = math.ceil(len(msg)/HOLDER_MSG_SIZE)
     begin_iterations = 1
 
+    space = 0
+    for s in tx_sender._create_account_list:
+        if s.NAME == NeonCreateContractTxStage.NAME:
+            space += s.size + ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
+        elif s.NAME == NeonCreateAccountTxStage.NAME:
+            space +=  ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
 
-    gas_for_space = transaction_emulator.allocated_space * EVM_BYTE_COST * GAS_MULTIPLIER
-    gas_for_trx = (transaction_emulator.steps_emulated + (holder_iterations + begin_iterations) * EVM_STEPS) * GAS_MULTIPLIER
+    space += tx_sender.unpaid_space
+
+    gas_for_trx = (tx_sender.steps_emulated + (holder_iterations + begin_iterations) * EVM_STEPS) * GAS_MULTIPLIER
+    gas_for_space = space * EVM_BYTE_COST * GAS_MULTIPLIER
     gas = gas_for_trx + gas_for_space + EXTRA_GAS
 
-    logger.debug("number of holder iterations: %s", holder_iterations)
-    logger.debug("allocated space: %s", transaction_emulator.allocated_space)
-    logger.debug("gas_for_space: %s", gas_for_space)
-    logger.debug("gas_for_trx: %s", gas_for_trx)
-    logger.debug("extra_gas: %s", EXTRA_GAS)
-    logger.debug("estimated gas: %s", gas)
+    logger.debug(f'number of holder iterations: {holder_iterations}')
+    logger.debug(f'allocated space: {space}')
+    logger.debug(f'gas_for_space: {gas_for_space}')
+    logger.debug(f'gas_for_trx: {gas_for_trx}')
+    logger.debug(f'extra_gas: {EXTRA_GAS}')
+    logger.debug(f'estimated gas: {gas}')
     return gas

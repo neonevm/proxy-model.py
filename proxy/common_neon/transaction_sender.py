@@ -4,9 +4,9 @@ import abc
 import json
 import math
 import os
-from typing import List
 import time
 import base58
+import sha3
 import traceback
 import multiprocessing
 
@@ -14,13 +14,11 @@ from logged_groups import logged_group
 from typing import NamedTuple, Optional
 
 from solana.transaction import AccountMeta, Transaction, PublicKey
-from solana.rpc.commitment import Confirmed
 from solana.blockhash import Blockhash
-from solana.transaction import AccountMeta, Transaction
-from proxy.common_neon.utils import get_holder_msg
+from solana.account import Account as SolanaAccount
 from solana.rpc.api import Client as SolanaClient
 
-from .address import accountWithSeed, getTokenAddr
+from .address import accountWithSeed, getTokenAddr, isPayed
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
 from .emulator_interactor import call_emulated
 from .neon_instruction import NeonInstruction as NeonIxBuilder
@@ -30,201 +28,13 @@ from .solana_interactor import check_if_big_transaction, check_if_program_exceed
 from .solana_interactor import get_error_definition_from_receipt, check_if_storage_is_empty_error
 from .solana_interactor import check_if_blockhash_notfound
 from ..common_neon.eth_proto import Trx as EthTx
-from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, ACCOUNT_PERMISSION_UPDATE_INT
+from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, ACCOUNT_PERMISSION_UPDATE_INT, \
+    ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE, HOLDER_MSG_SIZE
 from ..indexer.utils import NeonTxResultInfo, NeonTxInfo
 from ..indexer.indexer_db import IndexerDB, NeonPendingTxInfo
 from ..environment import get_solana_accounts
-
-class TransactionEmulator:
-    def __init__ (self, solana_interactor: SolanaInteractor) -> None:
-        self.sender = solana_interactor
-        self.instruction = NeonInstruction(self.sender.get_operator_key())
-
-
-    # def create_account_with_seed(self, seed, storage_size):
-    #     account = accountWithSeed(self.sender.get_operator_key(), seed)
-    #
-    #     if self.sender.get_sol_balance(account) == 0:
-    #         minimum_balance = self.sender.get_multiple_rent_exempt_balances_for_size([storage_size])[0]
-    #         logger.debug("Minimum balance required for account {}".format(minimum_balance))
-    #
-    #         trx = Transaction()
-    #         trx.add(self.instruction.create_account_with_seed_trx(account, seed, minimum_balance, storage_size))
-    #         self.sender.send_transaction(trx, eth_trx=self.eth_trx, reason='createAccountWithSeed')
-    #
-    #     return account
-
-
-    def create_account_list_by_emulate(self, sender_ether: bytes, to_address: Optional[bytes], value: Optional[int], data: Optional[bytes], nonce: int):
-        add_keys_05 = []
-        self.create_acc_trx = Transaction()
-        self.create_resize_acc_trx = Transaction()
-        self.resize_trx  =  Transaction()
-        self.allocated_space = 0
-
-        output_json = call_emulated(
-            to_address.hex() if to_address else "deploy",
-            sender_ether.hex(),
-            data.hex() if data else None,
-            hex(value) if value else None
-        )
-        logger.debug("emulator returns: %s", json.dumps(output_json, indent=3))
-
-        if not to_address:
-            to_address = keccak_256(rlp.encode((sender_ether, nonce))).digest()[-20:]
-
-        logger.debug("send_addr: %s", sender_ether.hex())
-        logger.debug("dest_addr: %s", to_address.hex())
-
-        contract_extra_space = 2048
-
-        resized_acc = {}
-        # resize storage account
-        for acc_desc in output_json["accounts"]:
-            if acc_desc["new"] == False:
-                if acc_desc["code_size_current"] is not None and acc_desc["code_size"] is not None:
-                    if acc_desc["code_size"] > acc_desc["code_size_current"]:
-                        code_size = acc_desc["code_size"] + contract_extra_space
-                        seed = b58encode(ACCOUNT_SEED_VERSION + os.urandom(20))
-                        code_account_new = accountWithSeed(self.sender.get_operator_key(), seed)
-
-                        logger.debug("creating new code_account with increased size %s", code_account_new)
-
-                        minimum_balance = self.sender.get_multiple_rent_exempt_balances_for_size([code_size])[0]
-                        logger.debug("Minimum balance required for account {}".format(minimum_balance))
-                        self.create_resize_acc_trx.add(self.instruction.create_account_with_seed_trx(code_account_new, seed, minimum_balance,
-                                                                                  code_size))
-
-                        # logger.debug("resized account is created %s", code_account_new)
-
-                        self.resize_trx.add(
-                            self.instruction.make_resize_instruction(acc_desc, code_account_new, seed))
-                        # replace code_account
-                        acc_desc["contract"] = code_account_new
-                        resized_acc[acc_desc["account"]] = code_size
-
-
-        for acc_desc in output_json["accounts"]:
-            address = bytes.fromhex(acc_desc["address"][2:])
-
-            code_account = None
-            code_account_writable = False
-            if acc_desc["new"]:
-                logger.debug("Create solana accounts for %s: %s %s", acc_desc["address"], acc_desc["account"],
-                             acc_desc["contract"])
-                if acc_desc["deploy"]:
-                    seed = b58encode(ACCOUNT_SEED_VERSION + address)
-                    code_account = accountWithSeed(self.sender.get_operator_key(), seed)
-                    logger.debug("     with code account %s", code_account)
-                    code_size = acc_desc["code_size"] + contract_extra_space
-                    code_account_balance = self.sender.get_multiple_rent_exempt_balances_for_size([code_size])[0]
-                    self.allocated_space += code_size
-                    self.create_acc_trx.add(
-                        self.instruction.create_account_with_seed_trx(code_account, seed, code_account_balance,
-                                                                      code_size))
-                    # add_keys_05.append(AccountMeta(pubkey=code_account, is_signer=False, is_writable=acc_desc["writable"]))
-                    code_account_writable = acc_desc["writable"]
-
-                # TODO: is it need to create only writable new-accounts?
-                create_trx = self.instruction.make_trx_with_create_and_airdrop(address, code_account)
-                self.allocated_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
-                self.create_acc_trx.add(create_trx)
-            else:
-                # gas estimation
-                if acc_desc["writable"]:
-                    if acc_desc["deploy"]:
-                        actual_contract_space = resized_acc.get(acc_desc["account"], acc_desc["code_size_current"])
-                        self.allocated_space += actual_contract_space
-                    elif acc_desc["storage_increment"] is not None:
-                        self.allocated_space += acc_desc["storage_increment"]
-
-                    acc_info: AccountInfo = getAccountInfo(self.sender.client, EthereumAddress(address))
-                    # losted account
-                    if acc_info.state == 0:
-                        logger.debug("found losted ether_account %s", acc_desc["account"])
-                        self.allocated_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
-
-            if address == to_address:
-                contract_sol = PublicKey(acc_desc["account"])
-                if acc_desc["new"]:
-                    code_sol = code_account
-                    code_writable = code_account_writable
-                else:
-                    if acc_desc["contract"] != None:
-                        code_sol = PublicKey(acc_desc["contract"])
-                        code_writable = acc_desc["writable"]
-                    else:
-                        code_sol = None
-                        code_writable = None
-
-            if address == sender_ether:
-                sender_sol = PublicKey(acc_desc["account"])
-
-            if address != to_address and address != sender_ether:
-                # TODO: check this is_writable
-                add_keys_05.append(AccountMeta(pubkey=acc_desc["account"], is_signer=False, is_writable=True))
-                if acc_desc["new"]:
-                    if code_account:
-                        add_keys_05.append(
-                            AccountMeta(pubkey=code_account, is_signer=False, is_writable=code_account_writable))
-                else:
-                    if acc_desc["contract"]:
-                        add_keys_05.append(AccountMeta(pubkey=acc_desc["contract"], is_signer=False,
-                                                       is_writable=acc_desc["writable"]))
-
-        for token_account in output_json["token_accounts"]:
-            add_keys_05.append(
-                AccountMeta(pubkey=PublicKey(token_account["key"]), is_signer=False, is_writable=True))
-
-            if token_account["new"]:
-                self.create_acc_trx.add(self.instruction.createERC20TokenAccountTrx(token_account))
-
-        for account_meta in output_json["solana_accounts"]:
-            add_keys_05.append(
-                AccountMeta(pubkey=PublicKey(account_meta["pubkey"]), is_signer=account_meta["is_signer"],
-                            is_writable=account_meta["is_writable"]))
-
-        self.caller_token = getTokenAddr(sender_sol)
-
-        self.eth_accounts = [
-                                AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
-                            ] + ([AccountMeta(pubkey=code_sol, is_signer=False,
-                                              is_writable=code_writable)] if code_sol != None else []) + [
-                                AccountMeta(pubkey=sender_sol, is_signer=False, is_writable=True),
-                            ] + add_keys_05
-
-        self.steps_emulated = output_json["steps_executed"]
-
-self.transaction_emulator = TransactionEmulator(solana_interactor)
-
-def execute_resize_storage_account(self):
-    for instr in self.transaction_emulator.resize_trx.instructions:
-        logger.debug("code and storage migration, account %s from  %s to %s", instr.keys[0].pubkey,
-                     instr.keys[1].pubkey, instr.keys[2].pubkey)
-
-        tx = Transaction().add(instr)
-        success = False
-        count = 0
-
-        while count < 2:
-            logger.debug("attemt: %d", count)
-
-            self.sender.send_transaction(tx, eth_trx=self.eth_trx, reason='resize_storage_account')
-            info = self.sender._getAccountData(instr.keys[0].pubkey, ACCOUNT_INFO_LAYOUT.sizeof())
-            info_data = AccountInfo.frombytes(info)
-            if info_data.code_account == instr.keys[2].pubkey:
-                success = True
-                logger.debug("successful code and storage migration, %s", instr.keys[0].pubkey)
-                break
-            # wait for unlock account
-            time.sleep(1)
-            count = count + 1
-
-        if success == False:
-            raise Exception(
-                "Can't resize storage account. Account is blocked {}".format(instr.keys[0].pubkey))
-
-
+from ..common_neon.account_whitelist import AccountWhitelist
+from proxy.common_neon.utils import get_holder_msg
 
 
 class SolanaTxError(Exception):
@@ -522,7 +332,7 @@ class OperatorResourceList:
         opkey = str(self._resource.public_key())
         if len(tx.instructions):
             self.debug(f"Create new accounts for resource {opkey}:{rid}")
-        sender_ether = bytes.fromhex(self.eth_trx.sender())
+            SolTxListSender(self._s, [tx], NeonCreatePermAccount.NAME).send()
         else:
             self.debug(f"Use existing accounts for resource {opkey}:{rid}")
         return account_list
@@ -578,6 +388,7 @@ class NeonTxSender:
         self._resize_contract_list = []
         self._create_account_list = []
         self._eth_meta_list = []
+        self.unpaid_space = 0
 
     def execute(self) -> NeonTxResultInfo:
         try:
@@ -697,13 +508,27 @@ class NeonTxSender:
 
         for account_desc in self._emulator_json['accounts']:
             if account_desc['new']:
-                if account_desc['code_size']:
+                if account_desc['deploy']:
                     stage = NeonCreateContractTxStage(self, account_desc)
-                else:
+                    self._create_account_list.append(stage)
+                elif account_desc['writable']:
                     stage = NeonCreateAccountTxStage(self, account_desc)
-                self._create_account_list.append(stage)
-            elif account_desc['code_size'] and (account_desc['code_size_current'] < account_desc['code_size']):
-                self._resize_contract_list.append(NeonResizeContractTxStage(self, account_desc))
+                    self._create_account_list.append(stage)
+            # TODO: this section may be moved to the estimate_gas() method
+            elif account_desc["writable"]:
+                resize_stage = None
+                if account_desc['code_size'] and (account_desc['code_size_current'] < account_desc['code_size']):
+                    resize_stage = NeonResizeContractTxStage(self, account_desc)
+                    self._resize_contract_list.append(resize_stage)
+
+                if account_desc["deploy"]:
+                    self.unpaid_space += resize_stage.size if resize_stage else account_desc["code_size_current"]
+                elif account_desc["storage_increment"]:
+                    self.unpaid_space += account_desc["storage_increment"]
+
+                if not isPayed(account_desc['address']):
+                    self.debug(f'found losted account {account_desc["account"]}')
+                    self.unpaid_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
 
             eth_address = account_desc['address'][2:]
             sol_account = account_desc["account"]
@@ -1112,15 +937,12 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
         tx_list = super()._build_preparation_txs()
 
         # write eth transaction to the holder account
-        unsigned_msg = self.s.eth_tx.unsigned_msg()
-        msg = self.s.eth_tx.signature()
-        msg += len(unsigned_msg).to_bytes(8, byteorder="little")
-        msg += unsigned_msg
+        msg = get_holder_msg(self.s.eth_tx)
 
         offset = 0
         rest = msg
         while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
+            (part, rest) = (rest[:HOLDER_MSG_SIZE], rest[HOLDER_MSG_SIZE:])
             tx_list.append(self.s.builder.make_write_transaction(offset, part))
             offset += len(part)
 

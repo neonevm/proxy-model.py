@@ -130,16 +130,6 @@ class SolanaInteractor:
         response_list = self._send_rpc_batch_request("getMinimumBalanceForRentExemption", request_list)
         return [r['result'] for r in response_list]
 
-    def _getAccountData(self, account, expected_length):
-        info = self.client.get_account_info(account, commitment=Confirmed)['result']['value']
-        if info is None:
-            raise ValueError(f"Can't get information about {account}")
-
-        data = base64.b64decode(info['data'][0])
-        if len(data) < expected_length:
-            raise ValueError(f"Wrong data length for account data {account}")
-        return data
-
     def get_recent_blockslot(self) -> int:
         blockhash_resp = self.client.get_recent_blockhash(commitment=Confirmed)
         if not blockhash_resp["result"]:

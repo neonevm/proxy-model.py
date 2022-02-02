@@ -184,7 +184,7 @@ class NeonInstruction:
                 AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
             ]
         ))
-        # self.allocated_storage.append(SPL_TOKEN_ACCOUNT_SIZE)
+
         return trx
 
     def make_transfer_instruction(self, associated_token_account: PublicKey) -> TransactionInstruction:
