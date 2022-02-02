@@ -6,7 +6,6 @@ FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 FROM neonlabsorg/evm_loader:${EVM_LOADER_REVISION} AS spl
 
 FROM ubuntu:20.04
-ARG PROXY_REVISION
 
 COPY ./requirements.txt /opt
 
@@ -57,6 +56,7 @@ COPY proxy/operator-keypairs/operator14-keypair.json /root/.config/solana/id14.j
 COPY proxy/operator-keypairs/operator15-keypair.json /root/.config/solana/id15.json
 
 COPY . /opt
+ARG PROXY_REVISION
 ARG LOG_CFG=log_cfg.json
 RUN (cp -f /opt/${LOG_CFG} /opt/log_cfg.json || true)
 RUN sed -i 's/NEON_PROXY_REVISION_TO_BE_REPLACED/'"$PROXY_REVISION"'/g' /opt/proxy/plugin/solana_rest_api.py
