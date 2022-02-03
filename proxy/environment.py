@@ -46,15 +46,27 @@ GET_SOL_PRICE_RETRY_INTERVAL = int(os.environ.get("GET_SOL_PRICE_RETRY_INTERVAL"
 GET_WHITE_LIST_BALANCE_MAX_RETRIES = int(os.environ.get("GET_WHITE_LIST_BALANCE_MAX_RETRIES", 3))
 GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S = int(os.environ.get("GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S", 1))
 
+
+class CliBase:
+
+    def run_cli(self, cmd: List[str]) -> str:
+        self.debug("Calling: " + " ".join(cmd))
+        proc_result = subprocess.run(cmd, timeout=neon_cli_timeout, universal_newlines=True, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE)
+        if proc_result.stderr:
+            print(proc_result.stderr, file=sys.stderr)
+        return proc_result.stdout
+
+
 @logged_group("neon.Proxy")
-class solana_cli:
+class solana_cli(CliBase):
     def call(self, *args):
         try:
             cmd = ["solana",
                    "--url", SOLANA_URL,
                    ] + list(args)
             self.debug("Calling: " + " ".join(cmd))
-            return subprocess.check_output(cmd, universal_newlines=True)
+            return self.run_cli(cmd)
         except subprocess.CalledProcessError as err:
             self.error("ERR: solana error {}".format(err))
             raise
@@ -102,15 +114,7 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
 
 
 @logged_group("neon.Proxy")
-class neon_cli:
-
-    def run_cli(self, cmd: List[str]) -> str:
-        self.debug("Calling: " + " ".join(cmd))
-        proc_result = subprocess.run(cmd, timeout=neon_cli_timeout, universal_newlines=True, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE)
-        if proc_result.stderr:
-            print(proc_result.stderr, file=sys.stderr)
-        return proc_result.stdout
+class neon_cli(CliBase):
 
     def call(self, *args):
         try:
