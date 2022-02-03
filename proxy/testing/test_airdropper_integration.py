@@ -15,6 +15,7 @@ from proxy.common_neon.neon_instruction import create_account_layout
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from time import sleep
 from web3 import Web3
+from .testing_helpers import request_airdrop
 import os
 import json
 
@@ -22,7 +23,6 @@ import json
 MAX_AIRDROP_WAIT_TIME = 45
 EVM_LOADER_ID = PublicKey(EVM_LOADER_ID)
 PROXY_URL = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-FAUCET_RPC_PORT = 3333
 NAME = 'TestToken'
 SYMBOL = 'TST'
 proxy = Web3(Web3.HTTPProvider(PROXY_URL))
@@ -112,6 +112,7 @@ class TestAirdropperIntegration(TestCase):
         mint_amount = 1000_000_000_000
         from_spl_token_acc = self.create_token_account(from_owner.public_key(), mint_amount)
         to_neon_acc = self.create_eth_account().address
+        request_airdrop(to_neon_acc)
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc), 0)
