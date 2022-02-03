@@ -49,10 +49,9 @@ GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S = int(os.environ.get("GET_WHITE_LIST_BAL
 
 class CliBase:
 
-    def run_cli(self, cmd: List[str]) -> str:
+    def run_cli(self, cmd: List[str], **kwargs) -> bytes:
         self.debug("Calling: " + " ".join(cmd))
-        proc_result = subprocess.run(cmd, timeout=neon_cli_timeout, universal_newlines=True, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE)
+        proc_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
         if proc_result.stderr is not None:
             print(proc_result.stderr, file=sys.stderr)
         return proc_result.stdout
@@ -66,7 +65,7 @@ class solana_cli(CliBase):
                    "--url", SOLANA_URL,
                    ] + list(args)
             self.debug("Calling: " + " ".join(cmd))
-            return self.run_cli(cmd)
+            return self.run_cli(cmd, universal_newlines=True)
         except subprocess.CalledProcessError as err:
             self.error("ERR: solana error {}".format(err))
             raise
@@ -127,7 +126,7 @@ class neon_cli(CliBase):
                    ]\
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
-            return self.run_cli(cmd)
+            return self.run_cli(cmd, timeout=neon_cli_timeout, universal_newlines=True)
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
