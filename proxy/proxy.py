@@ -22,8 +22,6 @@ from .core.acceptor import AcceptorPool
 from .http.handler import HttpProtocolHandler
 
 from multiprocessing import Process
-from .indexer.indexer import run_indexer
-from proxy.environment import SOLANA_URL, EVM_LOADER_ID, INDEXER_MODE
 
 
 class Proxy:
@@ -43,11 +41,6 @@ class Proxy:
             os.remove(self.flags.pid_file)
 
     def __enter__(self) -> 'Proxy':
-        if INDEXER_MODE.lower() not in [1, 'true', 'True']:
-            self.indexer = Process(target=run_indexer,
-                                   args=(SOLANA_URL,
-                                        EVM_LOADER_ID,))
-            self.indexer.start()
         self.acceptors = AcceptorPool(
             flags=self.flags,
             work_klass=HttpProtocolHandler
