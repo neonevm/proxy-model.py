@@ -78,8 +78,8 @@ echo "EVM_LOADER" $EVM_LOADER
 echo "SOLANA_URL" $SOLANA_URL
 
 
-cat <<<DONE
-echo "Run proxy tests..." && docker run --rm -ti --network=container:proxy \
+cat <<DONE | parallel --jobs 4 --group --results test-result {}
+echo "Run proxy tests..." && docker run --rm --network=container:proxy \
      -e PROXY_URL \
      -e EVM_LOADER \
      -e SOLANA_URL \
@@ -93,12 +93,12 @@ echo "Run proxy tests..." && docker run --rm -ti --network=container:proxy \
      ${EXTRA_ARGS:-} \
      $PROXY_IMAGE
 
-echo "Run uniswap-v2-core tests..." && docker run --rm -ti --network=host \
+echo "Run uniswap-v2-core tests..." && docker run --rm --network=host \
      --entrypoint ./deploy-test.sh \
      ${EXTRA_ARGS:-} \
      $UNISWAP_V2_CORE_IMAGE \
      all
-DONE | parallel --jobs 4 --group --results test-result {}
+DONE
 
 echo "Run tests return"
 exit 0
