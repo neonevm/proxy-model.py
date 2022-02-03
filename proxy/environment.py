@@ -110,7 +110,7 @@ class neon_cli:
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
             self.debug("Calling: " + " ".join(cmd))
-            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True)
+            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
@@ -120,7 +120,7 @@ class neon_cli:
             cmd = ["neon-cli",
                    "--version"]
             self.debug("Calling: " + " ".join(cmd))
-            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True).split()[1]
+            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True, stderr=subprocess.DEVNULL).split()[1]
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
