@@ -134,7 +134,7 @@ class neon_cli(CliBase):
     def version(self):
         try:
             cmd = ["neon-cli", "--version"]
-            return self.run_cli(cmd).split()[1]
+            return self.run_cli(cmd, timeout=neon_cli_timeout, universal_newlines=True).split()[1]
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
