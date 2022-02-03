@@ -8,7 +8,7 @@ from web3.auto import w3
 from eth_keys import keys as eth_keys
 import math
 from ..common_neon.utils import  get_holder_msg
-from ..plugin.eth_proto import Trx as EthTrx
+from ..common_neon.eth_proto import Trx as EthTrx
 
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 headers = {'Content-type': 'application/json'}

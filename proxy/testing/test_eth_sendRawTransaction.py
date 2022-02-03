@@ -189,7 +189,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
     def test_03_execute_with_low_gas(self):
         print("\ntest_03_execute_with_low_gas")
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        trx_store = self.storage_contract.functions.store(148).buildTransaction({'nonce': right_nonce, 'gasPrice': 1})
+        trx_store = self.storage_contract.functions.store(148).buildTransaction({'nonce': right_nonce, 'gasPrice': 10*9})
         print('trx_store:', trx_store)
         trx_store['gas'] = 0 # less than estimated
         print('trx_store:', trx_store)
@@ -198,7 +198,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_store_hash = proxy.eth.send_raw_transaction(trx_store_signed.rawTransaction)
         print('trx_store_hash:', trx_store_hash.hex())
         trx_store_receipt = proxy.eth.wait_for_transaction_receipt(trx_store_hash)
-        print('trx_store_receipt:', trx_store_receipt)
+        print('trx_store_receipt (low_gas):', trx_store_receipt)
         self.assertEqual(trx_store_receipt['status'], 0)  # false Transaction mined but execution failed
 
     # @unittest.skip("a.i.")
