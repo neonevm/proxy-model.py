@@ -511,9 +511,10 @@ class NeonTxSender:
                 if account_desc['deploy']:
                     stage = NeonCreateContractTxStage(self, account_desc)
                     self._create_account_list.append(stage)
-                elif account_desc['writable']:
-                    stage = NeonCreateAccountTxStage(self, account_desc)
-                    self._create_account_list.append(stage)
+                # blocked by evm_loader
+                # elif account_desc['writable']:
+                stage = NeonCreateAccountTxStage(self, account_desc)
+                self._create_account_list.append(stage)
             # TODO: this section may be moved to the estimate_gas() method
             elif account_desc["writable"]:
                 resize_stage = None
