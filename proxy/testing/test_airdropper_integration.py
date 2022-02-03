@@ -155,6 +155,7 @@ class TestAirdropperIntegration(TestCase):
         to_neon_acc1 = self.create_eth_account().address
         to_neon_acc2 = self.create_eth_account().address
 
+        request_airdrop(from_spl_token_acc)
         request_airdrop(to_neon_acc1)
         request_airdrop(to_neon_acc2)
 
