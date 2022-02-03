@@ -43,7 +43,7 @@ from .gas_price_calculator import GasPriceCalculator
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-NEON_PROXY_PKG_VERSION = '0.5.4-dev'
+NEON_PROXY_PKG_VERSION = '0.6.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -337,8 +337,9 @@ class EthereumModel:
             return None
         return self._getTransaction(tx)
 
-    def eth_getCode(self, param,  param1):
-        return "0x01"
+    def eth_getCode(self, account, _tag):
+        account = account.lower()
+        return self.db.get_contract_code(account)
 
     def eth_sendTransaction(self, trx):
         self.debug("eth_sendTransaction")
