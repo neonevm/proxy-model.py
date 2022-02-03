@@ -481,7 +481,7 @@ class NeonTxSender:
         self.builder.init_eth_trx(self.eth_tx, self._eth_meta_list, self._caller_token)
         self.builder.init_iterative(self.resource.storage, self.resource.holder, self.resource.rid)
 
-    def _call_emulated(self):
+    def _call_emulated(self, sender=None):
         self.debug(f'sender address: {self.tx_sender}')
 
         if self.deployed_contract:
@@ -492,7 +492,7 @@ class NeonTxSender:
             self.debug(f'destination address 0x{dst}')
 
         self._emulator_json = call_emulated(
-            dst, self.tx_sender, self.eth_tx.callData.hex(), hex(self.eth_tx.value))
+            dst, sender.hex() if sender else self.tx_sender, self.eth_tx.callData.hex(), hex(self.eth_tx.value))
         self.debug(f'emulator returns: {json.dumps(self._emulator_json, indent=3)}')
 
         self.steps_emulated = self._emulator_json['steps_executed']
@@ -526,7 +526,7 @@ class NeonTxSender:
                 elif account_desc["storage_increment"]:
                     self.unpaid_space += account_desc["storage_increment"]
 
-                if not isPayed(account_desc['address']):
+                if not isPayed(self.solana.client, account_desc['address']):
                     self.debug(f'found losted account {account_desc["account"]}')
                     self.unpaid_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
 

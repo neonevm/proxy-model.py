@@ -99,11 +99,11 @@ class EthereumModel:
 
     def eth_estimateGas(self, param):
         try:
-            caller_id : bytes = bytes.fromhex(param.get('from', "0x%040x" % 0x0)[2:])
+            sender : bytes = bytes.fromhex(param.get('from', "0x%040x" % 0x0)[2:])
 
-            contract_id = param.get('to', None)
-            if contract_id:
-                contract_id = bytes.fromhex(contract_id[2:])
+            contract = param.get('to', None)
+            if contract:
+                contract = bytes.fromhex(contract[2:])
 
             value = param.get('value', None)
             if value:
@@ -114,7 +114,7 @@ class EthereumModel:
                 data = bytes.fromhex(data[2:])
 
             unsigned_trx = {
-                'to': contract_id if contract_id else "",
+                'to': contract if contract else "",
                 'value': value if value else 0,
                 'gas': 999999999,
                 'gasPrice': 1_000_000_000,
@@ -126,7 +126,7 @@ class EthereumModel:
             trx = EthTrx.fromString(signed_trx.rawTransaction)
 
             tx_sender = NeonTxSender(self.db, self.client, trx, steps=500)
-            return estimate_gas(tx_sender)
+            return estimate_gas(tx_sender, sender)
 
         except EthereumError:
             raise

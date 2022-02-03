@@ -1,3 +1,5 @@
+import os
+
 import eth_utils
 import math
 
@@ -78,9 +80,9 @@ def is_account_exists(client: SolanaClient, eth_account: EthereumAddress) -> boo
 
 
 @logged_group("neon.Proxy")
-def estimate_gas(tx_sender: NeonTxSender, *, logger):
-
-    tx_sender._call_emulated()
+def estimate_gas(tx_sender: NeonTxSender, sender,  *, logger):
+    tx_sender.operator_key = PublicKey(os.urandom(32))
+    tx_sender._call_emulated(sender)
     tx_sender._parse_accounts_list();
 
     msg = get_holder_msg(tx_sender.eth_tx)
