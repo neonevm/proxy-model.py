@@ -22,4 +22,3 @@ from setup import __version__ as pkg_version
 #    section
 if lib_version != pkg_version:
     sys.exit(1)
-

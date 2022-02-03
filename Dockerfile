@@ -39,21 +39,7 @@ COPY --from=spl /opt/solana_utils.py \
                 /spl/bin/
 COPY --from=spl /opt/neon-cli /spl/bin/emulator
 
-COPY proxy/operator-keypair.json /root/.config/solana/id.json
-COPY proxy/operator-keypairs/operator2-keypair.json /root/.config/solana/id2.json
-COPY proxy/operator-keypairs/operator3-keypair.json /root/.config/solana/id3.json
-COPY proxy/operator-keypairs/operator4-keypair.json /root/.config/solana/id4.json
-COPY proxy/operator-keypairs/operator5-keypair.json /root/.config/solana/id5.json
-COPY proxy/operator-keypairs/operator6-keypair.json /root/.config/solana/id6.json
-COPY proxy/operator-keypairs/operator7-keypair.json /root/.config/solana/id7.json
-COPY proxy/operator-keypairs/operator8-keypair.json /root/.config/solana/id8.json
-COPY proxy/operator-keypairs/operator9-keypair.json /root/.config/solana/id9.json
-COPY proxy/operator-keypairs/operator10-keypair.json /root/.config/solana/id10.json
-COPY proxy/operator-keypairs/operator11-keypair.json /root/.config/solana/id11.json
-COPY proxy/operator-keypairs/operator12-keypair.json /root/.config/solana/id12.json
-COPY proxy/operator-keypairs/operator13-keypair.json /root/.config/solana/id13.json
-COPY proxy/operator-keypairs/operator14-keypair.json /root/.config/solana/id14.json
-COPY proxy/operator-keypairs/operator15-keypair.json /root/.config/solana/id15.json
+COPY proxy/operator-keypairs/* /root/.config/solana/
 
 COPY . /opt
 ARG PROXY_REVISION
