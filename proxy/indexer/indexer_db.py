@@ -161,10 +161,9 @@ class IndexerDB:
 
     def get_contract_code(self, address) -> str:
         account = self._account_db.get_account_info(address)
-        if not account.neon_account:
-            account.neon_account = address
-            account = self._fill_account_data_from_net(account)
-        if account.code_account and not account.code:
+        if not account.neon_account or (account.code_account and not account.code):
+            if not account.neon_account:
+                account.neon_account = address
             account = self._fill_account_data_from_net(account)
         if account.code:
             return account.code

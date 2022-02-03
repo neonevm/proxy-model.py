@@ -22,8 +22,8 @@ class NeonAccountDB(BaseDB):
         return f"""
             CREATE TABLE IF NOT EXISTS {self._table_name} (
                 neon_account CHAR(42),
-                pda_account TEXT,
-                code_account TEXT,
+                pda_account VARCHAR(50),
+                code_account VARCHAR(50),
                 slot BIGINT,
                 code TEXT,
 

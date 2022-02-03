@@ -268,9 +268,7 @@ def get_accounts_by_neon_address(client: Client, neon_address, *, logger):
     reciept = client.get_account_info(pda_address, commitment=Confirmed)
     account_info = get_from_dict(reciept, 'result', 'value')
     if account_info is None:
-        logger.debug(f"account_info is None")
-        logger.debug(f"pda_address({pda_address})")
-        logger.debug(f"reciept({reciept})")
+        logger.debug(f"account_info is None for pda_address({pda_address}) in reciept({reciept})")
         return None, None
     data = base64.b64decode(account_info['data'][0])
     if len(data) < ACCOUNT_INFO_LAYOUT.sizeof():
@@ -288,9 +286,7 @@ def get_code_from_account(client: Client, address, *, logger):
     reciept = client.get_account_info(address, commitment=Confirmed)
     code_account_info = get_from_dict(reciept, 'result', 'value')
     if code_account_info is None:
-        logger.debug(f"code_account_info is None")
-        logger.debug(f"code_address({address})")
-        logger.debug(f"reciept({reciept})")
+        logger.debug(f"code_account_info is None for code_address({address}) in reciept({reciept})")
         return None
     data = base64.b64decode(code_account_info['data'][0])
     if len(data) < CODE_ACCOUNT_INFO_LAYOUT.sizeof():
