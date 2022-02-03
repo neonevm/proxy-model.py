@@ -1,3 +1,4 @@
+import sys
 from decimal import Decimal
 import json
 import os
@@ -5,7 +6,7 @@ import subprocess
 from logged_groups import logged_group, LogMng
 from solana.publickey import PublicKey
 from solana.account import Account as sol_Account
-from typing import Optional
+from typing import Optional, List
 
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
 PP_SOLANA_URL = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
@@ -98,6 +99,15 @@ def get_solana_accounts(*, logger) -> [sol_Account]:
 
 @logged_group("neon.Proxy")
 class neon_cli:
+
+    def run_cli(self, cmd: List[str]) -> str:
+        self.debug("Calling: " + " ".join(cmd))
+        proc_result = subprocess.run(cmd, timeout=neon_cli_timeout, universal_newlines=True, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE)
+        if proc_result.stderr:
+            print(proc_result.stderr, file=sys.stderr)
+        return proc_result.stdout
+
     def call(self, *args):
         try:
             ctx = json.dumps(LogMng.get_logging_context())
@@ -109,18 +119,15 @@ class neon_cli:
                    ]\
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
-            self.debug("Calling: " + " ".join(cmd))
-            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True, stderr=subprocess.DEVNULL)
+            return self.run_cli(cmd)
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
 
     def version(self):
         try:
-            cmd = ["neon-cli",
-                   "--version"]
-            self.debug("Calling: " + " ".join(cmd))
-            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True, stderr=subprocess.DEVNULL).split()[1]
+            cmd = ["neon-cli", "--version"]
+            return self.run_cli(cmd).split()[1]
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
