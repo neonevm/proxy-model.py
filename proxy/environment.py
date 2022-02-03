@@ -53,7 +53,7 @@ class CliBase:
         self.debug("Calling: " + " ".join(cmd))
         proc_result = subprocess.run(cmd, timeout=neon_cli_timeout, universal_newlines=True, stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE)
-        if proc_result.stderr:
+        if proc_result.stderr is not None:
             print(proc_result.stderr, file=sys.stderr)
         return proc_result.stdout
 
