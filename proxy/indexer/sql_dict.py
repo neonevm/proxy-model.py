@@ -1,86 +1,56 @@
-import psycopg2
-import os
-import logging
 from collections.abc import MutableMapping
-
-POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
-POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
-POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy-pass")
-POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
-
-try:
-    from cPickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
-except ImportError:
-    from pickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
+from proxy.indexer.pg_common import encode, decode, dummy
+from proxy.indexer.utils import BaseDB
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-
-def encode(obj):
-    """Serialize an object using pickle to a binary format accepted by SQLite."""
-    return psycopg2.Binary(dumps(obj, protocol=PICKLE_PROTOCOL))
-
-
-def decode(obj):
-    """Deserialize objects retrieved from SQLite."""
-    return loads(bytes(obj))
-
-
-class SQLDict(MutableMapping):
+class SQLDict(MutableMapping, BaseDB):
     """Serialize an object using pickle to a binary format accepted by SQLite."""
 
-    def __init__(self, tablename='table'):
+    def __init__(self, tablename='table', bin_key=False):
+        self.bin_key = bin_key
         self.encode = encode
         self.decode = decode
-        self.tablename = tablename
-        self.conn = psycopg2.connect(
-            dbname=POSTGRES_DB,
-            user=POSTGRES_USER,
-            password=POSTGRES_PASSWORD,
-            host=POSTGRES_HOST
-        )
-        self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        cur = self.conn.cursor()
-        cur.execute('''
+        self.key_encode = encode if self.bin_key else dummy
+        self.key_decode = decode if self.bin_key else dummy
+        self._table_name = tablename + ("_bin_key" if self.bin_key else "")
+        BaseDB.__init__(self)
+
+    def _create_table_sql(self) -> str:
+        key_type = 'BYTEA' if self.bin_key else 'TEXT'
+        return f'''
                 CREATE TABLE IF NOT EXISTS
-                {} (
-                    key TEXT UNIQUE,
+                {self._table_name} (
+                    key {key_type} UNIQUE,
                     value BYTEA
                 )
-            '''.format(self.tablename)
-        )
-
-    def close(self):
-        self.conn.close()
+            '''
 
     def __len__(self):
-        cur = self.conn.cursor()
-        cur.execute('SELECT COUNT(*) FROM {}'.format(self.tablename))
-        rows = cur.fetchone()[0]
-        return rows if rows is not None else 0
+        with self._conn.cursor() as cur:
+            cur.execute(f'SELECT COUNT(*) FROM {self._table_name}')
+            rows = cur.fetchone()[0]
+            return rows if rows is not None else 0
 
     def iterkeys(self):
-        cur = self.conn.cursor()
-        cur.execute('SELECT key FROM {}'.format(self.tablename))
-        rows = cur.fetchall()
-        for row in rows:
-            yield row[0]
+        with self._conn.cursor() as cur:
+            cur.execute(f'SELECT key FROM {self._table_name}')
+            rows = cur.fetchall()
+            for row in rows:
+                yield self.key_decode(row[0])
 
     def itervalues(self):
-        cur = self.conn.cursor()
-        cur.execute('SELECT value FROM {}'.format(self.tablename))
-        rows = cur.fetchall()
-        for value in rows:
-            yield self.decode(value[0])
+        with self._conn.cursor() as cur:
+            cur.execute(f'SELECT value FROM {self._table_name}')
+            rows = cur.fetchall()
+            for row in rows:
+                yield self.decode(row[0])
 
     def iteritems(self):
-        cur = self.conn.cursor()
-        cur.execute('SELECT key, value FROM {}'.format(self.tablename))
-        rows = cur.fetchall()
-        for row in rows:
-            yield row[0], self.decode(row[1])
+        with self._conn.cursor() as cur:
+            cur.execute(f'SELECT key, value FROM {self._table_name}')
+            rows = cur.fetchall()
+            for row in rows:
+                yield self.key_decode(row[0]), self.decode(row[1])
 
     def keys(self):
         return list(self.iterkeys())
@@ -92,35 +62,40 @@ class SQLDict(MutableMapping):
         return list(self.iteritems())
 
     def __contains__(self, key):
-        cur = self.conn.cursor()
-        cur.execute('SELECT 1 FROM {} WHERE key = %s'.format(self.tablename), (key,))
-        return cur.fetchone() is not None
+        bin_key = self.key_encode(key)
+        with self._conn.cursor() as cur:
+            cur.execute(f'SELECT 1 FROM {self._table_name} WHERE key = %s', (bin_key,))
+            return cur.fetchone() is not None
 
     def __getitem__(self, key):
-        cur = self.conn.cursor()
-        cur.execute('SELECT value FROM {} WHERE key = %s'.format(self.tablename), (key,))
-        item = cur.fetchone()
-        if item is None:
-            raise KeyError(key)
-        return self.decode(item[0])
+        bin_key = self.key_encode(key)
+        with self._conn.cursor() as cur:
+            cur.execute(f'SELECT value FROM {self._table_name} WHERE key = %s', (bin_key,))
+            item = cur.fetchone()
+            if item is None:
+                raise KeyError(key)
+            return self.decode(item[0])
 
     def __setitem__(self, key, value):
-        cur = self.conn.cursor()
-        cur.execute('''
-                INSERT INTO {} (key, value)
-                VALUES (%s,%s)
-                ON CONFLICT (key)
-                DO UPDATE SET
-                value = EXCLUDED.value
-            '''.format(self.tablename),
-            (key, self.encode(value))
-        )
+        bin_key = self.key_encode(key)
+        bin_value = self.encode(value)
+        with self._conn.cursor() as cur:
+            cur.execute(f'''
+                    INSERT INTO {self._table_name} (key, value)
+                    VALUES (%s,%s)
+                    ON CONFLICT (key)
+                    DO UPDATE SET
+                    value = EXCLUDED.value
+                ''',
+                (bin_key, bin_value)
+            )
 
     def __delitem__(self, key):
-        cur = self.conn.cursor()
-        if key not in self:
-            raise KeyError(key)
-        cur.execute('DELETE FROM {} WHERE key = %s'.format(self.tablename), (key,))
+        bin_key = self.key_encode(key)
+        with self._conn.cursor() as cur:
+            if bin_key not in self:
+                raise KeyError(key)
+            cur.execute(f'DELETE FROM {self._table_name} WHERE key = %s', (bin_key,))
 
     def __iter__(self):
         return self.iterkeys()

@@ -34,6 +34,7 @@ PROXY_IMAGE=neonlabsorg/proxy:${IMAGETAG:-$REVISION}
 UNISWAP_V2_CORE_IMAGE=neonlabsorg/uniswap-v2-core:stable
 # Refreshing uniswap-v2-core image is required to run .buildkite/steps/deploy-test.sh locally
 docker pull $UNISWAP_V2_CORE_IMAGE
+docker-compose -f proxy/docker-compose-test.yml pull
 
 function cleanup_docker {
     if docker logs proxy >proxy.log 2>&1; then
@@ -47,18 +48,20 @@ function cleanup_docker {
     if docker logs airdropper >airdropper.log 2>&1; then echo "airdropper logs saved"; fi
 
     echo "\nCleanup docker-compose..."
-    docker-compose -f proxy/docker-compose-test.yml down --rmi 'all'
+    docker-compose -f proxy/docker-compose-test.yml down
     echo "Cleanup docker-compose done."
     echo "\nRemoving temporary data volumes..."
     docker volume prune -f
 
-    if grep '\[E\] get_measurements' <measurements.log; then
+    if grep 'ERROR.*get_measurements' <measurements.log; then
         echo 'Failed to get measurements'
         exit 1
     fi
 }
 trap cleanup_docker EXIT
 
+echo "\nCleanup docker-compose..."
+docker-compose -f proxy/docker-compose-test.yml down
 if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
   echo "docker-compose failed to start"
   exit 1;
@@ -87,7 +90,7 @@ docker run --rm -ti --network=container:proxy \
      -e POSTGRES_HOST=postgres \
      --entrypoint ./proxy/deploy-test.sh \
      ${EXTRA_ARGS:-} \
-     $PROXY_IMAGE \
+     $PROXY_IMAGE
 
 echo "Run uniswap-v2-core tests..."
 docker run --rm -ti --network=host \
