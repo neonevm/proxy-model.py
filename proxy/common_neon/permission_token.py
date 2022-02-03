@@ -1,5 +1,4 @@
 from lib2to3.pgen2 import token
-from venv import create
 from spl.token.client import Token as SplToken
 from solana.publickey import PublicKey
 from solana.rpc.api import Client as SolanaClient
@@ -17,14 +16,15 @@ from decimal import Decimal
 import os
 
 class PermissionToken:
-    def __init__(self, 
-                 solana: SolanaClient, 
-                 token_mint: PublicKey, 
+    def __init__(self,
+                 solana: SolanaClient,
+                 token_mint: PublicKey,
                  payer: SolanaAccount):
         self.solana = solana
+        self.token_mint = token_mint
         self.payer = payer
-        self.token = SplToken(solana, 
-                              token_mint, 
+        self.token = SplToken(self.solana,
+                              self.token_mint,
                               TOKEN_PROGRAM_ID,
                               payer)
 
@@ -39,7 +39,7 @@ class PermissionToken:
             return 0
         return int(result['value']['amount'])
 
-    def create_account_if_needed(self, 
+    def create_account_if_needed(self,
                                  ether_addr: Union[str, EthereumAddress]):
         token_account = self.get_token_account_address(ether_addr)
         response = self.solana.get_account_info(token_account, Confirmed)
@@ -48,18 +48,19 @@ class PermissionToken:
 
         txn = Transaction()
         create_txn = spl_token.create_associated_token_account(
-            payer=self.payer.public_key(), 
-            owner=PublicKey(ether2program(ether_addr)[0]), 
+            payer=self.payer.public_key(),
+            owner=PublicKey(ether2program(ether_addr)[0]),
             mint=self.token.pubkey
         )
         txn.add(create_txn)
         self.token._conn.send_transaction(txn, self.payer, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
         return token_account
 
-    def mint_to(self, 
+    def mint_to(self,
                 amount: int,
                 ether_addr: Union[str, EthereumAddress],
                 mint_authority_file: str):
         token_account = self.create_account_if_needed(ether_addr)
-        mint_command = f'spl-token mint "{str(self.token.pubkey)}" {Decimal(amount) * pow(Decimal(10), -9)} --owner {mint_authority_file} -- "{str(token_account)}"'
+        mint_command = f'spl-token mint "{str(self.token.pubkey)}" {Decimal(amount) * pow(Decimal(10), -9)}'
+        mint_command += f' --owner {mint_authority_file} -- "{str(token_account)}"'
         os.system(mint_command)
