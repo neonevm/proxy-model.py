@@ -31,7 +31,9 @@ from web3.auto.gethdev import w3
 install_solc(version='0.7.0')
 from solcx import compile_source
 
-MINIMAL_GAS_PRICE = 1
+# TODO: check it
+MINIMAL_GAS_PRICE = 0
+
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/365'
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
