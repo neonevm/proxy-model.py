@@ -31,7 +31,8 @@ done
 export REVISION=$(git rev-parse HEAD)
 PROXY_IMAGE=neonlabsorg/proxy:${IMAGETAG:-$REVISION}
 
-UNISWAP_V2_CORE_IMAGE=neonlabsorg/uniswap-v2-core:stable
+#-- UNISWAP_V2_CORE_IMAGE=neonlabsorg/uniswap-v2-core:stable
+UNISWAP_V2_CORE_IMAGE=neonlabsorg/uniswap-v2-core:bdc8a3cf9c094dbcf96b77c8c015be0df6ca8098
 # Refreshing uniswap-v2-core image is required to run .buildkite/steps/deploy-test.sh locally
 docker pull $UNISWAP_V2_CORE_IMAGE
 docker-compose -f proxy/docker-compose-test.yml pull
