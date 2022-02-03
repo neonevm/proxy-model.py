@@ -76,8 +76,9 @@ export SOLANA_URL=$(docker exec solana bash -c 'echo "$SOLANA_URL"')
 echo "EVM_LOADER" $EVM_LOADER
 echo "SOLANA_URL" $SOLANA_URL
 
-echo "Run proxy tests..."
-docker run --rm -ti --network=container:proxy \
+
+cat <<<DONE
+echo "Run proxy tests..." && docker run --rm -ti --network=container:proxy \
      -e PROXY_URL \
      -e EVM_LOADER \
      -e SOLANA_URL \
@@ -89,14 +90,14 @@ docker run --rm -ti --network=container:proxy \
      -e POSTGRES_HOST=postgres \
      --entrypoint ./proxy/deploy-test.sh \
      ${EXTRA_ARGS:-} \
-     $PROXY_IMAGE \
+     $PROXY_IMAGE
 
-echo "Run uniswap-v2-core tests..."
-docker run --rm -ti --network=host \
+echo "Run uniswap-v2-core tests..." && docker run --rm -ti --network=host \
      --entrypoint ./deploy-test.sh \
      ${EXTRA_ARGS:-} \
      $UNISWAP_V2_CORE_IMAGE \
      all
+DONE | parallel --results test-result {}
 
 echo "Run tests return"
 exit 0
