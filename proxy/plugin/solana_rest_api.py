@@ -29,23 +29,21 @@ from typing import List, Tuple
 
 from .solana_rest_api_tools import getAccountInfo, neon_config_load, \
     get_token_balance_or_airdrop, estimate_gas
-from ..common_neon.transaction_sender import NeonTxSender, OperatorResourceList
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.transaction_sender import NeonTxSender
 from ..common_neon.address import EthereumAddress
 from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
-from ..environment import SOLANA_URL, MINIMAL_GAS_PRICE, PP_SOLANA_URL, ACCOUNT_PERMISSION_UPDATE_INT
-from ..environment import neon_cli, get_solana_accounts
+from ..environment import SOLANA_URL, PP_SOLANA_URL
+from ..environment import neon_cli
 from ..indexer.indexer_db import IndexerDB, PendingTxError
 from .gas_price_calculator import GasPriceCalculator
-from ..common_neon.account_whitelist import AccountWhitelist
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-NEON_PROXY_PKG_VERSION = '0.5.4-dev'
+NEON_PROXY_PKG_VERSION = '0.6.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -57,7 +55,7 @@ class EthereumModel:
         self.client = SolanaClient(SOLANA_URL)
         self.db = IndexerDB()
         self.db.set_client(self.client)
-        
+
         if PP_SOLANA_URL == SOLANA_URL:
             self.gas_price_calculator = GasPriceCalculator(self.client)
         else:
@@ -68,8 +66,6 @@ class EthereumModel:
             self.proxy_id_glob.value += 1
 
         self.debug(f"Worker id {self.proxy_id}")
-
-        self.account_whitelist = AccountWhitelist(self.client, ACCOUNT_PERMISSION_UPDATE_INT)
 
         neon_config_load(self)
 
@@ -277,7 +273,7 @@ class EthereumModel:
             acc_info = getAccountInfo(self.client, EthereumAddress(account))
             return hex(int.from_bytes(acc_info.trx_count, 'little'))
         except Exception as err:
-            self.error("eth_getTransactionCount: Can't get account info: %s", err)
+            self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
 
     def _getTransactionReceipt(self, tx):
@@ -341,8 +337,9 @@ class EthereumModel:
             return None
         return self._getTransaction(tx)
 
-    def eth_getCode(self, param,  param1):
-        return "0x01"
+    def eth_getCode(self, account, _tag):
+        account = account.lower()
+        return self.db.get_contract_code(account)
 
     def eth_sendTransaction(self, trx):
         self.debug("eth_sendTransaction")
@@ -380,7 +377,7 @@ class EthereumModel:
                                     ]
                                 })
         try:
-            tx_sender = NeonTxSender(self.db, self.client, self.account_whitelist, trx, steps=500)
+            tx_sender = NeonTxSender(self.db, self.client, trx, steps=500)
             tx_sender.execute()
             return eth_signature
 
@@ -391,7 +388,7 @@ class EthereumModel:
             self._log_transaction_error(err)
             raise
         except EthereumError as err:
-            self.error("eth_sendRawTransaction EthereumError:%s", err)
+            self.debug("eth_sendRawTransaction EthereumError: {err}")
             raise
         except Exception as err:
             self.error("eth_sendRawTransaction type(err):%s, Exception:%s", type(err), err)
