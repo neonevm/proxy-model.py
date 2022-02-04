@@ -413,7 +413,7 @@ class NeonTxSender:
         neon_sign = self.eth_tx.hash_signed().hex()
         operator = f'{str(self.resource.public_key())}:{self.resource.rid}'
         self._pending_tx = NeonPendingTxInfo(neon_sign=neon_sign, slot=0, operator=operator)
-        self.pending_tx_into_db(self.solana.get_recent_blockslot())
+        self.pend_tx_into_db(self.solana.get_recent_blockslot())
 
         # Validate that transaction is allowed
         whitelist = AccountWhitelist(self.solana.client, ACCOUNT_PERMISSION_UPDATE_INT, self.resource.signer)
@@ -444,7 +444,7 @@ class NeonTxSender:
         self.error(f'No strategy to execute the Neon transaction: {self.eth_tx}')
         raise RuntimeError('No strategy to execute the Neon transaction')
 
-    def pending_tx_into_db(self, slot: int):
+    def pend_tx_into_db(self, slot: int):
         """
         Transaction sender doesn't remove pending transactions!!!
         This protects the neon transaction execution from race conditions, when user tries to send transaction
@@ -455,7 +455,7 @@ class NeonTxSender:
         if self._pending_tx and ((slot - self._pending_tx.slot) > 10):
             self.debug(f'Update pending transaction: diff {slot - self._pending_tx.slot}, set {slot}')
             self._pending_tx.slot = slot
-            self._db.pending_transaction(self._pending_tx)
+            self._db.pend_transaction(self._pending_tx)
 
     def _submit_tx_into_db(self, neon_res: NeonTxResultInfo):
         neon_tx = NeonTxInfo()
