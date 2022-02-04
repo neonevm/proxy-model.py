@@ -15,7 +15,6 @@ from proxy.common_neon.neon_instruction import create_account_layout
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from time import sleep
 from web3 import Web3
-from .testing_helpers import request_airdrop
 import os
 import json
 
@@ -23,6 +22,7 @@ import json
 MAX_AIRDROP_WAIT_TIME = 45
 EVM_LOADER_ID = PublicKey(EVM_LOADER_ID)
 PROXY_URL = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
+FAUCET_RPC_PORT = 3333
 NAME = 'TestToken'
 SYMBOL = 'TST'
 proxy = Web3(Web3.HTTPProvider(PROXY_URL))
@@ -113,8 +113,6 @@ class TestAirdropperIntegration(TestCase):
         from_spl_token_acc = self.create_token_account(from_owner.public_key(), mint_amount)
         to_neon_acc = self.create_eth_account().address
 
-        request_airdrop(to_neon_acc)
-
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc), 0)
 
@@ -130,10 +128,8 @@ class TestAirdropperIntegration(TestCase):
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
 
-        #====self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - TRANSFER_AMOUNT)
-        self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), 1000_000_000_000)
-
-        #====self.assertEqual(self.wrapper.get_balance(to_neon_acc), TRANSFER_AMOUNT)
+        self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - TRANSFER_AMOUNT)
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc), TRANSFER_AMOUNT)
 
         wait_time = 0
         eth_balance = 0
@@ -147,8 +143,8 @@ class TestAirdropperIntegration(TestCase):
         print(f"Wait time for simple transaction (1 airdrop): {wait_time}")
 
         eth_balance = proxy.eth.get_balance(to_neon_acc)
-        print("simple case NEON balance is: ", eth_balance)
-        #====self.assertTrue(eth_balance > 0 and eth_balance < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
+        print("NEON balance is: ", eth_balance)
+        self.assertTrue(eth_balance > 0 and eth_balance < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
 
     def test_success_airdrop_complex_case(self):
         from_owner = self.create_sol_account()
@@ -156,9 +152,6 @@ class TestAirdropperIntegration(TestCase):
         from_spl_token_acc = self.create_token_account(from_owner.public_key(), mint_amount)
         to_neon_acc1 = self.create_eth_account().address
         to_neon_acc2 = self.create_eth_account().address
-
-        request_airdrop(to_neon_acc1)
-        request_airdrop(to_neon_acc2)
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc1), 0)
@@ -183,11 +176,10 @@ class TestAirdropperIntegration(TestCase):
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
 
-        #====self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - TRANSFER_AMOUNT1 - TRANSFER_AMOUNT2)
-        self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), 1000_000_000_000)
+        self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - TRANSFER_AMOUNT1 - TRANSFER_AMOUNT2)
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc1), TRANSFER_AMOUNT1)
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc2), TRANSFER_AMOUNT2)
 
-        #====self.assertEqual(self.wrapper.get_balance(to_neon_acc1), TRANSFER_AMOUNT1)
-        #====self.assertEqual(self.wrapper.get_balance(to_neon_acc2), TRANSFER_AMOUNT2)
 
         wait_time = 0
         eth_balance1 = 0
@@ -229,5 +221,5 @@ class TestAirdropperIntegration(TestCase):
 
         sleep(15)
         eth_balance = proxy.eth.get_balance(to_neon_acc)
-        print("no airdrop NEON balance is: ", eth_balance)
+        print("NEON balance is: ", eth_balance)
         self.assertEqual(eth_balance, 0)
