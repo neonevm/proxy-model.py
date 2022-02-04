@@ -11,7 +11,7 @@ import traceback
 import multiprocessing
 
 from logged_groups import logged_group
-from typing import NamedTuple, Optional
+from typing import Optional
 
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
@@ -30,7 +30,7 @@ from .solana_interactor import check_if_blockhash_notfound
 from ..common_neon.eth_proto import Trx as EthTx
 from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, ACCOUNT_PERMISSION_UPDATE_INT
 from ..indexer.utils import NeonTxResultInfo, NeonTxInfo
-from ..indexer.indexer_db import IndexerDB, NeonPendingTxInfo
+from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..environment import get_solana_accounts
 from ..common_neon.account_whitelist import AccountWhitelist
 
@@ -365,7 +365,7 @@ def EthMeta(pubkey, is_writable) -> AccountMeta:
 
 @logged_group("neon.Proxy")
 class NeonTxSender:
-    def __init__(self, db: IndexerDB, client: SolanaClient, eth_tx: EthTx, steps: int):
+    def __init__(self, db: MemDB, client: SolanaClient, eth_tx: EthTx, steps: int):
         self._db = db
         self.eth_tx = eth_tx
         self.steps = steps
@@ -460,7 +460,7 @@ class NeonTxSender:
     def _submit_tx_into_db(self, neon_res: NeonTxResultInfo):
         neon_tx = NeonTxInfo()
         neon_tx.init_from_eth_tx(self.eth_tx)
-        self._db.submit_transaction(neon_tx, neon_res, [])
+        self._db.submit_transaction(neon_tx, neon_res)
 
     def _prepare_execution(self):
         self._call_emulated()

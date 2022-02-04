@@ -40,7 +40,7 @@ class IndexerDB:
     def set_client(self, client):
         self._client = client
 
-    def pending_transaction(self, tx: NeonPendingTxInfo):
+    def pend_transaction(self, tx: NeonPendingTxInfo):
         self._pending_txs_db.set_tx(tx)
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, used_ixs: [SolanaIxSignInfo]):
@@ -119,7 +119,7 @@ class IndexerDB:
     def get_last_block_height(self):
         return self._constants['last_block_height']
 
-    def get_latest_block_height(self):
+    def get_latest_block_height(self) -> int:
         return self._blocks_db.get_latest_block_height()
 
     def set_last_slot_height(self, slot, height):
@@ -138,7 +138,7 @@ class IndexerDB:
     def get_logs(self, fromBlock, toBlock, address, topics, blockHash):
         return self._logs_db.get_logs(fromBlock, toBlock, address, topics, blockHash)
 
-    def get_block_by_hash(self, block_hash: int) -> SolanaBlockDBInfo:
+    def get_block_by_hash(self, block_hash: str) -> SolanaBlockDBInfo:
         return self._blocks_db.get_block_by_hash(block_hash)
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockDBInfo:

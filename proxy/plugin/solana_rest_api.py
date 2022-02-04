@@ -37,8 +37,9 @@ from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..environment import SOLANA_URL, PP_SOLANA_URL
 from ..environment import neon_cli
-from ..indexer.indexer_db import IndexerDB, PendingTxError
+from ..memdb.memdb import MemDB, PendingTxError
 from .gas_price_calculator import GasPriceCalculator
+
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -52,12 +53,11 @@ class EthereumModel:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
     def __init__(self):
-        self.client = SolanaClient(SOLANA_URL)
-        self.db = IndexerDB()
-        self.db.set_client(self.client)
+        self._client = SolanaClient(SOLANA_URL)
+        self._db = MemDB(self._client)
 
         if PP_SOLANA_URL == SOLANA_URL:
-            self.gas_price_calculator = GasPriceCalculator(self.client)
+            self.gas_price_calculator = GasPriceCalculator(self._client)
         else:
             self.gas_price_calculator = GasPriceCalculator(SolanaClient(PP_SOLANA_URL))
 
@@ -111,7 +111,7 @@ class EthereumModel:
 
     def process_block_tag(self, tag):
         if tag == "latest":
-            block_number = self.db.get_latest_block_height()
+            block_number = self._db.get_latest_block_height()
         elif tag in ('earliest', 'pending'):
             raise Exception("Invalid tag {}".format(tag))
         elif isinstance(tag, str):
@@ -123,7 +123,7 @@ class EthereumModel:
         return block_number
 
     def eth_blockNumber(self):
-        height = self.db.get_latest_block_height()
+        height = self._db.get_latest_block_height()
         self.debug("eth_blockNumber %s", hex(height))
         return hex(height)
 
@@ -133,7 +133,7 @@ class EthereumModel:
         """
         eth_acc = EthereumAddress(account)
         self.debug(f'eth_getBalance: {account} {eth_acc}')
-        balance = get_token_balance_or_airdrop(self.client, eth_acc)
+        balance = get_token_balance_or_airdrop(self._client, eth_acc)
         return hex(balance * eth_utils.denoms.gwei)
 
     def eth_getLogs(self, obj):
@@ -154,10 +154,10 @@ class EthereumModel:
         if 'blockHash' in obj:
            blockHash = obj['blockHash']
 
-        return self.db.get_logs(fromBlock, toBlock, address, topics, blockHash)
+        return self._db.get_logs(fromBlock, toBlock, address, topics, blockHash)
 
     def getBlockBySlot(self, slot, full):
-        block = self.db.get_full_block_by_slot(slot)
+        block = self._db.get_full_block_by_slot(slot)
         if block.slot is None:
             return None
 
@@ -165,7 +165,7 @@ class EthereumModel:
         gasUsed = 0
         trx_index = 0
         for signature in block.signs:
-            tx = self.db.get_tx_by_sol_sign(signature)
+            tx = self._db.get_tx_by_sol_sign(signature)
             if not tx:
                 continue
 
@@ -214,7 +214,7 @@ class EthereumModel:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block_hash = block_hash.lower()
-        slot = self.db.get_block_by_hash(block_hash).slot
+        slot = self._db.get_block_by_hash(block_hash).slot
         if slot is None:
             self.debug("Not found block by hash %s", block_hash)
             return None
@@ -231,7 +231,7 @@ class EthereumModel:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block_number = self.process_block_tag(tag)
-        slot = self.db.get_block_by_height(block_number).slot
+        slot = self._db.get_block_by_height(block_number).slot
         if slot is None:
             self.debug("Not found block by number %s", tag)
             return None
@@ -270,7 +270,7 @@ class EthereumModel:
     def eth_getTransactionCount(self, account, tag):
         self.debug('eth_getTransactionCount: %s', account)
         try:
-            acc_info = getAccountInfo(self.client, EthereumAddress(account))
+            acc_info = getAccountInfo(self._client, EthereumAddress(account))
             return hex(int.from_bytes(acc_info.trx_count, 'little'))
         except Exception as err:
             self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
@@ -299,7 +299,7 @@ class EthereumModel:
         self.debug('eth_getTransactionReceipt: %s', trxId)
 
         neon_sign = trxId.lower()
-        tx = self.db.get_tx_by_neon_sign(neon_sign)
+        tx = self._db.get_tx_by_neon_sign(neon_sign)
         if not tx:
             self.debug("Not found receipt")
             return None
@@ -331,7 +331,7 @@ class EthereumModel:
         self.debug('eth_getTransactionByHash: %s', trxId)
 
         neon_sign = trxId.lower()
-        tx = self.db.get_tx_by_neon_sign(neon_sign)
+        tx = self._db.get_tx_by_neon_sign(neon_sign)
         if tx is None:
             self.debug("Not found receipt")
             return None
@@ -339,7 +339,7 @@ class EthereumModel:
 
     def eth_getCode(self, account, _tag):
         account = account.lower()
-        return self.db.get_contract_code(account)
+        return self._db.get_contract_code(account)
 
     def eth_sendTransaction(self, trx):
         self.debug("eth_sendTransaction")
@@ -377,7 +377,7 @@ class EthereumModel:
                                     ]
                                 })
         try:
-            tx_sender = NeonTxSender(self.db, self.client, trx, steps=500)
+            tx_sender = NeonTxSender(self._db, self._client, trx, steps=500)
             tx_sender.execute()
             return eth_signature
 
@@ -535,7 +535,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
     def handle_request_impl(self, request: HttpParser) -> None:
         if request.method == b'OPTIONS':
-            self.client.queue(memoryview(build_http_response(
+            self._client.queue(memoryview(build_http_response(
                 httpStatusCodes.OK, body=None,
                 headers={
                     b'Access-Control-Allow-Origin': b'*',
@@ -570,7 +570,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                      request.get('method', '---'),
                      resp_time_ms)
 
-        self.client.queue(memoryview(build_http_response(
+        self._client.queue(memoryview(build_http_response(
             httpStatusCodes.OK, body=json.dumps(response).encode('utf8'),
             headers={
                 b'Content-Type': b'application/json',
