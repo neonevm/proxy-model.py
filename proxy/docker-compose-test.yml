@@ -26,7 +26,7 @@ services:
 
   evm_loader:
     container_name: evm_loader
-    image: neonlabsorg/evm_loader:${EVM_LOADER_REVISION:-be55c851bf8d59922d36c2be17771cef47dd3fc2}
+    image: neonlabsorg/evm_loader:${EVM_LOADER_REVISION:-94cc91671c9096e1d562e1616ae92405ef131fbe}
     environment:
       - SOLANA_URL=http://solana:8899
     networks:
