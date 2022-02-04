@@ -53,7 +53,7 @@ class Test_read_only_accounts(unittest.TestCase):
     def create_token_mint(self):
         self.solana_client = SolanaClient(solana_url)
 
-        with open("proxy/operator-keypair.json") as f:
+        with open("proxy/operator-keypairs/id.json") as f:
             d = json.load(f)
         self.solana_account = SolanaAccount(d[0:32])
         self.solana_client.request_airdrop(self.solana_account.public_key(), 1000_000_000_000, Confirmed)
