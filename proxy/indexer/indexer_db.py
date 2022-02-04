@@ -7,7 +7,7 @@ from ..environment import FINALIZED
 try:
     from utils import LogDB, NeonTxInfo, NeonTxResultInfo, SolanaIxSignInfo
     from accounts_db import NeonAccountDB, NeonAccountInfo
-    from blocks_db import SolanaBlocksDB, SolanaBlockDBInfo
+    from blocks_db import SolanaBlocksDB, SolanaBlockInfo
     from transactions_db import NeonTxsDB, NeonTxDBInfo
     from pending_db import NeonPendingTxInfo, NeonPendingTxsDB, PendingTxError
     from sql_dict import SQLDict
@@ -15,7 +15,7 @@ try:
 except ImportError:
     from .utils import LogDB, NeonTxInfo, NeonTxResultInfo, SolanaIxSignInfo
     from .accounts_db import NeonAccountDB, NeonAccountInfo
-    from .blocks_db import SolanaBlocksDB, SolanaBlockDBInfo
+    from .blocks_db import SolanaBlocksDB, SolanaBlockInfo
     from .transactions_db import NeonTxsDB, NeonTxDBInfo
     from .pending_db import NeonPendingTxInfo, NeonPendingTxsDB, PendingTxError
     from .sql_dict import SQLDict
@@ -63,7 +63,7 @@ class IndexerDB:
             self.error('Exception on submitting transaction. ' +
                        f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
 
-    def _fill_block_from_net(self, block: SolanaBlockDBInfo):
+    def _fill_block_from_net(self, block: SolanaBlockInfo):
         opts = {"commitment": "confirmed", "transactionDetails": "signatures", "rewards": False}
         net_block = self._client._provider.make_request("getBlock", block.slot, opts)
         if (not net_block) or ('result' not in net_block):
@@ -101,13 +101,13 @@ class IndexerDB:
                 account.code)
         return account
 
-    def get_block_by_slot(self, slot) -> SolanaBlockDBInfo:
+    def get_block_by_slot(self, slot) -> SolanaBlockInfo:
         block = self._blocks_db.get_block_by_slot(slot)
         if not block.hash:
             self._fill_block_from_net(block)
         return block
 
-    def get_full_block_by_slot(self, slot) -> SolanaBlockDBInfo:
+    def get_full_block_by_slot(self, slot) -> SolanaBlockInfo:
         block = self._blocks_db.get_full_block_by_slot(slot)
         if not block.parent_hash:
             self._fill_block_from_net(block)
@@ -138,10 +138,10 @@ class IndexerDB:
     def get_logs(self, fromBlock, toBlock, address, topics, blockHash):
         return self._logs_db.get_logs(fromBlock, toBlock, address, topics, blockHash)
 
-    def get_block_by_hash(self, block_hash: str) -> SolanaBlockDBInfo:
+    def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_hash(block_hash)
 
-    def get_block_by_height(self, block_height: int) -> SolanaBlockDBInfo:
+    def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_height(block_height)
 
     def get_pending_tx_slot(self, neon_sign: str) -> int:

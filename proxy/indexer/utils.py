@@ -9,7 +9,6 @@ import subprocess
 import traceback
 
 from eth_utils import big_endian_to_int
-from solana.account import Account
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
@@ -25,7 +24,7 @@ from ..common_neon.address import ether2program
 from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, ACCOUNT_INFO_LAYOUT
 from ..common_neon.eth_proto import Trx as EthTx
-from ..common_neon.utils import get_from_dict
+from ..common_neon.utils import get_from_dict, str_fmt_object
 from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID, get_solana_accounts
 
 from proxy.indexer.pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
@@ -39,14 +38,6 @@ def check_error(trx):
     if 'meta' in trx and 'err' in trx['meta'] and trx['meta']['err'] is not None:
         return True
     return False
-
-
-def str_fmt_object(obj):
-    name = f'{type(obj)}'
-    name = name[name.rfind('.') + 1:-2]
-    lookup = lambda o: o.__dict__ if hasattr(o, '__dict__') else None
-    members = {json.dumps(obj, skipkeys=True, default=lookup, sort_keys=True)}
-    return f'{name}: {members}'
 
 
 class SolanaIxSignInfo:

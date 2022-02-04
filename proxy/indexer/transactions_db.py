@@ -1,9 +1,9 @@
 from .utils import BaseDB, SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, str_fmt_object
-from .blocks_db import SolanaBlockDBInfo
+from .blocks_db import SolanaBlockInfo
 
 
 class NeonTxDBInfo:
-    def __init__(self, neon_tx=NeonTxInfo(), neon_res=NeonTxResultInfo(), block=SolanaBlockDBInfo(), used_ixs=[]):
+    def __init__(self, neon_tx=NeonTxInfo(), neon_res=NeonTxResultInfo(), block=SolanaBlockInfo(), used_ixs=[]):
         self.neon_tx = neon_tx
         self.neon_res = neon_res
         self.used_ixs = used_ixs

@@ -15,7 +15,7 @@ from itertools import zip_longest
 from logged_groups import logged_group
 
 from .costs import update_transaction_cost
-from .utils import get_from_dict
+from .utils import get_from_dict, SolanaBlockInfo
 from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, WRITE_TRANSACTION_COST_IN_DB
 from ..environment import LOG_SENDING_SOLANA_TRANSACTION, FUZZING_BLOCKHASH, CONFIRM_TIMEOUT
 
@@ -129,6 +129,45 @@ class SolanaInteractor:
         request_list = [(size, opts) for size in size_list]
         response_list = self._send_rpc_batch_request("getMinimumBalanceForRentExemption", request_list)
         return [r['result'] for r in response_list]
+
+    def get_block_slot_list(self, last_block_slot, limit: int, commitment='confirmed') -> [int]:
+        opts = {
+            "commitment": commitment,
+            "enconding": "json",
+        }
+        return self.client._provider.make_request("getBlocksWithLimit", last_block_slot, limit, opts)['result']
+
+    def get_block_info_list(self, block_slot_list: [int], commitment='confirmed') -> [SolanaBlockInfo]:
+        opts = {
+            "commitment": commitment,
+            "encoding": "json",
+            "transactionDetails": "signatures",
+            "rewards": False
+        }
+
+        self.debug(f' {block_slot_list}')
+
+        request_list = []
+        for slot in block_slot_list:
+            request_list.append((slot, opts))
+
+        block_list = []
+        response_list = self._send_rpc_batch_request('getBlock', request_list)
+        for slot, response in zip(block_slot_list, response_list):
+            if (not response) or ('result' not in response):
+                continue
+            net_block = response['result']
+            block = SolanaBlockInfo(
+                slot=slot,
+                finalized=False,
+                hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
+                height=net_block['blockHeight'],
+                parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
+                time=net_block['blockTime'],
+                signs=net_block['signatures']
+            )
+            block_list.append(block)
+        return block_list
 
     def _getAccountData(self, account, expected_length):
         info = self.client.get_account_info(account, commitment=Confirmed)['result']['value']

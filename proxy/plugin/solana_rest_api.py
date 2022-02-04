@@ -289,7 +289,7 @@ class EthereumModel:
             "contractAddress": tx.neon_tx.contract,
             "logs": tx.neon_res.logs,
             "status": tx.neon_res.status,
-            "logsBloom":"0x"+'0'*512
+            "logsBloom": "0x"+'0'*512
         }
 
         self.debug('RESULT: %s', json.dumps(result, indent=3))
@@ -510,10 +510,10 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 params = request.get('params', [])
                 response['result'] = method(*params)
         except SolanaTxError as err:
-            # traceback.print_exc()
+            traceback.print_exc()
             response['error'] = err.result
         except EthereumError as err:
-            # traceback.print_exc()
+            traceback.print_exc()
             response['error'] = err.getError()
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
@@ -570,7 +570,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                      request.get('method', '---'),
                      resp_time_ms)
 
-        self._client.queue(memoryview(build_http_response(
+        self.client.queue(memoryview(build_http_response(
             httpStatusCodes.OK, body=json.dumps(response).encode('utf8'),
             headers={
                 b'Content-Type': b'application/json',

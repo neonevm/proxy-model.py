@@ -1,20 +1,7 @@
 import psycopg2
 import psycopg2.extras
-from .utils import BaseDB, str_fmt_object
-
-
-class SolanaBlockDBInfo:
-    def __init__(self, slot=None, finalized=False, height=None, hash=None, parent_hash=None, time=None, signs=None):
-        self.slot = slot
-        self.finalized = finalized
-        self.height = height
-        self.hash = hash
-        self.parent_hash = parent_hash
-        self.time = time
-        self.signs = signs
-
-    def __str__(self):
-        return str_fmt_object(self)
+from .utils import BaseDB
+from ..common_neon.utils import SolanaBlockInfo
 
 
 class SolanaBlocksDB(BaseDB):
@@ -42,22 +29,22 @@ class SolanaBlocksDB(BaseDB):
             CREATE INDEX IF NOT EXISTS {self._table_name}_height ON {self._table_name}(height, finalized);
             """
 
-    def _block_from_value(self, value, slot=None) -> SolanaBlockDBInfo:
+    def _block_from_value(self, value, slot=None) -> SolanaBlockInfo:
         if not value:
-            return SolanaBlockDBInfo(slot=slot)
+            return SolanaBlockInfo(slot=slot)
 
-        return SolanaBlockDBInfo(
+        return SolanaBlockInfo(
             slot=value[0],
             finalized=value[1],
             height=value[2],
             hash=value[3],
         )
 
-    def _full_block_from_value(self, value, slot=None) -> SolanaBlockDBInfo:
+    def _full_block_from_value(self, value, slot=None) -> SolanaBlockInfo:
         if not value:
-            return SolanaBlockDBInfo(slot=slot)
+            return SolanaBlockInfo(slot=slot)
 
-        return SolanaBlockDBInfo(
+        return SolanaBlockInfo(
             slot=value[0],
             finalized=value[1],
             height=value[2],
@@ -67,21 +54,21 @@ class SolanaBlocksDB(BaseDB):
             signs=self.decode_list(value[6])
         )
 
-    def get_block_by_slot(self, block_slot) -> SolanaBlockDBInfo:
+    def get_block_by_slot(self, block_slot) -> SolanaBlockInfo:
         return self._block_from_value(
             self._fetchone(self._column_lst, [('slot', block_slot)], ['finalized desc']),
             block_slot)
 
-    def get_full_block_by_slot(self, block_slot) -> SolanaBlockDBInfo:
+    def get_full_block_by_slot(self, block_slot) -> SolanaBlockInfo:
         return self._full_block_from_value(
             self._fetchone(self._full_column_lst, [('slot', block_slot)], ['finalized desc']),
             block_slot)
 
-    def get_block_by_hash(self, block_hash) -> SolanaBlockDBInfo:
+    def get_block_by_hash(self, block_hash) -> SolanaBlockInfo:
         return self._block_from_value(
             self._fetchone(self._column_lst, [('hash', block_hash)], ['finalized desc']))
 
-    def get_block_by_height(self, block_num) -> SolanaBlockDBInfo:
+    def get_block_by_height(self, block_num) -> SolanaBlockInfo:
         return self._block_from_value(
             self._fetchone(self._column_lst, [('height', block_num)], ['finalized desc']))
 
@@ -91,7 +78,7 @@ class SolanaBlocksDB(BaseDB):
             return result[0]
         return 0
 
-    def set_block(self, block: SolanaBlockDBInfo):
+    def set_block(self, block: SolanaBlockInfo):
         cursor = self._conn.cursor()
         cursor.execute(f'''
             INSERT INTO {self._table_name}
