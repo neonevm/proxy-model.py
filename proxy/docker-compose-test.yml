@@ -69,7 +69,7 @@ services:
       LOG_NEON_CLI_DEBUG: "YES"
       FUZZING_BLOCKHASH: "YES"
       CONFIG: ci
-      PP_SOLANA_URL: https://api.devnet.solana.com
+      PP_SOLANA_URL: https://api.mainnet-beta.solana.com
     hostname: proxy
     depends_on:
       postgres:
@@ -126,8 +126,8 @@ services:
       INDEXER_ERC20_WRAPPER_WHITELIST: ANY
       PRICE_UPDATE_INTERVAL: 10
       START_SLOT: LATEST
-      PP_SOLANA_URL: https://api.devnet.solana.com
-      PYTH_MAPPING_ACCOUNT: BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2
+      PP_SOLANA_URL: https://api.mainnet-beta.solana.com
+      PYTH_MAPPING_ACCOUNT: AHtgzX45WTKfkPG53L6WYhGEXwQkN1BVknET3sVsLL8J
       MAX_CONFIDENCE_INTERVAL: 0.01
     hostname: airdropper
     entrypoint: ./run-airdropper.sh
