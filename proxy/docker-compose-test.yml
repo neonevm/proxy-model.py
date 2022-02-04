@@ -69,7 +69,7 @@ services:
       LOG_NEON_CLI_DEBUG: "YES"
       FUZZING_BLOCKHASH: "YES"
       CONFIG: ci
-      PP_SOLANA_URL: https://api.mainnet-beta.solana.com
+      PP_SOLANA_URL: https://api.devnet.solana.com
     hostname: proxy
     depends_on:
       postgres:
@@ -148,7 +148,6 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       CONFIG: ci
-      PP_SOLANA_URL: https://api.mainnet-beta.solana.com
     hostname: indexer
     depends_on:
       postgres:
