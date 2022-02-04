@@ -19,7 +19,7 @@ class TestAirdroppingEthAccounts(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        airdrop_amount = 5
+        airdrop_amount = 10
         cls._EXPECTED_BALANCE_WEI = eth_utils.to_wei(airdrop_amount, 'ether')
 
         cls._contract_deployer = SolidityContractDeployer()
