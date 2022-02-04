@@ -70,6 +70,8 @@ services:
       FUZZING_BLOCKHASH: "YES"
       CONFIG: ci
       PP_SOLANA_URL: https://api.mainnet-beta.solana.com
+      MULTIPLIER_FOR_REQUIRED_SOLS: 2 # * solana rent 131072 (= Rent-exempt minimum: 0.913152 SOL) SOLs to create a storage
+      MIN_OPERATOR_BALANCE_TO_WARN: 4565760000 # = 913152000 * 5 (5 storage accounts) = 4.56576 SOL
     hostname: proxy
     depends_on:
       postgres:
