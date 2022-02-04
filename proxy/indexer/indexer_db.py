@@ -9,7 +9,6 @@ try:
     from accounts_db import NeonAccountDB, NeonAccountInfo
     from blocks_db import SolanaBlocksDB, SolanaBlockInfo
     from transactions_db import NeonTxsDB, NeonTxDBInfo
-    from pending_db import NeonPendingTxInfo, NeonPendingTxsDB, PendingTxError
     from sql_dict import SQLDict
     from utils import get_code_from_account, get_accounts_by_neon_address
 except ImportError:
@@ -17,7 +16,6 @@ except ImportError:
     from .accounts_db import NeonAccountDB, NeonAccountInfo
     from .blocks_db import SolanaBlocksDB, SolanaBlockInfo
     from .transactions_db import NeonTxsDB, NeonTxDBInfo
-    from .pending_db import NeonPendingTxInfo, NeonPendingTxsDB, PendingTxError
     from .sql_dict import SQLDict
     from .utils import get_code_from_account, get_accounts_by_neon_address
 
@@ -28,7 +26,6 @@ class IndexerDB:
         self._logs_db = LogDB()
         self._blocks_db = SolanaBlocksDB()
         self._txs_db = NeonTxsDB()
-        self._pending_txs_db = NeonPendingTxsDB()
         self._account_db = NeonAccountDB()
         self._client = None
 
@@ -39,9 +36,6 @@ class IndexerDB:
 
     def set_client(self, client):
         self._client = client
-
-    def pend_transaction(self, tx: NeonPendingTxInfo):
-        self._pending_txs_db.set_tx(tx)
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, used_ixs: [SolanaIxSignInfo]):
         try:
