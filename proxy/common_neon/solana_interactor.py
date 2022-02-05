@@ -17,7 +17,7 @@ from logged_groups import logged_group
 from .costs import update_transaction_cost
 from .utils import get_from_dict, SolanaBlockInfo
 from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, WRITE_TRANSACTION_COST_IN_DB
-from ..environment import LOG_SENDING_SOLANA_TRANSACTION, FUZZING_BLOCKHASH, CONFIRM_TIMEOUT
+from ..environment import LOG_SENDING_SOLANA_TRANSACTION, FUZZING_BLOCKHASH, CONFIRM_TIMEOUT, FINALIZED
 
 from typing import Any, List, NamedTuple, cast
 
@@ -159,7 +159,7 @@ class SolanaInteractor:
             net_block = response['result']
             block = SolanaBlockInfo(
                 slot=slot,
-                finalized=False,
+                finalized=(commitment==FINALIZED),
                 hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
                 height=net_block['blockHeight'],
                 parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),

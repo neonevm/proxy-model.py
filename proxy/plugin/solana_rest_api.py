@@ -137,24 +137,31 @@ class EthereumModel:
         return hex(balance * eth_utils.denoms.gwei)
 
     def eth_getLogs(self, obj):
-        fromBlock = None
-        toBlock = None
-        address = None
-        topics = None
-        blockHash = None
+        def to_list(items):
+            if isinstance(items, str):
+                return [items.lower()]
+            elif isinstance(items, list):
+                return [item.lower() for item in items if isinstance(item, str)]
+            return []
+
+        from_block = None
+        to_block = None
+        addresses = []
+        topics = []
+        block_hash = None
 
         if 'fromBlock' in obj and obj['fromBlock'] != '0':
-            fromBlock = self.process_block_tag(obj['fromBlock'])
+            from_block = self.process_block_tag(obj['fromBlock'])
         if 'toBlock' in obj and obj['toBlock'] != 'latest':
-            toBlock = self.process_block_tag(obj['toBlock'])
+            to_block = self.process_block_tag(obj['toBlock'])
         if 'address' in obj:
-           address = obj['address']
+            addresses = to_list(obj['address'])
         if 'topics' in obj:
-           topics = obj['topics']
+            topics = to_list(obj['topics'])
         if 'blockHash' in obj:
-           blockHash = obj['blockHash']
+            block_hash = obj['blockHash']
 
-        return self._db.get_logs(fromBlock, toBlock, address, topics, blockHash)
+        return self._db.get_logs(from_block, to_block, addresses, topics, block_hash)
 
     def getBlockBySlot(self, slot, full):
         block = self._db.get_full_block_by_slot(slot)

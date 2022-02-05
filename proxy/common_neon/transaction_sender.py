@@ -28,8 +28,8 @@ from .solana_interactor import check_if_big_transaction, check_if_program_exceed
 from .solana_interactor import get_error_definition_from_receipt, check_if_storage_is_empty_error
 from .solana_interactor import check_if_blockhash_notfound
 from ..common_neon.eth_proto import Trx as EthTx
+from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
 from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, ACCOUNT_PERMISSION_UPDATE_INT
-from ..indexer.utils import NeonTxResultInfo, NeonTxInfo
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..environment import get_solana_accounts
 from ..common_neon.account_whitelist import AccountWhitelist

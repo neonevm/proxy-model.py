@@ -1,23 +1,17 @@
 import base58
-from logged_groups import logged_group
 import traceback
 
-from ..environment import FINALIZED
+from logged_groups import logged_group
 
-try:
-    from utils import LogDB, NeonTxInfo, NeonTxResultInfo, SolanaIxSignInfo
-    from accounts_db import NeonAccountDB, NeonAccountInfo
-    from blocks_db import SolanaBlocksDB, SolanaBlockInfo
-    from transactions_db import NeonTxsDB, NeonTxDBInfo
-    from sql_dict import SQLDict
-    from utils import get_code_from_account, get_accounts_by_neon_address
-except ImportError:
-    from .utils import LogDB, NeonTxInfo, NeonTxResultInfo, SolanaIxSignInfo
-    from .accounts_db import NeonAccountDB, NeonAccountInfo
-    from .blocks_db import SolanaBlocksDB, SolanaBlockInfo
-    from .transactions_db import NeonTxsDB, NeonTxDBInfo
-    from .sql_dict import SQLDict
-    from .utils import get_code_from_account, get_accounts_by_neon_address
+from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
+
+from ..environment import FINALIZED
+from ..indexer.utils import LogDB, SolanaIxSignInfo
+from ..indexer.accounts_db import NeonAccountDB, NeonAccountInfo
+from ..indexer.blocks_db import SolanaBlocksDB, SolanaBlockInfo
+from ..indexer.transactions_db import NeonTxsDB
+from ..indexer.sql_dict import SQLDict
+from ..indexer.utils import get_code_from_account, get_accounts_by_neon_address
 
 
 @logged_group("neon.Indexer")
@@ -50,7 +44,7 @@ class IndexerDB:
                     rec['blockHash'] = block.hash
                     rec['blockNumber'] = hex(block.height)
                 self._logs_db.push_logs(neon_res.logs, block)
-            tx = NeonTxDBInfo(neon_tx=neon_tx, neon_res=neon_res, block=block, used_ixs=used_ixs)
+            tx = NeonTxFullInfo(neon_tx=neon_tx, neon_res=neon_res, block=block, used_ixs=used_ixs)
             self._txs_db.set_tx(tx)
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
@@ -129,8 +123,8 @@ class IndexerDB:
     def set_min_receipt_slot(self, slot):
         self._constants['min_receipt_slot'] = slot
 
-    def get_logs(self, fromBlock, toBlock, address, topics, blockHash):
-        return self._logs_db.get_logs(fromBlock, toBlock, address, topics, blockHash)
+    def get_logs(self, from_block, to_block, addresses, topics, block_hash):
+        return self._logs_db.get_logs(from_block, to_block, addresses, topics, block_hash)
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_hash(block_hash)
@@ -138,16 +132,13 @@ class IndexerDB:
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_height(block_height)
 
-    def get_pending_tx_slot(self, neon_sign: str) -> int:
-        return self._pending_txs_db.get_slot(neon_sign)
-
-    def get_tx_by_sol_sign(self, sol_sign: str) -> NeonTxDBInfo:
+    def get_tx_by_sol_sign(self, sol_sign: str) -> NeonTxFullInfo:
         tx = self._txs_db.get_tx_by_sol_sign(sol_sign)
         if tx:
             tx.block = self.get_block_by_slot(tx.neon_res.slot)
         return tx
 
-    def get_tx_by_neon_sign(self, neon_sign: str) -> NeonTxDBInfo:
+    def get_tx_by_neon_sign(self, neon_sign: str) -> NeonTxFullInfo:
         tx = self._txs_db.get_tx_by_neon_sign(neon_sign)
         if tx:
             tx.block = self.get_block_by_slot(tx.neon_res.slot)
@@ -167,5 +158,5 @@ class IndexerDB:
         self._account_db.set_acc_indexer(neon_account, pda_account, code_account, slot)
 
     def del_not_finalized(self, from_slot: int, to_slot: int):
-        for d in [self._logs_db, self._blocks_db, self._txs_db, self._pending_txs_db]:
+        for d in [self._logs_db, self._blocks_db, self._txs_db]:
             d.del_not_finalized(from_slot=from_slot, to_slot=to_slot)

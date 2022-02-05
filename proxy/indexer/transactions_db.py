@@ -1,16 +1,5 @@
-from .utils import BaseDB, SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, str_fmt_object
-from .blocks_db import SolanaBlockInfo
-
-
-class NeonTxDBInfo:
-    def __init__(self, neon_tx=NeonTxInfo(), neon_res=NeonTxResultInfo(), block=SolanaBlockInfo(), used_ixs=[]):
-        self.neon_tx = neon_tx
-        self.neon_res = neon_res
-        self.used_ixs = used_ixs
-        self.block = block
-
-    def __str__(self):
-        return str_fmt_object(self)
+from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo, SolanaBlockInfo, str_fmt_object
+from ..indexer.utils import BaseDB, SolanaIxSignInfo
 
 
 class SolanaNeonTxsDB(BaseDB):
@@ -95,7 +84,7 @@ class NeonTxsDB(BaseDB):
 
         neon_tx = NeonTxInfo()
         neon_res = NeonTxResultInfo()
-        block = SolanaBlockDBInfo()
+        block = SolanaBlockInfo()
 
         for idx, column in enumerate(self._column_lst):
             if column in ('neon_sign', 'from_addr', 'sol_sign', 'logs'):
@@ -116,9 +105,9 @@ class NeonTxsDB(BaseDB):
 
         block.slot = neon_res.slot
 
-        return NeonTxDBInfo(neon_tx=neon_tx, neon_res=neon_res, block=block)
+        return NeonTxFullInfo(neon_tx=neon_tx, neon_res=neon_res, block=block)
 
-    def set_tx(self, tx: NeonTxDBInfo):
+    def set_tx(self, tx: NeonTxFullInfo):
         row = [tx.neon_tx.sign, tx.neon_tx.addr, tx.neon_res.sol_sign]
         for idx, column in enumerate(self._column_lst):
             if column in ['neon_sign', 'from_addr', 'sol_sign', 'logs']:
@@ -158,10 +147,10 @@ class NeonTxsDB(BaseDB):
         cursor.execute(f'DELETE FROM {self._table_name} WHERE slot >= %s AND slot <= %s AND finalized = false',
                        (from_slot, to_slot))
 
-    def get_tx_by_neon_sign(self, neon_sign) -> NeonTxDBInfo:
+    def get_tx_by_neon_sign(self, neon_sign) -> NeonTxFullInfo:
         return self._tx_from_value(
             self._fetchone(self._column_lst, [('neon_sign', neon_sign)], ['finalized desc']))
 
-    def get_tx_by_sol_sign(self, sol_sign) -> NeonTxDBInfo:
+    def get_tx_by_sol_sign(self, sol_sign) -> NeonTxFullInfo:
         return self._tx_from_value(
             self._fetchone(self._column_lst, [('sol_sign', sol_sign)], ['finalized desc']))

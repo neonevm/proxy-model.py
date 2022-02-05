@@ -82,6 +82,7 @@ class BlocksDB:
         self._latest_block_height.value = last_block.height
 
         for block in block_list:
+            block.finalized = False
             data = pickle.dumps(block)
             self._blocks_by_slot[block.slot] = data
             self._blocks_by_hash[block.hash] = data
@@ -107,7 +108,7 @@ class BlocksDB:
             with self._blocks_lock:
                 self._request_blocks()
                 data = self._blocks_by_slot.get(block_slot)
-                if data is not None:
+                if data:
                     return pickle.loads(data)
 
         return self._db.get_full_block_by_slot(block_slot)
@@ -116,7 +117,7 @@ class BlocksDB:
         with self._blocks_lock:
             self._request_blocks()
             data = self._blocks_by_slog.get(block_hash)
-            if data is not None:
+            if data:
                 return pickle.loads(data)
 
         return self._db.get_block_by_hash(block_hash)

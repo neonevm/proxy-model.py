@@ -5,16 +5,12 @@ import time
 from logged_groups import logged_group
 from solana.system_program import SYS_PROGRAM_ID
 
-try:
-    from indexer_base import IndexerBase
-    from indexer_db import IndexerDB
-    from utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object
-    from utils import get_accounts_from_storage, check_error
-except ImportError:
-    from .indexer_base import IndexerBase
-    from .indexer_db import IndexerDB
-    from .utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object
-    from .utils import get_accounts_from_storage, check_error
+from ..indexer.indexer_base import IndexerBase
+from ..indexer.indexer_db import IndexerDB
+from ..indexer.utils import SolanaIxSignInfo, Canceller
+from ..indexer.utils import get_accounts_from_storage, check_error
+
+from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
 
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
 

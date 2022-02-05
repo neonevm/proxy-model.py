@@ -25,7 +25,7 @@ class NeonPendingTxInfo:
 
 
 @logged_group("neon.Proxy")
-class PendingTxDB:
+class PendingTxsDB:
     # These variables are global for class, they will be initialized one time
     _manager = multiprocessing.Manager()
 
@@ -43,7 +43,24 @@ class PendingTxDB:
         if (not self._pending_slot.value) or (self._pending_slot.value > tx.slot):
             self._pending_slot.value = tx.slot
 
-        return True
+    def _rm_finalized_txs(self, before_slot: int):
+        if (self._pending_slot.value > before_slot) or (not self._pending_slot.value):
+            return
+
+        rm_sign_list = []
+        self._pending_slot.value = 0
+
+        # Filter tx by slot
+        for data in self._pending_tx_by_hash.values():
+            tx = pickle.loads(data)
+            if tx.slot < before_slot:
+                rm_sign_list.append(tx.neon_sign)
+            elif (not self._pending_slot.value) or (self._pending_slot.value > tx.slot):
+                self._pending_slot.value = tx.slot
+
+        # Remove old txs
+        for sign in rm_sign_list:
+            del self._pending_tx_by_hash[sign]
 
     def pend_transaction(self, tx: NeonPendingTxInfo, latest_db_block_slot: int):
         with self._pending_tx_lock:
@@ -61,22 +78,3 @@ class PendingTxDB:
         executed_tx = self._db.get_tx_by_neon_sign(tx.neon_sign)
         if executed_tx:
             raise PendingTxError('Transaction is already executed')
-
-    def _rm_finalized_txs(self, before_slot: int):
-        if self._pending_slot.value > before_slot:
-            return
-
-        rm_sign_list = []
-        self._pending_slot.value = 0
-
-        # Filter tx by slot
-        for data in self._pending_tx_by_hash.values():
-            tx = pickle.loads(data)
-            if tx.slot < before_slot:
-                rm_sign_list.append(tx.neon_sign)
-            elif (not self._pending_slot.value) or (self._pending_slot.value > tx.slot):
-                self._pending_slot.value = tx.slot
-
-        # Remove old txs
-        for sign in rm_sign_list:
-            del self._pending_tx_by_hash[sign]
