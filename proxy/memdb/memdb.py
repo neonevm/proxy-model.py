@@ -23,7 +23,7 @@ class MemDB:
         self._pending_tx_db = PendingTxsDB(self._db)
 
     def _before_slot(self) -> int:
-        return self._blocks_db.latest_db_block_slot.value
+        return self._blocks_db.get_db_latest_block().slot
 
     def get_latest_block_height(self) -> int:
         return self._blocks_db.get_latest_block().height

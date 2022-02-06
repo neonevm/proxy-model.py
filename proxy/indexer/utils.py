@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import base64
-import json
 import multiprocessing
 import psycopg2
 import traceback
+
+from typing import NamedTuple
 
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
@@ -25,9 +26,6 @@ from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID, get_sola
 
 from proxy.indexer.pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
 from proxy.indexer.pg_common import encode, decode
-
-
-basedb_lock_glob = multiprocessing.Lock()
 
 
 def check_error(trx):
@@ -128,8 +126,23 @@ def get_code_from_account(client: Client, address, *, logger):
     return '0x' + data[offset:][:storage.code_size].hex()
 
 
+class DBQuery(NamedTuple):
+    column_list: []
+    key_list: []
+    order_list: []
+
+
+class DBQueryExpression(NamedTuple):
+    column_expr: str
+    where_expr: str
+    where_keys: []
+    order_expr: str
+
+
 @logged_group("neon.Indexer")
 class BaseDB:
+    _create_table_lock = multiprocessing.Lock()
+
     def __init__(self):
         self._conn = psycopg2.connect(
             dbname=POSTGRES_DB,
@@ -139,35 +152,35 @@ class BaseDB:
         )
         self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
-        with basedb_lock_glob:
+        with self._create_table_lock:
             cursor = self._conn.cursor()
             cursor.execute(self._create_table_sql())
 
     def _create_table_sql(self) -> str:
         assert False, 'No script for the table'
 
-    def _build_where(self, keys):
-        where_expr = ' AND '.join(['1=1'] + [f'{name}=%s' for name, _ in keys])
-        where_keys = [value for _, value in keys]
-        return where_expr, where_keys
+    def _build_expression(self, q: DBQuery) -> DBQueryExpression:
 
-    def _fetchone(self, columns, keys, orders=None) -> str:
-        column_expr = ','.join(columns)
+        return DBQueryExpression(
+            column_expr=','.join(q.column_list),
+            where_expr=' AND '.join(['1=1'] + [f'{name}=%s' for name, _ in q.key_list]),
+            where_keys=[value for _, value in q.key_list],
+            order_expr='ORDER BY ' + ', '.join(q.order_list) if len(q.order_list) else '',
+        )
 
-        where_expr, where_keys = self._build_where(keys)
-
-        order_expr = 'ORDER BY ' + ', '.join(orders) if orders else ''
+    def _fetchone(self, query: DBQuery) -> str:
+        e = self._build_expression(query)
 
         request = f'''
-            SELECT {column_expr}
-            FROM {self._table_name}
-            WHERE {where_expr}
-            {order_expr}
-            LIMIT 1
+            SELECT {e.column_expr}
+              FROM {self._table_name} AS a
+             WHERE {e.where_expr}
+                   {e.order_expr}
+             LIMIT 1
         '''
 
         with self._conn.cursor() as cursor:
-            cursor.execute(request, where_keys)
+            cursor.execute(request, e.where_keys)
             return cursor.fetchone()
 
     def __del__(self):

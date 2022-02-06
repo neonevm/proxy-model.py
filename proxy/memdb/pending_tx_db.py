@@ -63,9 +63,9 @@ class PendingTxsDB:
         for sign in rm_sign_list:
             del self._pending_tx_by_hash[sign]
 
-    def pend_transaction(self, tx: NeonPendingTxInfo, latest_db_block_slot: int):
+    def pend_transaction(self, tx: NeonPendingTxInfo, before_slot: int):
         with self._pending_tx_lock:
-            self._rm_finalized_txs(latest_db_block_slot)
+            self._rm_finalized_txs(before_slot)
 
             pended_data = self._pending_tx_by_hash.get(tx.neon_sign)
             if not pended_data:

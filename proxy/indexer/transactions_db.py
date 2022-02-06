@@ -1,5 +1,5 @@
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo, SolanaBlockInfo
-from ..indexer.utils import BaseDB, SolanaIxSignInfo
+from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo
+from ..indexer.utils import BaseDB, DBQuery, SolanaIxSignInfo
 
 
 class SolanaNeonTxsDB(BaseDB):
@@ -36,9 +36,9 @@ class SolanaNeonTxsDB(BaseDB):
 class NeonTxsDB(BaseDB):
     def __init__(self):
         BaseDB.__init__(self)
-        self._column_lst =  ('neon_sign', 'from_addr', 'sol_sign', 'slot', 'block_height', 'block_hash', 'idx',
-                             'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value', 'calldata', 'v', 'r', 's',
-                             'status', 'gas_used', 'return_value', 'logs')
+        self._column_lst = ('neon_sign', 'from_addr', 'sol_sign', 'slot', 'block_height', 'block_hash', 'idx',
+                            'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value', 'calldata',
+                            'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs')
         self._sol_neon_txs_db = SolanaNeonTxsDB()
 
     def _create_table_sql(self) -> str:
@@ -130,8 +130,18 @@ class NeonTxsDB(BaseDB):
 
     def get_tx_by_neon_sign(self, neon_sign) -> NeonTxFullInfo:
         return self._tx_from_value(
-            self._fetchone(self._column_lst, [('neon_sign', neon_sign)]))
+            self._fetchone(DBQuery(
+                column_list=self._column_lst,
+                key_list=[('neon_sign', neon_sign)],
+                order_list=[],
+            ))
+        )
 
     def get_tx_by_sol_sign(self, sol_sign) -> NeonTxFullInfo:
         return self._tx_from_value(
-            self._fetchone(self._column_lst, [('sol_sign', sol_sign)]))
+            self._fetchone(DBQuery(
+                column_list=self._column_lst,
+                key_list=[('sol_sign', sol_sign)],
+                order_list=[],
+            ))
+        )

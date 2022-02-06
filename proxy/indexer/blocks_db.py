@@ -1,6 +1,6 @@
 import psycopg2
 import psycopg2.extras
-from ..indexer.utils import BaseDB
+from ..indexer.utils import BaseDB, DBQuery
 from ..common_neon.utils import SolanaBlockInfo
 
 
@@ -32,20 +32,21 @@ class SolanaBlocksDB(BaseDB):
             );
             """
 
-    def _fetch_block(self, slot: int, keys) -> SolanaBlockInfo:
-        where_expr, where_keys = self._build_where(keys)
+    def _fetch_block(self, slot, q: DBQuery) -> SolanaBlockInfo:
+        e = self._build_expression(q)
 
         request = f'''
             SELECT a.slot, a.height, b.hash
               FROM {self._table_name}_heights AS a
          LEFT JOIN {self._table_name}_hashes AS b
                 ON a.slot = b.slot
-             WHERE {where_expr}
+             WHERE {e.where_expr}
+                   {e.order_expr}
              LIMIT 1
         '''
 
         with self._conn.cursor() as cursor:
-            cursor.execute(request, where_keys)
+            cursor.execute(request, e.where_keys)
             values = cursor.fetchone()
 
         if not values:
@@ -58,20 +59,21 @@ class SolanaBlocksDB(BaseDB):
             hash=values[2],
         )
 
-    def _fetch_full_block(self, slot: int, keys) -> SolanaBlockInfo:
-        where_expr, where_keys = self._build_where(keys)
+    def _fetch_full_block(self, slot, q: DBQuery) -> SolanaBlockInfo:
+        e = self._build_expression(q)
 
         request = f'''
             SELECT a.slot, a.height, b.hash, b.parent_hash, b.blocktime, b.signatures
               FROM {self._table_name}_heights AS a
          LEFT JOIN {self._table_name}_hashes AS b
                 ON a.slot = b.slot
-             WHERE {where_expr}
+             WHERE {e.where_expr}
+                   {e.order_expr}
              LIMIT 1
         '''
 
         with self._conn.cursor() as cursor:
-            cursor.execute(request, where_keys)
+            cursor.execute(request, e.where_keys)
             values = cursor.fetchone()
 
         if not values:
@@ -87,17 +89,25 @@ class SolanaBlocksDB(BaseDB):
             signs=self.decode_list(values[5])
         )
 
+    def get_latest_block(self) -> SolanaBlockInfo:
+        q = DBQuery(column_list=[], key_list=[], order_list=['a.slot DESC'])
+        return self._fetch_block(None, q)
+
     def get_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
-        return self._fetch_block(block_slot, [('a.slot', block_slot)])
+        q = DBQuery(column_list=[], key_list=[('a.slot', block_slot)], order_list=[])
+        return self._fetch_block(block_slot, q)
 
     def get_full_block_by_slot(self, block_slot) -> SolanaBlockInfo:
-        return self._fetch_full_block(block_slot, [('a.slot', block_slot)])
+        q = DBQuery(column_list=[], key_list=[('a.slot', block_slot)], order_list=[])
+        return self._fetch_full_block(block_slot, q)
 
     def get_block_by_hash(self, block_hash) -> SolanaBlockInfo:
-        return self._fetch_block(None, [('b.hash', block_hash)])
+        q = DBQuery(column_list=[], key_list=[('b.hash', block_hash)], order_list=[])
+        return self._fetch_block(None, q)
 
     def get_block_by_height(self, block_num) -> SolanaBlockInfo:
-        return self._fetch_block(None, [('a.height', block_num)])
+        q = DBQuery(column_list=[], key_list=[('a.height', block_num)], order_list=[])
+        return self._fetch_block(None, q)
 
     def set_block(self, block: SolanaBlockInfo):
         cursor = self._conn.cursor()
@@ -113,8 +123,8 @@ class SolanaBlocksDB(BaseDB):
     def fill_block_height(self, height, slots):
         with self._conn.cursor() as cursor:
             psycopg2.extras.execute_values(cursor, f"""
-                INSERT
-                INTO {self._table_name}_heights (slot, height)
+                INSERT INTO {self._table_name}_heights
+                (slot, height)
                 VALUES %s
                 ON CONFLICT DO NOTHING
             """, ((slot, height+idx) for idx, slot in enumerate(slots)), template="(%s, %s)", page_size=1000)

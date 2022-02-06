@@ -25,7 +25,7 @@ class IndexerDB:
         self._client = None
 
         self._constants = SQLDict(tablename="constants")
-        for k in ['last_block_slot', 'last_block_height', 'min_receipt_slot']:
+        for k in ['min_receipt_slot']:
             if k not in self._constants:
                 self._constants[k] = 0
 
@@ -98,15 +98,8 @@ class IndexerDB:
             self._fill_block_from_net(block)
         return block
 
-    def get_last_block_slot(self) -> int:
-        return self._constants['last_block_slot']
-
-    def get_last_block_height(self) -> int:
-        return self._constants['last_block_height']
-
-    def set_last_slot_height(self, slot, height):
-        self._constants['last_block_slot'] = slot
-        self._constants['last_block_height'] = height
+    def get_latest_block(self) -> SolanaBlockInfo:
+        return self._blocks_db.get_latest_block()
 
     def fill_block_height(self, number, slots):
         self._blocks_db.fill_block_height(number, slots)

@@ -702,7 +702,7 @@ class Indexer(IndexerBase):
         self.def_decoder = DummyIxDecoder('Unknown', self.state)
 
     def _init_last_height_slot(self):
-        last_known_slot = self.db.get_last_block_slot()
+        last_known_slot = self.db.get_latest_block().slot
         slot = self._init_last_slot('height', last_known_slot)
         if last_known_slot == slot:
             return
@@ -715,7 +715,7 @@ class Indexer(IndexerBase):
             return
 
         height = block['result']['blockHeight']
-        self.db.set_last_slot_height(slot, height)
+        self.db.fill_block_height(height, [slot])
 
     def process_functions(self):
         self.debug("Start getting blocks")
@@ -731,7 +731,7 @@ class Indexer(IndexerBase):
         start_time = time.time()
 
         max_slot = 0
-        last_block_slot = self.db.get_last_block_slot()
+        last_block_slot = self.db.get_latest_block().slot
 
         for slot, sign, tx in self.transaction_receipts.get_trxs(self.indexed_slot, reverse=False):
             if slot > last_block_slot:
@@ -794,16 +794,14 @@ class Indexer(IndexerBase):
 
     def gather_blocks(self):
         start_time = time.time()
-        last_block_slot = self.db.get_last_block_slot()
-        max_height = self.db.get_last_block_height()
-        start_block_slot = last_block_slot
+        latest_block = self.db.get_latest_block()
         height = -1
         confirmed_blocks_len = 10000
         client = self.client._provider
         list_opts = {"commitment": FINALIZED}
         block_opts = {"commitment": FINALIZED, "transactionDetails": "none", "rewards": False}
         while confirmed_blocks_len == 10000:
-            confirmed_blocks = client.make_request("getBlocksWithLimit", last_block_slot, confirmed_blocks_len, list_opts)['result']
+            confirmed_blocks = client.make_request("getBlocksWithLimit", latest_block.slot, confirmed_blocks_len, list_opts)['result']
             confirmed_blocks_len = len(confirmed_blocks)
             # No more blocks
             if confirmed_blocks_len == 0:
@@ -815,21 +813,24 @@ class Indexer(IndexerBase):
                 height = first_block['result']['blockHeight']
 
             # Validate last block height
-            max_height = height + confirmed_blocks_len - 1
-            last_block_slot = confirmed_blocks[confirmed_blocks_len - 1]
-            last_block = client.make_request("getBlock", last_block_slot, block_opts)
-            if not last_block['result'] or last_block['result']['blockHeight'] != max_height:
-                self.warning(f"FAILED max_height {max_height} last_block_slot {last_block_slot} {last_block}")
+            latest_block.height = height + confirmed_blocks_len - 1
+            latest_block.slot = confirmed_blocks[confirmed_blocks_len - 1]
+            last_block = client.make_request("getBlock", latest_block.slot, block_opts)
+            if not last_block['result'] or last_block['result']['blockHeight'] != latest_block.height:
+                self.warning(f"FAILED last_block_height {latest_block.height} " +
+                             f"last_block_slot {latest_block.slot} " +
+                             f"last_block {last_block}")
                 break
 
             # Everything is good
-            self.debug(f"gather_blocks from {height} to {max_height}")
+            self.debug(f"gather_blocks from {height} to {latest_block.height}")
             self.db.fill_block_height(height, confirmed_blocks)
-            self.db.set_last_slot_height(last_block_slot, max_height)
-            height = max_height
+            height = latest_block.height
 
         gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.debug(f"gather_blocks_ms: {gather_blocks_ms} last_height: {max_height} last_block_slot {last_block_slot}")
+        self.debug(f"gather_blocks_ms: {gather_blocks_ms} " +
+                   f"last_block_height: {latest_block.height} " +
+                   f"last_block_slot: {latest_block.slot}")
 
 
 @logged_group("neon.Indexer")

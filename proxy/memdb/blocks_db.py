@@ -18,10 +18,6 @@ BlocksManager = mp.Manager()
 
 
 class BlockInfo:
-    slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
-    height = BlocksManager.Value(ctypes.c_ulonglong, 0)
-    hash = BlocksManager.Value(ctypes.c_char_p, "")
-
     @classmethod
     def set(cls, block: SolanaBlockInfo):
         cls.slot.value = block.slot
@@ -51,8 +47,10 @@ class BlocksDB:
     # Last requesting time of blocks from Solana node
     _last_time = BlocksManager.Value(ctypes.c_ulonglong, 0)
 
-    # Latest block in DB
-    latest_db_block_slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
+    class _DBLastBlockInfo(BlockInfo):
+        slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
+        height = BlocksManager.Value(ctypes.c_ulonglong, 0)
+        hash = BlocksManager.Value(ctypes.c_char_p, "")
 
     class _FirstBlockInfo(BlockInfo):
         slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
@@ -77,22 +75,22 @@ class BlocksDB:
         if now < self._last_time.value or (now - self._last_time.value) < 40:
             return
 
-        latest_db_block_slot = self._db.get_last_block_slot()
-        if latest_db_block_slot < self._FirstBlockInfo.slot.value:
+        db_block = self._db.get_latest_block()
+        if db_block.slot < self._FirstBlockInfo.slot.value:
             return
 
-        slot_list = self._solana.get_block_slot_list(latest_db_block_slot, 100)
+        slot_list = self._solana.get_block_slot_list(db_block.slot, 100)
         if not len(slot_list):
             self.error('No confirmed block slots on Solana!')
             return
 
         # TODO: add filtering of already cached blocks
-        block_list = self._solana.get_block_info_list(slot_list, commitment='confirmed')
+        block_list = self._solana.get_block_info_list(slot_list)
         if not len(block_list):
             self.error('No confirmed block infos on Solana!')
             return
 
-        self.latest_db_block_slot.value = latest_db_block_slot
+        self._DBLastBlockInfo.set(db_block)
         self._last_time.value = now
 
         # TODO: the first block can stay on the same place
@@ -113,6 +111,11 @@ class BlocksDB:
 
     def force_request_blocks(self):
         self._last_time.value = 0
+
+    def get_db_latest_block(self) -> SolanaBlockInfo:
+        with self._blocks_lock:
+            self._request_blocks()
+            return self._DBLastBlockInfo.get()
 
     def get_latest_block(self) -> SolanaBlockInfo:
         with self._blocks_lock:
