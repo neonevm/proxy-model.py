@@ -368,7 +368,7 @@ class NeonTxSender:
     def __init__(self, db: MemDB, client: SolanaClient, eth_tx: EthTx, steps: int):
         self._db = db
         self.eth_tx = eth_tx
-        self.neon_sign = eth_tx.hash_signed().hex()
+        self.neon_sign = '0x' + eth_tx.hash_signed().hex()
         self.steps = steps
         self.solana = SolanaInteractor(client)
         self._resource_list = OperatorResourceList(self)
