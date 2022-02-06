@@ -1,4 +1,5 @@
 import multiprocessing
+import ctypes
 import pickle
 
 from logged_groups import logged_group
@@ -30,7 +31,7 @@ class PendingTxsDB:
     _manager = multiprocessing.Manager()
 
     _pending_tx_lock = _manager.Lock()
-    _pending_slot = _manager.Value('Q', 0)
+    _pending_slot = _manager.Value(ctypes.c_ulonglong, 0)
     _pending_tx_by_hash = _manager.dict()
 
     def __init__(self, db: IndexerDB):
@@ -40,11 +41,11 @@ class PendingTxsDB:
         data = pickle.dumps(tx)
         self._pending_tx_by_hash.setdefault(tx.neon_sign, data)
 
-        if (not self._pending_slot.value) or (self._pending_slot.value > tx.slot):
+        if (self._pending_slot.value == 0) or (self._pending_slot.value > tx.slot):
             self._pending_slot.value = tx.slot
 
     def _rm_finalized_txs(self, before_slot: int):
-        if (self._pending_slot.value > before_slot) or (not self._pending_slot.value):
+        if (self._pending_slot.value == 0) or (self._pending_slot.value > before_slot):
             return
 
         rm_sign_list = []
@@ -55,7 +56,7 @@ class PendingTxsDB:
             tx = pickle.loads(data)
             if tx.slot < before_slot:
                 rm_sign_list.append(tx.neon_sign)
-            elif (not self._pending_slot.value) or (self._pending_slot.value > tx.slot):
+            elif (self._pending_slot.value == 0) or (self._pending_slot.value > tx.slot):
                 self._pending_slot.value = tx.slot
 
         # Remove old txs

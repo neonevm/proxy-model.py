@@ -6,10 +6,11 @@ from logged_groups import logged_group
 from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
 
 from ..environment import FINALIZED
-from ..indexer.utils import LogDB, SolanaIxSignInfo
+from ..indexer.utils import SolanaIxSignInfo
 from ..indexer.accounts_db import NeonAccountDB, NeonAccountInfo
 from ..indexer.blocks_db import SolanaBlocksDB, SolanaBlockInfo
 from ..indexer.transactions_db import NeonTxsDB
+from ..indexer.logs_db import LogsDB
 from ..indexer.sql_dict import SQLDict
 from ..indexer.utils import get_code_from_account, get_accounts_by_neon_address
 
@@ -17,7 +18,7 @@ from ..indexer.utils import get_code_from_account, get_accounts_by_neon_address
 @logged_group("neon.Indexer")
 class IndexerDB:
     def __init__(self):
-        self._logs_db = LogDB()
+        self._logs_db = LogsDB()
         self._blocks_db = SolanaBlocksDB()
         self._txs_db = NeonTxsDB()
         self._account_db = NeonAccountDB()
@@ -38,13 +39,9 @@ class IndexerDB:
                 self.critical(f'Unable to submit transaction {neon_tx.sign} because slot {neon_res.slot} not found')
                 return
             self.debug(f'{neon_tx} {neon_res} {block}')
-            if neon_res.logs:
-                for rec in neon_res.logs:
-                    rec['transactionHash'] = neon_tx.sign
-                    rec['blockHash'] = block.hash
-                    rec['blockNumber'] = hex(block.height)
-                self._logs_db.push_logs(neon_res.logs, block)
-            tx = NeonTxFullInfo(neon_tx=neon_tx, neon_res=neon_res, block=block, used_ixs=used_ixs)
+            neon_res.fill_block_info(block)
+            self._logs_db.push_logs(neon_res.logs, block)
+            tx = NeonTxFullInfo(neon_tx=neon_tx, neon_res=neon_res, used_ixs=used_ixs)
             self._txs_db.set_tx(tx)
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
@@ -52,7 +49,7 @@ class IndexerDB:
                        f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
 
     def _fill_block_from_net(self, block: SolanaBlockInfo):
-        opts = {"commitment": "confirmed", "transactionDetails": "signatures", "rewards": False}
+        opts = {"commitment": FINALIZED, "transactionDetails": "signatures", "rewards": False}
         net_block = self._client._provider.make_request("getBlock", block.slot, opts)
         if (not net_block) or ('result' not in net_block):
             return block
@@ -63,7 +60,7 @@ class IndexerDB:
         block.signs = net_block['signatures']
         block.parent_hash = '0x' + base58.b58decode(net_block['previousBlockhash']).hex()
         block.time = net_block['blockTime']
-        block.finalized = block.finalized if block.finalized else ("confirmed" == FINALIZED)
+        block.finalized = True
         self.debug(f'{block}')
         self._blocks_db.set_block(block)
         return block
@@ -101,14 +98,11 @@ class IndexerDB:
             self._fill_block_from_net(block)
         return block
 
-    def get_last_block_slot(self):
+    def get_last_block_slot(self) -> int:
         return self._constants['last_block_slot']
 
-    def get_last_block_height(self):
+    def get_last_block_height(self) -> int:
         return self._constants['last_block_height']
-
-    def get_latest_block_height(self) -> int:
-        return self._blocks_db.get_latest_block_height()
 
     def set_last_slot_height(self, slot, height):
         self._constants['last_block_slot'] = slot
@@ -117,7 +111,7 @@ class IndexerDB:
     def fill_block_height(self, number, slots):
         self._blocks_db.fill_block_height(number, slots)
 
-    def get_min_receipt_slot(self):
+    def get_min_receipt_slot(self) -> int:
         return self._constants['min_receipt_slot']
 
     def set_min_receipt_slot(self, slot):
@@ -156,7 +150,3 @@ class IndexerDB:
 
     def fill_account_info_by_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int):
         self._account_db.set_acc_indexer(neon_account, pda_account, code_account, slot)
-
-    def del_not_finalized(self, from_slot: int, to_slot: int):
-        for d in [self._logs_db, self._blocks_db, self._txs_db]:
-            d.del_not_finalized(from_slot=from_slot, to_slot=to_slot)

@@ -1,4 +1,7 @@
-import multiprocessing
+from __future__ import annotations
+
+import multiprocessing as mp
+import ctypes
 import pickle
 import time
 import math
@@ -11,32 +14,55 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.indexer_db import IndexerDB
 
 
+BlocksManager = mp.Manager()
+
+
+class BlockInfo:
+    slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
+    height = BlocksManager.Value(ctypes.c_ulonglong, 0)
+    hash = BlocksManager.Value(ctypes.c_char_p, "")
+
+    @classmethod
+    def set(cls, block: SolanaBlockInfo):
+        cls.slot.value = block.slot
+        cls.height.value = block.height
+        cls.hash.value = block.hash
+
+    @classmethod
+    def get(cls) -> SolanaBlockInfo:
+        return SolanaBlockInfo(
+            slot=cls.slot.value,
+            height=cls.height.value,
+            hash=cls.hash.value
+        )
+
+
 @logged_group("neon.Proxy")
 class BlocksDB:
     # These variables are global for class, they will be initialized one time
-    _manager = multiprocessing.Manager()
-
     # Lock for blocks
-    _blocks_lock = _manager.Lock()
+    _blocks_lock = BlocksManager.Lock()
 
     # Blocks dictionaries
-    _blocks_by_hash = _manager.dict()
-    _blocks_by_height = _manager.dict()
-    _blocks_by_slot = _manager.dict()
+    _blocks_by_hash = BlocksManager.dict()
+    _blocks_by_height = BlocksManager.dict()
+    _blocks_by_slot = BlocksManager.dict()
 
     # Last requesting time of blocks from Solana node
-    _last_time = _manager.Value('Q', 0)   # Q - unsigned long long (8 bytes)
+    _last_time = BlocksManager.Value(ctypes.c_ulonglong, 0)
 
     # Latest block in DB
-    latest_db_block_slot = _manager.Value('Q', 0)
+    latest_db_block_slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
 
-    # Latest block in Memory Cache
-    _latest_block_slot = _manager.Value('Q', 0)
-    _latest_block_height = _manager.Value('Q', 0)
+    class _FirstBlockInfo(BlockInfo):
+        slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
+        height = BlocksManager.Value(ctypes.c_ulonglong, 0)
+        hash = BlocksManager.Value(ctypes.c_char_p, "")
 
-    # First block in Memory Cache
-    _first_block_slot = _manager.Value('Q', 0)
-    _first_block_height = _manager.Value('Q', 0)
+    class _LastBlockInfo(BlockInfo):
+        slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
+        height = BlocksManager.Value(ctypes.c_ulonglong, 0)
+        hash = BlocksManager.Value(ctypes.c_char_p, "")
 
     def __init__(self, client: SolanaClient, db: IndexerDB):
         self._solana = SolanaInteractor(client)
@@ -52,34 +78,31 @@ class BlocksDB:
             return
 
         latest_db_block_slot = self._db.get_last_block_slot()
-        if latest_db_block_slot < self._first_block_slot.value:
+        if latest_db_block_slot < self._FirstBlockInfo.slot.value:
             return
-
-        self._latest_db_block_slot.value = latest_db_block_slot
-        self._last_time.value = now
 
         slot_list = self._solana.get_block_slot_list(latest_db_block_slot, 100)
         if not len(slot_list):
-            self.error('No confirmed blocks on Solana!')
+            self.error('No confirmed block slots on Solana!')
             return
 
-        if slot_list[len(slot_list) - 1] == self._latest_block_slot.value:
-            self.debug('Latest block is not changed')
+        # TODO: add filtering of already cached blocks
+        block_list = self._solana.get_block_info_list(slot_list, commitment='confirmed')
+        if not len(block_list):
+            self.error('No confirmed block infos on Solana!')
             return
 
-        block_list = self._solana.get_block_info_list(slot_list)
+        self.latest_db_block_slot.value = latest_db_block_slot
+        self._last_time.value = now
 
+        # TODO: the first block can stay on the same place
+        self._FirstBlockInfo.set(block_list[0])
+        self._LastBlockInfo.set(block_list[len(block_list) - 1])
+
+        # TODO: add only not-existing blocks
         self._blocks_by_slot.clear()
         self._blocks_by_hash.clear()
         self._blocks_by_height.clear()
-
-        first_block = block_list[0]
-        self._first_block_slot.value = first_block.slot
-        self._first_block_height.vale = first_block.height
-
-        last_block = block_list[len(block_list) - 1]
-        self._latest_block_slot.value = last_block.slot
-        self._latest_block_height.value = last_block.height
 
         for block in block_list:
             block.finalized = False
@@ -88,13 +111,16 @@ class BlocksDB:
             self._blocks_by_hash[block.hash] = data
             self._blocks_by_height[block.height] = data
 
-    def get_latest_block_height(self) -> int:
+    def force_request_blocks(self):
+        self._last_time.value = 0
+
+    def get_latest_block(self) -> SolanaBlockInfo:
         with self._blocks_lock:
             self._request_blocks()
-            return self._latest_block_height.value
+            return self._LastBlockInfo.get()
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
-        if block_height >= self._first_block_height.value:
+        if block_height >= self._FirstBlockInfo.height.value:
             with self._blocks_lock:
                 self._request_blocks()
                 data = self._blocks_by_height.get(block_height)
@@ -104,7 +130,7 @@ class BlocksDB:
         return self._db.get_block_by_height(block_height)
 
     def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
-        if block_slot > self._first_block_slot.value:
+        if block_slot > self._FirstBlockInfo.slot.value:
             with self._blocks_lock:
                 self._request_blocks()
                 data = self._blocks_by_slot.get(block_slot)
@@ -116,7 +142,7 @@ class BlocksDB:
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         with self._blocks_lock:
             self._request_blocks()
-            data = self._blocks_by_slog.get(block_hash)
+            data = self._blocks_by_hash.get(block_hash)
             if data:
                 return pickle.loads(data)
 

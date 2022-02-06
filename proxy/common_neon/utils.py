@@ -40,11 +40,11 @@ class SolanaBlockInfo:
 
 
 class NeonTxResultInfo:
-    def __init__(self, tx=None, ix_idx=-1):
+    def __init__(self, neon_sign='', tx=None, ix_idx=-1):
         if not isinstance(tx, dict):
             self._set_defaults()
         else:
-            self.decode(tx, ix_idx)
+            self.decode(neon_sign, tx, ix_idx)
 
     def __str__(self):
         return str_fmt_object(self)
@@ -62,9 +62,11 @@ class NeonTxResultInfo:
         self.return_value = bytes()
         self.sol_sign = None
         self.slot = -1
+        self.block_height = -1
+        self.block_hash = ''
         self.idx = -1
 
-    def _decode_event(self, log, tx_idx):
+    def _decode_event(self, neon_sign, log, tx_idx):
         log_idx = len(self.logs)
         address = log[1:21]
         count_topics = int().from_bytes(log[21:29], 'little')
@@ -79,11 +81,11 @@ class NeonTxResultInfo:
             'address': '0x' + address.hex(),
             'topics': topics,
             'data': '0x' + data.hex(),
-            'transactionLogIndex': hex(0),
+            'transactionLogIndex': hex(log_idx),
             'transactionIndex': hex(tx_idx),
-            # 'blockNumber': block_number, # set when transaction found
-            # 'transactionHash': trxId, # set when transaction found
             'logIndex': hex(log_idx),
+            'transactionHash': neon_sign,
+            # 'blockNumber': block_number, # set when transaction found
             # 'blockHash': block_hash # set when transaction found
         }
         self.logs.append(rec)
@@ -96,7 +98,15 @@ class NeonTxResultInfo:
         self.slot = tx['slot']
         self.idx = ix_idx
 
-    def decode(self, tx: {}, ix_idx=-1) -> NeonTxResultInfo:
+    def fill_block_info(self, block: SolanaBlockInfo):
+        self.slot = block.slot
+        self.block_height = block.height
+        self.block_hash = block.hash
+        for rec in self.logs:
+            rec['blockHash'] = block.hash
+            rec['blockNumber'] = hex(block.height)
+
+    def decode(self, neon_sign: str, tx: {}, ix_idx=-1) -> NeonTxResultInfo:
         self._set_defaults()
         meta_ixs = tx['meta']['innerInstructions']
         msg = tx['transaction']['message']
@@ -119,7 +129,7 @@ class NeonTxResultInfo:
                         log = base58.b58decode(event['data'])
                         evm_ix = int(log[0])
                         if evm_ix == 7:
-                            self._decode_event(log, ix_idx)
+                            self._decode_event(neon_sign, log, ix_idx)
                         elif evm_ix == 6:
                             self._decode_return(log, ix_idx, tx)
         return self
@@ -208,11 +218,10 @@ class NeonTxInfo:
 
 
 class NeonTxFullInfo:
-    def __init__(self, neon_tx=NeonTxInfo(), neon_res=NeonTxResultInfo(), block=SolanaBlockInfo(), used_ixs=[]):
+    def __init__(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, used_ixs=[]):
         self.neon_tx = neon_tx
         self.neon_res = neon_res
         self.used_ixs = used_ixs
-        self.block = block
 
     def __str__(self):
         return str_fmt_object(self)

@@ -141,7 +141,7 @@ class EthereumModel:
             if isinstance(items, str):
                 return [items.lower()]
             elif isinstance(items, list):
-                return [item.lower() for item in items if isinstance(item, str)]
+                return list(set([item.lower() for item in items if isinstance(item, str)]))
             return []
 
         from_block = None
@@ -287,8 +287,8 @@ class EthereumModel:
         result = {
             "transactionHash": tx.neon_tx.sign,
             "transactionIndex": hex(0),
-            "blockHash": tx.block.hash,
-            "blockNumber": hex(tx.block.height),
+            "blockHash": tx.neon_res.block_hash,
+            "blockNumber": hex(tx.neon_res.block_height),
             "from": tx.neon_tx.addr,
             "to": tx.neon_tx.to_addr,
             "gasUsed": tx.neon_res.gas_used,
@@ -315,8 +315,8 @@ class EthereumModel:
     def _getTransaction(self, tx):
         t = tx.neon_tx
         ret = {
-            "blockHash": tx.block.hash,
-            "blockNumber": hex(tx.block.height),
+            "blockHash": tx.neon_res.block_hash,
+            "blockNumber": hex(tx.neon_res.block_height),
             "hash": t.sign,
             "transactionIndex": hex(0),
             "from": t.addr,
@@ -356,9 +356,8 @@ class EthereumModel:
         raise Exception("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
 
     def eth_sendRawTransaction(self, rawTrx):
-        self.debug('eth_sendRawTransaction rawTrx=%s', rawTrx)
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
-        self.debug("%s", json.dumps(trx.as_dict(), cls=JsonEncoder, indent=3))
+        self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, indent=3)}")
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
         if trx.gasPrice < min_gas_price:
             raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, min_gas_price))
@@ -366,14 +365,7 @@ class EthereumModel:
         sender = trx.sender()
         eth_signature = '0x' + trx.hash_signed().hex()
 
-        self.debug('Eth Sender: %s', sender)
-        self.debug('Eth Signature: %s', trx.signature().hex())
-        self.debug('Eth Hash: %s', eth_signature)
-
         nonce = int(self.eth_getTransactionCount('0x' + sender, None), base=16)
-
-        self.debug('Eth Sender trx nonce in solana: %s', nonce)
-        self.debug('Eth Sender trx nonce in transaction: %s', trx.nonce)
 
         if (int(nonce) != int(trx.nonce)):
             raise EthereumError(-32002, 'Verifying nonce before send transaction: Error processing Instruction 1: invalid program argument'
@@ -517,10 +509,10 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 params = request.get('params', [])
                 response['result'] = method(*params)
         except SolanaTxError as err:
-            traceback.print_exc()
+            # traceback.print_exc()
             response['error'] = err.result
         except EthereumError as err:
-            traceback.print_exc()
+            # traceback.print_exc()
             response['error'] = err.getError()
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
@@ -569,7 +561,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             else:
                 raise Exception("Invalid request")
         except Exception as err:
-            traceback.print_exc()
+            # traceback.print_exc()
             response = {'jsonrpc': '2.0', 'error': {'code': -32000, 'message': str(err)}}
 
         resp_time_ms = (time.time() - start_time)*1000  # convert this into milliseconds

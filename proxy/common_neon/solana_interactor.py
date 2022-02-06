@@ -145,8 +145,6 @@ class SolanaInteractor:
             "rewards": False
         }
 
-        self.debug(f' {block_slot_list}')
-
         request_list = []
         for slot in block_slot_list:
             request_list.append((slot, opts))

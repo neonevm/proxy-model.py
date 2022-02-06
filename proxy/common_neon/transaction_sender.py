@@ -368,6 +368,7 @@ class NeonTxSender:
     def __init__(self, db: MemDB, client: SolanaClient, eth_tx: EthTx, steps: int):
         self._db = db
         self.eth_tx = eth_tx
+        self.neon_sign = eth_tx.hash_signed().hex()
         self.steps = steps
         self.solana = SolanaInteractor(client)
         self._resource_list = OperatorResourceList(self)
@@ -410,9 +411,8 @@ class NeonTxSender:
         self._resource_list.init_resource_info()
 
         # Validate that transaction is not pended
-        neon_sign = self.eth_tx.hash_signed().hex()
         operator = f'{str(self.resource.public_key())}:{self.resource.rid}'
-        self._pending_tx = NeonPendingTxInfo(neon_sign=neon_sign, slot=0, operator=operator)
+        self._pending_tx = NeonPendingTxInfo(neon_sign=self.neon_sign, operator=operator, slot=0)
         self.pend_tx_into_db(self.solana.get_recent_blockslot())
 
         # Validate that transaction is allowed
@@ -569,7 +569,7 @@ class NeonTxSender:
 
 @logged_group("neon.Proxy")
 class SolTxListSender:
-    def __init__(self, sender, tx_list: [Transaction], name: str):
+    def __init__(self, sender: NeonTxSender, tx_list: [Transaction], name: str):
         self._s = sender
         self._name = name
 
@@ -634,7 +634,7 @@ class SolTxListSender:
         return self
 
     def on_wait_confirm(self, _, slot: int):
-        self._s.pending_tx_into_db(slot)
+        self._s.pend_tx_into_db(slot)
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         """Store the last successfully blockhash and set it in _set_tx_blockhash"""
@@ -726,7 +726,7 @@ class SimpleNeonTxSender(SolTxListSender):
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         if not self.neon_res.is_valid():
-            if self.neon_res.decode(receipt).is_valid():
+            if self.neon_res.decode(self._s.neon_sign, receipt).is_valid():
                 self._s.solana.get_measurements(self._name, self._s.eth_tx, receipt)
 
         super()._on_success_send(tx, receipt)

@@ -349,7 +349,7 @@ class DummyIxDecoder:
         the parsing order can be other than the execution order
         """
         if not tx.neon_res.is_valid():
-            tx.neon_res.decode(self.ix.tx, self.ix.sign.idx)
+            tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx)
             if tx.neon_res.is_valid():
                 return self._decoding_done(tx, 'found Neon results')
         return self._decoding_success(tx, 'mark ix used')
@@ -512,7 +512,8 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         if neon_tx.error:
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
-        tx = NeonTxObject('', neon_tx=neon_tx, neon_res=NeonTxResultInfo(self.ix.tx, self.ix.sign.idx))
+        neon_res = NeonTxResultInfo(neon_tx.sign, self.ix.tx, self.ix.sign.idx)
+        tx = NeonTxObject('', neon_tx=neon_tx, neon_res=neon_res)
         return self._decoding_done(tx, 'call success')
 
 
@@ -718,12 +719,10 @@ class Indexer(IndexerBase):
 
     def process_functions(self):
         self.debug("Start getting blocks")
-        (start_block_slot, last_block_slot) = self.gather_blocks()
+        self.gather_blocks()
         IndexerBase.process_functions(self)
         self.debug("Process receipts")
         self.process_receipts()
-        self.debug(f'remove not finalized data in range[{start_block_slot}..{last_block_slot}]')
-        self.db.del_not_finalized(from_slot=start_block_slot, to_slot=last_block_slot)
         self.debug("Unlock accounts")
         self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
@@ -831,7 +830,6 @@ class Indexer(IndexerBase):
 
         gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
         self.debug(f"gather_blocks_ms: {gather_blocks_ms} last_height: {max_height} last_block_slot {last_block_slot}")
-        return start_block_slot, last_block_slot
 
 
 @logged_group("neon.Indexer")

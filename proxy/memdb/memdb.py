@@ -22,8 +22,11 @@ class MemDB:
         self._txs_db = TxsDB(self._db)
         self._pending_tx_db = PendingTxsDB(self._db)
 
+    def _before_slot(self) -> int:
+        return self._blocks_db.latest_db_block_slot.value
+
     def get_latest_block_height(self) -> int:
-        return self._blocks_db.get_latest_block_height()
+        return self._blocks_db.get_latest_block().height
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_height(block_height)
@@ -35,17 +38,18 @@ class MemDB:
         return self._blocks_db.get_block_by_hash(block_hash)
 
     def pend_transaction(self, tx: NeonPendingTxInfo):
-        self._pending_tx_db.pend_transaction(tx, self._blocks_db.latest_db_block_slot)
+        self._pending_tx_db.pend_transaction(tx, self._before_slot())
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo):
-        block = self._blocks_db.get_full_block_by_slot(neon_res.slot)
-        self._txs_db.submit_transaction(neon_tx, neon_res, block, self._blocks_db.latest_db_block_slot)
+        self._blocks_db.force_request_blocks()
+        neon_res.fill_block_info(self._blocks_db.get_latest_block())
+        self._txs_db.submit_transaction(neon_tx, neon_res, self._before_slot())
 
     def get_tx_by_sol_sign(self, sol_sign: str) -> NeonTxFullInfo:
-        return self._txs_db.get_tx_by_sol_sign(sol_sign, self._blocks_db.latest_db_block_slot)
+        return self._txs_db.get_tx_by_sol_sign(sol_sign, self._before_slot())
 
     def get_tx_by_neon_sign(self, neon_sign: str) -> NeonTxFullInfo:
-        return self._txs_db.get_tx_by_neon_sign(neon_sign, self._blocks_db.latest_db_block_slot)
+        return self._txs_db.get_tx_by_neon_sign(neon_sign, self._before_slot())
 
     def get_logs(self, from_block, to_block, addresses, topics, block_hash):
         return self._txs_db.get_logs(from_block, to_block, addresses, topics, block_hash)
