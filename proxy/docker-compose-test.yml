@@ -148,7 +148,7 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       CONFIG: ci
-      WRITE_TRANSACTION_COST_IN_DB: NO
+      WRITE_TRANSACTION_COST_IN_DB: Nope
     hostname: indexer
     depends_on:
       postgres:
