@@ -8,13 +8,15 @@ from solana.system_program import SYS_PROGRAM_ID
 try:
     from indexer_base import IndexerBase
     from indexer_db import IndexerDB
-    from utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object
+    from utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, str_fmt_object
     from utils import get_accounts_from_storage, check_error
+    from canceller import Canceller
 except ImportError:
     from .indexer_base import IndexerBase
     from .indexer_db import IndexerDB
-    from .utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object
+    from .utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, str_fmt_object
     from .utils import get_accounts_from_storage, check_error
+    from .canceller import Canceller
 
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
 

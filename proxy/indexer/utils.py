@@ -5,31 +5,21 @@ import base64
 import json
 import multiprocessing
 import psycopg2
-import subprocess
-import traceback
 
 from eth_utils import big_endian_to_int
-from solana.account import Account
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
-from solana.rpc.types import TxOpts
-from solana.system_program import SYS_PROGRAM_ID
-from solana.sysvar import SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY
-from solana.transaction import AccountMeta, Transaction, TransactionInstruction
-from spl.token.constants import TOKEN_PROGRAM_ID
-from spl.token.instructions import get_associated_token_address
 from logged_groups import logged_group
 
 from ..common_neon.address import ether2program
-from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, ACCOUNT_INFO_LAYOUT
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import get_from_dict
-from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID, get_solana_accounts
+from ..environment import EVM_LOADER_ID
 
-from proxy.indexer.pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
-from proxy.indexer.pg_common import encode, decode
+from .pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
+from .pg_common import encode, decode
 
 
 basedb_lock_glob = multiprocessing.Lock()
@@ -164,6 +154,7 @@ class NeonTxInfo:
         return str_fmt_object(self)
 
     def _set_defaults(self):
+        self.tx = None
         self.addr = None
         self.sign = None
         self.nonce = None
@@ -179,6 +170,8 @@ class NeonTxInfo:
         self.error = None
 
     def init_from_eth_tx(self, tx: EthTx):
+        self.tx = tx
+
         self.v = hex(tx.v)
         self.r = hex(tx.r)
         self.s = hex(tx.s)
@@ -467,62 +460,3 @@ class LogDB(BaseDB):
         cursor.execute(f'DELETE FROM {self._table_name} WHERE slot >= %s AND slot <= %s AND finalized = false',
                        (from_slot, to_slot))
 
-
-@logged_group("neon.Indexer")
-class Canceller:
-    def __init__(self):
-        # Initialize user account
-        self.signer = get_solana_accounts()[0]
-
-        self.client = Client(SOLANA_URL)
-
-        self.operator = self.signer.public_key()
-        self.operator_token = get_associated_token_address(PublicKey(self.operator), ETH_TOKEN_MINT_ID)
-
-    def unlock_accounts(self, blocked_storages):
-        readonly_accs = [
-            PublicKey(EVM_LOADER_ID),
-            PublicKey(ETH_TOKEN_MINT_ID),
-            PublicKey(TOKEN_PROGRAM_ID),
-            PublicKey(SYSVAR_CLOCK_PUBKEY),
-            PublicKey(SYSVAR_INSTRUCTION_PUBKEY),
-            PublicKey(KECCAK_PROGRAM),
-            PublicKey(SYSVAR_RENT_PUBKEY),
-            PublicKey(INCINERATOR_PUBKEY),
-            PublicKey(SYS_PROGRAM_ID),
-        ]
-        for storage, tx_accounts in blocked_storages.items():
-            (neon_tx, blocked_accounts) = tx_accounts
-            if blocked_accounts is None:
-                self.error(f"Emtpy blocked accounts for the Neon tx {neon_tx}.")
-
-            if blocked_accounts is not None:
-                keys = [
-                        AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=self.operator, is_signer=True, is_writable=True),
-                        AccountMeta(pubkey=self.operator_token, is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=blocked_accounts[4], is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=INCINERATOR_PUBKEY, is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False)
-                    ]
-                for acc in blocked_accounts:
-                    is_writable = False if PublicKey(acc) in readonly_accs else True
-                    keys.append(AccountMeta(pubkey=acc, is_signer=False, is_writable=is_writable))
-
-                trx = Transaction()
-                nonce = int(neon_tx.nonce, 16)
-                trx.add(TransactionInstruction(
-                    program_id=EVM_LOADER_ID,
-                    data=bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
-                    keys=keys
-                ))
-
-                self.debug("Send Cancel")
-                try:
-                    self.client.send_transaction(trx, self.signer, opts=TxOpts(preflight_commitment=Confirmed))
-                except Exception as err:
-                    err_tb = "".join(traceback.format_tb(err.__traceback__))
-                    self.error('Exception on submitting transaction. ' +
-                               f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
-                else:
-                    self.debug(f"Canceled: {blocked_accounts}")
