@@ -29,7 +29,7 @@ from .solana_interactor import get_error_definition_from_receipt, check_if_stora
 from .solana_interactor import check_if_blockhash_notfound
 from ..common_neon.eth_proto import Trx as EthTx
 from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, ACCOUNT_PERMISSION_UPDATE_INT, \
-    MULTIPLIER_FOR_REQUIRED_SOLS, MIN_OPERATOR_BALANCE_TO_WARN
+    MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_ERR
 from ..indexer.utils import NeonTxResultInfo, NeonTxInfo
 from ..indexer.indexer_db import IndexerDB, NeonPendingTxInfo
 from ..environment import get_solana_accounts
@@ -406,8 +406,8 @@ class NeonTxSender:
         self.operator_key = None
         self.builder = None
 
-    def _required_balance(self):
-        return MULTIPLIER_FOR_REQUIRED_SOLS * self.solana.get_multiple_rent_exempt_balances_for_size([STORAGE_SIZE])[0]
+    def _min_operator_balance_to_err(self):
+        return MIN_OPERATOR_BALANCE_TO_ERR
 
     def _min_operator_balance_to_warn(self):
         return MIN_OPERATOR_BALANCE_TO_WARN
@@ -434,14 +434,13 @@ class NeonTxSender:
 
         # Validate operator's account has enough SOLs
         sol_balance = self.solana.get_sol_balance(self.resource.public_key())
-        required_balance = self._required_balance()
         min_operator_balance_to_warn = self._min_operator_balance_to_warn()
-        self.debug(f'Operator execution info: {operator}; balance = {sol_balance}; required balance = {required_balance}')
         if sol_balance <= min_operator_balance_to_warn:
             self.warning(f'Operator\'s account {self.resource.public_key()} SOLs are running out; balance = {sol_balance}; min_operator_balance_to_warn = {min_operator_balance_to_warn} required balance = {required_balance}; ')
-        if sol_balance < required_balance:
-            self.error(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; required balance = {required_balance}')
-            raise Exception(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; required balance = {required_balance}')
+        min_operator_balance_to_err = self._min_operator_balance_to_err()
+        if sol_balance <= min_operator_balance_to_err:
+            self.error(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err balance = {min_operator_balance_to_err}')
+            raise Exception(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err balance = {min_operator_balance_to_err}')
 
     def _execute(self):
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy]:
