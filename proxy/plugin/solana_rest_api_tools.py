@@ -101,6 +101,8 @@ def estimate_gas(tx_sender: NeonTxSender, sender,  *, logger):
     gas_for_trx = (tx_sender.steps_emulated + (holder_iterations + begin_iterations) * EVM_STEPS) * GAS_MULTIPLIER
     gas_for_space = space * EVM_BYTE_COST * GAS_MULTIPLIER
     gas = gas_for_trx + gas_for_space + EXTRA_GAS
+    # if gas < 21000:
+    #     gas = 21000
 
     logger.debug(f'number of holder iterations: {holder_iterations}')
     logger.debug(f'allocated space: {space}')
