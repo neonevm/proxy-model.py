@@ -10,6 +10,7 @@ from proxy.common_neon.solana_interactor import SolanaInteractor
 from proxy.environment import ETH_TOKEN_MINT_ID, SOLANA_URL, get_solana_accounts
 from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID, get_solana_accounts
 from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM
+from ..common_neon.utils import get_from_dict
 from solana.sysvar import SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY
 from solana.system_program import SYS_PROGRAM_ID
 from spl.token.constants import TOKEN_PROGRAM_ID
@@ -61,6 +62,9 @@ class Canceller:
                 try:
                     cancel_result = self.solana.send_multiple_transactions(self.signer, [trx], None, None)[0]
                     self.debug(f"cancel result: {cancel_result}")
+                    result_error = get_from_dict(cancel_result, 'meta', 'err')
+                    if result_error:
+                        self.error(f'Error sending cancel transaction: {result_error}')
                 except Exception as err:
                     err_tb = "".join(traceback.format_tb(err.__traceback__))
                     self.error('Exception on submitting transaction. ' +
