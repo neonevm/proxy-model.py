@@ -64,18 +64,17 @@ class PendingTxsDB:
             del self._pending_tx_by_hash[sign]
 
     def pend_transaction(self, tx: NeonPendingTxInfo, before_slot: int):
+        executed_tx = self._db.get_tx_by_neon_sign(tx.neon_sign)
+        if executed_tx:
+            raise PendingTxError(f'Transaction {tx.neon_sign} is already executed')
+
         with self._pending_tx_lock:
             self._rm_finalized_txs(before_slot)
 
             pended_data = self._pending_tx_by_hash.get(tx.neon_sign)
             if not pended_data:
-                # if tx was executed, this will be a cache in the memory
                 self._set_tx(tx)
             elif pickle.loads(pended_data).operator == tx.operator:
-                return self._set_tx(tx)
+                self._set_tx(tx)
             else:
-                raise PendingTxError('Transaction is locked in other worker')
-
-        executed_tx = self._db.get_tx_by_neon_sign(tx.neon_sign)
-        if executed_tx:
-            raise PendingTxError('Transaction is already executed')
+                raise PendingTxError(f'Transaction {tx.neon_sign} is locked in other worker')

@@ -18,7 +18,8 @@ from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
 from solana.rpc.api import Client as SolanaClient
 
-from .address import accountWithSeed, getTokenAddr
+from ..common_neon.address import accountWithSeed, getTokenAddr, EthereumAddress
+from ..common_neon.errors import EthereumError
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
 from .emulator_interactor import call_emulated
 from .neon_instruction import NeonInstruction as NeonIxBuilder
@@ -277,7 +278,7 @@ class OperatorResourceList:
             self._resource = self._resource_list[idx]
             self._s.set_resource(self._resource)
             if not self._init_perm_accounts():
-                self._s.clear_resouce()
+                self._s.clear_resource()
                 continue
 
             rid = self._resource.rid
@@ -340,7 +341,7 @@ class OperatorResourceList:
             return
         resource = self._resource
         self._resource = None
-        self._s.clear_resouce()
+        self._s.clear_resource()
 
         rid = resource.rid
         opkey = str(resource.public_key())
@@ -378,8 +379,13 @@ class NeonTxSender:
 
         self._pending_tx = None
 
-        self.tx_sender = eth_tx.sender()
+        self.eth_sender = '0x' + eth_tx.sender()
         self.deployed_contract = eth_tx.contract()
+        if self.deployed_contract:
+            self.deployed_contract = '0x' + self.deployed_contract
+        self.to_address = eth_tx.toAddress.hex()
+        if self.to_address:
+            self.to_address = '0x' + self.to_address
         self.steps_emulated = 0
 
         self.create_account_tx = Transaction()
@@ -401,7 +407,7 @@ class NeonTxSender:
         self.operator_key = resource.public_key()
         self.builder = NeonIxBuilder(self.operator_key)
 
-    def clear_resouce(self):
+    def clear_resource(self):
         self.resource = None
         self.operator_key = None
         self.builder = None
@@ -410,20 +416,44 @@ class NeonTxSender:
         # Validate that operator has available resources: operator key, holder/storage accounts
         self._resource_list.init_resource_info()
 
-        # Validate that transaction is not pended
+        self._validate_pend_tx()
+        self._validate_whitelist()
+        self._validate_tx_count()
+
+    def _validate_pend_tx(self):
         operator = f'{str(self.resource.public_key())}:{self.resource.rid}'
         self._pending_tx = NeonPendingTxInfo(neon_sign=self.neon_sign, operator=operator, slot=0)
         self.pend_tx_into_db(self.solana.get_recent_blockslot())
 
-        # Validate that transaction is allowed
+    def _validate_whitelist(self):
         whitelist = AccountWhitelist(self.solana.client, ACCOUNT_PERMISSION_UPDATE_INT, self.resource.signer)
-        if not whitelist.has_client_permission(self.tx_sender):
-            self.warning(f'Sender account {self.tx_sender} is not allowed to execute transactions')
-            raise Exception(f'Sender account {self.tx_sender} is not allowed to execute transactions')
+        if not whitelist.has_client_permission(self.eth_sender[2:]):
+            self.warning(f'Sender account {self.eth_sender} is not allowed to execute transactions')
+            raise Exception(f'Sender account {self.eth_sender} is not allowed to execute transactions')
 
-        if (self.deployed_contract is not None) and (not whitelist.has_contract_permission(self.deployed_contract)):
+        if (self.deployed_contract is not None) and (not whitelist.has_contract_permission(self.deployed_contract[2:])):
             self.warning(f'Contract account {self.deployed_contract} is not allowed for deployment')
             raise Exception(f'Contract account {self.deployed_contract} is not allowed for deployment')
+
+    def _validate_tx_count(self):
+        info = self.solana.get_neon_account_info(EthereumAddress(self.eth_sender))
+        if not info:
+            return
+
+        nonce = int.from_bytes(info.trx_count, 'little')
+        tx_nonce = int(self.eth_tx.nonce)
+        if nonce == tx_nonce:
+            return
+
+        raise EthereumError(
+            -32002,
+            'Verifying nonce before send transaction: Error processing Instruction 1: invalid program argument',
+            {
+                'logs': [
+                    f'/src/entrypoint.rs Invalid Ethereum transaction nonce: acc {nonce}, trx {tx_nonce}',
+                ]
+            }
+        )
 
     def _execute(self):
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy]:
@@ -479,17 +509,17 @@ class NeonTxSender:
         self.builder.init_iterative(self.resource.storage, self.resource.holder, self.resource.rid)
 
     def _call_emulated(self):
-        self.debug(f'sender address: {self.tx_sender}')
+        self.debug(f'sender address: {self.eth_sender}')
 
+        src = self.eth_sender[2:]
         if self.deployed_contract:
             dst = 'deploy'
-            self.debug(f'deploy contract: 0x{self.deployed_contract}')
+            self.debug(f'deploy contract: {self.deployed_contract}')
         else:
-            dst = self.eth_tx.toAddress.hex()
-            self.debug(f'destination address 0x{dst}')
+            dst = self.to_address[2:]
+            self.debug(f'destination address {self.to_address}')
 
-        self._emulator_json = call_emulated(
-            dst, self.tx_sender, self.eth_tx.callData.hex(), hex(self.eth_tx.value))
+        self._emulator_json = call_emulated(dst, src, self.eth_tx.callData.hex(), hex(self.eth_tx.value))
         self.debug(f'emulator returns: {json.dumps(self._emulator_json, indent=3)}')
 
         self.steps_emulated = self._emulator_json['steps_executed']
@@ -498,10 +528,12 @@ class NeonTxSender:
         self._eth_meta_list.append(AccountMeta(pubkey=pubkey, is_signer=is_signer, is_writable=is_writable))
 
     def _parse_accounts_list(self):
-        src_address = self.tx_sender
-        dst_address = (self.deployed_contract or self.eth_tx.toAddress.hex())
+        src_address = self.eth_sender
+        dst_address = (self.deployed_contract or self.to_address)
         src_meta_list = []
         dst_meta_list = []
+
+        self.debug(f'!!! {src_address} {dst_address} ({self.deployed_contract} or {self.to_address})')
 
         for account_desc in self._emulator_json['accounts']:
             if account_desc['new']:
@@ -513,7 +545,7 @@ class NeonTxSender:
             elif account_desc['code_size'] and (account_desc['code_size_current'] < account_desc['code_size']):
                 self._resize_contract_list.append(NeonResizeContractTxStage(self, account_desc))
 
-            eth_address = account_desc['address'][2:]
+            eth_address = account_desc['address']
             sol_account = account_desc["account"]
             sol_contract = account_desc['contract']
 

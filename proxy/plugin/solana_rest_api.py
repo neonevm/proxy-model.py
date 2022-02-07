@@ -27,9 +27,9 @@ from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
 from solana.rpc.api import Client as SolanaClient
 from typing import List, Tuple
 
-from .solana_rest_api_tools import getAccountInfo, neon_config_load, \
-    get_token_balance_or_airdrop, estimate_gas
+from .solana_rest_api_tools import neon_config_load, get_token_balance_or_airdrop, estimate_gas
 from ..common_neon.transaction_sender import NeonTxSender
+from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.address import EthereumAddress
 from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
@@ -277,7 +277,8 @@ class EthereumModel:
     def eth_getTransactionCount(self, account, tag):
         self.debug('eth_getTransactionCount: %s', account)
         try:
-            acc_info = getAccountInfo(self._client, EthereumAddress(account))
+            solana = SolanaInteractor(self._client)
+            acc_info = solana.get_neon_account_info(EthereumAddress(account))
             return hex(int.from_bytes(acc_info.trx_count, 'little'))
         except Exception as err:
             self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
@@ -362,35 +363,24 @@ class EthereumModel:
         if trx.gasPrice < min_gas_price:
             raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, min_gas_price))
 
-        sender = trx.sender()
         eth_signature = '0x' + trx.hash_signed().hex()
 
-        nonce = int(self.eth_getTransactionCount('0x' + sender, None), base=16)
-
-        if (int(nonce) != int(trx.nonce)):
-            raise EthereumError(-32002, 'Verifying nonce before send transaction: Error processing Instruction 1: invalid program argument'
-                                .format(int(nonce), int(trx.nonce)),
-                                {
-                                    'logs': [
-                                        '/src/entrypoint.rs Invalid Ethereum transaction nonce: acc {}, trx {}'.format(nonce, trx.nonce),
-                                    ]
-                                })
         try:
             tx_sender = NeonTxSender(self._db, self._client, trx, steps=500)
             tx_sender.execute()
             return eth_signature
 
-        except PendingTxError:
-            self.debug(f'Transaction {eth_signature} is already in pending list')
+        except PendingTxError as err:
+            self.debug(f'{err}')
             return eth_signature
         except SolanaTxError as err:
             self._log_transaction_error(err)
             raise
         except EthereumError as err:
-            self.debug("eth_sendRawTransaction EthereumError: {err}")
+            # self.debug(f"eth_sendRawTransaction EthereumError: {err}")
             raise
         except Exception as err:
-            self.error("eth_sendRawTransaction type(err):%s, Exception:%s", type(err), err)
+            # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
 
     def _log_transaction_error(self, error: SolanaTxError):
