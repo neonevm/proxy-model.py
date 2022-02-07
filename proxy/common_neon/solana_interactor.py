@@ -157,6 +157,10 @@ class SolanaInteractor:
         return self.client._provider.make_request("getBlocksWithLimit", last_block_slot, limit, opts)['result']
 
     def get_block_info_list(self, block_slot_list: [int], commitment='confirmed') -> [SolanaBlockInfo]:
+        block_list = []
+        if not len(block_slot_list):
+            return block_list
+
         opts = {
             "commitment": commitment,
             "encoding": "json",
@@ -168,7 +172,6 @@ class SolanaInteractor:
         for slot in block_slot_list:
             request_list.append((slot, opts))
 
-        block_list = []
         response_list = self._send_rpc_batch_request('getBlock', request_list)
         for slot, response in zip(block_slot_list, response_list):
             if (not response) or ('result' not in response):

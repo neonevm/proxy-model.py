@@ -21,16 +21,22 @@ class BlockInfo:
     @classmethod
     def set(cls, block: SolanaBlockInfo):
         cls.slot.value = block.slot
-        cls.height.value = block.height
         cls.hash.value = block.hash
+        cls.height.value = block.height
 
     @classmethod
     def get(cls) -> SolanaBlockInfo:
         return SolanaBlockInfo(
             slot=cls.slot.value,
+            hash=cls.hash.value,
             height=cls.height.value,
-            hash=cls.hash.value
         )
+
+    @classmethod
+    def clear(cls):
+        cls.slot.value = 0
+        cls.hash.value = ''
+        cls.height.value = 0
 
 
 @logged_group("neon.Proxy")
@@ -66,48 +72,63 @@ class BlocksDB:
         self._solana = SolanaInteractor(client)
         self._db = db
 
+    def _rm_old_blocks(self, slot_list):
+        exists_slot_list = [slot for slot in self._blocks_by_slot.keys()]
+        rm_slot_list = [slot for slot in exists_slot_list if slot not in slot_list]
+
+        for slot in rm_slot_list:
+            del self._blocks_by_slot[slot]
+
+        self._blocks_by_height.clear()
+        self._blocks_by_hash.clear()
+
+        return [slot for slot in slot_list if slot not in exists_slot_list]
+
+    def _add_new_blocks(self, block_list):
+        block_list = [block for block in block_list if block is not None]
+        for block in block_list:
+            self.debug(f' {block}')
+
+        for data in self._blocks_by_slot.values():
+            block_list.append(pickle.loads(data))
+
+        block_list = sorted(block_list, key=lambda b: b.slot)
+        height = self._DBLastBlockInfo.height.value
+
+        self._blocks_by_slot.clear()
+        for block in block_list:
+            height += 1
+            block.height = height
+            data = pickle.dumps(block)
+            self._blocks_by_slot[block.slot] = data
+            self._blocks_by_hash[block.hash] = data
+            self._blocks_by_height[block.height] = data
+
+        if len(block_list):
+            self._FirstBlockInfo.set(block_list[0])
+            self._LastBlockInfo.set(block_list[len(block_list) - 1])
+        else:
+            self._FirstBlockInfo.clear()
+            self._LastBlockInfo.clear()
+
     def _request_blocks(self):
-        # assert self._blocks_lock.locked()
-
-        now = math.ceil(time.time_ns() / 10_000_000)
-
         # 10 == 0.1 sec, when 0.4 is one block time
+        now = math.ceil(time.time_ns() / 10_000_000)
         if now < self._last_time.value or (now - self._last_time.value) < 40:
             return
 
         db_block = self._db.get_latest_block()
-        if db_block.slot < self._FirstBlockInfo.slot.value:
-            return
+        self._last_time.value = now
+        self._DBLastBlockInfo.set(db_block)
 
         slot_list = self._solana.get_block_slot_list(db_block.slot, 100)
         if not len(slot_list):
             self.error('No confirmed block slots on Solana!')
             return
 
-        # TODO: add filtering of already cached blocks
+        slot_list = self._rm_old_blocks(slot_list)
         block_list = self._solana.get_block_info_list(slot_list)
-        if not len(block_list):
-            self.error('No confirmed block infos on Solana!')
-            return
-
-        self._DBLastBlockInfo.set(db_block)
-        self._last_time.value = now
-
-        # TODO: the first block can stay on the same place
-        self._FirstBlockInfo.set(block_list[0])
-        self._LastBlockInfo.set(block_list[len(block_list) - 1])
-
-        # TODO: add only not-existing blocks
-        self._blocks_by_slot.clear()
-        self._blocks_by_hash.clear()
-        self._blocks_by_height.clear()
-
-        for block in block_list:
-            block.finalized = False
-            data = pickle.dumps(block)
-            self._blocks_by_slot[block.slot] = data
-            self._blocks_by_hash[block.hash] = data
-            self._blocks_by_height[block.height] = data
+        self._add_new_blocks(block_list)
 
     def force_request_blocks(self):
         self._last_time.value = 0
@@ -129,6 +150,8 @@ class BlocksDB:
                 data = self._blocks_by_height.get(block_height)
                 if data is not None:
                     return pickle.loads(data)
+                if block_height >= self._FirstBlockInfo.height.value:
+                    return None
 
         return self._db.get_block_by_height(block_height)
 
@@ -139,6 +162,8 @@ class BlocksDB:
                 data = self._blocks_by_slot.get(block_slot)
                 if data:
                     return pickle.loads(data)
+                if block_slot > self._FirstBlockInfo.slot.value:
+                    return None
 
         return self._db.get_full_block_by_slot(block_slot)
 
