@@ -97,7 +97,7 @@ docker run --rm -ti --network=container:proxy \
      $PROXY_IMAGE
 
 echo "Run uniswap-v2-core tests..."
-docker run --rm -ti --network=host \
+docker run --rm -ti --network=proxy_net \
      -e FAUCET_URL \
      --entrypoint ./deploy-test.sh \
      ${EXTRA_ARGS:-} \
