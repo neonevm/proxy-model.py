@@ -533,8 +533,6 @@ class NeonTxSender:
         src_meta_list = []
         dst_meta_list = []
 
-        self.debug(f'!!! {src_address} {dst_address} ({self.deployed_contract} or {self.to_address})')
-
         for account_desc in self._emulator_json['accounts']:
             if account_desc['new']:
                 if account_desc['code_size']:

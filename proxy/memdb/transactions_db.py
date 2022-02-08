@@ -17,7 +17,9 @@ class TxsDB:
     _tx_lock = _manager.Lock()
     _tx_slot = _manager.Value(ctypes.c_ulonglong, 0)
     _tx_by_neon_sign = _manager.dict()
+    _slot_by_neon_sign = _manager.dict()
     _tx_by_sol_sign = _manager.dict()
+    _slot_by_sol_sign = _manager.dict()
 
     def __init__(self, db: IndexerDB):
         self._db = db
@@ -26,21 +28,22 @@ class TxsDB:
         if (self._tx_slot.value == 0) or (self._tx_slot.value > before_slot):
             return
 
-        rm_sol_list = []
-        rm_neon_list = []
-        self._tx_slot.value = 0
-        for data in self._tx_by_neon_sign.values():
-            tx = pickle.loads(data)
-            if tx.neon_res.slot <= before_slot:
-                self.debug(f'remove {tx.neon_tx.sign} ({tx.neon_res.slot} <= {before_slot})')
-                rm_neon_list.append(tx.neon_tx.sign)
-                rm_sol_list.append(tx.neon_res.sol_sign)
-            elif (self._tx_slot.value == 0) or (self._tx_slot.value > tx.neon_res.slot):
-                self._tx_slot.value = tx.neon_res.slot
+        rm_neon_sign_list = []
+        tx_slot = 0
+        for sign, slot in self._slot_by_neon_sign.items():
+            if slot <= before_slot:
+                rm_neon_sign_list.append(sign)
+            elif (tx_slot == 0) or (tx_slot > slot):
+                tx_slot = slot
+        self._tx_slot.value = tx_slot
 
-        for sol_sign, neon_sign in zip(rm_sol_list, rm_neon_list):
+        rm_sol_sign_list = [sign for sign, slot in self._slot_by_sol_sign.items() if slot <= before_slot]
+
+        for neon_sign, sol_sign in zip(rm_neon_sign_list, rm_sol_sign_list):
             del self._tx_by_neon_sign[neon_sign]
+            del self._slot_by_neon_sign[neon_sign]
             del self._tx_by_sol_sign[sol_sign]
+            del self._slot_by_sol_sign[sol_sign]
 
     def get_tx_list_by_sol_sign(self, finalized, sol_sign_list: [str], before_slot: int) -> [NeonTxFullInfo]:
         if finalized:
@@ -102,6 +105,8 @@ class TxsDB:
         with self._tx_lock:
             self._rm_finalized_txs(before_slot)
             self._tx_by_neon_sign[tx.neon_tx.sign] = data
+            self._slot_by_neon_sign[tx.neon_tx.sign] = tx.neon_res.slot
             self._tx_by_sol_sign[tx.neon_res.sol_sign] = data
+            self._slot_by_sol_sign[tx.neon_res.sol_sign] = tx.neon_res.slot
             if (self._tx_slot.value == 0) or (self._tx_slot.value > tx.neon_res.slot):
                 self._tx_slot.value = tx.neon_res.slot

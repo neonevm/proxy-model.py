@@ -33,13 +33,15 @@ class PendingTxsDB:
     _pending_tx_lock = _manager.Lock()
     _pending_slot = _manager.Value(ctypes.c_ulonglong, 0)
     _pending_tx_by_hash = _manager.dict()
+    _pending_slot_by_hash = _manager.dict()
 
     def __init__(self, db: IndexerDB):
         self._db = db
 
     def _set_tx(self, tx: NeonPendingTxInfo):
         data = pickle.dumps(tx)
-        self._pending_tx_by_hash.setdefault(tx.neon_sign, data)
+        self._pending_tx_by_hash[tx.neon_sign] = data
+        self._pending_slot_by_hash[tx.neon_sign] = tx.slot
 
         if (self._pending_slot.value == 0) or (self._pending_slot.value > tx.slot):
             self._pending_slot.value = tx.slot
@@ -49,19 +51,21 @@ class PendingTxsDB:
             return
 
         rm_sign_list = []
-        self._pending_slot.value = 0
+        pending_slot = 0
 
         # Filter tx by slot
-        for data in self._pending_tx_by_hash.values():
-            tx = pickle.loads(data)
-            if tx.slot < before_slot:
-                rm_sign_list.append(tx.neon_sign)
-            elif (self._pending_slot.value == 0) or (self._pending_slot.value > tx.slot):
-                self._pending_slot.value = tx.slot
+        for sign, slot in self._pending_slot_by_hash.items():
+            if slot < before_slot:
+                rm_sign_list.append(sign)
+            elif (pending_slot == 0) or (pending_slot > slot):
+                pending_slot = slot
+
+        self._pending_slot.value = pending_slot
 
         # Remove old txs
         for sign in rm_sign_list:
             del self._pending_tx_by_hash[sign]
+            del self._pending_slot_by_hash[sign]
 
     def is_exist(self, neon_sign: str, before_slot) -> bool:
         with self._pending_tx_lock:
