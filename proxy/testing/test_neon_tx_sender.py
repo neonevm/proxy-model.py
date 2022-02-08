@@ -17,6 +17,7 @@ class TestNeonTxSender(unittest.TestCase):
         cls.solana = SolanaClient(os.environ['SOLANA_URL'])
         trx = EthTrx.fromString(bytearray.fromhex('f8678080843ade68b194f0dafe87532d4373453b2555c644390e1b99e84c8459682f0080820102a00193e1966a82c5597942370980fb78080901ca86eb3c1b25ec600b2760cfcc94a03efcc1169e161f9a148fd4586e0bcf880648ca74075bfa7a9acc8800614fc9ff'))
         cls.testee = NeonTxSender(IndexerDB(), cls.solana, trx, 500)
+        cls.testee._validate_pend_tx = Mock()
         cls.testee._min_operator_balance_to_warn = Mock()
         cls.testee._min_operator_balance_to_err = Mock()
 
@@ -32,6 +33,7 @@ class TestNeonTxSender(unittest.TestCase):
         then an error is returned to the client who requested the execution of the transaction
         and an error is written to the log.
         """
+        self.testee._validate_pend_tx.side_effect = [None]
         self.testee._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2]
         self.testee._min_operator_balance_to_err.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000]
 
