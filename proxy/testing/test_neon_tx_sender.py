@@ -42,3 +42,20 @@ class TestNeonTxSender(unittest.TestCase):
                 self.testee._validate_execution()
             print('logs.output:', str(logs.output))
             self.assertRegex(str(logs.output), 'ERROR:neon.Proxy:Operator account [A-Za-z0-9]{40,} has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
+
+    @unittest.skip("a.i.")
+    def test_validate_warning_when_little_sols(self):
+        """
+        If the balance value of one of the operator's accounts becomes equal to
+        the value of the variable MIN_OPERATOR_BALANCE_TO_WARN or less,
+        then a warning is written to the log.:
+        """
+        self.testee._validate_pend_tx.side_effect = [None]
+        self.testee._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000]
+        self.testee._min_operator_balance_to_err.side_effect = [1_049_049_000]
+
+        with self.assertLogs('neon', level='WARNING') as logs:
+            self.testee._validate_execution()
+            print('logs.output:', str(logs.output))
+            self.assertRegex(str(logs.output), 'WARNING:neon.Proxy:Operator account [A-Za-z0-9]{40,} SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
+
