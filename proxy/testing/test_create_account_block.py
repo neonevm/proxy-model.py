@@ -3,10 +3,7 @@ import os
 
 import rlp
 from web3 import Web3
-from solcx import install_solc
 from .testing_helpers import request_airdrop
-
-install_solc(version='0.7.6')
 from solcx import compile_source
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')

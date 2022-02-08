@@ -3,10 +3,7 @@ import os
 
 import eth_utils
 from web3 import Web3
-from solcx import install_solc
 from .testing_helpers import request_airdrop
-
-install_solc(version='0.7.6')
 from solcx import compile_source
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))

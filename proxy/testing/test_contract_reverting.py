@@ -8,9 +8,6 @@ from eth_account.account import LocalAccount
 from .testing_helpers import SolidityContractDeployer, request_airdrop
 from ..common_neon.emulator_interactor import decode_revert_message
 
-from solcx import install_solc
-install_solc(version='0.7.6')
-
 
 class TestContractReverting(unittest.TestCase):
 
