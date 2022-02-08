@@ -367,6 +367,8 @@ def EthMeta(pubkey, is_writable) -> AccountMeta:
 @logged_group("neon.Proxy")
 class NeonTxSender:
     def __init__(self, db: IndexerDB, client: SolanaClient, eth_tx: EthTx, steps: int):
+        self.info(f'MIN_OPERATOR_BALANCE_TO_WARN={MIN_OPERATOR_BALANCE_TO_WARN}')
+        self.info(f'MIN_OPERATOR_BALANCE_TO_ERR={MIN_OPERATOR_BALANCE_TO_ERR}')
         self._db = db
         self.eth_tx = eth_tx
         self.steps = steps
@@ -434,13 +436,13 @@ class NeonTxSender:
 
         # Validate operator's account has enough SOLs
         sol_balance = self.solana.get_sol_balance(self.resource.public_key())
-        min_operator_balance_to_warn = self._min_operator_balance_to_warn()
-        if sol_balance <= min_operator_balance_to_warn:
-            self.warning(f'Operator\'s account {self.resource.public_key()} SOLs are running out; balance = {sol_balance}; min_operator_balance_to_warn = {min_operator_balance_to_warn} required balance = {required_balance}; ')
         min_operator_balance_to_err = self._min_operator_balance_to_err()
         if sol_balance <= min_operator_balance_to_err:
-            self.error(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err balance = {min_operator_balance_to_err}')
-            raise Exception(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err balance = {min_operator_balance_to_err}')
+            self.error(f'Operator account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
+            raise Exception(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
+        min_operator_balance_to_warn = self._min_operator_balance_to_warn()
+        if sol_balance <= min_operator_balance_to_warn:
+            self.warning(f'Operator account {self.resource.public_key()} SOLs are running out; balance = {sol_balance}; min_operator_balance_to_warn = {min_operator_balance_to_warn}; min_operator_balance_to_err = {min_operator_balance_to_err}; ')
 
     def _execute(self):
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy]:
