@@ -1,20 +1,20 @@
 
 import traceback
+
+from logged_groups import logged_group
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
+from solana.system_program import SYS_PROGRAM_ID
+from solana.sysvar import SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY
 from solana.transaction import AccountMeta
+from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
-from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY
+
+from proxy.common_neon.constants import INCINERATOR_PUBKEY, KECCAK_PROGRAM, SYSVAR_INSTRUCTION_PUBKEY
 from proxy.common_neon.neon_instruction import NeonInstruction
 from proxy.common_neon.solana_interactor import SolanaInteractor
-from proxy.environment import ETH_TOKEN_MINT_ID, SOLANA_URL, get_solana_accounts
-from ..environment import SOLANA_URL, EVM_LOADER_ID, ETH_TOKEN_MINT_ID, get_solana_accounts
-from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM
-from ..common_neon.utils import get_from_dict
-from solana.sysvar import SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY
-from solana.system_program import SYS_PROGRAM_ID
-from spl.token.constants import TOKEN_PROGRAM_ID
-from logged_groups import logged_group
+from proxy.common_neon.utils import get_from_dict
+from proxy.environment import ETH_TOKEN_MINT_ID, EVM_LOADER_ID, SOLANA_URL, get_solana_accounts
 
 
 @logged_group("neon.Indexer")
