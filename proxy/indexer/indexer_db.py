@@ -2,6 +2,7 @@ import base58
 import traceback
 
 from logged_groups import logged_group
+from typing import Optional
 
 from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
 
@@ -119,13 +120,16 @@ class IndexerDB:
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_height(block_height)
 
-    def get_tx_by_sol_sign(self, sol_sign: str) -> NeonTxFullInfo:
-        tx = self._txs_db.get_tx_by_sol_sign(sol_sign)
-        if tx:
-            tx.block = self.get_block_by_slot(tx.neon_res.slot)
-        return tx
+    def get_tx_list_by_sol_sign(self, sol_sign_list: [str]) -> [NeonTxFullInfo]:
+        tx_list = self._txs_db.get_tx_list_by_sol_sign(sol_sign_list)
+        block = None
+        for tx in tx_list:
+            if not block:
+                block = self.get_block_by_slot(tx.neon_res.slot)
+            tx.block = block
+        return tx_list
 
-    def get_tx_by_neon_sign(self, neon_sign: str) -> NeonTxFullInfo:
+    def get_tx_by_neon_sign(self, neon_sign: str) -> Optional[NeonTxFullInfo]:
         tx = self._txs_db.get_tx_by_neon_sign(neon_sign)
         if tx:
             tx.block = self.get_block_by_slot(tx.neon_res.slot)

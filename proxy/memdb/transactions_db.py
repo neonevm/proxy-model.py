@@ -2,6 +2,7 @@ import multiprocessing
 import pickle
 import ctypes
 
+from typing import Optional
 from logged_groups import logged_group
 
 from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo, SolanaBlockInfo
@@ -41,21 +42,29 @@ class TxsDB:
             del self._tx_by_neon_sign[neon_sign]
             del self._tx_by_sol_sign[sol_sign]
 
-    def get_tx_by_sol_sign(self, sol_sign: str, before_slot: int) -> NeonTxFullInfo:
+    def get_tx_list_by_sol_sign(self, finalized, sol_sign_list: [str], before_slot: int) -> [NeonTxFullInfo]:
+        if finalized:
+            return self._db.get_tx_list_by_sol_sign(sol_sign_list)
+
+        tx_list = []
         with self._tx_lock:
             self._rm_finalized_txs(before_slot)
-            data = self._tx_by_sol_sign.get(sol_sign)
-            if data:
-                return pickle.loads(data)
-        return self._db.get_tx_by_sol_sign(sol_sign)
+            for sol_sign in sol_sign_list:
+                data = self._tx_by_sol_sign.get(sol_sign)
+                if data:
+                    tx_list.append(pickle.loads(data))
+        return tx_list
 
-    def get_tx_by_neon_sign(self, neon_sign: str, before_slot: int) -> NeonTxFullInfo:
+    def get_tx_by_neon_sign(self, neon_sign: str, is_pended_tx: bool, before_slot: int) -> Optional[NeonTxFullInfo]:
+        if not is_pended_tx:
+            return self._db.get_tx_by_neon_sign(neon_sign)
+
         with self._tx_lock:
             self._rm_finalized_txs(before_slot)
             data = self._tx_by_neon_sign.get(neon_sign)
             if data:
                 return pickle.loads(data)
-        return self._db.get_tx_by_neon_sign(neon_sign)
+        return None
 
     def get_logs(self, from_block, to_block, addresses, topics, block_hash):
         def _has_address(src_addresses, dst_address):

@@ -63,6 +63,11 @@ class PendingTxsDB:
         for sign in rm_sign_list:
             del self._pending_tx_by_hash[sign]
 
+    def is_exist(self, neon_sign: str, before_slot) -> bool:
+        with self._pending_tx_lock:
+            self._rm_finalized_txs(before_slot)
+            return neon_sign in self._pending_tx_by_hash
+
     def pend_transaction(self, tx: NeonPendingTxInfo, before_slot: int):
         executed_tx = self._db.get_tx_by_neon_sign(tx.neon_sign)
         if executed_tx:

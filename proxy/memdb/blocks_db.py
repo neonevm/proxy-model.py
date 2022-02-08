@@ -86,8 +86,6 @@ class BlocksDB:
 
     def _add_new_blocks(self, block_list):
         block_list = [block for block in block_list if block is not None]
-        for block in block_list:
-            self.debug(f' {block}')
 
         for data in self._blocks_by_slot.values():
             block_list.append(pickle.loads(data))
@@ -151,7 +149,7 @@ class BlocksDB:
                 if data is not None:
                     return pickle.loads(data)
                 if block_height >= self._FirstBlockInfo.height.value:
-                    return None
+                    return SolanaBlockInfo()
 
         return self._db.get_block_by_height(block_height)
 
@@ -163,7 +161,7 @@ class BlocksDB:
                 if data:
                     return pickle.loads(data)
                 if block_slot > self._FirstBlockInfo.slot.value:
-                    return None
+                    return SolanaBlockInfo()
 
         return self._db.get_full_block_by_slot(block_slot)
 

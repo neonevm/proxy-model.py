@@ -1,5 +1,6 @@
 from logged_groups import logged_group
 from solana.rpc.api import Client as SolanaClient
+from typing import Optional
 
 from ..indexer.indexer_db import IndexerDB
 
@@ -45,11 +46,13 @@ class MemDB:
         neon_res.fill_block_info(self._blocks_db.get_latest_block())
         self._txs_db.submit_transaction(neon_tx, neon_res, self._before_slot())
 
-    def get_tx_by_sol_sign(self, sol_sign: str) -> NeonTxFullInfo:
-        return self._txs_db.get_tx_by_sol_sign(sol_sign, self._before_slot())
+    def get_tx_list_by_sol_sign(self, finalized: bool, sol_sign_list: [str]) -> [NeonTxFullInfo]:
+        return self._txs_db.get_tx_list_by_sol_sign(finalized, sol_sign_list, self._before_slot())
 
-    def get_tx_by_neon_sign(self, neon_sign: str) -> NeonTxFullInfo:
-        return self._txs_db.get_tx_by_neon_sign(neon_sign, self._before_slot())
+    def get_tx_by_neon_sign(self, neon_sign: str) -> Optional[NeonTxFullInfo]:
+        before_slot = self._before_slot()
+        is_pended_tx = self._pending_tx_db.is_exist(neon_sign, before_slot)
+        return self._txs_db.get_tx_by_neon_sign(neon_sign, is_pended_tx, before_slot)
 
     def get_logs(self, from_block, to_block, addresses, topics, block_hash):
         return self._txs_db.get_logs(from_block, to_block, addresses, topics, block_hash)

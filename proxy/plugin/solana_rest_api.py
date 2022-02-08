@@ -168,37 +168,33 @@ class EthereumModel:
         if block.slot is None:
             return None
 
-        transactions = []
-        gasUsed = 0
-        trx_index = 0
-        for signature in block.signs:
-            tx = self._db.get_tx_by_sol_sign(signature)
-            if not tx:
-                continue
+        sign_list = []
+        gas_used = 0
+        tx_index = 0
+        tx_list = self._db.get_tx_list_by_sol_sign(block.finalized, block.signs)
 
-            trx_receipt = self._getTransactionReceipt(tx)
-            if trx_receipt is not None:
-                gasUsed += int(trx_receipt['gasUsed'], 16)
+        for tx in tx_list:
+            gas_used += int(tx.neon_res.gas_used, 16)
+
             if full:
-                trx = self._getTransaction(tx)
-                if trx is not None:
-                    trx['transactionIndex'] = hex(trx_index)
-                    trx_index += 1
-                    transactions.append(trx)
+                receipt = self._getTransaction(tx)
+                receipt['transactionIndex'] = hex(tx_index)
+                tx_index += 1
+                sign_list.append(receipt)
             else:
-                transactions.append(tx.neon_tx.sign)
+                sign_list.append(tx.neon_tx.sign)
 
-        ret = {
-            "gasUsed": hex(gasUsed),
+        result = {
+            "gasUsed": hex(gas_used),
             "hash": block.hash,
             "number": hex(slot),
             "parentHash": block.parent_hash,
             "timestamp": hex(block.time),
-            "transactions": transactions,
+            "transactions": sign_list,
             "logsBloom": '0x'+'0'*512,
             "gasLimit": '0x6691b7',
         }
-        return ret
+        return result
 
     def eth_getStorageAt(self, account, position, block_identifier):
         '''Retrieves storage data by given position
@@ -315,9 +311,11 @@ class EthereumModel:
 
     def _getTransaction(self, tx):
         t = tx.neon_tx
-        ret = {
-            "blockHash": tx.neon_res.block_hash,
-            "blockNumber": hex(tx.neon_res.block_height),
+        r = tx.neon_res
+
+        result = {
+            "blockHash": r.block_hash,
+            "blockNumber": hex(r.block_height),
             "hash": t.sign,
             "transactionIndex": hex(0),
             "from": t.addr,
@@ -332,8 +330,8 @@ class EthereumModel:
             "s": t.s,
         }
 
-        self.debug("_getTransaction: %s", json.dumps(ret, indent=3))
-        return ret
+        self.debug("_getTransaction: %s", json.dumps(result, indent=3))
+        return result
 
     def eth_getTransactionByHash(self, trxId):
         self.debug('eth_getTransactionByHash: %s', trxId)
@@ -354,14 +352,16 @@ class EthereumModel:
         self.debug("eth_sendTransaction: type(trx):%s", type(trx))
         self.debug("eth_sendTransaction: str(trx):%s", str(trx))
         self.debug("eth_sendTransaction: trx=%s", json.dumps(trx, cls=JsonEncoder, indent=3))
-        raise Exception("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
+        raise RuntimeError("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
 
     def eth_sendRawTransaction(self, rawTrx):
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, indent=3)}")
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
+
         if trx.gasPrice < min_gas_price:
-            raise Exception("The transaction gasPrice is less then the minimum allowable value ({}<{})".format(trx.gasPrice, min_gas_price))
+            raise RuntimeError("The transaction gasPrice is less then the minimum allowable value" +
+                               f"({trx.gasPrice}<{min_gas_price})")
 
         eth_signature = '0x' + trx.hash_signed().hex()
 
@@ -374,7 +374,8 @@ class EthereumModel:
             self.debug(f'{err}')
             return eth_signature
         except SolanaTxError as err:
-            self._log_transaction_error(err)
+            err_msg = json.dumps(err.result, indent=3)
+            self.error(f"Got SendTransactionError: {err_msg}")
             raise
         except EthereumError as err:
             # self.debug(f"eth_sendRawTransaction EthereumError: {err}")
@@ -382,10 +383,6 @@ class EthereumModel:
         except Exception as err:
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
-
-    def _log_transaction_error(self, error: SolanaTxError):
-        err_msg = json.dumps(error.result, indent=3)
-        self.error(f"Got SendTransactionError: {err_msg}")
 
 
 class JsonEncoder(json.JSONEncoder):

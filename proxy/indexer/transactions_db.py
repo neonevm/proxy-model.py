@@ -1,3 +1,5 @@
+from typing import Optional
+
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo
 from ..indexer.utils import BaseDB, DBQuery, SolanaIxSignInfo
 
@@ -78,7 +80,7 @@ class NeonTxsDB(BaseDB):
             );
             """
 
-    def _tx_from_value(self, value):
+    def _tx_from_value(self, value) -> Optional[NeonTxFullInfo]:
         if not value:
             return None
 
@@ -121,14 +123,14 @@ class NeonTxsDB(BaseDB):
                         INSERT INTO {self._table_name}
                             ({', '.join(self._column_lst)})
                         VALUES
-                            ({', '.join(['%s' for _ in range(len(self._column_lst))])})
+                            ({', '.join(['%s' for _ in self._column_lst])})
                         ON CONFLICT DO NOTHING;
                        ''',
                        row)
 
         self._sol_neon_txs_db.set_txs(tx.neon_tx.sign, tx.used_ixs)
 
-    def get_tx_by_neon_sign(self, neon_sign) -> NeonTxFullInfo:
+    def get_tx_by_neon_sign(self, neon_sign) -> Optional[NeonTxFullInfo]:
         return self._tx_from_value(
             self._fetchone(DBQuery(
                 column_list=self._column_lst,
@@ -137,11 +139,22 @@ class NeonTxsDB(BaseDB):
             ))
         )
 
-    def get_tx_by_sol_sign(self, sol_sign) -> NeonTxFullInfo:
-        return self._tx_from_value(
-            self._fetchone(DBQuery(
-                column_list=self._column_lst,
-                key_list=[('sol_sign', sol_sign)],
-                order_list=[],
-            ))
-        )
+    def get_tx_list_by_sol_sign(self, sol_sign_list: [str]) -> [NeonTxFullInfo]:
+        e = self._build_expression(DBQuery(
+            column_list=self._column_lst,
+            key_list=[],
+            order_list=[],
+        ))
+
+        request = f'''
+            SELECT {e.column_expr}
+              FROM {self._table_name} AS a
+             WHERE sol_sign in ({','.join(['%s' for _ in sol_sign_list])})
+             LIMIT {len(sol_sign_list)}
+        '''
+
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, sol_sign_list)
+            values = cursor.fetchall()
+
+        return [self._tx_from_value(v) for v in values]
