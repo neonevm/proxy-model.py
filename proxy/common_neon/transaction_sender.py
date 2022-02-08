@@ -427,6 +427,18 @@ class NeonTxSender:
         self._validate_pend_tx()
         self._validate_whitelist()
         self._validate_tx_count()
+        self._validate_operator_balance()
+
+    def _validate_operator_balance(self):
+        # Validate operator's account has enough SOLs
+        sol_balance = self.solana.get_sol_balance(self.resource.public_key())
+        min_operator_balance_to_err = self._min_operator_balance_to_err()
+        if sol_balance <= min_operator_balance_to_err:
+            self.error(f'Operator account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
+            raise Exception(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
+        min_operator_balance_to_warn = self._min_operator_balance_to_warn()
+        if sol_balance <= min_operator_balance_to_warn:
+            self.warning(f'Operator account {self.resource.public_key()} SOLs are running out; balance = {sol_balance}; min_operator_balance_to_warn = {min_operator_balance_to_warn}; min_operator_balance_to_err = {min_operator_balance_to_err}; ')
 
     def _validate_pend_tx(self):
         operator = f'{str(self.resource.public_key())}:{self.resource.rid}'
@@ -442,16 +454,6 @@ class NeonTxSender:
         if (self.deployed_contract is not None) and (not whitelist.has_contract_permission(self.deployed_contract[2:])):
             self.warning(f'Contract account {self.deployed_contract} is not allowed for deployment')
             raise Exception(f'Contract account {self.deployed_contract} is not allowed for deployment')
-
-        # Validate operator's account has enough SOLs
-        sol_balance = self.solana.get_sol_balance(self.resource.public_key())
-        min_operator_balance_to_err = self._min_operator_balance_to_err()
-        if sol_balance <= min_operator_balance_to_err:
-            self.error(f'Operator account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
-            raise Exception(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
-        min_operator_balance_to_warn = self._min_operator_balance_to_warn()
-        if sol_balance <= min_operator_balance_to_warn:
-            self.warning(f'Operator account {self.resource.public_key()} SOLs are running out; balance = {sol_balance}; min_operator_balance_to_warn = {min_operator_balance_to_warn}; min_operator_balance_to_err = {min_operator_balance_to_err}; ')
 
     def _validate_tx_count(self):
         info = self.solana.get_neon_account_info(EthereumAddress(self.eth_sender))
