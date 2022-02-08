@@ -60,7 +60,7 @@ class Canceller:
 
                 self.debug(f"Send Cancel: {trx}")
                 try:
-                    cancel_result = self.solana.send_multiple_transactions(self.signer, [trx], None, None)[0]
+                    cancel_result = self.solana.send_multiple_transactions(self.signer, [trx], neon_tx.tx, "CancelWithNonce")[0]
                     self.debug(f"cancel result: {cancel_result}")
                     result_error = get_from_dict(cancel_result, 'meta', 'err')
                     if result_error:
