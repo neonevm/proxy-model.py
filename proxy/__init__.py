@@ -13,6 +13,10 @@ from .proxy import main, start
 from .proxy import Proxy
 from .testing.test_case import TestCase
 
+from solcx import install_solc
+install_solc(version='0.7.6')
+from solcx import compile_source
+
 __all__ = [
     # PyPi package entry_point. See
     # https://github.com/abhinavsingh/proxy.py#from-command-line-when-installed-using-pip
