@@ -255,7 +255,7 @@ class OperatorResourceList:
             if self._resource_list_len_glob.value == 0:
                 raise RuntimeError('No resources!')
 
-    def init_resource_info(self, solana: SolanaInteractor) -> OperatorResourceInfo:
+    def init_resource_info(self) -> OperatorResourceInfo:
         if self._resource:
             return self._resource
 
@@ -270,8 +270,7 @@ class OperatorResourceList:
 
             with self._resource_list_len_glob.get_lock():
                 if self._resource_list_len_glob.value == 0:
-                    self.error(f'Operator has NO resources!')
-                    raise RuntimeError('No resources!')
+                    raise RuntimeError('Operator has NO resources!')
                 elif len(self._free_resource_list_glob) == 0:
                     continue
                 idx = self._free_resource_list_glob.pop(0)
@@ -289,7 +288,7 @@ class OperatorResourceList:
 
         raise RuntimeError('Timeout on waiting a free operator resource!')
 
-    def _init_perm_accounts(self, solana: SolanaInteractor) -> bool:
+    def _init_perm_accounts(self) -> bool:
         if self._check_operator_balance(solana) is False:
             self._resource_list_len_glob.value -= 1
             return False
@@ -318,9 +317,9 @@ class OperatorResourceList:
     def _min_operator_balance_to_warn(self):
         return MIN_OPERATOR_BALANCE_TO_WARN
 
-    def _check_operator_balance(self, solana: SolanaInteractor):
+    def _check_operator_balance(self):
         # Validate operator's account has enough SOLs
-        sol_balance = solana.get_sol_balance(self._resource.public_key())
+        sol_balance = self._s.solana.get_sol_balance(self._resource.public_key())
         min_operator_balance_to_err = self._min_operator_balance_to_err()
         if sol_balance <= min_operator_balance_to_err:
             self.error(f'Operator account {self._resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
