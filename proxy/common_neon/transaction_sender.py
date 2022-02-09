@@ -270,6 +270,7 @@ class OperatorResourceList:
 
             with self._resource_list_len_glob.get_lock():
                 if self._resource_list_len_glob.value == 0:
+                    self.error(f'Operator has NO resources!')
                     raise RuntimeError('No resources!')
                 elif len(self._free_resource_list_glob) == 0:
                     continue
@@ -289,6 +290,9 @@ class OperatorResourceList:
         raise RuntimeError('Timeout on waiting a free operator resource!')
 
     def _init_perm_accounts(self, solana: SolanaInteractor) -> bool:
+        if self._check_operator_balance(solana) is False:
+            self._resource_list_len_glob.value -= 1
+            return False
         if self._resource and self._resource.storage and self._resource.holder:
             return True
 
@@ -297,7 +301,6 @@ class OperatorResourceList:
         aid = rid.to_bytes(math.ceil(rid.bit_length() / 8), 'big')
         seed_list = [prefix + aid for prefix in [b"storage", b"holder"]]
         try:
-            self._validate_operator_balance(solana)
             storage, holder = self._create_perm_accounts(seed_list)
             self._resource.storage = storage
             self._resource.holder = holder
@@ -315,16 +318,17 @@ class OperatorResourceList:
     def _min_operator_balance_to_warn(self):
         return MIN_OPERATOR_BALANCE_TO_WARN
 
-    def _validate_operator_balance(self, solana: SolanaInteractor):
+    def _check_operator_balance(self, solana: SolanaInteractor):
         # Validate operator's account has enough SOLs
         sol_balance = solana.get_sol_balance(self._resource.public_key())
         min_operator_balance_to_err = self._min_operator_balance_to_err()
         if sol_balance <= min_operator_balance_to_err:
             self.error(f'Operator account {self._resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
-            raise Exception(f'Operator\'s account {self._resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
+            return False
         min_operator_balance_to_warn = self._min_operator_balance_to_warn()
         if sol_balance <= min_operator_balance_to_warn:
             self.warning(f'Operator account {self._resource.public_key()} SOLs are running out; balance = {sol_balance}; min_operator_balance_to_warn = {min_operator_balance_to_warn}; min_operator_balance_to_err = {min_operator_balance_to_err}; ')
+        return True
 
     def _create_perm_accounts(self, seed_list):
         tx = Transaction()
