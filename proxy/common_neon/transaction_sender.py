@@ -277,7 +277,7 @@ class OperatorResourceList:
 
             self._resource = self._resource_list[idx]
             self._s.set_resource(self._resource)
-            if not self._init_perm_accounts(solana):
+            if not self._init_perm_accounts():
                 self._s.clear_resource()
                 continue
 
@@ -289,7 +289,7 @@ class OperatorResourceList:
         raise RuntimeError('Timeout on waiting a free operator resource!')
 
     def _init_perm_accounts(self) -> bool:
-        if self._check_operator_balance(solana) is False:
+        if self._check_operator_balance() is False:
             self._resource_list_len_glob.value -= 1
             return False
         if self._resource and self._resource.storage and self._resource.holder:
