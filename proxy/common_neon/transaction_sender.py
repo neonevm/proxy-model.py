@@ -255,7 +255,7 @@ class OperatorResourceList:
             if self._resource_list_len_glob.value == 0:
                 raise RuntimeError('No resources!')
 
-    def init_resource_info(self) -> OperatorResourceInfo:
+    def init_resource_info(self, solana: SolanaInteractor) -> OperatorResourceInfo:
         if self._resource:
             return self._resource
 
@@ -277,7 +277,7 @@ class OperatorResourceList:
 
             self._resource = self._resource_list[idx]
             self._s.set_resource(self._resource)
-            if not self._init_perm_accounts():
+            if not self._init_perm_accounts(solana):
                 self._s.clear_resource()
                 continue
 
@@ -288,7 +288,7 @@ class OperatorResourceList:
 
         raise RuntimeError('Timeout on waiting a free operator resource!')
 
-    def _init_perm_accounts(self) -> bool:
+    def _init_perm_accounts(self, solana: SolanaInteractor) -> bool:
         if self._resource and self._resource.storage and self._resource.holder:
             return True
 
@@ -297,6 +297,7 @@ class OperatorResourceList:
         aid = rid.to_bytes(math.ceil(rid.bit_length() / 8), 'big')
         seed_list = [prefix + aid for prefix in [b"storage", b"holder"]]
         try:
+            self._validate_operator_balance(solana)
             storage, holder = self._create_perm_accounts(seed_list)
             self._resource.storage = storage
             self._resource.holder = holder
@@ -307,6 +308,23 @@ class OperatorResourceList:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
             self.error(f"Fail to init accounts for resource {opkey}:{rid}, err({err}): {err_tb}")
             return False
+
+    def _min_operator_balance_to_err(self):
+        return MIN_OPERATOR_BALANCE_TO_ERR
+
+    def _min_operator_balance_to_warn(self):
+        return MIN_OPERATOR_BALANCE_TO_WARN
+
+    def _validate_operator_balance(self, solana: SolanaInteractor):
+        # Validate operator's account has enough SOLs
+        sol_balance = solana.get_sol_balance(self._resource.public_key())
+        min_operator_balance_to_err = self._min_operator_balance_to_err()
+        if sol_balance <= min_operator_balance_to_err:
+            self.error(f'Operator account {self._resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
+            raise Exception(f'Operator\'s account {self._resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
+        min_operator_balance_to_warn = self._min_operator_balance_to_warn()
+        if sol_balance <= min_operator_balance_to_warn:
+            self.warning(f'Operator account {self._resource.public_key()} SOLs are running out; balance = {sol_balance}; min_operator_balance_to_warn = {min_operator_balance_to_warn}; min_operator_balance_to_err = {min_operator_balance_to_err}; ')
 
     def _create_perm_accounts(self, seed_list):
         tx = Transaction()
@@ -367,8 +385,6 @@ def EthMeta(pubkey, is_writable) -> AccountMeta:
 @logged_group("neon.Proxy")
 class NeonTxSender:
     def __init__(self, db: MemDB, client: SolanaClient, eth_tx: EthTx, steps: int):
-        self.info(f'MIN_OPERATOR_BALANCE_TO_WARN={MIN_OPERATOR_BALANCE_TO_WARN}')
-        self.info(f'MIN_OPERATOR_BALANCE_TO_ERR={MIN_OPERATOR_BALANCE_TO_ERR}')
         self._db = db
         self.eth_tx = eth_tx
         self.neon_sign = '0x' + eth_tx.hash_signed().hex()
@@ -414,31 +430,13 @@ class NeonTxSender:
         self.operator_key = None
         self.builder = None
 
-    def _min_operator_balance_to_err(self):
-        return MIN_OPERATOR_BALANCE_TO_ERR
-
-    def _min_operator_balance_to_warn(self):
-        return MIN_OPERATOR_BALANCE_TO_WARN
-
     def _validate_execution(self):
         # Validate that operator has available resources: operator key, holder/storage accounts
-        self._resource_list.init_resource_info()
+        self._resource_list.init_resource_info(self.solana)
 
         self._validate_pend_tx()
         self._validate_whitelist()
         self._validate_tx_count()
-        self._validate_operator_balance()
-
-    def _validate_operator_balance(self):
-        # Validate operator's account has enough SOLs
-        sol_balance = self.solana.get_sol_balance(self.resource.public_key())
-        min_operator_balance_to_err = self._min_operator_balance_to_err()
-        if sol_balance <= min_operator_balance_to_err:
-            self.error(f'Operator account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
-            raise Exception(f'Operator\'s account {self.resource.public_key()} has NOT enough SOLs; balance = {sol_balance}; min_operator_balance_to_err = {min_operator_balance_to_err}')
-        min_operator_balance_to_warn = self._min_operator_balance_to_warn()
-        if sol_balance <= min_operator_balance_to_warn:
-            self.warning(f'Operator account {self.resource.public_key()} SOLs are running out; balance = {sol_balance}; min_operator_balance_to_warn = {min_operator_balance_to_warn}; min_operator_balance_to_err = {min_operator_balance_to_err}; ')
 
     def _validate_pend_tx(self):
         operator = f'{str(self.resource.public_key())}:{self.resource.rid}'

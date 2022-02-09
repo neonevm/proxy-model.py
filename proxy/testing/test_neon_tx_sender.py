@@ -9,6 +9,7 @@ from unittest.mock import Mock, MagicMock, patch, call
 from proxy.common_neon.eth_proto import Trx as EthTrx
 from proxy.common_neon.transaction_sender import NeonTxSender
 from proxy.indexer.indexer_db import IndexerDB
+from proxy.memdb.memdb import MemDB
 
 
 class TestNeonTxSender(unittest.TestCase):
@@ -16,14 +17,16 @@ class TestNeonTxSender(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.solana = SolanaClient(os.environ['SOLANA_URL'])
         trx = EthTrx.fromString(bytearray.fromhex('f8678080843ade68b194f0dafe87532d4373453b2555c644390e1b99e84c8459682f0080820102a00193e1966a82c5597942370980fb78080901ca86eb3c1b25ec600b2760cfcc94a03efcc1169e161f9a148fd4586e0bcf880648ca74075bfa7a9acc8800614fc9ff'))
-        cls.testee = NeonTxSender(IndexerDB(), cls.solana, trx, 500)
+        cls.testee = NeonTxSender(MemDB(cls.solana), cls.solana, trx, 500)
         cls.testee._validate_pend_tx = Mock()
-        cls.testee._min_operator_balance_to_warn = Mock()
-        cls.testee._min_operator_balance_to_err = Mock()
+        cls.testee._validate_whitelist = Mock()
+        cls.testee._validate_tx_count = Mock()
+        cls.testee._resource_list._min_operator_balance_to_warn = Mock()
+        cls.testee._resource_list._min_operator_balance_to_err = Mock()
 
     def tearDown(self) -> None:
         trx = EthTrx.fromString(bytearray.fromhex('f8678080843ade68b194f0dafe87532d4373453b2555c644390e1b99e84c8459682f0080820102a00193e1966a82c5597942370980fb78080901ca86eb3c1b25ec600b2760cfcc94a03efcc1169e161f9a148fd4586e0bcf880648ca74075bfa7a9acc8800614fc9ff'))
-        self.testee = NeonTxSender(IndexerDB(), self.solana, trx, 500)
+        self.testee = NeonTxSender(MemDB(self.solana), self.solana, trx, 500)
 
     # @unittest.skip("a.i.")
     def test_validate_execution_when_not_enough_sols(self):
@@ -34,12 +37,13 @@ class TestNeonTxSender(unittest.TestCase):
         and an error is written to the log.
         """
         self.testee._validate_pend_tx.side_effect = [None]
-        self.testee._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2]
-        self.testee._min_operator_balance_to_err.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000]
+        self.testee._validate_pend_tx.side_effect = [None]
+        self.testee._resource_list._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2, 1_000_000_000 * 2]
+        self.testee._resource_list._min_operator_balance_to_err.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000]
 
         with self.assertLogs('neon', level='ERROR') as logs:
-            with self.assertRaises(Exception):
-                self.testee._validate_execution()
+            self.testee._validate_execution()
+            self.testee._resource_list.free_resource_info()
             print('logs.output:', str(logs.output))
             self.assertRegex(str(logs.output), 'ERROR:neon.Proxy:Operator account [A-Za-z0-9]{40,} has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
 
@@ -51,11 +55,15 @@ class TestNeonTxSender(unittest.TestCase):
         then a warning is written to the log.:
         """
         self.testee._validate_pend_tx.side_effect = [None]
-        self.testee._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000]
-        self.testee._min_operator_balance_to_err.side_effect = [1_049_049_000]
+        self.testee._validate_whitelist.side_effect = [None]
+        self.testee._validate_tx_count.side_effect = [None]
+        self.testee._resource_list._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000 * 2]
+        self.testee._resource_list._min_operator_balance_to_err.side_effect = [1_049_049_000, 1_000_000_000]
 
         with self.assertLogs('neon', level='WARNING') as logs:
+            # self.testee._resource_list.free_resource_info()
             self.testee._validate_execution()
+            self.testee._resource_list.free_resource_info()
             print('logs.output:', str(logs.output))
             self.assertRegex(str(logs.output), 'WARNING:neon.Proxy:Operator account [A-Za-z0-9]{40,} SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
 
