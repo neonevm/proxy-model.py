@@ -435,7 +435,7 @@ class NeonTxSender:
 
     def _validate_execution(self):
         # Validate that operator has available resources: operator key, holder/storage accounts
-        self._resource_list.init_resource_info(self.solana)
+        self._resource_list.init_resource_info()
 
         self._validate_pend_tx()
         self._validate_whitelist()
