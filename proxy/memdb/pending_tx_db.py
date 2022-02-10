@@ -82,8 +82,11 @@ class PendingTxsDB:
 
             pended_data = self._pending_tx_by_hash.get(tx.neon_sign)
             if not pended_data:
-                self._set_tx(tx)
-            elif pickle.loads(pended_data).operator == tx.operator:
+                return self._set_tx(tx)
+
+            pended_operator = pickle.loads(pended_data).operator
+            if pended_operator == tx.operator:
                 self._set_tx(tx)
             else:
-                raise PendingTxError(f'Transaction {tx.neon_sign} is locked in other worker')
+                raise PendingTxError(f'Transaction {tx.neon_sign} is locked ' +
+                                     f'by other operator resource {pended_operator}')
