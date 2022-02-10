@@ -47,6 +47,10 @@ GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S = int(os.environ.get("GET_WHITE_LIST_BAL
 MIN_OPERATOR_BALANCE_TO_WARN = max(int(os.environ.get("MIN_OPERATOR_BALANCE_TO_WARN", 9000000000)), 9000000000)
 MIN_OPERATOR_BALANCE_TO_ERR = max(int(os.environ.get("MIN_OPERATOR_BALANCE_TO_ERR", 1000000000)), 1000000000)
 
+PYTH_MAPPING_ACCOUNT = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
+if PYTH_MAPPING_ACCOUNT is not None:
+    PYTH_MAPPING_ACCOUNT = PublicKey(PYTH_MAPPING_ACCOUNT)
+
 class CliBase:
 
     def run_cli(self, cmd: List[str], **kwargs) -> bytes:
