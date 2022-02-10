@@ -187,31 +187,6 @@ class NeonInstruction:
 
         return trx
 
-    def make_transfer_instruction(self, associated_token_account: PublicKey) -> TransactionInstruction:
-        transfer_instruction = transfer2(Transfer2Params(
-            source=self.operator_neon_address,
-            owner=self.operator_account,
-            dest=associated_token_account,
-            amount=NEW_USER_AIRDROP_AMOUNT * eth_utils.denoms.gwei,
-            decimals=9,
-            mint=ETH_TOKEN_MINT_ID,
-            program_id=TOKEN_PROGRAM_ID
-        ))
-        self.debug(f"Token transfer from token: {self.operator_neon_address}, owned by: {self.operator_account}, to token: "
-                    f"{associated_token_account}, owned by: {associated_token_account} , value: {NEW_USER_AIRDROP_AMOUNT}")
-        return transfer_instruction
-
-    def make_trx_with_create_and_airdrop(self, eth_account, code_acc=None) -> Transaction:
-        trx = Transaction()
-        create_trx, associated_token_account = self.make_create_eth_account_trx(eth_account, code_acc)
-        trx.add(create_trx)
-        if NEW_USER_AIRDROP_AMOUNT <= 0:
-            return trx
-        transfer_instruction = self.make_transfer_instruction(associated_token_account)
-        trx.add(transfer_instruction)
-
-        return trx
-
     def make_resize_instruction(self, account, code_account_old, code_account_new, seed) -> TransactionInstruction:
         return TransactionInstruction(
             program_id = EVM_LOADER_ID,
@@ -268,7 +243,14 @@ class NeonInstruction:
         trx.add(self.make_05_call_instruction())
         return trx
 
-    def make_cancel_transaction(self) -> Transaction:
+    def make_cancel_transaction(self, cancel_keys = None) -> Transaction:
+        append_keys = []
+        if cancel_keys:
+            append_keys = cancel_keys
+        else:
+            append_keys = self.eth_accounts
+            append_keys.append(AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False))
+            append_keys += obligatory_accounts
         return Transaction().add(TransactionInstruction(
             program_id = EVM_LOADER_ID,
             data = bytearray.fromhex("15") + self.eth_trx.nonce.to_bytes(8, 'little'),
@@ -280,10 +262,7 @@ class NeonInstruction:
                 AccountMeta(pubkey=INCINERATOR_PUBKEY, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
 
-            ] + self.eth_accounts + [
-
-                AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False),
-            ] + obligatory_accounts
+            ] + append_keys
         ))
 
     def make_partial_call_or_continue_instruction(self, steps=0) -> TransactionInstruction:

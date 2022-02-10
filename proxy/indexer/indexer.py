@@ -2,19 +2,16 @@ from typing import Optional
 
 import base58
 import time
-from logged_groups import logged_group
+from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 
-try:
-    from indexer_base import IndexerBase
-    from indexer_db import IndexerDB
-    from utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object
-    from utils import get_accounts_from_storage, check_error
-except ImportError:
-    from .indexer_base import IndexerBase
-    from .indexer_db import IndexerDB
-    from .utils import SolanaIxSignInfo, NeonTxResultInfo, NeonTxInfo, Canceller, str_fmt_object
-    from .utils import get_accounts_from_storage, check_error
+from ..indexer.indexer_base import IndexerBase
+from ..indexer.indexer_db import IndexerDB
+from ..indexer.utils import SolanaIxSignInfo
+from ..indexer.utils import get_accounts_from_storage, check_error
+from ..indexer.canceller import Canceller
+
+from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
 
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
 
@@ -241,7 +238,8 @@ class ReceiptsParserState:
         for tx in self._done_tx_list:
             self.unmark_ix_used(tx)
             if tx.neon_tx.is_valid() and tx.neon_res.is_valid():
-                self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
+                with logging_context(req_id=tx.neon_tx.sign[:7]):
+                    self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
             self.del_tx(tx)
         self._done_tx_list.clear()
         self.debug('Receipt state stats: ' +
@@ -275,7 +273,7 @@ class DummyIxDecoder:
             blocked_accounts = ['']
         tx = self.state.get_tx(storage_account)
         if tx and neon_tx and tx.neon_tx and (neon_tx.sign != tx.neon_tx.sign):
-            self.warning(f'{self}: tx.neon_tx({tx.neon_tx}) != neon_tx({neon_tx}), storage: {storage_account}')
+            self.warning(f'tx.neon_tx({tx.neon_tx}) != neon_tx({neon_tx}), storage: {storage_account}')
             self.state.unmark_ix_used(tx)
             self.state.del_tx(tx)
             tx = None
@@ -303,7 +301,7 @@ class DummyIxDecoder:
         - log the success message.
         """
         self.state.mark_ix_used(obj)
-        self.debug(f'{self}: {msg} - {obj}')
+        self.debug(f'{msg} - {obj}')
         return True
 
     def _decoding_done(self, obj: BaseEvmObject, msg: str) -> bool:
@@ -318,12 +316,12 @@ class DummyIxDecoder:
             self.state.del_holder(obj)
         else:
             assert False, 'Unknown type of object'
-        self.debug(f'{self}: {msg} - {obj}')
+        self.debug(f'{msg} - {obj}')
         return True
 
     def _decoding_skip(self, reason: str) -> bool:
         """Skip decoding of the instruction"""
-        self.debug(f'{self}: {reason}')
+        self.debug(f'{reason}')
         return False
 
     def _decoding_fail(self, obj: BaseEvmObject, reason: str) -> bool:
@@ -334,7 +332,7 @@ class DummyIxDecoder:
 
         Show errors in warning mode because it can be a result of restarting.
         """
-        self.warning(f'{self}: {reason} - {obj}')
+        self.warning(f'{reason} - {obj}')
         self.state.unmark_ix_used(obj)
 
         if isinstance(obj, NeonTxObject):
@@ -353,7 +351,7 @@ class DummyIxDecoder:
         the parsing order can be other than the execution order
         """
         if not tx.neon_res.is_valid():
-            tx.neon_res.decode(self.ix.tx, self.ix.sign.idx)
+            tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx)
             if tx.neon_res.is_valid():
                 return self._decoding_done(tx, 'found Neon results')
         return self._decoding_success(tx, 'mark ix used')
@@ -375,7 +373,7 @@ class DummyIxDecoder:
 
         rlp_error = tx.neon_tx.decode(rlp_sign=rlp_sign, rlp_data=bytes(rlp_data)).error
         if rlp_error:
-            self.error(f'{self} Neon tx rlp error: {rlp_error}')
+            self.error(f'Neon tx rlp error: {rlp_error}')
 
         tx.holder_account = holder_account
         tx.move_ix_used(holder)
@@ -516,7 +514,8 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         if neon_tx.error:
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
-        tx = NeonTxObject('', neon_tx=neon_tx, neon_res=NeonTxResultInfo(self.ix.tx, self.ix.sign.idx))
+        neon_res = NeonTxResultInfo(neon_tx.sign, self.ix.tx, self.ix.sign.idx)
+        tx = NeonTxObject('', neon_tx=neon_tx, neon_res=neon_res)
         return self._decoding_done(tx, 'call success')
 
 
@@ -649,6 +648,7 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
 
     def execute(self) -> bool:
         self._decoding_start()
+
         blocked_accounts_start = 7
 
         if self.ix.get_account_cnt() < blocked_accounts_start + 1:
@@ -705,7 +705,7 @@ class Indexer(IndexerBase):
         self.def_decoder = DummyIxDecoder('Unknown', self.state)
 
     def _init_last_height_slot(self):
-        last_known_slot = self.db.get_last_block_slot()
+        last_known_slot = self.db.get_latest_block().slot
         slot = self._init_last_slot('height', last_known_slot)
         if last_known_slot == slot:
             return
@@ -718,25 +718,26 @@ class Indexer(IndexerBase):
             return
 
         height = block['result']['blockHeight']
-        self.db.set_last_slot_height(slot, height)
+        self.db.fill_block_height(height, [slot])
 
     def process_functions(self):
-        self.debug("Start getting blocks")
-        (start_block_slot, last_block_slot) = self.gather_blocks()
-        IndexerBase.process_functions(self)
-        self.debug("Process receipts")
-        self.process_receipts()
-        self.debug(f'remove not finalized data in range[{start_block_slot}..{last_block_slot}]')
-        self.db.del_not_finalized(from_slot=start_block_slot, to_slot=last_block_slot)
-        self.debug("Unlock accounts")
-        self.canceller.unlock_accounts(self.blocked_storages)
+        with logging_context(req_id="get_blocks"):
+            self.gather_blocks()
+        with logging_context(req_id="get_history"):
+            IndexerBase.process_functions(self)
+
+        with logging_context(req_id="process_receipts"):
+            self.process_receipts()
+
+        with logging_context(req_id="cancel"):
+            self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
 
     def process_receipts(self):
         start_time = time.time()
 
         max_slot = 0
-        last_block_slot = self.db.get_last_block_slot()
+        last_block_slot = self.db.get_latest_block().slot
 
         for slot, sign, tx in self.transaction_receipts.get_trxs(self.indexed_slot, reverse=False):
             if slot > last_block_slot:
@@ -749,8 +750,10 @@ class Indexer(IndexerBase):
             ix_info = SolanaIxInfo(sign=sign, slot=slot,  tx=tx)
 
             for _ in ix_info.iter_ixs():
-                self.state.set_ix(ix_info)
-                (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
+                req_id = ix_info.sign.get_req_id()
+                with logging_context(req_id=req_id):
+                        self.state.set_ix(ix_info)
+                        (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
         self.indexed_slot = last_block_slot
         self.db.set_min_receipt_slot(self.state.find_min_used_slot(self.indexed_slot))
@@ -799,16 +802,14 @@ class Indexer(IndexerBase):
 
     def gather_blocks(self):
         start_time = time.time()
-        last_block_slot = self.db.get_last_block_slot()
-        max_height = self.db.get_last_block_height()
-        start_block_slot = last_block_slot
+        latest_block = self.db.get_latest_block()
         height = -1
         confirmed_blocks_len = 10000
         client = self.client._provider
         list_opts = {"commitment": FINALIZED}
         block_opts = {"commitment": FINALIZED, "transactionDetails": "none", "rewards": False}
         while confirmed_blocks_len == 10000:
-            confirmed_blocks = client.make_request("getBlocksWithLimit", last_block_slot, confirmed_blocks_len, list_opts)['result']
+            confirmed_blocks = client.make_request("getBlocksWithLimit", latest_block.slot, confirmed_blocks_len, list_opts)['result']
             confirmed_blocks_len = len(confirmed_blocks)
             # No more blocks
             if confirmed_blocks_len == 0:
@@ -820,22 +821,24 @@ class Indexer(IndexerBase):
                 height = first_block['result']['blockHeight']
 
             # Validate last block height
-            max_height = height + confirmed_blocks_len - 1
-            last_block_slot = confirmed_blocks[confirmed_blocks_len - 1]
-            last_block = client.make_request("getBlock", last_block_slot, block_opts)
-            if not last_block['result'] or last_block['result']['blockHeight'] != max_height:
-                self.warning(f"FAILED max_height {max_height} last_block_slot {last_block_slot} {last_block}")
+            latest_block.height = height + confirmed_blocks_len - 1
+            latest_block.slot = confirmed_blocks[confirmed_blocks_len - 1]
+            last_block = client.make_request("getBlock", latest_block.slot, block_opts)
+            if not last_block['result'] or last_block['result']['blockHeight'] != latest_block.height:
+                self.warning(f"FAILED last_block_height {latest_block.height} " +
+                             f"last_block_slot {latest_block.slot} " +
+                             f"last_block {last_block}")
                 break
 
             # Everything is good
-            self.debug(f"gather_blocks from {height} to {max_height}")
+            self.debug(f"gather_blocks from {height} to {latest_block.height}")
             self.db.fill_block_height(height, confirmed_blocks)
-            self.db.set_last_slot_height(last_block_slot, max_height)
-            height = max_height
+            height = latest_block.height
 
         gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.debug(f"gather_blocks_ms: {gather_blocks_ms} last_height: {max_height} last_block_slot {last_block_slot}")
-        return start_block_slot, last_block_slot
+        self.debug(f"gather_blocks_ms: {gather_blocks_ms} " +
+                   f"last_block_height: {latest_block.height} " +
+                   f"last_block_slot: {latest_block.slot}")
 
 
 @logged_group("neon.Indexer")
