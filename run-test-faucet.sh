@@ -1,4 +1,5 @@
 #!/bin/bash
+echo $(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ Faucet:Undefined {}
 
 if [ -z "$SOLANA_URL" ]; then
   echo "SOLANA_URL is not set"

@@ -1,4 +1,5 @@
 #!/bin/bash
+echo $(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ Airdropper:Undefined {}
 
 if [ -z "$EVM_LOADER" ]; then
     echo "Extracting EVM_LOADER address from keypair file..."
