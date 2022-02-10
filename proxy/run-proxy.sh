@@ -1,4 +1,5 @@
 #!/bin/bash
+echo $(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ Proxy:Undefined {}
 
 source proxy/run-set-env.sh
 
