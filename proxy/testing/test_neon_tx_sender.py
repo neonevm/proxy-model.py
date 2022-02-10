@@ -82,4 +82,4 @@ class TestNeonTxSender(unittest.TestCase):
                 self.testee._validate_execution()
             print('logs.output:', str(logs.output))
             self.assertRegex(str(logs.output), 'ERROR:neon.Proxy:Operator account [A-Za-z0-9]{40,} has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
-            self.assertRegex(str(logs.output), 'ERROR:neon.Proxy:Operator has NO resources!')
+
