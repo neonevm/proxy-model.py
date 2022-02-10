@@ -238,7 +238,7 @@ class ReceiptsParserState:
         for tx in self._done_tx_list:
             self.unmark_ix_used(tx)
             if tx.neon_tx.is_valid() and tx.neon_res.is_valid():
-                with logging_context(req_id=tx.neon_tx.sign[:7]):
+                with logging_context(neon_id=tx.neon_tx.sign[:7]):
                     self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
             self.del_tx(tx)
         self._done_tx_list.clear()
@@ -667,6 +667,55 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
 
 
 @logged_group("neon.Indexer")
+class BlocksIndexer:
+    def __init__(self, db: IndexerDB, client):
+        self.db = db
+        self.client = client
+
+    def gather_blocks(self):
+        start_time = time.time()
+        latest_block = self.db.get_latest_block()
+        height = -1
+        min_height = height
+        confirmed_blocks_len = 10000
+        client = self.client._provider
+        list_opts = {"commitment": FINALIZED}
+        block_opts = {"commitment": FINALIZED, "transactionDetails": "none", "rewards": False}
+        while confirmed_blocks_len == 10000:
+            confirmed_blocks = client.make_request("getBlocksWithLimit", latest_block.slot, confirmed_blocks_len, list_opts)['result']
+            confirmed_blocks_len = len(confirmed_blocks)
+            # No more blocks
+            if confirmed_blocks_len == 0:
+                break
+
+            # Intitialize start height
+            if height == -1:
+                first_block = client.make_request("getBlock", confirmed_blocks[0], block_opts)
+                height = first_block['result']['blockHeight']
+
+            # Validate last block height
+            latest_block.height = height + confirmed_blocks_len - 1
+            latest_block.slot = confirmed_blocks[confirmed_blocks_len - 1]
+            last_block = client.make_request("getBlock", latest_block.slot, block_opts)
+            if not last_block['result'] or last_block['result']['blockHeight'] != latest_block.height:
+                self.warning(f"FAILED last_block_height {latest_block.height} " +
+                             f"last_block_slot {latest_block.slot} " +
+                             f"last_block {last_block}")
+                break
+
+            # Everything is good
+            min_height = min(min_height, height) if min_height > 0 else height
+            self.db.fill_block_height(height, confirmed_blocks)
+            height = latest_block.height
+
+        gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
+        self.debug(f"gather_blocks_ms: {gather_blocks_ms} " +
+                   f"from min_height: {min_height} " +
+                   f"to last_block_height: {latest_block.height} " +
+                   f"last_block_slot: {latest_block.slot}")
+
+
+@logged_group("neon.Indexer")
 class Indexer(IndexerBase):
     def __init__(self, solana_url, evm_loader_id):
         self.debug(f'Finalized commitment: {FINALIZED}')
@@ -678,6 +727,7 @@ class Indexer(IndexerBase):
         self.canceller = Canceller()
         self.blocked_storages = {}
         self._init_last_height_slot()
+        self.block_indexer = BlocksIndexer(db=self.db, client=self.client)
 
         self.state = ReceiptsParserState(db=self.db, client=self.client)
         self.ix_decoder_map = {
@@ -721,16 +771,10 @@ class Indexer(IndexerBase):
         self.db.fill_block_height(height, [slot])
 
     def process_functions(self):
-        with logging_context(req_id="get_blocks"):
-            self.gather_blocks()
-        with logging_context(req_id="get_history"):
-            IndexerBase.process_functions(self)
-
-        with logging_context(req_id="process_receipts"):
-            self.process_receipts()
-
-        with logging_context(req_id="cancel"):
-            self.canceller.unlock_accounts(self.blocked_storages)
+        self.block_indexer.gather_blocks()
+        IndexerBase.process_functions(self)
+        self.process_receipts()
+        self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
 
     def process_receipts(self):
@@ -751,7 +795,7 @@ class Indexer(IndexerBase):
 
             for _ in ix_info.iter_ixs():
                 req_id = ix_info.sign.get_req_id()
-                with logging_context(req_id=req_id):
+                with logging_context(sol_id=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
@@ -799,46 +843,6 @@ class Indexer(IndexerBase):
         self.blocked_storages[tx.storage_account] = (tx.neon_tx, tx.blocked_accounts)
         tx.canceled = True
         return True
-
-    def gather_blocks(self):
-        start_time = time.time()
-        latest_block = self.db.get_latest_block()
-        height = -1
-        confirmed_blocks_len = 10000
-        client = self.client._provider
-        list_opts = {"commitment": FINALIZED}
-        block_opts = {"commitment": FINALIZED, "transactionDetails": "none", "rewards": False}
-        while confirmed_blocks_len == 10000:
-            confirmed_blocks = client.make_request("getBlocksWithLimit", latest_block.slot, confirmed_blocks_len, list_opts)['result']
-            confirmed_blocks_len = len(confirmed_blocks)
-            # No more blocks
-            if confirmed_blocks_len == 0:
-                break
-
-            # Intitialize start height
-            if height == -1:
-                first_block = client.make_request("getBlock", confirmed_blocks[0], block_opts)
-                height = first_block['result']['blockHeight']
-
-            # Validate last block height
-            latest_block.height = height + confirmed_blocks_len - 1
-            latest_block.slot = confirmed_blocks[confirmed_blocks_len - 1]
-            last_block = client.make_request("getBlock", latest_block.slot, block_opts)
-            if not last_block['result'] or last_block['result']['blockHeight'] != latest_block.height:
-                self.warning(f"FAILED last_block_height {latest_block.height} " +
-                             f"last_block_slot {latest_block.slot} " +
-                             f"last_block {last_block}")
-                break
-
-            # Everything is good
-            self.debug(f"gather_blocks from {height} to {latest_block.height}")
-            self.db.fill_block_height(height, confirmed_blocks)
-            height = latest_block.height
-
-        gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.debug(f"gather_blocks_ms: {gather_blocks_ms} " +
-                   f"last_block_height: {latest_block.height} " +
-                   f"last_block_slot: {latest_block.slot}")
 
 
 @logged_group("neon.Indexer")

@@ -77,10 +77,10 @@ class IndexerBase:
             time.sleep(1.0)
 
     def process_functions(self):
-        self.debug("Start indexing")
         self.gather_unknown_transactions()
 
     def gather_unknown_transactions(self):
+        start_time = time.time()
         poll_txs = set()
 
         minimal_tx = None
@@ -90,18 +90,19 @@ class IndexerBase:
         max_known_tx = self.max_known_tx
 
         counter = 0
+        gathered_signatures = 0
         while (continue_flag):
             results = self._get_signatures(minimal_tx, self.max_known_tx[1])
-            self.debug("{:>3} get_signatures_for_address {}".format(counter, len(results)))
-            counter += 1
 
             if len(results) == 0:
-                self.debug("len(results) == 0")
                 break
 
             minimal_tx = results[-1]["signature"]
             max_tx = (results[0]["slot"], results[0]["signature"])
             max_known_tx = max(max_known_tx, max_tx)
+
+            gathered_signatures += len(results)
+            counter += 1
 
             for tx in results:
                 solana_signature = tx["signature"]
@@ -119,14 +120,18 @@ class IndexerBase:
                 if not self.transaction_receipts.contains(slot, solana_signature):
                     poll_txs.add(solana_signature)
 
-        self.debug("start getting receipts")
         pool = ThreadPool(PARALLEL_REQUESTS)
         pool.map(self._get_tx_receipts, poll_txs)
 
         self.current_slot = current_slot
         self.counter_ = 0
-        self.debug(max_known_tx)
         self.max_known_tx = max_known_tx
+
+        get_history_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
+        self.debug(f"get_history_ms: {get_history_ms} " +
+                   f"gathered_signatures: {gathered_signatures} " +
+                   f"in requests: {counter} " +
+                   f"max_known_tx: {max_known_tx}")
 
     def _get_signatures(self, before, until):
         opts: Dict[str, Union[int, str]] = {}
