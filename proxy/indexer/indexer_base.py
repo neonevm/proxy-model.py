@@ -6,7 +6,8 @@ from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict, Union
 from logged_groups import logged_group
 
-from ..indexer.trx_receipts_storage import TrxReceiptsStorage
+from .trx_receipts_storage import TrxReceiptsStorage
+from .utils import CountedLogger
 
 from ..environment import RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION
 from ..environment import HISTORY_START, PARALLEL_REQUESTS, FINALIZED
@@ -25,6 +26,7 @@ class IndexerBase:
         self.last_slot = self._init_last_slot('receipt', last_slot)
         self.current_slot = 0
         self.counter_ = 0
+        self.count_log = CountedLogger()
 
     def _init_last_slot(self, name: str, last_known_slot: int):
         """
@@ -128,10 +130,11 @@ class IndexerBase:
         self.max_known_tx = max_known_tx
 
         get_history_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.debug(f"get_history_ms: {get_history_ms} " +
-                   f"gathered_signatures: {gathered_signatures} " +
-                   f"in requests: {counter} " +
-                   f"max_known_tx: {max_known_tx}")
+        self.count_log.print(
+            self.debug,
+            list_params={"get_history_ms": get_history_ms, "gathered_signatures": gathered_signatures, "counter": counter},
+            latest_params={"max_known_tx": max_known_tx}
+        )
 
     def _get_signatures(self, before, until):
         opts: Dict[str, Union[int, str]] = {}

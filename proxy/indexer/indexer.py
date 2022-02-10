@@ -7,7 +7,7 @@ from solana.system_program import SYS_PROGRAM_ID
 
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
-from ..indexer.utils import SolanaIxSignInfo
+from ..indexer.utils import SolanaIxSignInfo, CountedLogger
 from ..indexer.utils import get_accounts_from_storage, check_error
 from ..indexer.canceller import Canceller
 
@@ -242,10 +242,15 @@ class ReceiptsParserState:
                     self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
             self.del_tx(tx)
         self._done_tx_list.clear()
-        self.debug('Receipt state stats: ' +
-                   f'holders {len(self._holder_table)}, ' +
-                   f'transactions {len(self._tx_table)}, ' +
-                   f'used ixs {len(self._used_ixs)}')
+
+        holders = len(self._holder_table)
+        transactions = len(self._tx_table)
+        used_ixs = len(self._used_ixs)
+        if holders > 0 or transactions > 0 or used_ixs > 0:
+            self.debug('Receipt state stats: ' +
+                        f'holders {holders}, ' +
+                        f'transactions {transactions}, ' +
+                        f'used ixs {used_ixs}')
 
     def iter_txs(self):
         for tx in self._tx_table.values():
@@ -382,7 +387,7 @@ class DummyIxDecoder:
 
     def execute(self) -> bool:
         """By default, skip the instruction without parsing."""
-        return self._decoding_skip('no logic to decode the instruction')
+        return self._decoding_skip(f'no logic to decode the instruction: {self.ix.ix_data.hex()[:8]}')
 
 
 class WriteIxDecoder(DummyIxDecoder):
@@ -671,6 +676,7 @@ class BlocksIndexer:
     def __init__(self, db: IndexerDB, client):
         self.db = db
         self.client = client
+        self.counted_logger = CountedLogger()
 
     def gather_blocks(self):
         start_time = time.time()
@@ -709,10 +715,11 @@ class BlocksIndexer:
             height = latest_block.height
 
         gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.debug(f"gather_blocks_ms: {gather_blocks_ms} " +
-                   f"from min_height: {min_height} " +
-                   f"to last_block_height: {latest_block.height} " +
-                   f"last_block_slot: {latest_block.slot}")
+        self.counted_logger.print(
+            self.debug,
+            list_params={"gather_blocks_ms": gather_blocks_ms, "processed_height": latest_block.height - min_height},
+            latest_params={"last_block_slot": latest_block.slot}
+        )
 
 
 @logged_group("neon.Indexer")
@@ -728,6 +735,7 @@ class Indexer(IndexerBase):
         self.blocked_storages = {}
         self._init_last_height_slot()
         self.block_indexer = BlocksIndexer(db=self.db, client=self.client)
+        self.counted_logger = CountedLogger()
 
         self.state = ReceiptsParserState(db=self.db, client=self.client)
         self.ix_decoder_map = {
@@ -813,9 +821,11 @@ class Indexer(IndexerBase):
         self.state.complete_done_txs()
 
         process_receipts_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.debug(f"process_receipts_ms: {process_receipts_ms} " +
-                   f"transaction_receipts.len: {self.transaction_receipts.size()} " +
-                   f"from {self.indexed_slot} to {self.current_slot} slots")
+        self.counted_logger.print(
+            self.debug,
+            list_params={"process_receipts_ms": process_receipts_ms, "processed_slots": self.current_slot - self.indexed_slot},
+            latest_params={"transaction_receipts.len": self.transaction_receipts.size(), "indexed_slot": self.indexed_slot}
+        )
 
     def unlock_accounts(self, tx) -> bool:
         # We already indexed the transaction
