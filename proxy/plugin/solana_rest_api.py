@@ -124,7 +124,7 @@ class EthereumModel:
             signed_trx = w3.eth.account.sign_transaction(unsigned_trx, eth_keys.PrivateKey(os.urandom(32)))
             trx = EthTrx.fromString(signed_trx.rawTransaction)
 
-            tx_sender = NeonTxSender(self.db, self.client, trx, steps=500)
+            tx_sender = NeonTxSender(self._db, self._client, trx, steps=500)
             return estimate_gas(tx_sender, sender)
 
         except EthereumError:
