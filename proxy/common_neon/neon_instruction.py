@@ -15,8 +15,7 @@ from logged_groups import logged_group
 from .address import accountWithSeed, ether2program, getTokenAddr, EthereumAddress
 from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from .layouts import CREATE_ACCOUNT_LAYOUT
-from ..environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, NEW_USER_AIRDROP_AMOUNT, \
-    ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
+from ..environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
 
 
 obligatory_accounts = [

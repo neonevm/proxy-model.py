@@ -13,7 +13,7 @@ from ..common_neon.address import ether2program, getTokenAddr, EthereumAddress
 from ..common_neon.errors import SolanaAccountNotFoundError, SolanaErrors
 from ..common_neon.utils import get_from_dict, get_holder_msg
 from ..common_neon.transaction_sender import NeonTxSender, NeonCreateContractTxStage, NeonCreateAccountTxStage
-from ..environment import NEW_USER_AIRDROP_AMOUNT, read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, \
+from ..environment import  read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, \
     EVM_BYTE_COST, HOLDER_MSG_SIZE, GAS_MULTIPLIER, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
 
 @logged_group("neon.Proxy")
