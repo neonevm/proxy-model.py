@@ -30,7 +30,7 @@ for i in $(seq 1 $NUM_ACCOUNTS); do
   if [ "$(spl-token balance --owner "$ID_FILE" "$NEON_TOKEN_MINT" || echo '0')" == "0" ]; then
     echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Create balance and mint token"
     TOKEN_ACCOUNT=$( (spl-token create-account --owner "$ID_FILE" "$NEON_TOKEN_MINT" || true) | grep -Po 'Creating account \K[^\n]*')
-     echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} TOKEN_ACCOUNT=$TOKEN_ACCOUNT"
+    echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} TOKEN_ACCOUNT=$TOKEN_ACCOUNT"
     spl-token mint "$NEON_TOKEN_MINT" 10000000 --owner /spl/bin/evm_loader-keypair.json -- "$TOKEN_ACCOUNT"
   fi
 done
