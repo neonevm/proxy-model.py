@@ -17,10 +17,7 @@ export NUM_ACCOUNTS=15
 echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Create test accounts: ${NUM_ACCOUNTS}"
 /spl/bin/create-test-accounts.sh $NUM_ACCOUNTS
 
-[[ -z "$NEW_USER_AIRDROP_AMOUNT" ]] && export NEW_USER_AIRDROP_AMOUNT=100
-echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} NEW_USER_AIRDROP_AMOUNT=${NEW_USER_AIRDROP_AMOUNT}"
-
-echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} NEON_TOKEN_MINT=${NEON_TOKEN_MINT}"
+echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} NEON_TOKEN_MINT=$NEON_TOKEN_MINT"
 
 for i in $(seq 1 $NUM_ACCOUNTS); do
   ID_FILE="$HOME/.config/solana/id"
@@ -33,8 +30,8 @@ for i in $(seq 1 $NUM_ACCOUNTS); do
   if [ "$(spl-token balance --owner "$ID_FILE" "$NEON_TOKEN_MINT" || echo '0')" == "0" ]; then
     echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Create balance and mint token"
     TOKEN_ACCOUNT=$( (spl-token create-account --owner "$ID_FILE" "$NEON_TOKEN_MINT" || true) | grep -Po 'Creating account \K[^\n]*')
-    echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} TOKEN_ACCOUNT=$TOKEN_ACCOUNT"
-    spl-token mint "$NEON_TOKEN_MINT" $(("$NEW_USER_AIRDROP_AMOUNT"*100000)) --owner /spl/bin/evm_loader-keypair.json -- "$TOKEN_ACCOUNT"
+     echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} TOKEN_ACCOUNT=$TOKEN_ACCOUNT"
+    spl-token mint "$NEON_TOKEN_MINT" 10000000 --owner /spl/bin/evm_loader-keypair.json -- "$TOKEN_ACCOUNT"
   fi
 done
 
