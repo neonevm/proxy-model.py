@@ -17,7 +17,8 @@ class GasPriceCalculator:
         self.min_gas_price = None
 
     def update_mapping(self):
-        self.pyth_network_client.update_mapping(self.mapping_account)
+        if self.mapping_account is not None:
+            self.pyth_network_client.update_mapping(self.mapping_account)
 
     def get_min_gas_price(self):
         if MINIMAL_GAS_PRICE is not None:
