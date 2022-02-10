@@ -371,12 +371,6 @@ class OperatorResourceList:
             self.warning(f"Skip freeing bad accounts for resource {opkey}:{rid}")
             return
 
-        info_list = self._s.solana.get_multiple_accounts_info([resource.storage, resource.holder])
-        for account in info_list:
-            if account.tag not in {EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG}:
-                self.error(f"Not empty/finalized accounts for resource {opkey}:{rid}")
-                return
-
         self._free_resource_list_glob.append(resource.idx)
 
 
@@ -444,7 +438,7 @@ class NeonTxSender:
     def _validate_pend_tx(self):
         operator = f'{str(self.resource.public_key())}:{self.resource.rid}'
         self._pending_tx = NeonPendingTxInfo(neon_sign=self.neon_sign, operator=operator, slot=0)
-        self.pend_tx_into_db(self.solana.get_recent_blockslot())
+        self._pend_tx_into_db(self.solana.get_recent_blockslot())
 
     def _validate_whitelist(self):
         whitelist = AccountWhitelist(self.solana.client, ACCOUNT_PERMISSION_UPDATE_INT, self.resource.signer)
@@ -495,7 +489,10 @@ class NeonTxSender:
         self.error(f'No strategy to execute the Neon transaction: {self.eth_tx}')
         raise RuntimeError('No strategy to execute the Neon transaction')
 
-    def pend_tx_into_db(self, slot: int):
+    def on_wait_confirm(self, slot: int):
+        self._pend_tx_into_db(slot)
+
+    def _pend_tx_into_db(self, slot: int):
         """
         Transaction sender doesn't remove pending transactions!!!
         This protects the neon transaction execution from race conditions, when user tries to send transaction
@@ -632,13 +629,15 @@ class SolTxListSender:
         self._blocked_account_list = []
         self._pending_list = []
         self._budget_exceeded_list = []
-        self._storage_empty = []
+        self._storage_status_x1 = []
+        self._storage_status_x4 = []
 
         self._all_list = [self._bad_block_list,
                           self._blocked_account_list,
                           self._budget_exceeded_list,
                           self._pending_list,
-                          self._storage_empty]
+                          self._storage_status_x1,
+                          self._storage_status_x4]
 
     def clear(self):
         self._tx_list.clear()
@@ -657,6 +656,7 @@ class SolTxListSender:
             self._retry_idx += 1
             receipt_list = solana.send_multiple_transactions(signer, self._tx_list, eth_tx, self._name, self)
 
+            success_cnt = 0
             for receipt, tx in zip(receipt_list, self._tx_list):
                 if check_if_blockhash_notfound(receipt):
                     self._bad_block_list.append(tx)
@@ -665,19 +665,26 @@ class SolTxListSender:
                 elif check_for_errors(receipt):
                     if check_if_program_exceeded_instructions(receipt):
                         self._budget_exceeded_list.append(tx)
-                    elif check_if_storage_is_empty_error(receipt):
-                        self._storage_empty.append(tx)
                     else:
-                        raise SolanaTxError(receipt)
+                        custom = check_if_storage_is_empty_error(receipt)
+                        if custom == 1:
+                            self._storage_status_x1.append(tx)
+                        elif custom == 4:
+                            self._storage_status_x4.append(tx)
+                        else:
+                            raise SolanaTxError(receipt)
                 else:
+                    success_cnt += 1
                     self._on_success_send(tx, receipt)
 
             self.debug(f'retry {self._retry_idx}, ' +
                        f'total receipts {len(receipt_list)}, ' +
+                       f'success receipts {success_cnt}, ' +
                        f'bad blocks {len(self._bad_block_list)}, ' +
                        f'blocked accounts {len(self._blocked_account_list)}, ' +
                        f'budget exceeded {len(self._budget_exceeded_list)}, ' +
-                       f'bad storage status: {len(self._storage_empty)}')
+                       f'bad storage status 0x1: {len(self._storage_status_x1)}, ' +
+                       f'bad storage status 0x4: {len(self._storage_status_x4)}')
 
             self._on_post_send()
 
@@ -686,15 +693,17 @@ class SolTxListSender:
         return self
 
     def on_wait_confirm(self, _, slot: int):
-        self._s.pend_tx_into_db(slot)
+        self._s.on_wait_confirm(slot)
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         """Store the last successfully blockhash and set it in _set_tx_blockhash"""
         self._blockhash = tx.recent_blockhash
 
     def _on_post_send(self):
-        if len(self._storage_empty):
-            raise RuntimeError('Custom error [0x1, 0x4]')
+        if len(self._storage_status_x1):
+            raise RuntimeError('Custom error 0x1')
+        elif len(self._storage_status_x4):
+            raise RuntimeError('Custom error 0x4')
         elif len(self._budget_exceeded_list):
             raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
 
@@ -893,8 +902,10 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             return
 
         # The storage has bad structure and the result isn't received! ((
-        if len(self._storage_empty):
-            raise RuntimeError('Custom error [0x1, 0x4]')
+        if len(self._storage_status_x1):
+            raise RuntimeError('Custom error 0x1')
+        elif len(self._storage_status_x4):
+            raise RuntimeError('Custom error 0x4')
 
         # Blockhash is changed (((
         if len(self._bad_block_list):

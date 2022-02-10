@@ -455,8 +455,8 @@ def check_if_storage_is_empty_error(receipt):
         error_dict = error_arr[1]
         if isinstance(error_dict, dict) and 'Custom' in error_dict:
             if error_dict['Custom'] == 1 or error_dict['Custom'] == 4:
-                return True
-    return False
+                return error_dict['Custom']
+    return 0
 
 
 def get_logs_from_receipt(receipt):
