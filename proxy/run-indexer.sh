@@ -1,5 +1,5 @@
 #!/bin/bash
-COMPONENT=Proxy
+COMPONENT=Indexer
 echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Start ${COMPONENT} service"
 
 if [ -z "$EVM_LOADER" ]; then
