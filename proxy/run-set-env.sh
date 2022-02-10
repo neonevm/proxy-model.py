@@ -1,8 +1,8 @@
 #!/bin/bash
-COMPONENT=$1
+COMPONENT="${1:-Undefined}"
 set -xeo pipefail
 
-echo $(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} "Init environment set"
+echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Init environment set"
 
 if [ "$CONFIG" == "ci" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="http://solana:8899"
