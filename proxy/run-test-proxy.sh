@@ -1,5 +1,6 @@
 #!/bin/bash
-echo $(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ Proxy:Undefined {}
+COMPONENT=Proxy
+echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Start ${COMPONENT} service"
 
 if [ -z "$SOLANA_URL" ]; then
   echo "SOLANA_URL is not set"
@@ -8,17 +9,18 @@ fi
 
 solana config set -u $SOLANA_URL
 
-echo "Dumping evm_loader and extracting ELF parameters"
+echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Dumping evm_loader and extracting ELF parameters"
 export EVM_LOADER=$(solana address -k /spl/bin/evm_loader-keypair.json)
 export $(/spl/bin/neon-cli --commitment confirmed --url $SOLANA_URL --evm_loader="$EVM_LOADER" neon-elf-params)
 
 export NUM_ACCOUNTS=15
+echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Create test accounts: ${NUM_ACCOUNTS}"
 /spl/bin/create-test-accounts.sh $NUM_ACCOUNTS
 
 [[ -z "$NEW_USER_AIRDROP_AMOUNT" ]] && export NEW_USER_AIRDROP_AMOUNT=100
-echo "NEW_USER_AIRDROP_AMOUNT=$NEW_USER_AIRDROP_AMOUNT"
+echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} NEW_USER_AIRDROP_AMOUNT=${NEW_USER_AIRDROP_AMOUNT}"
 
-echo "NEON_TOKEN_MINT=$NEON_TOKEN_MINT"
+echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} NEON_TOKEN_MINT=${NEON_TOKEN_MINT}"
 
 for i in $(seq 1 $NUM_ACCOUNTS); do
   ID_FILE="$HOME/.config/solana/id"
@@ -29,9 +31,9 @@ for i in $(seq 1 $NUM_ACCOUNTS); do
   fi
 
   if [ "$(spl-token balance --owner "$ID_FILE" "$NEON_TOKEN_MINT" || echo '0')" == "0" ]; then
-    echo 'Create balance and mint token'
+    echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Create balance and mint token"
     TOKEN_ACCOUNT=$( (spl-token create-account --owner "$ID_FILE" "$NEON_TOKEN_MINT" || true) | grep -Po 'Creating account \K[^\n]*')
-    echo "TOKEN_ACCOUNT=$TOKEN_ACCOUNT"
+    echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} TOKEN_ACCOUNT=$TOKEN_ACCOUNT"
     spl-token mint "$NEON_TOKEN_MINT" $(("$NEW_USER_AIRDROP_AMOUNT"*100000)) --owner /spl/bin/evm_loader-keypair.json -- "$TOKEN_ACCOUNT"
   fi
 done

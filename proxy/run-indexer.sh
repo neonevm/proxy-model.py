@@ -1,5 +1,6 @@
 #!/bin/bash
-echo $(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ Indexer:Undefined {}
+COMPONENT=Proxy
+echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Start ${COMPONENT} service"
 
 if [ -z "$EVM_LOADER" ]; then
     echo "Extracting EVM_LOADER address from keypair file..."
