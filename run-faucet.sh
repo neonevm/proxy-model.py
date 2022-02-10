@@ -2,7 +2,7 @@
 COMPONENT=Faucet
 echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Start ${COMPONENT} service"
 if [ -z "$SOLANA_URL" ]; then
-  echo "SOLANA_URL is not set"
+  echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Start ${COMPONENT} SOLANA_URL is not set"
   exit 1
 fi
 

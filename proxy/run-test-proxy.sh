@@ -3,7 +3,7 @@ COMPONENT=Proxy
 echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Start ${COMPONENT} service"
 
 if [ -z "$SOLANA_URL" ]; then
-  echo "SOLANA_URL is not set"
+  echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} SOLANA_URL is not set"
   exit 1
 fi
 
@@ -14,7 +14,6 @@ export EVM_LOADER=$(solana address -k /spl/bin/evm_loader-keypair.json)
 export $(/spl/bin/neon-cli --commitment confirmed --url $SOLANA_URL --evm_loader="$EVM_LOADER" neon-elf-params)
 
 export NUM_ACCOUNTS=15
-echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Create test accounts: ${NUM_ACCOUNTS}"
 /spl/bin/create-test-accounts.sh $NUM_ACCOUNTS
 
 echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} NEON_TOKEN_MINT=$NEON_TOKEN_MINT"
