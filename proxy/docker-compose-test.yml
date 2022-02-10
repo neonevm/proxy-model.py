@@ -61,10 +61,10 @@ services:
     image: neonlabsorg/proxy:${REVISION}
     environment:
       SOLANA_URL: http://solana:8899
+      FAUCET_URL: http://faucet:3333
       POSTGRES_DB: neon-db
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
-      NEW_USER_AIRDROP_AMOUNT: 100
       LOG_SENDING_SOLANA_TRANSACTION: "YES"
       LOG_NEON_CLI_DEBUG: "YES"
       FUZZING_BLOCKHASH: "YES"
@@ -102,9 +102,11 @@ services:
       FAUCET_SOLANA_ENABLE: 'true'
       SOLANA_URL: 'http://solana:8899'
       NEON_OPERATOR_KEYFILE: '/root/.config/solana/id.json'
-      NEON_ETH_MAX_AMOUNT: 10
+      NEON_ETH_MAX_AMOUNT: 1000
       TEST_FAUCET_INIT_NEON_BALANCE: 10000
     hostname: faucet
+    ports:
+      - 127.0.0.1:3333:3333
     expose:
       - "3333"
     networks:
