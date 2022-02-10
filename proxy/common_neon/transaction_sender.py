@@ -18,7 +18,7 @@ from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
 from solana.rpc.api import Client as SolanaClient
 
-from .address import accountWithSeed, getTokenAddr, EthereumAddress
+from .address import accountWithSeed, getTokenAddr, EthereumAddress, isPayed
 from ..common_neon.errors import EthereumError
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
 from .emulator_interactor import call_emulated
