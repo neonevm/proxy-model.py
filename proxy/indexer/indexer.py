@@ -387,7 +387,7 @@ class DummyIxDecoder:
 
     def execute(self) -> bool:
         """By default, skip the instruction without parsing."""
-        return self._decoding_skip(f'no logic to decode the instruction: {self.ix.ix_data.hex()[:8]}')
+        return self._decoding_skip(f'no logic to decode the instruction: {self.state.ix.ix_data.hex()[:8]}')
 
 
 class WriteIxDecoder(DummyIxDecoder):
@@ -753,6 +753,7 @@ class Indexer(IndexerBase):
             0x0c: CancelIxDecoder(self.state),
             0x0d: PartialCallOrContinueIxDecoder(self.state),
             0x0e: ExecuteOrContinueIxParser(self.state),
+            0x0f: DummyIxDecoder('ERC20CreateTokenAccount', self.state),
             0x11: ResizeStorageAccountIxDecoder(self.state),
             0x12: WriteWithHolderIxDecoder(self.state),
             0x13: PartialCallV02IxDecoder(self.state),
