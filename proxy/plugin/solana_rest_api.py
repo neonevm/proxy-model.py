@@ -35,6 +35,7 @@ from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import Trx as EthTrx
+from ..common_neon.utils import SolanaBlockInfo
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT
 from ..environment import neon_cli
 from ..memdb.memdb import MemDB, PendingTxError
@@ -164,10 +165,11 @@ class EthereumModel:
 
         return self._db.get_logs(from_block, to_block, addresses, topics, block_hash)
 
-    def getBlockBySlot(self, slot, full):
-        block = self._db.get_full_block_by_slot(slot)
-        if block.slot is None:
-            return None
+    def getBlockBySlot(self, block: SolanaBlockInfo, full):
+        if not block.hash:
+            block = self._db.get_full_block_by_slot(block.slot)
+            if block.slot is None:
+                return None
 
         sign_list = []
         gas_used = 0
@@ -188,7 +190,7 @@ class EthereumModel:
         result = {
             "gasUsed": hex(gas_used),
             "hash": block.hash,
-            "number": hex(slot),
+            "number": hex(block.slot),
             "parentHash": block.parent_hash,
             "timestamp": hex(block.time),
             "transactions": sign_list,
@@ -218,11 +220,11 @@ class EthereumModel:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block_hash = block_hash.lower()
-        slot = self._db.get_block_by_hash(block_hash).slot
-        if slot is None:
+        block = self._db.get_block_by_hash(block_hash)
+        if block.slot is None:
             self.debug("Not found block by hash %s", block_hash)
             return None
-        ret = self.getBlockBySlot(slot, full)
+        ret = self.getBlockBySlot(block, full)
         if ret is not None:
             self.debug("eth_getBlockByHash: %s", json.dumps(ret, indent=3))
         else:
@@ -235,11 +237,11 @@ class EthereumModel:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block_number = self.process_block_tag(tag)
-        slot = self._db.get_block_by_height(block_number).slot
-        if slot is None:
+        block = self._db.get_block_by_height(block_number)
+        if block.slot is None:
             self.debug("Not found block by number %s", tag)
             return None
-        ret = self.getBlockBySlot(slot, full)
+        ret = self.getBlockBySlot(block, full)
         if ret is not None:
             self.debug("eth_getBlockByNumber: %s", json.dumps(ret, indent=3))
         else:

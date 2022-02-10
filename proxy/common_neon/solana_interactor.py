@@ -189,14 +189,14 @@ class SolanaInteractor:
             block_list.append(block)
         return block_list
 
-    def get_recent_blockslot(self) -> int:
-        blockhash_resp = self.client.get_recent_blockhash(commitment=Confirmed)
+    def get_recent_blockslot(self, commitment=Confirmed) -> int:
+        blockhash_resp = self.client.get_recent_blockhash(commitment=commitment)
         if not blockhash_resp["result"]:
             raise RuntimeError("failed to get recent blockhash")
         return blockhash_resp['result']['context']['slot']
 
-    def get_recent_blockhash(self) -> Blockhash:
-        blockhash_resp = self.client.get_recent_blockhash(commitment=Confirmed)
+    def get_recent_blockhash(self, commitment=Confirmed) -> Blockhash:
+        blockhash_resp = self.client.get_recent_blockhash(commitment=commitment)
         if not blockhash_resp["result"]:
             raise RuntimeError("failed to get recent blockhash")
         blockhash = blockhash_resp["result"]["value"]["blockhash"]

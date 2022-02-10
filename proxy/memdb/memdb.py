@@ -43,7 +43,7 @@ class MemDB:
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo):
         self._blocks_db.force_request_blocks()
-        neon_res.fill_block_info(self._blocks_db.get_latest_block())
+        neon_res.fill_block_info(self._blocks_db.get_full_latest_block())
         self._txs_db.submit_transaction(neon_tx, neon_res, self._before_slot())
 
     def get_tx_list_by_sol_sign(self, finalized: bool, sol_sign_list: [str]) -> [NeonTxFullInfo]:
