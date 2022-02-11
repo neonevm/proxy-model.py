@@ -161,7 +161,7 @@ class TestUserStories(unittest.TestCase):
         code_size = 294
         allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
-        continue_iterations = math.ceil(steps_executed / EVM_STEPS)
+        continue_iterations = 1
         gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * EVM_STEP_COST
         gas_for_space = allocated_space * EVM_BYTE_COST
         expected_gas = gas_for_trx + gas_for_space + EXTRA_GAS
@@ -207,7 +207,7 @@ class TestUserStories(unittest.TestCase):
         code_size = 294
         allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE) * 2 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
-        continue_iterations = math.ceil(steps_executed / EVM_STEPS)
+        continue_iterations = 1
         gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * EVM_STEP_COST
         gas_for_space = allocated_space * EVM_BYTE_COST
         expected_gas = gas_for_trx + gas_for_space + EXTRA_GAS

@@ -99,11 +99,25 @@ def estimate_gas(tx_sender: NeonTxSender, sender,  *, logger):
 
     space += tx_sender.unpaid_space
 
-    remains =  tx_sender.steps_emulated % evm_steps_by_trx
-    if remains < EVM_STEPS:
-        tx_sender.steps_emulated += EVM_STEPS - remains
+    if tx_sender.steps_emulated > 0:
+        remains =  tx_sender.steps_emulated % evm_steps_by_trx
+        if remains > 0 and remains < EVM_STEPS:
+            tx_sender.steps_emulated += EVM_STEPS - remains
+    else:
+        tx_sender.steps_emulated += EVM_STEPS
 
-    gas_for_trx = (tx_sender.steps_emulated + (holder_iterations + begin_iterations) * EVM_STEPS) * EVM_STEP_COST
+    if tx_sender.steps_emulated > 0:
+        full_step_iterations = tx_sender.steps_emulated / evm_steps_by_trx
+        final_steps =  tx_sender.steps_emulated % evm_steps_by_trx
+        if final_steps > 0 and final_steps < EVM_STEPS:
+            final_steps = EVM_STEPS
+    else:
+        full_step_iterations = 0
+        final_steps = EVM_STEPS
+
+
+    evm_steps_for_pay = (holder_iterations + begin_iterations) * EVM_STEPS + full_step_iterations * evm_steps_by_trx + final_steps
+    gas_for_trx = evm_steps_for_pay * EVM_STEP_COST
     gas_for_space = space * EVM_BYTE_COST
     gas = gas_for_trx + gas_for_space + EXTRA_GAS
 
