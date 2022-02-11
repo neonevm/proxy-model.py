@@ -17,7 +17,7 @@ from ..environment import  read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA
     EVM_BYTE_COST, HOLDER_MSG_SIZE, EVM_STEP_COST, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
 
 # number of evm-steps, performed by transaction  (should be >= EVM_STEPS)
-evm_steps_by_trx = EVM_STEPS
+evm_steps_by_trx = EVM_STEPS * 5
 
 @logged_group("neon.Proxy")
 def neon_config_load(ethereum_model, *, logger):
