@@ -483,7 +483,7 @@ def get_logs_from_receipt(receipt):
     if log_from_prepared_receipt is not None:
         return log_from_prepared_receipt
 
-    return None
+    return []
 
 
 @logged_group("neon.Proxy")
@@ -492,6 +492,7 @@ def check_if_accounts_blocked(receipt, *, logger):
     if logs is None:
         logger.error("Can't get logs")
         logger.info("Failed result: %s"%json.dumps(receipt, indent=3))
+        return False
 
     ro_blocked = "trying to execute transaction on ro locked account"
     rw_blocked = "trying to execute transaction on rw locked account"
