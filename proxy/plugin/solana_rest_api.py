@@ -278,7 +278,7 @@ class EthereumModel:
         try:
             solana = SolanaInteractor(self._client)
             acc_info = solana.get_neon_account_info(EthereumAddress(account))
-            return hex(int.from_bytes(acc_info.trx_count, 'little'))
+            return hex(acc_info.trx_count)
         except Exception as err:
             self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)

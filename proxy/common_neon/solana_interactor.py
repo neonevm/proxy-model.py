@@ -133,7 +133,7 @@ class SolanaInteractor:
     def get_sol_balance(self, account):
         return self.client.get_balance(account, commitment=Confirmed)['result']['value']
 
-    def get_neon_account_info(self, eth_account: EthereumAddress) -> NeonAccountInfo:
+    def get_neon_account_info(self, eth_account: EthereumAddress) -> Optional[NeonAccountInfo]:
         account_sol, nonce = ether2program(eth_account)
         info = self.get_account_info(account_sol)
         if info is None:
