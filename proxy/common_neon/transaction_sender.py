@@ -604,7 +604,7 @@ class NeonTxSender:
 
         for s in self._create_account_list:
             self.create_account_tx.add(s.tx)
-        self.account_txs_name = ' + '.join([f'{name}({cnt})' for name, cnt in name_dict])
+        self.account_txs_name = ' + '.join([f'{name}({cnt})' for name, cnt in name_dict.items()])
 
     def build_account_txs(self, skip_create_accounts=False) -> [Transaction]:
         tx_list = [s.tx for s in self._resize_contract_list]
