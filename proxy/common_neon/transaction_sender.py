@@ -652,6 +652,8 @@ class SolTxListSender:
         eth_tx = self._s.eth_tx
         signer = self._s.resource.signer
 
+        self.debug(f'Start stage: {self._name}')
+
         while (self._retry_idx < RETRY_ON_FAIL) and (len(self._tx_list)):
             self._retry_idx += 1
             receipt_list = solana.send_multiple_transactions(signer, self._tx_list, eth_tx, self._name, self)
@@ -700,7 +702,11 @@ class SolTxListSender:
         self._blockhash = tx.recent_blockhash
 
     def _on_post_send(self):
-        if len(self._budget_exceeded_list):
+        if len(self._storage_status_x1):
+            raise RuntimeError('Custom error 0x1')
+        elif len(self._storage_status_x4):
+            raise RuntimeError('Custom error 0x4')
+        elif len(self._budget_exceeded_list):
             raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
 
         if len(self._blocked_account_list):
@@ -899,6 +905,12 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             if not self._is_canceled:
                 self._cancel()
             return
+
+        # The storage has bad structure and the result isn't received! ((
+        if len(self._storage_status_x1):
+            raise RuntimeError('Custom error 0x1')
+        elif len(self._storage_status_x4):
+            raise RuntimeError('Custom error 0x4')
 
         # Blockhash is changed (((
         if len(self._bad_block_list):
