@@ -379,7 +379,7 @@ class EthereumModel:
         eth_signature = '0x' + trx.hash_signed().hex()
 
         try:
-            tx_sender = NeonTxSender(self._db, self._client, trx, steps=350)
+            tx_sender = NeonTxSender(self._db, self._client, trx, steps=500)
             tx_sender.execute()
             return eth_signature
 
