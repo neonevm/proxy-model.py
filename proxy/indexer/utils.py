@@ -46,7 +46,7 @@ class SolanaIxSignInfo:
 
 
 @logged_group("neon.Indexer")
-def get_accounts_from_storage(client, storage_account, *, logger):
+def get_accounts_from_storage(client, storage_account, *, logger) -> [(bool, str)]:
     opts = {
         "encoding": "base64",
         "commitment": "confirmed",
@@ -75,9 +75,13 @@ def get_accounts_from_storage(client, storage_account, *, logger):
         storage = STORAGE_ACCOUNT_INFO_LAYOUT.parse(data[1:])
         offset = 1 + STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()
         for _ in range(storage.accounts_len):
+            writable = (data[offset] > 0)
+            offset += 1
+
             some_pubkey = PublicKey(data[offset:offset + 32])
-            acc_list.append(str(some_pubkey))
             offset += 32
+
+            acc_list.append((writable, str(some_pubkey)))
 
         return acc_list
     else:

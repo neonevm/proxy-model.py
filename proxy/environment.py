@@ -8,6 +8,8 @@ from solana.publickey import PublicKey
 from solana.account import Account as SolanaAccount
 from typing import Optional, List
 
+from proxy.common_neon.address import EthereumAddress
+
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
 PP_SOLANA_URL = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
 EVM_LOADER_ID = os.environ.get("EVM_LOADER")
@@ -115,6 +117,14 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
 
     return signer_list
 
+@logged_group("neon.Proxy")
+def get_operator_ethereum_accounts(*, logger) -> [EthereumAddress]:
+    list = [] # TODO read from config
+    for _ in range(1, 15):
+        account = EthereumAddress.random()
+        list.append(account)
+    
+    return list
 
 @logged_group("neon.Proxy")
 class neon_cli(CliBase):

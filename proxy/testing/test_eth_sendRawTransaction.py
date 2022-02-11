@@ -327,7 +327,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 gas=987654321,
                 gasPrice=0,
                 to=eth_account_alice.address,
-                value=eth_utils.denoms.gwei),
+                value=2 * eth_utils.denoms.gwei),
                 eth_account.key
             )
 
@@ -344,7 +344,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 gas=987654321,
                 gasPrice=0,
                 to=eth_account_bob.address,
-                value=eth_utils.denoms.gwei),
+                value=2 * eth_utils.denoms.gwei),
                 eth_account.key
             )
 
@@ -381,10 +381,8 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         bob_balance_after_transfer = proxy.eth.get_balance(eth_account_bob.address)
         print('alice_balance_after_transfer:', alice_balance_after_transfer)
         print('bob_balance_after_transfer:', bob_balance_after_transfer)
-        print('check https://github.com/neonlabsorg/neon-evm/issues/210')
-        print('one_gwei:', eth_utils.denoms.gwei)
-        self.assertEqual(alice_balance_after_transfer, alice_balance_before_transfer - eth_utils.denoms.gwei)
-        self.assertEqual(bob_balance_after_transfer, bob_balance_before_transfer + eth_utils.denoms.gwei)
+        self.assertEqual(alice_balance_after_transfer, alice_balance_before_transfer - one_and_a_half_gweis)
+        self.assertEqual(bob_balance_after_transfer, bob_balance_before_transfer + one_and_a_half_gweis)
 
     @unittest.skip("a.i.")
     def test_07_execute_long_transaction(self):

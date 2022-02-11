@@ -27,7 +27,7 @@ from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
 from solana.rpc.api import Client as SolanaClient
 from typing import List, Tuple
 
-from .solana_rest_api_tools import neon_config_load, get_token_balance_or_zero, estimate_gas
+from .solana_rest_api_tools import neon_config_load, estimate_gas
 from ..common_neon.transaction_sender import NeonTxSender
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.address import EthereumAddress
@@ -134,8 +134,13 @@ class EthereumModel:
         """
         eth_acc = EthereumAddress(account)
         self.debug(f'eth_getBalance: {account} {eth_acc}')
-        balance = get_token_balance_or_zero(self._client, eth_acc)
-        return hex(balance * eth_utils.denoms.gwei)
+        try:
+            solana = SolanaInteractor(self._client)
+            acc_info = solana.get_neon_account_info(eth_acc)
+            return hex(acc_info.balance)
+        except Exception as err:
+            self.debug(f"eth_getBalance: Can't get account info: {err}")
+            return hex(0)
 
     def eth_getLogs(self, obj):
         def to_list(items):
@@ -276,7 +281,7 @@ class EthereumModel:
         try:
             solana = SolanaInteractor(self._client)
             acc_info = solana.get_neon_account_info(EthereumAddress(account))
-            return hex(int.from_bytes(acc_info.trx_count, 'little'))
+            return hex(acc_info.trx_count)
         except Exception as err:
             self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)

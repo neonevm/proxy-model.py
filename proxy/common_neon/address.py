@@ -3,12 +3,7 @@ import random
 from eth_keys import keys as eth_keys
 from hashlib import sha256
 from solana.publickey import PublicKey
-from spl.token.instructions import get_associated_token_address
 from typing import NamedTuple
-
-from .layouts import ACCOUNT_INFO_LAYOUT
-from ..environment import neon_cli, ETH_TOKEN_MINT_ID, EVM_LOADER_ID
-from .constants import ACCOUNT_SEED_VERSION
 
 class EthereumAddress:
     def __init__(self, data, private=None):
@@ -34,11 +29,16 @@ class EthereumAddress:
 
 
 def accountWithSeed(base, seed):
+    from ..environment import EVM_LOADER_ID
+
     result = PublicKey(sha256(bytes(base) + bytes(seed) + bytes(PublicKey(EVM_LOADER_ID))).digest())
     return result
 
 
 def ether2program(ether):
+    from .constants import ACCOUNT_SEED_VERSION
+    from ..environment import EVM_LOADER_ID
+
     if isinstance(ether, str):
         pass
     elif isinstance(ether, EthereumAddress):
@@ -53,16 +53,20 @@ def ether2program(ether):
     return str(pda), nonce
 
 
-def getTokenAddr(account):
-    return get_associated_token_address(PublicKey(account), ETH_TOKEN_MINT_ID)
-
-
 class AccountInfo(NamedTuple):
     ether: eth_keys.PublicKey
+    balance: int
     trx_count: int
     code_account: PublicKey
 
     @staticmethod
     def frombytes(data):
+        from .layouts import ACCOUNT_INFO_LAYOUT
+
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
+        return AccountInfo(
+            ether=cont.ether, 
+            balance=int.from_bytes(cont.balance, "little"),
+            trx_count=int.from_bytes(cont.trx_count, "little"),
+            code_account=PublicKey(cont.code_account)
+        )
