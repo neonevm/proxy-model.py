@@ -4,6 +4,8 @@ import json
 import re
 import time
 
+from typing import Optional
+
 from solana.blockhash import Blockhash
 from solana.publickey import PublicKey
 from solana.rpc.api import Client as SolanaClient
@@ -77,7 +79,7 @@ class SolanaInteractor:
 
         return full_response_data
 
-    def get_account_info(self, storage_account) -> AccountInfo:
+    def get_account_info(self, storage_account) -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": "confirmed",
@@ -454,8 +456,9 @@ def check_if_storage_is_empty_error(receipt):
     if error_arr is not None and isinstance(error_arr, list):
         error_dict = error_arr[1]
         if isinstance(error_dict, dict) and 'Custom' in error_dict:
-            if error_dict['Custom'] == 1 or error_dict['Custom'] == 4:
-                return error_dict['Custom']
+            custom = error_dict['Custom']
+            if custom in (1, 4):
+                return custom
     return 0
 
 
