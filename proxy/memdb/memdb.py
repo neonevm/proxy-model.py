@@ -47,6 +47,8 @@ class MemDB:
         self._txs_db.submit_transaction(neon_tx, neon_res, self._before_slot())
 
     def get_tx_list_by_sol_sign(self, finalized: bool, sol_sign_list: [str]) -> [NeonTxFullInfo]:
+        if (not sol_sign_list) or (not len(sol_sign_list)):
+            return []
         return self._txs_db.get_tx_list_by_sol_sign(finalized, sol_sign_list, self._before_slot())
 
     def get_tx_by_neon_sign(self, neon_sign: str) -> Optional[NeonTxFullInfo]:

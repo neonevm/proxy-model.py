@@ -213,7 +213,7 @@ class BlocksDB:
         return self.db.get_block_by_height(block_height)
 
     def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
-        if block_slot > self._FirstBlockInfo.slot.value:
+        if block_slot >= self._FirstBlockInfo.slot.value:
             request = RequestSolanaBlocks(self)
             with self._blocks_lock:
                 self._fill_blocks(request)
@@ -221,7 +221,7 @@ class BlocksDB:
 
             if data:
                 return self._get_full_block_info(pickle.loads(data))
-            if block_slot > self._FirstBlockInfo.slot.value:
+            if block_slot >= self._FirstBlockInfo.slot.value:
                 return SolanaBlockInfo()
 
         return self.db.get_full_block_by_slot(block_slot)

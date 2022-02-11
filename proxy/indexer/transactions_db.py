@@ -140,9 +140,6 @@ class NeonTxsDB(BaseDB):
         )
 
     def get_tx_list_by_sol_sign(self, sol_sign_list: [str]) -> [NeonTxFullInfo]:
-        if sol_sign_list is None:
-            return []
-
         e = self._build_expression(DBQuery(
             column_list=self._column_lst,
             key_list=[],

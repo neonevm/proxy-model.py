@@ -166,9 +166,9 @@ class EthereumModel:
         return self._db.get_logs(from_block, to_block, addresses, topics, block_hash)
 
     def getBlockBySlot(self, block: SolanaBlockInfo, full):
-        if not block.hash:
+        if not block.time:
             block = self._db.get_full_block_by_slot(block.slot)
-            if block.slot is None:
+            if not block.time:
                 return None
 
         sign_list = []
