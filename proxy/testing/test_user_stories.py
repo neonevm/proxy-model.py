@@ -9,6 +9,7 @@ from eth_keys import keys as eth_keys
 import math
 from ..common_neon.utils import  get_holder_msg
 from ..common_neon.eth_proto import Trx as EthTrx
+from ..plugin.solana_rest_api_tools import evm_steps_by_trx
 
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 headers = {'Content-type': 'application/json'}
@@ -62,13 +63,20 @@ class TestUserStories(unittest.TestCase):
         signed_trx = w3.eth.account.sign_transaction(trx, eth_keys.PrivateKey(os.urandom(32)))
         msg = get_holder_msg(EthTrx.fromString(signed_trx.rawTransaction))
 
+
         begin_iterations = 1
         steps_executed = 128
         code_size = 1138
         allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
-        continue_iterations = math.ceil(steps_executed / EVM_STEPS)
-        gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * EVM_STEP_COST
+
+        full_step_iterations = int(steps_executed / evm_steps_by_trx)
+        final_steps = steps_executed % evm_steps_by_trx
+        if final_steps > 0 and final_steps < EVM_STEPS:
+            final_steps =  EVM_STEPS
+
+        steps_for_pay = (holder_iterations + begin_iterations) * EVM_STEPS  + full_step_iterations * evm_steps_by_trx + final_steps
+        gas_for_trx = steps_for_pay * EVM_STEP_COST
         gas_for_space = allocated_space * EVM_BYTE_COST
         expected_gas = gas_for_trx + gas_for_space + EXTRA_GAS
 
@@ -114,8 +122,15 @@ class TestUserStories(unittest.TestCase):
         code_size = 1138
         allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
-        continue_iterations = math.ceil(steps_executed / EVM_STEPS)
-        gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * EVM_STEP_COST
+
+        full_step_iterations = int(steps_executed / evm_steps_by_trx)
+        final_steps = steps_executed % evm_steps_by_trx
+        if final_steps > 0 and final_steps < EVM_STEPS:
+            final_steps =  EVM_STEPS
+
+        steps_for_pay = (holder_iterations + begin_iterations) * EVM_STEPS  + full_step_iterations * evm_steps_by_trx + final_steps
+        gas_for_trx = steps_for_pay * EVM_STEP_COST
+
         gas_for_space = allocated_space * EVM_BYTE_COST
         expected_gas = gas_for_trx + gas_for_space + EXTRA_GAS
 
