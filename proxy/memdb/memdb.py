@@ -1,3 +1,6 @@
+import base64
+import os
+
 from logged_groups import logged_group
 from solana.rpc.api import Client as SolanaClient
 from typing import Optional
@@ -5,6 +8,7 @@ from typing import Optional
 from ..indexer.indexer_db import IndexerDB
 
 from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
+from ..common_neon.solana_interactor import SolanaInteractor
 
 from ..memdb.blocks_db import BlocksDB, SolanaBlockInfo
 from ..memdb.pending_tx_db import PendingTxsDB, NeonPendingTxInfo, PendingTxError
@@ -18,13 +22,14 @@ class MemDB:
 
         self._db = IndexerDB()
         self._db.set_client(self._client)
+        self._solana = SolanaInteractor(client)
 
-        self._blocks_db = BlocksDB(self._client, self._db)
+        self._blocks_db = BlocksDB(self._db)
         self._txs_db = TxsDB(self._db)
         self._pending_tx_db = PendingTxsDB(self._db)
 
     def _before_slot(self) -> int:
-        return self._blocks_db.get_db_latest_block().slot
+        return self._blocks_db.get_latest_block().slot
 
     def get_latest_block(self) -> SolanaBlockInfo:
         return self._blocks_db.get_latest_block()
@@ -42,8 +47,21 @@ class MemDB:
         self._pending_tx_db.pend_transaction(tx, self._before_slot())
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo):
-        self._blocks_db.force_request_blocks()
-        neon_res.fill_block_info(self._blocks_db.get_full_latest_block())
+        block_list = self._solana.get_block_info_list([neon_res.slot])
+        if len(block_list):
+            block = block_list[0]
+        else:
+            latest_block = self._blocks_db.get_latest_block()
+            block = SolanaBlockInfo(
+                slot=neon_res.slot,
+                time=latest_block.time + 60,
+                hash=base64.b64encode(os.urandom(32)),
+                parent_hash=base64.b64encode(os.urandom(32)),
+                signs=[neon_res.sol_sign]
+            )
+        neon_res.fill_block_info(block)
+
+        self._blocks_db.submit_block(block)
         self._txs_db.submit_transaction(neon_tx, neon_res, self._before_slot())
 
     def get_tx_list_by_sol_sign(self, finalized: bool, sol_sign_list: [str]) -> [NeonTxFullInfo]:

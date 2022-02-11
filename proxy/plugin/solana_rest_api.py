@@ -245,7 +245,7 @@ class EthereumModel:
         if block.slot is None:
             self.debug("Not found block by number %s", tag)
             return None
-        ret = self.getBlockBySlot(block, full, True)
+        ret = self.getBlockBySlot(block, full, tag == 'latest')
         if ret is not None:
             self.debug("eth_getBlockByNumber: %s", json.dumps(ret, indent=3))
         else:

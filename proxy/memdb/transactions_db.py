@@ -12,10 +12,12 @@ from ..indexer.indexer_db import IndexerDB
 
 @logged_group("neon.Proxy")
 class TxsDB:
+    BIG_SLOT = 1_000_000_000_000
+
     _manager = multiprocessing.Manager()
 
     _tx_lock = _manager.Lock()
-    _tx_slot = _manager.Value(ctypes.c_ulonglong, 0)
+    _tx_slot = _manager.Value(ctypes.c_ulonglong, BIG_SLOT)
     _tx_by_neon_sign = _manager.dict()
     _slot_by_neon_sign = _manager.dict()
     _tx_by_sol_sign = _manager.dict()
@@ -25,15 +27,15 @@ class TxsDB:
         self._db = db
 
     def _rm_finalized_txs(self, before_slot: int):
-        if (self._tx_slot.value == 0) or (self._tx_slot.value > before_slot):
+        if self._tx_slot.value > before_slot:
             return
 
         rm_neon_sign_list = []
-        tx_slot = 0
+        tx_slot = self.BIG_SLOT
         for sign, slot in self._slot_by_neon_sign.items():
             if slot <= before_slot:
                 rm_neon_sign_list.append(sign)
-            elif (tx_slot == 0) or (tx_slot > slot):
+            elif tx_slot > slot:
                 tx_slot = slot
         self._tx_slot.value = tx_slot
 
@@ -42,6 +44,7 @@ class TxsDB:
         for neon_sign, sol_sign in zip(rm_neon_sign_list, rm_sol_sign_list):
             del self._tx_by_neon_sign[neon_sign]
             del self._slot_by_neon_sign[neon_sign]
+
             del self._tx_by_sol_sign[sol_sign]
             del self._slot_by_sol_sign[sol_sign]
 
@@ -104,9 +107,12 @@ class TxsDB:
 
         with self._tx_lock:
             self._rm_finalized_txs(before_slot)
+
             self._tx_by_neon_sign[tx.neon_tx.sign] = data
             self._slot_by_neon_sign[tx.neon_tx.sign] = tx.neon_res.slot
+
             self._tx_by_sol_sign[tx.neon_res.sol_sign] = data
             self._slot_by_sol_sign[tx.neon_res.sol_sign] = tx.neon_res.slot
-            if (self._tx_slot.value == 0) or (self._tx_slot.value > tx.neon_res.slot):
+
+            if self._tx_slot.value > tx.neon_res.slot:
                 self._tx_slot.value = tx.neon_res.slot

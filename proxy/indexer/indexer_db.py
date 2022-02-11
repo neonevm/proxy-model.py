@@ -103,6 +103,9 @@ class IndexerDB:
     def get_latest_block(self) -> SolanaBlockInfo:
         return self._blocks_db.get_latest_block()
 
+    def get_latest_block_list(self, limit: int) -> [SolanaBlockInfo]:
+        return self._blocks_db.get_latest_block_list(limit)
+
     def fill_block_height(self, number, slots):
         self._blocks_db.fill_block_height(number, slots)
 

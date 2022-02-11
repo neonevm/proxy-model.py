@@ -28,10 +28,12 @@ class NeonPendingTxInfo:
 @logged_group("neon.Proxy")
 class PendingTxsDB:
     # These variables are global for class, they will be initialized one time
+    BIG_SLOT = 1_000_000_000_000
+
     _manager = multiprocessing.Manager()
 
     _pending_tx_lock = _manager.Lock()
-    _pending_slot = _manager.Value(ctypes.c_ulonglong, 0)
+    _pending_slot = _manager.Value(ctypes.c_ulonglong, BIG_SLOT)
     _pending_tx_by_hash = _manager.dict()
     _pending_slot_by_hash = _manager.dict()
 
@@ -43,7 +45,7 @@ class PendingTxsDB:
         self._pending_tx_by_hash[tx.neon_sign] = data
         self._pending_slot_by_hash[tx.neon_sign] = tx.slot
 
-        if (self._pending_slot.value == 0) or (self._pending_slot.value > tx.slot):
+        if self._pending_slot.value > tx.slot:
             self._pending_slot.value = tx.slot
 
     def _rm_finalized_txs(self, before_slot: int):
@@ -51,13 +53,13 @@ class PendingTxsDB:
             return
 
         rm_sign_list = []
-        pending_slot = 0
+        pending_slot = self.BIG_SLOT
 
         # Filter tx by slot
         for sign, slot in self._pending_slot_by_hash.items():
             if slot < before_slot:
                 rm_sign_list.append(sign)
-            elif (pending_slot == 0) or (pending_slot > slot):
+            elif pending_slot > slot:
                 pending_slot = slot
 
         self._pending_slot.value = pending_slot
