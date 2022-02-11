@@ -683,8 +683,8 @@ class SolTxListSender:
                        f'bad blocks {len(self._bad_block_list)}, ' +
                        f'blocked accounts {len(self._blocked_account_list)}, ' +
                        f'budget exceeded {len(self._budget_exceeded_list)}, ' +
-                       f'bad storage status 0x1: {len(self._storage_status_x1)}, ' +
-                       f'bad storage status 0x4: {len(self._storage_status_x4)}')
+                       f'bad storage 0x1: {len(self._storage_status_x1)}, ' +
+                       f'bad storage 0x4: {len(self._storage_status_x4)}')
 
             self._on_post_send()
 
@@ -700,11 +700,7 @@ class SolTxListSender:
         self._blockhash = tx.recent_blockhash
 
     def _on_post_send(self):
-        if len(self._storage_status_x1):
-            raise RuntimeError('Custom error 0x1')
-        elif len(self._storage_status_x4):
-            raise RuntimeError('Custom error 0x4')
-        elif len(self._budget_exceeded_list):
+        if len(self._budget_exceeded_list):
             raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
 
         if len(self._blocked_account_list):
@@ -794,10 +790,13 @@ class SimpleNeonTxSender(SolTxListSender):
 
     def _on_post_send(self):
         if self.neon_res.is_valid():
-            self.debug(f'Got the Neon tx result: {self.neon_res}')
+            self.debug(f'Got Neon tx result: {self.neon_res}')
             self.clear()
         else:
             super()._on_post_send()
+
+            if not len(self._tx_list):
+                raise RuntimeError('Run out of attempts to execute transaction')
 
 
 @logged_group("neon.Proxy")
@@ -900,12 +899,6 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             if not self._is_canceled:
                 self._cancel()
             return
-
-        # The storage has bad structure and the result isn't received! ((
-        if len(self._storage_status_x1):
-            raise RuntimeError('Custom error 0x1')
-        elif len(self._storage_status_x4):
-            raise RuntimeError('Custom error 0x4')
 
         # Blockhash is changed (((
         if len(self._bad_block_list):
