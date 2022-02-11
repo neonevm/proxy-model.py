@@ -164,8 +164,7 @@ class IndexerBase:
 
         self.counter_ += 1
         if self.counter_ % 100 == 0:
-            self.debug(self.counter_)
-
+            self.debug(f"Acquired {self.counter_} receipts")
 
     def _add_trx(self, solana_signature, trx):
         if trx is not None:
