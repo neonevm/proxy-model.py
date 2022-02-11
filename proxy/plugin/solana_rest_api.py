@@ -113,19 +113,19 @@ class EthereumModel:
 
     def process_block_tag(self, tag):
         if tag == "latest":
-            block_number = self._db.get_latest_block_height()
+            block = self._db.get_latest_block()
         elif tag in ('earliest', 'pending'):
             raise Exception("Invalid tag {}".format(tag))
         elif isinstance(tag, str):
-            block_number = int(tag, 16)
+            block = SolanaBlockInfo(height=int(tag, 16))
         elif isinstance(tag, int):
-            block_number = tag
+            block = SolanaBlockInfo(height=tag)
         else:
             raise Exception(f'Failed to parse block tag: {tag}')
-        return block_number
+        return block
 
     def eth_blockNumber(self):
-        height = self._db.get_latest_block_height()
+        height = self._db.get_latest_block().height
         self.debug("eth_blockNumber %s", hex(height))
         return hex(height)
 
@@ -153,9 +153,9 @@ class EthereumModel:
         block_hash = None
 
         if 'fromBlock' in obj and obj['fromBlock'] != '0':
-            from_block = self.process_block_tag(obj['fromBlock'])
+            from_block = self.process_block_tag(obj['fromBlock']).height
         if 'toBlock' in obj and obj['toBlock'] != 'latest':
-            to_block = self.process_block_tag(obj['toBlock'])
+            to_block = self.process_block_tag(obj['toBlock']).height
         if 'address' in obj:
             addresses = to_list(obj['address'])
         if 'topics' in obj:
@@ -236,8 +236,9 @@ class EthereumModel:
             tag - integer of a block number, or the string "earliest", "latest" or "pending", as in the default block parameter.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
-        block_number = self.process_block_tag(tag)
-        block = self._db.get_block_by_height(block_number)
+        block = self.process_block_tag(tag)
+        if block.slot is None:
+            block = self._db.get_block_by_height(block.height)
         if block.slot is None:
             self.debug("Not found block by number %s", tag)
             return None

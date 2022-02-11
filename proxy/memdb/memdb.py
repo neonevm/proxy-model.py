@@ -26,8 +26,8 @@ class MemDB:
     def _before_slot(self) -> int:
         return self._blocks_db.get_db_latest_block().slot
 
-    def get_latest_block_height(self) -> int:
-        return self._blocks_db.get_latest_block().height
+    def get_latest_block(self) -> SolanaBlockInfo:
+        return self._blocks_db.get_latest_block()
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_height(block_height)

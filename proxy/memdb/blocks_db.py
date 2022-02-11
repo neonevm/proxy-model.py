@@ -84,11 +84,6 @@ class BlocksDB:
         height = 0
         hash = ''
 
-    class _FirstBlockInfo(BlockInfo):
-        slot = 0
-        height = 0
-        hash = ''
-
     class _LastBlockInfo(BlockInfo):
         slot = 0
         height = 0
@@ -129,10 +124,8 @@ class BlocksDB:
                 self._blocks_by_hash[block.hash] = block
 
         if len(block_list):
-            self._FirstBlockInfo.set(block_list[0])
             self._LastBlockInfo.set(block_list[len(block_list) - 1])
         else:
-            self._FirstBlockInfo.clear()
             self._LastBlockInfo.clear()
 
     def _fill_blocks(self, request: RequestSolanaBlocks):
@@ -162,8 +155,6 @@ class BlocksDB:
             self._blocks_by_slot[net_block.slot] = net_block
             self._blocks_by_hash[net_block.hash] = net_block
             self._blocks_by_height[net_block.height] = net_block
-        if (self._FirstBlockInfo.slot, self._FirstBlockInfo.height) == (net_block.slot, net_block.height):
-            self._FirstBlockInfo.set(net_block)
         if (self._LastBlockInfo.slot, self._LastBlockInfo.height) == (net_block.slot, net_block.height):
             self._LastBlockInfo.set(net_block)
 
@@ -186,27 +177,27 @@ class BlocksDB:
         return self._get_full_block_info(self.get_latest_block())
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
-        if block_height >= self._FirstBlockInfo.height:
+        if block_height > self._DBLastBlockInfo.height:
             request = RequestSolanaBlocks(self)
             self._fill_blocks(request)
 
             block = self._blocks_by_height.get(block_height)
             if block:
                 return block
-            if block_height >= self._FirstBlockInfo.height:
+            if block_height > self._DBLastBlockInfo.height:
                 return SolanaBlockInfo()
 
         return self.db.get_block_by_height(block_height)
 
     def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
-        if block_slot >= self._FirstBlockInfo.slot:
+        if block_slot > self._DBLastBlockInfo.slot:
             request = RequestSolanaBlocks(self)
             self._fill_blocks(request)
 
             block = self._blocks_by_slot.get(block_slot)
             if block:
                 return self._get_full_block_info(block)
-            if block_slot >= self._FirstBlockInfo.slot:
+            if block_slot > self._DBLastBlockInfo.slot:
                 return SolanaBlockInfo()
 
         return self.db.get_full_block_by_slot(block_slot)
