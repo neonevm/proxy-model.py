@@ -455,7 +455,7 @@ class NeonTxSender:
         if not info:
             return
 
-        nonce = int.from_bytes(info.trx_count, 'little')
+        nonce = info.trx_count
         tx_nonce = int(self.eth_tx.nonce)
         if nonce == tx_nonce:
             return
@@ -595,13 +595,16 @@ class NeonTxSender:
         size_list = list(set([s.size for s in all_stages]))
         balance_list = self.solana.get_multiple_rent_exempt_balances_for_size(size_list)
         balance_map = {size: balance for size, balance in zip(size_list, balance_list)}
+        name_dict = {}
         for s in all_stages:
             s.balance = balance_map[s.size]
             s.build()
+            name_dict.setdefault(s.NAME, 0)
+            name_dict[s.NAME] += 1
 
         for s in self._create_account_list:
             self.create_account_tx.add(s.tx)
-        self.account_txs_name = ' + '.join(set([s.NAME for s in all_stages]))
+        self.account_txs_name = ' + '.join([f'{name}({cnt})' for name, cnt in name_dict])
 
     def build_account_txs(self, skip_create_accounts=False) -> [Transaction]:
         tx_list = [s.tx for s in self._resize_contract_list]
@@ -995,12 +998,14 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
 
         offset = 0
         rest = msg
+        cnt = 0
         while len(rest):
             (part, rest) = (rest[:1000], rest[1000:])
             tx_list.append(self.s.builder.make_write_transaction(offset, part))
             offset += len(part)
+            cnt += 1
 
         if len(self._preparation_txs_name):
             self._preparation_txs_name += ' + '
-        self._preparation_txs_name += 'WriteWithHolder'
+        self._preparation_txs_name += f'WriteWithHolder({cnt})'
         return tx_list
