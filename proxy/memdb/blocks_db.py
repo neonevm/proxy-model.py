@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import multiprocessing as mp
-import ctypes
-import pickle
 import time
 import math
 
@@ -14,29 +11,26 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.indexer_db import IndexerDB
 
 
-BlocksManager = mp.Manager()
-
-
 class BlockInfo:
     @classmethod
     def set(cls, block: SolanaBlockInfo):
-        cls.slot.value = block.slot
-        cls.hash.value = block.hash
-        cls.height.value = block.height
+        cls.slot = block.slot
+        cls.hash = block.hash
+        cls.height = block.height
 
     @classmethod
     def get(cls) -> SolanaBlockInfo:
         return SolanaBlockInfo(
-            slot=cls.slot.value,
-            hash=cls.hash.value,
-            height=cls.height.value,
+            slot=cls.slot,
+            hash=cls.hash,
+            height=cls.height,
         )
 
     @classmethod
     def clear(cls):
-        cls.slot.value = 0
-        cls.hash.value = ''
-        cls.height.value = 0
+        cls.slot = 0
+        cls.hash = ''
+        cls.height = 0
 
 
 @logged_group("neon.Proxy")
@@ -44,7 +38,7 @@ class RequestSolanaBlocks:
     def __init__(self, blocks_db: BlocksDB):
         self._b = blocks_db
 
-        self.last_time = self._b.last_time.value
+        self.last_time = self._b.last_time
         self.now = math.ceil(time.time_ns() / 10_000_000)
         self.slot_list = []
         self.db_block = SolanaBlockInfo()
@@ -76,31 +70,29 @@ class RequestSolanaBlocks:
 @logged_group("neon.Proxy")
 class BlocksDB:
     # These variables are global for class, they will be initialized one time
-    # Lock for blocks
-    _blocks_lock = BlocksManager.Lock()
 
     # Blocks dictionaries
-    _blocks_by_hash = BlocksManager.dict()
-    _blocks_by_height = BlocksManager.dict()
-    _blocks_by_slot = BlocksManager.dict()
+    _blocks_by_hash = {}
+    _blocks_by_height = {}
+    _blocks_by_slot = {}
 
     # Last requesting time of blocks from Solana node
-    last_time = BlocksManager.Value(ctypes.c_ulonglong, 0)
+    last_time = 0
 
     class _DBLastBlockInfo(BlockInfo):
-        slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
-        height = BlocksManager.Value(ctypes.c_ulonglong, 0)
-        hash = BlocksManager.Value(ctypes.c_char_p, "")
+        slot = 0
+        height = 0
+        hash = ''
 
     class _FirstBlockInfo(BlockInfo):
-        slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
-        height = BlocksManager.Value(ctypes.c_ulonglong, 0)
-        hash = BlocksManager.Value(ctypes.c_char_p, "")
+        slot = 0
+        height = 0
+        hash = ''
 
     class _LastBlockInfo(BlockInfo):
-        slot = BlocksManager.Value(ctypes.c_ulonglong, 0)
-        height = BlocksManager.Value(ctypes.c_ulonglong, 0)
-        hash = BlocksManager.Value(ctypes.c_char_p, "")
+        slot = 0
+        height = 0
+        hash = ''
 
     def __init__(self, client: SolanaClient, db: IndexerDB):
         self.solana = SolanaInteractor(client)
@@ -121,21 +113,20 @@ class BlocksDB:
     def _add_new_blocks(self, block_list):
         block_list = [block for block in block_list if block is not None]
 
-        for data in self._blocks_by_slot.values():
-            block_list.append(pickle.loads(data))
+        for block in self._blocks_by_slot.values():
+            block_list.append(block)
 
         block_list = sorted(block_list, key=lambda b: b.slot)
-        height = self._DBLastBlockInfo.height.value
+        height = self._DBLastBlockInfo.height
 
         self._blocks_by_slot.clear()
         for block in block_list:
             height += 1
             block.height = height
-            data = pickle.dumps(block)
-            self._blocks_by_slot[block.slot] = data
-            self._blocks_by_height[block.height] = data
+            self._blocks_by_slot[block.slot] = block
+            self._blocks_by_height[block.height] = block
             if block.hash:
-                self._blocks_by_hash[block.hash] = data
+                self._blocks_by_hash[block.hash] = block
 
         if len(block_list):
             self._FirstBlockInfo.set(block_list[0])
@@ -145,10 +136,10 @@ class BlocksDB:
             self._LastBlockInfo.clear()
 
     def _fill_blocks(self, request: RequestSolanaBlocks):
-        if (request.last_time != self.last_time.value) or (not len(request.slot_list)):
+        if (request.last_time != self.last_time) or (not len(request.slot_list)):
             return
 
-        self.last_time.value = math.ceil(time.time_ns() / 10_000_000)
+        self.last_time = request.now
         self._DBLastBlockInfo.set(request.db_block)
 
         slot_list = self._rm_old_blocks(request.slot_list)
@@ -165,75 +156,68 @@ class BlocksDB:
 
         net_block = block_list[0]
         net_block.height = block.height
-        net_data = pickle.dumps(net_block)
 
-        with self._blocks_lock:
-            data = self._blocks_by_height.get(net_block.height, None)
-            if data and pickle.loads(data).slot == net_block.slot:
-                self._blocks_by_slot[net_block.slot] = net_data
-                self._blocks_by_hash[net_block.hash] = net_data
-                self._blocks_by_height[net_block.height] = net_data
-            if (self._FirstBlockInfo.slot, self._FirstBlockInfo.height) == (net_block.slot, net_block.height):
-                self._FirstBlockInfo.set(net_block)
-            if (self._LastBlockInfo.slot, self._LastBlockInfo.height) == (net_block.slot, net_block.height):
-                self._LastBlockInfo.set(net_block)
+        block = self._blocks_by_height.get(net_block.height, None)
+        if block and block.slot == net_block.slot:
+            self._blocks_by_slot[net_block.slot] = net_block
+            self._blocks_by_hash[net_block.hash] = net_block
+            self._blocks_by_height[net_block.height] = net_block
+        if (self._FirstBlockInfo.slot, self._FirstBlockInfo.height) == (net_block.slot, net_block.height):
+            self._FirstBlockInfo.set(net_block)
+        if (self._LastBlockInfo.slot, self._LastBlockInfo.height) == (net_block.slot, net_block.height):
+            self._LastBlockInfo.set(net_block)
 
         return net_block
 
     def force_request_blocks(self):
-        self.last_time.value = 0
+        self.last_time = 0
 
     def get_db_latest_block(self) -> SolanaBlockInfo:
         request = RequestSolanaBlocks(self)
-        with self._blocks_lock:
-            self._fill_blocks(request)
-            return self._DBLastBlockInfo.get()
+        self._fill_blocks(request)
+        return self._DBLastBlockInfo.get()
 
     def get_latest_block(self) -> SolanaBlockInfo:
         request = RequestSolanaBlocks(self)
-        with self._blocks_lock:
-            self._fill_blocks(request)
-            return self._LastBlockInfo.get()
+        self._fill_blocks(request)
+        return self._LastBlockInfo.get()
 
     def get_full_latest_block(self) -> SolanaBlockInfo:
         return self._get_full_block_info(self.get_latest_block())
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
-        if block_height >= self._FirstBlockInfo.height.value:
+        if block_height >= self._FirstBlockInfo.height:
             request = RequestSolanaBlocks(self)
-            with self._blocks_lock:
-                self._fill_blocks(request)
-                data = self._blocks_by_height.get(block_height)
+            self._fill_blocks(request)
 
-            if data:
-                return pickle.loads(data)
-            if block_height >= self._FirstBlockInfo.height.value:
+            block = self._blocks_by_height.get(block_height)
+            if block:
+                return block
+            if block_height >= self._FirstBlockInfo.height:
                 return SolanaBlockInfo()
 
         return self.db.get_block_by_height(block_height)
 
     def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
-        if block_slot >= self._FirstBlockInfo.slot.value:
+        if block_slot >= self._FirstBlockInfo.slot:
             request = RequestSolanaBlocks(self)
-            with self._blocks_lock:
-                self._fill_blocks(request)
-                data = self._blocks_by_slot.get(block_slot)
+            self._fill_blocks(request)
 
-            if data:
-                return self._get_full_block_info(pickle.loads(data))
-            if block_slot >= self._FirstBlockInfo.slot.value:
+            block = self._blocks_by_slot.get(block_slot)
+            if block:
+                return self._get_full_block_info(block)
+            if block_slot >= self._FirstBlockInfo.slot:
                 return SolanaBlockInfo()
 
         return self.db.get_full_block_by_slot(block_slot)
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         request = RequestSolanaBlocks(self)
-        with self._blocks_lock:
-            self._fill_blocks(request)
-            data = self._blocks_by_hash.get(block_hash)
+        self._fill_blocks(request)
 
-        if data:
-            return pickle.loads(data)
+        block = self._blocks_by_hash.get(block_hash)
+        if block:
+            return block
 
         return self.db.get_block_by_hash(block_hash)
 
