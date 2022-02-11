@@ -14,7 +14,10 @@ from ..common_neon.errors import SolanaAccountNotFoundError, SolanaErrors
 from ..common_neon.utils import get_from_dict, get_holder_msg
 from ..common_neon.transaction_sender import NeonTxSender, NeonCreateContractTxStage, NeonCreateAccountTxStage
 from ..environment import  read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG, EXTRA_GAS, EVM_STEPS, \
-    EVM_BYTE_COST, HOLDER_MSG_SIZE, GAS_MULTIPLIER, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
+    EVM_BYTE_COST, HOLDER_MSG_SIZE, EVM_STEP_COST, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE
+
+# number of evm-steps, performed by transaction  (should be >= EVM_STEPS)
+evm_steps_by_trx = EVM_STEPS
 
 @logged_group("neon.Proxy")
 def neon_config_load(ethereum_model, *, logger):
@@ -96,9 +99,15 @@ def estimate_gas(tx_sender: NeonTxSender, sender,  *, logger):
 
     space += tx_sender.unpaid_space
 
-    gas_for_trx = (tx_sender.steps_emulated + (holder_iterations + begin_iterations) * EVM_STEPS) * GAS_MULTIPLIER
-    gas_for_space = space * EVM_BYTE_COST * GAS_MULTIPLIER
+    remains =  tx_sender.steps_emulated % evm_steps_by_trx
+    if remains < EVM_STEPS:
+        tx_sender.steps_emulated += EVM_STEPS - remains
+
+    gas_for_trx = (tx_sender.steps_emulated + (holder_iterations + begin_iterations) * EVM_STEPS) * EVM_STEP_COST
+    gas_for_space = space * EVM_BYTE_COST
     gas = gas_for_trx + gas_for_space + EXTRA_GAS
+
+    # TODO: MM restirction. Uncomment ?
     # if gas < 21000:
     #     gas = 21000
 

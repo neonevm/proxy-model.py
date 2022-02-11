@@ -5,7 +5,6 @@ import eth_utils
 from web3 import Web3
 from .testing_helpers import request_airdrop
 from solcx import compile_source
-from proxy.environment import GAS_MULTIPLIER, EVM_STEPS
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
