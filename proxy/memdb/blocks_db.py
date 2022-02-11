@@ -148,7 +148,7 @@ class BlocksDB:
         if (request.last_time != self.last_time.value) or (not len(request.slot_list)):
             return
 
-        self.last_time.value = request.now
+        self.last_time.value = math.ceil(time.time_ns() / 10_000_000)
         self._DBLastBlockInfo.set(request.db_block)
 
         slot_list = self._rm_old_blocks(request.slot_list)
