@@ -124,34 +124,35 @@ def get_code_from_account(client: Client, address, *, logger):
     return '0x' + data[offset:][:storage.code_size].hex()
 
 
-class CountedLogger:
+class MetricsToLogBuff :
     def __init__(self):
-        self.set_defaults()
+        self._reset()
 
-    def set_defaults(self):
+    def _reset(self):
         self.counter = 0
         self.items_list = {}
         self.items_latest = {}
 
-    def print(self, logger, list_params, latest_params):
+    def print(self, logger: function, list_params: dict, latest_params: dict):
         for key, value in list_params.items():
-            if key not in self.items_list:
-                self.items_list[key] = []
-            self.items_list[key].append(value)
+            metric_list = self.items_list.set_default(key, [])
+            metric_list.append(value)
         for key, value in latest_params.items():
             self.items_latest[key] = value
         self.counter += 1
 
-        if self.counter % INDEXER_LOG_SKIP_COUNT == 0:
-            msg = ''
-            for key, value_list in self.items_list.items():
-                msg += f' {key} avg: {statistics.mean(value_list):.2f}'
-                msg += f' min: {min(value_list):.2f}'
-                msg += f' max: {max(value_list):.2f};'
-            for key, value in self.items_latest.items():
-                msg += f' {key}: {value};'
-            logger(msg)
-            self.set_defaults()
+        if self.counter % INDEXER_LOG_SKIP_COUNT != 0:
+            return
+
+        msg = ''
+        for key, value_list in self.items_list.items():
+            msg += f' {key} avg: {statistics.mean(value_list):.2f}'
+            msg += f' min: {min(value_list):.2f}'
+            msg += f' max: {max(value_list):.2f};'
+        for key, value in self.items_latest.items():
+            msg += f' {key}: {value};'
+        logger(msg)
+        self._reset()
 
 
 class DBQuery(NamedTuple):

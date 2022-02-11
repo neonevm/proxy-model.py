@@ -7,7 +7,7 @@ from typing import Dict, Union
 from logged_groups import logged_group
 
 from .trx_receipts_storage import TrxReceiptsStorage
-from .utils import CountedLogger
+from .utils import MetricsToLogBuff
 
 from ..environment import RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION
 from ..environment import HISTORY_START, PARALLEL_REQUESTS, FINALIZED
@@ -20,13 +20,13 @@ class IndexerBase:
                  evm_loader_id,
                  last_slot):
         self.evm_loader_id = evm_loader_id
-        self.client = Client(solana_url)
+        self.solana_client = Client(solana_url)
         self.transaction_receipts = TrxReceiptsStorage('transaction_receipts')
         self.max_known_tx = self.transaction_receipts.max_known_trx()
         self.last_slot = self._init_last_slot('receipt', last_slot)
         self.current_slot = 0
         self.counter_ = 0
-        self.count_log = CountedLogger()
+        self.count_log = MetricsToLogBuff()
 
     def _init_last_slot(self, name: str, last_known_slot: int):
         """
@@ -36,7 +36,7 @@ class IndexerBase:
         - NUMBER - first start from the number, then continue from last parsed slot
         """
         last_known_slot = 0 if not isinstance(last_known_slot, int) else last_known_slot
-        latest_slot = self.client.get_slot(commitment=FINALIZED)["result"]
+        latest_slot = self.solana_client.get_slot(commitment=FINALIZED)["result"]
         start_int_slot = 0
         name = f'{name} slot'
 
@@ -87,7 +87,7 @@ class IndexerBase:
 
         minimal_tx = None
         continue_flag = True
-        current_slot = self.client.get_slot(commitment=FINALIZED)["result"]
+        current_slot = self.solana_client.get_slot(commitment=FINALIZED)["result"]
 
         max_known_tx = self.max_known_tx
 
@@ -143,7 +143,7 @@ class IndexerBase:
         if before is not None:
             opts["before"] = before
         opts["commitment"] = FINALIZED
-        result = self.client._provider.make_request("getSignaturesForAddress", self.evm_loader_id, opts)
+        result = self.solana_client._provider.make_request("getSignaturesForAddress", self.evm_loader_id, opts)
         return result['result']
 
     def _get_tx_receipts(self, solana_signature):
@@ -152,7 +152,7 @@ class IndexerBase:
 
         while retry > 0:
             try:
-                trx = self.client.get_confirmed_transaction(solana_signature)['result']
+                trx = self.solana_client.get_confirmed_transaction(solana_signature)['result']
                 self._add_trx(solana_signature, trx)
                 retry = 0
             except Exception as err:
