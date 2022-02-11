@@ -11,6 +11,7 @@ from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from logged_groups import logged_group
+from typing import Dict, Union, Callable
 
 from ..common_neon.address import ether2program
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, ACCOUNT_INFO_LAYOUT
@@ -133,7 +134,7 @@ class MetricsToLogBuff :
         self.items_list = {}
         self.items_latest = {}
 
-    def print(self, logger: function, list_params: dict, latest_params: dict):
+    def print(self, logger: Callable[[str], None], list_params: Dict[str, Union[int, float]], latest_params: Dict[str, int]):
         for key, value in list_params.items():
             metric_list = self.items_list.setdefault(key, [])
             metric_list.append(value)
