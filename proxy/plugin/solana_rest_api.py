@@ -125,7 +125,6 @@ class EthereumModel:
             signed_trx = w3.eth.account.sign_transaction(unsigned_trx, eth_keys.PrivateKey(os.urandom(32)))
             trx = EthTrx.fromString(signed_trx.rawTransaction)
 
-            self.assertTrue(evm_steps_by_trx > EVM_STEPS)
             tx_sender = NeonTxSender(self._db, self._client, trx, steps=evm_steps_by_trx)
             return estimate_gas(tx_sender, sender)
 
