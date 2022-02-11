@@ -18,7 +18,7 @@ from logged_groups import logged_group
 
 from .costs import update_transaction_cost
 from .utils import get_from_dict, SolanaBlockInfo
-from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, WRITE_TRANSACTION_COST_IN_DB
+from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, WRITE_TRANSACTION_COST_IN_DB, SKIP_PREFLIGHT
 from ..environment import LOG_SENDING_SOLANA_TRANSACTION, FUZZING_BLOCKHASH, CONFIRM_TIMEOUT, FINALIZED
 
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
@@ -241,7 +241,7 @@ class SolanaInteractor:
 
     def _send_multiple_transactions_unconfirmed(self, signer: SolanaAccount, tx_list: [Transaction]) -> [str]:
         opts = {
-            "skipPreflight": False,
+            "skipPreflight": SKIP_PREFLIGHT,
             "encoding": "base64",
             "preflightCommitment": "confirmed"
         }
