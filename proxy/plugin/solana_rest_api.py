@@ -165,7 +165,7 @@ class EthereumModel:
 
         return self._db.get_logs(from_block, to_block, addresses, topics, block_hash)
 
-    def getBlockBySlot(self, block: SolanaBlockInfo, full):
+    def getBlockBySlot(self, block: SolanaBlockInfo, full, skip_transaction):
         if not block.time:
             block = self._db.get_full_block_by_slot(block.slot)
             if not block.time:
@@ -174,7 +174,10 @@ class EthereumModel:
         sign_list = []
         gas_used = 0
         tx_index = 0
-        tx_list = self._db.get_tx_list_by_sol_sign(block.finalized, block.signs)
+        if skip_transaction:
+            tx_list = []
+        else:
+            tx_list = self._db.get_tx_list_by_sol_sign(block.finalized, block.signs)
 
         for tx in tx_list:
             gas_used += int(tx.neon_res.gas_used, 16)
@@ -224,7 +227,7 @@ class EthereumModel:
         if block.slot is None:
             self.debug("Not found block by hash %s", block_hash)
             return None
-        ret = self.getBlockBySlot(block, full)
+        ret = self.getBlockBySlot(block, full, False)
         if ret is not None:
             self.debug("eth_getBlockByHash: %s", json.dumps(ret, indent=3))
         else:
@@ -242,7 +245,7 @@ class EthereumModel:
         if block.slot is None:
             self.debug("Not found block by number %s", tag)
             return None
-        ret = self.getBlockBySlot(block, full)
+        ret = self.getBlockBySlot(block, full, True)
         if ret is not None:
             self.debug("eth_getBlockByNumber: %s", json.dumps(ret, indent=3))
         else:

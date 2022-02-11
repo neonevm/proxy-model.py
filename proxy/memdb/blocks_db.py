@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import multiprocessing as mp
+import ctypes
 import time
 import math
 
@@ -11,28 +13,6 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.indexer_db import IndexerDB
 
 
-class BlockInfo:
-    @classmethod
-    def set(cls, block: SolanaBlockInfo):
-        cls.slot = block.slot
-        cls.hash = block.hash
-        cls.height = block.height
-
-    @classmethod
-    def get(cls) -> SolanaBlockInfo:
-        return SolanaBlockInfo(
-            slot=cls.slot,
-            hash=cls.hash,
-            height=cls.height,
-        )
-
-    @classmethod
-    def clear(cls):
-        cls.slot = 0
-        cls.hash = ''
-        cls.height = 0
-
-
 @logged_group("neon.Proxy")
 class RequestSolanaBlocks:
     def __init__(self, blocks_db: BlocksDB):
@@ -42,19 +22,29 @@ class RequestSolanaBlocks:
         self.now = math.ceil(time.time_ns() / 10_000_000)
         self.slot_list = []
         self.db_block = SolanaBlockInfo()
+        self.last_increment = self._b.last_increment.value
 
         self._init_slot_list()
 
     def _init_slot_list(self):
+        if self._b.active_request_cnt > 0:
+            return
+        elif self._b.current_increment < self.last_increment:
+            pass
         # 10 == 0.1 sec, when 0.4 is one block time
-        if self.now < self.last_time or (self.now - self.last_time) < 400:
+        elif self.now < self.last_time or (self.now - self.last_time) < 40:
             return
 
-        self._init_db_last_block()
-        self.slot_list = self._b.solana.get_block_slot_list(self.db_block.slot, 100)
-        if not len(self.slot_list):
-            self.error('No confirmed block slots on Solana!')
-            return
+        try:
+            self._b.active_request_cnt += 1
+
+            self._init_db_last_block()
+            self.slot_list = self._b.solana.get_block_slot_list(self.db_block.slot, 10)
+            if not len(self.slot_list):
+                self.error('No confirmed block slots on Solana!')
+                return
+        finally:
+            self._b.active_request_cnt -= 1
 
     def _init_db_last_block(self):
         self.db_block = self._b.db.get_latest_block()
@@ -79,15 +69,12 @@ class BlocksDB:
     # Last requesting time of blocks from Solana node
     last_time = 0
 
-    class _DBLastBlockInfo(BlockInfo):
-        slot = 0
-        height = 0
-        hash = ''
+    last_increment = mp.Value(ctypes.c_ulonglong, 0)
+    current_increment = 0
+    active_request_cnt = 0
 
-    class _LastBlockInfo(BlockInfo):
-        slot = 0
-        height = 0
-        hash = ''
+    _db_last_block = SolanaBlockInfo()
+    _last_block = SolanaBlockInfo()
 
     def __init__(self, client: SolanaClient, db: IndexerDB):
         self.solana = SolanaInteractor(client)
@@ -112,7 +99,7 @@ class BlocksDB:
             block_list.append(block)
 
         block_list = sorted(block_list, key=lambda b: b.slot)
-        height = self._DBLastBlockInfo.height
+        height = self._db_last_block.height
 
         self._blocks_by_slot.clear()
         for block in block_list:
@@ -123,17 +110,15 @@ class BlocksDB:
             if block.hash:
                 self._blocks_by_hash[block.hash] = block
 
-        if len(block_list):
-            self._LastBlockInfo.set(block_list[len(block_list) - 1])
-        else:
-            self._LastBlockInfo.clear()
+        self._last_block = block_list[len(block_list) - 1]
 
     def _fill_blocks(self, request: RequestSolanaBlocks):
         if (request.last_time != self.last_time) or (not len(request.slot_list)):
             return
 
         self.last_time = math.ceil(time.time_ns() / 10_000_000)
-        self._DBLastBlockInfo.set(request.db_block)
+        self.current_increment = request.last_increment
+        self._db_last_block = request.db_block
 
         slot_list = self._rm_old_blocks(request.slot_list)
         block_list = [SolanaBlockInfo(slot=slot) for slot in slot_list]
@@ -155,49 +140,50 @@ class BlocksDB:
             self._blocks_by_slot[net_block.slot] = net_block
             self._blocks_by_hash[net_block.hash] = net_block
             self._blocks_by_height[net_block.height] = net_block
-        if (self._LastBlockInfo.slot, self._LastBlockInfo.height) == (net_block.slot, net_block.height):
-            self._LastBlockInfo.set(net_block)
+        if (self._last_block.slot, self._last_block.height) == (net_block.slot, net_block.height):
+            self._last_block = net_block
 
         return net_block
 
     def force_request_blocks(self):
-        self.last_time = 0
+        with self.last_increment.get_lock():
+            self.last_increment.value += 1
 
     def get_db_latest_block(self) -> SolanaBlockInfo:
         request = RequestSolanaBlocks(self)
         self._fill_blocks(request)
-        return self._DBLastBlockInfo.get()
+        return self._db_last_block
 
     def get_latest_block(self) -> SolanaBlockInfo:
         request = RequestSolanaBlocks(self)
         self._fill_blocks(request)
-        return self._LastBlockInfo.get()
+        return self._last_block
 
     def get_full_latest_block(self) -> SolanaBlockInfo:
         return self._get_full_block_info(self.get_latest_block())
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
-        if block_height > self._DBLastBlockInfo.height:
+        if block_height > self._db_last_block.height:
             request = RequestSolanaBlocks(self)
             self._fill_blocks(request)
 
             block = self._blocks_by_height.get(block_height)
             if block:
                 return block
-            if block_height > self._DBLastBlockInfo.height:
+            if block_height > self._db_last_block.height:
                 return SolanaBlockInfo()
 
         return self.db.get_block_by_height(block_height)
 
     def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
-        if block_slot > self._DBLastBlockInfo.slot:
+        if block_slot > self._db_last_block.slot:
             request = RequestSolanaBlocks(self)
             self._fill_blocks(request)
 
             block = self._blocks_by_slot.get(block_slot)
             if block:
                 return self._get_full_block_info(block)
-            if block_slot > self._DBLastBlockInfo.slot:
+            if block_slot > self._db_last_block.slot:
                 return SolanaBlockInfo()
 
         return self.db.get_full_block_by_slot(block_slot)
