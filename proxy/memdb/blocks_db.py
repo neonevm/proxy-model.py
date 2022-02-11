@@ -47,7 +47,7 @@ class RequestSolanaBlocks:
 
     def _init_slot_list(self):
         # 10 == 0.1 sec, when 0.4 is one block time
-        if self.now < self.last_time or (self.now - self.last_time) < 40:
+        if self.now < self.last_time or (self.now - self.last_time) < 400:
             return
 
         self._init_db_last_block()
@@ -132,7 +132,7 @@ class BlocksDB:
         if (request.last_time != self.last_time) or (not len(request.slot_list)):
             return
 
-        self.last_time = request.now
+        self.last_time = math.ceil(time.time_ns() / 10_000_000)
         self._DBLastBlockInfo.set(request.db_block)
 
         slot_list = self._rm_old_blocks(request.slot_list)
