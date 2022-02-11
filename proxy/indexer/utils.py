@@ -135,7 +135,7 @@ class MetricsToLogBuff :
 
     def print(self, logger: function, list_params: dict, latest_params: dict):
         for key, value in list_params.items():
-            metric_list = self.items_list.set_default(key, [])
+            metric_list = self.items_list.setdefault(key, [])
             metric_list.append(value)
         for key, value in latest_params.items():
             self.items_latest[key] = value
