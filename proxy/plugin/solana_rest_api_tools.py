@@ -100,13 +100,6 @@ def estimate_gas(tx_sender: NeonTxSender, sender,  *, logger):
     space += tx_sender.unpaid_space
 
     if tx_sender.steps_emulated > 0:
-        remains =  tx_sender.steps_emulated % evm_steps_by_trx
-        if remains > 0 and remains < EVM_STEPS:
-            tx_sender.steps_emulated += EVM_STEPS - remains
-    else:
-        tx_sender.steps_emulated += EVM_STEPS
-
-    if tx_sender.steps_emulated > 0:
         full_step_iterations = int(tx_sender.steps_emulated / evm_steps_by_trx)
         final_steps =  tx_sender.steps_emulated % evm_steps_by_trx
         if final_steps > 0 and final_steps < EVM_STEPS:
