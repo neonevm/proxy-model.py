@@ -24,7 +24,7 @@ class MemDB:
         self._db.set_client(self._client)
         self._solana = SolanaInteractor(client)
 
-        self._blocks_db = BlocksDB(self._db)
+        self._blocks_db = BlocksDB(self._solana, self._db)
         self._txs_db = TxsDB(self._db)
         self._pending_tx_db = PendingTxsDB(self._db)
 

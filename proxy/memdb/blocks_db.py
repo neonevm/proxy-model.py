@@ -9,11 +9,16 @@ import pickle
 from logged_groups import logged_group
 
 from ..common_neon.utils import SolanaBlockInfo
+from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.indexer_db import IndexerDB
+
+from ..environment import FINALIZED
 
 
 @logged_group("neon.Proxy")
 class RequestSolanaBlocks:
+    BLOCK_CACHE_LIMIT = 32
+
     def __init__(self, blocks_db: BlocksDB):
         self._b = blocks_db
 
@@ -38,14 +43,32 @@ class RequestSolanaBlocks:
         try:
             self._b.active_request_cnt += 1
 
-            self.block_list = self._b.db.get_latest_block_list(10)
+            if not self._init_db_block_list():
+                self._init_solana_block_list()
             if not len(self.block_list):
-                raise RuntimeError('You should run indexer before proxy!')
+                raise RuntimeError('No information about finalized Solana blocks!')
+
             self.now = math.ceil(time.time_ns() / 10_000_000)
             self.first_block = self.block_list[len(self.block_list) - 1]
             self.last_block = self.block_list[0]
         finally:
             self._b.active_request_cnt -= 1
+
+    def _init_db_block_list(self) -> bool:
+        self.block_list = self._b.db.get_latest_block_list(self.BLOCK_CACHE_LIMIT)
+        return len(self.block_list) > 0
+
+    def _init_solana_block_list(self) -> bool:
+        limit = self.BLOCK_CACHE_LIMIT * 2
+
+        slot = self._b.solana.get_recent_blockslot(commitment=FINALIZED)
+        slot_list = self._b.solana.get_block_slot_list(slot - limit, limit=limit, commitment=FINALIZED)
+        if not len(slot_list):
+            return False
+
+        slot_list = slot_list[:-self.BLOCK_CACHE_LIMIT]
+        self.block_list = self._b.solana.get_block_info_list(slot_list, commitment=FINALIZED)
+        return len(self.block_list) > 0
 
 
 @logged_group("neon.Proxy")
@@ -63,7 +86,7 @@ class BlocksDB:
     current_increment = 0
     active_request_cnt = 0
 
-    _first_block = SolanaBlockInfo()
+    _first_block = SolanaBlockInfo(slot=0, height=0)
     _last_block = SolanaBlockInfo()
 
     _manager = mp.Manager()
@@ -72,8 +95,9 @@ class BlocksDB:
     _pending_block_by_slot = _manager.dict()
     pending_increment = mp.Value(ctypes.c_ulonglong, 0)
 
-    def __init__(self, db: IndexerDB):
+    def __init__(self, solana: SolanaInteractor, db: IndexerDB):
         self.db = db
+        self.solana = solana
 
     def _add_block(self, block):
         self._blocks_by_slot[block.slot] = block
