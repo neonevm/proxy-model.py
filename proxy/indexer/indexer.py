@@ -356,6 +356,21 @@ class DummyIxDecoder:
                 return self._decoding_done(tx, 'found Neon results')
         return self._decoding_success(tx, 'mark ix used')
 
+    def _fill_costs(self, steps = None):
+        operator = self.ix.tx['transaction']['message']['accountKeys'][0]
+        sol = self.ix.tx['meta']['preBalances'][0] - self.ix.tx['meta']['postBalances'][0]
+        bpf = None
+        for log in self.ix.tx['meta']['logMessages']:
+            log_words = log.split()
+            if log_words[0] == 'Program' and\
+               log_words[1] == str(EVM_LOADER_ID) and\
+               log_words[2] == 'consumed' and\
+               log_words[4] == 'of' and\
+               log_words[6] == 'compute' and\
+               log_words[7] == 'units':
+                bpf = int(log_words[3])
+        self.ix.sign.set_costs(operator, bpf, steps, sol)
+
     def _init_tx_from_holder(self, holder_account: str, storage_account: str, blocked_accounts: [str]) -> Optional[NeonTxObject]:
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
         if tx.holder_account:
@@ -434,6 +449,7 @@ class WriteIxDecoder(DummyIxDecoder):
         holder.data = holder.data[:chunk.offset] + chunk.data + holder.data[chunk.endpos:]
         holder.count_written += chunk.length
 
+        self._fill_costs()
         return self._decoding_success(holder, f'add chunk {chunk}')
 
 
@@ -516,6 +532,8 @@ class CallFromRawIxDecoder(DummyIxDecoder):
 
         neon_res = NeonTxResultInfo(neon_tx.sign, self.ix.tx, self.ix.sign.idx)
         tx = NeonTxObject('', neon_tx=neon_tx, neon_res=neon_res)
+
+        self._fill_costs()
         return self._decoding_done(tx, 'call success')
 
 
@@ -545,6 +563,8 @@ class PartialCallIxDecoder(DummyIxDecoder):
 
         tx = self._getadd_tx(storage_account, neon_tx=neon_tx, blocked_accounts=blocked_accounts)
         tx.step_count.append(step_count)
+
+        self._fill_costs(step_count)
         return self._decode_tx(tx)
 
 
@@ -577,6 +597,8 @@ class ContinueIxDecoder(DummyIxDecoder):
 
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
         tx.step_count.append(step_count)
+
+        self._fill_costs(step_count)
         return self._decode_tx(tx)
 
 
@@ -606,6 +628,8 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
         if not tx:
             return self._decoding_skip(f'fail to init in storage {storage_account} from holder {holder_account}')
         tx.step_count.append(step_count)
+
+        self._fill_costs(step_count)
         return self._decode_tx(tx)
 
 
@@ -634,6 +658,8 @@ class CancelIxDecoder(DummyIxDecoder):
             return self._decoding_fail(tx, f'cannot find storage {tx}')
 
         tx.neon_res.canceled(self.ix.tx)
+
+        self._fill_costs()
         return self._decoding_done(tx, f'cancel success')
 
 
@@ -663,6 +689,8 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
         if not tx:
             return self._decoding_skip(f'fail to init the storage {storage_account} from the holder {holder_account}')
         tx.step_count.append(step_count)
+
+        self._fill_costs(step_count)
         return self._decode_tx(tx)
 
 
@@ -725,10 +753,8 @@ class Indexer(IndexerBase):
             self.gather_blocks()
         with logging_context(req_id="get_history"):
             IndexerBase.process_functions(self)
-
         with logging_context(req_id="process_receipts"):
             self.process_receipts()
-
         with logging_context(req_id="cancel"):
             self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
