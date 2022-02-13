@@ -181,7 +181,7 @@ class SolanaInteractor:
             net_block = response['result']
             block = SolanaBlockInfo(
                 slot=slot,
-                finalized=(commitment==FINALIZED),
+                finalized=(commitment == FINALIZED),
                 hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
                 height=net_block['blockHeight'],
                 parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
