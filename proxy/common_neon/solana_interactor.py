@@ -292,7 +292,7 @@ class SolanaInteractor:
             return
 
         try:
-            self.debug(f"send multiple transactions for reason {reason}: {eth_tx.__dict__}")
+            self.debug(f"send multiple transactions for reason {reason}")
 
             measurements = self._extract_measurements_from_receipt(receipt)
             for m in measurements:

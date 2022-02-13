@@ -514,7 +514,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 response['result'] = method(*params)
         except SolanaTxError as err:
             # traceback.print_exc()
-            response['error'] = err.result
+            response['error'] = err.error
         except EthereumError as err:
             # traceback.print_exc()
             response['error'] = err.getError()
@@ -553,7 +553,6 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
         try:
             request = json.loads(request.body)
-            self.debug(f'Request payload: {request}')
             if isinstance(request, list):
                 response = []
                 if len(request) == 0:
