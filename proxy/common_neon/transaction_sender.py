@@ -42,8 +42,10 @@ class SolanaTxError(Exception):
         error = get_error_definition_from_receipt(receipt)
         if isinstance(error, list) and isinstance(error[1], str):
             super().__init__(str(error[1]))
+            self.error = str(error[1])
         else:
             super().__init__('Unknown error')
+            self.error = json.dumps(receipt)
 
 
 class NeonTxStage(metaclass=abc.ABCMeta):
@@ -632,23 +634,20 @@ class SolTxListSender:
         self._blocked_account_list = []
         self._pending_list = []
         self._budget_exceeded_list = []
-        self._storage_status_x1 = []
-        self._storage_status_x4 = []
+        self._storage_bad_status_list = []
 
-        self._all_list = [self._bad_block_list,
-                          self._blocked_account_list,
-                          self._budget_exceeded_list,
-                          self._pending_list,
-                          self._storage_status_x1,
-                          self._storage_status_x4]
+        self._all_tx_list = [self._bad_block_list,
+                             self._blocked_account_list,
+                             self._budget_exceeded_list,
+                             self._pending_list]
 
     def clear(self):
         self._tx_list.clear()
-        for lst in self._all_list:
+        for lst in self._all_tx_list:
             lst.clear()
 
     def _get_full_list(self):
-        return [tx for lst in self._all_list for tx in lst]
+        return [tx for lst in self._all_tx_list for tx in lst]
 
     def send(self) -> SolTxListSender:
         solana = self._s.solana
@@ -672,10 +671,8 @@ class SolTxListSender:
                         self._budget_exceeded_list.append(tx)
                     else:
                         custom = check_if_storage_is_empty_error(receipt)
-                        if custom == 1:
-                            self._storage_status_x1.append(tx)
-                        elif custom == 4:
-                            self._storage_status_x4.append(tx)
+                        if custom in (1, 4):
+                            self._storage_bad_status_list.append(receipt)
                         else:
                             raise SolanaTxError(receipt)
                 else:
@@ -688,8 +685,7 @@ class SolTxListSender:
                        f'bad blocks {len(self._bad_block_list)}, ' +
                        f'blocked accounts {len(self._blocked_account_list)}, ' +
                        f'budget exceeded {len(self._budget_exceeded_list)}, ' +
-                       f'bad storage 0x1: {len(self._storage_status_x1)}, ' +
-                       f'bad storage 0x4: {len(self._storage_status_x4)}')
+                       f'bad storage: {len(self._storage_bad_status_list)}')
 
             self._on_post_send()
 
@@ -705,10 +701,8 @@ class SolTxListSender:
         self._blockhash = tx.recent_blockhash
 
     def _on_post_send(self):
-        if len(self._storage_status_x1):
-            raise RuntimeError('Custom error 0x1')
-        elif len(self._storage_status_x4):
-            raise RuntimeError('Custom error 0x4')
+        if len(self._storage_bad_status_list):
+            raise SolanaTxError(self._storage_bad_status_list[0])
         elif len(self._budget_exceeded_list):
             raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
 
@@ -910,10 +904,8 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             return
 
         # The storage has bad structure and the result isn't received! ((
-        if len(self._storage_status_x1):
-            raise RuntimeError('Custom error 0x1')
-        elif len(self._storage_status_x4):
-            raise RuntimeError('Custom error 0x4')
+        if len(self._storage_bad_status_list):
+            raise SolanaTxError(self._storage_bad_status_list[0])
 
         # Blockhash is changed (((
         if len(self._bad_block_list):
