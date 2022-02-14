@@ -239,7 +239,7 @@ class ReceiptsParserState:
         for tx in self._done_tx_list:
             self.unmark_ix_used(tx)
             if tx.neon_tx.is_valid() and tx.neon_res.is_valid():
-                with logging_context(neon_id=tx.neon_tx.sign[:7]):
+                with logging_context(neon_tx=tx.neon_tx.sign[:7]):
                     self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
             self.del_tx(tx)
         self._done_tx_list.clear()
@@ -805,7 +805,7 @@ class Indexer(IndexerBase):
 
             for _ in ix_info.iter_ixs():
                 req_id = ix_info.sign.get_req_id()
-                with logging_context(sol_id=req_id):
+                with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
