@@ -227,7 +227,7 @@ class BlocksDB:
         # Solana can switch to another history branch,
         #   so it isn't critical return a fake block for a not-finalized state
 
-        last_block = self.get_latest_block()
+        last_block = self.get_full_latest_block()
         with self._block_lock:
             self._generate_fake_history(last_block, neon_res.slot + 1)
             data = self._pending_block_by_slot[neon_res.slot]
