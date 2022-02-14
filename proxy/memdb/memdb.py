@@ -1,6 +1,3 @@
-import base64
-import os
-
 from logged_groups import logged_group
 from solana.rpc.api import Client as SolanaClient
 from typing import Optional
@@ -11,7 +8,7 @@ from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
 from ..common_neon.solana_interactor import SolanaInteractor
 
 from ..memdb.blocks_db import BlocksDB, SolanaBlockInfo
-from ..memdb.pending_tx_db import PendingTxsDB, NeonPendingTxInfo, PendingTxError
+from ..memdb.pending_tx_db import PendingTxsDB, NeonPendingTxInfo
 from ..memdb.transactions_db import TxsDB
 
 
@@ -47,21 +44,8 @@ class MemDB:
         self._pending_tx_db.pend_transaction(tx, self._before_slot())
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo):
-        block_list = self._solana.get_block_info_list([neon_res.slot])
-        if len(block_list):
-            block = block_list[0]
-        else:
-            latest_block = self._blocks_db.get_latest_block()
-            block = SolanaBlockInfo(
-                slot=neon_res.slot,
-                time=latest_block.time + 60,
-                hash=base64.b64encode(os.urandom(32)),
-                parent_hash=base64.b64encode(os.urandom(32)),
-                signs=[neon_res.sol_sign]
-            )
+        block = self._blocks_db.submit_block(neon_res)
         neon_res.fill_block_info(block)
-
-        self._blocks_db.submit_block(block)
         self._txs_db.submit_transaction(neon_tx, neon_res, self._before_slot())
 
     def get_tx_list_by_sol_sign(self, finalized: bool, sol_sign_list: [str]) -> [NeonTxFullInfo]:
