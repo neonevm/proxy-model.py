@@ -5,11 +5,7 @@ import pickle
 from logged_groups import logged_group
 
 from ..indexer.indexer_db import IndexerDB
-
-
-class PendingTxError(Exception):
-    def __init__(self, err):
-        super().__init__(err)
+from ..common_neon.errors import PendingTxError
 
 
 class NeonPendingTxInfo:
