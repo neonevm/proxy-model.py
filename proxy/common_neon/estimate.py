@@ -68,7 +68,7 @@ class GasEstimate:
     @logged_group("neon.Proxy")
     def iterative_neon_tx_strategy(self, *, logger):
         begin_iteration = 1
-        final_steps, full_step_iterations = self.interation_info()
+        final_steps, full_step_iterations = self.iteration_info()
         steps = begin_iteration * EVM_STEPS + full_step_iterations * self.step_count + final_steps
         gas = steps * evm_step_cost(1)
         logger.debug(f'estimate iterative_neon_tx_strategy: {gas}')
@@ -79,7 +79,7 @@ class GasEstimate:
         begin_iteration = 1
         msg = get_holder_msg(self.tx_sender.eth_tx)
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
-        final_steps, full_step_iterations = self.interation_info()
+        final_steps, full_step_iterations = self.iteration_info()
         steps = (begin_iteration + holder_iterations) * EVM_STEPS + full_step_iterations * self.step_count + final_steps
         gas = steps * evm_step_cost(1)
         logger.debug(f'estimate holder_neon_tx_strategy: {gas}')
