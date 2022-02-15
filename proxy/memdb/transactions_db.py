@@ -11,7 +11,7 @@ from ..indexer.indexer_db import IndexerDB
 
 
 @logged_group("neon.Proxy")
-class TxsDB:
+class MemTxsDB:
     BIG_SLOT = 1_000_000_000_000
 
     _manager = multiprocessing.Manager()

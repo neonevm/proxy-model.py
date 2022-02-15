@@ -22,7 +22,7 @@ class NeonPendingTxInfo:
 
 
 @logged_group("neon.Proxy")
-class PendingTxsDB:
+class MemPendingTxsDB:
     # These variables are global for class, they will be initialized one time
     BIG_SLOT = 1_000_000_000_000
 

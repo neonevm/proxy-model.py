@@ -124,7 +124,7 @@ class EthereumModel:
         return block
 
     def eth_blockNumber(self):
-        height = self._db.get_latest_block().height
+        height = self._db.get_latest_block_height()
         self.debug("eth_blockNumber %s", hex(height))
         return hex(height)
 

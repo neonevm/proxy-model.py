@@ -17,222 +17,212 @@ from ..environment import FINALIZED
 
 
 @logged_group("neon.Proxy")
-class RequestSolanaBlocks:
-    BLOCK_CACHE_LIMIT = 32
+class RequestSolanaBlockList:
+    BLOCK_CACHE_LIMIT = 200
 
-    def __init__(self, blocks_db: BlocksDB):
+    def __init__(self, blocks_db: MemBlocksDB):
         self._b = blocks_db
 
-        self.last_time = self._b.last_time
+        self.last_time = self._b.last_time.value
         self.now = math.ceil(time.time_ns() / 10_000_000)
         self.block_list = []
-        self.last_block = SolanaBlockInfo()
-        self.first_block = SolanaBlockInfo(slot=0, height=0)
-        self.pending_increment = self._b.pending_increment.value
+        self.tail_block = SolanaBlockInfo(slot=0, height=0)
+        self.head_block = SolanaBlockInfo(slot=0, height=0)
 
     def execute(self) -> bool:
-        # this worker already tries to get new list of blocks
-        if self._b.has_active_request:
-            return False
-        # if the forcing of request exists
-        elif self._b.current_increment < self.pending_increment:
-            pass
         # 10 == 0.1 sec, when 0.4 is one block time
-        elif self.now < self.last_time or (self.now - self.last_time) < 40 * 3:
+        if self.now < self.last_time or (self.now - self.last_time) < 40:
             return False
+
+        # one of the workers already tries to get new list of blocks
+        with self._b.has_active_request.get_lock():
+            if self._b.has_active_request.value:
+                return False
+            self._b.has_active_request.value = True
 
         try:
-            self._b.has_active_request = True
-
-            if not self._init_db_block_list():
-                if not self._init_solana_block_list():
-                    return False
+            self._init_head_block()
+            if not self._init_solana_block_list():
+                return False
 
             self.now = math.ceil(time.time_ns() / 10_000_000)
-            self.first_block = self.block_list[len(self.block_list) - 1]
-            self.last_block = self.block_list[0]
-            return True
-        finally:
-            self._b.has_active_request = False
 
-    def _init_db_block_list(self) -> bool:
-        self.block_list = self._b.db.get_latest_block_list(self.BLOCK_CACHE_LIMIT)
-        return len(self.block_list) > 0
+            self._b.fill_blocks(self)
+            return True
+        except:
+            return False
+        finally:
+            with self._b.has_active_request.get_lock():
+                self._b.has_active_request.value = False
+
+    def _init_head_block(self):
+        self.head_block = self._b.db.get_latest_block()
+        if self.head_block.slot:
+            return
+        self.head_block.slot = self._b.solana.get_recent_blockslot(commitment=FINALIZED)
 
     def _init_solana_block_list(self) -> bool:
-        limit = self.BLOCK_CACHE_LIMIT * 2
-
-        slot = self._b.solana.get_recent_blockslot(commitment=FINALIZED)
-        slot_list = self._b.solana.get_block_slot_list(slot - limit, limit=limit, commitment=FINALIZED)
-        if not len(slot_list):
+        slot = self.head_block.slot
+        slot_list = [s for s in range(slot, slot + self.BLOCK_CACHE_LIMIT)]
+        self.block_list = self._b.solana.get_block_info_list(slot_list)
+        if not len(self.block_list):
             return False
 
-        slot_list = slot_list[:-self.BLOCK_CACHE_LIMIT]
-        self.block_list = self._b.solana.get_block_info_list(slot_list, commitment=FINALIZED)
+        self.tail_block = self.block_list[len(self.block_list) - 1]
+
+        height = self.tail_block.height
+        tail_height = self._b.get_tail_block_height()
+        if tail_height > height:
+            height = tail_height
+
+        for block in reversed(self.block_list):
+            block.height = height
+            height -= 1
+
+        if not self.head_block.height:
+            self.head_block = self.block_list[0]
+            self.head_block.height -= 1
+
         return len(self.block_list) > 0
 
 
 @logged_group("neon.Proxy")
-class BlocksDB:
+class MemBlocksDB:
     # These variables are global for class, they will be initialized one time
+    _manager = mp.Manager()
+    _block_lock = _manager.Lock()
 
     # Blocks dictionaries
-    _blocks_by_hash = {}
-    _blocks_by_height = {}
-    _blocks_by_slot = {}
+    _block_by_hash = _manager.dict()
+    _block_by_height = _manager.dict()
+    _pending_block_by_slot = _manager.dict()
+
+    # Head and tail of cache
+    _head_block_slot = _manager.Value(ctypes.c_ulonglong, 0)
+    _head_block_height = _manager.Value(ctypes.c_ulonglong, 0)
+
+    _tail_block_data = _manager.Value(ctypes.c_void_p, b'')
+    _tail_block_height = _manager.Value(ctypes.c_ulonglong, 0)
 
     # Last requesting time of blocks from Solana node
-    last_time = 0
-
-    current_increment = 0
-    has_active_request = False
-
-    _first_block = SolanaBlockInfo(slot=0, height=0)
-    _last_block = SolanaBlockInfo(slot=0, height=0)
-
-    _manager = mp.Manager()
-
-    _block_lock = _manager.Lock()
-    _pending_block_by_slot = _manager.dict()
-    pending_increment = mp.Value(ctypes.c_uint, 0)
+    last_time = _manager.Value(ctypes.c_ulonglong, 0)
+    has_active_request = mp.Value(ctypes.c_bool, False)
 
     def __init__(self, solana: SolanaInteractor, db: IndexerDB):
         self.db = db
         self.solana = solana
 
-    def _add_block(self, block):
-        self._blocks_by_slot[block.slot] = block
-        self._blocks_by_height[block.height] = block
-        if block.hash:
-            self._blocks_by_hash[block.hash] = block
+    def _add_block(self, block, data=None):
+        if not data:
+            data = pickle.dumps(block)
 
-    def _fill_blocks(self, request: RequestSolanaBlocks):
-        self.last_time = request.now
-        self.current_increment = request.pending_increment
-        self._last_block = request.last_block
-        self._first_block = request.first_block
+        self._block_by_hash[block.hash] = data
+        self._block_by_height[block.height] = data
 
-        self._blocks_by_slot.clear()
-        self._blocks_by_height.clear()
-        self._blocks_by_hash.clear()
+    def fill_blocks(self, request: RequestSolanaBlockList):
+        with self._block_lock:
+            self._fill_blocks(request)
+
+    def _fill_blocks(self, request: RequestSolanaBlockList):
+        self.last_time.value = request.now
+
+        self._head_block_slot.value = request.head_block.slot
+        self._head_block_height.value = request.head_block.height
+
+        self._tail_block_data.value = pickle.dumps(request.tail_block)
+        self._tail_block_height.value = request.tail_block.height
+
+        self._block_by_height.clear()
+        self._block_by_hash.clear()
 
         for block in request.block_list:
             self._add_block(block)
 
-        if not len(self._pending_block_by_slot):
-            return
+        rm_block_slot_list = []
+        for slot, data in self._pending_block_by_slot.items():
+            if slot <= request.head_block.slot:
+                rm_block_slot_list.append(slot)
+            else:
+                block = pickle.loads(data)
+                self._add_block(block, data)
 
-        rm_block_slot = []
-        with self._block_lock:
-            for slot, data in self._pending_block_by_slot.items():
-                if slot < self._last_block.slot:
-                    rm_block_slot.append(slot)
-                elif slot not in self._blocks_by_slot:
-                    self._add_block(pickle.loads(data))
-            for slot in rm_block_slot:
-                del self._pending_block_by_slot[slot]
-
-    def _get_full_block_info(self, block: SolanaBlockInfo) -> SolanaBlockInfo:
-        if block.time:
-            return block
-
-        db_block = self.db.get_full_block_by_slot(block.slot)
-        if not db_block:
-            return block
-
-        block = self._blocks_by_slot.get(db_block.slot, None)
-        if block and block.slot == db_block.slot:
-            self._blocks_by_slot[db_block.slot] = db_block
-            self._blocks_by_hash[db_block.hash] = db_block
-            self._blocks_by_height[db_block.height] = db_block
-        if (self._last_block.slot, self._last_block.height) == (db_block.slot, db_block.height):
-            self._last_block = db_block
-        if (self._first_block.slot, self._first_block.height) == (db_block.slot, db_block.height):
-            self._last_block = db_block
-        return db_block
+        for slot in rm_block_slot_list:
+            del self._pending_block_by_slot[slot]
 
     def _request_blocks(self):
-        request = RequestSolanaBlocks(self)
-        if request.execute():
-            self._fill_blocks(request)
+        RequestSolanaBlockList(self).execute()
 
-    def get_latest_block(self) -> SolanaBlockInfo:
+    def _get_tail_block(self) -> SolanaBlockInfo:
+        data = self._tail_block_data.value
+        if len(data):
+            return pickle.loads(data)
+        return SolanaBlockInfo()
+
+    def get_tail_block(self) -> SolanaBlockInfo:
         self._request_blocks()
-        return self._last_block
+        with self._block_lock:
+            return self._get_tail_block()
 
-    def get_full_latest_block(self) -> SolanaBlockInfo:
-        return self._get_full_block_info(self.get_latest_block())
+    def get_tail_block_height(self) -> int:
+        self._request_blocks()
+        return self._tail_block_height.value
+
+    def get_head_block_slot(self) -> int:
+        self._request_blocks()
+        return self._head_block_slot.value
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
-        if block_height > self._first_block.height:
-            self._request_blocks()
-
-            block = self._blocks_by_height.get(block_height)
-            if block:
-                return block
+        self._request_blocks()
+        if block_height > self._head_block_height.value:
+            with self._block_lock:
+                data = self._block_by_height.get(block_height)
+            if data:
+                return pickle.loads(data)
+            else:
+                return SolanaBlockInfo()
 
         return self.db.get_block_by_height(block_height)
 
-    def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
-        if block_slot > self._first_block.slot:
-            self._request_blocks()
-
-            block = self._blocks_by_slot.get(block_slot)
-            if block:
-                return self._get_full_block_info(block)
-
-        return self.db.get_full_block_by_slot(block_slot)
-
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         self._request_blocks()
-
-        block = self._blocks_by_hash.get(block_hash)
-        if block:
-            return block
+        with self._block_lock:
+            data = self._block_by_hash.get(block_hash)
+        if data:
+            return pickle.loads(data)
 
         return self.db.get_block_by_hash(block_hash)
 
-    @staticmethod
-    def _generate_fake_block(prev_block: SolanaBlockInfo, slot: int) -> SolanaBlockInfo:
-        return SolanaBlockInfo(
-            slot=slot,
-            height=prev_block.height + 1,
-            time=prev_block.time,
-            hash='0x' + os.urandom(32).hex(),
-            parent_hash=prev_block.hash,
-        )
-
-    def _generate_fake_history(self, last_block: SolanaBlockInfo, new_slot: int):
-        data = self._pending_block_by_slot.get(new_slot)
+    def _generate_fake_block(self, neon_res: NeonTxResultInfo) -> SolanaBlockInfo:
+        data = self._pending_block_by_slot.get(neon_res.slot)
         if data:
-            return
+            block = pickle.loads(data)
+        else:
+            tail_block = self._get_tail_block()
+            block_height = (tail_block.height or neon_res.slot) + 1
+            block_time = (tail_block.time or 1)
 
-        start_slot = last_block.slot + 1
-        block = last_block
-        for slot in range(new_slot, last_block.slot, -1):
-            data = self._pending_block_by_slot.get(slot)
-            if data:
-                start_slot = slot + 1
-                block = pickle.loads(data)
+            block = SolanaBlockInfo(
+                slot=neon_res.slot,
+                height=block_height,
+                time=block_time,
+                hash='0x' + os.urandom(32).hex(),
+                parent_hash='0x' + os.urandom(32).hex(),
+            )
+            self.debug(f'Generate fake block {block} for {neon_res.sol_sign}')
 
-        for slot in range(start_slot, new_slot + 1):
-            block = self._generate_fake_block(block, slot)
-            data = pickle.dumps(block)
-            self._pending_block_by_slot.setdefault(slot, data)
-
+        block.signs.append(neon_res.sol_sign)
         return block
 
-    def submit_block(self, neon_res: NeonTxResultInfo):
-        # for faster confirmation by Ethereum clients ...
-        # Solana can switch to another history branch,
-        #   so it isn't critical return a fake block for a not-finalized state
+    def submit_block(self, neon_res: NeonTxResultInfo) -> SolanaBlockInfo:
+        block_list = self.solana.get_block_info_list([neon_res.slot])
+        block = block_list[0] if len(block_list) else SolanaBlockInfo()
 
-        last_block = self.get_full_latest_block()
         with self._block_lock:
-            self._generate_fake_history(last_block, neon_res.slot + 1)
-            data = self._pending_block_by_slot[neon_res.slot]
-            block = pickle.loads(data)
-            block.signs.append(neon_res.sol_sign)
-            self._pending_block_by_slot[neon_res.slot] = pickle.dumps(block)
-            self.pending_increment.value += 1
+            if not block.slot:
+                block = self._generate_fake_block(neon_res)
+
+            data = pickle.dumps(block)
+            self._pending_block_by_slot[block.slot] = data
+            self._add_block(block, data)
+
             return block

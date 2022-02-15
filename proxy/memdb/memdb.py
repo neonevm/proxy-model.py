@@ -7,9 +7,9 @@ from ..indexer.indexer_db import IndexerDB
 from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
 from ..common_neon.solana_interactor import SolanaInteractor
 
-from ..memdb.blocks_db import BlocksDB, SolanaBlockInfo
-from ..memdb.pending_tx_db import PendingTxsDB, NeonPendingTxInfo
-from ..memdb.transactions_db import TxsDB
+from ..memdb.blocks_db import MemBlocksDB, SolanaBlockInfo
+from ..memdb.pending_tx_db import MemPendingTxsDB, NeonPendingTxInfo
+from ..memdb.transactions_db import MemTxsDB
 
 
 @logged_group("neon.Proxy")
@@ -21,21 +21,24 @@ class MemDB:
         self._db.set_client(self._client)
         self._solana = SolanaInteractor(client)
 
-        self._blocks_db = BlocksDB(self._solana, self._db)
-        self._txs_db = TxsDB(self._db)
-        self._pending_tx_db = PendingTxsDB(self._db)
+        self._blocks_db = MemBlocksDB(self._solana, self._db)
+        self._txs_db = MemTxsDB(self._db)
+        self._pending_tx_db = MemPendingTxsDB(self._db)
 
     def _before_slot(self) -> int:
-        return self._blocks_db.get_latest_block().slot
+        return self._blocks_db.get_head_block_slot()
 
     def get_latest_block(self) -> SolanaBlockInfo:
-        return self._blocks_db.get_latest_block()
+        return self._blocks_db.get_tail_block()
+
+    def get_latest_block_height(self) -> int:
+        return self._blocks_db.get_tail_block_height()
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_height(block_height)
 
     def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
-        return self._blocks_db.get_full_block_by_slot(block_slot)
+        return self._db.get_full_block_by_slot(block_slot)
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_hash(block_hash)
