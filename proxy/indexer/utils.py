@@ -35,12 +35,14 @@ class SolanaIxSignInfo:
         self.bpf  = None     # Instruction index
         self.step  = None    # Instruction index
         self.sol  = None     # Instruction index
+        self.token  = None     # Instruction index
 
-    def set_costs(self, operator, bpf, step, sol):
+    def set_costs(self, operator, bpf, step, sol, token):
         self.operator = operator
         self.bpf  = bpf
         self.step  = step
         self.sol  = sol
+        self.token = token
 
 
     def __str__(self):

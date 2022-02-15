@@ -369,7 +369,16 @@ class DummyIxDecoder:
                log_words[6] == 'compute' and\
                log_words[7] == 'units':
                 bpf = int(log_words[3])
-        self.ix.sign.set_costs(operator, bpf, steps, sol)
+        pre_token = 0
+        post_token = 0
+        for balance in self.ix.tx['meta']['preTokenBalances']:
+            if balance['owner'] == operator:
+                pre_token = balance["uiTokenAmount"]["amount"]
+        for balance in self.ix.tx['meta']['postTokenBalances']:
+            if balance['owner'] == operator:
+                post_token = balance["uiTokenAmount"]["amount"]
+        token = post_token - pre_token
+        self.ix.sign.set_costs(operator, bpf, steps, sol, token)
 
     def _init_tx_from_holder(self, holder_account: str, storage_account: str, blocked_accounts: [str]) -> Optional[NeonTxObject]:
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)

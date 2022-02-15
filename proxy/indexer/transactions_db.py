@@ -21,6 +21,7 @@ class SolanaNeonTxsDB(BaseDB):
                 neon_steps INT,
                 bpf_steps INT,
                 sol_cost INT,
+                token_income BIGINT,
 
                 UNIQUE(sol_sign, neon_sign, idx),
                 UNIQUE(neon_sign, sol_sign, idx)
@@ -30,12 +31,12 @@ class SolanaNeonTxsDB(BaseDB):
         used_ixs = set(used_ixs)
         rows = []
         for ix in used_ixs:
-            rows.append((ix.sign, neon_sign, ix.slot, ix.idx, ix.operator, ix.step, ix.bpf, ix.sol))
+            rows.append((ix.sign, neon_sign, ix.slot, ix.idx, ix.operator, ix.step, ix.bpf, ix.sol, ix.token))
 
         with self._conn.cursor() as cursor:
             cursor.executemany(f'''
                 INSERT INTO {self._table_name}
-                (sol_sign, neon_sign, slot, idx, operator, neon_steps, bpf_steps, sol_cost)
+                (sol_sign, neon_sign, slot, idx, operator, neon_steps, bpf_steps, sol_cost, token_income)
                 VALUES(%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING''',
                 rows)
 
