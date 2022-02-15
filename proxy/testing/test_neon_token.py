@@ -12,7 +12,7 @@ pragma solidity >=0.5.12;
 contract NeonToken {
     address constant NeonPrecompiled = 0xFF00000000000000000000000000000000000003;
 
-    function withdraw(bytes32 spender) override public payable returns (bool) {
+    function withdraw(bytes32 spender) public payable returns (bool) {
         (bool success, bytes memory returnData) = NeonPrecompiled.delegatecall(abi.encodeWithSignature("withdraw(bytes32)", spender));
         return success;
     }
@@ -37,7 +37,7 @@ class TestNeonToken(unittest.TestCase):
 
     def deploy_contract(self):
         erc20 = proxy.eth.contract(abi=self.neon_token['abi'], bytecode=self.neon_token['bin'])
-        nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
+        nonce = proxy.eth.get_transaction_count(eth_account.address)
         tx = {'nonce': nonce}
         tx_constructor = erc20.constructor().buildTransaction(tx)
         tx_deploy = proxy.eth.account.sign_transaction(tx_constructor, eth_account.key)
@@ -54,6 +54,13 @@ class TestNeonToken(unittest.TestCase):
         dest_acc = SolanaAccount()
         print(f"Try to withdraw NEON tokens to solana account {dest_acc.public_key()}")
         amount = pow(10, 18) # 1 NEON
-        withdraw_func = self.neon_contract.functions.withdraw(bytes(dest_acc.public_key()))
-        result = withdraw_func.transact({ "value": amount })
-        print(result)
+
+        nonce = proxy.eth.get_transaction_count(eth_account.address)
+        tx = {'value': amount, 'nonce': nonce}
+        withdraw_tx_dict = self.neon_contract.functions.withdraw(bytes(dest_acc.public_key())).buildTransaction(tx)
+        withdraw_tx = proxy.eth.account.sign_transaction(withdraw_tx_dict, eth_account.key)
+        withdraw_tx_hash = proxy.eth.send_raw_transaction(withdraw_tx.rawTransaction)
+        print(f'withdraw_tx_hash: {withdraw_tx_hash.hex()}')
+        withdraw_tx_receipt = proxy.eth.wait_for_transaction_receipt(withdraw_tx_hash)
+        print(f'withdraw_tx_receipt: {withdraw_tx_receipt}')
+        print(f'deploy status: {withdraw_tx_receipt.status}')
