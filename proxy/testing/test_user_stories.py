@@ -3,13 +3,14 @@ import os
 import requests
 import json
 import inspect
-from proxy.environment import EVM_STEPS, EVM_STEP_COST, HOLDER_MSG_SIZE, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE, EVM_BYTE_COST
+from proxy.environment import EVM_STEPS, HOLDER_MSG_SIZE, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE, EVM_BYTE_COST
 from web3.auto import w3
 from eth_keys import keys as eth_keys
 import math
 from ..common_neon.utils import  get_holder_msg
 from ..common_neon.eth_proto import Trx as EthTrx
-from ..plugin.solana_rest_api_tools import evm_steps_by_trx
+from ..common_neon.estimate import evm_step_cost
+from ..plugin.solana_rest_api import evm_step_count
 
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 headers = {'Content-type': 'application/json'}
@@ -70,13 +71,13 @@ class TestUserStories(unittest.TestCase):
         allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
 
-        full_step_iterations = int(steps_executed / evm_steps_by_trx)
-        final_steps = steps_executed % evm_steps_by_trx
+        full_step_iterations = int(steps_executed / evm_step_count)
+        final_steps = steps_executed % evm_step_count
         if final_steps > 0 and final_steps < EVM_STEPS:
             final_steps =  EVM_STEPS
 
-        steps_for_pay = (holder_iterations + begin_iterations) * EVM_STEPS  + full_step_iterations * evm_steps_by_trx + final_steps
-        gas_for_trx = steps_for_pay * EVM_STEP_COST
+        steps_for_pay = (holder_iterations + begin_iterations) * EVM_STEPS  + full_step_iterations * evm_step_count + final_steps
+        gas_for_trx = steps_for_pay * evm_step_cost(1)
         gas_for_space = allocated_space * EVM_BYTE_COST
         expected_gas = gas_for_trx + gas_for_space + EXTRA_GAS
 
@@ -123,13 +124,13 @@ class TestUserStories(unittest.TestCase):
         allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
 
-        full_step_iterations = int(steps_executed / evm_steps_by_trx)
-        final_steps = steps_executed % evm_steps_by_trx
+        full_step_iterations = int(steps_executed / evm_step_count)
+        final_steps = steps_executed % evm_step_count
         if final_steps > 0 and final_steps < EVM_STEPS:
             final_steps =  EVM_STEPS
 
-        steps_for_pay = (holder_iterations + begin_iterations) * EVM_STEPS  + full_step_iterations * evm_steps_by_trx + final_steps
-        gas_for_trx = steps_for_pay * EVM_STEP_COST
+        steps_for_pay = (holder_iterations + begin_iterations) * EVM_STEPS  + full_step_iterations * evm_step_count + final_steps
+        gas_for_trx = steps_for_pay * evm_step_cost(1)
 
         gas_for_space = allocated_space * EVM_BYTE_COST
         expected_gas = gas_for_trx + gas_for_space + EXTRA_GAS
@@ -177,7 +178,7 @@ class TestUserStories(unittest.TestCase):
         allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
         continue_iterations = 1
-        gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * EVM_STEP_COST
+        gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * evm_step_cost(1)
         gas_for_space = allocated_space * EVM_BYTE_COST
         expected_gas = gas_for_trx + gas_for_space + EXTRA_GAS
 
@@ -223,7 +224,7 @@ class TestUserStories(unittest.TestCase):
         allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE) * 2 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
         continue_iterations = 1
-        gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * EVM_STEP_COST
+        gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * evm_step_cost(1)
         gas_for_space = allocated_space * EVM_BYTE_COST
         expected_gas = gas_for_trx + gas_for_space + EXTRA_GAS
 

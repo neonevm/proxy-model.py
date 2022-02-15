@@ -27,23 +27,19 @@ from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
 from solana.rpc.api import Client as SolanaClient
 from typing import List, Tuple
 
-from .solana_rest_api_tools import neon_config_load, get_token_balance_or_zero, estimate_gas, evm_steps_by_trx
+from .solana_rest_api_tools import neon_config_load, get_token_balance_or_zero
 from ..common_neon.transaction_sender import NeonTxSender
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.address import EthereumAddress, getAccountInfo
+from ..common_neon.address import EthereumAddress
 from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError
-from ..common_neon.eth_proto import Trx as EthTrx
+from ..common_neon.estimate import GasEstimate
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEPS
 from ..environment import neon_cli
 from ..memdb.memdb import MemDB, PendingTxError
 from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx
-from typing import Optional
-from eth_keys import keys as eth_keys
-from web3.auto import w3
-import os
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -51,6 +47,7 @@ modelInstance = None
 NEON_PROXY_PKG_VERSION = '0.6.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
+evm_step_count = EVM_STEPS * 5  # number of evm-steps, performed by transaction  (should be >= EVM_STEPS)
 
 @logged_group("neon.Proxy")
 class EthereumModel:
@@ -99,34 +96,8 @@ class EthereumModel:
 
     def eth_estimateGas(self, param):
         try:
-            sender : bytes = bytes.fromhex(param.get('from', "0x%040x" % 0x0)[2:])
-
-            contract = param.get('to', None)
-            if contract:
-                contract = bytes.fromhex(contract[2:])
-
-            value = param.get('value', None)
-            if value:
-                value = int(value, 16)
-
-            data = param.get('data', None)
-            if data:
-                data = bytes.fromhex(data[2:])
-
-            unsigned_trx = {
-                'to': contract if contract else "",
-                'value': value if value else 0,
-                'gas': 999999999,
-                'gasPrice': 1_000_000_000,
-                'nonce': 0xffff,
-                'data': data.hex() if data else "",
-                'chainId': int(self.neon_config_dict['NEON_CHAIN_ID'])
-            }
-            signed_trx = w3.eth.account.sign_transaction(unsigned_trx, eth_keys.PrivateKey(os.urandom(32)))
-            trx = EthTrx.fromString(signed_trx.rawTransaction)
-
-            tx_sender = NeonTxSender(self._db, self._client, trx, steps=evm_steps_by_trx)
-            return estimate_gas(tx_sender, sender)
+            calculator = GasEstimate(param,  self._db, self._client, evm_step_count)
+            return calculator.estimate()
 
         except EthereumError:
             raise
@@ -405,7 +376,7 @@ class EthereumModel:
         eth_signature = '0x' + trx.hash_signed().hex()
 
         try:
-            tx_sender = NeonTxSender(self._db, self._client, trx, steps=evm_steps_by_trx)
+            tx_sender = NeonTxSender(self._db, self._client, trx, steps=evm_step_count)
             tx_sender.execute()
             return eth_signature
 
