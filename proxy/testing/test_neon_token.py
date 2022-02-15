@@ -3,23 +3,22 @@ from solcx import compile_source
 from web3 import Web3
 import os
 from .testing_helpers import request_airdrop
+from solana.account import Account as SolanaAccount
 
 NEON_TOKEN_CONTRACT = '''
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.5.12;
 
-interface INeon {
-    function withdraw(bytes32 spender) external payable returns (bool);
-}
-
-contract NeonToken is INeon {
+contract NeonToken {
     address constant NeonPrecompiled = 0xFF00000000000000000000000000000000000003;
 
-    function withdraw(bytes32 spender) public override payable returns (bool) {
-        return INeon(NeonPrecompiled).withdraw{value: msg.value}(spender);
+    function withdraw(bytes32 spender) override public payable returns (bool) {
+        (bool success, bytes memory returnData) = NeonPrecompiled.delegatecall(abi.encodeWithSignature("withdraw(bytes32)", spender));
+        return success;
     }
 }
 '''
+
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
@@ -33,6 +32,8 @@ class TestNeonToken(unittest.TestCase):
         artifacts = compile_source(NEON_TOKEN_CONTRACT)
         _, cls.neon_token = artifacts.popitem()
         cls.deploy_contract(cls)
+        print(f"default eth account: {eth_account.address}")
+        request_airdrop(eth_account.address)
 
     def deploy_contract(self):
         erc20 = proxy.eth.contract(abi=self.neon_token['abi'], bytecode=self.neon_token['bin'])
@@ -41,12 +42,18 @@ class TestNeonToken(unittest.TestCase):
         tx_constructor = erc20.constructor().buildTransaction(tx)
         tx_deploy = proxy.eth.account.sign_transaction(tx_constructor, eth_account.key)
         tx_deploy_hash = proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
-        self.debug(f'tx_deploy_hash: {tx_deploy_hash.hex()}')
+        print(f'tx_deploy_hash: {tx_deploy_hash.hex()}')
         tx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
-        self.debug(f'tx_deploy_receipt: {tx_deploy_receipt}')
-        self.debug(f'deploy status: {tx_deploy_receipt.status}')
+        print(f'tx_deploy_receipt: {tx_deploy_receipt}')
+        print(f'deploy status: {tx_deploy_receipt.status}')
         self.neon_token_address = tx_deploy_receipt.contractAddress
-        self.debug(f'NeonToken contract address is: {self.neon_token_address}')
+        print(f'NeonToken contract address is: {self.neon_token_address}')
+        self.neon_contract = proxy.eth.contract(address=self.neon_token_address, abi=self.neon_token['abi'])
 
     def test_success_call_withdraw(self):
-        print('IMPLEMENT ME!')
+        dest_acc = SolanaAccount()
+        print(f"Try to withdraw NEON tokens to solana account {dest_acc.public_key()}")
+        amount = pow(10, 18) # 1 NEON
+        withdraw_func = self.neon_contract.functions.withdraw(bytes(dest_acc.public_key()))
+        result = withdraw_func.transact({ "value": amount })
+        print(result)
