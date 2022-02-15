@@ -32,7 +32,7 @@ class GasEstimate:
         value = int(value, 16) if value else 0
 
         data = request.get('data', None)
-        data = bytes.fromhex(data[2:]) if data else ""
+        data = data[2:] if data else ""
 
         unsigned_trx = {
             'to': contract,
@@ -40,7 +40,7 @@ class GasEstimate:
             'gas': 999999999,
             'gasPrice': 1_000_000_000,
             'nonce': 0xffff,
-            'data': data.hex(),
+            'data': data,
             'chainId': int('ffffffff', 16)
         }
         signed_trx = w3.eth.account.sign_transaction(unsigned_trx, eth_keys.PrivateKey(os.urandom(32)))
