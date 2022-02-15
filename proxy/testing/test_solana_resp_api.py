@@ -20,6 +20,7 @@ class SolanaContractTests(unittest.TestCase):
     def getTokenBalance(self, token, account):
         return self.model.contracts[token].balances.get(account, 0)
 
+    @unittest.skip("a.i.")
     def test_transferFunds(self):
         (sender, receiver, amount) = (self.owner, '0x8d900bfa2353548a4631be870f99939575551b60', 123*10**18)
         senderBalance = self.getBalance(sender)
@@ -41,7 +42,7 @@ class SolanaContractTests(unittest.TestCase):
 
         self.assertTrue(receiptId in block['transactions'])
 
-    @unittest.skip("n.i.")
+    @unittest.skip("a.i.")
     def test_transferTokens(self):
         (token, sender, receiver, amount) = ('0xcf73021fde8654e64421f67372a47aa53c4341a8', '0x324726ca9954ed9bd567a62ae38a7dd7b4eaad0e', '0xb937ad32debafa742907d83cb9749443160de0c4', 32)
         senderBalance = self.getTokenBalance(token, sender)
@@ -59,5 +60,6 @@ class SolanaContractTests(unittest.TestCase):
 
         block = self.model.eth_getBlockByNumber(receipt['blockNumber'], False)
         self.debug('Block:', block)
+
 
         self.assertTrue(receiptId in block['transactions'])
