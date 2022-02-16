@@ -20,7 +20,7 @@ TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFI
 MINIMAL_GAS_PRICE=os.environ.get("MINIMAL_GAS_PRICE", None)
 if MINIMAL_GAS_PRICE is not None:
     MINIMAL_GAS_PRICE = int(MINIMAL_GAS_PRICE)*10**9
-
+!!!!!!!!!!!!!!!!
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 LOG_SENDING_SOLANA_TRANSACTION = os.environ.get("LOG_SENDING_SOLANA_TRANSACTION", "NO") == "YES"
 LOG_NEON_CLI_DEBUG = os.environ.get("LOG_NEON_CLI_DEBUG", "NO") == "YES"
