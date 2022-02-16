@@ -9,7 +9,7 @@ from typing import Tuple
 from ..common_neon.utils import get_holder_msg
 from ..common_neon.transaction_sender import NeonTxSender, NeonCreateContractTxStage, NeonCreateAccountTxStage
 from ..environment import   EXTRA_GAS, EVM_STEPS,  EVM_BYTE_COST, HOLDER_MSG_SIZE, LAMPORTS_PER_SIGNATURE, \
-    ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE, PAYMENT_TO_TREASURE
+    ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE, PAYMENT_TO_TREASURE, ACCOUNT_STORAGE_OVERHEAD
 from eth_keys import keys as eth_keys
 from .eth_proto import Trx as EthTrx
 
@@ -90,9 +90,9 @@ class GasEstimate:
         space = 0
         for s in self.tx_sender._create_account_list:
             if s.NAME == NeonCreateContractTxStage.NAME:
-                space += s.size + ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
+                space += s.size + ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE + ACCOUNT_STORAGE_OVERHEAD*3
             elif s.NAME == NeonCreateAccountTxStage.NAME:
-                space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
+                space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE + ACCOUNT_STORAGE_OVERHEAD * 2
 
         space += self.tx_sender.unpaid_space
         logger.debug(f'allocated space: {space}')

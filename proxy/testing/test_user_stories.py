@@ -3,7 +3,7 @@ import os
 import requests
 import json
 import inspect
-from proxy.environment import EVM_STEPS, HOLDER_MSG_SIZE, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE, EVM_BYTE_COST
+from proxy.environment import EVM_STEPS, HOLDER_MSG_SIZE, ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE, EVM_BYTE_COST, ACCOUNT_STORAGE_OVERHEAD
 from web3.auto import w3
 from eth_keys import keys as eth_keys
 import math
@@ -68,7 +68,7 @@ class TestUserStories(unittest.TestCase):
         begin_iterations = 1
         steps_executed = 128
         code_size = 1138
-        allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + code_size + contract_extra_space
+        allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + ACCOUNT_STORAGE_OVERHEAD*3 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
 
         full_step_iterations = int(steps_executed / evm_step_count)
@@ -121,7 +121,7 @@ class TestUserStories(unittest.TestCase):
         begin_iterations = 1
         steps_executed = 128
         code_size = 1138
-        allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + code_size + contract_extra_space
+        allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + ACCOUNT_STORAGE_OVERHEAD*3 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
 
         full_step_iterations = int(steps_executed / evm_step_count)
@@ -175,7 +175,7 @@ class TestUserStories(unittest.TestCase):
         begin_iterations = 1
         steps_executed = 0
         code_size = 294
-        allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + code_size + contract_extra_space
+        allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE)*2 + ACCOUNT_STORAGE_OVERHEAD*3 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
         continue_iterations = 1
         gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * evm_step_cost(1)
@@ -221,7 +221,7 @@ class TestUserStories(unittest.TestCase):
         begin_iterations = 1
         steps_executed = 0
         code_size = 294
-        allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE) * 2 + code_size + contract_extra_space
+        allocated_space = (ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE) * 2 + ACCOUNT_STORAGE_OVERHEAD*3 + code_size + contract_extra_space
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
         continue_iterations = 1
         gas_for_trx = (holder_iterations + begin_iterations + continue_iterations) * EVM_STEPS * evm_step_cost(1)

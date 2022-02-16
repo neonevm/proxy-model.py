@@ -31,7 +31,7 @@ from .solana_interactor import check_if_blockhash_notfound
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
 from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, ACCOUNT_PERMISSION_UPDATE_INT, MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_ERR, \
-    ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE, HOLDER_MSG_SIZE
+    ACCOUNT_MAX_SIZE, SPL_TOKEN_ACCOUNT_SIZE, HOLDER_MSG_SIZE, ACCOUNT_STORAGE_OVERHEAD
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..environment import get_solana_accounts
 from ..common_neon.account_whitelist import AccountWhitelist
@@ -572,13 +572,13 @@ class NeonTxSender:
                     self._resize_contract_list.append(resize_stage)
 
                 if account_desc["deploy"]:
-                    self.unpaid_space += resize_stage.size if resize_stage else account_desc["code_size_current"]
+                    self.unpaid_space += (resize_stage.size if resize_stage else account_desc["code_size_current"]) + ACCOUNT_STORAGE_OVERHEAD
                 elif account_desc["storage_increment"]:
                     self.unpaid_space += account_desc["storage_increment"]
 
                 if not isPayed(self.solana.client, account_desc['address']):
                     self.debug(f'found losted account {account_desc["account"]}')
-                    self.unpaid_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
+                    self.unpaid_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE + ACCOUNT_STORAGE_OVERHEAD * 2
 
             eth_address = account_desc['address']
             sol_account = account_desc["account"]
