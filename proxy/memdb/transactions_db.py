@@ -1,4 +1,4 @@
-import multiprocessing
+import multiprocessing as mp
 import pickle
 import ctypes
 
@@ -14,10 +14,10 @@ from ..indexer.indexer_db import IndexerDB
 class MemTxsDB:
     BIG_SLOT = 1_000_000_000_000
 
-    _manager = multiprocessing.Manager()
+    _manager = mp.Manager()
 
-    _tx_lock = _manager.Lock()
-    _tx_slot = _manager.Value(ctypes.c_ulonglong, BIG_SLOT)
+    _tx_slot = mp.Value(ctypes.c_ulonglong, BIG_SLOT)
+
     _tx_by_neon_sign = _manager.dict()
     _slot_by_neon_sign = _manager.dict()
     _tx_by_sol_sign = _manager.dict()
@@ -53,7 +53,7 @@ class MemTxsDB:
             return self._db.get_tx_list_by_sol_sign(sol_sign_list)
 
         tx_list = []
-        with self._tx_lock:
+        with self._tx_slot.get_lock():
             self._rm_finalized_txs(before_slot)
             for sol_sign in sol_sign_list:
                 data = self._tx_by_sol_sign.get(sol_sign)
@@ -65,7 +65,7 @@ class MemTxsDB:
         if not is_pended_tx:
             return self._db.get_tx_by_neon_sign(neon_sign)
 
-        with self._tx_lock:
+        with self._tx_slot.get_lock():
             self._rm_finalized_txs(before_slot)
             data = self._tx_by_neon_sign.get(neon_sign)
             if data:
@@ -83,7 +83,7 @@ class MemTxsDB:
             return False
 
         result_list = []
-        with self._tx_lock:
+        with self._tx_slot.get_lock():
             for data in self._tx_by_neon_sign.values():
                 tx = pickle.loads(data)
                 if from_block and tx.neon_res.block_height < from_block:
@@ -105,7 +105,7 @@ class MemTxsDB:
         tx = NeonTxFullInfo(neon_tx=neon_tx, neon_res=neon_res)
         data = pickle.dumps(tx)
 
-        with self._tx_lock:
+        with self._tx_slot.get_lock():
             self._rm_finalized_txs(before_slot)
 
             self._tx_by_neon_sign[tx.neon_tx.sign] = data

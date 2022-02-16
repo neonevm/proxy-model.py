@@ -26,13 +26,13 @@ class MemDB:
         self._pending_tx_db = MemPendingTxsDB(self._db)
 
     def _before_slot(self) -> int:
-        return self._blocks_db.get_head_block_slot()
+        return self._blocks_db.get_db_block_slot()
 
     def get_latest_block(self) -> SolanaBlockInfo:
-        return self._blocks_db.get_tail_block()
+        return self._blocks_db.get_latest_block()
 
     def get_latest_block_height(self) -> int:
-        return self._blocks_db.get_tail_block_height()
+        return self._blocks_db.get_latest_block_height()
 
     def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_height(block_height)

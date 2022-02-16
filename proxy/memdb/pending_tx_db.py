@@ -1,4 +1,4 @@
-import multiprocessing
+import multiprocessing as mp
 import ctypes
 import pickle
 
@@ -26,10 +26,10 @@ class MemPendingTxsDB:
     # These variables are global for class, they will be initialized one time
     BIG_SLOT = 1_000_000_000_000
 
-    _manager = multiprocessing.Manager()
+    _manager = mp.Manager()
 
-    _pending_tx_lock = _manager.Lock()
-    _pending_slot = _manager.Value(ctypes.c_ulonglong, BIG_SLOT)
+    _pending_slot = mp.Value(ctypes.c_ulonglong, BIG_SLOT)
+
     _pending_tx_by_hash = _manager.dict()
     _pending_slot_by_hash = _manager.dict()
 
@@ -45,7 +45,7 @@ class MemPendingTxsDB:
             self._pending_slot.value = tx.slot
 
     def _rm_finalized_txs(self, before_slot: int):
-        if (self._pending_slot.value == 0) or (self._pending_slot.value > before_slot):
+        if self._pending_slot.value > before_slot:
             return
 
         rm_sign_list = []
@@ -66,7 +66,7 @@ class MemPendingTxsDB:
             del self._pending_slot_by_hash[sign]
 
     def is_exist(self, neon_sign: str, before_slot) -> bool:
-        with self._pending_tx_lock:
+        with self._pending_slot.get_lock():
             self._rm_finalized_txs(before_slot)
             return neon_sign in self._pending_tx_by_hash
 
@@ -75,7 +75,7 @@ class MemPendingTxsDB:
         if executed_tx:
             raise PendingTxError(f'Transaction {tx.neon_sign} is already executed')
 
-        with self._pending_tx_lock:
+        with self._pending_slot.get_lock():
             self._rm_finalized_txs(before_slot)
 
             pended_data = self._pending_tx_by_hash.get(tx.neon_sign)
