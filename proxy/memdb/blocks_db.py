@@ -19,7 +19,7 @@ from ..environment import FINALIZED
 
 @logged_group("neon.Proxy")
 class RequestSolanaBlockList:
-    BLOCK_CACHE_LIMIT = 100
+    BLOCK_CACHE_LIMIT = (32 + 16)
     BIG_SLOT = 1_000_000_000_000
 
     def __init__(self, blocks_db: MemBlocksDB):
@@ -32,8 +32,8 @@ class RequestSolanaBlockList:
         self.pending_block_revision = 0
 
         self.block_list = []
-        self.first_block = SolanaBlockInfo(slot=0, height=0)
-        self.latest_block = SolanaBlockInfo(slot=0, height=0)
+        self.first_block = SolanaBlockInfo(slot=0)
+        self.latest_block = SolanaBlockInfo(slot=0)
 
     def execute(self) -> bool:
         try:
@@ -62,13 +62,13 @@ class RequestSolanaBlockList:
 
         self.latest_block = self.block_list[0]
 
-        height = self.latest_block.height
-        latest_height = self._b.get_latest_block_height()
-        if latest_height > height:
-            height = latest_height
+        slot = self.latest_block.slot
+        latest_slot = self._b.get_latest_block_slot()
+        if latest_slot > slot:
+            slot = latest_slot
         for block in self.block_list:
-            block.height = height
-            height -= 1
+            block.slot = slot
+            slot -= 1
 
         self.first_block = self.block_list[len(self.block_list) - 1]
 
@@ -100,18 +100,18 @@ class MemBlocksDB:
     _active_block_revision = 0
 
     _block_by_hash = {}
-    _block_by_height = {}
+    _block_by_slot = {}
 
     # Head and tail of cache
-    _first_block = SolanaBlockInfo(slot=0, height=0)
-    _latest_block = SolanaBlockInfo(slot=0, height=0)
+    _first_block = SolanaBlockInfo(slot=0)
+    _latest_block = SolanaBlockInfo(slot=0)
     _latest_db_block_slot = 0
 
     def __init__(self, solana: SolanaInteractor, db: IndexerDB):
         self.db = db
         self.solana = solana
         self._update_block_dicts()
-        self.debug(f'Init first version of block list {len(self._block_by_height)} ' +
+        self.debug(f'Init first version of block list {len(self._block_by_slot)} ' +
                    f'first block - {self._first_block}, ' +
                    f'latest block - {self._latest_block}, ' +
                    f'latest db block slot - {self._latest_db_block_slot}')
@@ -150,12 +150,12 @@ class MemBlocksDB:
         self._latest_block = request.latest_block
         self._latest_db_block_slot = request.latest_db_block_slot
 
-        self._block_by_height.clear()
+        self._block_by_slot.clear()
         self._block_by_hash.clear()
 
         for block in request.block_list:
             self._block_by_hash[block.hash] = block
-            self._block_by_height[block.height] = block
+            self._block_by_slot[block.slot] = block
 
     def _start_request(self) -> bool:
         last_time = self._last_time.value
@@ -229,20 +229,27 @@ class MemBlocksDB:
         self._update_block_dicts()
         return self._latest_block
 
-    def get_latest_block_height(self) -> int:
+    def get_latest_block_slot(self) -> int:
         self._update_block_dicts()
-        return self._latest_block.height
+        return self._latest_block.slot
 
     def get_db_block_slot(self) -> int:
         self._update_block_dicts()
         return self._latest_db_block_slot
 
-    def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
+    def get_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
         self._update_block_dicts()
-        if block_height > self._first_block.height:
-            return self._block_by_height.get(block_height, SolanaBlockInfo())
+        if block_slot > self._first_block.slot:
+            return self._block_by_slot.get(block_slot, SolanaBlockInfo())
 
-        return self.db.get_block_by_height(block_height)
+        return self.db.get_block_by_slot(block_slot)
+
+    def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
+        self._update_block_dicts()
+        if block_slot > self._first_block.slot:
+            return self._block_by_slot.get(block_slot, SolanaBlockInfo())
+
+        return self.db.get_full_block_by_slot(block_slot)
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         self._update_block_dicts()
@@ -257,14 +264,9 @@ class MemBlocksDB:
         if data:
             block = pickle.loads(data)
         else:
-            latest_block = self._latest_block
-            block_height = (latest_block.height or neon_res.slot) + 1
-            block_time = (latest_block.time or 1)
-
             block = SolanaBlockInfo(
                 slot=neon_res.slot,
-                height=block_height,
-                time=block_time,
+                time=self._latest_block.time,
                 hash='0x' + os.urandom(32).hex(),
                 parent_hash='0x' + os.urandom(32).hex(),
             )

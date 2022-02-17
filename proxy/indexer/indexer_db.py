@@ -27,7 +27,7 @@ class IndexerDB:
         self._client = None
 
         self._constants = SQLDict(tablename="constants")
-        for k in ['min_receipt_slot']:
+        for k in ['min_receipt_slot', 'latest_slot']:
             if k not in self._constants:
                 self._constants[k] = 0
 
@@ -61,7 +61,6 @@ class IndexerDB:
             return block
 
         block.hash = '0x' + base58.b58decode(net_block['blockhash']).hex()
-        block.height = net_block['blockHeight']
         block.signs = net_block['signatures']
         block.parent_hash = '0x' + base58.b58decode(net_block['previousBlockhash']).hex()
         block.time = net_block['blockTime']
@@ -104,18 +103,15 @@ class IndexerDB:
         return block
 
     def get_latest_block(self) -> SolanaBlockInfo:
-        return self._blocks_db.get_latest_block()
+        return SolanaBlockInfo(slot=self._constants['latest_slot'])
 
-    def get_latest_block_list(self, limit: int) -> [SolanaBlockInfo]:
-        return self._blocks_db.get_latest_block_list(limit)
-
-    def fill_block_height(self, number, slots):
-        self._blocks_db.fill_block_height(number, slots)
+    def set_latest_block(self, slot: int):
+        self._constants['latest_slot'] = slot
 
     def get_min_receipt_slot(self) -> int:
         return self._constants['min_receipt_slot']
 
-    def set_min_receipt_slot(self, slot):
+    def set_min_receipt_slot(self, slot: int):
         self._constants['min_receipt_slot'] = slot
 
     def get_logs(self, from_block, to_block, addresses, topics, block_hash):
@@ -123,9 +119,6 @@ class IndexerDB:
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_hash(block_hash)
-
-    def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
-        return self._blocks_db.get_block_by_height(block_height)
 
     def get_tx_list_by_sol_sign(self, sol_sign_list: [str]) -> [NeonTxFullInfo]:
         tx_list = self._txs_db.get_tx_list_by_sol_sign(sol_sign_list)

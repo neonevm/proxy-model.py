@@ -31,14 +31,14 @@ class MemDB:
     def get_latest_block(self) -> SolanaBlockInfo:
         return self._blocks_db.get_latest_block()
 
-    def get_latest_block_height(self) -> int:
-        return self._blocks_db.get_latest_block_height()
+    def get_latest_block_slot(self) -> int:
+        return self._blocks_db.get_latest_block_slot()
 
-    def get_block_by_height(self, block_height: int) -> SolanaBlockInfo:
-        return self._blocks_db.get_block_by_height(block_height)
+    def get_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
+        return self._blocks_db.get_block_by_slot(block_slot)
 
     def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
-        return self._db.get_full_block_by_slot(block_slot)
+        return self._blocks_db.get_full_block_by_slot(block_slot)
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         return self._blocks_db.get_block_by_hash(block_hash)

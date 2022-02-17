@@ -116,17 +116,16 @@ class EthereumModel:
         elif tag in ('earliest', 'pending'):
             raise Exception("Invalid tag {}".format(tag))
         elif isinstance(tag, str):
-            block = SolanaBlockInfo(height=int(tag, 16))
+            block = SolanaBlockInfo(slot=int(tag, 16))
         elif isinstance(tag, int):
-            block = SolanaBlockInfo(height=tag)
+            block = SolanaBlockInfo(slot=tag)
         else:
             raise Exception(f'Failed to parse block tag: {tag}')
         return block
 
     def eth_blockNumber(self):
-        height = self._db.get_latest_block_height()
-        self.debug("eth_blockNumber %s", hex(height))
-        return hex(height)
+        slot = self._db.get_latest_block_slot()
+        return hex(slot)
 
     def eth_getBalance(self, account, tag):
         """account - address to check for balance.
@@ -152,9 +151,9 @@ class EthereumModel:
         block_hash = None
 
         if 'fromBlock' in obj and obj['fromBlock'] != '0':
-            from_block = self.process_block_tag(obj['fromBlock']).height
+            from_block = self.process_block_tag(obj['fromBlock']).slot
         if 'toBlock' in obj and obj['toBlock'] != 'latest':
-            to_block = self.process_block_tag(obj['toBlock']).height
+            to_block = self.process_block_tag(obj['toBlock']).slot
         if 'address' in obj:
             addresses = to_list(obj['address'])
         if 'topics' in obj:
@@ -227,10 +226,6 @@ class EthereumModel:
             self.debug("Not found block by hash %s", block_hash)
             return None
         ret = self.getBlockBySlot(block, full, False)
-        if ret is not None:
-            self.debug("eth_getBlockByHash: %s", json.dumps(ret, indent=3))
-        else:
-            self.debug("Not found block by hash %s", block_hash)
         return ret
 
     def eth_getBlockByNumber(self, tag, full):
@@ -240,15 +235,9 @@ class EthereumModel:
         """
         block = self.process_block_tag(tag)
         if block.slot is None:
-            block = self._db.get_block_by_height(block.height)
-        if block.slot is None:
-            self.debug("Not found block by number %s", tag)
+            self.debug(f"Not found block by number {tag}")
             return None
         ret = self.getBlockBySlot(block, full, tag == 'latest')
-        if ret is not None:
-            self.debug("eth_getBlockByNumber: %s", json.dumps(ret, indent=3))
-        else:
-            self.debug("Not found block by number %s", tag)
         return ret
 
     def eth_call(self, obj, tag):
@@ -291,7 +280,7 @@ class EthereumModel:
             "transactionHash": tx.neon_tx.sign,
             "transactionIndex": hex(0),
             "blockHash": tx.neon_res.block_hash,
-            "blockNumber": hex(tx.neon_res.block_height),
+            "blockNumber": hex(tx.neon_res.slot),
             "from": tx.neon_tx.addr,
             "to": tx.neon_tx.to_addr,
             "gasUsed": tx.neon_res.gas_used,
@@ -302,7 +291,6 @@ class EthereumModel:
             "logsBloom": "0x"+'0'*512
         }
 
-        self.debug('RESULT: %s', json.dumps(result, indent=3))
         return result
 
     def eth_getTransactionReceipt(self, trxId):
@@ -321,7 +309,7 @@ class EthereumModel:
 
         result = {
             "blockHash": r.block_hash,
-            "blockNumber": hex(r.block_height),
+            "blockNumber": hex(r.slot),
             "hash": t.sign,
             "transactionIndex": hex(0),
             "from": t.addr,
@@ -336,7 +324,6 @@ class EthereumModel:
             "s": t.s,
         }
 
-        self.debug("_getTransaction: %s", json.dumps(result, indent=3))
         return result
 
     def eth_getTransactionByHash(self, trxId):
@@ -354,15 +341,12 @@ class EthereumModel:
         return self._db.get_contract_code(account)
 
     def eth_sendTransaction(self, trx):
-        self.debug("eth_sendTransaction")
-        self.debug("eth_sendTransaction: type(trx):%s", type(trx))
-        self.debug("eth_sendTransaction: str(trx):%s", str(trx))
-        self.debug("eth_sendTransaction: trx=%s", json.dumps(trx, cls=JsonEncoder, indent=3))
+        self.debug(f"eth_sendTransaction type(trx): {type(trx)}, str(trx): {str(trx)}")
         raise RuntimeError("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
 
     def eth_sendRawTransaction(self, rawTrx):
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
-        self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, indent=3)}")
+        self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
 
         if trx.gasPrice < min_gas_price:
@@ -460,7 +444,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
             self.error('Exception on process request. ' +
-                           f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+                       f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
             response['error'] = {'code': -32000, 'message': str(err)}
 
         return response
@@ -508,8 +492,8 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
         resp_time_ms = (time.time() - start_time)*1000  # convert this into milliseconds
         self.info('handle_request >>> %s 0x%0x %s %s resp_time_ms= %s', threading.get_ident(), id(self.model), json.dumps(response),
-                     request.get('method', '---'),
-                     resp_time_ms)
+                  request.get('method', '---'),
+                  resp_time_ms)
 
         self.client.queue(memoryview(build_http_response(
             httpStatusCodes.OK, body=json.dumps(response).encode('utf8'),

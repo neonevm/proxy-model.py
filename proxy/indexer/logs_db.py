@@ -35,7 +35,7 @@ class LogsDB(BaseDB):
                     (
                         log['address'],
                         block.hash,
-                        block.height,
+                        block.slot,
                         log['transactionHash'],
                         int(log['transactionLogIndex'], 16),
                         topic,

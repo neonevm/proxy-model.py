@@ -681,45 +681,15 @@ class BlocksIndexer:
 
     def gather_blocks(self):
         start_time = time.time()
-        latest_block = self.db.get_latest_block()
-        height = -1
-        min_height = height
-        confirmed_blocks_len = 10000
         client = self.solana_client._provider
-        list_opts = {"commitment": FINALIZED}
-        block_opts = {"commitment": FINALIZED, "transactionDetails": "none", "rewards": False}
-        while confirmed_blocks_len == 10000:
-            confirmed_blocks = client.make_request("getBlocksWithLimit", latest_block.slot, confirmed_blocks_len, list_opts)['result']
-            confirmed_blocks_len = len(confirmed_blocks)
-            # No more blocks
-            if confirmed_blocks_len == 0:
-                break
-
-            # Intitialize start height
-            if height == -1:
-                first_block = client.make_request("getBlock", confirmed_blocks[0], block_opts)
-                height = first_block['result']['blockHeight']
-
-            # Validate last block height
-            latest_block.height = height + confirmed_blocks_len - 1
-            latest_block.slot = confirmed_blocks[confirmed_blocks_len - 1]
-            last_block = client.make_request("getBlock", latest_block.slot, block_opts)
-            if not last_block['result'] or last_block['result']['blockHeight'] != latest_block.height:
-                self.warning(f"FAILED last_block_height {latest_block.height} " +
-                             f"last_block_slot {latest_block.slot} " +
-                             f"last_block {last_block}")
-                break
-
-            # Everything is good
-            min_height = min(min_height, height) if min_height > 0 else height
-            self.db.fill_block_height(height, confirmed_blocks)
-            height = latest_block.height
-
+        opts = {"commitment": FINALIZED}
+        slot = client.make_request('getSlot', opts)['result']
+        self.db.set_latest_block(slot)
         gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
         self.counted_logger.print(
             self.debug,
-            list_params={"gather_blocks_ms": gather_blocks_ms, "processed_height": latest_block.height - min_height},
-            latest_params={"last_block_slot": latest_block.slot}
+            list_params={"gather_blocks_ms": gather_blocks_ms},
+            latest_params={"last_block_slot": slot}
         )
 
 
@@ -734,7 +704,6 @@ class Indexer(IndexerBase):
         self.db.set_client(self.solana_client)
         self.canceller = Canceller()
         self.blocked_storages = {}
-        self._init_last_height_slot()
         self.block_indexer = BlocksIndexer(db=self.db, solana_client=self.solana_client)
         self.counted_logger = MetricsToLogBuff()
 
@@ -763,22 +732,6 @@ class Indexer(IndexerBase):
             0x16: ExecuteTrxFromAccountV02IxDecoder(self.state)
         }
         self.def_decoder = DummyIxDecoder('Unknown', self.state)
-
-    def _init_last_height_slot(self):
-        last_known_slot = self.db.get_latest_block().slot
-        slot = self._init_last_slot('height', last_known_slot)
-        if last_known_slot == slot:
-            return
-
-        block_opts = {"commitment": FINALIZED, "transactionDetails": "none", "rewards": False}
-        client = self.solana_client._provider
-        block = client.make_request("getBlock", slot, block_opts)
-        if not block['result']:
-            self.warning(f"Solana haven't return block information for the slot {slot}")
-            return
-
-        height = block['result']['blockHeight']
-        self.db.fill_block_height(height, [slot])
 
     def process_functions(self):
         self.block_indexer.gather_blocks()

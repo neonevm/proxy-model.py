@@ -183,7 +183,6 @@ class SolanaInteractor:
                 slot=slot,
                 finalized=(commitment == FINALIZED),
                 hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
-                height=net_block['blockHeight'],
                 parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
                 time=net_block['blockTime'],
                 signs=net_block['signatures']

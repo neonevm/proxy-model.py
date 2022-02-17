@@ -198,7 +198,7 @@ class BaseDB:
             order_expr='ORDER BY ' + ', '.join(q.order_list) if len(q.order_list) else '',
         )
 
-    def _fetchone(self, query: DBQuery) -> str:
+    def _fetchone(self, query: DBQuery) -> []:
         e = self._build_expression(query)
 
         request = f'''
