@@ -3,8 +3,8 @@ set -euox pipefail
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
-#INFRA_REFLECT_FILE="https://github.com/neonlabsorg/neon-infra-inventories/blob/369-calculate-hashes/develop_changes/neon-evm.changes"
-INFRA_REFLECT_FILE="https://github.com/neonlabsorg/proxy-model.py/blob/369-calculate-hashes/develop_changes/neon-evm.changes"
+#INFRA_REFLECT_FILE="https://github.com/neonlabsorg/neon-infra-inventories/blob/369-calculate-hashes/develop_changes/proxy-model.py.changes"
+INFRA_REFLECT_FILE="https://github.com/neonlabsorg/proxy-model.py/blob/369-calculate-hashes/develop_changes/proxy-model.py.changes"
 MAINTENANCE_FILES="
 ./proxy/environment.py
 ./proxy/proxy.py"
