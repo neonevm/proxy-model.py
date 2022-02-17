@@ -4,14 +4,14 @@ set -euo pipefail
 REVISION=$(git rev-parse HEAD)
 
 INFRA_REFLECT_FILE="proxy-model.py.changes"
-INFRA_REFLECT_REPO_PATH="https://github.com/neonlabsorg/neon-infra-inventories/blob/369-calculate-hashes/develop_changes/neon-evm.changes"
+INFRA_REFLECT_REPO_PATH="https://github.com/neonlabsorg/neon-infra-inventories/blob/develop/develop_changes/"
 MAINTENANCE_FILES="
 ./proxy/docker-compose-test.yml
 ./proxy/environment.py"
 
 echo "MAINTENANCE_FILES=$MAINTENANCE_FILES"
 rm -rf ./neon-infra-inventories/
-git clone -b 369-calculate-hashes https://github.com/neonlabsorg/neon-infra-inventories.git
+git clone -b ${BUILDKITE_BRANCH} https://github.com/neonlabsorg/neon-infra-inventories.git
 
 git ls-files -s $MAINTENANCE_FILES > "${INFRA_REFLECT_FILE}"".""${REVISION}"
 echo "------ ${INFRA_REFLECT_FILE}:" && cat ./neon-infra-inventories/develop_changes/"${INFRA_REFLECT_FILE}"
@@ -26,7 +26,7 @@ else
   echo "==========================================================================="
   echo "The changes in maintenance files: "$MAINTENANCE_FILES "are NOT reflected in the infra file ${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}" | grep --color=always "are NOT reflected";
   if [[ ${BUILDKITE_BRANCH} == "develop" ]]; then
-       exit 1
+    exit 1
   fi
 fi
 echo "==========================================================================="
