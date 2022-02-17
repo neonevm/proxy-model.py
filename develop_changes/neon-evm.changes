@@ -1,0 +1,4 @@
+100755 871254dc8cfc75104bc08e47424e3fa5c76c4ef2 0	deploy-evm.sh
+100755 10454c8f07fab9a4486432d08b32ab1c00fce715 0	deploy-test.sh
+100644 8b89f14e976c708ad9a2b270bbb8b752c05d8dc0 0	docker-compose-test.yml
+100644 b327e40e269f7980a576e723bebe433ac4f35ed5 0	program/src/config.rs

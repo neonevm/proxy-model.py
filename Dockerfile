@@ -44,6 +44,7 @@ COPY proxy/operator-keypairs/* /root/.config/solana/
 COPY . /opt
 ARG PROXY_REVISION
 ARG LOG_CFG=log_cfg.json
+RUN cd proxy && /opt/proxy/ci_checks.sh
 RUN (cp -f /opt/${LOG_CFG} /opt/log_cfg.json || true)
 RUN sed -i 's/NEON_PROXY_REVISION_TO_BE_REPLACED/'"$PROXY_REVISION"'/g' /opt/proxy/plugin/solana_rest_api.py
 
