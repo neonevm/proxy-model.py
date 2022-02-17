@@ -4,10 +4,10 @@ set -euo pipefail
 REVISION=$(git rev-parse HEAD)
 
 INFRA_REFLECT_FILE="proxy-model.py.changes"
-INFRA_REFLECT_REPO_PATH="https://raw.githubusercontent.com/neonlabsorg/proxy-model.py/369-calculate-hashes/develop_changes/"
+INFRA_REFLECT_REPO_PATH="https://github.com/neonlabsorg/neon-infra-inventories/blob/369-calculate-hashes/develop_changes/neon-evm.changes"
 MAINTENANCE_FILES="
-./proxy/environment.py
-./proxy/proxy.py"
+./proxy/docker-compose-test.yml
+./proxy/environment.py"
 
 echo "MAINTENANCE_FILES=$MAINTENANCE_FILES"
 rm -rf ./neon-infra-inventories/
@@ -18,9 +18,11 @@ echo "------ ${INFRA_REFLECT_FILE}:" && cat ./neon-infra-inventories/develop_cha
 echo "------ ${INFRA_REFLECT_FILE}.${REVISION}:" && cat ./"${INFRA_REFLECT_FILE}"".""${REVISION}"
 echo "==========================================================================="
 if diff -B ./neon-infra-inventories/develop_changes/"${INFRA_REFLECT_FILE}" ./"${INFRA_REFLECT_FILE}"".""${REVISION}"; then
+  rm -rf ./neon-infra-inventories/
   echo "==========================================================================="
   echo "The changes in maintenance files: "$MAINTENANCE_FILES "are reflected in the infra file ${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}";
 else
+  rm -rf ./neon-infra-inventories/
   echo "==========================================================================="
   echo "The changes in maintenance files: "$MAINTENANCE_FILES "are NOT reflected in the infra file ${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}" | grep --color=always "are NOT reflected";
   if [[ ${BUILDKITE_BRANCH} == "develop" ]]; then
