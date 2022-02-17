@@ -6,6 +6,7 @@ from .testing_helpers import request_airdrop
 from solana.account import Account as SolanaAccount
 from solana.rpc.api import Client as SolanaClient
 from spl.token.client import Token as SplToken
+from spl.token.instructions import get_associated_token_address
 from proxy.environment import ETH_TOKEN_MINT_ID
 from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.rpc.commitment import Confirmed
@@ -62,16 +63,21 @@ class TestNeonToken(unittest.TestCase):
         self.neon_contract = proxy.eth.contract(address=self.neon_token_address, 
                                                 abi=self.neon_token_iface['abi'])
 
-    def test_success_call_withdraw(self):
+    def test_success_withdraw(self):
         dest_acc = SolanaAccount()
         print(f"Try to withdraw NEON tokens to solana account {dest_acc.public_key()}")
-        amount = pow(10, 18) # 1 NEON
+        # creating destination accout by airdropping SOL
+        solana.request_airdrop(dest_acc.public_key(), 1000_000_000_000)
+        dest_token_acc = get_associated_token_address(dest_acc.public_key(), ETH_TOKEN_MINT_ID)
+        print(f"Destination token account: {dest_token_acc}")
+        
+        withdraw_amount = pow(10, 18) # 1 NEON
 
         print(f'Source account balance before: {proxy.eth.get_balance(eth_account.address)}')
-        print(f'Destination account balance before: {self.spl_neon_token.get_balance(dest_acc.public_key(), commitment=Confirmed)}')
+        print(f'Destination account balance before: {self.spl_neon_token.get_balance(dest_token_acc, commitment=Confirmed)}')
 
         nonce = proxy.eth.get_transaction_count(eth_account.address)
-        tx = {'value': amount, 'nonce': nonce}
+        tx = {'value': withdraw_amount, 'nonce': nonce}
         withdraw_tx_dict = self.neon_contract.functions.withdraw(bytes(dest_acc.public_key())).buildTransaction(tx)
         withdraw_tx = proxy.eth.account.sign_transaction(withdraw_tx_dict, eth_account.key)
         withdraw_tx_hash = proxy.eth.send_raw_transaction(withdraw_tx.rawTransaction)
@@ -81,4 +87,4 @@ class TestNeonToken(unittest.TestCase):
         print(f'deploy status: {withdraw_tx_receipt.status}')
 
         print(f'Source account balance after: {proxy.eth.get_balance(eth_account.address)}')
-        print(f'Destination account balance after: {self.spl_neon_token.get_balance(dest_acc.public_key(), commitment=Confirmed)}')
+        print(f'Destination account balance after: {self.spl_neon_token.get_balance(dest_token_acc, commitment=Confirmed)}')
