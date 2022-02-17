@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euox pipefail
+set -euo pipefail
 
 REVISION=$(git rev-parse HEAD)
 
@@ -23,13 +23,17 @@ MAINTENANCE_FILES="
 echo "MAINTENANCE_FILES=$MAINTENANCE_FILES"
 wget -O "${INFRA_REFLECT_FILE}" "${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}"
 git ls-files -s $MAINTENANCE_FILES > "${INFRA_REFLECT_FILE}"".""${REVISION}"
-cat ./"${INFRA_REFLECT_FILE}"
-cat ./"${INFRA_REFLECT_FILE}"".""${REVISION}"
+echo "------ ${INFRA_REFLECT_FILE}:" && cat ./"${INFRA_REFLECT_FILE}"
+echo "------ ${INFRA_REFLECT_FILE}.${REVISION}:" && cat ./"${INFRA_REFLECT_FILE}"".""${REVISION}"
+echo "==========================================================================="
 if diff -B ./"${INFRA_REFLECT_FILE}" ./"${INFRA_REFLECT_FILE}"".""${REVISION}"; then
+  echo "==========================================================================="
   echo "The changes in maintenance files: "$MAINTENANCE_FILES "are reflected in the infra file ${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}";
 else
+  echo "==========================================================================="
   echo "The changes in maintenance files: "$MAINTENANCE_FILES "are NOT reflected in the infra file ${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}";
 fi
+echo "==========================================================================="
 
 docker build -t neonlabsorg/proxy:${REVISION} \
     --build-arg SOLANA_REVISION=${SOLANA_REVISION} \
