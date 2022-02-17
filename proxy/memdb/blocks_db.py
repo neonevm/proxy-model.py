@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import multiprocessing as mp
 import traceback
 import ctypes
@@ -38,7 +37,7 @@ class RequestSolanaBlockList:
 
     def execute(self) -> bool:
         try:
-            self._get_db_latest_block()
+            self._get_latest_db_block()
             if not self._get_solana_block_list():
                 return False
 
@@ -49,7 +48,7 @@ class RequestSolanaBlockList:
             self.error(f"Exception on request latest block list from Solana: {err}: {err_tb}")
         return False
 
-    def _get_db_latest_block(self):
+    def _get_latest_db_block(self):
         self.latest_db_block_slot = self._b.db.get_latest_block().slot
         if not self.latest_db_block_slot:
             self.latest_db_block_slot = self._b.solana.get_recent_blockslot(commitment=FINALIZED)
@@ -111,6 +110,11 @@ class MemBlocksDB:
     def __init__(self, solana: SolanaInteractor, db: IndexerDB):
         self.db = db
         self.solana = solana
+        self._update_block_dicts()
+        self.debug(f'Init first version of block list {len(self._block_by_height)} ' +
+                   f'first block - {self._first_block}, ' +
+                   f'latest block - {self._latest_block}, ' +
+                   f'latest db block slot - {self._latest_db_block_slot}')
 
     def _get_now(self) -> int:
         return math.ceil(time.time_ns() / 10_000_000)
@@ -118,7 +122,7 @@ class MemBlocksDB:
     def _set_block_list(self, request: RequestSolanaBlockList):
         rm_block_slot_list = []
         for slot, data in self._pending_block_by_slot.items():
-            if slot <= request.db_latest_block.slot:
+            if slot <= request.latest_db_block_slot:
                 rm_block_slot_list.append(slot)
             else:
                 block = pickle.loads(data)
@@ -128,8 +132,8 @@ class MemBlocksDB:
         for slot in rm_block_slot_list:
             del self._pending_block_by_slot[slot]
 
-        self._packed_block_list.clear()
-        self._packed_block_list.extend(request.packed_block_list)
+        del self._pending_block_list[:]
+        self._pending_block_list.extend(request.packed_block_list)
 
         self._pending_first_block.value = request.packed_first_block
         self._pending_latest_block.value = request.packed_latest_block
@@ -153,7 +157,7 @@ class MemBlocksDB:
             self._block_by_hash[block.hash] = block
             self._block_by_height[block.height] = block
 
-    def _request_blocks(self) -> bool:
+    def _start_request(self) -> bool:
         last_time = self._last_time.value
         now = self._get_now()
 
@@ -167,6 +171,7 @@ class MemBlocksDB:
             if self._has_active_request.value:
                 return False
             self._has_active_request.value = True
+        return True
 
     def _stop_request(self):
         now = self._get_now()
@@ -199,7 +204,7 @@ class MemBlocksDB:
             request.packed_block_list = [data for data in self._pending_block_list]
             request.packed_first_block = self._pending_first_block.value
             request.packed_latest_block = self._pending_latest_block.value
-            request.db_latest_block = self._pending_db_block_slot.value
+            request.latest_db_block_slot = self._pending_db_block_slot.value
             request.pending_block_revision = self._pending_block_revision.value
 
         request.block_list = [pickle.loads(data) for data in request.packed_block_list]
@@ -209,14 +214,16 @@ class MemBlocksDB:
             request.latest_block = pickle.loads(request.packed_latest_block)
         return request
 
-    def _update_block_dicts(self):
-        if self._request_blocks():
-            return
-        elif self._pending_block_revision.value <= self._active_block_revision:
+    def _try_to_fill_blocks_from_pending_list(self):
+        if self._pending_block_revision.value <= self._active_block_revision:
             return
 
         request = self._restore_pending_block_list()
         self._fill_block_dicts(request)
+
+    def _update_block_dicts(self):
+        if not self._request_new_block_list():
+            self._try_to_fill_blocks_from_pending_list()
 
     def get_latest_block(self) -> SolanaBlockInfo:
         self._update_block_dicts()

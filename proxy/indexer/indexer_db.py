@@ -57,6 +57,9 @@ class IndexerDB:
             return block
 
         net_block = net_block['result']
+        if not net_block:
+            return block
+
         block.hash = '0x' + base58.b58decode(net_block['blockhash']).hex()
         block.height = net_block['blockHeight']
         block.signs = net_block['signatures']
