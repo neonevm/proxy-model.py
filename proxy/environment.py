@@ -15,7 +15,7 @@ neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
 
 CONFIRMATION_CHECK_DELAY = float(os.environ.get("NEON_CONFIRMATION_CHECK_DELAY", "0.1"))
 CONTINUE_COUNT_FACTOR = int(os.environ.get("CONTINUE_COUNT_FACTOR", "3"))
-TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFIG", "3600"))
+TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFIG", "3601"))
 
 MINIMAL_GAS_PRICE=os.environ.get("MINIMAL_GAS_PRICE", None)
 if MINIMAL_GAS_PRICE is not None:
