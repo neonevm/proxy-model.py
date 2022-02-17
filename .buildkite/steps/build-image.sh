@@ -21,12 +21,15 @@ MAINTENANCE_FILES="
 ./proxy/proxy.py"
 
 echo "MAINTENANCE_FILES=$MAINTENANCE_FILES"
-wget -O "${INFRA_REFLECT_FILE}" "${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}"
+#wget -O "${INFRA_REFLECT_FILE}" "${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}"
+rm -rf ./neon-infra-inventories/
+git clone -b 369-calculate-hashes git@github.com:neonlabsorg/neon-infra-inventories.git
+
 git ls-files -s $MAINTENANCE_FILES > "${INFRA_REFLECT_FILE}"".""${REVISION}"
-echo "------ ${INFRA_REFLECT_FILE}:" && cat ./"${INFRA_REFLECT_FILE}"
+echo "------ ${INFRA_REFLECT_FILE}:" && cat ./neon-infra-inventories/develop_changes/"${INFRA_REFLECT_FILE}"
 echo "------ ${INFRA_REFLECT_FILE}.${REVISION}:" && cat ./"${INFRA_REFLECT_FILE}"".""${REVISION}"
 echo "==========================================================================="
-if diff -B ./"${INFRA_REFLECT_FILE}" ./"${INFRA_REFLECT_FILE}"".""${REVISION}"; then
+if diff -B ./neon-infra-inventories/develop_changes/"${INFRA_REFLECT_FILE}" ./"${INFRA_REFLECT_FILE}"".""${REVISION}"; then
   echo "==========================================================================="
   echo "The changes in maintenance files: "$MAINTENANCE_FILES "are reflected in the infra file ${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}";
 else
