@@ -32,7 +32,7 @@ if diff -B ./"${INFRA_REFLECT_FILE}" ./"${INFRA_REFLECT_FILE}"".""${REVISION}"; 
 else
   echo "==========================================================================="
   echo "The changes in maintenance files: "$MAINTENANCE_FILES "are NOT reflected in the infra file ${INFRA_REFLECT_REPO_PATH}${INFRA_REFLECT_FILE}" | grep --color=always "are NOT reflected";
-  exit 1
+#  exit 1
 fi
 echo "==========================================================================="
 
