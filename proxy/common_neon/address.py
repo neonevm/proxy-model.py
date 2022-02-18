@@ -69,7 +69,7 @@ class AccountInfo(NamedTuple):
     @staticmethod
     def frombytes(data):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account), cont.state)
+        return AccountInfo(cont.ether, int.from_bytes(cont.trx_count, 'little'), PublicKey(cont.code_account), cont.state)
 
 
 def _getAccountData(client, account, expected_length, owner=None):
