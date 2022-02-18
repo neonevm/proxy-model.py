@@ -251,7 +251,7 @@ class BlockedTest(unittest.TestCase):
         return storage
 
     # TODO: fix it (https://app.zenhub.com/workspaces/solana-evm-6007c75a9dc141001100ccb8/issues/neonlabsorg/proxy-model.py/547)
-    @unittest.skip("")
+    # @unittest.skip("")
     def test_blocked_iterative(self):
         print("\ntest_blocked_iterative")
         self.create_blocked_transaction()
@@ -279,7 +279,7 @@ class BlockedTest(unittest.TestCase):
 
 
     # TODO: fix it (https://app.zenhub.com/workspaces/solana-evm-6007c75a9dc141001100ccb8/issues/neonlabsorg/proxy-model.py/547)
-    @unittest.skip("")
+    # @unittest.skip("")
     def test_blocked_single(self):
         print("\ntest_blocked_single")
         self.create_blocked_transaction()

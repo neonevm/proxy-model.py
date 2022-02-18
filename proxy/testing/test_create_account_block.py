@@ -83,7 +83,7 @@ class Test_createAccountBlock(unittest.TestCase):
 
     # TODO:  need to unskip
     #  create_and_airdrop was disabled in the estimate_gas
-    @unittest.skip("")
+    # @unittest.skip("")
     def test_blockAccount(self):
         nonce = proxy.eth.get_transaction_count(eth_account.address)
         expected_contract_address = proxy.keccak(rlp.encode((bytes.fromhex(eth_account.address[2:]), nonce + 1)))[-20:]
