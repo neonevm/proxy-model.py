@@ -11,6 +11,7 @@ class SolanaNeonTxsDB(BaseDB):
 
     def _create_table_sql(self) -> str:
         (sql, self._table_name) = CREATE_TABLE_SOLANA_NEON_TRANSACTIONS()
+        return sql
 
     def set_txs(self, neon_sign: str, used_ixs: [SolanaIxSignInfo]):
 
