@@ -10,6 +10,8 @@ from datetime import datetime
 from decimal import Decimal
 import os
 from logged_groups import logged_group
+
+from ..db_scheme import CREATE_TABLE_FAILED_AIRDROP_ATTEMPTS, CREATE_TABLE_AIRDROP_READY
 from ..environment import NEON_PRICE_USD
 
 try:
@@ -28,15 +30,8 @@ class FailedAttempts(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        self._table_name = 'failed_airdrop_attempts'
-        return f'''
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                attempt_time    BIGINT,
-                eth_address     TEXT,
-                reason          TEXT
-            );
-            CREATE INDEX IF NOT EXISTS failed_attempt_time_idx ON {self._table_name} (attempt_time);
-            '''
+        (sql, self._table_name) = CREATE_TABLE_FAILED_AIRDROP_ATTEMPTS()
+        return sql
 
     def airdrop_failed(self, eth_address, reason):
         with self._conn.cursor() as cur:
@@ -51,16 +46,8 @@ class AirdropReadySet(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        self._table_name = 'airdrop_ready'
-        return f'''
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                eth_address     TEXT UNIQUE,
-                scheduled_ts    BIGINT,
-                finished_ts     BIGINT,
-                duration        INTEGER,
-                amount_galans   INTEGER
-            )
-            '''
+        (sql, self._table_name) = CREATE_TABLE_AIRDROP_READY()
+        return sql
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):
         finished = int(datetime.now().timestamp())

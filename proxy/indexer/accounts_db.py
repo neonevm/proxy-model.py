@@ -1,3 +1,4 @@
+from ..db_scheme import CREATE_TABLE_NEON_ACCOUNTS
 from ..indexer.utils import BaseDB, DBQuery
 from ..common_neon.utils import str_fmt_object
 
@@ -19,17 +20,8 @@ class NeonAccountDB(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        self._table_name = 'neon_accounts'
-        return f"""
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                neon_account CHAR(42),
-                pda_account VARCHAR(50),
-                code_account VARCHAR(50),
-                slot BIGINT,
-                code TEXT,
-
-                UNIQUE(pda_account, code_account)
-            );"""
+        (sql, self._table_name) = CREATE_TABLE_NEON_ACCOUNTS()
+        return sql
 
     def set_acc_by_request(self, neon_account: str, pda_account: str, code_account: str, code: str):
         with self._conn.cursor() as cursor:

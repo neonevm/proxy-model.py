@@ -1,3 +1,4 @@
+from proxy.db_scheme import CREATE_TABLE_TRANSACTION_RECEIPTS
 from proxy.indexer.pg_common import encode, decode
 from proxy.indexer.utils import BaseDB
 
@@ -8,14 +9,8 @@ class TrxReceiptsStorage(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        return f'''
-        CREATE TABLE IF NOT EXISTS {self._table_name} (
-            slot        BIGINT,
-            signature   VARCHAR(88),
-            trx         BYTEA,
-            PRIMARY KEY (slot, signature)
-        );
-        '''
+        (sql, _) = CREATE_TABLE_TRANSACTION_RECEIPTS(self._table_name)
+        return sql
 
     def clear(self):
         with self._conn.cursor() as cur:

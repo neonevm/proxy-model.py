@@ -1,4 +1,6 @@
 import json
+
+from ..db_scheme import CREATE_TABLE_NEON_TRANSACTION_LOGS
 from ..indexer.utils import BaseDB
 
 
@@ -7,25 +9,8 @@ class LogsDB(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        self._table_name = 'neon_transaction_logs'
-        return f"""
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                address CHAR(42),
-                blockHash CHAR(66),
-                blockNumber BIGINT,
-
-                transactionHash CHAR(66),
-                transactionLogIndex INT,
-                topic TEXT,
-
-                json TEXT,
-
-                UNIQUE(blockNumber, transactionHash, transactionLogIndex)
-            );
-            CREATE INDEX IF NOT EXISTS {self._table_name}_block_hash ON {self._table_name}(blockHash);
-            CREATE INDEX IF NOT EXISTS {self._table_name}_address ON {self._table_name}(address);
-            CREATE INDEX IF NOT EXISTS {self._table_name}_topic ON {self._table_name}(topic);
-            """
+        (sql, self._table_name) = CREATE_TABLE_NEON_TRANSACTION_LOGS()
+        return sql
 
     def push_logs(self, logs, block):
         rows = []

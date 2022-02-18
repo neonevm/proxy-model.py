@@ -1,6 +1,7 @@
 from typing import Optional
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo
+from ..db_scheme import CREATE_TABLE_SOLANA_NEON_TRANSACTIONS, CREATE_TABLE_NEON_TRANSACTIONS
 from ..indexer.utils import BaseDB, DBQuery, SolanaIxSignInfo
 
 
@@ -9,17 +10,7 @@ class SolanaNeonTxsDB(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        self._table_name = 'solana_neon_transactions'
-        return f"""
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                sol_sign CHAR(88),
-                neon_sign CHAR(66),
-                slot BIGINT,
-                idx INT,
-
-                UNIQUE(sol_sign, neon_sign, idx),
-                UNIQUE(neon_sign, sol_sign, idx)
-            );"""
+        (sql, self._table_name) = CREATE_TABLE_SOLANA_NEON_TRANSACTIONS()
 
     def set_txs(self, neon_sign: str, used_ixs: [SolanaIxSignInfo]):
 
@@ -44,41 +35,8 @@ class NeonTxsDB(BaseDB):
         self._sol_neon_txs_db = SolanaNeonTxsDB()
 
     def _create_table_sql(self) -> str:
-        self._table_name = 'neon_transactions'
-        return f"""
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                neon_sign CHAR(66),
-                from_addr CHAR(42),
-                sol_sign CHAR(88),
-                slot BIGINT,
-                block_height BIGINT,
-                block_hash CHAR(66),
-                idx INT,
-
-                nonce VARCHAR,
-                gas_price VARCHAR,
-                gas_limit VARCHAR,
-                value VARCHAR,
-                gas_used VARCHAR,
-
-                to_addr CHAR(42),
-                contract CHAR(42),
-
-                status CHAR(3),
-
-                return_value TEXT,
-
-                v TEXT,
-                r TEXT,
-                s TEXT,
-
-                calldata TEXT,
-                logs BYTEA,
-
-                UNIQUE(neon_sign),
-                UNIQUE(sol_sign, idx)
-            );
-            """
+        (sql, self._table_name) = CREATE_TABLE_NEON_TRANSACTIONS()
+        return sql
 
     def _tx_from_value(self, value) -> Optional[NeonTxFullInfo]:
         if not value:
