@@ -275,7 +275,6 @@ class BlockedTest(unittest.TestCase):
         print('return_dict:', return_dict)
         self.assertEqual(return_dict[caller_seed]['status'], 1)
 
-
     def test_blocked_single(self):
         print("\ntest_blocked_single")
         self.create_blocked_transaction()
