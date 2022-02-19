@@ -16,7 +16,6 @@ from typing import Optional
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
-from solana.rpc.api import Client as SolanaClient
 
 from ..common_neon.address import accountWithSeed, getTokenAddr, EthereumAddress
 from ..common_neon.errors import EthereumError
@@ -383,12 +382,12 @@ def EthMeta(pubkey, is_writable) -> AccountMeta:
 
 @logged_group("neon.Proxy")
 class NeonTxSender:
-    def __init__(self, db: MemDB, client: SolanaClient, eth_tx: EthTx, steps: int):
+    def __init__(self, db: MemDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
         self._db = db
         self.eth_tx = eth_tx
         self.neon_sign = '0x' + eth_tx.hash_signed().hex()
         self.steps = steps
-        self.solana = SolanaInteractor(client)
+        self.solana = solana
         self._resource_list = OperatorResourceList(self)
         self.resource = None
         self.operator_key = None
@@ -443,7 +442,7 @@ class NeonTxSender:
         self._pend_tx_into_db(self.solana.get_recent_blockslot())
 
     def _validate_whitelist(self):
-        whitelist = AccountWhitelist(self.solana.client, ACCOUNT_PERMISSION_UPDATE_INT, self.resource.signer)
+        whitelist = AccountWhitelist(self.solana, ACCOUNT_PERMISSION_UPDATE_INT, self.resource.signer)
         if not whitelist.has_client_permission(self.eth_sender[2:]):
             self.warning(f'Sender account {self.eth_sender} is not allowed to execute transactions')
             raise Exception(f'Sender account {self.eth_sender} is not allowed to execute transactions')
@@ -540,7 +539,7 @@ class NeonTxSender:
             self.debug(f'destination address {self.to_address}')
 
         self._emulator_json = call_emulated(dst, src, self.eth_tx.callData.hex(), hex(self.eth_tx.value))
-        self.debug(f'emulator returns: {json.dumps(self._emulator_json, indent=3)}')
+        self.debug(f'emulator returns: {json.dumps(self._emulator_json, sort_keys=True)}')
 
         self.steps_emulated = self._emulator_json['steps_executed']
 

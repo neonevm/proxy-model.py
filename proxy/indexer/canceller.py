@@ -3,7 +3,6 @@ import traceback
 
 from logged_groups import logged_group
 from solana.publickey import PublicKey
-from solana.rpc.api import Client
 from solana.system_program import SYS_PROGRAM_ID
 from solana.sysvar import SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY
 from solana.transaction import AccountMeta
@@ -35,10 +34,9 @@ class Canceller:
         # Initialize user account
         self.signer = get_solana_accounts()[0]
         self._operator = self.signer.public_key()
-        self._client = Client(SOLANA_URL)
         self.operator_token = get_associated_token_address(PublicKey(self._operator), ETH_TOKEN_MINT_ID)
 
-        self.solana = SolanaInteractor(self._client)
+        self._solana = SolanaInteractor(SOLANA_URL)
         self.builder = NeonInstruction(self._operator)
 
 
@@ -60,7 +58,7 @@ class Canceller:
 
                 self.debug(f"Send Cancel: {trx}")
                 try:
-                    cancel_result = self.solana.send_multiple_transactions(self.signer, [trx], neon_tx.tx, "CancelWithNonce")[0]
+                    cancel_result = self._solana.send_multiple_transactions(self.signer, [trx], neon_tx.tx, "CancelWithNonce")[0]
                     self.debug(f"cancel result: {cancel_result}")
                     result_error = get_from_dict(cancel_result, 'meta', 'err')
                     if result_error:

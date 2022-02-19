@@ -1,5 +1,4 @@
 from logged_groups import logged_group
-from solana.rpc.api import Client as SolanaClient
 from typing import Optional
 
 from ..indexer.indexer_db import IndexerDB
@@ -14,12 +13,9 @@ from ..memdb.transactions_db import MemTxsDB
 
 @logged_group("neon.Proxy")
 class MemDB:
-    def __init__(self, client: SolanaClient):
-        self._client = client
-
-        self._db = IndexerDB()
-        self._db.set_client(self._client)
-        self._solana = SolanaInteractor(client)
+    def __init__(self, solana: SolanaInteractor):
+        self._solana = solana
+        self._db = IndexerDB(solana)
 
         self._blocks_db = MemBlocksDB(self._solana, self._db)
         self._txs_db = MemTxsDB(self._db)

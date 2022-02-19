@@ -55,7 +55,6 @@ class Test_Airdropper(unittest.TestCase):
     def create_airdropper(self, start_slot):
         os.environ['START_SLOT'] = str(start_slot)
         return Airdropper(solana_url         =f'http://{self.address}:8899',
-                          evm_loader_id       =self.evm_loader_id,
                           pyth_mapping_account=self.pyth_mapping_account,
                           faucet_url          =f'http://{self.address}:{self.faucet_port}',
                           wrapper_whitelist   =self.wrapper_whitelist,

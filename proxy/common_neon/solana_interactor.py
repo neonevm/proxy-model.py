@@ -10,11 +10,12 @@ from solana.blockhash import Blockhash
 from solana.publickey import PublicKey
 from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
-from solana.rpc.commitment import Confirmed
 from solana.rpc.types import RPCResponse
 from solana.transaction import Transaction
 from itertools import zip_longest
 from logged_groups import logged_group
+from typing import Dict, Union
+from base58 import b58decode, b58encode
 
 from .costs import update_transaction_cost
 from .utils import get_from_dict, SolanaBlockInfo
@@ -42,16 +43,38 @@ class SendResult(NamedTuple):
 
 @logged_group("neon.Proxy")
 class SolanaInteractor:
-    def __init__(self, client: SolanaClient) -> None:
-        self.client = client
+    def __init__(self, solana_url: str) -> None:
+        self._client = SolanaClient(solana_url)._provider
         self._fuzzing_hash_cycle = False
+
+    def _make_request(self, request) -> RPCResponse:
+        """This method is used to make retries to send request to Solana"""
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+        client = self._client
+        raw_response = client.session.post(client.endpoint_uri, headers=headers, json=request)
+        raw_response.raise_for_status()
+        return raw_response
+
+    def _send_rpc_request(self, method: str, *params: Any) -> RPCResponse:
+        request_id = next(self._client._request_counter) + 1
+
+        request = {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": method,
+            "params": params
+        }
+        raw_response = self._make_request(request)
+        return cast(RPCResponse, raw_response.json())
 
     def _send_rpc_batch_request(self, method: str, params_list: List[Any]) -> List[RPCResponse]:
         full_request_data = []
         full_response_data = []
         request_data = []
-        client = self.client._provider
-        headers = {"Content-Type": "application/json"}
+        client = self._client
 
         for params in params_list:
             request_id = next(client._request_counter) + 1
@@ -61,10 +84,8 @@ class SolanaInteractor:
 
             # Protection from big payload
             if len(request_data) == 30 or len(full_request_data) == len(params_list):
-                response = client.session.post(client.endpoint_uri, headers=headers, json=request_data)
-                response.raise_for_status()
-
-                response_data = cast(List[RPCResponse], response.json())
+                raw_response = self._make_request(request_data)
+                response_data = cast(List[RPCResponse], raw_response.json())
 
                 full_response_data += response_data
                 request_data.clear()
@@ -79,22 +100,42 @@ class SolanaInteractor:
 
         return full_response_data
 
-    def get_account_info(self, storage_account) -> Optional[AccountInfo]:
+    def get_signatures_for_address(self, before, until, commitment='confirmed'):
+        opts: Dict[str, Union[int, str]] = {}
+        if until is not None:
+            opts["until"] = until
+        if before is not None:
+            opts["before"] = before
+        opts["commitment"] = commitment
+        return self._send_rpc_request("getSignaturesForAddress", EVM_LOADER_ID, opts)
+
+    def get_confirmed_transaction(self, sol_sign: str, encoding: str = "json"):
+        return self._send_rpc_request("getConfirmedTransaction", sol_sign, encoding)
+
+    def get_slot(self, commitment='confirmed') -> RPCResponse:
+        opts = {
+            'commitment': commitment
+        }
+        return self._send_rpc_request('getSlot', opts)
+
+    def get_account_info(self, pubkey: PublicKey, length=256, commitment='confirmed') -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
-            "commitment": "confirmed",
-            "dataSlice": {
-                "offset": 0,
-                "length": 256,
-            }
+            "commitment": commitment,
         }
 
-        result = self.client._provider.make_request("getAccountInfo", str(storage_account), opts)
-        self.debug(f"\n{json.dumps(result, indent=4, sort_keys=True)}")
+        if length != 0:
+            opts['dataSlice'] = {
+                'offset': 0,
+                'length': length
+            }
+
+        result = self._send_rpc_request('getAccountInfo', str(pubkey), opts)
+        self.debug(f"{json.dumps(result, sort_keys=True)}")
 
         info = result['result']['value']
         if info is None:
-            self.debug(f"Can't get information about {storage_account}")
+            self.debug(f"Can't get information about {str(pubkey)}")
             return None
 
         data = base64.b64decode(info['data'][0])
@@ -105,24 +146,27 @@ class SolanaInteractor:
 
         return AccountInfo(account_tag, lamports, owner, data)
 
-    def get_multiple_accounts_info(self, accounts: [PublicKey]) -> [AccountInfo]:
-        options = {
+    def get_multiple_accounts_info(self, accounts: [PublicKey], length=256, commitment='confirmed') -> [AccountInfo]:
+        opts = {
             "encoding": "base64",
-            "commitment": "confirmed",
-            "dataSlice": {
-                "offset": 0,
-                "length": 16
-            }
+            "commitment": commitment,
         }
-        result = self.client._provider.make_request("getMultipleAccounts", [str(a) for a in accounts], options)
-        self.debug(f"\n{json.dumps(result, indent=4, sort_keys=True)}")
+
+        if length != 0:
+            opts['dataSlice'] = {
+                'offset': 0,
+                'length': length
+            }
+
+        result = self._send_rpc_request("getMultipleAccounts", [str(a) for a in accounts], opts)
+        self.debug(f"{json.dumps(result, sort_keys=True)}")
 
         if result['result']['value'] is None:
             self.debug(f"Can't get information about {accounts}")
             return []
 
         accounts_info = []
-        for info in result['result']['value']:
+        for pubkey, info in zip(accounts, result['result']['value']):
             if info is None:
                 accounts_info.append(None)
             else:
@@ -132,8 +176,38 @@ class SolanaInteractor:
 
         return accounts_info
 
-    def get_sol_balance(self, account):
-        return self.client.get_balance(account, commitment=Confirmed)['result']['value']
+    def get_sol_balance(self, account, commitment='confirmed'):
+        opts = {
+            "commitment": commitment
+        }
+        return self._send_rpc_request('getBalance', str(account), opts)['result']['value']
+
+    def get_token_account_balance(self, pubkey: Union[str, PublicKey], commitment='confirmed') -> int:
+        opts = {
+            "commitment": commitment
+        }
+        response = self._send_rpc_request("getTokenAccountBalance", str(pubkey), opts)
+        result = response.get('result', None)
+        if result is None:
+            return 0
+        return int(result['value']['amount'])
+
+    def get_token_account_balance_list(self, pubkey_list: [Union[str, PublicKey]], commitment: object = 'confirmed') -> [int]:
+        opts = {
+            "commitment": commitment
+        }
+        request_list = []
+        for pubkey in pubkey_list:
+            request_list.append((str(pubkey), opts))
+
+        balance_list = []
+        response_list = self._send_rpc_batch_request('getTokenAccountBalance', request_list)
+        for response in response_list:
+            result = response.get('result', None)
+            balance = int(result['value']['amount']) if result else 0
+            balance_list.append(balance)
+
+        return balance_list
 
     def get_neon_account_info(self, eth_account: EthereumAddress) -> Optional[NeonAccountInfo]:
         account_sol, nonce = ether2program(eth_account)
@@ -145,8 +219,10 @@ class SolanaInteractor:
                                f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
         return NeonAccountInfo.frombytes(info.data)
 
-    def get_multiple_rent_exempt_balances_for_size(self, size_list: [int]) -> [int]:
-        opts = {"commitment": "confirmed"}
+    def get_multiple_rent_exempt_balances_for_size(self, size_list: [int], commitment='confirmed') -> [int]:
+        opts = {
+            "commitment": commitment
+        }
         request_list = [(size, opts) for size in size_list]
         response_list = self._send_rpc_batch_request("getMinimumBalanceForRentExemption", request_list)
         return [r['result'] for r in response_list]
@@ -156,7 +232,29 @@ class SolanaInteractor:
             "commitment": commitment,
             "enconding": "json",
         }
-        return self.client._provider.make_request("getBlocksWithLimit", last_block_slot, limit, opts)['result']
+        return self._send_rpc_request("getBlocksWithLimit", last_block_slot, limit, opts)['result']
+
+    def get_block_info(self, slot: int, commitment='confirmed') -> [SolanaBlockInfo]:
+        opts = {
+            "commitment": commitment,
+            "encoding": "json",
+            "transactionDetails": "signatures",
+            "rewards": False
+        }
+
+        response = self._send_rpc_request('getBlock', slot, opts)
+        net_block = response.get('result', None)
+        if not net_block:
+            return SolanaBlockInfo(slot=slot)
+
+        return SolanaBlockInfo(
+            slot=slot,
+            finalized=(commitment == FINALIZED),
+            hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
+            parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
+            time=net_block['blockTime'],
+            signs=net_block['signatures']
+        )
 
     def get_block_info_list(self, block_slot_list: [int], commitment='confirmed') -> [SolanaBlockInfo]:
         block_list = []
@@ -190,14 +288,20 @@ class SolanaInteractor:
             block_list.append(block)
         return block_list
 
-    def get_recent_blockslot(self, commitment=Confirmed) -> int:
-        blockhash_resp = self.client.get_recent_blockhash(commitment=commitment)
+    def get_recent_blockslot(self, commitment='confirmed') -> int:
+        opts = {
+            'commitment': commitment
+        }
+        blockhash_resp = self._send_rpc_request('getRecentBlockhash', opts)
         if not blockhash_resp["result"]:
             raise RuntimeError("failed to get recent blockhash")
         return blockhash_resp['result']['context']['slot']
 
-    def get_recent_blockhash(self, commitment=Confirmed) -> Blockhash:
-        blockhash_resp = self.client.get_recent_blockhash(commitment=commitment)
+    def get_recent_blockhash(self, commitment='confirmed') -> Blockhash:
+        opts = {
+            'commitment': commitment
+        }
+        blockhash_resp = self._send_rpc_request('getRecentBlockhash', opts)
         if not blockhash_resp["result"]:
             raise RuntimeError("failed to get recent blockhash")
         blockhash = blockhash_resp["result"]["value"]["blockhash"]
@@ -224,7 +328,7 @@ class SolanaInteractor:
             "rewards": False
         }
         slot = max(slot - 500, 10)
-        block = self.client._provider.make_request("getBlock", slot, block_opts)
+        block = self._send_rpc_request("getBlock", slot, block_opts)
         fuzzing_blockhash = Blockhash(block['result']['blockhash'])
         self.debug(f"fuzzing block {fuzzing_blockhash} for slot {slot}")
 
@@ -238,11 +342,12 @@ class SolanaInteractor:
             request_list[idx] = (base64_tx, tx_opts)
         return request_list
 
-    def _send_multiple_transactions_unconfirmed(self, signer: SolanaAccount, tx_list: [Transaction]) -> [str]:
+    def _send_multiple_transactions(self, signer: SolanaAccount, tx_list: [Transaction],
+                                    skip_preflight: bool, preflight_commitment: str) -> [str]:
         opts = {
-            "skipPreflight": SKIP_PREFLIGHT,
+            "skipPreflight": skip_preflight,
             "encoding": "base64",
-            "preflightCommitment": "confirmed"
+            "preflightCommitment": preflight_commitment
         }
 
         blockhash = None
@@ -263,8 +368,10 @@ class SolanaInteractor:
         response_list = self._send_rpc_batch_request('sendTransaction', request_list)
         return [SendResult(result=r.get('result'), error=r.get('error')) for r in response_list]
 
-    def send_multiple_transactions(self, signer, tx_list, eth_tx, reason, waiter=None) -> [{}]:
-        send_result_list = self._send_multiple_transactions_unconfirmed(signer, tx_list)
+    def send_multiple_transactions(self, signer, tx_list,
+                                   eth_tx=None, reason=None, waiter=None,
+                                   skip_preflight=SKIP_PREFLIGHT, preflight_commitment='confirmed') -> [{}]:
+        send_result_list = self._send_multiple_transactions(signer, tx_list, skip_preflight, preflight_commitment)
         # Filter good transactions and wait the confirmations for them
         sign_list = [s.result for s in send_result_list if s.result]
         self._confirm_multiple_transactions(sign_list, waiter)
@@ -274,11 +381,12 @@ class SolanaInteractor:
         receipt_list = []
         for s in send_result_list:
             if s.error:
+                self.debug(f'Got error on preflight check of transaction: {s.error}')
                 receipt_list.append(s.error)
             else:
                 receipt_list.append(confirmed_list.pop(0))
 
-        if WRITE_TRANSACTION_COST_IN_DB:
+        if eth_tx and reason and WRITE_TRANSACTION_COST_IN_DB:
             for receipt in receipt_list:
                 update_transaction_cost(receipt, eth_tx, reason)
 
@@ -303,8 +411,19 @@ class SolanaInteractor:
     def _confirm_multiple_transactions(self, sign_list: [str], waiter=None):
         """Confirm a transaction."""
         if not len(sign_list):
-            self.debug(f'Got confirmed status for transactions: {sign_list}')
+            self.debug('No confirmations, because transaction list is empty')
             return
+
+        base58_sign_list: List[str] = []
+        for sign in sign_list:
+            if isinstance(sign, str):
+                base58_sign_list.append(b58encode(b58decode(sign)).decode("utf-8"))
+            else:
+                base58_sign_list.append(b58encode(sign).decode("utf-8"))
+
+        opts = {
+            "searchTransactionHistory": False
+        }
 
         elapsed_time = 0
         while elapsed_time < CONFIRM_TIMEOUT:
@@ -312,8 +431,8 @@ class SolanaInteractor:
                 time.sleep(CONFIRMATION_CHECK_DELAY)
             elapsed_time += CONFIRMATION_CHECK_DELAY
 
-            response = self.client.get_signature_statuses(sign_list)
-            result = response['result']
+            response = self._send_rpc_request("getSignatureStatuses", base58_sign_list, opts)
+            result = response.get('result', None)
             if not result:
                 continue
 
@@ -490,7 +609,7 @@ def check_if_accounts_blocked(receipt, *, logger):
     logs = get_logs_from_receipt(receipt)
     if logs is None:
         logger.error("Can't get logs")
-        logger.info("Failed result: %s"%json.dumps(receipt, indent=3))
+        logger.info(f"Failed result: {json.dumps(receipt, indent=3)}")
         return False
 
     ro_blocked = "trying to execute transaction on ro locked account"

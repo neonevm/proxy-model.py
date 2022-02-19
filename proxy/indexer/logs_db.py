@@ -1,5 +1,5 @@
 import json
-from ..indexer.utils import BaseDB
+from ..indexer.base_db import BaseDB
 
 
 class LogsDB(BaseDB):

@@ -3,7 +3,6 @@ from typing import Optional
 import base58
 import time
 from logged_groups import logged_group, logging_context
-from solana.rpc.api import Client
 from solana.system_program import SYS_PROGRAM_ID
 
 from ..indexer.indexer_base import IndexerBase
@@ -13,6 +12,7 @@ from ..indexer.utils import get_accounts_from_storage, check_error
 from ..indexer.canceller import Canceller
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
+from ..common_neon.solana_interactor import SolanaInteractor
 
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
 
@@ -168,9 +168,9 @@ class ReceiptsParserState:
     - All instructions are removed from the _used_ixs;
     - If number of the smallest slot in the _used_ixs is changed, it's stored into the DB for the future restart.
     """
-    def __init__(self, db: IndexerDB, solana_client: Client):
+    def __init__(self, db: IndexerDB, solana: SolanaInteractor):
         self._db = db
-        self._client = solana_client
+        self._solana = solana
         self._holder_table = {}
         self._tx_table = {}
         self._done_tx_list = []
@@ -674,16 +674,14 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
 
 @logged_group("neon.Indexer")
 class BlocksIndexer:
-    def __init__(self, db: IndexerDB, solana_client: Client):
+    def __init__(self, db: IndexerDB, solana: SolanaInteractor):
         self.db = db
-        self.solana_client = solana_client
+        self.solana = solana
         self.counted_logger = MetricsToLogBuff()
 
     def gather_blocks(self):
         start_time = time.time()
-        client = self.solana_client._provider
-        opts = {"commitment": FINALIZED}
-        slot = client.make_request('getSlot', opts)['result']
+        slot = self.solana.get_slot(FINALIZED)['result']
         self.db.set_latest_block(slot)
         gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
         self.counted_logger.print(
@@ -695,19 +693,19 @@ class BlocksIndexer:
 
 @logged_group("neon.Indexer")
 class Indexer(IndexerBase):
-    def __init__(self, solana_url, evm_loader_id):
+    def __init__(self, solana_url):
         self.debug(f'Finalized commitment: {FINALIZED}')
-        self.db = IndexerDB()
+        solana = SolanaInteractor(solana_url)
+        self.db = IndexerDB(solana)
         last_known_slot = self.db.get_min_receipt_slot()
-        IndexerBase.__init__(self, solana_url, evm_loader_id, last_known_slot)
+        IndexerBase.__init__(self, solana, last_known_slot)
         self.indexed_slot = self.last_slot
-        self.db.set_client(self.solana_client)
         self.canceller = Canceller()
         self.blocked_storages = {}
-        self.block_indexer = BlocksIndexer(db=self.db, solana_client=self.solana_client)
+        self.block_indexer = BlocksIndexer(db=self.db, solana=solana)
         self.counted_logger = MetricsToLogBuff()
 
-        self.state = ReceiptsParserState(db=self.db, solana_client=self.solana_client)
+        self.state = ReceiptsParserState(db=self.db, solana=solana)
         self.ix_decoder_map = {
             0x00: WriteIxDecoder(self.state),
             0x01: DummyIxDecoder('Finalize', self.state),
@@ -795,7 +793,7 @@ class Indexer(IndexerBase):
             self.warning(f"Transaction {tx.neon_tx} hasn't blocked accounts.")
             return False
 
-        storage_accounts_list = get_accounts_from_storage(self.solana_client, tx.storage_account)
+        storage_accounts_list = get_accounts_from_storage(self.solana, tx.storage_account)
         if storage_accounts_list is None:
             self.warning(f"Transaction {tx.neon_tx} has empty storage.")
             return False
@@ -811,16 +809,15 @@ class Indexer(IndexerBase):
 
 
 @logged_group("neon.Indexer")
-def run_indexer(solana_url, evm_loader_id, *, logger):
+def run_indexer(solana_url, *, logger):
     logger.info(f"""Running indexer with params:
         solana_url: {solana_url},
-        evm_loader_id: {evm_loader_id}""")
+        evm_loader_id: {EVM_LOADER_ID}""")
 
-    indexer = Indexer(solana_url, evm_loader_id)
+    indexer = Indexer(solana_url)
     indexer.run()
 
 
 if __name__ == "__main__":
     solana_url = SOLANA_URL
-    evm_loader_id = EVM_LOADER_ID
-    run_indexer(solana_url, evm_loader_id)
+    run_indexer(solana_url)

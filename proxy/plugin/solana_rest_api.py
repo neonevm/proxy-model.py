@@ -23,7 +23,6 @@ from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-from solana.rpc.api import Client as SolanaClient
 from typing import List, Tuple
 
 from .solana_rest_api_tools import neon_config_load, get_token_balance_or_zero, estimate_gas
@@ -53,13 +52,13 @@ class EthereumModel:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
     def __init__(self):
-        self._client = SolanaClient(SOLANA_URL)
-        self._db = MemDB(self._client)
+        self._solana = SolanaInteractor(SOLANA_URL)
+        self._db = MemDB(self._solana)
 
         if PP_SOLANA_URL == SOLANA_URL:
-            self.gas_price_calculator = GasPriceCalculator(self._client, PYTH_MAPPING_ACCOUNT)
+            self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
         else:
-            self.gas_price_calculator = GasPriceCalculator(SolanaClient(PP_SOLANA_URL), PYTH_MAPPING_ACCOUNT)
+            self.gas_price_calculator = GasPriceCalculator(SolanaInteractor(PP_SOLANA_URL), PYTH_MAPPING_ACCOUNT)
         self.gas_price_calculator.update_mapping()
 
         with self.proxy_id_glob.get_lock():
@@ -133,7 +132,7 @@ class EthereumModel:
         """
         eth_acc = EthereumAddress(account)
         self.debug(f'eth_getBalance: {account} {eth_acc}')
-        balance = get_token_balance_or_zero(self._client, eth_acc)
+        balance = get_token_balance_or_zero(self._solana, eth_acc)
         return hex(balance * eth_utils.denoms.gwei)
 
     def eth_getLogs(self, obj):
@@ -268,8 +267,7 @@ class EthereumModel:
     def eth_getTransactionCount(self, account, tag):
         self.debug('eth_getTransactionCount: %s', account)
         try:
-            solana = SolanaInteractor(self._client)
-            acc_info = solana.get_neon_account_info(EthereumAddress(account))
+            acc_info = self._solana.get_neon_account_info(EthereumAddress(account))
             return hex(acc_info.trx_count)
         except Exception as err:
             self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
@@ -366,7 +364,7 @@ class EthereumModel:
         eth_signature = '0x' + trx.hash_signed().hex()
 
         try:
-            tx_sender = NeonTxSender(self._db, self._client, trx, steps=500)
+            tx_sender = NeonTxSender(self._db, self._solana, trx, steps=500)
             tx_sender.execute()
             return eth_signature
 

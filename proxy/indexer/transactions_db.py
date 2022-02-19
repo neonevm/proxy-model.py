@@ -1,7 +1,8 @@
 from typing import Optional
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo
-from ..indexer.utils import BaseDB, DBQuery, SolanaIxSignInfo
+from ..indexer.base_db import BaseDB, DBQuery
+from ..indexer.utils import SolanaIxSignInfo
 
 
 class SolanaNeonTxsDB(BaseDB):
