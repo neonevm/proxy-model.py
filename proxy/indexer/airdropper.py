@@ -276,7 +276,8 @@ class Airdropper(IndexerBase):
                                                 })
 
         for eth_address in success_addresses:
-            del self.airdrop_scheduled[eth_address]
+            if eth_address in self.airdrop_scheduled:
+                del self.airdrop_scheduled[eth_address]
 
     def process_functions(self):
         """
