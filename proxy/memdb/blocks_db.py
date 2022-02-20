@@ -20,7 +20,6 @@ from ..environment import FINALIZED
 @logged_group("neon.Proxy")
 class RequestSolanaBlockList:
     BLOCK_CACHE_LIMIT = (32 + 16)
-    BIG_SLOT = 1_000_000_000_000
 
     def __init__(self, blocks_db: MemBlocksDB):
         self._b = blocks_db
@@ -58,25 +57,31 @@ class RequestSolanaBlockList:
         exist_block_dict = self._b.get_block_dict(slot)
 
         slot_list = []
-        self.block_list = []
-        block_time = 1
-        for slot in range(slot + self.BLOCK_CACHE_LIMIT, slot - 1, -1):
+        block_list = []
+        max_slot = max(slot + self.BLOCK_CACHE_LIMIT, self._b.get_latest_block_slot())
+        for slot in range(max_slot, slot - 1, -1):
             block = exist_block_dict.get(slot)
             if block is None:
                 slot_list.append(slot)
             else:
-                self.block_list.append(block)
-                block_time = block.time
+                block_list.append(block)
 
+        self.block_list = []
+
+        block_time = 0
         solana_block_list = self._b.solana.get_block_info_list(slot_list)
         for block in solana_block_list:
             if not block.time:
-                # generate fake block
+                if not block_time:
+                    continue
                 block.time = block_time
-                block.hash = '0x' + os.urandom(32).hex(),
+                block.hash = '0x' + os.urandom(32).hex()
                 block.parent_hash = '0x' + os.urandom(32).hex()
-            block_time = block.time
+            else:
+                block_time = block.time
             self.block_list.append(block)
+
+        self.block_list.extend(block_list)
 
         if not len(self.block_list):
             return False
@@ -234,8 +239,8 @@ class MemBlocksDB:
         self._fill_block_dicts(request)
 
     def _update_block_dicts(self):
-        if not self._request_new_block_list():
-            self._try_to_fill_blocks_from_pending_list()
+        self._try_to_fill_blocks_from_pending_list()
+        self._request_new_block_list()
 
     def get_block_dict(self, from_slot: int) -> {}:
         return {slot: block for slot, block in self._block_by_slot.items() if slot > from_slot}
