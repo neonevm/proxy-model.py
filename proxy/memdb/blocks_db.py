@@ -53,39 +53,40 @@ class RequestSolanaBlockList:
             self.latest_db_block_slot = self._b.solana.get_recent_blockslot(commitment=FINALIZED)
 
     def _get_solana_block_list(self) -> bool:
-        slot = self.latest_db_block_slot
-        exist_block_dict = self._b.get_block_dict(slot)
+        latest_db_slot = self.latest_db_block_slot
+        exist_block_dict = self._b.get_block_dict(latest_db_slot)
+        latest_slot = max(exist_block_dict) if len(exist_block_dict) else 0
 
+        block_time = 0
         slot_list = []
-        block_list = []
-        max_slot = max(slot + self.BLOCK_CACHE_LIMIT, self._b.get_latest_block_slot())
-        for slot in range(max_slot, slot - 1, -1):
+        self.block_list = []
+
+        max_slot = max(latest_db_slot + self.BLOCK_CACHE_LIMIT, latest_slot)
+        for slot in range(max_slot, latest_db_slot - 1, -1):
             block = exist_block_dict.get(slot)
             if block is None:
                 slot_list.append(slot)
             else:
-                block_list.append(block)
+                self.block_list.append(block)
+                block_time = max(block_time, block.time)
 
-        self.block_list = []
-
-        block_time = 0
         solana_block_list = self._b.solana.get_block_info_list(slot_list)
         for block in solana_block_list:
             if not block.time:
-                if not block_time:
+                if block.slot > latest_slot:
                     continue
                 block.time = block_time
                 block.hash = '0x' + os.urandom(32).hex()
                 block.parent_hash = '0x' + os.urandom(32).hex()
             else:
-                block_time = block.time
+                block_time = max(block_time, block.time)
+                latest_slot = max(block.slot, latest_slot)
             self.block_list.append(block)
-
-        self.block_list.extend(block_list)
 
         if not len(self.block_list):
             return False
 
+        self.block_list.sort(key=lambda b: b.slot, reverse=True)
         self.latest_block = self.block_list[0]
         self.first_block = self.block_list[len(self.block_list) - 1]
 
