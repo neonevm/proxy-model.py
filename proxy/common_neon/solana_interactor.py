@@ -6,6 +6,7 @@ import json
 import re
 import time
 import traceback
+import requests
 
 from typing import Optional
 
@@ -77,13 +78,13 @@ class SolanaInteractor:
                 raw_response.raise_for_status()
                 return raw_response
 
-            except ConnectionError as err:
+            except requests.exceptions.ConnectionError as err:
                 if retry > RETRY_ON_FAIL:
                     raise
 
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
                 self.error(f'ConnectionError({retry}) on send request to Solana. ' +
-                            f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+                           f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
                 time.sleep(1)
 
             except Exception as err:
@@ -91,7 +92,6 @@ class SolanaInteractor:
                 self.error('Unknown exception on send request to Solana. ' +
                            f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
                 raise
-
 
     def _send_rpc_request(self, method: str, *params: Any) -> RPCResponse:
         request_id = next(self._client._request_counter) + 1
