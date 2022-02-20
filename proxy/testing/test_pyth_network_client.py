@@ -131,7 +131,7 @@ class TestPythNetworkClient(unittest.TestCase):
         mock_get_account_info.side_effect = Exception('TestException')
         with self.assertRaises(Exception):
             self.update_mapping()
-        mock_get_account_info.assert_called_once_with(mapping_account)
+        mock_get_account_info.assert_called_once_with(mapping_account, length=0)
 
 
     def test_integration_success_read_price(self):

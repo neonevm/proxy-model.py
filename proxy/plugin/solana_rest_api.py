@@ -27,9 +27,8 @@ from typing import List, Tuple
 
 from .solana_rest_api_tools import neon_config_load, get_token_balance_or_zero, estimate_gas
 from ..common_neon.transaction_sender import NeonTxSender
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolanaInteractor, SolTxError
 from ..common_neon.address import EthereumAddress
-from ..common_neon.transaction_sender import SolanaTxError
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError, PendingTxError
 from ..common_neon.eth_proto import Trx as EthTrx
@@ -371,7 +370,7 @@ class EthereumModel:
         except PendingTxError as err:
             self.debug(f'{err}')
             return eth_signature
-        except SolanaTxError as err:
+        except SolTxError as err:
             err_msg = json.dumps(err.result, indent=3)
             self.error(f"Got SendTransactionError: {err_msg}")
             raise
@@ -433,7 +432,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 method = getattr(self.model, request['method'])
                 params = request.get('params', [])
                 response['result'] = method(*params)
-        except SolanaTxError as err:
+        except SolTxError as err:
             # traceback.print_exc()
             response['error'] = err.error
         except EthereumError as err:
@@ -489,7 +488,10 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             response = {'jsonrpc': '2.0', 'error': {'code': -32000, 'message': str(err)}}
 
         resp_time_ms = (time.time() - start_time)*1000  # convert this into milliseconds
-        self.info('handle_request >>> %s 0x%0x %s %s resp_time_ms= %s', threading.get_ident(), id(self.model), json.dumps(response),
+        self.info('handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
+                  threading.get_ident(),
+                  id(self.model),
+                  json.dumps(response),
                   request.get('method', '---'),
                   resp_time_ms)
 

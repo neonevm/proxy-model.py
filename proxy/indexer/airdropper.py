@@ -175,7 +175,6 @@ class Airdropper(IndexerBase):
     def process_trx_airdropper_mode(self, trx):
         if check_error(trx):
             return
-
         # helper function finding all instructions that satisfies predicate
         def find_instructions(trx, predicate):
             return [instr for instr in trx['transaction']['message']['instructions'] if predicate(instr)]

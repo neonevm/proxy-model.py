@@ -116,7 +116,7 @@ class PythNetworkClient:
         if isinstance(acc_addrs, PublicKey):
             acct_values = self.solana.get_account_info(acc_addrs, length=0)
         elif isinstance(acc_addrs, list):
-            acct_values = self.solana.get_multiple_accounts_info(acc_addrs, length=0)
+            acct_values = self.solana.get_account_info_list(acc_addrs, length=0)
         else:
             raise Exception(f'Unsupported argument to read_pyth_acct_data: {acc_addrs}')
 
