@@ -776,6 +776,10 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             self.debug(f'Got Neon tx {"cancel" if self._is_canceled else "result"}: {self.neon_res}')
             return self.clear()
 
+        if len(self._node_behind_list):
+            self.warning(f'Node is behind by {self._slots_behind} slots')
+            time.sleep(1)
+
         # There is no more retries to send transactions
         if self._retry_idx >= RETRY_ON_FAIL:
             if not self._is_canceled:

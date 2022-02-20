@@ -5,6 +5,7 @@ import base64
 import json
 import re
 import time
+import traceback
 
 from typing import Optional
 
@@ -67,9 +68,30 @@ class SolanaInteractor:
             "Content-Type": "application/json"
         }
         client = self._client
-        raw_response = client.session.post(client.endpoint_uri, headers=headers, json=request)
-        raw_response.raise_for_status()
-        return raw_response
+
+        retry = 0
+        while True:
+            try:
+                retry += 1
+                raw_response = client.session.post(client.endpoint_uri, headers=headers, json=request)
+                raw_response.raise_for_status()
+                return raw_response
+
+            except ConnectionError as err:
+                if retry > RETRY_ON_FAIL:
+                    raise
+
+                err_tb = "".join(traceback.format_tb(err.__traceback__))
+                self.error(f'ConnectionError({retry}) on send request to Solana. ' +
+                            f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+                time.sleep(1)
+
+            except Exception as err:
+                err_tb = "".join(traceback.format_tb(err.__traceback__))
+                self.error('Unknown exception on send request to Solana. ' +
+                           f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+                raise
+
 
     def _send_rpc_request(self, method: str, *params: Any) -> RPCResponse:
         request_id = next(self._client._request_counter) + 1
@@ -463,14 +485,17 @@ class SolTxListSender:
 
         self._blockhash = None
         self._retry_idx = 0
+        self._slots_behind = 0
         self._tx_list = tx_list
+        self._node_behind_list = []
         self._bad_block_list = []
         self._blocked_account_list = []
         self._pending_list = []
         self._budget_exceeded_list = []
         self._storage_bad_status_list = []
 
-        self._all_tx_list = [self._bad_block_list,
+        self._all_tx_list = [self._node_behind_list,
+                             self._bad_block_list,
                              self._blocked_account_list,
                              self._budget_exceeded_list,
                              self._pending_list]
@@ -494,12 +519,18 @@ class SolTxListSender:
 
         while (self._retry_idx < RETRY_ON_FAIL) and (len(self._tx_list)):
             self._retry_idx += 1
+            self._slots_behind = 0
+
             receipt_list = solana.send_multiple_transactions(signer, self._tx_list, waiter, skip, commitment)
             self.update_transaction_cost(receipt_list)
 
             success_cnt = 0
             for receipt, tx in zip(receipt_list, self._tx_list):
-                if check_if_blockhash_notfound(receipt):
+                slots_behind = check_if_node_behind(receipt)
+                if slots_behind:
+                    self._slots_behind = slots_behind
+                    self._node_behind_list.append(tx)
+                elif check_if_blockhash_notfound(receipt):
                     self._bad_block_list.append(tx)
                 elif check_if_accounts_blocked(receipt):
                     self._blocked_account_list.append(tx)
@@ -519,6 +550,7 @@ class SolTxListSender:
             self.debug(f'retry {self._retry_idx}, ' +
                        f'total receipts {len(receipt_list)}, ' +
                        f'success receipts {success_cnt}, ' +
+                       f'node behind {len(self._node_behind_list)}, '
                        f'bad blocks {len(self._bad_block_list)}, ' +
                        f'blocked accounts {len(self._blocked_account_list)}, ' +
                        f'budget exceeded {len(self._budget_exceeded_list)}, ' +
@@ -545,7 +577,10 @@ class SolTxListSender:
         return False
 
     def _on_post_send(self):
-        if len(self._storage_bad_status_list):
+        if len(self._node_behind_list):
+            self.warning(f'Node is behind by {self._slots_behind} slots')
+            time.sleep(1)
+        elif len(self._storage_bad_status_list):
             raise SolTxError(self._storage_bad_status_list[0])
         elif len(self._budget_exceeded_list):
             raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
@@ -767,3 +802,7 @@ def check_if_accounts_blocked(receipt, *, logger):
 
 def check_if_blockhash_notfound(receipt):
     return (not receipt) or (get_from_dict(receipt, 'data', 'err') == 'BlockhashNotFound')
+
+
+def check_if_node_behind(receipt):
+    return get_from_dict(receipt, 'data', 'numSlotsBehind')
