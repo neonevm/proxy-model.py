@@ -55,21 +55,33 @@ class RequestSolanaBlockList:
 
     def _get_solana_block_list(self) -> bool:
         slot = self.latest_db_block_slot
-        slot_list = [s for s in range(slot + self.BLOCK_CACHE_LIMIT, slot - 1, -1)]
-        self.block_list = self._b.solana.get_block_info_list(slot_list)
+        exist_block_dict = self._b.get_block_dict(slot)
+
+        slot_list = []
+        self.block_list = []
+        block_time = 1
+        for slot in range(slot + self.BLOCK_CACHE_LIMIT, slot - 1, -1):
+            block = exist_block_dict.get(slot)
+            if block is None:
+                slot_list.append(slot)
+            else:
+                self.block_list.append(block)
+                block_time = block.time
+
+        solana_block_list = self._b.solana.get_block_info_list(slot_list)
+        for block in solana_block_list:
+            if not block.time:
+                # generate fake block
+                block.time = block_time
+                block.hash = '0x' + os.urandom(32).hex(),
+                block.parent_hash = '0x' + os.urandom(32).hex()
+            block_time = block.time
+            self.block_list.append(block)
+
         if not len(self.block_list):
             return False
 
         self.latest_block = self.block_list[0]
-
-        slot = self.latest_block.slot
-        latest_slot = self._b.get_latest_block_slot()
-        if latest_slot > slot:
-            slot = latest_slot
-        for block in self.block_list:
-            block.slot = slot
-            slot -= 1
-
         self.first_block = self.block_list[len(self.block_list) - 1]
 
         return len(self.block_list) > 0
@@ -225,6 +237,9 @@ class MemBlocksDB:
         if not self._request_new_block_list():
             self._try_to_fill_blocks_from_pending_list()
 
+    def get_block_dict(self, from_slot: int) -> {}:
+        return {slot: block for slot, block in self._block_by_slot.items() if slot > from_slot}
+
     def get_latest_block(self) -> SolanaBlockInfo:
         self._update_block_dicts()
         return self._latest_block
@@ -276,21 +291,15 @@ class MemBlocksDB:
         return block
 
     def submit_block(self, neon_res: NeonTxResultInfo) -> SolanaBlockInfo:
-        block_list = self.solana.get_block_info_list([neon_res.slot])
-        is_new_block = False
-        if len(block_list):
-            block = block_list[0]
-            data = pickle.dumps(block)
-        else:
-            block = SolanaBlockInfo()
-            data = None
+        block = self.solana.get_block_info(neon_res.slot)
 
         with self._last_time.get_lock():
-            if not block.slot:
+            if not block.time:
                 block = self._generate_fake_block(neon_res)
                 data = pickle.dumps(block)
                 is_new_block = True
             else:
+                data = pickle.dumps(block)
                 is_new_block = neon_res.slot not in self._pending_block_by_slot
 
             if is_new_block:

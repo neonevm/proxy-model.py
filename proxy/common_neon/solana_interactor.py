@@ -310,16 +310,20 @@ class SolanaInteractor:
         response_list = self._send_rpc_batch_request('getBlock', request_list)
         for slot, response in zip(block_slot_list, response_list):
             if (not response) or ('result' not in response):
-                continue
-            net_block = response['result']
-            block = SolanaBlockInfo(
-                slot=slot,
-                finalized=(commitment == FINALIZED),
-                hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
-                parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
-                time=net_block['blockTime'],
-                signs=net_block['signatures']
-            )
+                block = SolanaBlockInfo(
+                    slot=slot,
+                    finalized=(commitment == FINALIZED),
+                )
+            else:
+                net_block = response['result']
+                block = SolanaBlockInfo(
+                    slot=slot,
+                    finalized=(commitment == FINALIZED),
+                    hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
+                    parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
+                    time=net_block['blockTime'],
+                    signs=net_block['signatures']
+                )
             block_list.append(block)
         return block_list
 
