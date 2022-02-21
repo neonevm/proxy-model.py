@@ -11,7 +11,7 @@ from decimal import Decimal
 import os
 from logged_groups import logged_group
 
-from ..db_scheme import CREATE_TABLE_FAILED_AIRDROP_ATTEMPTS, CREATE_TABLE_AIRDROP_READY
+from ..db.scheme import CREATE_TABLE_FAILED_AIRDROP_ATTEMPTS, CREATE_TABLE_AIRDROP_READY
 from ..environment import NEON_PRICE_USD
 
 try:

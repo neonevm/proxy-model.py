@@ -1,7 +1,7 @@
 import psycopg2
 import psycopg2.extras
 
-from ..db_scheme import CREATE_TABLE_SOLANA_BLOCK
+from ..db.scheme import CREATE_TABLE_SOLANA_BLOCK
 from ..indexer.utils import BaseDB, DBQuery
 from ..common_neon.utils import SolanaBlockInfo
 

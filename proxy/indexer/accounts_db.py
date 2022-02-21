@@ -1,4 +1,4 @@
-from ..db_scheme import CREATE_TABLE_NEON_ACCOUNTS
+from ..db.scheme import CREATE_TABLE_NEON_ACCOUNTS
 from ..indexer.utils import BaseDB, DBQuery
 from ..common_neon.utils import str_fmt_object
 

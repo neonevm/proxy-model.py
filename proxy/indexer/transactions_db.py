@@ -1,7 +1,7 @@
 from typing import Optional
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo
-from ..db_scheme import CREATE_TABLE_SOLANA_NEON_TRANSACTIONS, CREATE_TABLE_NEON_TRANSACTIONS
+from ..db.scheme import CREATE_TABLE_SOLANA_NEON_TRANSACTIONS, CREATE_TABLE_NEON_TRANSACTIONS
 from ..indexer.utils import BaseDB, DBQuery, SolanaIxSignInfo
 
 

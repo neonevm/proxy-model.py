@@ -1,4 +1,4 @@
-from proxy.db_scheme import CREATE_TABLE_TRANSACTION_RECEIPTS
+from proxy.db.scheme import CREATE_TABLE_TRANSACTION_RECEIPTS
 from proxy.indexer.pg_common import encode, decode
 from proxy.indexer.utils import BaseDB
 

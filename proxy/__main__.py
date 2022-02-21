@@ -14,7 +14,7 @@ from .proxy import entry_point
 import os
 from .indexer.airdropper import run_airdropper
 from .indexer.indexer import run_indexer
-from proxy.db.db_creation import run_dbcreation
+from proxy.db.creation import run_dbcreation
 
 if __name__ == '__main__':
     airdropper_mode = os.environ.get('AIRDROPPER_MODE', 'False').lower() in [1, 'true', 'True']

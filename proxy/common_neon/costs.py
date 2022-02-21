@@ -1,6 +1,6 @@
 import base58
 
-from ..db_scheme import CREATE_TABLE_OPERATOR_COST
+from ..db.scheme import CREATE_TABLE_OPERATOR_COST
 from ..environment import EVM_LOADER_ID
 from ..indexer.utils import BaseDB
 

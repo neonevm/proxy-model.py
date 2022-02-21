@@ -1,6 +1,6 @@
 import json
 
-from ..db_scheme import CREATE_TABLE_NEON_TRANSACTION_LOGS
+from ..db.scheme import CREATE_TABLE_NEON_TRANSACTION_LOGS
 from ..indexer.utils import BaseDB
 
 
