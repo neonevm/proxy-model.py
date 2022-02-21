@@ -93,7 +93,7 @@ services:
       MINIMAL_GAS_PRICE: 1
     hostname: proxy
     depends_on:
-      service:dbcreation:
+      dbcreation:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
