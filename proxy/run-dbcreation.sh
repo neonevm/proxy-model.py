@@ -14,5 +14,5 @@ export DBCREATION_MODE='true'
 
 python3 -m proxy
 
-docker exec postgres psql neon-db neon-proxy --command "\\dt+ public.*"
-docker exec postgres psql neon-db neon-proxy --command "\\d+ public.*"
+psql ${POSTGRES_DB} ${POSTGRES_USER} --command "\\dt+ public.*"
+psql ${POSTGRES_DB} ${POSTGRES_USER} --command "\\d+ public.*"
