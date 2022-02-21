@@ -11,6 +11,7 @@ from ..indexer.trx_receipts_storage import TrxReceiptsStorage
 
 @logged_group("neon.dbcreation")
 def run_dbcreation(*, logger):
+    logger.info(f"""Running dbcreation""")
     _db_operator_cost = SQLCost()
     _db_solana_blocks = SolanaBlocksDB()
     _db_neon_txs = NeonTxsDB()
@@ -22,11 +23,4 @@ def run_dbcreation(*, logger):
 
 
 if __name__ == "__main__":
-    db_operator_cost = SQLCost()
-    db_solana_blocks = SolanaBlocksDB()
-    db_neon_txs = NeonTxsDB()
-    db_neon_account = NeonAccountDB()
-    db_airdrop_ready = AirdropReadySet()
-    db_failed_attempts = FailedAttempts()
-    db_indexer_logs = LogsDB()
-    db_transaction_receipts = TrxReceiptsStorage('transaction_receipts')
+    run_dbcreation()
