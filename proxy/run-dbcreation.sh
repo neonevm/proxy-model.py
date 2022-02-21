@@ -13,3 +13,6 @@ echo "$(date "+%F %X.%3N") I $(basename $0):${LINENO} $$ ${COMPONENT}:StartScrip
 export DBCREATION_MODE='true'
 
 python3 -m proxy
+
+docker exec postgres psql neon-db neon-proxy --command "\\dt+ public.*"
+docker exec postgres psql neon-db neon-proxy --command "\\d+ public.*"
