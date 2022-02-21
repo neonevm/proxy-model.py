@@ -10,7 +10,7 @@ from ..indexer.trx_receipts_storage import TrxReceiptsStorage
 
 
 @logged_group("neon.dbcreation")
-def run_dbcreation(solana_url, evm_loader_id, *, logger):
+def run_dbcreation(*, logger):
     _db_operator_cost = SQLCost()
     _db_solana_blocks = SolanaBlocksDB()
     _db_neon_txs = NeonTxsDB()
