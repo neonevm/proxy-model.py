@@ -67,6 +67,7 @@ services:
       POSTGRES_HOST: postgres
     hostname: dbcreation
     entrypoint: proxy/run-dbcreation.sh
+    network_mode: container:postgres
     networks:
       - net
     depends_on:
