@@ -12,19 +12,19 @@
 from solana.publickey import PublicKey
 from .proxy import entry_point
 import os
-
-solana_url = os.environ['SOLANA_URL']
-evm_loader_id = os.environ['EVM_LOADER']
-
 from .indexer.airdropper import run_airdropper
 from .indexer.indexer import run_indexer
 from proxy.db.creation import run_dbcreation
 
 if __name__ == '__main__':
+    solana_url = os.environ['SOLANA_URL']
+    evm_loader_id = os.environ['EVM_LOADER']
     print(f"Will run with SOLANA_URL={solana_url}; EVM_LOADER={evm_loader_id}")
+
     airdropper_mode = os.environ.get('AIRDROPPER_MODE', 'False').lower() in [1, 'true', 'True']
     indexer_mode = os.environ.get('INDEXER_MODE', 'False').lower() in [1, 'true', 'True']
     dbcreation_mode = os.environ.get('DBCREATION_MODE', 'False').lower() in [1, 'true', 'True']
+
     if dbcreation_mode:
         print("Will run in db creation mode")
         run_dbcreation()
