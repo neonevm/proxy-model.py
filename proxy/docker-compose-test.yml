@@ -68,7 +68,8 @@ services:
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
     entrypoint: proxy/run-dbcreation.sh
-    network_mode: service:postgres
+    networks:
+      - net
     depends_on:
       postgres:
         condition: service_healthy
