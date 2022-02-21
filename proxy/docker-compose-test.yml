@@ -61,8 +61,6 @@ services:
   dbcreation:
     container_name: dbcreation
     image: neonlabsorg/proxy:${REVISION}
-    links:
-      - postgres
     environment:
       SOLANA_URL: http://solana:8899
       POSTGRES_DB: neon-db

@@ -14,5 +14,6 @@ export DBCREATION_MODE='true'
 
 python3 -m proxy
 
-psql ${POSTGRES_DB} ${POSTGRES_USER} --command "\\dt+ public.*"
-psql ${POSTGRES_DB} ${POSTGRES_USER} --command "\\d+ public.*"
+export PGPASSWORD=${POSTGRES_PASSWORD}
+psql -h ${POSTGRES_HOST} ${POSTGRES_DB} ${POSTGRES_USER} --command "\\dt+ public.*"
+psql -h ${POSTGRES_HOST} ${POSTGRES_DB} ${POSTGRES_USER} --command "\\d+ public.*"
