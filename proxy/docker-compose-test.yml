@@ -65,7 +65,7 @@ services:
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
     hostname: db-creation
-    entrypoint: ./run-db-creation.sh
+    entrypoint: proxy/run-db-creation.sh
     networks:
       - net
     depends_on:
