@@ -6,4 +6,6 @@ source proxy/run-set-env.sh ${COMPONENT}
 
 echo "$(date "+%F %X.%3N") I $(basename $0):${LINENO} $$ ${COMPONENT}:StartScript {} dbcreation"
 
-python3 proxy/db_creation.py
+pwd
+ls -al
+#python3 proxy/db_creation.py
