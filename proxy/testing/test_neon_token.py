@@ -71,13 +71,18 @@ class TestNeonToken(unittest.TestCase):
         dest_token_acc = get_associated_token_address(dest_acc.public_key(), ETH_TOKEN_MINT_ID)
         print(f"Destination token account: {dest_token_acc}")
         
-        withdraw_amount = pow(10, 18) # 1 NEON
+        withdraw_amount_alan = pow(10, 18) # 1 NEON
+        withdraw_amount_galan = int(withdraw_amount_alan / 1_000_000_000)
 
-        print(f'Source account balance before: {proxy.eth.get_balance(eth_account.address)}')
-        print(f'Destination account balance before: {self.spl_neon_token.get_balance(dest_token_acc, commitment=Confirmed)}')
+        source_balance_before_alan = proxy.eth.get_balance(eth_account.address)
+        destination_balance_before_galan = self.spl_neon_token.get_balance(dest_token_acc, commitment=Confirmed)
+        print(f'Source account balance before (Alan): {source_balance_before_alan}')
+        print(f'Destination account balance before (Galan): {destination_balance_before_galan}')
+
+        self.assertTrue(destination_balance_before_galan['error'] is not None)
 
         nonce = proxy.eth.get_transaction_count(eth_account.address)
-        tx = {'value': withdraw_amount, 'nonce': nonce}
+        tx = {'value': withdraw_amount_alan, 'nonce': nonce}
         withdraw_tx_dict = self.neon_contract.functions.withdraw(bytes(dest_acc.public_key())).buildTransaction(tx)
         withdraw_tx = proxy.eth.account.sign_transaction(withdraw_tx_dict, eth_account.key)
         withdraw_tx_hash = proxy.eth.send_raw_transaction(withdraw_tx.rawTransaction)
@@ -86,5 +91,9 @@ class TestNeonToken(unittest.TestCase):
         print(f'withdraw_tx_receipt: {withdraw_tx_receipt}')
         print(f'deploy status: {withdraw_tx_receipt.status}')
 
-        print(f'Source account balance after: {proxy.eth.get_balance(eth_account.address)}')
-        print(f'Destination account balance after: {self.spl_neon_token.get_balance(dest_token_acc, commitment=Confirmed)}')
+        source_balance_after_alan = proxy.eth.get_balance(eth_account.address)
+        destination_balance_after_galan = int(self.spl_neon_token.get_balance(dest_token_acc, commitment=Confirmed)['result']['value']['amount'])
+        print(f'Source account balance after (Alan): {source_balance_after_alan}')
+        print(f'Destination account balance after (Galan): {destination_balance_after_galan}')
+        self.assertEqual(source_balance_after_alan, source_balance_before_alan - withdraw_amount_alan)
+        self.assertEqual(destination_balance_after_galan, withdraw_amount_galan)
