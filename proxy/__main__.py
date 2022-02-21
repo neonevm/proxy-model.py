@@ -43,7 +43,9 @@ if __name__ == '__main__':
                        pp_solana_url,
                        max_conf)
     elif dbcreation_mode:
-        print("Will run in dbcreation mode")
+        solana_url = os.environ['SOLANA_URL']
+        evm_loader_id = os.environ['EVM_LOADER']
+        print(f"Will run in dbcreation mode with SOLANA_URL={solana_url}; EVM_LOADER={evm_loader_id}")
         run_dbcreation()
     elif indexer_mode:
         print("Will run in indexer mode")
