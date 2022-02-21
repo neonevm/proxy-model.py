@@ -56,6 +56,22 @@ services:
     networks:
       - net
 
+  db-creation:
+    container_name: db-creation
+    image: neonlabsorg/proxy:${REVISION}
+    environment:
+      POSTGRES_DB: neon-db
+      POSTGRES_USER: neon-proxy
+      POSTGRES_PASSWORD: neon-proxy-pass
+      POSTGRES_HOST: postgres
+    hostname: db-creation
+    entrypoint: ./run-db-creation.sh
+    networks:
+      - net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   proxy:
     container_name: proxy
     image: neonlabsorg/proxy:${REVISION}
@@ -76,6 +92,8 @@ services:
       MINIMAL_GAS_PRICE: 1
     hostname: proxy
     depends_on:
+      db-creation:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       evm_loader:
@@ -140,6 +158,8 @@ services:
     networks:
       - net
     depends_on:
+      db-creation:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       faucet:
@@ -156,6 +176,8 @@ services:
       CONFIG: ci
     hostname: indexer
     depends_on:
+      db-creation:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       evm_loader:
