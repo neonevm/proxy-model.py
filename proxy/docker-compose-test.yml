@@ -71,6 +71,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      evm_loader:
+        condition: service_completed_successfully
 
   proxy:
     container_name: proxy
