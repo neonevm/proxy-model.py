@@ -1,3 +1,5 @@
+from logged_groups import logged_group, logging_context
+
 from ..common_neon.costs import SQLCost
 from ..indexer.accounts_db import NeonAccountDB
 from ..indexer.airdropper import AirdropReadySet, FailedAttempts
