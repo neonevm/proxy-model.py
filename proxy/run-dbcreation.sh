@@ -14,5 +14,5 @@ export DBCREATION_MODE='true'
 
 python3 -m proxy
 
-#psql ${POSTGRES_DB} ${POSTGRES_USER} --command "\\dt+ public.*"
-#psql ${POSTGRES_DB} ${POSTGRES_USER} --command "\\d+ public.*"
+psql ${POSTGRES_DB} ${POSTGRES_USER} --command "\\dt+ public.*"
+psql ${POSTGRES_DB} ${POSTGRES_USER} --command "\\d+ public.*"
