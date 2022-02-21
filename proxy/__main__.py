@@ -14,11 +14,12 @@ from .proxy import entry_point
 import os
 from .indexer.airdropper import run_airdropper
 from .indexer.indexer import run_indexer
-from solana.rpc.api import Client
+from proxy.db.db_creation import run_dbcreation
 
 if __name__ == '__main__':
     airdropper_mode = os.environ.get('AIRDROPPER_MODE', 'False').lower() in [1, 'true', 'True']
     indexer_mode = os.environ.get('INDEXER_MODE', 'False').lower() in [1, 'true', 'True']
+    dbcreation_mode = os.environ.get('DBCREATION_MODE', 'False').lower() in [1, 'true', 'True']
     if airdropper_mode:
         print("Will run in airdropper mode")
         solana_url = os.environ['SOLANA_URL']
@@ -41,6 +42,9 @@ if __name__ == '__main__':
                        neon_decimals,
                        pp_solana_url,
                        max_conf)
+    elif dbcreation_mode:
+        print("Will run in dbcreation mode")
+        run_dbcreation()
     elif indexer_mode:
         print("Will run in indexer mode")
 
