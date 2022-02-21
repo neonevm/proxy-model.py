@@ -68,8 +68,6 @@ services:
     hostname: dbcreation
     entrypoint: proxy/run-dbcreation.sh
     network_mode: container:postgres
-    networks:
-      - net
     depends_on:
       postgres:
         condition: service_healthy
