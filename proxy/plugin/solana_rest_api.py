@@ -94,7 +94,7 @@ class EthereumModel:
 
     def eth_estimateGas(self, param):
         try:
-            calculator = GasEstimate(param,  self._db, self._client, evm_step_count)
+            calculator = GasEstimate(param,  self._db, self._solana, evm_step_count)
             return calculator.estimate()
 
         except EthereumError:

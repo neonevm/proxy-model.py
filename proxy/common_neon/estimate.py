@@ -21,7 +21,7 @@ def evm_step_cost(signature_cnt):
 
 @logged_group("neon.Proxy")
 class GasEstimate:
-    def __init__(self, request, db, client, evm_step_count):
+    def __init__(self, request, db, solana, evm_step_count):
         self.sender: bytes = bytes.fromhex(request.get('from', "0x%040x" % 0x0)[2:])
         self.step_count = evm_step_count
 
@@ -46,7 +46,7 @@ class GasEstimate:
         signed_trx = w3.eth.account.sign_transaction(unsigned_trx, eth_keys.PrivateKey(os.urandom(32)))
         trx = EthTrx.fromString(signed_trx.rawTransaction)
 
-        self.tx_sender = NeonTxSender(db, client, trx, steps=evm_step_count)
+        self.tx_sender = NeonTxSender(db, solana, trx, steps=evm_step_count)
 
     def iteration_info(self) -> Tuple[int, int]:
         if self.tx_sender.steps_emulated > 0:
