@@ -497,6 +497,7 @@ class SolTxListSender:
         self._pending_list = []
         self._budget_exceeded_list = []
         self._storage_bad_status_list = []
+        self._unknown_error_list = []
 
         self._all_tx_list = [self._node_behind_list,
                              self._bad_block_list,
@@ -546,7 +547,7 @@ class SolTxListSender:
                         if custom in (1, 4):
                             self._storage_bad_status_list.append(receipt)
                         else:
-                            raise SolTxError(receipt)
+                            self._unknown_error_list.append(receipt)
                 else:
                     success_cnt += 1
                     self._on_success_send(tx, receipt)
@@ -558,7 +559,8 @@ class SolTxListSender:
                        f'bad blocks {len(self._bad_block_list)}, ' +
                        f'blocked accounts {len(self._blocked_account_list)}, ' +
                        f'budget exceeded {len(self._budget_exceeded_list)}, ' +
-                       f'bad storage: {len(self._storage_bad_status_list)}')
+                       f'bad storage: {len(self._storage_bad_status_list)}, ' +
+                       f'unknown error: {len(self._unknown_error_list)}')
 
             self._on_post_send()
 
@@ -581,7 +583,9 @@ class SolTxListSender:
         return False
 
     def _on_post_send(self):
-        if len(self._node_behind_list):
+        if len(self._unknown_error_list):
+            raise SolTxError(self._unknown_error_list[0])
+        elif len(self._node_behind_list):
             self.warning(f'Node is behind by {self._slots_behind} slots')
             time.sleep(1)
         elif len(self._storage_bad_status_list):

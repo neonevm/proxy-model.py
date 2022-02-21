@@ -780,6 +780,13 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             self.warning(f'Node is behind by {self._slots_behind} slots')
             time.sleep(1)
 
+        # Unknown error happens - cancel the transaction
+        if len(self._unknown_error_list):
+            self._unknown_error_list.clear()
+            if not self._is_canceled:
+                self._cancel()
+            return
+
         # There is no more retries to send transactions
         if self._retry_idx >= RETRY_ON_FAIL:
             if not self._is_canceled:
