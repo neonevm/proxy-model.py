@@ -65,7 +65,6 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
-    hostname: dbcreation
     entrypoint: proxy/run-dbcreation.sh
     network_mode: service:postgres
     depends_on:
@@ -94,7 +93,7 @@ services:
       MINIMAL_GAS_PRICE: 1
     hostname: proxy
     depends_on:
-      dbcreation:
+      service:dbcreation:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
