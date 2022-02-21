@@ -54,7 +54,7 @@ services:
     expose:
       - "5432"
     ports:
-      - "5432:5432"
+      - "5432"
     networks:
       - net
 
@@ -68,8 +68,7 @@ services:
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
     entrypoint: proxy/run-dbcreation.sh
-    networks:
-      - net
+    network_mode: service:postgres
     depends_on:
       postgres:
         condition: service_healthy
