@@ -145,5 +145,5 @@ class IndexerDB:
             return account.code
         return '0x'
 
-    def fill_account_info_by_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int):
-        self._account_db.set_acc_indexer(neon_account, pda_account, code_account, slot)
+    def fill_account_info_by_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int, sol_sign: str):
+        self._account_db.set_acc_indexer(neon_account, pda_account, code_account, slot, sol_sign)

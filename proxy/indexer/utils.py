@@ -58,6 +58,44 @@ class SolanaIxSignInfo:
         return f"{self.idx}{self.sign}"[:7]
 
 
+class CostInfo:
+    def __init__(self, sign: str, tx: dict, program: PublicKey):
+        self.sign = sign
+        self.operator = None
+        self.sol_spent = None
+        self.bpf = None
+        self.token_income = None
+        self.step = None
+        if tx:
+            self.setup(tx, program)
+
+    def setup(self, tx: dict, program: PublicKey):
+        self.operator = tx['transaction']['message']['accountKeys'][0]
+        self.sol_spent = tx['meta']['preBalances'][0] - tx['meta']['postBalances'][0]
+        for log in tx['meta']['logMessages']:
+            log_words = log.split()
+            if log_words[0] == 'Program' and\
+            log_words[1] == str(program) and\
+            log_words[2] == 'consumed' and\
+            log_words[4] == 'of' and\
+            log_words[6] == 'compute' and\
+            log_words[7] == 'units':
+                bpf = int(log_words[3])
+                self.bpf = max(self.bpf, bpf) if self.bpf else bpf
+        pre_token = 0
+        post_token = 0
+        for balance in tx['meta']['preTokenBalances']:
+            if balance['owner'] == self.operator:
+                pre_token = int(balance["uiTokenAmount"]["amount"])
+        for balance in tx['meta']['postTokenBalances']:
+            if balance['owner'] == self.operator:
+                post_token = int(balance["uiTokenAmount"]["amount"])
+        self.token_income = post_token - pre_token
+
+
+    def set_step(self, step):
+        self.step = step
+
 
 @logged_group("neon.Indexer")
 def get_accounts_from_storage(client, storage_account, *, logger):

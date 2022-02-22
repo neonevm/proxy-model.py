@@ -27,6 +27,7 @@ class NeonAccountDB(BaseDB):
                 code_account VARCHAR(50),
                 slot BIGINT,
                 code TEXT,
+                sol_sign CHAR(88),
 
                 UNIQUE(pda_account, code_account)
             );"""
@@ -43,17 +44,28 @@ class NeonAccountDB(BaseDB):
                 ''',
                 (neon_account, pda_account, code_account, 0, code))
 
-    def set_acc_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int):
+    def set_acc_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int, sol_sign: str):
+        if not neon_account:
+            value = self._fetchone(DBQuery(
+                column_list=['neon_account'],
+                key_list=[('pda_account', pda_account)],
+                order_list=['slot desc']
+            ))
+            if not value:
+                self.error(f"Not found account for pda_account: {pda_account}")
+                return
+            neon_account = value[0]
         with self._conn.cursor() as cursor:
             cursor.execute(f'''
-                INSERT INTO {self._table_name}(neon_account, pda_account, code_account, slot)
-                VALUES(%s, %s, %s, %s)
+                INSERT INTO {self._table_name}(neon_account, pda_account, code_account, slot, sol_sign)
+                VALUES(%s, %s, %s, %s, %s)
                 ON CONFLICT (pda_account, code_account) DO UPDATE
                 SET
                     slot=EXCLUDED.slot
                 ;
                 ''',
-                (neon_account, pda_account, code_account, slot))
+                (neon_account, pda_account, code_account, slot, sol_sign))
+
 
     def _acc_from_value(self, value) -> NeonAccountInfo:
         self.debug(f"accounts db returned {value}")
