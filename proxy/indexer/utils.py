@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import multiprocessing
 import psycopg2
+import statistics
 
 from typing import NamedTuple
 
@@ -10,10 +11,13 @@ from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from logged_groups import logged_group
+from typing import Dict, Union, Callable
 
 from ..common_neon.address import ether2program
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, ACCOUNT_INFO_LAYOUT
 from ..common_neon.utils import get_from_dict
+
+from ..environment import INDEXER_LOG_SKIP_COUNT
 
 from .pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
 from .pg_common import encode, decode
@@ -117,10 +121,10 @@ def get_accounts_from_storage(client, storage_account, *, logger):
     data = base64.b64decode(info['data'][0])
 
     tag = data[0]
-    if tag == 0:
+    if tag in (0, 1, 4):
         logger.debug("Empty")
         return None
-    elif tag == 3:
+    else:
         logger.debug("Not empty storage")
 
         acc_list = []
@@ -132,9 +136,6 @@ def get_accounts_from_storage(client, storage_account, *, logger):
             offset += 32
 
         return acc_list
-    else:
-        logger.debug("Not empty other")
-        return None
 
 
 @logged_group("neon.Indexer")
@@ -171,6 +172,37 @@ def get_code_from_account(client: Client, address, *, logger):
     if len(data) < offset + storage.code_size:
         return None
     return '0x' + data[offset:][:storage.code_size].hex()
+
+
+class MetricsToLogBuff :
+    def __init__(self):
+        self._reset()
+
+    def _reset(self):
+        self.counter = 0
+        self.items_list = {}
+        self.items_latest = {}
+
+    def print(self, logger: Callable[[str], None], list_params: Dict[str, Union[int, float]], latest_params: Dict[str, int]):
+        for key, value in list_params.items():
+            metric_list = self.items_list.setdefault(key, [])
+            metric_list.append(value)
+        for key, value in latest_params.items():
+            self.items_latest[key] = value
+        self.counter += 1
+
+        if self.counter % INDEXER_LOG_SKIP_COUNT != 0:
+            return
+
+        msg = ''
+        for key, value_list in self.items_list.items():
+            msg += f' {key} avg: {statistics.mean(value_list):.2f}'
+            msg += f' min: {min(value_list):.2f}'
+            msg += f' max: {max(value_list):.2f};'
+        for key, value in self.items_latest.items():
+            msg += f' {key}: {value};'
+        logger(msg)
+        self._reset()
 
 
 class DBQuery(NamedTuple):

@@ -2,6 +2,7 @@ import base58
 import traceback
 
 from logged_groups import logged_group
+from solana.rpc.api import Client
 from typing import Optional
 
 from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
@@ -30,8 +31,8 @@ class IndexerDB:
             if k not in self._constants:
                 self._constants[k] = 0
 
-    def set_client(self, client):
-        self._client = client
+    def set_client(self, solana_client: Client):
+        self._client = solana_client
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, used_ixs: [SolanaIxSignInfo]):
         try:
@@ -56,6 +57,9 @@ class IndexerDB:
             return block
 
         net_block = net_block['result']
+        if not net_block:
+            return block
+
         block.hash = '0x' + base58.b58decode(net_block['blockhash']).hex()
         block.height = net_block['blockHeight']
         block.signs = net_block['signatures']
@@ -101,6 +105,9 @@ class IndexerDB:
 
     def get_latest_block(self) -> SolanaBlockInfo:
         return self._blocks_db.get_latest_block()
+
+    def get_latest_block_list(self, limit: int) -> [SolanaBlockInfo]:
+        return self._blocks_db.get_latest_block_list(limit)
 
     def fill_block_height(self, number, slots):
         self._blocks_db.fill_block_height(number, slots)
