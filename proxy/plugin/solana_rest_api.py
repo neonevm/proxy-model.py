@@ -265,7 +265,7 @@ class EthereumModel:
     def eth_getTransactionCount(self, account, tag):
         self.debug('eth_getTransactionCount: %s', account)
         try:
-            acc_info = self._solana.get_neon_account_info(EthereumAddress(account))
+            acc_info = self._solana.get_account_info_layout(EthereumAddress(account))
             return hex(acc_info.trx_count)
         except Exception as err:
             self.debug(f"eth_getTransactionCount: Can't get account info: {err}")

@@ -17,7 +17,7 @@ from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
 
-from .address import accountWithSeed, getTokenAddr, EthereumAddress, isPayed
+from .address import accountWithSeed, getTokenAddr, EthereumAddress
 from ..common_neon.errors import EthereumError
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
 from .emulator_interactor import call_emulated
@@ -446,7 +446,7 @@ class NeonTxSender:
             raise Exception(f'Contract account {self.deployed_contract} is not allowed for deployment')
 
     def _validate_tx_count(self):
-        info = self.solana.get_neon_account_info(EthereumAddress(self.eth_sender))
+        info = self.solana.get_account_info_layout(EthereumAddress(self.eth_sender))
         if not info:
             return
 
@@ -565,7 +565,7 @@ class NeonTxSender:
                 elif account_desc["storage_increment"]:
                     self.unpaid_space += account_desc["storage_increment"]
 
-                if not isPayed(self.solana.client, account_desc['address']):
+                if not self.solana.get_account_info_layout(account_desc['address']).is_payed():
                     self.debug(f'found losted account {account_desc["account"]}')
                     self.unpaid_space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE + ACCOUNT_STORAGE_OVERHEAD * 2
 

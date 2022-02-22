@@ -29,7 +29,7 @@ from ..environment import RETRY_ON_FAIL
 
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from ..common_neon.address import EthereumAddress, ether2program
-from ..common_neon.address import AccountInfo as NeonAccountInfo
+from ..common_neon.address import AccountInfoLayout as AccountInfoLayout
 
 
 class SolTxError(Exception):
@@ -244,7 +244,7 @@ class SolanaInteractor:
 
         return balance_list
 
-    def get_neon_account_info(self, eth_account: EthereumAddress) -> Optional[NeonAccountInfo]:
+    def get_account_info_layout(self, eth_account: EthereumAddress) -> Optional[AccountInfoLayout]:
         account_sol, nonce = ether2program(eth_account)
         info = self.get_account_info(account_sol)
         if info is None:
@@ -252,7 +252,7 @@ class SolanaInteractor:
         elif len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
             raise RuntimeError(f"Wrong data length for account data {account_sol}: " +
                                f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return NeonAccountInfo.frombytes(info.data)
+        return AccountInfoLayout.frombytes(info.data)
 
     def get_multiple_rent_exempt_balances_for_size(self, size_list: [int], commitment='confirmed') -> [int]:
         opts = {

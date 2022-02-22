@@ -59,34 +59,30 @@ class GasEstimate:
             final_steps = EVM_STEPS
         return final_steps, full_step_iterations
 
-    @logged_group("neon.Proxy")
-    def simple_neon_tx_strategy(self, *, logger):
+    def simple_neon_tx_strategy(self):
         gas = evm_step_cost(2) * (self.tx_sender.steps_emulated if self.tx_sender.steps_emulated > EVM_STEPS else EVM_STEPS)
-        logger.debug(f'estimate simple_neon_tx_strategy: {gas}')
+        self.debug(f'estimate simple_neon_tx_strategy: {gas}')
         return gas
 
-    @logged_group("neon.Proxy")
-    def iterative_neon_tx_strategy(self, *, logger):
+    def iterative_neon_tx_strategy(self):
         begin_iteration = 1
         final_steps, full_step_iterations = self.iteration_info()
         steps = begin_iteration * EVM_STEPS + full_step_iterations * self.step_count + final_steps
         gas = steps * evm_step_cost(1)
-        logger.debug(f'estimate iterative_neon_tx_strategy: {gas}')
+        self.debug(f'estimate iterative_neon_tx_strategy: {gas}')
         return gas
 
-    @logged_group("neon.Proxy")
-    def holder_neon_tx_strategy(self, *, logger):
+    def holder_neon_tx_strategy(self):
         begin_iteration = 1
         msg = get_holder_msg(self.tx_sender.eth_tx)
         holder_iterations = math.ceil(len(msg) / HOLDER_MSG_SIZE)
         final_steps, full_step_iterations = self.iteration_info()
         steps = (begin_iteration + holder_iterations) * EVM_STEPS + full_step_iterations * self.step_count + final_steps
         gas = steps * evm_step_cost(1)
-        logger.debug(f'estimate holder_neon_tx_strategy: {gas}')
+        self.debug(f'estimate holder_neon_tx_strategy: {gas}')
         return gas
 
-    @logged_group("neon.Proxy")
-    def allocated_space(self, *, logger):
+    def allocated_space(self):
         space = 0
         for s in self.tx_sender._create_account_list:
             if s.NAME == NeonCreateContractTxStage.NAME:
@@ -95,14 +91,13 @@ class GasEstimate:
                 space += ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE + ACCOUNT_STORAGE_OVERHEAD * 2
 
         space += self.tx_sender.unpaid_space
-        logger.debug(f'allocated space: {space}')
+        self.debug(f'allocated space: {space}')
         return space
 
-    @logged_group("neon.Proxy")
-    def estimate(self, *, logger):
+    def estimate(self):
         self.tx_sender.operator_key = PublicKey(os.urandom(32))
         self.tx_sender._call_emulated(self.sender)
-        self.tx_sender._parse_accounts_list();
+        self.tx_sender._parse_accounts_list()
 
         gas_for_trx = max(self.simple_neon_tx_strategy(),  self.iterative_neon_tx_strategy(), self.holder_neon_tx_strategy())
         gas_for_space = self.allocated_space() * EVM_BYTE_COST
@@ -112,8 +107,8 @@ class GasEstimate:
         # if gas < 21000:
         #     gas = 21000
 
-        logger.debug(f'extra_gas: {EXTRA_GAS}')
-        logger.debug(f'gas_for_space: {gas_for_space}')
-        logger.debug(f'gas_for_trx: {gas_for_trx}')
-        logger.debug(f'estimated gas: {gas}')
+        self.debug(f'extra_gas: {EXTRA_GAS}')
+        self.debug(f'gas_for_space: {gas_for_space}')
+        self.debug(f'gas_for_trx: {gas_for_trx}')
+        self.debug(f'estimated gas: {gas}')
         return hex(gas)
