@@ -3,7 +3,7 @@ from typing import List
 from ..indexer.utils import BaseDB, CostInfo
 
 
-class SolananTxCostsDB(BaseDB):
+class CostsDB(BaseDB):
     def __init__(self):
         BaseDB.__init__(self)
 

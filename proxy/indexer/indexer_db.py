@@ -3,13 +3,14 @@ import traceback
 
 from logged_groups import logged_group
 from solana.rpc.api import Client
-from typing import Optional
+from typing import Optional, List
 
 from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
 
 from ..environment import FINALIZED
-from ..indexer.utils import SolanaIxSignInfo
+from ..indexer.utils import SolanaIxSignInfo, CostInfo
 from ..indexer.accounts_db import NeonAccountDB, NeonAccountInfo
+from ..indexer.costs_db import CostsDB
 from ..indexer.blocks_db import SolanaBlocksDB, SolanaBlockInfo
 from ..indexer.transactions_db import NeonTxsDB
 from ..indexer.logs_db import LogsDB
@@ -24,6 +25,7 @@ class IndexerDB:
         self._blocks_db = SolanaBlocksDB()
         self._txs_db = NeonTxsDB()
         self._account_db = NeonAccountDB()
+        self._costs_db = CostsDB()
         self._client = None
 
         self._constants = SQLDict(tablename="constants")
@@ -154,3 +156,6 @@ class IndexerDB:
 
     def fill_account_info_by_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int, sol_sign: str):
         self._account_db.set_acc_indexer(neon_account, pda_account, code_account, slot, sol_sign)
+
+    def add_tx_costs(self, tx_costs: List[CostInfo]):
+        self._costs_db.add_costs(tx_costs)
