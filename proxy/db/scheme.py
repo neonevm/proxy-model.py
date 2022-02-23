@@ -2,9 +2,9 @@ from typing import Tuple
 
 
 def CREATE_TABLE_OPERATOR_COST() -> Tuple[str, str]:
-    TABLE_NAME_OPERATOR_COST = 'OPERATOR_COST'
+    table_name = 'OPERATOR_COST'
     return f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_OPERATOR_COST} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             id SERIAL PRIMARY KEY,
             hash char(64),
             cost bigint,
@@ -15,13 +15,13 @@ def CREATE_TABLE_OPERATOR_COST() -> Tuple[str, str]:
             status varchar(100),
             reason varchar(100)
         );
-        """, TABLE_NAME_OPERATOR_COST
+        """, table_name
 
 
 def CREATE_TABLE_NEON_ACCOUNTS() -> Tuple[str, str]:
-    TABLE_NAME_NEON_ACCOUNTS = 'neon_accounts'
+    table_name = 'neon_accounts'
     return f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_NEON_ACCOUNTS} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             neon_account CHAR(42),
             pda_account VARCHAR(50),
             code_account VARCHAR(50),
@@ -30,45 +30,38 @@ def CREATE_TABLE_NEON_ACCOUNTS() -> Tuple[str, str]:
 
             UNIQUE(pda_account, code_account)
         );
-        """, TABLE_NAME_NEON_ACCOUNTS
+        """, table_name
 
 
 def CREATE_TABLE_FAILED_AIRDROP_ATTEMPTS() -> Tuple[str, str]:
-    TABLE_NAME_FAILED_AIRDROP_ATTEMPTS = 'failed_airdrop_attempts'
+    table_name = 'failed_airdrop_attempts'
     return f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_FAILED_AIRDROP_ATTEMPTS} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             attempt_time    BIGINT,
             eth_address     TEXT,
             reason          TEXT
         );
-        CREATE INDEX IF NOT EXISTS failed_attempt_time_idx ON {TABLE_NAME_FAILED_AIRDROP_ATTEMPTS} (attempt_time);
-        """, TABLE_NAME_FAILED_AIRDROP_ATTEMPTS
+        CREATE INDEX IF NOT EXISTS failed_attempt_time_idx ON {table_name} (attempt_time);
+        """, table_name
 
 
 def CREATE_TABLE_AIRDROP_READY() -> Tuple[str, str]:
-    TABLE_NAME_AIRDROP_READY = 'airdrop_ready'
+    table_name = 'airdrop_ready'
     return f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_AIRDROP_READY} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             eth_address     TEXT UNIQUE,
             scheduled_ts    BIGINT,
             finished_ts     BIGINT,
             duration        INTEGER,
             amount_galans   INTEGER
         );
-        """, TABLE_NAME_AIRDROP_READY
+        """, table_name
 
 
 def CREATE_TABLE_SOLANA_BLOCK() -> Tuple[str, str]:
-    TABLE_NAME_SOLANA_BLOCK = 'solana_block'
+    table_name = 'solana_block'
     return f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_SOLANA_BLOCK}_heights (
-            slot BIGINT,
-            height BIGINT,
-
-            UNIQUE(slot),
-            UNIQUE(height)
-        );
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_SOLANA_BLOCK}_hashes (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             slot BIGINT,
             hash CHAR(66),
 
@@ -79,13 +72,13 @@ def CREATE_TABLE_SOLANA_BLOCK() -> Tuple[str, str]:
             UNIQUE(slot),
             UNIQUE(hash)
         );
-        """, TABLE_NAME_SOLANA_BLOCK
+        """, table_name
 
 
 def CREATE_TABLE_NEON_TRANSACTION_LOGS() -> Tuple[str, str]:
-    TABLE_NAME_NEON_TRANSACTION_LOGS = 'neon_transaction_logs'
+    table_name = 'neon_transaction_logs'
     return f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_NEON_TRANSACTION_LOGS} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             address CHAR(42),
             blockHash CHAR(66),
             blockNumber BIGINT,
@@ -98,16 +91,16 @@ def CREATE_TABLE_NEON_TRANSACTION_LOGS() -> Tuple[str, str]:
 
             UNIQUE(blockNumber, transactionHash, transactionLogIndex)
         );
-        CREATE INDEX IF NOT EXISTS {TABLE_NAME_NEON_TRANSACTION_LOGS}_block_hash ON {TABLE_NAME_NEON_TRANSACTION_LOGS}(blockHash);
-        CREATE INDEX IF NOT EXISTS {TABLE_NAME_NEON_TRANSACTION_LOGS}_address ON {TABLE_NAME_NEON_TRANSACTION_LOGS}(address);
-        CREATE INDEX IF NOT EXISTS {TABLE_NAME_NEON_TRANSACTION_LOGS}_topic ON {TABLE_NAME_NEON_TRANSACTION_LOGS}(topic);
-        """, TABLE_NAME_NEON_TRANSACTION_LOGS
+        CREATE INDEX IF NOT EXISTS {table_name}_block_hash ON {table_name}(blockHash);
+        CREATE INDEX IF NOT EXISTS {table_name}_address ON {table_name}(address);
+        CREATE INDEX IF NOT EXISTS {table_name}_topic ON {table_name}(topic);
+        """, table_name
 
 
 def CREATE_TABLE_SOLANA_NEON_TRANSACTIONS() -> Tuple[str, str]:
-    TABLE_NAME_SOLANA_NEON_TRANSACTIONS = 'solana_neon_transactions'
+    table_name = 'solana_neon_transactions'
     return f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_SOLANA_NEON_TRANSACTIONS} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             sol_sign CHAR(88),
             neon_sign CHAR(66),
             slot BIGINT,
@@ -116,18 +109,17 @@ def CREATE_TABLE_SOLANA_NEON_TRANSACTIONS() -> Tuple[str, str]:
             UNIQUE(sol_sign, neon_sign, idx),
             UNIQUE(neon_sign, sol_sign, idx)
         );
-        """, TABLE_NAME_SOLANA_NEON_TRANSACTIONS
+        """, table_name
 
 
 def CREATE_TABLE_NEON_TRANSACTIONS() -> Tuple[str, str]:
-    TABLE_NAME_NEON_TRANSACTIONS = 'neon_transactions'
+    table_name = 'neon_transactions'
     return f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME_NEON_TRANSACTIONS} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             neon_sign CHAR(66),
             from_addr CHAR(42),
             sol_sign CHAR(88),
             slot BIGINT,
-            block_height BIGINT,
             block_hash CHAR(66),
             idx INT,
 
@@ -154,7 +146,7 @@ def CREATE_TABLE_NEON_TRANSACTIONS() -> Tuple[str, str]:
             UNIQUE(neon_sign),
             UNIQUE(sol_sign, idx)
         );
-        """, TABLE_NAME_NEON_TRANSACTIONS
+        """, table_name
 
 
 def CREATE_TABLE_TRANSACTION_RECEIPTS(table_name='transaction_receipts') -> Tuple[str, str]:

@@ -8,6 +8,8 @@ services:
       SOLANA_URL: http://solana:8899
       RUST_LOG: solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
     hostname: solana
+    ports:
+      - 127.0.0.1:8899:8899
     expose:
       - "8899"
       - "9900"
@@ -122,11 +124,11 @@ services:
       WEB3_RPC_URL: 'http://proxy:9090/solana'
       WEB3_PRIVATE_KEY: ''
       NEON_ERC20_TOKENS:
-      NEON_ERC20_MAX_AMOUNT: 1000
+      NEON_ERC20_MAX_AMOUNT: 2000
       FAUCET_SOLANA_ENABLE: 'true'
       SOLANA_URL: 'http://solana:8899'
       NEON_OPERATOR_KEYFILE: '/root/.config/solana/id.json'
-      NEON_ETH_MAX_AMOUNT: 1000
+      NEON_ETH_MAX_AMOUNT: 2000
       TEST_FAUCET_INIT_NEON_BALANCE: 100000
     hostname: faucet
     ports:
