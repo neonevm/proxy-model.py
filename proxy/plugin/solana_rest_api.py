@@ -404,7 +404,7 @@ class EthereumModel:
     def stat_transactionsCountFailed(self, slot):
         return self._db.get_failed_tx_count_since(slot, self._operator_list)
 
-    def stat_minimalGasPrice(self):
+    def stat_envMinimalGasPrice(self):
         return MINIMAL_GAS_PRICE
 
     def stat_receivedNeons(self, slot):
