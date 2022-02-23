@@ -1,4 +1,5 @@
 import random
+import base64
 
 from eth_keys import keys as eth_keys
 from hashlib import sha256

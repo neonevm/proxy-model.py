@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Dict, Optional, Any
+from .eth_proto import Trx as EthTx
 
 import json
 import base58
@@ -27,7 +28,7 @@ class SolanaBlockInfo:
         self.hash = hash
         self.parent_hash = parent_hash
         self.time = time
-        self.signs = signs
+        self.signs = (signs or [])
 
     def __str__(self):
         return str_fmt_object(self)
@@ -246,3 +247,8 @@ def get_from_dict(src: Dict, *path) -> Optional[Any]:
         if val is None:
             return None
     return val
+
+
+def get_holder_msg(eth_trx: EthTx):
+    unsigned_msg = eth_trx.unsigned_msg()
+    return  eth_trx.signature() + len(unsigned_msg).to_bytes(8, byteorder="little") + unsigned_msg
