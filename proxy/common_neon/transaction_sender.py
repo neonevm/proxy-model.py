@@ -16,37 +16,24 @@ from typing import Dict, Optional
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
-from solana.rpc.api import Client as SolanaClient
 
-from ..common_neon.address import accountWithSeed, EthereumAddress, ether2program
+from .address import accountWithSeed, EthereumAddress, ether2program
 from ..common_neon.errors import EthereumError
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
 from .emulator_interactor import call_emulated
 from .neon_instruction import NeonInstruction as NeonIxBuilder
 from .solana_interactor import COMPUTATION_BUDGET_EXCEEDED
-from .solana_interactor import SolanaInteractor, check_for_errors, check_if_accounts_blocked
+from .solana_interactor import SolanaInteractor, Measurements, SolTxListSender, SolTxError
 from .solana_interactor import check_if_big_transaction, check_if_program_exceeded_instructions
-from .solana_interactor import get_error_definition_from_receipt, check_if_storage_is_empty_error
-from .solana_interactor import check_if_blockhash_notfound
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
-from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, ACCOUNT_PERMISSION_UPDATE_INT, MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_ERR, HOLDER_MSG_SIZE
+from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, ACCOUNT_PERMISSION_UPDATE_INT
+from ..environment import MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_ERR
+from ..environment import HOLDER_MSG_SIZE, CONTRACT_EXTRA_SPACE
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..environment import get_solana_accounts, get_operator_ethereum_accounts
 from ..common_neon.account_whitelist import AccountWhitelist
 from proxy.common_neon.utils import get_holder_msg
-
-
-class SolanaTxError(Exception):
-    def __init__(self, receipt):
-        self.result = receipt
-        error = get_error_definition_from_receipt(receipt)
-        if isinstance(error, list) and isinstance(error[1], str):
-            super().__init__(str(error[1]))
-            self.error = str(error[1])
-        else:
-            super().__init__('Unknown error')
-            self.error = json.dumps(receipt)
 
 
 class NeonTxStage(metaclass=abc.ABCMeta):
@@ -167,7 +154,7 @@ class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
         self._seed_base = ACCOUNT_SEED_VERSION + bytes.fromhex(self._address[2:])
         self._init_sol_account()
         self._account_desc['contract'] = self.sol_account
-        self.size = account_desc['code_size'] + 2048
+        self.size = account_desc['code_size'] + CONTRACT_EXTRA_SPACE
 
     def _create_account(self):
         assert self.sol_account
@@ -319,10 +306,12 @@ class OperatorResourceList:
             self.error(f"Fail to init accounts for resource {opkey}:{rid}, err({err}): {err_tb}")
             return False
 
-    def _min_operator_balance_to_err(self):
+    @staticmethod
+    def _min_operator_balance_to_err():
         return MIN_OPERATOR_BALANCE_TO_ERR
 
-    def _min_operator_balance_to_warn(self):
+    @staticmethod
+    def _min_operator_balance_to_warn():
         return MIN_OPERATOR_BALANCE_TO_WARN
 
     def _check_operator_balance(self):
@@ -347,7 +336,7 @@ class OperatorResourceList:
         ether_address = self._resource.ether
         solana_address = ether2program(ether_address)[0]
 
-        account_info = self._s.solana.get_multiple_accounts_info([solana_address])[0]
+        account_info = self._s.solana.get_account_info(solana_address)
         if account_info is not None:
             self.debug(f"Use existing ether account for resource {opkey}:{rid}")
             return solana_address
@@ -367,7 +356,7 @@ class OperatorResourceList:
 
         stage_list = [NeonCreatePermAccount(self._s, seed, STORAGE_SIZE) for seed in seed_list]
         account_list = [s.sol_account for s in stage_list]
-        info_list = self._s.solana.get_multiple_accounts_info(account_list)
+        info_list = self._s.solana.get_account_info_list(account_list)
         balance = self._s.solana.get_multiple_rent_exempt_balances_for_size([STORAGE_SIZE])[0]
         for account, stage in zip(info_list, stage_list):
             if not account:
@@ -408,14 +397,16 @@ class OperatorResourceList:
 
 @logged_group("neon.Proxy")
 class NeonTxSender:
-    def __init__(self, db: MemDB, client: SolanaClient, eth_tx: EthTx, steps: int):
+    def __init__(self, db: MemDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
         self._db = db
         self.eth_tx = eth_tx
         self.neon_sign = '0x' + eth_tx.hash_signed().hex()
         self.steps = steps
-        self.solana = SolanaInteractor(client)
+        self.waiter = self
+        self.solana = solana
         self._resource_list = OperatorResourceList(self)
         self.resource = None
+        self.signer = None
         self.operator_key = None
         self.builder = None
 
@@ -446,6 +437,7 @@ class NeonTxSender:
 
     def set_resource(self, resource: Optional[OperatorResourceInfo]):
         self.resource = resource
+        self.signer = resource.signer
         self.operator_key = resource.public_key()
         self.builder = NeonIxBuilder(self.operator_key, resource.ether)
 
@@ -468,7 +460,7 @@ class NeonTxSender:
         self._pend_tx_into_db(self.solana.get_recent_blockslot())
 
     def _validate_whitelist(self):
-        whitelist = AccountWhitelist(self.solana.client, ACCOUNT_PERMISSION_UPDATE_INT, self.resource.signer)
+        whitelist = AccountWhitelist(self.solana, ACCOUNT_PERMISSION_UPDATE_INT, self.resource.signer)
         if not whitelist.has_client_permission(self.eth_sender[2:]):
             self.warning(f'Sender account {self.eth_sender} is not allowed to execute transactions')
             raise Exception(f'Sender account {self.eth_sender} is not allowed to execute transactions')
@@ -478,7 +470,7 @@ class NeonTxSender:
             raise Exception(f'Contract account {self.deployed_contract} is not allowed for deployment')
 
     def _validate_tx_count(self):
-        info = self.solana.get_neon_account_info(EthereumAddress(self.eth_sender))
+        info = self.solana.get_account_info_layout(EthereumAddress(self.eth_sender))
         if not info:
             return
 
@@ -515,7 +507,7 @@ class NeonTxSender:
         self.error(f'No strategy to execute the Neon transaction: {self.eth_tx}')
         raise RuntimeError('No strategy to execute the Neon transaction')
 
-    def on_wait_confirm(self, slot: int):
+    def on_wait_confirm(self, _, slot: int):
         self._pend_tx_into_db(slot)
 
     def _pend_tx_into_db(self, slot: int):
@@ -564,7 +556,7 @@ class NeonTxSender:
             self.debug(f'destination address {self.to_address}')
 
         self._emulator_json = call_emulated(dst, src, self.eth_tx.callData.hex(), hex(self.eth_tx.value))
-        self.debug(f'emulator returns: {json.dumps(self._emulator_json, indent=3)}')
+        self.debug(f'emulator returns: {json.dumps(self._emulator_json, sort_keys=True)}')
 
         self.steps_emulated = self._emulator_json['steps_executed']
 
@@ -634,120 +626,6 @@ class NeonTxSender:
 
 
 @logged_group("neon.Proxy")
-class SolTxListSender:
-    def __init__(self, sender: NeonTxSender, tx_list: [Transaction], name: str):
-        self._s = sender
-        self._name = name
-
-        self._blockhash = None
-        self._retry_idx = 0
-        self._tx_list = tx_list
-        self._bad_block_list = []
-        self._blocked_account_list = []
-        self._pending_list = []
-        self._budget_exceeded_list = []
-        self._storage_bad_status_list = []
-        self._unknown_error_list = []
-
-        self._all_tx_list = [self._bad_block_list,
-                             self._blocked_account_list,
-                             self._budget_exceeded_list,
-                             self._pending_list]
-
-    def clear(self):
-        self._tx_list.clear()
-        for lst in self._all_tx_list:
-            lst.clear()
-
-    def _get_full_list(self):
-        return [tx for lst in self._all_tx_list for tx in lst]
-
-    def send(self) -> SolTxListSender:
-        solana = self._s.solana
-        eth_tx = self._s.eth_tx
-        signer = self._s.resource.signer
-
-        self.debug(f'Start stage: {self._name}')
-
-        while (self._retry_idx < RETRY_ON_FAIL) and (len(self._tx_list)):
-            self._retry_idx += 1
-            receipt_list = solana.send_multiple_transactions(signer, self._tx_list, eth_tx, self._name, self)
-
-            success_cnt = 0
-            for receipt, tx in zip(receipt_list, self._tx_list):
-                if check_if_blockhash_notfound(receipt):
-                    self._bad_block_list.append(tx)
-                elif check_if_accounts_blocked(receipt):
-                    self._blocked_account_list.append(tx)
-                elif check_for_errors(receipt):
-                    if check_if_program_exceeded_instructions(receipt):
-                        self._budget_exceeded_list.append(tx)
-                    else:
-                        custom = check_if_storage_is_empty_error(receipt)
-                        if custom in (1, 4):
-                            self._storage_bad_status_list.append(receipt)
-                        else:
-                            self._unknown_error_list.append(receipt)
-                else:
-                    success_cnt += 1
-                    self._on_success_send(tx, receipt)
-
-            self.debug(f'retry {self._retry_idx}, ' +
-                       f'total receipts {len(receipt_list)}, ' +
-                       f'success receipts {success_cnt}, ' +
-                       f'bad blocks {len(self._bad_block_list)}, ' +
-                       f'blocked accounts {len(self._blocked_account_list)}, ' +
-                       f'budget exceeded {len(self._budget_exceeded_list)}, ' +
-                       f'bad storage: {len(self._storage_bad_status_list)}, ' +
-                       f'unknown error: {len(self._unknown_error_list)}')
-
-            self._on_post_send()
-
-        if len(self._tx_list):
-            raise RuntimeError('Run out of attempts to execute transaction')
-        return self
-
-    def on_wait_confirm(self, _, slot: int):
-        self._s.on_wait_confirm(slot)
-
-    def _on_success_send(self, tx: Transaction, receipt: {}):
-        """Store the last successfully blockhash and set it in _set_tx_blockhash"""
-        self._blockhash = tx.recent_blockhash
-
-    def _on_post_send(self):
-        if len(self._unknown_error_list):
-            raise SolanaTxError(self._unknown_error_list[0])
-        elif len(self._storage_bad_status_list):
-            raise SolanaTxError(self._storage_bad_status_list[0])
-        elif len(self._budget_exceeded_list):
-            raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
-
-        if len(self._blocked_account_list):
-            time.sleep(0.4)  # one block time
-
-        # force changing of recent_blockhash if Solana doesn't accept the current one
-        if len(self._bad_block_list):
-            self._blockhash = None
-
-        # resend not-accepted transactions
-        self._move_txlist()
-
-    def _set_tx_blockhash(self, tx):
-        """Try to keep the branch of block history"""
-        tx.recent_blockhash = self._blockhash
-        tx.signatures.clear()
-
-    def _move_txlist(self):
-        full_list = self._get_full_list()
-        self.clear()
-        for tx in full_list:
-            self._set_tx_blockhash(tx)
-            self._tx_list.append(tx)
-        if len(self._tx_list):
-            self.debug(f' Resend Solana transactions: {len(self._tx_list)}')
-
-
-@logged_group("neon.Proxy")
 class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
     NAME = 'UNKNOWN STRATEGY'
 
@@ -803,8 +681,7 @@ class SimpleNeonTxSender(SolTxListSender):
     def _on_success_send(self, tx: Transaction, receipt: {}):
         if not self.neon_res.is_valid():
             if self.neon_res.decode(self._s.neon_sign, receipt).is_valid():
-                self._s.solana.get_measurements(self._name, self._s.eth_tx, receipt)
-
+                Measurements().extract(self._name, receipt)
         super()._on_success_send(tx, receipt)
 
     def _on_post_send(self):
@@ -868,6 +745,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
     def __init__(self, *args, **kwargs):
         SimpleNeonTxSender.__init__(self, *args, **kwargs)
         self._is_canceled = False
+        self._postponed_error_receipt = None
 
     def _try_lock_accounts(self):
         time.sleep(0.4)  # one block time
@@ -904,31 +782,49 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         if self._is_canceled:
             # Transaction with cancel is confirmed
             self.neon_res.canceled(receipt)
+            Measurements().extract(self._name, receipt)
         else:
             super()._on_success_send(tx, receipt)
+
+    def _raise_error(self, error=None):
+        if self._postponed_error_receipt:
+            raise SolTxError(self._postponed_error_receipt)
+
+        assert error is not None
+        raise error
 
     def _on_post_send(self):
         # Result is received
         if self.neon_res.is_valid():
             self.debug(f'Got Neon tx {"cancel" if self._is_canceled else "result"}: {self.neon_res}')
+            if self._is_canceled and self._postponed_error_receipt:
+                self._raise_error()
             return self.clear()
+
+        if len(self._node_behind_list):
+            self.warning(f'Node is behind by {self._slots_behind} slots')
+            time.sleep(1)
 
         # Unknown error happens - cancel the transaction
         if len(self._unknown_error_list):
+            if self._is_canceled:
+                self._raise_error(SolTxError(self._unknown_error_list[0]))
+
+            self._postponed_error_receipt = self._unknown_error_list[0]
             self._unknown_error_list.clear()
-            if not self._is_canceled:
-                self._cancel()
-            return
+            if self._total_success_cnt:
+                return self._cancel()
+            self._raise_error()
 
         # There is no more retries to send transactions
-        if self._retry_idx == RETRY_ON_FAIL:
-            if not self._is_canceled:
+        if self._retry_idx >= RETRY_ON_FAIL:
+            if (not self._is_canceled) and (self._total_success_cnt > 0):
                 self._cancel()
-            return
+            self._raise_error(RuntimeError('No more retries to complete transaction!'))
 
         # The storage has bad structure and the result isn't received! ((
         if len(self._storage_bad_status_list):
-            raise SolanaTxError(self._storage_bad_status_list[0])
+            self._raise_error(SolTxError(self._storage_bad_status_list[0]))
 
         # Blockhash is changed (((
         if len(self._bad_block_list):

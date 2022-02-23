@@ -7,8 +7,6 @@ import inspect
 
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 headers = {'Content-type': 'application/json'}
-EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
-contract_extra_space = 2048
 
 def get_line_number():
     cf = inspect.currentframe()
@@ -44,7 +42,7 @@ class TestUserStories(unittest.TestCase):
         print('response:', response)
         estimated_gas = response['result']
 
-        self.assertEqual(estimated_gas, "0x1628df0")
+        self.assertEqual(estimated_gas, "0x19fb9f0")
 
     def test_02_check_eth_estimateGas_on_deploying_a_contract_with_the_empty_value(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/122")
@@ -60,7 +58,7 @@ class TestUserStories(unittest.TestCase):
         print('response:', response)
         estimated_gas = response['result']
 
-        self.assertEqual(estimated_gas, "0x1628df0")
+        self.assertEqual(estimated_gas, "0x19fb9f0")
 
     def test_03_check_eth_estimateGas_on_deploying_a_contract_with_the_empty_data(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/122")
@@ -76,7 +74,7 @@ class TestUserStories(unittest.TestCase):
         print('response:', response)
         estimated_gas = response['result']
 
-        self.assertEqual(estimated_gas, "0x104d368")
+        self.assertEqual(estimated_gas, "0x13b3368")
 
     def test_04_check_eth_estimateGas_on_deploying_a_contract_with_the_empty_data_and_value(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/122")
@@ -91,7 +89,7 @@ class TestUserStories(unittest.TestCase):
         print('response:', response)
         estimated_gas = response['result']
 
-        self.assertEqual(estimated_gas, "0x104d368")
+        self.assertEqual(estimated_gas, "0x13b3368")
 
     def test_05_check_params_omitted(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/318")

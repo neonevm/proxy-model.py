@@ -1,33 +1,52 @@
 import json
 from logged_groups import logged_group
 
-from solana.rpc.api import Client as SolanaClient
-from proxy.common_neon.address import EthereumAddress
 from proxy.common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_holder_msg
-from ..environment import EXTRA_GAS, CHAIN_ID, HOLDER_MSG_SIZE
+from ..environment import CONTRACT_EXTRA_SPACE, EXTRA_GAS, CHAIN_ID, HOLDER_MSG_SIZE
 from .eth_proto import Trx as EthTrx
+from .solana_interactor import SolanaInteractor
+from .layouts import ACCOUNT_INFO_LAYOUT
 
 
 
 @logged_group("neon.Proxy")
 class GasEstimate:
-    def __init__(self, request: dict, client: SolanaClient):
+    def __init__(self, request: dict, solana: SolanaInteractor):
         self.sender = request.get('from', "0x0000000000000000000000000000000000000000")[2:]
         self.contract = request.get('to', '0x')[2:]
         self.value = request.get('value', '0x00')
         self.data = request.get('data', '0x')[2:]
 
-        # TODO Solana 1.9 - replace by getFeeForMessage
-        fees = client.get_fees("processed")
-        self.fee = fees["result"]["value"]["feeCalculator"]
+        self.solana = solana
 
     @logged_group("neon.Proxy")
     def execution_cost(self, *, logger) -> int:
         result = call_emulated(self.contract or "deploy", self.sender, self.data, self.value)
         self.debug(f'emulator returns: {json.dumps(result, indent=3)}')
 
-        return result['used_gas']
+        # Gas used in emulatation
+        cost = result['used_gas']
+
+        # Some accounts may not exist at the emulation time 
+        # Calculate gas for them separately
+        accounts_size = [
+            a["code_size"] + CONTRACT_EXTRA_SPACE
+            for a in result["accounts"]
+            if (not a["code_size_current"]) and a["code_size"]
+        ]
+
+        if not accounts_size:
+            return cost
+
+        accounts_size.append(ACCOUNT_INFO_LAYOUT.sizeof())
+        balances = self.solana.get_multiple_rent_exempt_balances_for_size(accounts_size)
+
+        for balance in balances[:-1]:
+            cost += balances[-1]
+            cost += balance
+
+        return cost
 
     @logged_group("neon.Proxy")
     def trx_size_cost(self, *, logger) -> int:
@@ -45,12 +64,12 @@ class GasEstimate:
             s = 0x1820182018201820182018201820182018201820182018201820182018201820
         )
         msg = get_holder_msg(trx)
-        return ((len(msg) // HOLDER_MSG_SIZE) + 1) * self.fee["lamportsPerSignature"]
+        return ((len(msg) // HOLDER_MSG_SIZE) + 1) * 5000
 
     @logged_group("neon.Proxy")
     def iterative_overhead_cost(self, *, logger) -> int:
-        last_iteration_cost = self.fee["lamportsPerSignature"]
-        cancel_cost = self.fee["lamportsPerSignature"]
+        last_iteration_cost = 5000
+        cancel_cost = 5000
 
         return last_iteration_cost + cancel_cost
 

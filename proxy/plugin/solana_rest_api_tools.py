@@ -1,12 +1,9 @@
 from datetime import datetime
 from solana.publickey import PublicKey
-from solana.rpc.api import Client as SolanaClient
-from solana.rpc.commitment import Confirmed
 from logged_groups import logged_group
 
-from ..common_neon.address import ether2program, EthereumAddress
-from ..common_neon.utils import get_from_dict
 from ..environment import  read_elf_params, TIMEOUT_TO_RELOAD_NEON_CONFIG
+
 
 @logged_group("neon.Proxy")
 def neon_config_load(ethereum_model, *, logger):
