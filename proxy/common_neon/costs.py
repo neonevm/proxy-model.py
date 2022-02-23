@@ -2,7 +2,7 @@ import base58
 
 from ..db.scheme import CREATE_TABLE_OPERATOR_COST
 from ..environment import EVM_LOADER_ID
-from ..indexer.utils import BaseDB
+from ..indexer.base_db import BaseDB
 
 
 class SQLCost(BaseDB):

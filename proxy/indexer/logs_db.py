@@ -1,7 +1,7 @@
 import json
 
 from ..db.scheme import CREATE_TABLE_NEON_TRANSACTION_LOGS
-from ..indexer.utils import BaseDB
+from ..indexer.base_db import BaseDB
 
 
 class LogsDB(BaseDB):
@@ -20,7 +20,7 @@ class LogsDB(BaseDB):
                     (
                         log['address'],
                         block.hash,
-                        block.height,
+                        block.slot,
                         log['transactionHash'],
                         int(log['transactionLogIndex'], 16),
                         topic,
