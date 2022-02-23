@@ -8,6 +8,7 @@
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
 """
+import logging
 
 from solana.publickey import PublicKey
 from .proxy import entry_point
@@ -16,17 +17,19 @@ from .indexer.airdropper import run_airdropper
 from .indexer.indexer import run_indexer
 from proxy.db.creation import run_dbcreation
 
+logger = logging.getLogger('neon')
+
 if __name__ == '__main__':
     solana_url = os.environ['SOLANA_URL']
     evm_loader_id = os.environ['EVM_LOADER']
-    print(f"Will run with SOLANA_URL={solana_url}; EVM_LOADER={evm_loader_id}")
+    logger.info(f"Will run with SOLANA_URL={solana_url}; EVM_LOADER={evm_loader_id}")
 
     airdropper_mode = os.environ.get('AIRDROPPER_MODE', 'False').lower() in [1, 'true', 'True']
     indexer_mode = os.environ.get('INDEXER_MODE', 'False').lower() in [1, 'true', 'True']
     dbcreation_mode = os.environ.get('DBCREATION_MODE', 'False').lower() in [1, 'true', 'True']
 
     if dbcreation_mode:
-        print("Will run in db creation mode")
+        logger.info("Will run in db creation mode")
         run_dbcreation()
     elif airdropper_mode:
         print("Will run in airdropper mode")
@@ -48,7 +51,7 @@ if __name__ == '__main__':
                        pp_solana_url,
                        max_conf)
     elif indexer_mode:
-        print("Will run in indexer mode")
+        logger.info("Will run in indexer mode")
         run_indexer(solana_url)
     else:
         entry_point()

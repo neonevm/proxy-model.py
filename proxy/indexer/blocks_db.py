@@ -1,7 +1,7 @@
 from typing import Optional
 
 from ..db.scheme import CREATE_TABLE_SOLANA_BLOCK
-from ..indexer.utils import BaseDB, DBQuery
+from ..indexer.base_db import BaseDB, DBQuery
 from ..common_neon.utils import SolanaBlockInfo
 
 
