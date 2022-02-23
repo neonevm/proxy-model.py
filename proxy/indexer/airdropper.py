@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
 
-from ..db.scheme import CREATE_TABLE_FAILED_AIRDROP_ATTEMPTS, CREATE_TABLE_AIRDROP_READY
+from ..db.scheme import create_table_failed_airdrop_attempts, create_table_airdrop_ready
 from ..environment import NEON_PRICE_USD, EVM_LOADER_ID
 from ..common_neon.solana_interactor import SolanaInteractor
 
@@ -25,7 +25,7 @@ class FailedAttempts(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        (sql, self._table_name) = CREATE_TABLE_FAILED_AIRDROP_ATTEMPTS()
+        (sql, self._table_name) = create_table_failed_airdrop_attempts()
         return sql
 
     def airdrop_failed(self, eth_address, reason):
@@ -41,7 +41,7 @@ class AirdropReadySet(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        (sql, self._table_name) = CREATE_TABLE_AIRDROP_READY()
+        (sql, self._table_name) = create_table_airdrop_ready()
         return sql
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):

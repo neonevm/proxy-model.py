@@ -1,7 +1,7 @@
 from typing import Tuple
 
 
-def CREATE_TABLE_OPERATOR_COST() -> Tuple[str, str]:
+def create_table_operator_cost() -> Tuple[str, str]:
     table_name = 'OPERATOR_COST'
     return f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
@@ -18,7 +18,7 @@ def CREATE_TABLE_OPERATOR_COST() -> Tuple[str, str]:
         """, table_name
 
 
-def CREATE_TABLE_NEON_ACCOUNTS() -> Tuple[str, str]:
+def create_table_neon_accounts() -> Tuple[str, str]:
     table_name = 'neon_accounts'
     return f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
@@ -33,7 +33,7 @@ def CREATE_TABLE_NEON_ACCOUNTS() -> Tuple[str, str]:
         """, table_name
 
 
-def CREATE_TABLE_FAILED_AIRDROP_ATTEMPTS() -> Tuple[str, str]:
+def create_table_failed_airdrop_attempts() -> Tuple[str, str]:
     table_name = 'failed_airdrop_attempts'
     return f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
@@ -45,7 +45,7 @@ def CREATE_TABLE_FAILED_AIRDROP_ATTEMPTS() -> Tuple[str, str]:
         """, table_name
 
 
-def CREATE_TABLE_AIRDROP_READY() -> Tuple[str, str]:
+def create_table_airdrop_ready() -> Tuple[str, str]:
     table_name = 'airdrop_ready'
     return f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
@@ -58,7 +58,7 @@ def CREATE_TABLE_AIRDROP_READY() -> Tuple[str, str]:
         """, table_name
 
 
-def CREATE_TABLE_SOLANA_BLOCK() -> Tuple[str, str]:
+def create_table_solana_block() -> Tuple[str, str]:
     table_name = 'solana_block'
     return f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
@@ -75,7 +75,7 @@ def CREATE_TABLE_SOLANA_BLOCK() -> Tuple[str, str]:
         """, table_name
 
 
-def CREATE_TABLE_NEON_TRANSACTION_LOGS() -> Tuple[str, str]:
+def create_table_neon_transaction_logs() -> Tuple[str, str]:
     table_name = 'neon_transaction_logs'
     return f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
@@ -97,7 +97,7 @@ def CREATE_TABLE_NEON_TRANSACTION_LOGS() -> Tuple[str, str]:
         """, table_name
 
 
-def CREATE_TABLE_SOLANA_NEON_TRANSACTIONS() -> Tuple[str, str]:
+def create_table_solana_neon_transactions() -> Tuple[str, str]:
     table_name = 'solana_neon_transactions'
     return f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
@@ -112,7 +112,7 @@ def CREATE_TABLE_SOLANA_NEON_TRANSACTIONS() -> Tuple[str, str]:
         """, table_name
 
 
-def CREATE_TABLE_NEON_TRANSACTIONS() -> Tuple[str, str]:
+def create_table_neon_transactions() -> Tuple[str, str]:
     table_name = 'neon_transactions'
     return f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
@@ -149,7 +149,7 @@ def CREATE_TABLE_NEON_TRANSACTIONS() -> Tuple[str, str]:
         """, table_name
 
 
-def CREATE_TABLE_TRANSACTION_RECEIPTS(table_name='transaction_receipts') -> Tuple[str, str]:
+def create_table_transaction_receipts(table_name='transaction_receipts') -> Tuple[str, str]:
     return f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
             slot        BIGINT,

@@ -1,7 +1,7 @@
 from typing import Optional
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo
-from ..db.scheme import CREATE_TABLE_SOLANA_NEON_TRANSACTIONS, CREATE_TABLE_NEON_TRANSACTIONS
+from ..db.scheme import create_table_solana_neon_transactions, create_table_neon_transactions
 from ..indexer.base_db import BaseDB, DBQuery
 from ..indexer.utils import SolanaIxSignInfo
 
@@ -11,7 +11,7 @@ class SolanaNeonTxsDB(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        (sql, self._table_name) = CREATE_TABLE_SOLANA_NEON_TRANSACTIONS()
+        (sql, self._table_name) = create_table_solana_neon_transactions()
         return sql
 
     def set_txs(self, neon_sign: str, used_ixs: [SolanaIxSignInfo]):
@@ -37,7 +37,7 @@ class NeonTxsDB(BaseDB):
         self._sol_neon_txs_db = SolanaNeonTxsDB()
 
     def _create_table_sql(self) -> str:
-        (sql, self._table_name) = CREATE_TABLE_NEON_TRANSACTIONS()
+        (sql, self._table_name) = create_table_neon_transactions()
         return sql
 
     def _tx_from_value(self, value) -> Optional[NeonTxFullInfo]:

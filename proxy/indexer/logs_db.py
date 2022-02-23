@@ -1,6 +1,6 @@
 import json
 
-from ..db.scheme import CREATE_TABLE_NEON_TRANSACTION_LOGS
+from ..db.scheme import create_table_neon_transaction_logs
 from ..indexer.base_db import BaseDB
 
 
@@ -9,7 +9,7 @@ class LogsDB(BaseDB):
         BaseDB.__init__(self)
 
     def _create_table_sql(self) -> str:
-        (sql, self._table_name) = CREATE_TABLE_NEON_TRANSACTION_LOGS()
+        (sql, self._table_name) = create_table_neon_transaction_logs()
         return sql
 
     def push_logs(self, logs, block):
