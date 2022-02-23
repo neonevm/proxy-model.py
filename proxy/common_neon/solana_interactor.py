@@ -59,8 +59,22 @@ class SendResult(NamedTuple):
 @logged_group("neon.Proxy")
 class SolanaInteractor:
     def __init__(self, solana_url: str) -> None:
+        self.solana_url = solana_url
         self._client = SolanaClient(solana_url)._provider
         self._fuzzing_hash_cycle = False
+
+    def is_connected(self) -> bool:
+        """Health check."""
+        try:
+            response = requests.get(f"{self.solana_url}/health")
+            response.raise_for_status()
+        except (IOError, requests.HTTPError) as err:
+            self.logger.error("Health check failed with error: %s", str(err))
+            return False
+
+        self.debug(f"Health check {response.content}")
+
+        return response.ok
 
     def _make_request(self, request) -> RPCResponse:
         """This method is used to make retries to send request to Solana"""

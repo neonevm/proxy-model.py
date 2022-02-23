@@ -1,5 +1,5 @@
 from logged_groups import logged_group
-from typing import Optional
+from typing import List, Optional
 
 from ..indexer.indexer_db import IndexerDB
 
@@ -62,3 +62,18 @@ class MemDB:
 
     def get_contract_code(self, address: str) -> str:
         return self._db.get_contract_code(address)
+
+    def is_db_connected(self):
+        return self._db.is_db_connected()
+
+    def get_tx_count_since(self, slot: int, operators: List[str]):
+        return self._db.get_tx_count_since(slot, operators)
+
+    def get_failed_tx_count_since(self, slot: int, operators: List[str]):
+        return self._db.get_failed_tx_count_since(slot, operators)
+
+    def get_neon_income_since(self, slot: int, operators: List[str]):
+        return self._db.get_neon_income_since(slot, operators)
+
+    def get_neon_tx_stat(self, neon_tx: str):
+        return self._db.get_neon_tx_stat(neon_tx)

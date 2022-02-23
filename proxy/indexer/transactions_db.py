@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo
 from ..indexer.base_db import BaseDB, DBQuery
@@ -160,3 +160,60 @@ class NeonTxsDB(BaseDB):
             return []
 
         return [self._tx_from_value(v) for v in values if v is not None]
+
+    def getTxCountSince(self, slot: int, operators: List[str]):
+        request = f'''
+                SELECT COUNT(*) FROM neon_transactions
+                INNER JOIN solana_neon_transactions_costs ON neon_transactions.sol_sign = solana_neon_transactions_costs.sol_sign
+                WHERE neon_transactions.slot >= %s AND solana_neon_transactions_costs.operator IN ({','.join(['%s' for _ in operators])})
+        '''
+        operators.insert(0, slot)
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, operators)
+            return cursor.fetchone()[0]
+
+    def getFailedTxCountSince(self, slot: int, operators: List[str]):
+        request = f'''
+                SELECT COUNT(*) FROM neon_transactions
+                INNER JOIN solana_neon_transactions_costs ON neon_transactions.sol_sign = solana_neon_transactions_costs.sol_sign
+                WHERE neon_transactions.slot >= %s
+                AND solana_neon_transactions_costs.operator IN ({','.join(['%s' for _ in operators])})
+                AND neon_transactions.status = '0x0'
+        '''
+        operators.insert(0, slot)
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, operators)
+            return cursor.fetchone()[0]
+
+    def getNeonIncomeSince(self, slot: int, operators: List[str]):
+        request = f'''
+                SELECT SUM(solana_neon_transactions_costs.token_income) FROM solana_neon_transactions_costs
+                INNER JOIN solana_neon_transactions ON solana_neon_transactions.sol_sign = solana_neon_transactions_costs.sol_sign
+                WHERE solana_neon_transactions.slot >= %s AND solana_neon_transactions_costs.operator IN ({','.join(['%s' for _ in operators])})
+        '''
+        operators.insert(0, slot)
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, operators)
+            return cursor.fetchone()[0]
+
+    def getNeonTxStat(self, neon_tx: str):
+        request = f'''
+                SELECT
+                neon_transactions.neon_sign,
+                neon_transactions.status,
+                neon_transactions.gas_used,
+                solana_neon_transactions_costs.operator,
+                solana_neon_transactions_costs.neon_steps,
+                solana_neon_transactions_costs.bpf_instructions,
+                solana_neon_transactions_costs.sol_cost,
+                solana_neon_transactions_costs.token_income
+                FROM solana_neon_transactions
+                INNER JOIN solana_neon_transactions_costs ON solana_neon_transactions.sol_sign = solana_neon_transactions_costs.sol_sign
+                INNER JOIN neon_transactions ON solana_neon_transactions.neon_sign = neon_transactions.neon_sign
+                WHERE solana_neon_transactions.neon_sign = %s
+        '''
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, (neon_tx,))
+            return cursor.fetchall()
+
+

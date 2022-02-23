@@ -138,3 +138,18 @@ class IndexerDB:
 
     def add_tx_costs(self, tx_costs: List[CostInfo]):
         self._costs_db.add_costs(tx_costs)
+
+    def is_db_connected(self):
+        return self._constants.is_db_connected()
+
+    def get_tx_count_since(self, slot: int, operators: List[str]):
+        return self._txs_db.getTxCountSince(slot, operators)
+
+    def get_failed_tx_count_since(self, slot: int, operators: List[str]):
+        return self._txs_db.getFailedTxCountSince(slot, operators)
+
+    def get_neon_income_since(self, slot: int, operators: List[str]):
+        return self._txs_db.getNeonIncomeSince(slot, operators)
+
+    def get_neon_tx_stat(self, neon_tx: str):
+        return self._txs_db.getNeonTxStat(neon_tx)

@@ -34,7 +34,8 @@ from ..common_neon.errors import EthereumError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.utils import SolanaBlockInfo
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEPS
-from ..environment import neon_cli
+from ..environment import MINIMAL_GAS_PRICE
+from ..environment import neon_cli, get_solana_accounts
 from ..memdb.memdb import MemDB
 from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx
@@ -68,6 +69,11 @@ class EthereumModel:
         self.debug(f"Worker id {self.proxy_id}")
 
         neon_config_load(self)
+
+        self._operator_list = []
+        for solana_acc in get_solana_accounts():
+            acc = str(solana_acc.public_key())
+            self._operator_list.append(acc)
 
     def neon_proxy_version(self):
         return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
@@ -379,6 +385,33 @@ class EthereumModel:
         except Exception as err:
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
+
+    def stat_checkDB(self):
+        return int(self._db.is_db_connected())
+
+    def stat_checkSolana(self):
+        return int(self._solana.is_connected())
+
+    def stat_checkBalance(self):
+        balances = {}
+        for acc in self._operator_list:
+            balances[acc] = self._solana.get_sol_balance(acc)
+        return balances
+
+    def stat_transactionsCount(self, slot):
+        return self._db.get_tx_count_since(slot, self._operator_list)
+
+    def stat_transactionsCountFailed(self, slot):
+        return self._db.get_failed_tx_count_since(slot, self._operator_list)
+
+    def stat_minimalGasPrice(self):
+        return MINIMAL_GAS_PRICE
+
+    def stat_receivedNeons(self, slot):
+        return int(self._db.get_neon_income_since(slot, self._operator_list))
+
+    def stat_getTxStat(self, neon_tx):
+        return self._db.get_neon_tx_stat(neon_tx)
 
 
 class JsonEncoder(json.JSONEncoder):

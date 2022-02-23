@@ -1,6 +1,7 @@
 from typing import List
 
-from ..indexer.utils import BaseDB, CostInfo
+from ..indexer.utils import CostInfo
+from ..indexer.base_db import BaseDB
 
 
 class CostsDB(BaseDB):
