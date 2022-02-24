@@ -41,7 +41,6 @@ if __name__ == '__main__':
         max_conf = float(os.environ.get('MAX_CONFIDENCE_INTERVAL', 0.02))
 
         run_airdropper(solana_url,
-                       evm_loader_id,
                        pyth_mapping_account,
                        faucet_url,
                        wrapper_whitelist,
