@@ -70,9 +70,9 @@
 
         UNIQUE(blockNumber, transactionHash, transactionLogIndex)
     );
-    CREATE INDEX IF NOT EXISTS neon_transaction_logs_block_hash ON {table_name}(blockHash);
-    CREATE INDEX IF NOT EXISTS neon_transaction_logs_address ON {table_name}(address);
-    CREATE INDEX IF NOT EXISTS neon_transaction_logs_topic ON {table_name}(topic);
+    CREATE INDEX IF NOT EXISTS neon_transaction_logs_block_hash ON neon_transaction_logs(blockHash);
+    CREATE INDEX IF NOT EXISTS neon_transaction_logs_address ON neon_transaction_logs(address);
+    CREATE INDEX IF NOT EXISTS neon_transaction_logs_topic ON neon_transaction_logs(topic);
 
     CREATE TABLE IF NOT EXISTS solana_neon_transactions (
         sol_sign CHAR(88),
