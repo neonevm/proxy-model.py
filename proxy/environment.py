@@ -40,6 +40,7 @@ CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
 ACCOUNT_PERMISSION_UPDATE_INT = int(os.environ.get("ACCOUNT_PERMISSION_UPDATE_INT", 60 * 5))
 PERM_ACCOUNT_LIMIT = max(int(os.environ.get("PERM_ACCOUNT_LIMIT", 2)), 2)
 OPERATOR_FEE = Decimal(os.environ.get("OPERATOR_FEE", "0.1"))
+OPERATOR_GAS_ACCOUNTS = os.environ.get('OPERATOR_GAS_ACCOUNTS', '0x8966Ef2ae7A109Fd0977F5151b4607dc42929fBD;0x619d670152103a972B67a45b9Be764FF11979E4E')
 NEON_PRICE_USD = Decimal('0.25')
 SOL_PRICE_UPDATE_INTERVAL = int(os.environ.get("SOL_PRICE_UPDATE_INTERVAL", 60))
 GET_SOL_PRICE_MAX_RETRIES = int(os.environ.get("GET_SOL_PRICE_MAX_RETRIES", 3))
@@ -120,12 +121,15 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
 
 @logged_group("neon.Proxy")
 def get_operator_ethereum_accounts(*, logger) -> [EthereumAddress]:
-    list = [] # TODO read from config
-    for _ in range(1, 15):
-        account = EthereumAddress.random()
-        list.append(account)
-    
-    return list
+    accounts = []
+
+    for account in OPERATOR_GAS_ACCOUNTS.split(';'):
+        address = EthereumAddress(account)
+        logger.debug(f'Add gas account: {address}')
+
+        accounts.append(address)
+
+    return accounts
 
 @logged_group("neon.Proxy")
 class neon_cli(CliBase):

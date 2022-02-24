@@ -131,6 +131,9 @@ class EthereumModel:
         self.debug(f'eth_getBalance: {account}')
         try:
             acc_info = self._solana.get_account_info_layout(EthereumAddress(account))
+            if acc_info is None:
+                return hex(0)
+
             return hex(acc_info.balance)
         except Exception as err:
             self.debug(f"eth_getBalance: Can't get account info: {err}")
