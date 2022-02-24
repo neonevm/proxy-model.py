@@ -1,3 +1,12 @@
+    CREATE TABLE IF NOT EXISTS constants (
+        key TEXT UNIQUE,
+        value BYTEA
+    );
+
+    CREATE TABLE IF NOT EXISTS airdrop_scheduled (
+        key TEXT UNIQUE,
+        value BYTEA
+    );
 
     CREATE TABLE IF NOT EXISTS OPERATOR_COST (
         id SERIAL PRIMARY KEY,
