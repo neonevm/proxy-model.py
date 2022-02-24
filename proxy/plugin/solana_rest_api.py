@@ -60,6 +60,7 @@ class EthereumModel:
         else:
             self.gas_price_calculator = GasPriceCalculator(SolanaInteractor(PP_SOLANA_URL), PYTH_MAPPING_ACCOUNT)
         self.gas_price_calculator.update_mapping()
+        self.gas_price_calculator.try_update_gas_price()
 
         with self.proxy_id_glob.get_lock():
             self.proxy_id = self.proxy_id_glob.value
@@ -90,7 +91,7 @@ class EthereumModel:
         return self.neon_config_dict['NEON_CHAIN_ID']
 
     def eth_gasPrice(self):
-        return hex(int(self.gas_price_calculator.get_min_gas_price()))
+        return hex(int(self.gas_price_calculator.get_suggested_gas_price()))
 
     def eth_estimateGas(self, param):
         try:
