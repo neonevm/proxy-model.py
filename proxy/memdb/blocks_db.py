@@ -75,9 +75,7 @@ class RequestSolanaBlockList:
             if not block.time:
                 if block.slot > latest_slot:
                     continue
-                block.time = block_time
-                block.hash = '0x' + os.urandom(32).hex()
-                block.parent_hash = '0x' + os.urandom(32).hex()
+                block = self._b.generate_fake_block(block.slot, block_time)
             else:
                 block_time = max(block_time, block.time)
                 latest_slot = max(block.slot, latest_slot)
@@ -270,7 +268,11 @@ class MemBlocksDB:
         if block_slot > self._first_block.slot:
             return self._block_by_slot.get(block_slot, SolanaBlockInfo())
 
-        return self.db.get_full_block_by_slot(block_slot)
+        block = self.db.get_full_block_by_slot(block_slot)
+        if not block.time:
+            block = self.generate_fake_block(block.slot, 1)
+        return block
+
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         self._update_block_dicts()
@@ -285,16 +287,21 @@ class MemBlocksDB:
         if data:
             block = pickle.loads(data)
         else:
-            block = SolanaBlockInfo(
-                slot=neon_res.slot,
-                time=self._latest_block.time,
-                hash='0x' + os.urandom(32).hex(),
-                parent_hash='0x' + os.urandom(32).hex(),
-            )
+            block = self.generate_fake_block(neon_res.slot, self._latest_block.time)
             self.debug(f'Generate fake block {block} for {neon_res.sol_sign}')
 
         block.signs.append(neon_res.sol_sign)
         return block
+
+    @staticmethod
+    def generate_fake_block(slot: int, block_time: int) -> SolanaBlockInfo:
+        # TODO: return predictable information
+        return SolanaBlockInfo(
+            slot=slot,
+            time=block_time,
+            hash='0x' + os.urandom(32).hex(),
+            parent_hash='0x' + os.urandom(32).hex(),
+        )
 
     def submit_block(self, neon_res: NeonTxResultInfo) -> SolanaBlockInfo:
         block = self.solana.get_block_info(neon_res.slot)
