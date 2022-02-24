@@ -15,7 +15,7 @@ class CostsDB(BaseDB):
                 sol_sign CHAR(88) UNIQUE,
                 operator VARCHAR(50),
 
-                neon_steps INT,
+                heap_size INT,
                 bpf_instructions INT,
 
                 sol_cost BIGINT,
@@ -29,7 +29,7 @@ class CostsDB(BaseDB):
                 cost_info.sign,
                 cost_info.operator,
 
-                cost_info.step,
+                cost_info.heap,
                 cost_info.bpf,
 
                 cost_info.sol_spent,
@@ -39,6 +39,6 @@ class CostsDB(BaseDB):
         with self._conn.cursor() as cursor:
             cursor.executemany(f'''
                 INSERT INTO {self._table_name}
-                (sol_sign, operator, neon_steps, bpf_instructions, sol_cost, token_income)
+                (sol_sign, operator, heap_size, bpf_instructions, sol_cost, token_income)
                 VALUES(%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING''',
                 rows)

@@ -554,7 +554,7 @@ class PartialCallIxDecoder(DummyIxDecoder):
         tx = self._getadd_tx(storage_account, neon_tx=neon_tx, blocked_accounts=blocked_accounts)
         tx.step_count.append(step_count)
 
-        self.ix.cost_info.set_step(step_count)
+        self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
 
 
@@ -588,7 +588,7 @@ class ContinueIxDecoder(DummyIxDecoder):
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
         tx.step_count.append(step_count)
 
-        self.ix.cost_info.set_step(step_count)
+        self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
 
 
@@ -619,7 +619,7 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
             return self._decoding_skip(f'fail to init in storage {storage_account} from holder {holder_account}')
         tx.step_count.append(step_count)
 
-        self.ix.cost_info.set_step(step_count)
+        self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
 
 
@@ -679,7 +679,7 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
             return self._decoding_skip(f'fail to init the storage {storage_account} from the holder {holder_account}')
         tx.step_count.append(step_count)
 
-        self.ix.cost_info.set_step(step_count)
+        self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
 
 

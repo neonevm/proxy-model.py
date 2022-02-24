@@ -25,6 +25,7 @@ class SolanaIxSignInfo:
         self.sign = sign  # Solana transaction signature
         self.slot = slot  # Solana block slot
         self.idx  = idx   # Instruction index
+        self.steps = None # Instruction index
 
     def __str__(self):
         return f'{self.slot} {self.sign} {self.idx}'
@@ -38,6 +39,9 @@ class SolanaIxSignInfo:
     def get_req_id(self):
         return f"{self.idx}{self.sign}"[:7]
 
+    def set_steps(self, steps: int):
+        self.steps = steps
+
 
 class CostInfo:
     def __init__(self, sign: str, tx: dict, program: PublicKey):
@@ -45,24 +49,43 @@ class CostInfo:
         self.operator = None
         self.sol_spent = None
         self.bpf = None
+        self.heap = None
         self.token_income = None
-        self.step = None
         if tx:
             self.setup(tx, program)
 
     def setup(self, tx: dict, program: PublicKey):
+        def bpf_log(program, msg_words: list[str]):
+            if len(msg_words) >= 7 and\
+                msg_words[0] == 'Program' and\
+                msg_words[1] == str(program) and\
+                msg_words[2] == 'consumed' and\
+                msg_words[4] == 'of' and\
+                msg_words[6] == 'compute' and\
+                msg_words[7] == 'units':
+                return int(log_words[3])
+            return None
+        def heap_log(msg_words: list[str]):
+            if len(msg_words) >= 5 and\
+                msg_words[0] == 'Program' and\
+                msg_words[1] == "log:" and\
+                msg_words[2] == 'Total' and\
+                msg_words[3] == 'memory' and\
+                msg_words[4] == 'occupied:':
+                return int(log_words[5])
+            return None
+
         self.operator = tx['transaction']['message']['accountKeys'][0]
         self.sol_spent = tx['meta']['preBalances'][0] - tx['meta']['postBalances'][0]
         for log in tx['meta']['logMessages']:
             log_words = log.split()
-            if log_words[0] == 'Program' and\
-            log_words[1] == str(program) and\
-            log_words[2] == 'consumed' and\
-            log_words[4] == 'of' and\
-            log_words[6] == 'compute' and\
-            log_words[7] == 'units':
-                bpf = int(log_words[3])
+            bpf = bpf_log(program, log_words)
+            heap = heap_log(log_words)
+            if bpf:
                 self.bpf = max(self.bpf, bpf) if self.bpf else bpf
+            if heap:
+                self.heap = max(self.heap, heap) if self.heap else heap
+
         pre_token = 0
         post_token = 0
         for balance in tx['meta']['preTokenBalances']:
@@ -72,10 +95,6 @@ class CostInfo:
             if balance['owner'] == self.operator:
                 post_token = int(balance["uiTokenAmount"]["amount"])
         self.token_income = post_token - pre_token
-
-
-    def set_step(self, step):
-        self.step = step
 
 
 @logged_group("neon.Indexer")
