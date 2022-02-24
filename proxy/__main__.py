@@ -50,6 +50,6 @@ if __name__ == '__main__':
                        max_conf)
     elif indexer_mode:
         print("Will run in indexer mode")
-        run_indexer(solana_url, evm_loader_id)
+        run_indexer(solana_url)
     else:
         entry_point()
