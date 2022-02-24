@@ -9,12 +9,13 @@ class TestTrxReceiptsStorage(TestCase):
     def setUpClass(cls) -> None:
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/421")
         cls.testee = TrxReceiptsStorage('test_storage')
+        cls.testee.create_test_table()
 
     def create_signature(self):
         signature = b''
         for i in range(0, 5):
             signature += randint(0, 255).to_bytes(1, byteorder='big')
-        return b58encode(signature).decode("utf-8") 
+        return b58encode(signature).decode("utf-8")
 
     def create_slot_sig(self, max_slot):
         slot = randint(0, max_slot)

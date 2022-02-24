@@ -8,11 +8,7 @@ from ..indexer.utils import SolanaIxSignInfo
 
 class SolanaNeonTxsDB(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        (sql, self._table_name) = create_table_solana_neon_transactions()
-        return sql
+        BaseDB.__init__(self, 'solana_neon_transactions')
 
     def set_txs(self, neon_sign: str, used_ixs: [SolanaIxSignInfo]):
 
@@ -30,15 +26,11 @@ class SolanaNeonTxsDB(BaseDB):
 
 class NeonTxsDB(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
+        BaseDB.__init__(self, 'neon_transactions')
         self._column_lst = ('neon_sign', 'from_addr', 'sol_sign', 'slot', 'block_hash', 'idx',
                             'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value', 'calldata',
                             'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs')
         self._sol_neon_txs_db = SolanaNeonTxsDB()
-
-    def _create_table_sql(self) -> str:
-        (sql, self._table_name) = create_table_neon_transactions()
-        return sql
 
     def _tx_from_value(self, value) -> Optional[NeonTxFullInfo]:
         if not value:

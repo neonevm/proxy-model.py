@@ -22,11 +22,7 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 
 class FailedAttempts(BaseDB):
     def __init__(self) -> None:
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        (sql, self._table_name) = create_table_failed_airdrop_attempts()
-        return sql
+        BaseDB.__init__(self, 'failed_airdrop_attempts')
 
     def airdrop_failed(self, eth_address, reason):
         with self._conn.cursor() as cur:
@@ -38,11 +34,7 @@ class FailedAttempts(BaseDB):
 
 class AirdropReadySet(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        (sql, self._table_name) = create_table_airdrop_ready()
-        return sql
+        BaseDB.__init__(self, 'airdrop_ready')
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):
         finished = int(datetime.now().timestamp())

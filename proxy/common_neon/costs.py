@@ -1,17 +1,12 @@
 import base58
 
-from ..db.scheme import create_table_operator_cost
 from ..environment import EVM_LOADER_ID
 from ..indexer.base_db import BaseDB
 
 
 class SQLCost(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        (sql, self._table_name) = create_table_operator_cost()
-        return sql
+        BaseDB.__init__(self, 'OPERATOR_COST')
 
     def insert(self, hash, cost, used_gas, sender, to_address, sig, status, reason):
         with self._conn.cursor() as cur:

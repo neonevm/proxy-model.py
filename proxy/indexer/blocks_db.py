@@ -1,19 +1,14 @@
 from typing import Optional
 
-from ..db.scheme import create_table_solana_block
 from ..indexer.base_db import BaseDB, DBQuery
 from ..common_neon.utils import SolanaBlockInfo
 
 
 class SolanaBlocksDB(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
+        BaseDB.__init__(self, 'solana_block')
         self._column_lst = ('slot', 'hash')
         self._full_column_lst = ('slot', 'hash', 'parent_hash', 'blocktime', 'signatures')
-
-    def _create_table_sql(self) -> str:
-        (sql, self._table_name) = create_table_solana_block()
-        return sql
 
     def _block_from_value(self, slot: Optional[int], values: []) -> SolanaBlockInfo:
         if not values:

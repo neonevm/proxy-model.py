@@ -6,11 +6,7 @@ from ..indexer.base_db import BaseDB
 
 class LogsDB(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        (sql, self._table_name) = create_table_neon_transaction_logs()
-        return sql
+        BaseDB.__init__(self, 'neon_transaction_logs')
 
     def push_logs(self, logs, block):
         rows = []

@@ -26,12 +26,8 @@ if __name__ == '__main__':
 
     airdropper_mode = os.environ.get('AIRDROPPER_MODE', 'False').lower() in [1, 'true', 'True']
     indexer_mode = os.environ.get('INDEXER_MODE', 'False').lower() in [1, 'true', 'True']
-    dbcreation_mode = os.environ.get('DBCREATION_MODE', 'False').lower() in [1, 'true', 'True']
 
-    if dbcreation_mode:
-        logger.info("Will run in db creation mode")
-        run_dbcreation()
-    elif airdropper_mode:
+    if airdropper_mode:
         print("Will run in airdropper mode")
         pyth_mapping_account = PublicKey(os.environ['PYTH_MAPPING_ACCOUNT'])
         faucet_url = os.environ['FAUCET_URL']

@@ -17,11 +17,7 @@ class NeonAccountInfo:
 
 class NeonAccountDB(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        (sql, self._table_name) = create_table_neon_accounts()
-        return sql
+        BaseDB.__init__(self, 'neon_accounts')
 
     def set_acc_by_request(self, neon_account: str, pda_account: str, code_account: str, code: str):
         with self._conn.cursor() as cursor:
