@@ -1,6 +1,5 @@
 import json
 
-from ..db.scheme import create_table_neon_transaction_logs
 from ..indexer.base_db import BaseDB
 
 

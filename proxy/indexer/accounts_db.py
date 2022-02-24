@@ -1,4 +1,3 @@
-from ..db.scheme import create_table_neon_accounts
 from ..indexer.base_db import BaseDB, DBQuery
 from ..common_neon.utils import str_fmt_object
 

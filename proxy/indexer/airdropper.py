@@ -11,7 +11,6 @@ from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
 
-from ..db.scheme import create_table_failed_airdrop_attempts, create_table_airdrop_ready
 from ..environment import NEON_PRICE_USD, EVM_LOADER_ID
 from ..common_neon.solana_interactor import SolanaInteractor
 
