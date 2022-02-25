@@ -1,17 +1,25 @@
 import unittest
+
+from solana.publickey import PublicKey
 from proxy.indexer.pythnetwork import PythNetworkClient
 from proxy.plugin.gas_price_calculator import GasPriceCalculator
 from solana.rpc.api import Client as SolanaClient
-from unittest.mock import patch, call
+from unittest.mock import patch, call, Mock
 from decimal import Decimal
-from ..environment import NEON_PRICE_USD, OPERATOR_FEE, GET_SOL_PRICE_MAX_RETRIES, SOL_PRICE_UPDATE_INTERVAL
+from ..environment import NEON_PRICE_USD, OPERATOR_FEE, GET_SOL_PRICE_MAX_RETRIES, SOL_PRICE_UPDATE_INTERVAL, \
+    MINIMAL_GAS_PRICE
+
+MINIMAL_GAS_PRICE = None
 
 class TestGasPriceCalculator(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.solana_url = "https://api.devnet.solana.com"
+        cls.mapping_account = PublicKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')  # only for devnet
+        cls.solana_url = "https://api.devnet.solana.com" # devnet
         cls.solana_client = SolanaClient(cls.solana_url)
-        cls.testee = GasPriceCalculator(cls.solana_client)
+        cls.testee = GasPriceCalculator(cls.solana_client, cls.mapping_account)
+        cls.testee.env_min_gas_price = Mock()
+        cls.testee.env_min_gas_price.return_value = None
 
 
     def setUp(self) -> None:
@@ -31,11 +39,11 @@ class TestGasPriceCalculator(unittest.TestCase):
         mock_get_price.side_effect = [{'status': 1, 'price': sol_price}]
 
         gas_price = self.testee.get_min_gas_price()
-        expected_price = (sol_price / NEON_PRICE_USD) * (1 + OPERATOR_FEE)
+        expected_price = (sol_price / NEON_PRICE_USD) * (1 + OPERATOR_FEE) * pow(Decimal(10), 9)
         self.assertEqual(gas_price, expected_price)
 
         mock_get_current_time.assert_called_once()
-        mock_get_price.assert_called_once()
+        mock_get_price.assert_called_once_with('Crypto.SOL/USD')
 
 
     @patch.object(GasPriceCalculator, 'get_current_time')
@@ -53,11 +61,11 @@ class TestGasPriceCalculator(unittest.TestCase):
         ]
 
         gas_price = self.testee.get_min_gas_price()
-        expected_price = (sol_price / NEON_PRICE_USD) * (1 + OPERATOR_FEE)
+        expected_price = (sol_price / NEON_PRICE_USD) * (1 + OPERATOR_FEE) * pow(Decimal(10), 9)
         self.assertEqual(gas_price, expected_price)
 
         mock_get_current_time.assert_called_once()
-        mock_get_price.assert_has_calls([call()] * 2)
+        mock_get_price.assert_has_calls([call('Crypto.SOL/USD')] * 2)
 
 
     @patch.object(GasPriceCalculator, 'get_current_time')
@@ -76,11 +84,11 @@ class TestGasPriceCalculator(unittest.TestCase):
         ]
 
         gas_price = self.testee.get_min_gas_price()
-        expected_price = (sol_price / NEON_PRICE_USD) * (1 + OPERATOR_FEE)
+        expected_price = (sol_price / NEON_PRICE_USD) * (1 + OPERATOR_FEE) * pow(Decimal(10), 9)
         self.assertEqual(gas_price, expected_price)
 
         mock_get_current_time.assert_called_once()
-        mock_get_price.assert_has_calls([call()] * 2)
+        mock_get_price.assert_has_calls([call('Crypto.SOL/USD')] * 2)
 
 
     @patch.object(GasPriceCalculator, 'get_current_time')
@@ -99,7 +107,7 @@ class TestGasPriceCalculator(unittest.TestCase):
             self.testee.get_min_gas_price()
 
         mock_get_current_time.assert_called_once()
-        mock_get_price.assert_has_calls([call()] * GET_SOL_PRICE_MAX_RETRIES)
+        mock_get_price.assert_has_calls([call('Crypto.SOL/USD')] * GET_SOL_PRICE_MAX_RETRIES)
 
 
     @patch.object(GasPriceCalculator, 'get_current_time')
@@ -123,15 +131,15 @@ class TestGasPriceCalculator(unittest.TestCase):
             {'status': 1, 'price': sol_price2}]
 
         gas_price1 = self.testee.get_min_gas_price()
-        expected_price1 = (sol_price1 / NEON_PRICE_USD) * (1 + OPERATOR_FEE)
+        expected_price1 = (sol_price1 / NEON_PRICE_USD) * (1 + OPERATOR_FEE) * pow(Decimal(10), 9)
         self.assertEqual(gas_price1, expected_price1)
 
         gas_price2 = self.testee.get_min_gas_price()
         self.assertEqual(gas_price2, expected_price1)
 
         gas_price3 = self.testee.get_min_gas_price()
-        expected_price2 = (sol_price2 / NEON_PRICE_USD) * (1 + OPERATOR_FEE)
+        expected_price2 = (sol_price2 / NEON_PRICE_USD) * (1 + OPERATOR_FEE) * pow(Decimal(10), 9)
         self.assertEqual(gas_price3, expected_price2)
 
         mock_get_current_time.assert_has_calls([call()] * 3)
-        mock_get_price.assert_has_calls([call()] * 2)
+        mock_get_price.assert_has_calls([call('Crypto.SOL/USD')] * 2)

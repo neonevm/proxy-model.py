@@ -22,16 +22,14 @@ from solana.rpc.commitment import Confirmed
 from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, Transaction, TransactionInstruction
 from solana_utils import *
-from solcx import install_solc
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from web3 import Web3
 from web3.auto.gethdev import w3
-
-install_solc(version='0.7.0')
+from .testing_helpers import request_airdrop
 from solcx import compile_source
 
-MINIMAL_GAS_PRICE = 1
+MINIMAL_GAS_PRICE = 1000000003
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/365'
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
@@ -65,12 +63,13 @@ def send_routine(acc_seed, contractAddress, abi, loop, return_dict, padding_stri
             abi=abi
         )
     new_eth_account = proxy.eth.account.create(acc_seed)
+    request_airdrop(new_eth_account.address)
     right_nonce = proxy.eth.get_transaction_count(new_eth_account.address)
     trx_store = storage_contract.functions.add_some(2, loop, padding_string).buildTransaction(
         {
             "chainId": proxy.eth.chain_id,
             "gas": 987654321,
-            "gasPrice": 0,
+            "gasPrice": 1000000001,
             "nonce": right_nonce,
         }
     )
@@ -84,6 +83,7 @@ class BlockedTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_retry_on_blocked_accounts.py setUpClass")
+        request_airdrop(eth_account.address)
 
         cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
@@ -136,7 +136,7 @@ class BlockedTest(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=0,
+            gasPrice=1000000002,
             to='',
             value=0,
             data=storage.bytecode),

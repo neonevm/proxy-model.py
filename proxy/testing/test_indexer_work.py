@@ -21,14 +21,12 @@ from solana.rpc.commitment import Confirmed
 from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, Transaction, TransactionInstruction
 from solana_utils import *
-from solcx import install_solc
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from web3 import Web3
 from web3.auto.gethdev import w3
+from .testing_helpers import request_airdrop
 
-# install_solc(version='latest')
-install_solc(version='0.7.0')
 from solcx import compile_source
 
 MINIMAL_GAS_PRICE = 1
@@ -77,6 +75,7 @@ class CancelTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_cancel_hanged.py setUpClass")
+        request_airdrop(eth_account.address)
 
         cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
@@ -131,7 +130,7 @@ class CancelTest(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=0,
+            gasPrice=1000000000,
             to='',
             value=0,
             data=storage.bytecode),
@@ -144,7 +143,8 @@ class CancelTest(unittest.TestCase):
 
         self.storage_contract = proxy.eth.contract(
             address=trx_deploy_receipt.contractAddress,
-            abi=storage.abi
+            abi=storage.abi,
+            bytecode=contract_interface['bin']
         )
 
     def create_hanged_transaction(self):
@@ -177,7 +177,6 @@ class CancelTest(unittest.TestCase):
 
         return (trx_raw.hex(), eth_signature, from_address)
 
-
     def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
@@ -209,7 +208,6 @@ class CancelTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
         trx = Transaction()
@@ -218,11 +216,9 @@ class CancelTest(unittest.TestCase):
         print(trx.__dict__)
         return send_transaction(client, trx, self.acc)
 
-
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
-
 
     def create_storage_account(self, seed):
         storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(EVM_LOADER))).digest())
@@ -236,12 +232,16 @@ class CancelTest(unittest.TestCase):
         return storage
 
     # @unittest.skip("a.i.")
-    def test_canceled(self):
-        print("\ntest_canceled")
+    def test_01_canceled(self):
+        print("\ntest_01_canceled")
         trx_receipt = proxy.eth.wait_for_transaction_receipt(self.tx_hash)
         print('trx_receipt:', trx_receipt)
         self.assertEqual(trx_receipt['status'], 0)
 
+    def test_02_get_code_from_indexer(self):
+        print("\ntest_02_get_code_from_indexer")
+        code = proxy.eth.get_code(self.storage_contract.address)
+        self.assertEqual(code, self.storage_contract.bytecode[-len(code):])
 
 
 if __name__ == '__main__':
