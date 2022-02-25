@@ -1,22 +1,33 @@
 from datetime import datetime
+from decimal import Decimal
 import time
 from logged_groups import logged_group
 from ..indexer.pythnetwork import PythNetworkClient
+from ..common_neon.solana_interactor import SolanaInteractor
 from ..environment import MINIMAL_GAS_PRICE, OPERATOR_FEE, NEON_PRICE_USD, \
     SOL_PRICE_UPDATE_INTERVAL, GET_SOL_PRICE_MAX_RETRIES, GET_SOL_PRICE_RETRY_INTERVAL
 
 
 @logged_group("neon.gas_price_calculator")
 class GasPriceCalculator:
-    def __init__(self, solana_client) -> None:
-        self.solana_client = solana_client
-        self.pyth_network_client = PythNetworkClient(self.solana_client)
+    def __init__(self, solana: SolanaInteractor, pyth_mapping_acc) -> None:
+        self.solana = solana
+        self.mapping_account = pyth_mapping_acc
+        self.pyth_network_client = PythNetworkClient(self.solana)
         self.recent_sol_price_update_time = None
         self.min_gas_price = None
 
-    def get_min_gas_price(self):
+    def env_min_gas_price(self):
         if MINIMAL_GAS_PRICE is not None:
             return MINIMAL_GAS_PRICE
+
+    def update_mapping(self):
+        if self.mapping_account is not None:
+            self.pyth_network_client.update_mapping(self.mapping_account)
+
+    def get_min_gas_price(self):
+        if self.env_min_gas_price() is not None:
+            return self.env_min_gas_price()
         self.try_update_gas_price()
         return self.min_gas_price
 
@@ -38,12 +49,12 @@ class GasPriceCalculator:
 
         while True:
             try:
-                price = self.pyth_network_client.get_price()
+                price = self.pyth_network_client.get_price('Crypto.SOL/USD')
                 if price['status'] != 1: # tradable
                     raise Exception('Price status is not tradable')
 
                 self.recent_sol_price_update_time = cur_time
-                self.min_gas_price = (price['price'] / NEON_PRICE_USD) * (1 + OPERATOR_FEE)
+                self.min_gas_price = (price['price'] / NEON_PRICE_USD) * (1 + OPERATOR_FEE) * pow(Decimal(10), 9)
                 return
 
             except Exception as err:

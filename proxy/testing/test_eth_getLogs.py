@@ -1,11 +1,9 @@
 import unittest
 import os
 from web3 import Web3
-from solcx import install_solc
-
-# install_solc(version='latest')
-install_solc(version='0.7.0')
 from solcx import compile_source
+
+from proxy.testing.testing_helpers import request_airdrop
 
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/210'
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
@@ -54,6 +52,7 @@ class Test_eth_getLogs(unittest.TestCase):
         print(SEED)
         print('eth_account.address:', eth_account.address)
         print('eth_account.key:', eth_account.key.hex())
+        request_airdrop(eth_account.address)
 
         cls.block_hashes = []
         cls.topics = []
@@ -79,7 +78,7 @@ class Test_eth_getLogs(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=0,
+            gasPrice=1000000000,
             to='',
             value=0,
             data=storage.bytecode),
@@ -162,7 +161,7 @@ class Test_eth_getLogs(unittest.TestCase):
 
     def test_get_logs_by_fromBlock(self):
         print("\ntest_get_logs_by_fromBlock")
-        receipts = proxy.eth.get_logs({'fromBlock': self.block_numbers[0]})
+        receipts = proxy.eth.get_logs({'fromBlock': self.block_numbers[2]})
         print('receipts: ', receipts)
         self.assertEqual(len(receipts), 4)
 
@@ -175,13 +174,13 @@ class Test_eth_getLogs(unittest.TestCase):
             'topics': self.topics,
         })
         print('receipts: ', receipts)
-        self.assertEqual(len(receipts), 4)
+        self.assertEqual(len(receipts), 6)
 
     def test_get_logs_by_address(self):
         print("\ntest_get_logs_by_address")
         receipts = proxy.eth.get_logs({'address': self.storage_contract.address})
         print('receipts: ', receipts)
-        self.assertEqual(len(receipts), 4)
+        self.assertEqual(len(receipts), 6)
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,35 +1,29 @@
 import os
 import time
 import traceback
-from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
-from typing import Dict, Union
 from logged_groups import logged_group
 
-from ..environment import RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION
-from ..environment import HISTORY_START, PARALLEL_REQUESTS, FINALIZED
+from .trx_receipts_storage import TrxReceiptsStorage
+from .utils import MetricsToLogBuff
+from ..common_neon.solana_interactor import SolanaInteractor
 
-try:
-    from sql_dict import SQLDict
-    from trx_receipts_storage import TrxReceiptsStorage
-except ImportError:
-    from .sql_dict import SQLDict
-    from .trx_receipts_storage import TrxReceiptsStorage
+from ..environment import RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION
+from ..environment import HISTORY_START, PARALLEL_REQUESTS, FINALIZED, EVM_LOADER_ID
 
 
 @logged_group("neon.Indexer")
 class IndexerBase:
     def __init__(self,
-                 solana_url,
-                 evm_loader_id,
-                 last_slot):
-        self.evm_loader_id = evm_loader_id
-        self.client = Client(solana_url)
+                 solana: SolanaInteractor,
+                 last_slot: int):
+        self.solana = solana
         self.transaction_receipts = TrxReceiptsStorage('transaction_receipts')
         self.max_known_tx = self.transaction_receipts.max_known_trx()
         self.last_slot = self._init_last_slot('receipt', last_slot)
         self.current_slot = 0
         self.counter_ = 0
+        self.count_log = MetricsToLogBuff()
 
     def _init_last_slot(self, name: str, last_known_slot: int):
         """
@@ -39,7 +33,7 @@ class IndexerBase:
         - NUMBER - first start from the number, then continue from last parsed slot
         """
         last_known_slot = 0 if not isinstance(last_known_slot, int) else last_known_slot
-        latest_slot = self.client.get_slot(commitment=FINALIZED)["result"]
+        latest_slot = self.solana.get_slot(FINALIZED)["result"]
         start_int_slot = 0
         name = f'{name} slot'
 
@@ -82,31 +76,32 @@ class IndexerBase:
             time.sleep(1.0)
 
     def process_functions(self):
-        self.debug("Start indexing")
         self.gather_unknown_transactions()
 
     def gather_unknown_transactions(self):
+        start_time = time.time()
         poll_txs = set()
 
         minimal_tx = None
         continue_flag = True
-        current_slot = self.client.get_slot(commitment=FINALIZED)["result"]
+        current_slot = self.solana.get_slot(commitment=FINALIZED)["result"]
 
         max_known_tx = self.max_known_tx
 
         counter = 0
+        gathered_signatures = 0
         while (continue_flag):
             results = self._get_signatures(minimal_tx, self.max_known_tx[1])
-            self.debug("{:>3} get_signatures_for_address {}".format(counter, len(results)))
-            counter += 1
 
             if len(results) == 0:
-                self.debug("len(results) == 0")
                 break
 
             minimal_tx = results[-1]["signature"]
             max_tx = (results[0]["slot"], results[0]["signature"])
             max_known_tx = max(max_known_tx, max_tx)
+
+            gathered_signatures += len(results)
+            counter += 1
 
             for tx in results:
                 solana_signature = tx["signature"]
@@ -124,24 +119,27 @@ class IndexerBase:
                 if not self.transaction_receipts.contains(slot, solana_signature):
                     poll_txs.add(solana_signature)
 
-        self.debug("start getting receipts")
         pool = ThreadPool(PARALLEL_REQUESTS)
         pool.map(self._get_tx_receipts, poll_txs)
 
         self.current_slot = current_slot
         self.counter_ = 0
-        self.debug(max_known_tx)
         self.max_known_tx = max_known_tx
 
+        get_history_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
+        self.count_log.print(
+            self.debug,
+            list_params={"get_history_ms": get_history_ms, "gathered_signatures": gathered_signatures, "counter": counter},
+            latest_params={"max_known_tx": max_known_tx}
+        )
+
     def _get_signatures(self, before, until):
-        opts: Dict[str, Union[int, str]] = {}
-        if until is not None:
-            opts["until"] = until
-        if before is not None:
-            opts["before"] = before
-        opts["commitment"] = FINALIZED
-        result = self.client._provider.make_request("getSignaturesForAddress", self.evm_loader_id, opts)
-        return result['result']
+        response = self.solana.get_signatures_for_address(before, until, FINALIZED)
+        error = response.get('error')
+        result = response.get('result', [])
+        if error:
+            self.warning(f'Fail to get signatures: {error}')
+        return result
 
     def _get_tx_receipts(self, solana_signature):
         # trx = None
@@ -149,7 +147,7 @@ class IndexerBase:
 
         while retry > 0:
             try:
-                trx = self.client.get_confirmed_transaction(solana_signature)['result']
+                trx = self.solana.get_confirmed_transaction(solana_signature)['result']
                 self._add_trx(solana_signature, trx)
                 retry = 0
             except Exception as err:
@@ -161,14 +159,13 @@ class IndexerBase:
 
         self.counter_ += 1
         if self.counter_ % 100 == 0:
-            self.debug(self.counter_)
-
+            self.debug(f"Acquired {self.counter_} receipts")
 
     def _add_trx(self, solana_signature, trx):
         if trx is not None:
             add = False
             for instruction in trx['transaction']['message']['instructions']:
-                if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] == self.evm_loader_id:
+                if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] == EVM_LOADER_ID:
                     add = True
             if add:
                 self.debug((trx['slot'], solana_signature))

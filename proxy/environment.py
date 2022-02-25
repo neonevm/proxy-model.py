@@ -1,3 +1,4 @@
+import sys
 from decimal import Decimal
 import json
 import os
@@ -5,14 +6,13 @@ import subprocess
 from logged_groups import logged_group, LogMng
 from solana.publickey import PublicKey
 from solana.account import Account as SolanaAccount
-from typing import Optional
+from typing import Optional, List
 
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
 PP_SOLANA_URL = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
 EVM_LOADER_ID = os.environ.get("EVM_LOADER")
 neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
 
-NEW_USER_AIRDROP_AMOUNT = int(os.environ.get("NEW_USER_AIRDROP_AMOUNT", "0"))
 CONFIRMATION_CHECK_DELAY = float(os.environ.get("NEON_CONFIRMATION_CHECK_DELAY", "0.1"))
 CONTINUE_COUNT_FACTOR = int(os.environ.get("CONTINUE_COUNT_FACTOR", "3"))
 TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFIG", "3600"))
@@ -42,18 +42,34 @@ NEON_PRICE_USD = Decimal('0.25')
 SOL_PRICE_UPDATE_INTERVAL = int(os.environ.get("SOL_PRICE_UPDATE_INTERVAL", 60))
 GET_SOL_PRICE_MAX_RETRIES = int(os.environ.get("GET_SOL_PRICE_MAX_RETRIES", 3))
 GET_SOL_PRICE_RETRY_INTERVAL = int(os.environ.get("GET_SOL_PRICE_RETRY_INTERVAL", 1))
-GET_WHITE_LIST_BALANCE_MAX_RETRIES = int(os.environ.get("GET_WHITE_LIST_BALANCE_MAX_RETRIES", 3))
-GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S = int(os.environ.get("GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S", 1))
+INDEXER_LOG_SKIP_COUNT = int(os.environ.get("INDEXER_LOG_SKIP_COUNT", 10))
+MIN_OPERATOR_BALANCE_TO_WARN = max(int(os.environ.get("MIN_OPERATOR_BALANCE_TO_WARN", 9000000000)), 9000000000)
+MIN_OPERATOR_BALANCE_TO_ERR = max(int(os.environ.get("MIN_OPERATOR_BALANCE_TO_ERR", 1000000000)), 1000000000)
+SKIP_PREFLIGHT = os.environ.get("SKIP_PREFLIGHT", "NO") == "YES"
+
+PYTH_MAPPING_ACCOUNT = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
+if PYTH_MAPPING_ACCOUNT is not None:
+    PYTH_MAPPING_ACCOUNT = PublicKey(PYTH_MAPPING_ACCOUNT)
+
+class CliBase:
+
+    def run_cli(self, cmd: List[str], **kwargs) -> bytes:
+        self.debug("Calling: " + " ".join(cmd))
+        proc_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
+        if proc_result.stderr is not None:
+            print(proc_result.stderr, file=sys.stderr)
+        return proc_result.stdout
+
 
 @logged_group("neon.Proxy")
-class solana_cli:
+class solana_cli(CliBase):
     def call(self, *args):
         try:
             cmd = ["solana",
                    "--url", SOLANA_URL,
                    ] + list(args)
             self.debug("Calling: " + " ".join(cmd))
-            return subprocess.check_output(cmd, universal_newlines=True)
+            return self.run_cli(cmd, universal_newlines=True)
         except subprocess.CalledProcessError as err:
             self.error("ERR: solana error {}".format(err))
             raise
@@ -101,7 +117,8 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
 
 
 @logged_group("neon.Proxy")
-class neon_cli:
+class neon_cli(CliBase):
+
     def call(self, *args):
         try:
             ctx = json.dumps(LogMng.get_logging_context())
@@ -113,18 +130,15 @@ class neon_cli:
                    ]\
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
-            self.debug("Calling: " + " ".join(cmd))
-            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True)
+            return self.run_cli(cmd, timeout=neon_cli_timeout, universal_newlines=True)
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
 
     def version(self):
         try:
-            cmd = ["neon-cli",
-                   "--version"]
-            self.debug("Calling: " + " ".join(cmd))
-            return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True).split()[1]
+            cmd = ["neon-cli", "--version"]
+            return self.run_cli(cmd, timeout=neon_cli_timeout, universal_newlines=True).split()[1]
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise

@@ -1,11 +1,9 @@
 import unittest
 import os
+
 import rlp
 from web3 import Web3
-from solcx import install_solc
-
-# install_solc(version='latest')
-install_solc(version='0.7.0')
+from .testing_helpers import request_airdrop
 from solcx import compile_source
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
@@ -42,6 +40,8 @@ class Test_createAccountBlock(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/147")
+        request_airdrop(eth_account.address)
+
         print('eth_account.address:', eth_account.address)
         print('eth_account.key:', eth_account.key.hex())
         print('balance:', proxy.eth.get_balance(eth_account.address))
@@ -57,7 +57,7 @@ class Test_createAccountBlock(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(eth_account.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=0,
+            gasPrice=1000000000,
             to='',
             value=0,
             data=storage.bytecode),
@@ -72,7 +72,7 @@ class Test_createAccountBlock(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(eth_account.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=0,
+            gasPrice=1000000000,
             to=bytes(target_account),
             value=value),
             eth_account.key
