@@ -19,6 +19,7 @@ from solana.account import Account as SolanaAccount
 
 from .address import accountWithSeed, getTokenAddr, EthereumAddress
 from ..common_neon.errors import EthereumError
+from .compute_budget import TransactionWithComputeBudget
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
 from .emulator_interactor import call_emulated
 from .neon_instruction import NeonInstruction as NeonIxBuilder
@@ -42,7 +43,7 @@ class NeonTxStage(metaclass=abc.ABCMeta):
 
     def __init__(self, sender):
         self.s = sender
-        self.tx = Transaction()
+        self.tx = TransactionWithComputeBudget()
 
     def _is_empty(self):
         return not len(self.tx.signatures)
@@ -323,7 +324,7 @@ class OperatorResourceList:
         return True
 
     def _create_perm_accounts(self, seed_list):
-        tx = Transaction()
+        tx = TransactionWithComputeBudget()
 
         stage_list = [NeonCreatePermAccount(self._s, seed, STORAGE_SIZE) for seed in seed_list]
         account_list = [s.sol_account for s in stage_list]
@@ -398,7 +399,7 @@ class NeonTxSender:
             self.to_address = '0x' + self.to_address
         self.steps_emulated = 0
 
-        self.create_account_tx = Transaction()
+        self.create_account_tx = TransactionWithComputeBudget()
         self.account_txs_name = ''
         self._resize_contract_list = []
         self._create_account_list = []
@@ -645,7 +646,7 @@ class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def build_tx(self) -> Transaction:
-        return Transaction()
+        return TransactionWithComputeBudget()
 
     @abc.abstractmethod
     def _validate(self) -> bool:
@@ -725,7 +726,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         return True
 
     def build_tx(self) -> Transaction:
-        tx = Transaction()
+        tx = TransactionWithComputeBudget()
         if not self._skip_create_account:
             tx.add(self.s.create_account_tx)
         tx.add(self.s.builder.make_noniterative_call_transaction(len(tx.instructions)))

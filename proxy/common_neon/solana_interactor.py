@@ -21,6 +21,7 @@ from logged_groups import logged_group
 from typing import Dict, Union, Any, List, NamedTuple, cast
 from base58 import b58decode, b58encode
 
+from .constants import COMPUTE_BUDGET_ID
 from .costs import update_transaction_cost
 from .utils import get_from_dict, SolanaBlockInfo
 from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, WRITE_TRANSACTION_COST_IN_DB, SKIP_PREFLIGHT
@@ -675,7 +676,7 @@ class Measurements:
             messages[-1]['logs'].append(log)
 
         for instr in instructions:
-            if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',): continue
+            if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',COMPUTE_BUDGET_ID,): continue
             if messages[0]['program'] != instr['program']:
                 raise ValueError('Invalid program in log messages: expect %s, actual %s' % (
                     messages[0]['program'], instr['program']))

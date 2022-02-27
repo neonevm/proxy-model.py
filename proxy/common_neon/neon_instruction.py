@@ -13,6 +13,7 @@ from typing import Tuple
 from logged_groups import logged_group
 
 from .address import accountWithSeed, ether2program, getTokenAddr, EthereumAddress
+from .compute_budget import TransactionWithComputeBudget
 from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from .layouts import CREATE_ACCOUNT_LAYOUT
 from ..environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE
@@ -135,7 +136,7 @@ class NeonInstruction:
 
         base = self.operator_account
         data = create_account_layout(0, 0, bytes(eth_address), nonce)
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         if code_acc is None:
             trx.add(TransactionInstruction(
                 program_id=EVM_LOADER_ID,
@@ -168,7 +169,7 @@ class NeonInstruction:
         return trx, neon_token_account
 
     def createERC20TokenAccountTrx(self, token_info) -> Transaction:
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=bytes.fromhex('0F'),
@@ -203,7 +204,7 @@ class NeonInstruction:
         )
 
     def make_write_transaction(self, offset: int, data: bytes) -> Transaction:
-        return Transaction().add(TransactionInstruction(
+        return TransactionWithComputeBudget().add(TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=write_holder_layout(self.perm_accs_id, offset, data),
             keys=[
@@ -237,8 +238,8 @@ class NeonInstruction:
         )
 
     def make_noniterative_call_transaction(self, length_before: int = 0) -> Transaction:
-        trx = Transaction()
-        trx.add(self.make_keccak_instruction(length_before + 1, len(self.eth_trx.unsigned_msg()), 5))
+        trx = TransactionWithComputeBudget()
+        trx.add(self.make_keccak_instruction(len(trx.instructions) + length_before + 1, len(self.eth_trx.unsigned_msg()), 5))
         trx.add(self.make_05_call_instruction())
         return trx
 
@@ -250,7 +251,7 @@ class NeonInstruction:
             append_keys = self.eth_accounts
             append_keys.append(AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False))
             append_keys += obligatory_accounts
-        return Transaction().add(TransactionInstruction(
+        return TransactionWithComputeBudget().add(TransactionInstruction(
             program_id = EVM_LOADER_ID,
             data = bytearray.fromhex("15") + self.eth_trx.nonce.to_bytes(8, 'little'),
             keys = [
@@ -286,8 +287,8 @@ class NeonInstruction:
         )
 
     def make_partial_call_or_continue_transaction(self, steps=0, length_before=0) -> Transaction:
-        trx = Transaction()
-        trx.add(self.make_keccak_instruction(length_before + 1, len(self.eth_trx.unsigned_msg()), 13))
+        trx = TransactionWithComputeBudget()
+        trx.add(self.make_keccak_instruction(len(trx.instructions) + length_before + 1, len(self.eth_trx.unsigned_msg()), 13))
         trx.add(self.make_partial_call_or_continue_instruction(steps))
         return trx
 
@@ -295,7 +296,7 @@ class NeonInstruction:
         data = bytearray.fromhex("0E") + self.collateral_pool_index_buf + steps.to_bytes(8, byteorder='little')
         if index:
             data = data + index.to_bytes(8, byteorder="little")
-        return Transaction().add(TransactionInstruction(
+        return TransactionWithComputeBudget().add(TransactionInstruction(
             program_id = EVM_LOADER_ID,
             data = data,
             keys = [

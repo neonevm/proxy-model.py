@@ -1,4 +1,3 @@
-
 import traceback
 
 from logged_groups import logged_group
@@ -9,7 +8,7 @@ from solana.transaction import AccountMeta
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 
-from proxy.common_neon.constants import INCINERATOR_PUBKEY, KECCAK_PROGRAM, SYSVAR_INSTRUCTION_PUBKEY
+from proxy.common_neon.constants import INCINERATOR_PUBKEY, KECCAK_PROGRAM, SYSVAR_INSTRUCTION_PUBKEY, COMPUTE_BUDGET_ID
 from proxy.common_neon.neon_instruction import NeonInstruction
 from proxy.common_neon.solana_interactor import SolanaInteractor, SolTxListSender
 from proxy.common_neon.utils import get_from_dict
@@ -28,6 +27,7 @@ class Canceller:
         PublicKey(SYSVAR_RENT_PUBKEY),
         PublicKey(INCINERATOR_PUBKEY),
         PublicKey(SYS_PROGRAM_ID),
+        PublicKey(COMPUTE_BUDGET_ID),
     ]
 
     def __init__(self):

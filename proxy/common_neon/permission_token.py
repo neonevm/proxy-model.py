@@ -9,6 +9,8 @@ from proxy.common_neon.solana_interactor import SolanaInteractor, SolTxListSende
 from decimal import Decimal
 import os
 
+from .compute_budget import TransactionWithComputeBudget
+
 class PermissionToken:
     def __init__(self,
                  solana: SolanaInteractor,
@@ -34,7 +36,7 @@ class PermissionToken:
         if info is not None:
             return token_account
 
-        txn = Transaction()
+        txn = TransactionWithComputeBudget()
         create_txn = spl_token.create_associated_token_account(
             payer=self.signer.public_key(),
             owner=PublicKey(ether2program(ether_addr)[0]),
