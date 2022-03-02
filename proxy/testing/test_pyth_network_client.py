@@ -134,16 +134,15 @@ class TestPythNetworkClient(unittest.TestCase):
         mock_get_account_info.assert_called_once_with(mapping_account, length=0)
 
 
-    # Fails all the time. Depends on Solana devnet state
-    # def test_integration_success_read_price(self):
-    #     '''
-    #     Reading mapping account and prices from real Solana (This test might fail sometimes)
-    #     '''
-    #     try:
-    #         self.update_mapping()
-    #         price1 = self.testee.get_price(sol_usd_symbol)
-    #         sleep(2)
-    #         price2 = self.testee.get_price(sol_usd_symbol)
-    #         self.assertTrue(price1['valid_slot'] != price2['valid_slot'])
-    #     except Exception as err:
-    #         self.fail(f"Expected get_price not throws exception but it does: {err}")
+    def test_integration_success_read_price(self):
+        '''
+        Reading mapping account and prices from real Solana (This test might fail sometimes)
+        '''
+        try:
+            self.update_mapping()
+            price1 = self.testee.get_price(sol_usd_symbol)
+            sleep(2)
+            price2 = self.testee.get_price(sol_usd_symbol)
+            self.assertTrue(price1['valid_slot'], price2['valid_slot'])
+        except Exception as err:
+            self.fail(f"Expected get_price not throws exception but it does: {err}")

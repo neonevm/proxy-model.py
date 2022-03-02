@@ -47,10 +47,7 @@ def get_accounts_from_storage(solana: SolanaInteractor, storage_account, *, logg
     if info is None:
         raise Exception(f"Can't get information about {storage_account}")
 
-    if info.tag != 30:
-        logger.debug("Empty")
-        return None
-    else:
+    if info.tag == 30:
         logger.debug("Not empty storage")
 
         acc_list = []
@@ -67,6 +64,9 @@ def get_accounts_from_storage(solana: SolanaInteractor, storage_account, *, logg
             acc_list.append((writable, str(some_pubkey)))
 
         return acc_list
+    else:
+        logger.debug("Empty")
+        return None
 
 
 @logged_group("neon.Indexer")
