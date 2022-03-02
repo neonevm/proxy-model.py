@@ -181,7 +181,7 @@ class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
         # Replace the old code account with the new code account
         self._old_sol_account = account_desc['contract']
         account_desc['contract'] = self.sol_account
-        self.size = account_desc['code_size'] + 2048
+        self.size = account_desc['code_size'] + CONTRACT_EXTRA_SPACE
 
     def _resize_account(self):
         account = self._account_desc['account']
