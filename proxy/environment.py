@@ -1,3 +1,4 @@
+import logging
 import sys
 from decimal import Decimal
 import json
@@ -155,6 +156,8 @@ def read_elf_params(out_dict):
 
 ELF_PARAMS = {}
 read_elf_params(ELF_PARAMS)
+logger = logging.getLogger("neon.Proxy")
+logger.debug(f"ELF_PARAMS: {ELF_PARAMS}")
 COLLATERAL_POOL_BASE = ELF_PARAMS.get("NEON_POOL_BASE")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(ELF_PARAMS.get("NEON_TOKEN_MINT"))
 EVM_BYTE_COST = int(ELF_PARAMS.get("NEON_EVM_BYTE_COST"))
