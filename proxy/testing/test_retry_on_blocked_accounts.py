@@ -1,7 +1,7 @@
 import os
 
 from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY
-from proxy.environment import ETH_TOKEN_MINT_ID
+from proxy.environment import NEON_TOKEN_MINT
 
 os.environ['SOLANA_URL'] = "http://solana:8899"
 os.environ['EVM_LOADER'] = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
@@ -111,7 +111,7 @@ class BlockedTest(unittest.TestCase):
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
-        # cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, cls.caller_token)
+        # cls.token.transfer(NEON_TOKEN_MINT, 2000, cls.caller_token)
 
         collateral_pool_index = 2
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
@@ -124,7 +124,7 @@ class BlockedTest(unittest.TestCase):
         acc_info = ACCOUNT_INFO_LAYOUT.parse(data)
 
         code_address = PublicKey(acc_info.code_account)
-        alternate_token = get_associated_token_address(PublicKey(sol_address), ETH_TOKEN_MINT_ID)
+        alternate_token = get_associated_token_address(PublicKey(sol_address), NEON_TOKEN_MINT)
 
         return (sol_address, alternate_token, code_address)
 
@@ -207,21 +207,16 @@ class BlockedTest(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                # Operator's NEON token account:
-                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # User's NEON token account:
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
+                # Operator's NEON token account: pay gas to caller
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(SYS_PROGRAM_ID), is_signer=False, is_writable=False),
+                # NeonEVM program account:
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
 
                 AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-
-                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
 
