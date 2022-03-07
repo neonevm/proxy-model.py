@@ -587,12 +587,6 @@ class SolTxListSender:
         elif len(self._budget_exceeded_list):
             raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
 
-        # There is no more retries to send transactions
-        if self._retry_idx >= RETRY_ON_FAIL:
-            if not self._is_canceled:
-                self._cancel()
-            return
-
         if len(self._blocked_account_list):
             time.sleep(0.4)  # one block time
 
