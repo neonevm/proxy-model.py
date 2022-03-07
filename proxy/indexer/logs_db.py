@@ -1,5 +1,5 @@
 import json
-from ..indexer.utils import BaseDB
+from ..indexer.base_db import BaseDB
 
 
 class LogsDB(BaseDB):
@@ -35,7 +35,7 @@ class LogsDB(BaseDB):
                     (
                         log['address'],
                         block.hash,
-                        block.height,
+                        block.slot,
                         log['transactionHash'],
                         int(log['transactionLogIndex'], 16),
                         topic,
@@ -49,8 +49,6 @@ class LogsDB(BaseDB):
                             INSERT INTO {self._table_name}(address, blockHash, blockNumber,
                                             transactionHash, transactionLogIndex, topic, json)
                             VALUES (%s, %s, %s,  %s, %s,  %s, %s) ON CONFLICT DO NOTHING''', rows)
-        else:
-            self.debug("NO LOGS")
 
 
     def get_logs(self, fromBlock = None, toBlock = None, addresses = [], topics = [], blockHash = None):

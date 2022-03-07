@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Dict, Optional, Any
+from .eth_proto import Trx as EthTx
 
 import json
 import base58
@@ -20,23 +21,29 @@ def str_fmt_object(obj):
 
 
 class SolanaBlockInfo:
-    def __init__(self, slot=None, finalized=False, height=None, hash=None, parent_hash=None, time=None, signs=None):
+    def __init__(self, slot: int, is_finalized=False, hash=None, parent_hash=None, time=None, signs=None, is_fake=False):
         self.slot = slot
-        self.finalized = finalized
-        self.height = height
+        self.is_finalized = is_finalized
+        self.is_fake = is_fake
         self.hash = hash
         self.parent_hash = parent_hash
         self.time = time
-        self.signs = signs
+        self.signs = (signs or [])
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str_fmt_object(self)
 
-    def __getstate__(self):
+    def __getstate__(self) -> Dict:
         return self.__dict__
 
     def __setstate__(self, src):
         self.__dict__ = src
+
+    def is_empty_fake(self) -> bool:
+        return self.is_fake and (len(self.signs) == 0)
+
+    def is_empty(self) -> bool:
+        return self.time is None
 
 
 class NeonTxResultInfo:
@@ -62,7 +69,6 @@ class NeonTxResultInfo:
         self.return_value = bytes()
         self.sol_sign = None
         self.slot = -1
-        self.block_height = -1
         self.block_hash = ''
         self.idx = -1
 
@@ -100,11 +106,10 @@ class NeonTxResultInfo:
 
     def fill_block_info(self, block: SolanaBlockInfo):
         self.slot = block.slot
-        self.block_height = block.height
         self.block_hash = block.hash
         for rec in self.logs:
             rec['blockHash'] = block.hash
-            rec['blockNumber'] = hex(block.height)
+            rec['blockNumber'] = hex(block.slot)
 
     def decode(self, neon_sign: str, tx: {}, ix_idx=-1) -> NeonTxResultInfo:
         self._set_defaults()
@@ -246,3 +251,8 @@ def get_from_dict(src: Dict, *path) -> Optional[Any]:
         if val is None:
             return None
     return val
+
+
+def get_holder_msg(eth_trx: EthTx):
+    unsigned_msg = eth_trx.unsigned_msg()
+    return  eth_trx.signature() + len(unsigned_msg).to_bytes(8, byteorder="little") + unsigned_msg

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 
 from eth_keys import keys as eth_keys
@@ -53,18 +55,21 @@ def ether2program(ether):
     return str(pda), nonce
 
 
-class AccountInfo(NamedTuple):
+class AccountInfoLayout(NamedTuple):
     ether: eth_keys.PublicKey
     balance: int
     trx_count: int
     code_account: PublicKey
 
+    def is_payed(self) -> bool:
+        return self.state != 0
+
     @staticmethod
-    def frombytes(data):
+    def frombytes(data) -> AccountInfoLayout:
         from .layouts import ACCOUNT_INFO_LAYOUT
 
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(
+        return AccountInfoLayout(
             ether=cont.ether, 
             balance=int.from_bytes(cont.balance, "little"),
             trx_count=int.from_bytes(cont.trx_count, "little"),

@@ -4,11 +4,12 @@ import unittest
 from solana.publickey import PublicKey
 from solcx import compile_source, install_solc
 
+from proxy.testing.testing_helpers import request_airdrop
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
 evm_loader_id = PublicKey(os.environ.get("EVM_LOADER"))
-ETH_TOKEN_MINT_ID: PublicKey = PublicKey("HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU")
+NEON_TOKEN_MINT: PublicKey = PublicKey("HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU")
 
 proxy = Web3(Web3.HTTPProvider(proxy_url))
 install_solc(version='0.7.0')
@@ -41,6 +42,7 @@ class resize_storage_account(unittest.TestCase):
         print("\n\nhttps://app.zenhub.com/workspaces/solana-evm-6007c75a9dc141001100ccb8/issues/neonlabsorg/proxy-model.py/233")
         self.account = proxy.eth.account.create()
         print('account.address:', self.account.address)
+        request_airdrop(self.account.address)
 
         compiled = compile_source(INCREAZE_STORAGE_CONTRACT)
         id, interface = compiled.popitem()
@@ -49,7 +51,7 @@ class resize_storage_account(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(self.account.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=0,
+            gasPrice=1000000000,
             to='',
             value=0,
             data=contract.bytecode),

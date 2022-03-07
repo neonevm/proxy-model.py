@@ -13,7 +13,7 @@ from proxy.common_neon.address import EthereumAddress
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
 PP_SOLANA_URL = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
 EVM_LOADER_ID = os.environ.get("EVM_LOADER")
-neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.1"))
+neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.5"))
 
 CONFIRMATION_CHECK_DELAY = float(os.environ.get("NEON_CONFIRMATION_CHECK_DELAY", "0.1"))
 CONTINUE_COUNT_FACTOR = int(os.environ.get("CONTINUE_COUNT_FACTOR", "3"))
@@ -22,6 +22,8 @@ TIMEOUT_TO_RELOAD_NEON_CONFIG = int(os.environ.get("TIMEOUT_TO_RELOAD_NEON_CONFI
 MINIMAL_GAS_PRICE=os.environ.get("MINIMAL_GAS_PRICE", None)
 if MINIMAL_GAS_PRICE is not None:
     MINIMAL_GAS_PRICE = int(MINIMAL_GAS_PRICE)*10**9
+
+GAS_PRICE_SUGGESTED_PCT = Decimal(os.environ.get("GAS_PRICE_SUGGEST_PCT", "0.02"))
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 LOG_SENDING_SOLANA_TRANSACTION = os.environ.get("LOG_SENDING_SOLANA_TRANSACTION", "NO") == "YES"
@@ -40,14 +42,17 @@ CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
 ACCOUNT_PERMISSION_UPDATE_INT = int(os.environ.get("ACCOUNT_PERMISSION_UPDATE_INT", 60 * 5))
 PERM_ACCOUNT_LIMIT = max(int(os.environ.get("PERM_ACCOUNT_LIMIT", 2)), 2)
 OPERATOR_FEE = Decimal(os.environ.get("OPERATOR_FEE", "0.1"))
+OPERATOR_GAS_ACCOUNTS = os.environ.get('OPERATOR_GAS_ACCOUNTS', '0x8966Ef2ae7A109Fd0977F5151b4607dc42929fBD;0x619d670152103a972B67a45b9Be764FF11979E4E')
 NEON_PRICE_USD = Decimal('0.25')
 SOL_PRICE_UPDATE_INTERVAL = int(os.environ.get("SOL_PRICE_UPDATE_INTERVAL", 60))
 GET_SOL_PRICE_MAX_RETRIES = int(os.environ.get("GET_SOL_PRICE_MAX_RETRIES", 3))
 GET_SOL_PRICE_RETRY_INTERVAL = int(os.environ.get("GET_SOL_PRICE_RETRY_INTERVAL", 1))
-GET_WHITE_LIST_BALANCE_MAX_RETRIES = int(os.environ.get("GET_WHITE_LIST_BALANCE_MAX_RETRIES", 3))
-GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S = int(os.environ.get("GET_WHITE_LIST_BALANCE_RETRY_INTERVAL_S", 1))
+INDEXER_LOG_SKIP_COUNT = int(os.environ.get("INDEXER_LOG_SKIP_COUNT", 10))
 MIN_OPERATOR_BALANCE_TO_WARN = max(int(os.environ.get("MIN_OPERATOR_BALANCE_TO_WARN", 9000000000)), 9000000000)
 MIN_OPERATOR_BALANCE_TO_ERR = max(int(os.environ.get("MIN_OPERATOR_BALANCE_TO_ERR", 1000000000)), 1000000000)
+SKIP_PREFLIGHT = os.environ.get("SKIP_PREFLIGHT", "NO") == "YES"
+CONTRACT_EXTRA_SPACE = int(os.environ.get("CONTRACT_EXTRA_SPACE", 2048))
+EVM_STEP_COUNT = int(os.environ.get("EVM_STEP_COUNT", 750))  # number of evm-steps, performed by one iteration
 
 PYTH_MAPPING_ACCOUNT = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
 if PYTH_MAPPING_ACCOUNT is not None:
@@ -119,12 +124,15 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
 
 @logged_group("neon.Proxy")
 def get_operator_ethereum_accounts(*, logger) -> [EthereumAddress]:
-    list = [] # TODO read from config
-    for _ in range(1, 15):
-        account = EthereumAddress.random()
-        list.append(account)
-    
-    return list
+    accounts = []
+
+    for account in OPERATOR_GAS_ACCOUNTS.split(';'):
+        address = EthereumAddress(account)
+        logger.debug(f'Add gas account: {address}')
+
+        accounts.append(address)
+
+    return accounts
 
 @logged_group("neon.Proxy")
 class neon_cli(CliBase):
@@ -164,4 +172,6 @@ def read_elf_params(out_dict):
 ELF_PARAMS = {}
 read_elf_params(ELF_PARAMS)
 COLLATERAL_POOL_BASE = ELF_PARAMS.get("NEON_POOL_BASE")
-ETH_TOKEN_MINT_ID: PublicKey = PublicKey(ELF_PARAMS.get("NEON_TOKEN_MINT"))
+NEON_TOKEN_MINT: PublicKey = PublicKey(ELF_PARAMS.get("NEON_TOKEN_MINT"))
+HOLDER_MSG_SIZE = int(ELF_PARAMS.get("NEON_HOLDER_MSG_SIZE"))
+CHAIN_ID = int(ELF_PARAMS.get('NEON_CHAIN_ID', None))

@@ -7,11 +7,12 @@ from solana.system_program import SYS_PROGRAM_ID
 
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
-from ..indexer.utils import SolanaIxSignInfo
+from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff
 from ..indexer.utils import get_accounts_from_storage, check_error
 from ..indexer.canceller import Canceller
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
+from ..common_neon.solana_interactor import SolanaInteractor
 
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
 
@@ -167,9 +168,9 @@ class ReceiptsParserState:
     - All instructions are removed from the _used_ixs;
     - If number of the smallest slot in the _used_ixs is changed, it's stored into the DB for the future restart.
     """
-    def __init__(self, db: IndexerDB, client):
+    def __init__(self, db: IndexerDB, solana: SolanaInteractor):
         self._db = db
-        self._client = client
+        self._solana = solana
         self._holder_table = {}
         self._tx_table = {}
         self._done_tx_list = []
@@ -238,14 +239,19 @@ class ReceiptsParserState:
         for tx in self._done_tx_list:
             self.unmark_ix_used(tx)
             if tx.neon_tx.is_valid() and tx.neon_res.is_valid():
-                with logging_context(req_id=tx.neon_tx.sign[:7]):
+                with logging_context(neon_tx=tx.neon_tx.sign[:7]):
                     self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
             self.del_tx(tx)
         self._done_tx_list.clear()
-        self.debug('Receipt state stats: ' +
-                   f'holders {len(self._holder_table)}, ' +
-                   f'transactions {len(self._tx_table)}, ' +
-                   f'used ixs {len(self._used_ixs)}')
+
+        holders = len(self._holder_table)
+        transactions = len(self._tx_table)
+        used_ixs = len(self._used_ixs)
+        if holders > 0 or transactions > 0 or used_ixs > 0:
+            self.debug('Receipt state stats: ' +
+                        f'holders {holders}, ' +
+                        f'transactions {transactions}, ' +
+                        f'used ixs {used_ixs}')
 
     def iter_txs(self):
         for tx in self._tx_table.values():
@@ -382,7 +388,7 @@ class DummyIxDecoder:
 
     def execute(self) -> bool:
         """By default, skip the instruction without parsing."""
-        return self._decoding_skip('no logic to decode the instruction')
+        return self._decoding_skip(f'no logic to decode the instruction: {self.state.ix.ix_data.hex()[:8]}')
 
 
 class WriteIxDecoder(DummyIxDecoder):
@@ -690,19 +696,39 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
 
 
 @logged_group("neon.Indexer")
+class BlocksIndexer:
+    def __init__(self, db: IndexerDB, solana: SolanaInteractor):
+        self.db = db
+        self.solana = solana
+        self.counted_logger = MetricsToLogBuff()
+
+    def gather_blocks(self):
+        start_time = time.time()
+        slot = self.solana.get_slot(FINALIZED)['result']
+        self.db.set_latest_block(slot)
+        gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
+        self.counted_logger.print(
+            self.debug,
+            list_params={"gather_blocks_ms": gather_blocks_ms},
+            latest_params={"last_block_slot": slot}
+        )
+
+
+@logged_group("neon.Indexer")
 class Indexer(IndexerBase):
-    def __init__(self, solana_url, evm_loader_id):
+    def __init__(self, solana_url):
         self.debug(f'Finalized commitment: {FINALIZED}')
-        self.db = IndexerDB()
+        solana = SolanaInteractor(solana_url)
+        self.db = IndexerDB(solana)
         last_known_slot = self.db.get_min_receipt_slot()
-        IndexerBase.__init__(self, solana_url, evm_loader_id, last_known_slot)
+        IndexerBase.__init__(self, solana, last_known_slot)
         self.indexed_slot = self.last_slot
-        self.db.set_client(self.client)
         self.canceller = Canceller()
         self.blocked_storages = {}
-        self._init_last_height_slot()
+        self.block_indexer = BlocksIndexer(db=self.db, solana=solana)
+        self.counted_logger = MetricsToLogBuff()
 
-        self.state = ReceiptsParserState(db=self.db, client=self.client)
+        self.state = ReceiptsParserState(db=self.db, solana=solana)
         self.ix_decoder_map = {
             0x00: WriteIxDecoder(self.state),
             0x01: DummyIxDecoder('Finalize', self.state),
@@ -718,6 +744,7 @@ class Indexer(IndexerBase):
             0x0c: CancelIxDecoder(self.state),
             0x0d: PartialCallOrContinueIxDecoder(self.state),
             0x0e: ExecuteOrContinueIxParser(self.state),
+            0x0f: DummyIxDecoder('ERC20CreateTokenAccount', self.state),
             0x11: ResizeStorageAccountIxDecoder(self.state),
             0x12: WriteWithHolderIxDecoder(self.state),
             0x13: PartialCallV02IxDecoder(self.state),
@@ -730,33 +757,11 @@ class Indexer(IndexerBase):
         }
         self.def_decoder = DummyIxDecoder('Unknown', self.state)
 
-    def _init_last_height_slot(self):
-        last_known_slot = self.db.get_latest_block().slot
-        slot = self._init_last_slot('height', last_known_slot)
-        if last_known_slot == slot:
-            return
-
-        block_opts = {"commitment": FINALIZED, "transactionDetails": "none", "rewards": False}
-        client = self.client._provider
-        block = client.make_request("getBlock", slot, block_opts)
-        if not block['result']:
-            self.warning(f"Solana haven't return block information for the slot {slot}")
-            return
-
-        height = block['result']['blockHeight']
-        self.db.fill_block_height(height, [slot])
-
     def process_functions(self):
-        with logging_context(req_id="get_blocks"):
-            self.gather_blocks()
-        with logging_context(req_id="get_history"):
-            IndexerBase.process_functions(self)
-
-        with logging_context(req_id="process_receipts"):
-            self.process_receipts()
-
-        with logging_context(req_id="cancel"):
-            self.canceller.unlock_accounts(self.blocked_storages)
+        self.block_indexer.gather_blocks()
+        IndexerBase.process_functions(self)
+        self.process_receipts()
+        self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
 
     def process_receipts(self):
@@ -777,7 +782,7 @@ class Indexer(IndexerBase):
 
             for _ in ix_info.iter_ixs():
                 req_id = ix_info.sign.get_req_id()
-                with logging_context(req_id=req_id):
+                with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
@@ -795,9 +800,11 @@ class Indexer(IndexerBase):
         self.state.complete_done_txs()
 
         process_receipts_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.debug(f"process_receipts_ms: {process_receipts_ms} " +
-                   f"transaction_receipts.len: {self.transaction_receipts.size()} " +
-                   f"from {self.indexed_slot} to {self.current_slot} slots")
+        self.counted_logger.print(
+            self.debug,
+            list_params={"process_receipts_ms": process_receipts_ms, "processed_slots": self.current_slot - self.indexed_slot},
+            latest_params={"transaction_receipts.len": self.transaction_receipts.size(), "indexed_slot": self.indexed_slot}
+        )
 
     def unlock_accounts(self, tx) -> bool:
         # We already indexed the transaction
@@ -812,7 +819,7 @@ class Indexer(IndexerBase):
             self.warning(f"Transaction {tx.neon_tx} hasn't blocked accounts.")
             return False
 
-        storage_accounts_list = get_accounts_from_storage(self.client, tx.storage_account)
+        storage_accounts_list = get_accounts_from_storage(self.solana, tx.storage_account)
         if storage_accounts_list is None:
             self.warning(f"Transaction {tx.neon_tx} has empty storage.")
             return False
@@ -831,58 +838,17 @@ class Indexer(IndexerBase):
         tx.canceled = True
         return True
 
-    def gather_blocks(self):
-        start_time = time.time()
-        latest_block = self.db.get_latest_block()
-        height = -1
-        confirmed_blocks_len = 10000
-        client = self.client._provider
-        list_opts = {"commitment": FINALIZED}
-        block_opts = {"commitment": FINALIZED, "transactionDetails": "none", "rewards": False}
-        while confirmed_blocks_len == 10000:
-            confirmed_blocks = client.make_request("getBlocksWithLimit", latest_block.slot, confirmed_blocks_len, list_opts)['result']
-            confirmed_blocks_len = len(confirmed_blocks)
-            # No more blocks
-            if confirmed_blocks_len == 0:
-                break
-
-            # Intitialize start height
-            if height == -1:
-                first_block = client.make_request("getBlock", confirmed_blocks[0], block_opts)
-                height = first_block['result']['blockHeight']
-
-            # Validate last block height
-            latest_block.height = height + confirmed_blocks_len - 1
-            latest_block.slot = confirmed_blocks[confirmed_blocks_len - 1]
-            last_block = client.make_request("getBlock", latest_block.slot, block_opts)
-            if not last_block['result'] or last_block['result']['blockHeight'] != latest_block.height:
-                self.warning(f"FAILED last_block_height {latest_block.height} " +
-                             f"last_block_slot {latest_block.slot} " +
-                             f"last_block {last_block}")
-                break
-
-            # Everything is good
-            self.debug(f"gather_blocks from {height} to {latest_block.height}")
-            self.db.fill_block_height(height, confirmed_blocks)
-            height = latest_block.height
-
-        gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.debug(f"gather_blocks_ms: {gather_blocks_ms} " +
-                   f"last_block_height: {latest_block.height} " +
-                   f"last_block_slot: {latest_block.slot}")
-
 
 @logged_group("neon.Indexer")
-def run_indexer(solana_url, evm_loader_id, *, logger):
+def run_indexer(solana_url, *, logger):
     logger.info(f"""Running indexer with params:
         solana_url: {solana_url},
-        evm_loader_id: {evm_loader_id}""")
+        evm_loader_id: {EVM_LOADER_ID}""")
 
-    indexer = Indexer(solana_url, evm_loader_id)
+    indexer = Indexer(solana_url)
     indexer.run()
 
 
 if __name__ == "__main__":
     solana_url = SOLANA_URL
-    evm_loader_id = EVM_LOADER_ID
-    run_indexer(solana_url, evm_loader_id)
+    run_indexer(solana_url)

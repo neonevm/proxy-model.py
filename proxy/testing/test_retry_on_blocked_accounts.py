@@ -1,7 +1,7 @@
 import os
 
 from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY
-from proxy.environment import ETH_TOKEN_MINT_ID
+from proxy.environment import NEON_TOKEN_MINT
 
 os.environ['SOLANA_URL'] = "http://solana:8899"
 os.environ['EVM_LOADER'] = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
@@ -29,7 +29,7 @@ from web3.auto.gethdev import w3
 from .testing_helpers import request_airdrop
 from solcx import compile_source
 
-MINIMAL_GAS_PRICE = 1
+MINIMAL_GAS_PRICE = 1000000003
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/365'
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
@@ -63,12 +63,13 @@ def send_routine(acc_seed, contractAddress, abi, loop, return_dict, padding_stri
             abi=abi
         )
     new_eth_account = proxy.eth.account.create(acc_seed)
+    request_airdrop(new_eth_account.address)
     right_nonce = proxy.eth.get_transaction_count(new_eth_account.address)
     trx_store = storage_contract.functions.add_some(2, loop, padding_string).buildTransaction(
         {
             "chainId": proxy.eth.chain_id,
             "gas": 987654321,
-            "gasPrice": 0,
+            "gasPrice": 1000000001,
             "nonce": right_nonce,
         }
     )
@@ -110,7 +111,7 @@ class BlockedTest(unittest.TestCase):
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
-        # cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, cls.caller_token)
+        # cls.token.transfer(NEON_TOKEN_MINT, 2000, cls.caller_token)
 
         collateral_pool_index = 2
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
@@ -123,7 +124,7 @@ class BlockedTest(unittest.TestCase):
         acc_info = ACCOUNT_INFO_LAYOUT.parse(data)
 
         code_address = PublicKey(acc_info.code_account)
-        alternate_token = get_associated_token_address(PublicKey(sol_address), ETH_TOKEN_MINT_ID)
+        alternate_token = get_associated_token_address(PublicKey(sol_address), NEON_TOKEN_MINT)
 
         return (sol_address, alternate_token, code_address)
 
@@ -135,7 +136,7 @@ class BlockedTest(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=0,
+            gasPrice=1000000002,
             to='',
             value=0,
             data=storage.bytecode),

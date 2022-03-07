@@ -1,30 +1,39 @@
 from datetime import datetime
 from decimal import Decimal
 import time
+import math
 from logged_groups import logged_group
 from ..indexer.pythnetwork import PythNetworkClient
-from ..environment import MINIMAL_GAS_PRICE, OPERATOR_FEE, NEON_PRICE_USD, \
-    SOL_PRICE_UPDATE_INTERVAL, GET_SOL_PRICE_MAX_RETRIES, GET_SOL_PRICE_RETRY_INTERVAL
+from ..common_neon.solana_interactor import SolanaInteractor
+from ..environment import MINIMAL_GAS_PRICE, OPERATOR_FEE, NEON_PRICE_USD, GAS_PRICE_SUGGESTED_PCT
+from ..environment import SOL_PRICE_UPDATE_INTERVAL, GET_SOL_PRICE_MAX_RETRIES, GET_SOL_PRICE_RETRY_INTERVAL
 
 
 @logged_group("neon.gas_price_calculator")
 class GasPriceCalculator:
-    def __init__(self, solana_client, pyth_mapping_acc) -> None:
-        self.solana_client = solana_client
+    def __init__(self, solana: SolanaInteractor, pyth_mapping_acc) -> None:
+        self.solana = solana
         self.mapping_account = pyth_mapping_acc
-        self.pyth_network_client = PythNetworkClient(self.solana_client)
+        self.pyth_network_client = PythNetworkClient(self.solana)
         self.recent_sol_price_update_time = None
         self.min_gas_price = None
+
+    def env_min_gas_price(self):
+        if MINIMAL_GAS_PRICE is not None:
+            return MINIMAL_GAS_PRICE
 
     def update_mapping(self):
         if self.mapping_account is not None:
             self.pyth_network_client.update_mapping(self.mapping_account)
 
     def get_min_gas_price(self):
-        if MINIMAL_GAS_PRICE is not None:
-            return MINIMAL_GAS_PRICE
+        if self.env_min_gas_price() is not None:
+            return self.env_min_gas_price()
         self.try_update_gas_price()
         return self.min_gas_price
+
+    def get_suggested_gas_price(self):
+        return math.ceil(self.get_min_gas_price() * (1 + GAS_PRICE_SUGGESTED_PCT))
 
     def try_update_gas_price(self):
         cur_time = self.get_current_time()
