@@ -118,7 +118,7 @@ class SolanaInteractor:
             full_request_data.append(request)
 
             # Protection from big payload
-            if len(request_data) == 30 or len(full_request_data) == len(params_list):
+            if len(request_data) >= 25 or len(full_request_data) == len(params_list):
                 raw_response = self._make_request(request_data)
                 response_data = cast(List[RPCResponse], raw_response.json())
 
