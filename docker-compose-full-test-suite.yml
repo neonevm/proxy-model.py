@@ -1,0 +1,22 @@
+version: "3"
+
+services:
+
+  full_test_suite:
+    container_name: full_test_suite
+    image: neonlabsorg/full_test_suite:develop
+    environment:
+      - NETWORK_NAME=night-stand
+      - PROXY_URL=http://proxy.night.stand.neontest.xyz/solana
+      - NETWORK_ID=111
+      - ADDRESS_FROM=
+      - ADDRESS_TO=
+      - PRIVATE_KEY=
+      - REQUEST_AMOUNT=995
+      - FAUCET_URL=http://proxy.night.stand.neontest.xyz/request_eth_token
+      - USE_FAUCET=true
+      - SOLANA_EXPLORER=https://explorer.solana.com/?cluster=custom&customUrl=http://proxy.night.stand.neontest.xyz/node-solana
+      - SOLANA_URL=http://proxy.night.stand.neontest.xyz/node-solana
+      - USERS_NUMBER=15
+      - JOBS_NUMBER=8
+    network_mode: host
