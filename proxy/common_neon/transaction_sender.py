@@ -16,6 +16,7 @@ from typing import Dict, Optional
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
+from solana.sysvar import SYSVAR_RECENT_BLOCKHASHES_PUBKEY
 
 from .address import accountWithSeed, EthereumAddress, ether2program
 from ..common_neon.errors import EthereumError
@@ -345,11 +346,11 @@ class OperatorResourceList:
         stage = NeonCreateAccountTxStage(self._s, { "address": ether_address })
         stage.balance = self._s.solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0]
         stage.build()
-        
+
         self.debug(f"Create new accounts for resource {opkey}:{rid}")
         SolTxListSender(self._s, [stage.tx], NeonCreateAccountTxStage.NAME).send()
 
-        return solana_address        
+        return solana_address
 
     def _create_perm_accounts(self, seed_list):
         tx = Transaction()
@@ -592,6 +593,8 @@ class NeonTxSender:
     def _parse_solana_list(self):
         for account_desc in self._emulator_json['solana_accounts']:
             self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
+        if self._emulator_json.get('used_block_hash_history', False):
+            self._add_meta(SYSVAR_RECENT_BLOCKHASHES_PUBKEY, False)
 
     def _build_txs(self):
         all_stages = self._create_account_list + self._resize_contract_list
