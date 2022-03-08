@@ -363,11 +363,11 @@ class OperatorResourceList:
                 stage.build()
                 tx.add(stage.tx)
             elif account.lamports < balance:
-                raise RuntimeError(f"insufficient balance")
+                raise RuntimeError(f"insufficient balance of {str(stage.sol_account)}")
             elif PublicKey(account.owner) != PublicKey(EVM_LOADER_ID):
-                raise RuntimeError(f"wrong owner")
+                raise RuntimeError(f"wrong owner for: {str(stage.sol_account)}")
             elif account.tag not in {EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG}:
-                raise RuntimeError(f"not empty, not finalized")
+                raise RuntimeError(f"not empty, not finalized: {str(stage.sol_account)}")
 
         rid = self._resource.rid
         opkey = str(self._resource.public_key())
