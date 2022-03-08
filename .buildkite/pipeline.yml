@@ -25,7 +25,8 @@ steps:
 #        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
 #        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
     commands:
-      - FULL_TEST_RESULT=$(docker-compose -f docker-compose-full-test-suite.yml up --no-log-prefix | tee /dev/stdout | (grep -oP "(?<=Passing - )\d+" || echo 0))
+      - docker-compose -f docker-compose-full-test-suite.yml up --no-log-prefix --name fts_${BUILDKITE_BUILD_NUMBER} | tee fts_output
+      - FULL_TEST_RESULT=$(cat fts_output | (grep -oP "(?<=Passing - )\d+" || echo 0))
       - echo Full test passing - $${FULL_TEST_RESULT}
       - echo Full test threshold - $${FULL_TEST_THRESHOLD}
       - echo Check if $${FULL_TEST_RESULT} is greater or equeal $${FULL_TEST_THRESHOLD}
