@@ -32,8 +32,8 @@ steps:
     commands:
       - FULL_TEST_RESULT=$(./ggbb.sh | (grep -oP "(?<=Passing - )\d+" || echo 0))
       - echo Full test passing - $${FULL_TEST_RESULT}
-#      - "echo Full test threshold: $${FULL_TEST_THRESHOLD}"
-#      - "test $${FULL_TEST_THRESHOLD} -le"
+      - echo Full test threshold - $${FULL_TEST_THRESHOLD}
+      - test $${FULL_TEST_THRESHOLD} -le
     env:
       FULL_TEST_THRESHOLD: 934
 
