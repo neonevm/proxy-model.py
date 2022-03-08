@@ -21,7 +21,7 @@ steps:
 #      - "indexer.log"
 
   - label: ":coverage: full test suite"
-#    if: build.source == "trigger_job" && build.env("EVM_LOADER_FULL_TEST_SUITE") == "true"
+    if: build.source == "webhook"
     command: echo asdkljfkl asdjfkldasj;fkj
 #    plugins:
 #      - docker-compose#v3.9.0:
