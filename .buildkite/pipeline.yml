@@ -21,8 +21,10 @@ steps:
 #      - "indexer.log"
 
   - label: ":coverage: full test suite"
-    if: build.source == "webhook"
-    command: echo asdkljfkl asdjfkldasj;fkj
+    if: |
+        (build.pull_request.base_branch == "develop" && !build.pull_request.draft)
+        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
+    command: echo "asdkljfkl asdjfkldasj;fkj"
 #    plugins:
 #      - docker-compose#v3.9.0:
 #          run: full_test_suite
