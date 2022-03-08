@@ -30,9 +30,9 @@ steps:
 #          config:
 #            - docker-compose-full-test-suite.yml
 #    command: ./ggbb.sh | (grep -oP "(?<=Passing - )\d+" || echo 0) | xargs echo ${FULL_TEST_THRESHOLD} -lt
-    command: echo ${FULL_TEST_THRESHOLD}
+    command: echo ${GGBB}
     env:
-      FULL_TEST_THRESHOLD: 500
+      GGBB: "500"
 
   - wait
 
