@@ -5,6 +5,7 @@ services:
   full_test_suite:
     container_name: full_test_suite
     image: neonlabsorg/full_test_suite:develop
+    entrypoint: ./run-test.sh 2>&1
     environment:
       - NETWORK_NAME=night-stand
       - PROXY_URL=http://proxy.night.stand.neontest.xyz/solana
