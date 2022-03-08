@@ -27,9 +27,9 @@ steps:
     command: run-test.sh
     plugins:
       - docker-compose#v3.9.0:
-        run: full_test_suite
-        config:
-          - docker-compose-full-test-suite.yml
+          run: full_test_suite
+          config:
+            - docker-compose-full-test-suite.yml
     env:
       - TESTS_PASSED_THRESHOLD: 500
 
