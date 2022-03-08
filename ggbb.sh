@@ -4,8 +4,6 @@
 cat << EOF
 24 passing (2m)
 
-`stdout` files found: 83. Processing ...
-
 Summarize result:
 
     Failing - 33
