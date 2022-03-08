@@ -8,7 +8,7 @@ Summarize result:
 
     Failing - 33
     Pending - 121
-    Passing - 934
+    Passing - 933
 
 Total tests - 1088
 
