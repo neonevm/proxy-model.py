@@ -31,7 +31,7 @@ from ..environment import RETRY_ON_FAIL, EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, ACCO
 from ..environment import MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_ERR
 from ..environment import HOLDER_MSG_SIZE, CONTRACT_EXTRA_SPACE
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
-from ..environment import get_solana_accounts, get_operator_ethereum_accounts
+from ..environment import get_solana_accounts
 from ..common_neon.account_whitelist import AccountWhitelist
 from proxy.common_neon.utils import get_holder_msg
 
@@ -199,17 +199,19 @@ class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
 
 
 class OperatorResourceInfo:
-    def __init__(self, signer: SolanaAccount, ether: EthereumAddress, rid: int, idx: int):
+    def __init__(self, signer: SolanaAccount, rid: int, idx: int):
         self.signer = signer
-        self.ether = ether
         self.rid = rid
         self.idx = idx
-        self.ether_key: PublicKey = None
+        self.ether: EthereumAddress = None
         self.storage: PublicKey = None
         self.holder: PublicKey = None
 
     def public_key(self) -> PublicKey:
         return self.signer.public_key()
+
+    def secret_key(self) -> bytes:
+        return self.signer.secret_key()
 
 
 @logged_group("neon.Proxy")
@@ -230,10 +232,9 @@ class OperatorResourceList:
 
         idx = 0
         signer_list = get_solana_accounts()
-        ether_list = get_operator_ethereum_accounts()
         for rid in range(PERM_ACCOUNT_LIMIT):
-            for signer, ether in zip(signer_list, ether_list):
-                info = OperatorResourceInfo(signer=signer, ether=ether, rid=rid, idx=idx)
+            for signer in signer_list:
+                info = OperatorResourceInfo(signer=signer, rid=rid, idx=idx)
                 self._resource_list.append(info)
                 idx += 1
 
@@ -276,7 +277,8 @@ class OperatorResourceList:
 
             self.debug(f'Resource is selected: {str(self._resource.public_key())}:{self._resource.rid}, ' +
                        f'storage: {str(self._resource.storage)}, ' +
-                       f'holder: {str(self._resource.holder)}')
+                       f'holder: {str(self._resource.holder)}, ' +
+                       f'ether: {str(self._resource.ether)}')
             return self._resource
 
         raise RuntimeError('Timeout on waiting a free operator resource!')
@@ -286,7 +288,7 @@ class OperatorResourceList:
             self._resource_list_len_glob.value -= 1
             return False
 
-        if self._resource.storage and self._resource.holder and self._resource.ether_key:
+        if self._resource.storage and self._resource.holder and self._resource.ether:
             return True
 
         rid = self._resource.rid
@@ -295,7 +297,8 @@ class OperatorResourceList:
         seed_list = [prefix + aid for prefix in [b"storage", b"holder"]]
         try:
             storage, holder = self._create_perm_accounts(seed_list)
-            self._resource.ether_key = self._create_ether_account()
+            ether = self._create_ether_account()
+            self._resource.ether = ether
             self._resource.storage = storage
             self._resource.holder = holder
             return True
@@ -326,29 +329,29 @@ class OperatorResourceList:
             self.warning(f'Operator account {self._resource.public_key()} SOLs are running out; balance = {sol_balance}; min_operator_balance_to_warn = {min_operator_balance_to_warn}; min_operator_balance_to_err = {min_operator_balance_to_err}; ')
         return True
 
-    def _create_ether_account(self) -> PublicKey:
-        if self._resource.ether_key is not None:
-            return self._resource.ether_key
+    def _create_ether_account(self) -> EthereumAddress:
+        if self._resource.ether:
+            return self._resource.ether
 
         rid = self._resource.rid
         opkey = str(self._resource.public_key())
 
-        ether_address = self._resource.ether
+        ether_address = EthereumAddress.from_private_key(self._resource.secret_key())
         solana_address = ether2program(ether_address)[0]
 
         account_info = self._s.solana.get_account_info(solana_address)
         if account_info is not None:
-            self.debug(f"Use existing ether account for resource {opkey}:{rid}")
-            return solana_address
+            self.debug(f"Use existing ether account {str(solana_address)} for resource {opkey}:{rid}")
+            return ether_address
 
         stage = NeonCreateAccountTxStage(self._s, {"address": ether_address})
         stage.balance = self._s.solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0]
         stage.build()
 
-        self.debug(f"Create new accounts for resource {opkey}:{rid}")
+        self.debug(f"Create new account {str(solana_address)} for resource {opkey}:{rid}")
         SolTxListSender(self._s, [stage.tx], NeonCreateAccountTxStage.NAME).send()
 
-        return solana_address
+        return ether_address
 
     def _create_perm_accounts(self, seed_list):
         tx = Transaction()
@@ -388,7 +391,7 @@ class OperatorResourceList:
         rid = resource.rid
         opkey = str(resource.public_key())
 
-        if (not resource.storage) or (not resource.holder):
+        if (not resource.storage) or (not resource.holder) or (not resource.ether):
             self.warning(f"Skip freeing bad accounts for resource {opkey}:{rid}")
             return
 
@@ -439,7 +442,7 @@ class NeonTxSender:
         self.resource = resource
         self.signer = resource.signer
         self.operator_key = resource.public_key()
-        self.builder = NeonIxBuilder(self.operator_key, resource.ether)
+        self.builder = NeonIxBuilder(self.operator_key)
 
     def clear_resource(self):
         self.resource = None
@@ -542,6 +545,7 @@ class NeonTxSender:
         # Build all instructions
         self._build_txs()
 
+        self.builder.init_operator_ether(self.resource.ether)
         self.builder.init_eth_trx(self.eth_tx, eth_meta_list)
         self.builder.init_iterative(self.resource.storage, self.resource.holder, self.resource.rid)
 
@@ -659,6 +663,8 @@ class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
 
         # Predefined blockhash is used only to check transaction size, this transaction won't be send to network
         tx.recent_blockhash = Blockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+        self.debug(f'{str(self.s.resource)}')
+        self.debug(f'{str(self.s.resource.public_key())}')
         tx.sign(self.s.resource.signer)
         try:
             tx.serialize()
