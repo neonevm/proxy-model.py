@@ -24,12 +24,12 @@ steps:
     if: |
         (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
         (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
-    command: echo "asdkljfkl asdjfkldasj;fkj"
-    plugins:
-      - docker-compose#v3.9.0:
-          run: full_test_suite
-          config:
-            - docker-compose-full-test-suite.yml
+#    plugins:
+#      - docker-compose#v3.9.0:
+#          run: full_test_suite
+#          config:
+#            - docker-compose-full-test-suite.yml
+    command: ./ggbb.sh && exit 1
     env:
       - TESTS_PASSED_THRESHOLD: 500
 
