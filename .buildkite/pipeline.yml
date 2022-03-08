@@ -20,6 +20,16 @@ steps:
       - "airdropper.log"
       - "indexer.log"
 
+  - label: ":coverage: full test suite"
+    if: |
+        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
+        (build.source == "trigger_job" && build.env("EVM_LOADER_FULL_TEST_SUITE") == "true")
+    plugins:
+      - docker-compose#v3.9.0:
+        run: full_test_suite
+        config:
+          - docker-compose-full-test-suite.yml
+
   - wait
 
   - label: ":floppy_disk: publish image"
@@ -27,9 +37,5 @@ steps:
     if: |
         build.branch =~ /^(master|develop|^ci-.+|v[0-9]+\.[0-9]+\..+)$$/ &&
         (build.env("NEON_EVM_BRANCH") == "develop" || build.env("NEON_EVM_BRANCH") == null)
-    plugins:
-      - docker-compose#v3.9.0:
-          run: full_test_suite
-          config:
-            - docker-compose-full-test-suite.yml
+
 
