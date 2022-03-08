@@ -31,9 +31,9 @@ steps:
 #            - docker-compose-full-test-suite.yml
     command:
       - "./ggbb.sh | (grep -oP \"(?<=Passing - )\d+\" || echo 0) | xargs export FULL_TEST_RESULT="
-      - "echo Full test passing: $${FULL_TEST_RESULT}"
-      - "echo Full test threshold: $${FULL_TEST_THRESHOLD}"
-      - "test $${FULL_TEST_THRESHOLD} -le"
+#      - "echo Full test passing: $${FULL_TEST_RESULT}"
+#      - "echo Full test threshold: $${FULL_TEST_THRESHOLD}"
+#      - "test $${FULL_TEST_THRESHOLD} -le"
     env:
       FULL_TEST_THRESHOLD: 934
 
