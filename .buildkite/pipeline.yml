@@ -26,8 +26,9 @@ steps:
 #        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
     commands:
       - docker ps
-#      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
-#      - FULL_TEST_RESULT=$(docker logs full_test_suite | (grep -oP "(?<=Passing - )\d+" || echo 0))
+      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
+      - docker logs full_test_suite
+      - FULL_TEST_RESULT=$(docker logs full_test_suite | (grep -oP "(?<=Passing - )\d+" || echo 0))
 #      - docker cp full_test_suite:/opt/allure-reports.tar ./
 #      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
 #      - echo Full test passing - $${FULL_TEST_RESULT}
