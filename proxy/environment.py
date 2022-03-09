@@ -1,4 +1,3 @@
-import logging
 import sys
 from decimal import Decimal
 import json
