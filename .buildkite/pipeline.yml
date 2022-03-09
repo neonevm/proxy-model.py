@@ -37,7 +37,7 @@ steps:
       - test $${FULL_TEST_RESULT} -ge $${FULL_TEST_THRESHOLD}
     artifact_paths:
       - allure-reports.tar
-      - ${FTS_CONTAINER_NAME}
+      - ${FTS_CONTAINER_NAME}.log
     env:
       FULL_TEST_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
