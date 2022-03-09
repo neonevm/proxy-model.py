@@ -29,7 +29,7 @@ steps:
       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
       - FULL_TEST_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
       - docker cp $${FTS_CONTAINER_NAME}:/opt/allure-reports.tar ./
-      - docker logs $${FTS_CONTAINER_NAME} > $${FTS_CONTAINER_NAME}.log
+      - docker logs $${FTS_CONTAINER_NAME} > ./$${FTS_CONTAINER_NAME}.log
       - echo !!!!!!!!!!!!!!!!!!!!!!!!
       - cat $${FTS_CONTAINER_NAME}.log
       - echo !!!!!!!!!!!!!!!!!!!!!!!!
@@ -40,7 +40,7 @@ steps:
       - test $${FULL_TEST_RESULT} -ge $${FULL_TEST_THRESHOLD}
     artifact_paths:
       - allure-reports.tar
-      - ${FTS_CONTAINER_NAME}.log
+      - fts_${BUILDKITE_BUILD_NUMBER}.log
     env:
       FULL_TEST_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
