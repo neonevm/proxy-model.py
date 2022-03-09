@@ -4,20 +4,20 @@ services:
 
   full_test_suite:
     container_name: ${FTS_CONTAINER_NAME:-full_test_suite}
-    image: neonlabsorg/full_test_suite:develop
+    image: ${FULL_TEST_SUITE_IMAGE:-neonlabsorg/develop}
     entrypoint: ./run-test.sh 2>/dev/null
     environment:
       - NETWORK_NAME=night-stand
-      - PROXY_URL=http://proxy.night.stand.neontest.xyz/solana
+      - PROXY_URL=${PROXY_URL}
       - NETWORK_ID=111
       - ADDRESS_FROM=
       - ADDRESS_TO=
       - PRIVATE_KEY=
       - REQUEST_AMOUNT=995
-      - FAUCET_URL=http://proxy.night.stand.neontest.xyz/request_eth_token
+      - FAUCET_URL=${FAUCET_URL}
       - USE_FAUCET=true
       - SOLANA_EXPLORER=https://explorer.solana.com/?cluster=custom&customUrl=http://proxy.night.stand.neontest.xyz/node-solana
-      - SOLANA_URL=http://proxy.night.stand.neontest.xyz/node-solana
+      - SOLANA_URL=${SOLANA_URL}
       - USERS_NUMBER=15
       - JOBS_NUMBER=8
     network_mode: host

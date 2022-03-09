@@ -41,7 +41,10 @@ steps:
     env:
       FULL_TEST_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
-
+      PROXY_URL: http://proxy.night.stand.neontest.xyz/solana
+      FAUCET_URL: http://proxy.night.stand.neontest.xyz/request_eth_token
+      SOLANA_URL: http://proxy.night.stand.neontest.xyz/node-solana
+      FULL_TEST_SUITE_IMAGE: neonlabsorg/full_test_suite:583-full-test-suite
   - wait
 
   - label: ":floppy_disk: publish image"
