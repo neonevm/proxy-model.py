@@ -33,7 +33,7 @@ steps:
       - echo Check if $${FULL_TEST_RESULT} is greater or equeal $${FULL_TEST_THRESHOLD}
       - test $${FULL_TEST_RESULT} -ge $${FULL_TEST_THRESHOLD}
     env:
-      FULL_TEST_THRESHOLD: 1000
+      FULL_TEST_THRESHOLD: 1700
 
   - wait
 
