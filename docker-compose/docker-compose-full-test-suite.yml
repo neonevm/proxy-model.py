@@ -3,7 +3,7 @@ version: "3"
 services:
 
   full_test_suite:
-    container_name: full_test_suite
+    container_name: ${FTS_CONTAINER_NAME:-full_test_suite}
     image: neonlabsorg/full_test_suite:develop
     entrypoint: ./run-test.sh 2>/dev/null
     environment:
