@@ -4,7 +4,7 @@ services:
 
   full_test_suite:
     container_name: ${FTS_CONTAINER_NAME:-full_test_suite}
-    image: ${FULL_TEST_SUITE_IMAGE:-neonlabsorg/develop}
+    image: ${FTS_IMAGE:-neonlabsorg/develop}
     entrypoint: ./run-test.sh 2>/dev/null
     environment:
       - NETWORK_NAME=night-stand

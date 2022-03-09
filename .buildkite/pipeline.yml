@@ -20,31 +20,32 @@ steps:
 #      - "airdropper.log"
 #      - "indexer.log"
 
-  - label: ":coverage: full test suite"
-#    if: |
-#        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
-#        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
+  - label: ":coverage: full test suite (FTS)"
+    if: |
+        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
+        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
     commands:
       - echo Full test suite container name - $${FTS_CONTAINER_NAME}
       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
-      - FULL_TEST_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
+      - FTS_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
       - docker cp $${FTS_CONTAINER_NAME}:/opt/allure-reports.tar ./
       - docker logs $${FTS_CONTAINER_NAME} > ./$${FTS_CONTAINER_NAME}.log
       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
-      - echo Full test passing - $${FULL_TEST_RESULT}
-      - echo Full test threshold - $${FULL_TEST_THRESHOLD}
-      - echo Check if $${FULL_TEST_RESULT} is greater or equeal $${FULL_TEST_THRESHOLD}
-      - test $${FULL_TEST_RESULT} -ge $${FULL_TEST_THRESHOLD}
+      - echo Full test passing - $${FTS_RESULT}
+      - echo Full test threshold - $${FTS_THRESHOLD}
+      - echo Check if $${FTS_RESULT} is greater or equeal $${FTS_THRESHOLD}
+      - test $${FTS_RESULT} -ge $${FTS_THRESHOLD}
     artifact_paths:
       - allure-reports.tar
-      - ${FTS_CONTAINER_NAME}
+      - fts_${BUILDKITE_BUILD_NUMBER}.log
     env:
-      FULL_TEST_THRESHOLD: 1700
-      FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
       PROXY_URL: http://proxy.night.stand.neontest.xyz/solana
       FAUCET_URL: http://proxy.night.stand.neontest.xyz/request_eth_token
       SOLANA_URL: http://proxy.night.stand.neontest.xyz/node-solana
-      FULL_TEST_SUITE_IMAGE: neonlabsorg/full_test_suite:583-full-test-suite
+      FTS_THRESHOLD: 1700
+      FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
+      FTS_IMAGE: neonlabsorg/full_test_suite:583-full-test-suite
+
   - wait
 
   - label: ":floppy_disk: publish image"
