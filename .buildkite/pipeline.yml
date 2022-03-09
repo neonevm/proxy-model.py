@@ -28,7 +28,7 @@ steps:
       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
       - FULL_TEST_RESULT=$(docker logs full_test_suite | (grep -oP "(?<=Passing - )\d+" || echo 0))
       - docker cp full_test_suite:/opt/allure-reports.tar ./
-      - docker-compose -f docker-compose-full-test-suite.yml rm -f
+      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
       - echo Full test passing - $${FULL_TEST_RESULT}
       - echo Full test threshold - $${FULL_TEST_THRESHOLD}
       - echo Check if $${FULL_TEST_RESULT} is greater or equeal $${FULL_TEST_THRESHOLD}
