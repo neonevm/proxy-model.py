@@ -25,7 +25,6 @@ steps:
 #        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
 #        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
     commands:
-      - export FTS_CONTAINER_NAME=fts_${BUILDKITE_BUILD_NUMBER}
       - echo Full test suite container name - $${FTS_CONTAINER_NAME}
       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
       - FULL_TEST_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
@@ -38,8 +37,10 @@ steps:
       - test $${FULL_TEST_RESULT} -ge $${FULL_TEST_THRESHOLD}
     artifact_paths:
       - allure-reports.tar
+      - ${FTS_CONTAINER_NAME}
     env:
       FULL_TEST_THRESHOLD: 1700
+      FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
 
   - wait
 
