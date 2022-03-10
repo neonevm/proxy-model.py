@@ -36,7 +36,7 @@ steps:
       - echo Check if $${FTS_RESULT} is greater or equeal $${FTS_THRESHOLD}
       - test $${FTS_RESULT} -ge $${FTS_THRESHOLD}
     artifact_paths:
-      - allure-reports.tar
+      - allure-reports.tar.gz
       - fts_${BUILDKITE_BUILD_NUMBER}.log
     env:
       PROXY_URL: http://proxy.night.stand.neontest.xyz/solana
