@@ -1,5 +1,5 @@
 ARG SOLANA_REVISION=v1.8.12-testnet
-ARG EVM_LOADER_REVISION=ci-308-account_v2
+ARG EVM_LOADER_REVISION=develop
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 
