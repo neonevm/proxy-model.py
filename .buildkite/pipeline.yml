@@ -39,7 +39,6 @@ steps:
       - allure-reports.tar
       - fts_${BUILDKITE_BUILD_NUMBER}.log
     env:
-      REQUEST_AMOUNT: 995
       PROXY_URL: http://proxy.night.stand.neontest.xyz/solana
       FAUCET_URL: http://proxy.night.stand.neontest.xyz/request_eth_token
       SOLANA_URL: http://proxy.night.stand.neontest.xyz/node-solana
