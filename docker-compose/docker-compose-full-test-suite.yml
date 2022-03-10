@@ -13,7 +13,7 @@ services:
       - ADDRESS_FROM=
       - ADDRESS_TO=
       - PRIVATE_KEY=
-      - REQUEST_AMOUNT=995
+      - REQUEST_AMOUNT=20000
       - FAUCET_URL=${FAUCET_URL}
       - USE_FAUCET=true
       - SOLANA_EXPLORER=https://explorer.solana.com/?cluster=custom&customUrl=http://proxy.night.stand.neontest.xyz/node-solana
