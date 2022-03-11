@@ -35,7 +35,10 @@ steps:
       - SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
       - PROXY_URL="http://$$PROXY_ADDR:9091/solana"
       - FAUCET_URL="http://$$PROXY_ADDR:3334/request_neon"
-      - SOLANA_URL="http://$$SOLANA_ADDR:8899"    
+      - SOLANA_URL="http://$$SOLANA_ADDR:8899"
+      - echo $$PROXY_URL
+      - echo $$FAUCET_URL
+      - echo $$SOLANA_URL
       - echo Full test suite container name - $${FTS_CONTAINER_NAME}
       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
       - FTS_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
