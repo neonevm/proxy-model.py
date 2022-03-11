@@ -12,5 +12,5 @@ export TF_BACKEND_CONFIG="-backend-config="bucket=${TFSTATE_BUCKET}" -backend-co
 terraform init
 terraform destroy --auto-approve=true
 
-buildkite meta-data get "neon-tests-proxy-$BUILDKITE_COMMIT"
-buildkite meta-data get "neon-tests-solana-$BUILDKITE_COMMIT"
+buildkite-agent meta-data get "neon-tests-proxy-$BUILDKITE_COMMIT"
+buildkite-agent meta-data get "neon-tests-solana-$BUILDKITE_COMMIT"

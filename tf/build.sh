@@ -15,5 +15,5 @@ terraform apply --auto-approve=true
 terraform output --json | jq -r '.proxy_ip.value' | buildkite-agent meta-data set "neon-tests-proxy-$BUILDKITE_COMMIT"
 terraform output --json | jq -r '.proxy_ip.value' | buildkite-agent meta-data set "neon-tests-solana-$BUILDKITE_COMMIT"
 
-buildkite meta-data get "neon-tests-proxy-$BUILDKITE_COMMIT"
-buildkite meta-data get "neon-tests-solana-$BUILDKITE_COMMIT"
+buildkite-agent meta-data get "neon-tests-proxy-$BUILDKITE_COMMIT"
+buildkite-agent meta-data get "neon-tests-solana-$BUILDKITE_COMMIT"
