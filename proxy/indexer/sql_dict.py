@@ -18,7 +18,7 @@ class SQLDict(MutableMapping, BaseDB):
     def _create_table_sql(self) -> str:
         key_type = 'BYTEA' if self.bin_key else 'TEXT'
         return f'''
-        
+
                 CREATE TABLE IF NOT EXISTS
                 {self._table_name} (
                     key {key_type} UNIQUE,
