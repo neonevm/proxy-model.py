@@ -21,9 +21,9 @@ steps:
 #      - "indexer.log"
 
   - label: ":coverage: full test suite (FTS)"
-#    if: |
-#        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
-#        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
+    if: |
+        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
+        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
     commands:
       - echo Full test suite container name - $${FTS_CONTAINER_NAME}
       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
@@ -45,6 +45,8 @@ steps:
       FTS_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
       FTS_IMAGE: neonlabsorg/full_test_suite:583-full-test-suite
+    agents:
+       queue: "testing"
 
   - wait
 
