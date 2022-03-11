@@ -61,6 +61,7 @@ services:
     image: neonlabsorg/proxy:${REVISION}
     environment:
       SOLANA_URL: http://solana:8899
+      FAUCET_URL: http://faucet:3333
       POSTGRES_DB: neon-db
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
