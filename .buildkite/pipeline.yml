@@ -28,7 +28,7 @@ steps:
   - label: "Check variables"
     command:
       - env
-      - PROXY_URL=`buildkite-agent meta-data get 'neon-tests-solana-$$BUILDKITE_COMMIT'`
+      - PROXY_URL=`buildkite-agent meta-data get 'PROXY_IP'`
       - echo "PROXY_URL $$PROXY_URL"
 
     env:

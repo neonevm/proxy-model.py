@@ -12,8 +12,8 @@ export TF_BACKEND_CONFIG="-backend-config="bucket=${TFSTATE_BUCKET}" -backend-co
 terraform init $TF_BACKEND_CONFIG
 terraform apply --auto-approve=true
 
-terraform output --json | jq -r '.proxy_ip.value' | buildkite-agent meta-data set "neon-tests-proxy-$BUILDKITE_COMMIT"
-terraform output --json | jq -r '.solana_ip.value' | buildkite-agent meta-data set "neon-tests-solana-$BUILDKITE_COMMIT"
+terraform output --json | jq -r '.proxy_ip.value' | buildkite-agent meta-data set "PROXY_IP"
+terraform output --json | jq -r '.solana_ip.value' | buildkite-agent meta-data set "SOLANA_IP"
 
-buildkite-agent meta-data get "neon-tests-proxy-$BUILDKITE_COMMIT"
-buildkite-agent meta-data get "neon-tests-solana-$BUILDKITE_COMMIT"
+buildkite-agent meta-data get "PROXY_IP"
+buildkite-agent meta-data get "SOLANA_IP"
