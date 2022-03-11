@@ -27,9 +27,14 @@ steps:
 
   - label: "Check variables"
     command:
-      - env
-      - PROXY_URL=`buildkite-agent meta-data get 'PROXY_IP'`
+      - PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`
+      - SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
+      - PROXY_URL="http://$$PROXY_ADDR:9090/solana"
+      - FAUCET_URL="http://$$PROXY_ADDR:3333/request_neon"
+      - SOLANA_URL="http://$$SOLANA_ADDR:8899"
       - echo "PROXY_URL $$PROXY_URL"
+      - echo "FAUCET_URL $$FAUCET_URL"
+      - echo "SOLANA_URL $$SOLANA_URL"
 
     env:
       SOLANA_IP: "buildkite-agent meta-data get 'neon-tests-solana-$$BUILDKITE_COMMIT'"
