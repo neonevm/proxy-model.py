@@ -25,39 +25,39 @@ steps:
 #      - "airdropper.log"
 #      - "indexer.log"
 
-  - label: ":coverage: full test suite (FTS)"
-#    if: |
-#        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
-#        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
-    commands:
-      - echo Full test suite container name - $${FTS_CONTAINER_NAME}
-      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
-      - FTS_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
-      - docker cp $${FTS_CONTAINER_NAME}:/opt/allure-reports.tar.gz ./
-      - docker logs $${FTS_CONTAINER_NAME} > ./$${FTS_CONTAINER_NAME}.log
-      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
-      - echo Full test passing - $${FTS_RESULT}
-      - echo Full test threshold - $${FTS_THRESHOLD}
-      - echo Check if $${FTS_RESULT} is greater or equeal $${FTS_THRESHOLD}
-      - test $${FTS_RESULT} -ge $${FTS_THRESHOLD}
-    artifact_paths:
-      - allure-reports.tar.gz
-      - fts_${BUILDKITE_BUILD_NUMBER}.log
-    env:
-      PROXY_URL: http://proxy.night.stand.neontest.xyz/solana
-      FAUCET_URL: http://proxy.night.stand.neontest.xyz/request_eth_token
-      SOLANA_URL: http://proxy.night.stand.neontest.xyz/node-solana
-      FTS_THRESHOLD: 1700
-      FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
-      FTS_IMAGE: neonlabsorg/full_test_suite:583-full-test-suite
+#   - label: ":coverage: full test suite (FTS)"
+# #    if: |
+# #        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
+# #        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
+#     commands:
+#       - echo Full test suite container name - $${FTS_CONTAINER_NAME}
+#       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
+#       - FTS_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
+#       - docker cp $${FTS_CONTAINER_NAME}:/opt/allure-reports.tar.gz ./
+#       - docker logs $${FTS_CONTAINER_NAME} > ./$${FTS_CONTAINER_NAME}.log
+#       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
+#       - echo Full test passing - $${FTS_RESULT}
+#       - echo Full test threshold - $${FTS_THRESHOLD}
+#       - echo Check if $${FTS_RESULT} is greater or equeal $${FTS_THRESHOLD}
+#       - test $${FTS_RESULT} -ge $${FTS_THRESHOLD}
+#     artifact_paths:
+#       - allure-reports.tar.gz
+#       - fts_${BUILDKITE_BUILD_NUMBER}.log
+#     env:
+#       PROXY_URL: http://proxy.night.stand.neontest.xyz/solana
+#       FAUCET_URL: http://proxy.night.stand.neontest.xyz/request_eth_token
+#       SOLANA_URL: http://proxy.night.stand.neontest.xyz/node-solana
+#       FTS_THRESHOLD: 1700
+#       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
+#       FTS_IMAGE: neonlabsorg/full_test_suite:583-full-test-suite
 
-  - wait
+#   - wait
 
-  - label: ":floppy_disk: publish image"
-    command: ".buildkite/steps/publish-image.sh"
-    if: |
-        build.branch =~ /^(master|develop|^ci-.+|v[0-9]+\.[0-9]+\..+)$$/ &&
-        (build.env("NEON_EVM_BRANCH") == "develop" || build.env("NEON_EVM_BRANCH") == null)
+#   - label: ":floppy_disk: publish image"
+#     command: ".buildkite/steps/publish-image.sh"
+#     if: |
+#         build.branch =~ /^(master|develop|^ci-.+|v[0-9]+\.[0-9]+\..+)$$/ &&
+#         (build.env("NEON_EVM_BRANCH") == "develop" || build.env("NEON_EVM_BRANCH") == null)
 
   - label: ":terraform: destroy infrastructure"
     agents:

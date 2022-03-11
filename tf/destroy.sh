@@ -11,3 +11,6 @@ export TF_VAR_proxy_model_revision=latest
 export TF_BACKEND_CONFIG="-backend-config="bucket=${TFSTATE_BUCKET}" -backend-config="key=${TFSTATE_KEY}" -backend-config="region=${TFSTATE_REGION}""
 terraform init
 terraform destroy --auto-approve=true
+
+buildkite meta-data get "neon-tests-proxy-$BUILDKITE_COMMIT"
+buildkite meta-data get "neon-tests-solana-$BUILDKITE_COMMIT"
