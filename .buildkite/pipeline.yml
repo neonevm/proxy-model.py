@@ -27,9 +27,11 @@ steps:
 
   - label: "Check variables"
     command:
-      - "echo $$SOLANA_IP"
-      - "echo $$PROXY_IP"
-      - "env"
+      - echo "SOLANA_IP: $$SOLANA_IP"
+      - echo "PROXY_IP: $$PROXY_IP"
+      - export ZZ=`buildkite-agent meta-data get 'neon-tests-solana-$$BUILDKITE_COMMIT'`
+      - echo "ZZ $ZZ"
+
     env:
       SOLANA_IP: "buildkite-agent meta-data get 'neon-tests-solana-$$BUILDKITE_COMMIT'"
       PROXY_IP: "buildkite-agent meta-data get 'neon-tests-proxy-$$BUILDKITE_COMMIT'"
