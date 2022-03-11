@@ -1,5 +1,5 @@
 ARG SOLANA_REVISION=v1.8.12-testnet
-ARG EVM_LOADER_REVISION=latest
+ARG EVM_LOADER_REVISION=develop
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 
@@ -12,9 +12,8 @@ COPY ./requirements.txt /opt
 WORKDIR /opt
 
 RUN apt update && \
-    DEBIAN_FRONTEND=noninteractive apt install -y git software-properties-common openssl curl \
-                                                  ca-certificates python3-pip python3-venv \
-                                                  postgresql-client-common postgresql-client && \
+    DEBIAN_FRONTEND=noninteractive apt install -y git software-properties-common openssl curl parallel \
+                                                  ca-certificates python3-pip python3-venv postgresql-client && \
     python3 -m venv venv && \
     pip3 install --upgrade pip && \
     /bin/bash -c "source venv/bin/activate" && \
