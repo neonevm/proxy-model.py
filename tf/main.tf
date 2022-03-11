@@ -41,8 +41,13 @@ data "template_file" "proxy_init" {
   }
 }
 
+resource "random_id" "test-stand-solana" {
+  byte_length = 4
+  prefix      = "test-stand-solana-"
+}
+
 resource "aws_security_group" "test-stand-solana" {
-  name        = "${var.branch} - solana group for test stand"
+  name        = random_id.test-stand-solana.hex
   description = "set of rules allow incoming traffic from ci test agents for OZ tests"
   vpc_id      = data.aws_vpc.default.id
 
@@ -78,15 +83,20 @@ resource "aws_security_group" "test-stand-solana" {
   }
 }
 
+resource "random_id" "test-stand-proxy" {
+  byte_length = 4
+  prefix      = "test-stand-solana-"
+}
+
 resource "aws_security_group" "test-stand-proxy" {
-  name        = "${var.branch} - proxy group for test stand"
+  name        = random_id.test-stand-proxy.hex
   description = "set of rules allow incoming traffic from ci test agents for OZ tests"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
     description = "allow incoming from ci test agent to PROXY"
     from_port   = 9090
-    to_port     = 9090
+    to_port     = 9091
     protocol    = "tcp"
     cidr_blocks = var.allow_list
 
@@ -95,7 +105,7 @@ resource "aws_security_group" "test-stand-proxy" {
   ingress {
     description = "allow incoming from ci test agent to FAUCET"
     from_port   = 3333
-    to_port     = 3333
+    to_port     = 3334
     protocol    = "tcp"
     cidr_blocks = var.allow_list
 

@@ -30,9 +30,13 @@ services:
   proxy:
     environment:
       - SOLANA_URL=$SOLANA_URL
+    ports:
+      - 9091:9090
   faucet:
     environment:
       - SOLANA_URL=$SOLANA_URL
+    ports:
+      - 3334:3333
   airdropper:
     environment:
       - SOLANA_URL=$SOLANA_URL
