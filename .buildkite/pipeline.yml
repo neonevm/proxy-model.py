@@ -5,6 +5,8 @@ steps:
       - ".buildkite/steps/upload-image.sh"
 
   - label: ":terraform: build infrastructure"
+    agents:
+      queue: "testing"
     command:
       - "tf/build.sh"
   - wait
@@ -58,5 +60,7 @@ steps:
         (build.env("NEON_EVM_BRANCH") == "develop" || build.env("NEON_EVM_BRANCH") == null)
 
   - label: ":terraform: destroy infrastructure"
+    agents:
+      queue: "testing"
     command:
       - "tf/destroy.sh"

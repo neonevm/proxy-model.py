@@ -168,7 +168,7 @@ resource "aws_instance" "proxy" {
     type        = "ssh"
     user        = "ubuntu"
     host        = aws_instance.proxy.public_ip
-    private_key = file("1")
+    private_key = file("~/.ssh/ci-stands")
   }
 
   provisioner "file" {
