@@ -27,9 +27,9 @@ steps:
 
 
   - label: ":coverage: full test suite (FTS)"
-#    if: |
-#        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
-#        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
+    if: |
+        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
+        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
     commands:
       - PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`
       - SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
@@ -55,7 +55,9 @@ steps:
     env:
       FTS_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
-      FTS_IMAGE: neonlabsorg/full_test_suite:583-full-test-suite
+      FTS_IMAGE: neonlabsorg/full_test_suite:develop
+    agents:
+       queue: "testing"
 
   - wait
 
