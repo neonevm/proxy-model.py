@@ -505,7 +505,7 @@ class CreateAccount2IxDecoder(DummyIxDecoder):
 
         self.debug(f"neon_account({neon_account}), pda_account({pda_account}), code_account({code_account}), slot({self.ix.sign.slot})")
 
-        self.state.add_account_to_db(neon_account, pda_account, code_account, self.ix.sign.slot)
+        self.state.add_account_to_db(neon_account, pda_account, code_account, self.ix.sign.slot, self.ix.sign.sign)
         return True
 
 class ResizeStorageAccountIxDecoder(DummyIxDecoder):
