@@ -11,6 +11,7 @@ from .airdropper import Airdropper
 class AirdropperApp:
 
     def __init__(self):
+        self.info("Airdropper application is starting ...")
         pyth_mapping_account = PublicKey(os.environ['PYTH_MAPPING_ACCOUNT'])
         faucet_url = os.environ['FAUCET_URL']
         wrapper_whitelist = os.environ['INDEXER_ERC20_WRAPPER_WHITELIST']
