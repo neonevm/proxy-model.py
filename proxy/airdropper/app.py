@@ -2,7 +2,7 @@ import os
 from logged_groups import logged_group
 from solana.publickey import PublicKey
 
-from ..environment import EVM_LOADER_ID
+from ..environment import EVM_LOADER_ID, SOLANA_URL
 from ..common_neon.neon_app import NeonApp, INeonAppImpl
 
 from .airdropper import Airdropper
@@ -12,7 +12,6 @@ from .airdropper import Airdropper
 class AirdropperApp(NeonApp, INeonAppImpl):
 
     def __init__(self):
-        self.info("Airdropper application is starting ...")
         pyth_mapping_account = PublicKey(os.environ['PYTH_MAPPING_ACCOUNT'])
         faucet_url = os.environ['FAUCET_URL']
         wrapper_whitelist = os.environ['INDEXER_ERC20_WRAPPER_WHITELIST']
@@ -22,10 +21,9 @@ class AirdropperApp(NeonApp, INeonAppImpl):
 
         pp_solana_url = os.environ.get('PP_SOLANA_URL', None)
         max_conf = float(os.environ.get('MAX_CONFIDENCE_INTERVAL', 0.02))
-        solana_url = os.environ['SOLANA_URL']
 
         self.info(f"""Construct Airdropper with params:
-                  solana_url: {solana_url},
+                  solana_url: {SOLANA_URL},
                   evm_loader_id: {EVM_LOADER_ID},
                   pyth.network mapping account: {pyth_mapping_account},
                   faucet_url: {faucet_url},
@@ -34,7 +32,7 @@ class AirdropperApp(NeonApp, INeonAppImpl):
                   Price provider solana: {pp_solana_url},
                   Max confidence interval: {max_conf}""")
 
-        self._airdropper = Airdropper(solana_url, pyth_mapping_account, faucet_url, wrapper_whitelist, neon_decimals,
+        self._airdropper = Airdropper(SOLANA_URL, pyth_mapping_account, faucet_url, wrapper_whitelist, neon_decimals,
                                       pp_solana_url, max_conf)
 
     def run_impl(self):

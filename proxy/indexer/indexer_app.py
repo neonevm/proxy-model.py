@@ -10,14 +10,11 @@ from .indexer import Indexer
 class IndexerApp(NeonApp, INeonAppImpl):
 
     def __init__(self):
-
-        self.info(f"""Running indexer with params:
-                  solana_url: {SOLANA_URL},
-                  evm_loader_id: {EVM_LOADER_ID}""")
-
-        self.indexer = Indexer(SOLANA_URL)
+        NeonApp.__init__(self)
+        self.info(f"""Construct indexer with params: solana_url: {SOLANA_URL}, evm_loader_id: {EVM_LOADER_ID}""")
+        self._indexer = Indexer(SOLANA_URL)
 
     def run_impl(self):
-        self.indexer.run()
+        self._indexer.run()
 
 
