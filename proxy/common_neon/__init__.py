@@ -1,1 +1,1 @@
-from neon_app import NeonApp, INeonAppImpl
+from .neon_app import NeonApp, INeonAppImpl
