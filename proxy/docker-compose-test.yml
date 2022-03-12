@@ -125,11 +125,11 @@ services:
       WEB3_RPC_URL: 'http://proxy:9090/solana'
       WEB3_PRIVATE_KEY: ''
       NEON_ERC20_TOKENS:
-      NEON_ERC20_MAX_AMOUNT: 2000
+      NEON_ERC20_MAX_AMOUNT: 1000
       FAUCET_SOLANA_ENABLE: 'true'
       SOLANA_URL: 'http://solana:8899'
       NEON_OPERATOR_KEYFILE: '/root/.config/solana/id.json'
-      NEON_ETH_MAX_AMOUNT: 2000
+      NEON_ETH_MAX_AMOUNT: 1000
       TEST_FAUCET_INIT_NEON_BALANCE: 100000
     hostname: faucet
     ports:
