@@ -72,3 +72,4 @@ steps:
       queue: "testing"
     command:
       - "tf/destroy.sh"
+    allow_dependency_failure: true
