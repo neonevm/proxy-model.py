@@ -44,7 +44,7 @@ steps:
       SOLANA_URL: http://proxy.night.stand.neontest.xyz/node-solana
       FTS_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
-      FTS_IMAGE: neonlabsorg/full_test_suite:583-full-test-suite
+      FTS_IMAGE: neonlabsorg/full_test_suite:develop
     agents:
        queue: "testing"
 
