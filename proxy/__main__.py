@@ -11,7 +11,6 @@
 
 from .proxy import entry_point
 import os
-from proxy.indexer.airdropper.airdropper import AirdropperApp
 from .indexer.indexer import run_indexer
 
 if __name__ == '__main__':
@@ -19,15 +18,9 @@ if __name__ == '__main__':
     evm_loader_id = os.environ['EVM_LOADER']
     print(f"Will run with SOLANA_URL={solana_url}; EVM_LOADER={evm_loader_id}")
 
-    airdropper_mode = os.environ.get('AIRDROPPER_MODE', 'False').lower() in [1, 'true', 'True']
     indexer_mode = os.environ.get('INDEXER_MODE', 'False').lower() in [1, 'true', 'True']
 
-    if airdropper_mode:
-        airdropper_app = AirdropperApp()
-        exit_code = airdropper_app.run()
-        exit(exit_code)
-
-    elif indexer_mode:
+    if indexer_mode:
         print("Will run in indexer mode")
         run_indexer(solana_url)
     else:
