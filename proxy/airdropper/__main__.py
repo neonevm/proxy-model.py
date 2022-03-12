@@ -1,4 +1,4 @@
-from .airdropper import AirdropperApp
+from . import AirdropperApp
 
 if __name__ == '__main__':
     airdropper_app = AirdropperApp()

@@ -1,3 +1,11 @@
+import os
+from logged_groups import logged_group
+from solana.publickey import PublicKey
+
+from ..environment import EVM_LOADER_ID
+
+from .airdropper import Airdropper
+
 
 @logged_group("neon.Airdropper")
 class AirdropperApp:
@@ -34,5 +42,3 @@ class AirdropperApp:
             self.error(f'Failed to start Airdropper: {err}')
             return 1
         return 0
-
-f

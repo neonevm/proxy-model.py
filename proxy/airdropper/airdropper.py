@@ -271,4 +271,3 @@ class Airdropper(IndexerBase):
                 self.process_trx_airdropper_mode(trx)
         self.latest_processed_slot = max(self.latest_processed_slot, max_slot)
         self._constants['latest_processed_slot'] = self.latest_processed_slot
-
