@@ -278,7 +278,6 @@ class Airdropper(IndexerBase):
 class AirdropperApp:
 
     def __init__(self):
-        print("Will run in airdropper mode")
         pyth_mapping_account = PublicKey(os.environ['PYTH_MAPPING_ACCOUNT'])
         faucet_url = os.environ['FAUCET_URL']
         wrapper_whitelist = os.environ['INDEXER_ERC20_WRAPPER_WHITELIST']
@@ -305,7 +304,7 @@ class AirdropperApp:
 
     def run(self) -> int:
         try:
-            self.airdropper.run()
+            self._airdropper.run()
         except Exception as err:
             self.error(f'Failed to start Airdropper: {err}')
             return 1
