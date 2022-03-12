@@ -3,12 +3,13 @@ from logged_groups import logged_group
 from solana.publickey import PublicKey
 
 from ..environment import EVM_LOADER_ID
+from ..common_neon.neon_app import NeonApp, INeonAppImpl
 
 from .airdropper import Airdropper
 
 
 @logged_group("neon.Airdropper")
-class AirdropperApp:
+class AirdropperApp(NeonApp, INeonAppImpl):
 
     def __init__(self):
         self.info("Airdropper application is starting ...")
@@ -36,10 +37,5 @@ class AirdropperApp:
         self._airdropper = Airdropper(solana_url, pyth_mapping_account, faucet_url, wrapper_whitelist, neon_decimals,
                                       pp_solana_url, max_conf)
 
-    def run(self) -> int:
-        try:
-            self._airdropper.run()
-        except Exception as err:
-            self.error(f'Failed to start Airdropper: {err}')
-            return 1
-        return 0
+    def run_impl(self):
+        self._airdropper.run()
