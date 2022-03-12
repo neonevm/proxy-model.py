@@ -7,13 +7,13 @@ from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
 
-from ..environment import NEON_PRICE_USD, EVM_LOADER_ID
-from ..common_neon.solana_interactor import SolanaInteractor
-from ..indexer.indexer_base import IndexerBase
-from ..indexer.pythnetwork import PythNetworkClient
-from ..indexer.base_db import BaseDB
-from ..indexer.utils import check_error
-from ..indexer.sql_dict import SQLDict
+from ...environment import NEON_PRICE_USD, EVM_LOADER_ID
+from ...common_neon.solana_interactor import SolanaInteractor
+from ...indexer.indexer_base import IndexerBase
+from ...indexer.pythnetwork import PythNetworkClient
+from ...indexer.base_db import BaseDB
+from ...indexer.utils import check_error
+from ...indexer.sql_dict import SQLDict
 
 
 ACCOUNT_CREATION_PRICE_SOL = Decimal('0.00472692')
@@ -310,3 +310,5 @@ class AirdropperApp:
             self.error(f'Failed to start Airdropper: {err}')
             return 1
         return 0
+
+

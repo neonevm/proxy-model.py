@@ -11,7 +11,7 @@
 
 from .proxy import entry_point
 import os
-from .indexer.airdropper import AirdropperApp
+from proxy.indexer.airdropper.airdropper import AirdropperApp
 from .indexer.indexer import run_indexer
 
 if __name__ == '__main__':
