@@ -6,19 +6,6 @@ class TrxReceiptsStorage(BaseDB):
     def __init__(self, table_name):
         BaseDB.__init__(self, table_name)
 
-    def create_test_table(self) -> str:
-        sql = f"""
-        CREATE TABLE IF NOT EXISTS {self._table_name} (
-            slot        BIGINT,
-            signature   VARCHAR(88),
-            trx         BYTEA,
-            PRIMARY KEY (slot, signature)
-        );
-        """
-        with self._create_table_lock:
-            cursor = self._conn.cursor()
-            cursor.execute(sql)
-
     def clear(self):
         with self._conn.cursor() as cur:
             cur.execute(f'DELETE FROM {self._table_name}')

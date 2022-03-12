@@ -132,3 +132,17 @@
         key TEXT UNIQUE,
         value BYTEA
     )
+
+    CREATE TABLE IF NOT EXISTS transaction_receipts (
+        slot        BIGINT,
+        signature   VARCHAR(88),
+        trx         BYTEA,
+        PRIMARY KEY (slot, signature)
+    );
+
+    CREATE TABLE IF NOT EXISTS test_storage (
+        slot        BIGINT,
+        signature   VARCHAR(88),
+        trx         BYTEA,
+        PRIMARY KEY (slot, signature)
+    );

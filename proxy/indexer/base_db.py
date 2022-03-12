@@ -23,7 +23,6 @@ class DBQueryExpression(NamedTuple):
 
 @logged_group("neon.Indexer")
 class BaseDB:
-    _create_table_lock = multiprocessing.Lock()
 
     def __init__(self, table_name):
         self._table_name = table_name

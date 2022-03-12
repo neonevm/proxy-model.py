@@ -9,7 +9,6 @@ class TestTrxReceiptsStorage(TestCase):
     def setUpClass(cls) -> None:
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/421")
         cls.testee = TrxReceiptsStorage('test_storage')
-        cls.testee.create_test_table()
 
     def create_signature(self):
         signature = b''
