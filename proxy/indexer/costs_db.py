@@ -6,21 +6,7 @@ from ..indexer.base_db import BaseDB
 
 class CostsDB(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        self._table_name = 'solana_neon_transactions_costs'
-        return f"""
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                sol_sign CHAR(88) UNIQUE,
-                operator VARCHAR(50),
-
-                heap_size INT,
-                bpf_instructions INT,
-
-                sol_cost BIGINT,
-                token_income BIGINT
-            );"""
+        BaseDB.__init__(self, 'solana_neon_transactions_costs')
 
     def add_costs(self, tx_costs: List[CostInfo]):
         rows = []
