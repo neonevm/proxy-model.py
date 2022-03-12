@@ -10,4 +10,4 @@ fi
 
 [[ -z "$FINALIZED" ]] && export FINALIZED="confirmed"
 
-python3 -m proxy.indexer.airdropper
+python3 -m proxy.airdropper
