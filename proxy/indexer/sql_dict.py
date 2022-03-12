@@ -7,24 +7,12 @@ class SQLDict(MutableMapping, BaseDB):
     """Serialize an object using pickle to a binary format accepted by SQLite."""
 
     def __init__(self, tablename='table', bin_key=False):
-        self.bin_key = bin_key
+        self.bin_key = False
         self.encode = encode
         self.decode = decode
         self.key_encode = encode if self.bin_key else dummy
         self.key_decode = decode if self.bin_key else dummy
-        BaseDB.__init__(self, tablename + ("_bin_key" if self.bin_key else ""))
-        self._create_table_sql()
-
-    def _create_table_sql(self) -> str:
-        key_type = 'BYTEA' if self.bin_key else 'TEXT'
-        return f'''
-
-                CREATE TABLE IF NOT EXISTS
-                {self._table_name} (
-                    key {key_type} UNIQUE,
-                    value BYTEA
-                )
-            '''
+        BaseDB.__init__(self, tablename)
 
     def __len__(self):
         with self._conn.cursor() as cur:

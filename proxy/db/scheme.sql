@@ -122,3 +122,13 @@
         trx         BYTEA,
         PRIMARY KEY (slot, signature)
     );
+
+    CREATE TABLE IF NOT EXISTS constants (
+        key TEXT UNIQUE,
+        value BYTEA
+    )
+
+    CREATE TABLE IF NOT EXISTS airdrop_scheduled (
+        key TEXT UNIQUE,
+        value BYTEA
+    )
