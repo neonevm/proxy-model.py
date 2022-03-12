@@ -6,12 +6,11 @@ from proxy.indexer.base_db import BaseDB
 class SQLDict(MutableMapping, BaseDB):
     """Serialize an object using pickle to a binary format accepted by SQLite."""
 
-    def __init__(self, tablename='table', bin_key=False):
-        self.bin_key = False
+    def __init__(self, tablename='table'):
         self.encode = encode
         self.decode = decode
-        self.key_encode = encode if self.bin_key else dummy
-        self.key_decode = decode if self.bin_key else dummy
+        self.key_encode = dummy
+        self.key_decode = dummy
         BaseDB.__init__(self, tablename)
 
     def __len__(self):
