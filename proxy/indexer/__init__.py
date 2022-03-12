@@ -1,1 +1,1 @@
-from indexer_app import IndexerApp
+from .indexer_app import IndexerApp
