@@ -6,3 +6,6 @@ output "proxy_ip" {
   value = aws_instance.proxy.public_ip
 }
 
+output "branch" {
+  value = var.branch
+}
