@@ -35,6 +35,7 @@ services:
   faucet:
     environment:
       - SOLANA_URL=$SOLANA_URL
+      - NEON_ETH_MAX_AMOUNT=50000
     ports:
       - 3334:3333
   airdropper:
