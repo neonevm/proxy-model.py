@@ -135,7 +135,7 @@ resource "aws_security_group" "test-stand-proxy" {
 
 
 resource "aws_instance" "solana" {
-  instance_type          = var.instance_type
+  instance_type          = var.solana_instance_type
   ami                    = var.ami
   key_name               = data.aws_key_pair.ci-stands.key_name
   vpc_security_group_ids = [aws_security_group.test-stand-solana.id]
@@ -156,7 +156,7 @@ resource "aws_instance" "solana" {
 }
 
 resource "aws_instance" "proxy" {
-  instance_type          = var.instance_type
+  instance_type          = var.proxy_instance_type
   ami                    = var.ami
   key_name               = data.aws_key_pair.ci-stands.key_name
   vpc_security_group_ids = [aws_security_group.test-stand-proxy.id]

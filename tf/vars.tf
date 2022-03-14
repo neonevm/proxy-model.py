@@ -8,7 +8,11 @@ variable "allow_list" {
   type = list(string)
 }
 
-variable "instance_type" {
+variable "solana_instance_type" {
+  type = string
+}
+
+variable "proxy_instance_type" {
   type = string
 }
 
