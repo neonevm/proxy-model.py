@@ -59,6 +59,15 @@ steps:
       FTS_IMAGE: neonlabsorg/full_test_suite:develop
     agents:
        queue: "testing"
+    artifact_paths:
+      - "proxy.log"
+      - "solana.log"
+      - "measurements.log"
+      - "evm_loader.log"
+      - "dbcreation.log"
+      - "faucet.log"
+      - "airdropper.log"
+      - "indexer.log"
 
   - wait
 
