@@ -38,6 +38,7 @@ services:
       - NEON_ETH_MAX_AMOUNT=50000
     ports:
       - 3334:3333
+    entrypoint: /spl/bin/faucet --config /opt/proxy/faucet.conf run
   airdropper:
     environment:
       - SOLANA_URL=$SOLANA_URL
