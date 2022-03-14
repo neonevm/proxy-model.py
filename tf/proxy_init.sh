@@ -62,3 +62,5 @@ do
 done;
 
 docker-compose -f docker-compose-test.yml -f docker-compose-test.override.yml up -d $SERVICES
+
+docker rm -f solana
