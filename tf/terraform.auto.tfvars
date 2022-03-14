@@ -1,4 +1,4 @@
-branch               = "develop"
+#branch               = "develop"
 neon_evm_revision    = "latest"
 proxy_model_revision = "latest"
 
