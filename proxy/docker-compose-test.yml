@@ -8,8 +8,6 @@ services:
       SOLANA_URL: http://solana:8899
       RUST_LOG: solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
     hostname: solana
-    ports:
-      - 127.0.0.1:8899:8899
     expose:
       - "8899"
       - "9900"
