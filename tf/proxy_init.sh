@@ -36,6 +36,8 @@ services:
     environment:
       - SOLANA_URL=$SOLANA_URL
       - NEON_ETH_MAX_AMOUNT=50000
+      - EVM_LOADER=53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
+      - NEON_TOKEN_MINT=HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU      
     ports:
       - 3334:3333
     entrypoint: /spl/bin/faucet --config /opt/proxy/faucet.conf run
