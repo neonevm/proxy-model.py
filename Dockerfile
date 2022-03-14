@@ -3,7 +3,7 @@ ARG EVM_LOADER_REVISION=develop
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 
-FROM neonlabsorg/evm_loader:${NEON_EVM_COMMIT} AS spl
+FROM neonlabsorg/evm_loader:${EVM_LOADER_REVISION} AS spl
 
 FROM ubuntu:20.04
 
