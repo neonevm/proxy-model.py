@@ -2,6 +2,18 @@
 
 cd tf
 
+### Receive artefacts
+export SSH_KEY="~/.ssh/ci-stands"
+export ARTIFACTS_LOGS="./logs"
+mkdir -p $ARTIFACTS_LOGS
+
+# solana
+export REMOTE_HOST=`buildkite-agent meta-data get "SOLANA_IP"`
+ssh -i $SSH_KEY ubuntu@$REMOTE_HOST 'sudo docker logs solana > /tmp/solana.log'
+scp -i $SSH_KEY ubuntu@$REMOTE_HOST:/tmp/solana.log $ARTIFACTS_LOGS
+
+# proxy
+
 export TF_VAR_branch=$BUILDKITE_BRANCH
 export TFSTATE_BUCKET="nl-ci-stands"
 export TFSTATE_KEY="tests/test-$BUILDKITE_COMMIT"
