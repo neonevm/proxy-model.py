@@ -26,48 +26,48 @@ steps:
 #      - "indexer.log"
 
 
-   - label: ":coverage: full test suite (FTS)"
-     key: "full_tests"
+  - label: ":coverage: full test suite (FTS)"
+    key: "full_tests"
 #    if: |
 #        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
 #        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
-     commands:
-       - PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`
-       - SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
-       - export PROXY_URL="http://$$PROXY_ADDR:9091/solana"
-       - export FAUCET_URL="http://$$PROXY_ADDR:3334/request_neon"
-       - export SOLANA_URL="http://$$SOLANA_ADDR:8899"
-       - echo $$PROXY_URL
-       - echo $$FAUCET_URL
-       - echo $$SOLANA_URL
-       - echo Full test suite container name - $${FTS_CONTAINER_NAME}
-       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
-       - FTS_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
-       - docker cp $${FTS_CONTAINER_NAME}:/opt/allure-reports.tar.gz ./
-       - docker logs $${FTS_CONTAINER_NAME} > ./$${FTS_CONTAINER_NAME}.log
-       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
-       - echo Full test passing - $${FTS_RESULT}
-       - echo Full test threshold - $${FTS_THRESHOLD}
-       - echo Check if $${FTS_RESULT} is greater or equeal $${FTS_THRESHOLD}
-       - test $${FTS_RESULT} -ge $${FTS_THRESHOLD}
-     artifact_paths:
-       - allure-reports.tar.gz
-       - fts_${BUILDKITE_BUILD_NUMBER}.log
-     env:
-       FTS_THRESHOLD: 1700
-       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
-       FTS_IMAGE: neonlabsorg/full_test_suite:develop
-     agents:
-        queue: "testing"
-     artifact_paths:
-       - "proxy.log"
-       - "solana.log"
-       - "measurements.log"
-       - "evm_loader.log"
-       - "dbcreation.log"
-       - "faucet.log"
-       - "airdropper.log"
-       - "indexer.log"
+    commands:
+      - PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`
+      - SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
+      - export PROXY_URL="http://$$PROXY_ADDR:9091/solana"
+      - export FAUCET_URL="http://$$PROXY_ADDR:3334/request_neon"
+      - export SOLANA_URL="http://$$SOLANA_ADDR:8899"
+      - echo $$PROXY_URL
+      - echo $$FAUCET_URL
+      - echo $$SOLANA_URL
+      - echo Full test suite container name - $${FTS_CONTAINER_NAME}
+      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
+      - FTS_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
+      - docker cp $${FTS_CONTAINER_NAME}:/opt/allure-reports.tar.gz ./
+      - docker logs $${FTS_CONTAINER_NAME} > ./$${FTS_CONTAINER_NAME}.log
+      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
+      - echo Full test passing - $${FTS_RESULT}
+      - echo Full test threshold - $${FTS_THRESHOLD}
+      - echo Check if $${FTS_RESULT} is greater or equeal $${FTS_THRESHOLD}
+      - test $${FTS_RESULT} -ge $${FTS_THRESHOLD}
+    artifact_paths:
+      - allure-reports.tar.gz
+      - fts_${BUILDKITE_BUILD_NUMBER}.log
+    env:
+      FTS_THRESHOLD: 1700
+      FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
+      FTS_IMAGE: neonlabsorg/full_test_suite:develop
+    agents:
+       queue: "testing"
+    artifact_paths:
+      - "proxy.log"
+      - "solana.log"
+      - "measurements.log"
+      - "evm_loader.log"
+      - "dbcreation.log"
+      - "faucet.log"
+      - "airdropper.log"
+      - "indexer.log"
 
   - wait
 
