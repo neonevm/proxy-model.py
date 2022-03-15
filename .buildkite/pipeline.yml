@@ -26,13 +26,13 @@ steps:
 #      - "indexer.log"
 
 
-#   - label: ":coverage: full test suite (FTS)"
-#     key: "full_tests"
-# #    if: |
-# #        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
-# #        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
-#     commands:
-#       - PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`
+   - label: ":coverage: full test suite (FTS)"
+     key: "full_tests"
+#    if: |
+#        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
+#        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
+     commands:
+       - PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`
 #       - SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
 #       - export PROXY_URL="http://$$PROXY_ADDR:9091/solana"
 #       - export FAUCET_URL="http://$$PROXY_ADDR:3334/request_neon"
