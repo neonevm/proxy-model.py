@@ -85,4 +85,4 @@ steps:
 #    depends_on: "full_tests"
     allow_dependency_failure: true
     artifact_paths:
-      - "./tf/logs/solana.log"
+      - "./tf/logs/*"

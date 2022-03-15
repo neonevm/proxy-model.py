@@ -14,7 +14,20 @@ ssh -i $SSH_KEY ubuntu@$REMOTE_HOST 'sudo docker logs solana > /tmp/solana.log'
 scp -i $SSH_KEY ubuntu@$REMOTE_HOST:/tmp/solana.log $ARTIFACTS_LOGS
 
 # proxy
+export REMOTE_HOST=`buildkite-agent meta-data get "PROXY_IP"`
+ssh-keyscan -H $REMOTE_HOST >> ~/.ssh/known_hosts
+declare -a services=("evm_loader" "postgres" "dbcreation" "indexer" "proxy" "faucet" "airdropper")
 
+for service in "${services[@]}"
+do
+   echo "$servce"
+   ssh -i $SSH_KEY ubuntu@$REMOTE_HOST "sudo docker logs $service > /tmp/$service.log"
+   scp -i $SSH_KEY ubuntu@$REMOTE_HOST:/tmp/$service.log $ARTIFACTS_LOGS
+done
+
+
+
+### Clean infrastructure by terraform
 export TF_VAR_branch=$BUILDKITE_BRANCH
 export TFSTATE_BUCKET="nl-ci-stands"
 export TFSTATE_KEY="tests/test-$BUILDKITE_COMMIT"
@@ -25,5 +38,6 @@ export TF_BACKEND_CONFIG="-backend-config="bucket=${TFSTATE_BUCKET}" -backend-co
 terraform init $TF_BACKEND_CONFIG
 terraform destroy --auto-approve=true
 
+# info
 buildkite-agent meta-data get "PROXY_IP"
 buildkite-agent meta-data get "SOLANA_IP"
