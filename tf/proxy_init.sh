@@ -33,6 +33,7 @@ services:
     ports:
       - 9091:9090
   faucet:
+    image: neonlabsorg/faucet:latest
     environment:
       - SOLANA_URL=$SOLANA_URL
       - NEON_ETH_MAX_AMOUNT=50000
@@ -40,7 +41,7 @@ services:
       - NEON_TOKEN_MINT=HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU      
     ports:
       - 3334:3333
-    entrypoint: /spl/bin/faucet --config /opt/proxy/faucet.conf run
+    entrypoint: /opt/faucet/faucet --config /opt/proxy/faucet.conf run
   airdropper:
     environment:
       - SOLANA_URL=$SOLANA_URL
