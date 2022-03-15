@@ -9,6 +9,7 @@ mkdir -p $ARTIFACTS_LOGS
 
 # solana
 export REMOTE_HOST=`buildkite-agent meta-data get "SOLANA_IP"`
+ssh-keyscan -H $REMOTE_HOST >> ~/.ssh/known_hosts
 ssh -i $SSH_KEY ubuntu@$REMOTE_HOST 'sudo docker logs solana > /tmp/solana.log'
 scp -i $SSH_KEY ubuntu@$REMOTE_HOST:/tmp/solana.log $ARTIFACTS_LOGS
 
