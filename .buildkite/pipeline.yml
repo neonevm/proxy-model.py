@@ -69,7 +69,7 @@ steps:
        - "airdropper.log"
        - "indexer.log"
 
-   - wait
+  - wait
 
   - label: ":floppy_disk: publish image"
     command: ".buildkite/steps/publish-image.sh"
