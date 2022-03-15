@@ -36,10 +36,16 @@ services:
     image: neonlabsorg/faucet:latest
     environment:
       - FAUCET_RPC_BIND=0.0.0.0
+      - FAUCET_RPC_PORT=3333
       - SOLANA_URL=$SOLANA_URL
       - NEON_ETH_MAX_AMOUNT=50000
       - EVM_LOADER=53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
-      - NEON_TOKEN_MINT=HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU      
+      - NEON_TOKEN_MINT=HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU   
+      - FAUCET_RPC_ALLOWED_ORIGINS=["https://neonswap.live"]
+      - FAUCET_WEB3_ENABLE=false
+      - FAUCET_SOLANA_ENABLE=true
+      - NEON_TOKEN_MINT_DECIMALS=9
+      - NEON_OPERATOR_KEYFILE=/opt/faucet/id.json
     ports:
       - 3334:3333
     entrypoint: /opt/faucet/faucet --config /opt/proxy/faucet.conf run
