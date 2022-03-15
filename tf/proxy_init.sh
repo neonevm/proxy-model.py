@@ -35,6 +35,7 @@ services:
   faucet:
     image: neonlabsorg/faucet:latest
     environment:
+      - FAUCET_RPC_BIND=0.0.0.0
       - SOLANA_URL=$SOLANA_URL
       - NEON_ETH_MAX_AMOUNT=50000
       - EVM_LOADER=53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
