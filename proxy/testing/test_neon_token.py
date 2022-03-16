@@ -92,7 +92,8 @@ class TestNeonToken(unittest.TestCase):
         withdraw_tx_receipt = proxy.eth.wait_for_transaction_receipt(withdraw_tx_hash)
         print(f'withdraw_tx_receipt: {withdraw_tx_receipt}')
         print(f'deploy status: {withdraw_tx_receipt.status}')
-    
+
+    @unittest.skip("a.i.")
     def test_success_withdraw_to_non_existing_account(self):
         """
         Should succesfully withdraw NEON tokens to previously non-existing Associated Token Account
@@ -126,7 +127,8 @@ class TestNeonToken(unittest.TestCase):
         destination_balance_after_galan = self.spl_neon_token.get_balance(dest_token_acc, commitment=Confirmed)
         print(f'Destination account balance after (Galan): {destination_balance_after_galan}')
         self.assertEqual(int(destination_balance_after_galan['result']['value']['amount']), withdraw_amount_galan)
-    
+
+    @unittest.skip("a.i.")
     def test_success_withdraw_to_existing_account(self):
         """
         Should succesfully withdraw NEON tokens to existing Associated Token Account
