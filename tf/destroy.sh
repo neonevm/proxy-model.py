@@ -38,6 +38,7 @@ export TF_BACKEND_CONFIG="-backend-config="bucket=${TFSTATE_BUCKET}" -backend-co
 #terraform init $TF_BACKEND_CONFIG
 #terraform destroy --auto-approve=true
 
+
 # info
 buildkite-agent meta-data get "PROXY_IP"
 buildkite-agent meta-data get "SOLANA_IP"
