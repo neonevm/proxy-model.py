@@ -138,3 +138,6 @@ class IndexerDB:
 
     def add_tx_costs(self, tx_costs: List[CostInfo]):
         self._costs_db.add_costs(tx_costs)
+
+    def get_sol_sign_list_by_neon_sign(self, neon_sign: str) -> [str]:
+        return self._txs_db.get_sol_sign_list_by_neon_sign(neon_sign)
