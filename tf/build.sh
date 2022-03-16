@@ -17,3 +17,6 @@ terraform output --json | jq -r '.solana_ip.value' | buildkite-agent meta-data s
 
 buildkite-agent meta-data get "PROXY_IP"
 buildkite-agent meta-data get "SOLANA_IP"
+
+
+sleep 180
