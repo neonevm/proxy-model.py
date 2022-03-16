@@ -1,5 +1,5 @@
 ARG SOLANA_REVISION=v1.8.12-testnet
-ARG EVM_LOADER_REVISION=develop
+ARG EVM_LOADER_REVISION=v0.7.0
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 
@@ -40,7 +40,7 @@ COPY --from=spl /opt/solana_utils.py \
                 /spl/bin/
 COPY --from=spl /opt/neon-cli /spl/bin/emulator
 
-COPY proxy/operator-keypairs/* /root/.config/solana/
+COPY proxy/operator-keypairs/id.json /root/.config/solana/
 
 COPY . /opt
 ARG PROXY_REVISION
