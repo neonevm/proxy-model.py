@@ -12,7 +12,7 @@ cd /opt
 curl -O https://raw.githubusercontent.com/neonlabsorg/proxy-model.py/${branch}/proxy/docker-compose-test.yml
 
 export REVISION=${revision}
-export SOLANA_URL=http:\/\/${solana_ip}:8898
+export SOLANA_URL=http:\/\/${solana_ip}:8899
 
 cat > docker-compose-test.override.yml <<EOF
 version: "3"

@@ -36,7 +36,7 @@ steps:
       - SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
       - export PROXY_URL="http://$$PROXY_ADDR:9091/solana"
       - export FAUCET_URL="http://$$PROXY_ADDR:3334/request_neon"
-      - export SOLANA_URL="http://$$SOLANA_ADDR:8898"
+      - export SOLANA_URL="http://$$SOLANA_ADDR:8899"
       - echo $$PROXY_URL
       - echo $$FAUCET_URL
       - echo $$SOLANA_URL
