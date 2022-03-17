@@ -38,11 +38,7 @@ version: "3"
 services:
   solana:
     ports:
-      - "8899:8899"
-      - "9900:9900"
-      - "8900:8900"
-      - "8001:8001"
-      - "8001-8009:8001-8009/udp"
+      - 8898:8899
 EOF
 docker-compose -f docker-compose-test.yml -f docker-compose-test.override.yml up -d solana
 touch /tmp/startup_done
