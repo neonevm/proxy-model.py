@@ -6,6 +6,9 @@ steps:
 
   - label: ":terraform: build infrastructure"
     key: "create_infrastructure"
+    if: &main_if |
+        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
+        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")    
     agents:
       queue: "testing"
     command:
@@ -29,9 +32,7 @@ steps:
 
   - label: ":coverage: full test suite (FTS)"
     key: "full_tests"
-    if: |
-        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
-        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
+    if: *main_if
     commands:
       - PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`
       - SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
@@ -82,6 +83,7 @@ steps:
   - label: ":terraform: destroy infrastructure"
     agents:
       queue: "testing"
+    if: *main_if
     command:
       - ".buildkite/steps/tf/destroy.sh"
     depends_on: 
