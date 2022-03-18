@@ -7,7 +7,7 @@ terraform {
   }
 
   backend "s3" {
-
+    // Must be set from environment
   }
 }
 
@@ -61,7 +61,7 @@ resource "aws_security_group" "test-stand-solana" {
   }
 
   ingress {
-    description = "allow incoming from ci test agent to SOLANA"
+    description = "allow incoming from world to SOLANA"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -111,7 +111,7 @@ resource "aws_security_group" "test-stand-proxy" {
 
   }
   ingress {
-    description = "allow incoming from ci test agent to SOLANA"
+    description = "allow incoming from world to PROXY"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -165,7 +165,7 @@ resource "aws_instance" "proxy" {
     device_name = "/dev/sda1"
     volume_size = 50
   }
-  //user_data = data.template_file.proxy_init.rendered
+
   tags = {
     Name    = "${var.branch}-test-stand-proxy"
     purpose = "ci-oz-full-tests"

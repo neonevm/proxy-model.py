@@ -8,7 +8,7 @@ steps:
     agents:
       queue: "testing"
     command:
-      - "tf/build.sh"
+      - ".buildkite/steps/tf/build.sh"
   - wait
 
 #  - label: ":cop::skin-tone-2: deploy check"
@@ -86,4 +86,4 @@ steps:
     depends_on: "full_tests"
     allow_dependency_failure: true
     artifact_paths:
-      - "./tf/logs/*"
+      - ".buildkite/steps/tf/logs/*"
