@@ -82,7 +82,7 @@ steps:
     agents:
       queue: "testing"
     command:
-      - "tf/destroy.sh"
+      - ".buildkite/steps/tf/destroy.sh"
     depends_on: "full_tests"
     allow_dependency_failure: true
     artifact_paths:
