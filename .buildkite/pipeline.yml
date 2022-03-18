@@ -41,6 +41,7 @@ steps:
       - echo $$FAUCET_URL
       - echo $$SOLANA_URL
       - echo Full test suite container name - $${FTS_CONTAINER_NAME}
+      - docker image rm -f ${FTS_IMAGE}
       - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
       - FTS_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
       - docker cp $${FTS_CONTAINER_NAME}:/opt/allure-reports.tar.gz ./
