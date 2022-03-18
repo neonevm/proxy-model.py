@@ -5,6 +5,7 @@ steps:
       - ".buildkite/steps/upload-image.sh"
 
   - label: ":terraform: build infrastructure"
+    key: "create_infrastructure"
     agents:
       queue: "testing"
     command:
@@ -83,7 +84,9 @@ steps:
       queue: "testing"
     command:
       - ".buildkite/steps/tf/destroy.sh"
-    depends_on: "full_tests"
+    depends_on: 
+      - "full_tests"
+      - "create_infrastructure"
     allow_dependency_failure: true
     artifact_paths:
       - ".buildkite/steps/tf/logs/*"
