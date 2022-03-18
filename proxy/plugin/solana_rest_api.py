@@ -42,7 +42,7 @@ from ..common_neon.eth_proto import Trx as EthTrx
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-NEON_PROXY_PKG_VERSION = '0.6.0-dev'
+NEON_PROXY_PKG_VERSION = '0.7.1-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -385,6 +385,12 @@ class EthereumModel:
         except Exception as err:
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
+
+    def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
+        if not isinstance(neonTxId, str):
+            return []
+        return self._db.get_sol_sign_list_by_neon_sign(neonTxId)
+
 
 
 class JsonEncoder(json.JSONEncoder):
