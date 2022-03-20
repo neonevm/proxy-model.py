@@ -490,11 +490,12 @@ class NeonTxSender:
         self.resource = resource
         self.signer = resource.signer
         self.operator_key = resource.public_key()
-        self.ether_key = resource.ether
+        self.sol_acc = resource.public_key()
+        self.neon_acc = EthereumAddress.from_private_key(resource.secret_key())
         self.builder = NeonIxBuilder(self.operator_key)
 
     def get_keys(self):
-        return self.operator_key, self.ether_key
+        return self.sol_acc, self.neon_acc
 
     def clear_resource(self):
         self.resource = None
