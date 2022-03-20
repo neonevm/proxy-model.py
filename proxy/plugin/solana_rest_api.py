@@ -54,7 +54,7 @@ from ..prometheus_provider.commit_metrics import (
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-NEON_PROXY_PKG_VERSION = '0.6.0-dev'
+NEON_PROXY_PKG_VERSION = '0.7.2-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -465,6 +465,12 @@ class EthereumModel:
                 operator_neon_balance[neon_account] = 0
 
         return operator_sol_balance, operator_neon_balance
+
+    def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
+        if not isinstance(neonTxId, str):
+            return []
+        return self._db.get_sol_sign_list_by_neon_sign(neonTxId)
+
 
 
 class JsonEncoder(json.JSONEncoder):
