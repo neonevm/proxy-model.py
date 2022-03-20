@@ -23,7 +23,8 @@ from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-from typing import List, Tuple
+from solana.publickey import PublicKey
+from typing import Dict, List, Tuple
 
 from .solana_rest_api_tools import neon_config_load
 from ..common_neon.transaction_sender import NeonTxSender
@@ -35,9 +36,20 @@ from ..common_neon.estimate import GasEstimate
 from ..common_neon.utils import SolanaBlockInfo
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEP_COUNT
 from ..environment import neon_cli
+from ..environment import get_solana_accounts, get_operator_ethereum_accounts
 from ..memdb.memdb import MemDB
 from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx
+
+from ..prometheus_provider.commit_metrics import (
+    stat_commit_request_and_timeout,
+    stat_commit_success_tx,
+    stat_commit_failed_tx,
+    stat_commit_incoming_tx,
+    stat_commit_min_gas_price,
+    stat_commit_operator_balance,
+    stat_commit_operator_neon_balance,
+)
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -90,7 +102,17 @@ class EthereumModel:
         return self.neon_config_dict['NEON_CHAIN_ID']
 
     def eth_gasPrice(self):
-        return hex(int(self.gas_price_calculator.get_suggested_gas_price()))
+        gas_price = int(self.gas_price_calculator.get_suggested_gas_price())
+        sol_price_usd = self.gas_price_calculator.get_sol_price_usd()
+        neon_price_usd = self.gas_price_calculator.get_neon_price_usd()
+        operator_fee = self.gas_price_calculator.get_operator_fee()
+        stat_commit_min_gas_price(
+            gas_price,
+            sol_price_usd,
+            neon_price_usd,
+            operator_fee,
+        )
+        return hex(gas_price)
 
     def eth_estimateGas(self, param):
         try:
@@ -347,11 +369,14 @@ class EthereumModel:
         raise RuntimeError("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
 
     def eth_sendRawTransaction(self, rawTrx):
+        operator_sol_balance, operator_neon_balance = self._stat_tx_begin()
+
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
 
         if trx.gasPrice < min_gas_price:
+            self._stat_tx_end()
             raise RuntimeError("The transaction gasPrice is less than the minimum allowable value" +
                                f"({trx.gasPrice}<{min_gas_price})")
 
@@ -359,6 +384,7 @@ class EthereumModel:
         fee = trx.gasPrice * trx.gasLimit
         required_balance = fee + trx.value
         if user_balance < required_balance:
+            self._stat_tx_end()
             raise RuntimeError("The account balance is less than required: " +
                                f"Account {trx.sender()}; balance = {user_balance}; " +
                                f"gasPrice = {trx.gasPrice}; gasLimit = {trx.gasLimit}; " +
@@ -370,21 +396,75 @@ class EthereumModel:
         try:
             tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             tx_sender.execute()
+            sol_acc, neon_acc = tx_sender.get_keys()
+            self._stat_tx_end(
+                operator_sol_balance, sol_acc,
+                operator_neon_balance, str(neon_acc)
+            )
             return eth_signature
 
         except PendingTxError as err:
+            self._stat_tx_end()
             self.debug(f'{err}')
             return eth_signature
         except SolTxError as err:
+            self._stat_tx_end()
             err_msg = json.dumps(err.result, indent=3)
             self.error(f"Got SendTransactionError: {err_msg}")
             raise
         except EthereumError as err:
+            self._stat_tx_end()
             # self.debug(f"eth_sendRawTransaction EthereumError: {err}")
             raise
         except Exception as err:
+            self._stat_tx_end()
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
+
+    def _stat_tx_begin(self):
+        stat_commit_incoming_tx()
+        return self._stat_operator_balance()
+
+    def _stat_tx_end(
+        self,
+        pre_sol_balance: Dict[str, int] = None,
+        sol_acc: PublicKey = None,
+        pre_neon_balance: Dict[str, int] = None,
+        neon_acc: EthereumAddress = None
+    ):
+        post_sol_balance, post_neon_balance = self._stat_operator_balance()
+        if sol_acc:
+            sol_diff = pre_sol_balance[sol_acc] - post_sol_balance[sol_acc]
+            neon_diff = pre_neon_balance[neon_acc] - post_neon_balance[neon_acc]
+            stat_commit_success_tx(sol_acc, sol_diff, neon_acc, neon_diff)
+            self.debug(f"sol_acc({sol_acc}), sol_diff({sol_diff}), neon_acc({neon_acc}), neon_diff({neon_diff})")
+        else:
+            stat_commit_failed_tx(None)
+
+    def _stat_operator_balance(self) -> Tuple[Dict[str, int], Dict[str, int]]:
+        sol_accounts = [str(sol_account.public_key()) for sol_account in get_solana_accounts()]
+        # self.debug(f"sol_accounts({sol_accounts})")
+        sol_balances = self._solana.get_sol_balance_list(sol_accounts)
+        # self.debug(f"sol_balances({sol_balances})")
+        operator_sol_balance = dict(zip(sol_accounts, sol_balances))
+        # self.debug(f"operator_sol_balance({operator_sol_balance})")
+        for account, balance in operator_sol_balance.items():
+            stat_commit_operator_balance(str(account), balance)
+
+        neon_accounts = [str(neon_account) for neon_account in get_operator_ethereum_accounts()]
+        # self.debug(f"neon_accounts({neon_accounts})")
+        neon_layouts = self._solana.get_account_info_layout_list(neon_accounts)
+        # self.debug(f"neon_layouts({neon_layouts})")
+        operator_neon_balance = {}
+        # self.debug(f"operator_neon_balance({operator_neon_balance})")
+        for neon_account, neon_layout in zip(neon_accounts, neon_layouts):
+            if neon_layout:
+                operator_neon_balance[neon_account] = neon_layout.balance
+                stat_commit_operator_neon_balance(str(neon_account), neon_layout.balance)
+            else:
+                operator_neon_balance[neon_account] = 0
+
+        return operator_sol_balance, operator_neon_balance
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -506,6 +586,8 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 b'Content-Type': b'application/json',
                 b'Access-Control-Allow-Origin': b'*',
             })))
+
+        stat_commit_request_and_timeout(request.get('method', '---'), resp_time_ms)
 
     def on_websocket_open(self) -> None:
         pass

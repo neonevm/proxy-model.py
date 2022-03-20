@@ -17,6 +17,10 @@ from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
 
+from proxy.prometheus_provider.commit_metrics import (
+    stat_commit_create_stage_account,
+)
+
 from .address import accountWithSeed, EthereumAddress, ether2program
 from ..common_neon.errors import EthereumError
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
@@ -376,6 +380,9 @@ class OperatorResourceList:
             SolTxListSender(self._s, [tx], NeonCreatePermAccount.NAME).send()
         else:
             self.debug(f"Use existing accounts for resource {opkey}:{rid}")
+        if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+            for acc in account_list:
+                stat_commit_create_stage_account(str(acc), balance)
         return account_list
 
     def free_resource_info(self):
@@ -439,7 +446,11 @@ class NeonTxSender:
         self.resource = resource
         self.signer = resource.signer
         self.operator_key = resource.public_key()
+        self.ether_key = resource.ether
         self.builder = NeonIxBuilder(self.operator_key, resource.ether)
+
+    def get_keys(self):
+        return self.operator_key, self.ether_key
 
     def clear_resource(self):
         self.resource = None

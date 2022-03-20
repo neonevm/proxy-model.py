@@ -17,6 +17,7 @@ class GasPriceCalculator:
         self.pyth_network_client = PythNetworkClient(self.solana)
         self.recent_sol_price_update_time = None
         self.min_gas_price = None
+        self.sol_price_usd = None
 
     def env_min_gas_price(self):
         if MINIMAL_GAS_PRICE is not None:
@@ -57,8 +58,9 @@ class GasPriceCalculator:
                 if price['status'] != 1: # tradable
                     raise Exception('Price status is not tradable')
 
+                self.sol_price_usd = price['price']
                 self.recent_sol_price_update_time = cur_time
-                self.min_gas_price = (price['price'] / NEON_PRICE_USD) * (1 + OPERATOR_FEE) * pow(Decimal(10), 9)
+                self.min_gas_price = (self.sol_price_usd / NEON_PRICE_USD) * (1 + OPERATOR_FEE) * pow(Decimal(10), 9)
                 return
 
             except Exception as err:
@@ -70,3 +72,14 @@ class GasPriceCalculator:
 
                 self.info(f'Will retry getting price after {GET_SOL_PRICE_RETRY_INTERVAL} seconds')
                 time.sleep(GET_SOL_PRICE_RETRY_INTERVAL)
+
+    def get_sol_price_usd(self) -> float:
+        if self.sol_price_usd:
+            return float(self.sol_price_usd)
+        return 0.0
+
+    def get_neon_price_usd(self) -> float:
+        return float(NEON_PRICE_USD)
+
+    def get_operator_fee(self) -> float:
+        return float(OPERATOR_FEE)

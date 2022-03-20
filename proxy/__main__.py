@@ -15,6 +15,7 @@ import os
 from .indexer.airdropper import run_airdropper
 from .indexer.indexer import run_indexer
 
+
 if __name__ == '__main__':
     airdropper_mode = os.environ.get('AIRDROPPER_MODE', 'False').lower() in [1, 'true', 'True']
     indexer_mode = os.environ.get('INDEXER_MODE', 'False').lower() in [1, 'true', 'True']
@@ -40,9 +41,12 @@ if __name__ == '__main__':
                        max_conf)
     elif indexer_mode:
         print("Will run in indexer mode")
-
         solana_url = os.environ['SOLANA_URL']
-
         run_indexer(solana_url)
     else:
+        from .prometheus_provider.proxy_metrics import registry
+        from prometheus_client import start_http_server
+
+        print("Will run in proxy mode")
+        start_http_server(8888, registry=registry)
         entry_point()
