@@ -1,10 +1,12 @@
 import unittest
 import os
+import json
 
 import eth_utils
 from web3 import Web3
 from .testing_helpers import request_airdrop
 from solcx import compile_source
+
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
@@ -106,9 +108,9 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             eth_account.key
         )
         print('trx_deploy:', trx_deploy)
-        trx_deploy_hash = proxy.eth.send_raw_transaction(trx_deploy.rawTransaction)
-        print('trx_deploy_hash:', trx_deploy_hash.hex())
-        trx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(trx_deploy_hash)
+        self.trx_deploy_hash = proxy.eth.send_raw_transaction(trx_deploy.rawTransaction)
+        print('trx_deploy_hash:', self.trx_deploy_hash.hex())
+        trx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(self.trx_deploy_hash)
         print('trx_deploy_receipt:', trx_deploy_receipt)
 
         self.deploy_block_hash = trx_deploy_receipt['blockHash']
@@ -151,15 +153,24 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         print("\ntest_check_get_block_by_hash")
         block = proxy.eth.get_block(self.deploy_block_hash, full_transactions=True)
         print('block:', block)
-        self.assertEqual(len(block['transactions']), 1)
-        self.assertEqual(block['transactions'][0]['blockHash'], self.deploy_block_hash)
+        has_tx = False
+        for tx in block['transactions']:
+            if tx['hash'] == self.trx_deploy_hash:
+                has_tx = True
+                break
+        self.assertTrue(has_tx)
 
     # @unittest.skip("a.i.")
     def test_check_get_block_by_number(self):
         print("\ntest_check_get_block_by_number")
         block = proxy.eth.get_block(int(self.deploy_block_num))
         print('block:', block)
-        self.assertEqual(len(block['transactions']), 1)
+        has_tx = False
+        for tx in block['transactions']:
+            if tx == self.trx_deploy_hash:
+                has_tx = True
+                break
+        self.assertTrue(has_tx)
 
     # @unittest.skip("a.i.")
     def test_01_call_retrieve_right_after_deploy(self):
@@ -193,13 +204,12 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
         print('trx_store_signed:', trx_store_signed)
 
-        with self.assertRaisesRegex(Exception, 'custom program error: 0x5'):
-            trx_store_hash = proxy.eth.send_raw_transaction(trx_store_signed.rawTransaction)
-            print(trx_store_hash)
-        # print('trx_store_hash:', trx_store_hash.hex())
-        # trx_store_receipt = proxy.eth.wait_for_transaction_receipt(trx_store_hash)
-        # print('trx_store_receipt (low_gas):', trx_store_receipt)
-        # self.assertEqual(trx_store_receipt['status'], 0)  # false Transaction mined but execution failed
+        trx_store_hash = proxy.eth.send_raw_transaction(trx_store_signed.rawTransaction)
+        print(trx_store_hash)
+        print('trx_store_hash:', trx_store_hash.hex())
+        trx_store_receipt = proxy.eth.wait_for_transaction_receipt(trx_store_hash)
+        print('trx_store_receipt (low_gas):', trx_store_receipt)
+        self.assertEqual(trx_store_receipt['status'], 0)  # false Transaction mined but execution failed
 
     # @unittest.skip("a.i.")
     def test_04_execute_with_bad_nonce(self):
@@ -334,7 +344,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 gas=987654321,
                 gasPrice=1000000000,
                 to=eth_account_alice.address,
-                value=eth_utils.denoms.gwei),
+                value=2 * eth_utils.denoms.gwei),
                 eth_account.key
             )
 
@@ -351,7 +361,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 gas=987654321,
                 gasPrice=1000000000,
                 to=eth_account_bob.address,
-                value=eth_utils.denoms.gwei),
+                value=2 * eth_utils.denoms.gwei),
                 eth_account.key
             )
 
@@ -384,14 +394,15 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_transfer_receipt = proxy.eth.wait_for_transaction_receipt(trx_transfer_hash)
         print('trx_transfer_receipt:', trx_transfer_receipt)
 
+        gas_cost = trx_transfer_receipt['gasUsed'] * 1000000000
+        print('gas_cost:', gas_cost)
+
         alice_balance_after_transfer = proxy.eth.get_balance(eth_account_alice.address)
         bob_balance_after_transfer = proxy.eth.get_balance(eth_account_bob.address)
         print('alice_balance_after_transfer:', alice_balance_after_transfer)
         print('bob_balance_after_transfer:', bob_balance_after_transfer)
-        print('check https://github.com/neonlabsorg/neon-evm/issues/210')
-        print('one_gwei:', eth_utils.denoms.gwei)
-        self.assertLessEqual(alice_balance_after_transfer, alice_balance_before_transfer - eth_utils.denoms.gwei)
-        self.assertEqual(bob_balance_after_transfer, bob_balance_before_transfer + eth_utils.denoms.gwei)
+        self.assertEqual(alice_balance_after_transfer, alice_balance_before_transfer - one_and_a_half_gweis - gas_cost)
+        self.assertEqual(bob_balance_after_transfer, bob_balance_before_transfer + one_and_a_half_gweis)
 
     @unittest.skip("a.i.")
     def test_07_execute_long_transaction(self):

@@ -1,17 +1,18 @@
 from solana.publickey import PublicKey
-from proxy.indexer.indexer_base import IndexerBase
-from proxy.indexer.pythnetwork import PythNetworkClient
-from proxy.indexer.base_db import BaseDB
-from proxy.indexer.utils import check_error
-from proxy.indexer.sql_dict import SQLDict
 import requests
 import base58
 import traceback
 from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
+
 from ..environment import NEON_PRICE_USD, EVM_LOADER_ID
 from ..common_neon.solana_interactor import SolanaInteractor
+from ..indexer.indexer_base import IndexerBase
+from ..indexer.pythnetwork import PythNetworkClient
+from ..indexer.base_db import BaseDB
+from ..indexer.utils import check_error
+from ..indexer.sql_dict import SQLDict
 
 
 ACCOUNT_CREATION_PRICE_SOL = Decimal('0.00472692')
@@ -20,18 +21,7 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 
 class FailedAttempts(BaseDB):
     def __init__(self) -> None:
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        self._table_name = 'failed_airdrop_attempts'
-        return f'''
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                attempt_time    BIGINT,
-                eth_address     TEXT,
-                reason          TEXT
-            );
-            CREATE INDEX IF NOT EXISTS failed_attempt_time_idx ON {self._table_name} (attempt_time);
-            '''
+        BaseDB.__init__(self, 'failed_airdrop_attempts')
 
     def airdrop_failed(self, eth_address, reason):
         with self._conn.cursor() as cur:
@@ -43,19 +33,7 @@ class FailedAttempts(BaseDB):
 
 class AirdropReadySet(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        self._table_name = 'airdrop_ready'
-        return f'''
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                eth_address     TEXT UNIQUE,
-                scheduled_ts    BIGINT,
-                finished_ts     BIGINT,
-                duration        INTEGER,
-                amount_galans   INTEGER
-            )
-            '''
+        BaseDB.__init__(self, 'airdrop_ready')
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):
         finished = int(datetime.now().timestamp())
@@ -144,13 +122,10 @@ class Airdropper(IndexerBase):
     # helper function checking if given 'create account' corresponds to 'create erc20 token account' instruction
     def check_create_instr(self, account_keys, create_acc, create_token_acc):
         # Must use the same Ethereum account
-        if account_keys[create_acc['accounts'][1]] != account_keys[create_token_acc['accounts'][2]]:
-            return False
-        # Must use the same token program
-        if account_keys[create_acc['accounts'][5]] != account_keys[create_token_acc['accounts'][6]]:
+        if account_keys[create_acc['accounts'][2]] != account_keys[create_token_acc['accounts'][2]]:
             return False
         # Token program must be system token program
-        if account_keys[create_acc['accounts'][5]] != 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA':
+        if account_keys[create_token_acc['accounts'][6]] != 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA':
             return False
         # CreateERC20TokenAccount instruction must use ERC20-wrapper from whitelist
         if not self.is_allowed_wrapper_contract(account_keys[create_token_acc['accounts'][3]]):
@@ -186,7 +161,7 @@ class Airdropper(IndexerBase):
         # neon.CreateAccount -> neon.CreateERC20TokenAccount -> spl.Transfer (maybe shuffled)
         # First: select all instructions that can form such chains
         predicate = lambda instr: account_keys[instr['programIdIndex']] == EVM_LOADER_ID \
-                                  and base58.b58decode(instr['data'])[0] == 0x02
+                                  and base58.b58decode(instr['data'])[0] == 0x18
         create_acc_list = find_instructions(trx, predicate)
 
         predicate = lambda  instr: account_keys[instr['programIdIndex']] == EVM_LOADER_ID \
@@ -244,7 +219,7 @@ class Airdropper(IndexerBase):
         return int(self.airdrop_amount_neon * pow(Decimal(10), self.neon_decimals))
 
     def schedule_airdrop(self, create_acc):
-        eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[20:][:20]).hex()
+        eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[1:][:20]).hex()
         if self.airdrop_ready.is_airdrop_ready(eth_address) or eth_address in self.airdrop_scheduled:
             # Target account already supplied with airdrop or airdrop already scheduled
             return
@@ -296,34 +271,3 @@ class Airdropper(IndexerBase):
                 self.process_trx_airdropper_mode(trx)
         self.latest_processed_slot = max(self.latest_processed_slot, max_slot)
         self._constants['latest_processed_slot'] = self.latest_processed_slot
-
-
-@logged_group("neon.Airdropper")
-def run_airdropper(solana_url,
-                   pyth_mapping_account: PublicKey,
-                   faucet_url,
-                   wrapper_whitelist = 'ANY',
-                   neon_decimals = 9,
-                   pp_solana_url = None,
-                   max_conf = 0.1, *, logger):
-    logger.info(f"""Running indexer with params:
-        solana_url: {solana_url},
-        evm_loader_id: {EVM_LOADER_ID},
-        pyth.network mapping account: {pyth_mapping_account},
-        faucet_url: {faucet_url},
-        wrapper_whitelist: {wrapper_whitelist},
-        NEON decimals: {neon_decimals},
-        Price provider solana: {pp_solana_url},
-        Max confidence interval: {max_conf}""")
-
-    try:
-        airdropper = Airdropper(solana_url,
-                                pyth_mapping_account,
-                                faucet_url,
-                                wrapper_whitelist,
-                                neon_decimals,
-                                pp_solana_url,
-                                max_conf)
-        airdropper.run()
-    except Exception as err:
-        logger.error(f'Failed to start Airdropper: {err}')

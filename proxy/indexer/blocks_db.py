@@ -6,32 +6,16 @@ from ..common_neon.utils import SolanaBlockInfo
 
 class SolanaBlocksDB(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self)
+        BaseDB.__init__(self, 'solana_block')
         self._column_lst = ('slot', 'hash')
         self._full_column_lst = ('slot', 'hash', 'parent_hash', 'blocktime', 'signatures')
-
-    def _create_table_sql(self) -> str:
-        self._table_name = 'solana_block'
-        return f"""
-            CREATE TABLE IF NOT EXISTS {self._table_name} (
-                slot BIGINT,
-                hash CHAR(66),
-
-                parent_hash CHAR(66),
-                blocktime BIGINT,
-                signatures BYTEA,
-
-                UNIQUE(slot),
-                UNIQUE(hash)
-            );
-            """
 
     def _block_from_value(self, slot: Optional[int], values: []) -> SolanaBlockInfo:
         if not values:
             return SolanaBlockInfo(slot=slot)
 
         return SolanaBlockInfo(
-            finalized=True,
+            is_finalized=True,
             slot=values[0],
             hash=values[1],
         )
@@ -41,7 +25,7 @@ class SolanaBlocksDB(BaseDB):
             return SolanaBlockInfo(slot=slot)
 
         return SolanaBlockInfo(
-            finalized=True,
+            is_finalized=True,
             slot=values[0],
             hash=values[1],
             parent_hash=values[2],
