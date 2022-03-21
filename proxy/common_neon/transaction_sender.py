@@ -45,7 +45,7 @@ class NeonTxStage(metaclass=abc.ABCMeta):
 
     def __init__(self, sender):
         self.s = sender
-        self.tx = TransactionWithComputeBudget()
+        self.tx = Transaction()
 
     def _is_empty(self):
         return not len(self.tx.signatures)
