@@ -19,46 +19,46 @@ steps:
   - wait
 
 
-  - label: ":cop::skin-tone-2: deploy check"
-    command: ".buildkite/steps/deploy-test.sh"
-    timeout: 90
-    agents:
-       queue: "testing"
-    artifact_paths:
-      - "proxy.log"
-      - "solana.log"
-      - "measurements.log"
-      - "evm_loader.log"
-      - "faucet.log"
-      - "airdropper.log"
-      - "indexer.log"
+  # - label: ":cop::skin-tone-2: deploy check"
+  #   command: ".buildkite/steps/deploy-test.sh"
+  #   timeout: 90
+  #   agents:
+  #      queue: "testing"
+  #   artifact_paths:
+  #     - "proxy.log"
+  #     - "solana.log"
+  #     - "measurements.log"
+  #     - "evm_loader.log"
+  #     - "faucet.log"
+  #     - "airdropper.log"
+  #     - "indexer.log"
 
 
-  - label: ":coverage: full test suite (FTS)"
-    key: "full_test_suite"
-    if: *main_if
-    commands:
-      - ".buildkite/steps/full_test_suite/run_full_test_suite.sh"
-    env:
-      FTS_THRESHOLD: 1700
-      FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
-      FTS_IMAGE: neonlabsorg/full_test_suite:develop
-    agents:
-       queue: "testing"
-    artifact_paths:
-      - proxy.log
-      - solana.log
-      - measurements.log
-      - evm_loader.log
-      - dbcreation.log
-      - faucet.log
-      - airdropper.log
-      - indexer.log
-      - allure-reports.tar.gz
-      - fts_${BUILDKITE_BUILD_NUMBER}.log
+  # - label: ":coverage: full test suite (FTS)"
+  #   key: "full_test_suite"
+  #   if: *main_if
+  #   commands:
+  #     - ".buildkite/steps/full_test_suite/run_full_test_suite.sh"
+  #   env:
+  #     FTS_THRESHOLD: 1700
+  #     FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
+  #     FTS_IMAGE: neonlabsorg/full_test_suite:develop
+  #   agents:
+  #      queue: "testing"
+  #   artifact_paths:
+  #     - proxy.log
+  #     - solana.log
+  #     - measurements.log
+  #     - evm_loader.log
+  #     - dbcreation.log
+  #     - faucet.log
+  #     - airdropper.log
+  #     - indexer.log
+  #     - allure-reports.tar.gz
+  #     - fts_${BUILDKITE_BUILD_NUMBER}.log
 
 
-  - wait
+  # - wait
 
 
   - label: ":floppy_disk: publish image"
