@@ -428,7 +428,6 @@ class EthereumModel:
             sol_diff = pre_sol_balance[sol_acc] - post_sol_balance[sol_acc]
             neon_diff = post_neon_balance[neon_acc] - pre_neon_balance[neon_acc]
             stat_commit_success_tx(sol_acc, sol_diff, neon_acc, neon_diff)
-            self.debug(f"sol_acc({sol_acc}), sol_diff({sol_diff}), neon_acc({neon_acc}), neon_diff({neon_diff})")
         else:
             stat_commit_failed_tx(None)
 
