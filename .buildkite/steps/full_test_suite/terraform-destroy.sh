@@ -24,7 +24,7 @@ declare -a services=("evm_loader" "postgres" "dbcreation" "indexer" "proxy" "fau
 
 for service in "${services[@]}"
 do
-   echo "$servce"
+   echo "$service"
    ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} "sudo docker logs $service > /tmp/$service.log 2>&1"
    scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/$service.log ${ARTIFACTS_LOGS}
 done
