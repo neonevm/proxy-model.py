@@ -23,3 +23,7 @@ terraform output --json | jq -r '.solana_ip.value' | buildkite-agent meta-data s
 # Save IPs for next steps
 buildkite-agent meta-data get "PROXY_IP"
 buildkite-agent meta-data get "SOLANA_IP"
+
+
+# Create flag
+buildkite-agent meta-data set "INFRASTRUCTURE_CREATED" "YES"
