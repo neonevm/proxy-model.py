@@ -2,7 +2,10 @@
 
 if [[ "$BUILDKITE_STEP_KEY" == "full_test_suite" ]]
 then
-  ./buildkite/steps/full_test_suite/terraform-destroy.sh
-else
-  exit 0
+    buildkite-agent meta-data exists "INFRASTRUCTURE_CREATED"
+    if [ $? -eq 0 ]; then
+        ./buildkite/steps/full_test_suite/terraform-destroy.sh
+    else
+        echo "nothing to destroy"
+    fi
 fi

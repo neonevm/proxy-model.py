@@ -81,15 +81,15 @@ steps:
         build.branch =~ /^(master|develop|^ci-.+|v[0-9]+\.[0-9]+\..+)$$/ &&
         (build.env("NEON_EVM_BRANCH") == "develop" || build.env("NEON_EVM_BRANCH") == null)
 
-  - label: ":terraform: destroy infrastructure"
-    agents:
-      queue: "testing"
-    if: *main_if
-    command:
-      - ".buildkite/steps/full_test_suite/terraform-destroy.sh"
-    depends_on: 
-      - "full_test_suite"
-      - "create_infrastructure"
-    allow_dependency_failure: true
-    artifact_paths:
-      - ".buildkite/steps/full_test_suite/logs/*"
+  # - label: ":terraform: destroy infrastructure"
+  #   agents:
+  #     queue: "testing"
+  #   if: *main_if
+  #   command:
+  #     - ".buildkite/steps/full_test_suite/terraform-destroy.sh"
+  #   depends_on: 
+  #     - "full_test_suite"
+  #     - "create_infrastructure"
+  #   allow_dependency_failure: true
+  #   artifact_paths:
+  #     - ".buildkite/steps/full_test_suite/logs/*"
