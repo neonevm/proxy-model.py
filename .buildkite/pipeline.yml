@@ -4,7 +4,6 @@ steps:
       - ".buildkite/steps/build-image.sh"
       - ".buildkite/steps/upload-image.sh"
 
-
   - label: ":terraform: build infrastructure"
     key: "create_infrastructure"
     if: &main_if |
@@ -16,9 +15,7 @@ steps:
     command:
       - ".buildkite/steps/full_test_suite/terraform-build.sh"
 
-
   - wait
-
 
   - label: ":cop::skin-tone-2: deploy check"
     command: ".buildkite/steps/deploy-test.sh"
@@ -39,7 +36,25 @@ steps:
     key: "full_test_suite"
     if: *main_if
     commands:
-      - ".buildkite/steps/full_test_suite/run_full_test_suite.sh"
+      - PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`
+      - SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
+      - export PROXY_URL="http://$$PROXY_ADDR:9091/solana"
+      - export FAUCET_URL="http://$$PROXY_ADDR:3334/request_neon"
+      - export SOLANA_URL="http://$$SOLANA_ADDR:8899"
+      - echo $$PROXY_URL
+      - echo $$FAUCET_URL
+      - echo $$SOLANA_URL
+      - echo Full test suite container name - $${FTS_CONTAINER_NAME}
+      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml pull
+      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
+      - FTS_RESULT=$(docker logs $${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
+      - docker cp $${FTS_CONTAINER_NAME}:/opt/allure-reports.tar.gz ./
+      - docker logs $${FTS_CONTAINER_NAME} > ./$${FTS_CONTAINER_NAME}.log
+      - docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
+      - echo Full test passing - $${FTS_RESULT}
+      - echo Full test threshold - $${FTS_THRESHOLD}
+      - echo Check if $${FTS_RESULT} is greater or equeal $${FTS_THRESHOLD}
+      - test $${FTS_RESULT} -ge $${FTS_THRESHOLD}
     env:
       FTS_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
@@ -58,16 +73,13 @@ steps:
       - allure-reports.tar.gz
       - fts_${BUILDKITE_BUILD_NUMBER}.log
 
-
   - wait
-
 
   - label: ":floppy_disk: publish image"
     command: ".buildkite/steps/publish-image.sh"
     if: |
         build.branch =~ /^(master|develop|^ci-.+|v[0-9]+\.[0-9]+\..+)$$/ &&
         (build.env("NEON_EVM_BRANCH") == "develop" || build.env("NEON_EVM_BRANCH") == null)
-
 
   - label: ":terraform: destroy infrastructure"
     agents:
