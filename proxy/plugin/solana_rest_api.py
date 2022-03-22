@@ -40,15 +40,8 @@ from ..memdb.memdb import MemDB
 from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx
 
-from ..prometheus_provider.commit_metrics import (
-    stat_commit_request_and_timeout,
-    stat_commit_success_tx,
-    stat_commit_failed_tx,
-    stat_commit_incoming_tx,
-    stat_commit_min_gas_price,
-    stat_commit_operator_balance,
-    stat_commit_operator_neon_balance,
-)
+from ..statistics_exporter.common_metrics import StatisticsExporter
+from ..statistics_exporter.prometheus_exporter import PrometheusExporter
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -80,6 +73,9 @@ class EthereumModel:
 
         neon_config_load(self)
 
+    def set_stat_exporter(self, stat_exporter: StatisticsExporter):
+        self.stat_exporter = stat_exporter
+
     def neon_proxy_version(self):
         return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
 
@@ -105,7 +101,7 @@ class EthereumModel:
         sol_price_usd = self.gas_price_calculator.get_sol_price_usd()
         neon_price_usd = self.gas_price_calculator.get_neon_price_usd()
         operator_fee = self.gas_price_calculator.get_operator_fee()
-        stat_commit_min_gas_price(
+        self.stat_exporter.stat_commit_gas_parameters(
             gas_price,
             sol_price_usd,
             neon_price_usd,
@@ -395,7 +391,7 @@ class EthereumModel:
         try:
             tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             tx_sender.execute()
-            sol_acc, neon_acc = tx_sender.get_keys()
+            sol_acc, neon_acc, new_accs = tx_sender.get_stat_values()
             self._stat_tx_end( ( operator_sol_balance, str(sol_acc), operator_neon_balance, str(neon_acc) ) )
             return eth_signature
 
@@ -418,7 +414,7 @@ class EthereumModel:
             raise
 
     def _stat_tx_begin(self):
-        stat_commit_incoming_tx()
+        self.stat_exporter.stat_commit_tx_begin()
         return self._stat_operator_balance()
 
     def _stat_tx_end(self, pre_balance: Tuple[Dict[str, int], str, Dict[str, int], str] = None):
@@ -427,9 +423,10 @@ class EthereumModel:
             pre_sol_balance, sol_acc, pre_neon_balance, neon_acc = pre_balance
             sol_diff = pre_sol_balance[sol_acc] - post_sol_balance[sol_acc]
             neon_diff = post_neon_balance[neon_acc] - pre_neon_balance[neon_acc]
-            stat_commit_success_tx(sol_acc, sol_diff, neon_acc, neon_diff)
+            self.stat_exporter.stat_commit_tx_end_success()
+            self.stat_exporter.stat_commit_tx_balance_change(sol_acc, sol_diff, neon_acc, neon_diff)
         else:
-            stat_commit_failed_tx(None)
+            self.stat_exporter.stat_commit_tx_end_failed(None)
 
     def _stat_operator_balance(self) -> Tuple[Dict[str, int], Dict[str, int]]:
         operator_accounts = get_solana_accounts()
@@ -437,7 +434,7 @@ class EthereumModel:
         sol_balances = self._solana.get_sol_balance_list(sol_accounts)
         operator_sol_balance = dict(zip(sol_accounts, sol_balances))
         for account, balance in operator_sol_balance.items():
-            stat_commit_operator_balance(str(account), balance)
+            self.stat_exporter.stat_commit_operator_sol_balance(str(account), balance)
 
         neon_accounts = [str(EthereumAddress.from_private_key(neon_account.secret_key())) for neon_account in operator_accounts]
         neon_layouts = self._solana.get_account_info_layout_list(neon_accounts)
@@ -445,7 +442,7 @@ class EthereumModel:
         for neon_account, neon_layout in zip(neon_accounts, neon_layouts):
             if neon_layout:
                 operator_neon_balance[neon_account] = neon_layout.balance
-                stat_commit_operator_neon_balance(str(neon_account), neon_layout.balance)
+                self.stat_exporter.stat_commit_operator_neon_balance(str(neon_account), neon_layout.balance)
             else:
                 operator_neon_balance[neon_account] = 0
 
@@ -479,7 +476,9 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
+        self.stat_exporter = PrometheusExporter()
         self.model = SolanaProxyPlugin.getModel()
+        self.model.set_stat_exporter(self.stat_exporter)
 
     @classmethod
     def getModel(cls):
@@ -578,7 +577,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 b'Access-Control-Allow-Origin': b'*',
             })))
 
-        stat_commit_request_and_timeout(request.get('method', '---'), resp_time_ms)
+        self.stat_exporter.stat_commit_request_and_timeout(request.get('method', '---'), resp_time_ms)
 
     def on_websocket_open(self) -> None:
         pass

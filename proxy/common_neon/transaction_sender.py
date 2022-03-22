@@ -20,10 +20,6 @@ from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
 
-from proxy.prometheus_provider.commit_metrics import (
-    stat_commit_create_stage_account,
-)
-
 from .address import accountWithSeed, EthereumAddress, ether2program
 from ..common_neon.errors import EthereumError
 from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACCOUNT_SEED_VERSION
@@ -418,6 +414,7 @@ class OperatorResourceList:
                 stage.balance = balance
                 stage.build()
                 tx.add(stage.tx)
+                self._s.set_created_resources(stage.sol_account, balance)
             elif account.lamports < balance:
                 raise RuntimeError(f"insufficient balance of {str(stage.sol_account)}")
             elif PublicKey(account.owner) != PublicKey(EVM_LOADER_ID):
@@ -432,9 +429,6 @@ class OperatorResourceList:
             SolTxListSender(self._s, [tx], NeonCreatePermAccount.NAME).send()
         else:
             self.debug(f"Use existing accounts for resource {opkey}:{rid}")
-        if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
-            for acc in account_list:
-                stat_commit_create_stage_account(str(acc), balance)
         return account_list
 
     def free_resource_info(self):
@@ -492,10 +486,18 @@ class NeonTxSender:
         self.operator_key = resource.public_key()
         self.sol_acc = resource.public_key()
         self.neon_acc = EthereumAddress.from_private_key(resource.secret_key())
+        self.created_accounts = {}
         self.builder = NeonIxBuilder(self.operator_key)
 
-    def get_keys(self):
-        return self.sol_acc, self.neon_acc
+    def set_created_resources(self, account: PublicKey, balance: int):
+        self.created_accounts[str(account)] = balance
+
+    def get_stat_values(self) -> tuple[PublicKey, EthereumAddress, Dict[str, int]]:
+        return_value = ( self.sol_acc, self.neon_acc, self.created_accounts )
+        self.sol_acc = None
+        self.neon_acc = None
+        self.created_accounts = None
+        return return_value
 
     def clear_resource(self):
         self.resource = None

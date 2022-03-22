@@ -25,7 +25,7 @@ if __name__ == '__main__':
         print("Will run in indexer mode")
         run_indexer(solana_url)
     else:
-        from .prometheus_provider.proxy_metrics import registry
+        from .statistics_exporter.prometheus_metrics import registry
         from prometheus_client import start_http_server
 
         print("Will run in proxy mode")

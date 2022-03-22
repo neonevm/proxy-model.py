@@ -1,5 +1,5 @@
 from prometheus_client import multiprocess
-from prometheus_client import generate_latest, Gauge, Counter, Summary, Histogram, REGISTRY
+from prometheus_client import Gauge, Counter, Histogram, REGISTRY
 
 registry = REGISTRY
 multiprocess_registry = multiprocess.MultiProcessCollector(registry)
