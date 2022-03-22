@@ -38,7 +38,7 @@ steps:
     key: "full_test_suite"
     if: *main_if
     commands:
-      - ".buildkite/steps/full_test_suite/terraform-destroy.sh"
+      - ".buildkite/steps/full_test_suite/run_full_test_suite.sh"
     env:
       FTS_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
