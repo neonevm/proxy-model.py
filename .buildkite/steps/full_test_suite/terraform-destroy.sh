@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd .buildkite/steps/tf
+cd .buildkite/steps/full_test_suite
 
 
 ### Receive artefacts

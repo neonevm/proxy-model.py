@@ -57,7 +57,6 @@ resource "aws_security_group" "test-stand-solana" {
     to_port     = 65535
     protocol    = "tcp"
     cidr_blocks = var.allow_list
-
   }
 
   ingress {
@@ -66,7 +65,6 @@ resource "aws_security_group" "test-stand-solana" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-
   }
 
   egress {
@@ -85,7 +83,7 @@ resource "aws_security_group" "test-stand-solana" {
 
 resource "random_id" "test-stand-proxy" {
   byte_length = 4
-  prefix      = "test-stand-solana-"
+  prefix      = "test-stand-proxy-"
 }
 
 resource "aws_security_group" "test-stand-proxy" {
@@ -99,7 +97,6 @@ resource "aws_security_group" "test-stand-proxy" {
     to_port     = 9091
     protocol    = "tcp"
     cidr_blocks = var.allow_list
-
   }
 
   ingress {
@@ -108,15 +105,14 @@ resource "aws_security_group" "test-stand-proxy" {
     to_port     = 3334
     protocol    = "tcp"
     cidr_blocks = var.allow_list
-
   }
+
   ingress {
     description = "allow incoming from world to PROXY"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-
   }
 
   egress {
@@ -152,7 +148,6 @@ resource "aws_instance" "solana" {
     Name    = "${var.branch}-test-stand-solana"
     purpose = "ci-oz-full-tests"
   }
-
 }
 
 resource "aws_instance" "proxy" {
@@ -170,6 +165,7 @@ resource "aws_instance" "proxy" {
     Name    = "${var.branch}-test-stand-proxy"
     purpose = "ci-oz-full-tests"
   }
+
   depends_on = [
     aws_instance.solana
   ]

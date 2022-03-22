@@ -11,7 +11,7 @@ sudo apt-get update
 
 
 # Tune instance for Solana requirements(must be applied before start services)
-sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
+sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf<<EOF
 # Increase UDP buffer size
 net.core.rmem_default = 134217728
 net.core.rmem_max = 134217728
@@ -20,13 +20,13 @@ net.core.wmem_max = 134217728
 EOF"
 sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 
-sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
+sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf<<EOF
 # Increase memory mapped files limit
 vm.max_map_count = 1000000
 EOF"
 sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 
-bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
+bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf<<EOF
 # Increase process file descriptor count limit
 * - nofile 1000000
 EOF"
@@ -41,7 +41,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 # Receive docker-compose file and create override file
 cd /opt
 curl -O https://raw.githubusercontent.com/neonlabsorg/proxy-model.py/${branch}/proxy/docker-compose-test.yml
-cat > docker-compose-test.override.yml <<EOF
+cat > docker-compose-test.override.yml<<EOF
 version: "3"
 
 services:

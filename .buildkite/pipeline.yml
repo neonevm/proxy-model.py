@@ -12,26 +12,27 @@ steps:
     agents:
       queue: "testing"
     command:
-      - ".buildkite/steps/tf/build.sh"
+      - ".buildkite/steps/full_test_suite/terraform-build.sh"
+
   - wait
 
-#  - label: ":cop::skin-tone-2: deploy check"
-#    command: ".buildkite/steps/deploy-test.sh"
-#    timeout: 90
-#    agents:
-#       queue: "testing"
-#    artifact_paths:
-#      - "proxy.log"
-#      - "solana.log"
-#      - "measurements.log"
-#      - "evm_loader.log"
-#      - "faucet.log"
-#      - "airdropper.log"
-#      - "indexer.log"
+  - label: ":cop::skin-tone-2: deploy check"
+    command: ".buildkite/steps/deploy-test.sh"
+    timeout: 90
+    agents:
+       queue: "testing"
+    artifact_paths:
+      - "proxy.log"
+      - "solana.log"
+      - "measurements.log"
+      - "evm_loader.log"
+      - "faucet.log"
+      - "airdropper.log"
+      - "indexer.log"
 
 
   - label: ":coverage: full test suite (FTS)"
-    key: "full_tests"
+    key: "full_test_suite"
     if: *main_if
     commands:
       - PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`
@@ -53,9 +54,6 @@ steps:
       - echo Full test threshold - $${FTS_THRESHOLD}
       - echo Check if $${FTS_RESULT} is greater or equeal $${FTS_THRESHOLD}
       - test $${FTS_RESULT} -ge $${FTS_THRESHOLD}
-    artifact_paths:
-      - allure-reports.tar.gz
-      - fts_${BUILDKITE_BUILD_NUMBER}.log
     env:
       FTS_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
@@ -71,6 +69,8 @@ steps:
       - "faucet.log"
       - "airdropper.log"
       - "indexer.log"
+      - allure-reports.tar.gz
+      - fts_${BUILDKITE_BUILD_NUMBER}.log
 
   - wait
 
@@ -85,9 +85,9 @@ steps:
       queue: "testing"
     if: *main_if
     command:
-      - ".buildkite/steps/tf/destroy.sh"
+      - ".buildkite/steps/full_test_suite/terraform-destroy.sh"
     depends_on: 
-      - "full_tests"
+      - "full_test_suite"
       - "create_infrastructure"
     allow_dependency_failure: true
     artifact_paths:
