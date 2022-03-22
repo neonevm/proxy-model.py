@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # External addresses from previous step
 PROXY_ADDR=`buildkite-agent meta-data get 'PROXY_IP'`

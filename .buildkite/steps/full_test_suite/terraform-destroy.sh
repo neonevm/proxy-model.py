@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 cd .buildkite/steps/full_test_suite
 
