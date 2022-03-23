@@ -7,7 +7,6 @@ services:
     image: ${FTS_IMAGE:-neonlabsorg/develop}
     entrypoint: ./run-test.sh 2>/dev/null
     environment:
-      - SOLANA_EXPLORER=https://explorer.solana.com/?cluster=custom&customUrl=http://proxy.night.stand.neontest.xyz/node-solana
       - NETWORK_NAME=${NETWORK_NAME}
       - PROXY_URL=${PROXY_URL}
       - NETWORK_ID=${NETWORK_ID}
