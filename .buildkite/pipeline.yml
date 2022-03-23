@@ -41,7 +41,7 @@ steps:
     env:
       FTS_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
-      FTS_IMAGE: neonlabsorg/full_test_suite:develop
+      FTS_IMAGE: neonlabsorg/full_test_suite:583-full-test-suite
       NETWORK_NAME: full-test-suite-${BUILDKITE_BUILD_NUMBER}
       NETWORK_ID: 111
       REQUEST_AMOUNT: 20000
