@@ -42,6 +42,12 @@ steps:
       FTS_THRESHOLD: 1700
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
       FTS_IMAGE: neonlabsorg/full_test_suite:develop
+      NETWORK_NAME: night-stand
+      NETWORK_ID: 111
+      REQUEST_AMOUNT: 20000
+      USE_FAUCET: true
+      USERS_NUMBER: 15
+      JOBS_NUMBER: 8
     agents:
        queue: "testing"
     artifact_paths:
