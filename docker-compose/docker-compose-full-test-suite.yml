@@ -7,13 +7,17 @@ services:
     image: ${FTS_IMAGE:-neonlabsorg/develop}
     entrypoint: ./run-test.sh 2>/dev/null
     environment:
-      - NETWORK_NAME=${NETWORK_NAME}
+      - NETWORK_NAME=night-stand
       - PROXY_URL=${PROXY_URL}
-      - NETWORK_ID=${NETWORK_ID}
-      - REQUEST_AMOUNT=${REQUEST_AMOUNT}
+      - NETWORK_ID=111
+      - ADDRESS_FROM=
+      - ADDRESS_TO=
+      - PRIVATE_KEY=
+      - REQUEST_AMOUNT=20000
       - FAUCET_URL=${FAUCET_URL}
-      - USE_FAUCET=${USE_FAUCET}
+      - USE_FAUCET=true
+      - SOLANA_EXPLORER=https://explorer.solana.com/?cluster=custom&customUrl=http://proxy.night.stand.neontest.xyz/node-solana
       - SOLANA_URL=${SOLANA_URL}
-      - USERS_NUMBER=${USERS_NUMBER}
-      - JOBS_NUMBER=${JOBS_NUMBER}
+      - USERS_NUMBER=15
+      - JOBS_NUMBER=8
     network_mode: host
