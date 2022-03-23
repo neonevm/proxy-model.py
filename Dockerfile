@@ -1,4 +1,4 @@
-ARG SOLANA_REVISION=v1.8.12-testnet
+ARG SOLANA_REVISION=v1.9.12-testnet
 ARG NEON_EVM_COMMIT=latest
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
