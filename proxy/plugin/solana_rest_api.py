@@ -434,15 +434,16 @@ class EthereumModel:
         sol_balances = self._solana.get_sol_balance_list(sol_accounts)
         operator_sol_balance = dict(zip(sol_accounts, sol_balances))
         for account, balance in operator_sol_balance.items():
-            self.stat_exporter.stat_commit_operator_sol_balance(str(account), balance)
+            self.stat_exporter.stat_commit_operator_sol_balance(str(account), balance / 1_000_000_000)
 
         neon_accounts = [str(EthereumAddress.from_private_key(neon_account.secret_key())) for neon_account in operator_accounts]
         neon_layouts = self._solana.get_account_info_layout_list(neon_accounts)
         operator_neon_balance = {}
-        for neon_account, neon_layout in zip(neon_accounts, neon_layouts):
+        for sol_account, neon_account, neon_layout in zip(operator_accounts, neon_accounts, neon_layouts):
             if neon_layout:
-                operator_neon_balance[neon_account] = neon_layout.balance
-                self.stat_exporter.stat_commit_operator_neon_balance(str(neon_account), neon_layout.balance)
+                neon_balance = neon_layout.balance / 1_000_000_000 / 1_000_000_000
+                operator_neon_balance[neon_account] = neon_balance
+                self.stat_exporter.stat_commit_operator_neon_balance(str(sol_account), str(neon_account), neon_balance)
             else:
                 operator_neon_balance[neon_account] = 0
 

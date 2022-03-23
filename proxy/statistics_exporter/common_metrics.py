@@ -24,11 +24,11 @@ class StatisticsExporter(ABC):
         """Переместить"""
 
     @abstractmethod
-    def stat_commit_operator_sol_balance(self, operator: str, sol_balance: int):
+    def stat_commit_operator_sol_balance(self, operator: str, sol_balance: float):
         """Переместить"""
 
     @abstractmethod
-    def stat_commit_operator_neon_balance(self, neon_acc: str, neon_balance: int):
+    def stat_commit_operator_neon_balance(self, sol_acc: str, neon_acc: str, neon_balance: float):
         """Переместить"""
 
     @abstractmethod

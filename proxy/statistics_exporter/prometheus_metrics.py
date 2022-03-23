@@ -18,13 +18,13 @@ TX_SUCCESS = Counter('tx_success_count', 'Count Of Succeeded Txs', registry=regi
 TX_FAILED = Counter('tx_failed_count', 'Count Of Failed Txs', registry=registry)
 TX_IN_PROGRESS = Gauge('tx_in_progress', 'Count Of Txs Currently Processed', registry=registry)
 OPERATOR_SOL_BALANCE = Gauge(
-    'operator_sol_balance', 'Operator Sol Balance',
+    'operator_sol_balance', 'Operator Balance in Sol\'s',
     ['operator_sol_wallet'],
     registry=registry,
 )
 OPERATOR_NEON_BALANCE = Gauge(
-    'operator_neon_balance', 'Operator Neon Balance',
-    ['operator_neon_wallet'],
+    'operator_neon_balance', 'Operator Balance in Neon\'s',
+    ['operator_sol_wallet', 'operator_neon_wallet'],
     registry=registry,
 )
 OPERATOR_SOL_BALANCE_DIFF = Gauge(
@@ -43,15 +43,15 @@ OPERATOR_ACCOUNT_RENT = Gauge(
     registry=registry,
 )
 USD_PRISE_SOL = Gauge(
-    'usd_prise_sol', 'Sol Price USD',
+    'usd_price_sol', 'Sol Price USD',
     registry=registry,
 )
 USD_PRISE_NEON = Gauge(
-    'usd_prise_neon', 'Neon Price USD',
+    'usd_price_neon', 'Neon Price USD',
     registry=registry,
 )
 GAS_PRICE = Gauge(
-    'gas_pice', 'Gas price',
+    'gas_price', 'Gas Price',
     registry=registry,
 )
 OPERATOR_FEE = Gauge(

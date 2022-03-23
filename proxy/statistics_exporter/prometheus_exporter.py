@@ -38,17 +38,17 @@ class PrometheusExporter(StatisticsExporter):
         OPERATOR_SOL_BALANCE_DIFF.labels(sol_acc).set(sol_diff)
         OPERATOR_NEON_BALANCE_DIFF.labels(neon_acc).set(neon_diff)
 
-    def stat_commit_operator_sol_balance(self, operator: str, sol_balance: int):
+    def stat_commit_operator_sol_balance(self, operator: str, sol_balance: float):
         from .prometheus_metrics import (
             OPERATOR_SOL_BALANCE
         )
         OPERATOR_SOL_BALANCE.labels(operator).set(sol_balance)
 
-    def stat_commit_operator_neon_balance(self, neon_acc: str, neon_balance: int):
+    def stat_commit_operator_neon_balance(self, sol_acc: str, neon_acc: str, neon_balance: float):
         from .prometheus_metrics import (
             OPERATOR_NEON_BALANCE
         )
-        OPERATOR_NEON_BALANCE.labels(neon_acc).set(neon_balance)
+        OPERATOR_NEON_BALANCE.labels(sol_acc, neon_acc).set(neon_balance)
 
     def stat_commit_create_resource_account(self, account: str, rent: int):
         from .prometheus_metrics import (
