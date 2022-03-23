@@ -19,3 +19,8 @@ terraform apply --auto-approve=true
 # Get IPs
 terraform output --json | jq -r '.proxy_ip.value' | buildkite-agent meta-data set "PROXY_IP"
 terraform output --json | jq -r '.solana_ip.value' | buildkite-agent meta-data set "SOLANA_IP"
+
+
+# Show IPs
+buildkite-agent meta-data get 'PROXY_IP'
+buildkite-agent meta-data get 'SOLANA_IP'
