@@ -8,7 +8,7 @@ steps:
     key: "create_infrastructure"
     if: &is_fts_enabled |
         (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
-        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")    
+        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
     agents:
       queue: "testing"
     command:
@@ -46,8 +46,8 @@ steps:
       NETWORK_ID: 111
       REQUEST_AMOUNT: 20000
       USE_FAUCET: true
-      USERS_NUMBER: 15
-      JOBS_NUMBER: 8
+      FTS_USERS_NUMBER: 15
+      FTS_JOBS_NUMBER: 8
     agents:
        queue: "testing"
     artifact_paths:
@@ -70,7 +70,7 @@ steps:
     if: *is_fts_enabled
     command:
       - ".buildkite/steps/full_test_suite/terraform-destroy.sh"
-    depends_on: 
+    depends_on:
       - "full_test_suite"
       - "create_infrastructure"
     allow_dependency_failure: true
