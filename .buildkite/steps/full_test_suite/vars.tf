@@ -24,12 +24,3 @@ variable "ami" {
 variable "branch" {
   type = string
 }
-
-variable "neon_evm_revision" {
-  type = string
-}
-
-variable "proxy_model_revision" {
-  type = string
-}
-
