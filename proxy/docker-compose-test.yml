@@ -131,7 +131,7 @@ services:
       TEST_FAUCET_INIT_NEON_BALANCE: 100000
     hostname: faucet
     ports:
-      - 127.0.0.1:3333:3333
+      - 3333
     expose:
       - "3333"
     networks:

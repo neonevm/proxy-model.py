@@ -7,7 +7,7 @@ SOLANA_ADDR=`buildkite-agent meta-data get 'SOLANA_IP'`
 
 # Create envirinment variables for tests
 export PROXY_URL="http://${PROXY_ADDR}:9091/solana"
-export FAUCET_URL="http://${PROXY_ADDR}:3334/request_neon"
+export FAUCET_URL="http://${PROXY_ADDR}:3333/request_neon"
 export SOLANA_URL="http://${SOLANA_ADDR}:8899"
 
 # Check variables

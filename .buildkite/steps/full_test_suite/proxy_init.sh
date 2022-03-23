@@ -59,7 +59,7 @@ services:
       - NEON_OPERATOR_KEYFILE=/opt/faucet/id.json
       - SOLANA_COMMITMENT=confirmed
     ports:
-      - 3334:3333
+      - 3333:3333
     entrypoint: /opt/faucet/faucet --config /opt/proxy/faucet.conf run
   airdropper:
     environment:
