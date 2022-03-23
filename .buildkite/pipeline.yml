@@ -46,14 +46,6 @@ steps:
     agents:
        queue: "testing"
     artifact_paths:
-      - proxy.log
-      - solana.log
-      - measurements.log
-      - evm_loader.log
-      - dbcreation.log
-      - faucet.log
-      - airdropper.log
-      - indexer.log
       - allure-reports.tar.gz
       - fts_${BUILDKITE_BUILD_NUMBER}.log
 
