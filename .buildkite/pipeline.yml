@@ -6,10 +6,9 @@ steps:
 
   - label: ":terraform: build infrastructure"
     key: "create_infrastructure"
-    if: &main_if |
-        true
-#        (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
-#        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")    
+    if: &is_fts_enabled |
+      (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
+      (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")    
     agents:
       queue: "testing"
     command:
@@ -36,7 +35,7 @@ steps:
 
   - label: ":coverage: full test suite (FTS)"
     key: "full_test_suite"
-    if: *main_if
+    if: *is_fts_enabled
     commands:
       - ".buildkite/steps/full_test_suite/run_full_test_suite.sh"
     env:
@@ -70,7 +69,7 @@ steps:
   - label: ":terraform: destroy infrastructure"
     agents:
       queue: "testing"
-    if: *main_if
+    if: *is_fts_enabled
     command:
       - ".buildkite/steps/full_test_suite/terraform-destroy.sh"
     depends_on: 
