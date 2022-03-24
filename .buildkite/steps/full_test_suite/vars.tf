@@ -24,3 +24,8 @@ variable "ami" {
 variable "branch" {
   type = string
 }
+
+
+variable "revision" {
+  type = string
+}

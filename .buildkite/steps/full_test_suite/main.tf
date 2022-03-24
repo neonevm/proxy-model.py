@@ -36,7 +36,7 @@ data "template_file" "proxy_init" {
 
   vars = {
     branch    = "${var.branch}"
-    revision  = "latest"
+    revision  = "${var.revision}"
     solana_ip = aws_instance.solana.private_ip
   }
 }
