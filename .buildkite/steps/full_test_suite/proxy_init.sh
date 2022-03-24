@@ -22,7 +22,7 @@ curl -O https://raw.githubusercontent.com/neonlabsorg/proxy-model.py/${branch}/p
 
 
 # Set required environment variables
-export REVISION=${revision}
+export REVISION=${proxy_model_commit}
 export SOLANA_URL=http:\/\/${solana_ip}:8899
 export NEON_EVM_COMMIT=${neon_evm_commit}
 
