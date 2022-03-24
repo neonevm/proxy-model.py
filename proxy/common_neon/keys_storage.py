@@ -13,7 +13,7 @@ class KeyStorage:
         with open(storage_path, mode='r') as f:
             line_list = f.readlines()
             for line in line_list:
-                pk_key_str = line.strip()
+                pk_key_str = line.strip().lower()
                 try:
                     pk_key_data = bytes.fromhex(pk_key_str)
                     EthereumAddress.from_private_key(pk_key_data)

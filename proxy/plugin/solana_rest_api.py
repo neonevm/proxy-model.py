@@ -8,7 +8,6 @@
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
 """
-import eth_utils
 import json
 import threading
 import traceback
@@ -34,11 +33,12 @@ from ..common_neon.errors import EthereumError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.keys_storage import KeyStorage
-from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEP_COUNT
+from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEP_COUNT, CHAIN_ID
 from ..environment import neon_cli
 from ..memdb.memdb import MemDB
 from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx
+from web3.auto import w3
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -270,7 +270,6 @@ class EthereumModel:
             raise
 
     def eth_getTransactionCount(self, account, tag):
-        self.debug('eth_getTransactionCount: %s', account)
         try:
             acc_info = self._solana.get_account_info_layout(EthereumAddress(account))
             return hex(acc_info.trx_count)
@@ -388,31 +387,72 @@ class EthereumModel:
             raise
 
     @staticmethod
-    def eth_accounts():
+    def eth_accounts() -> [str]:
         storage = KeyStorage()
         account_list = storage.get_list()
         return [str(a) for a in account_list]
 
     @staticmethod
-    def eth_sign(address: str, data: str):
+    def eth_sign(address: str, data: str) -> str:
         try:
             address = address.lower()
             bin_address = bytes.fromhex(address[2:])
             assert len(bin_address) == 20
         except:
-            return 'bad account'
+            raise EthereumError(message='bad account')
 
         account = KeyStorage().get_key(address)
         if not account:
-            return 'unknown account'  # the same error retufrom geth
+            raise EthereumError(message='unknown account')
 
         try:
             data = bytes.fromhex(data[2:])
         except:
-            return 'data is not hex string'
+            raise EthereumError(message='data is not hex string')
 
         message = str.encode(f'\x19Ethereum Signed Message:\n{len(data)}') + data
         return str(account.private.sign_msg(message))
+
+    def eth_signTransaction(self, tx: dict) -> dict:
+        try:
+            sender = tx['from']
+            bin_sender = bytes.fromhex(sender[2:])
+            assert len(bin_sender) == 20
+        except:
+            raise EthereumError(message='bad account')
+
+        account = KeyStorage().get_key(sender)
+        if not account:
+            raise EthereumError(message='unknown account')
+
+        try:
+            receiver = ''
+            if 'from' in tx:
+                del tx['from']
+            if 'to' in tx:
+                receiver = tx['to']
+                del tx['to']
+            if 'nonce' not in tx:
+                tx['nonce'] = self.eth_getTransactionCount(sender, 'latest')
+            if 'chainId' not in tx:
+                tx['chainId'] = hex(CHAIN_ID)
+
+            signed_tx = w3.eth.account.sign_transaction(tx, account.private)
+            raw_tx = signed_tx.rawTransaction.hex()
+
+            tx['from'] = sender
+            tx['to'] = receiver
+            tx['hash'] = signed_tx.hash.hex()
+            tx['r'] = hex(signed_tx.r)
+            tx['s'] = hex(signed_tx.s)
+            tx['v'] = hex(signed_tx.v)
+
+            return {
+                "raw": raw_tx,
+                "tx": tx
+            }
+        except:
+            raise EthereumError(message='bad transaction')
 
     def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
         if not isinstance(neonTxId, str):
