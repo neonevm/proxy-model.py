@@ -112,13 +112,13 @@ class EthereumModel:
         if tag == "latest":
             block = self._db.get_latest_block()
         elif tag in ('earliest', 'pending'):
-            raise Exception("Invalid tag {}".format(tag))
+            raise EthereumError(message="Invalid tag {}".format(tag))
         elif isinstance(tag, str):
             block = SolanaBlockInfo(slot=int(tag, 16))
         elif isinstance(tag, int):
             block = SolanaBlockInfo(slot=tag)
         else:
-            raise Exception(f'Failed to parse block tag: {tag}')
+            raise EthereumError(message=f'Failed to parse block tag: {tag}')
         return block
 
     def eth_blockNumber(self):
@@ -210,7 +210,7 @@ class EthereumModel:
         '''
         if block_identifier != "latest":
             self.debug(f"Block type '{block_identifier}' is not supported yet")
-            raise RuntimeError(f"Not supported block identifier: {block_identifier}")
+            raise EthereumError(message=f"Not supported block identifier: {block_identifier}")
 
         try:
             value = neon_cli().call('get-storage-at', account, position)
@@ -256,7 +256,7 @@ class EthereumModel:
                 data: DATA - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
             tag - integer block number, or the string "latest", "earliest" or "pending", see the default block parameter
         """
-        if not obj['data']: raise Exception("Missing data")
+        if not obj['data']: raise EthereumError(message="Missing data")
         try:
             caller_id = obj.get('from', "0x0000000000000000000000000000000000000000")
             contract_id = obj.get('to', 'deploy')
@@ -342,28 +342,24 @@ class EthereumModel:
         account = account.lower()
         return self._db.get_contract_code(account)
 
-    def eth_sendTransaction(self, trx):
-        self.debug(f"eth_sendTransaction type(trx): {type(trx)}, str(trx): {str(trx)}")
-        raise RuntimeError("eth_sendTransaction is not supported. please use eth_sendRawTransaction")
-
     def eth_sendRawTransaction(self, rawTrx):
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
 
         if trx.gasPrice < min_gas_price:
-            raise RuntimeError("The transaction gasPrice is less than the minimum allowable value" +
-                               f"({trx.gasPrice}<{min_gas_price})")
+            raise EthereumError(message="The transaction gasPrice is less than the minimum allowable value" +
+                                f"({trx.gasPrice}<{min_gas_price})")
 
         user_balance = int(self.eth_getBalance('0x' + trx.sender(), 'latest'), 16)
         fee = trx.gasPrice * trx.gasLimit
         required_balance = fee + trx.value
         if user_balance < required_balance:
-            raise RuntimeError("The account balance is less than required: " +
-                               f"Account {trx.sender()}; balance = {user_balance}; " +
-                               f"gasPrice = {trx.gasPrice}; gasLimit = {trx.gasLimit}; " +
-                               f"fee = {fee}; value = {trx.value}; " +
-                               f"required_balance = {required_balance}; ")
+            raise EthereumError("The account balance is less than required: " +
+                                f"Account {trx.sender()}; balance = {user_balance}; " +
+                                f"gasPrice = {trx.gasPrice}; gasLimit = {trx.gasLimit}; " +
+                                f"fee = {fee}; value = {trx.value}; " +
+                                f"required_balance = {required_balance}; ")
 
         eth_signature = '0x' + trx.hash_signed().hex()
 
@@ -448,11 +444,15 @@ class EthereumModel:
             tx['v'] = hex(signed_tx.v)
 
             return {
-                "raw": raw_tx,
-                "tx": tx
+                'raw': raw_tx,
+                'tx': tx
             }
         except:
             raise EthereumError(message='bad transaction')
+
+    def eth_sendTransaction(self, tx):
+        tx = self.eth_signTransaction(tx)
+        return self.eth_sendRawTransaction(tx['raw'])
 
     def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
         if not isinstance(neonTxId, str):
@@ -512,7 +512,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 response['result'] = method(*params)
         except SolTxError as err:
             # traceback.print_exc()
-            response['error'] = err.error
+            raise EthereumError(message=err.error)
         except EthereumError as err:
             # traceback.print_exc()
             response['error'] = err.getError()
