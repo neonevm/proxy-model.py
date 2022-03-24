@@ -26,7 +26,7 @@ variable "branch" {
 }
 
 
-variable "revision" {
+variable "proxy_model_commit" {
   type = string
 }
 

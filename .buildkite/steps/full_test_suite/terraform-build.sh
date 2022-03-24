@@ -12,7 +12,7 @@ export TFSTATE_BUCKET="nl-ci-stands"
 export TFSTATE_KEY="tests/test-${BUILDKITE_COMMIT}"
 export TFSTATE_REGION="us-east-2"
 export TF_BACKEND_CONFIG="-backend-config="bucket=${TFSTATE_BUCKET}" -backend-config="key=${TFSTATE_KEY}" -backend-config="region=${TFSTATE_REGION}""
-export TF_VAR_revision=${PROXY_MODEL_COMMIT}
+export TF_VAR_proxy_model_commit=${PROXY_MODEL_COMMIT}
 export TF_VAR_neon_evm_commit=${NEON_EVM_COMMIT}
 
 terraform init ${TF_BACKEND_CONFIG}
