@@ -29,9 +29,11 @@ do
    scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/$service.log ${ARTIFACTS_LOGS}
 done
 
+export NEON_EVM_COMMIT=${NEON_EVM_COMMIT:-latest}
 
 ### Clean infrastructure by terraform
 export TF_VAR_branch=${BUILDKITE_BRANCH}
+export TF_VAR_neon_evm_commit=${NEON_EVM_COMMIT}
 export TFSTATE_BUCKET="nl-ci-stands"
 export TFSTATE_KEY="tests/test-$BUILDKITE_COMMIT"
 export TFSTATE_REGION="us-east-2"
