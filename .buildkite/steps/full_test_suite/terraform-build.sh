@@ -3,8 +3,8 @@ set -euo pipefail
 
 cd .buildkite/steps/full_test_suite
 
-NEON_EVM_COMMIT=${NEON_EVM_COMMIT:-latest}
-PROXY_MODEL_COMMIT=${BUILDKITE_COMMIT}
+export NEON_EVM_COMMIT=${NEON_EVM_COMMIT:-latest}
+export PROXY_MODEL_COMMIT=${BUILDKITE_COMMIT}
 
 # Terraform part
 export TF_VAR_branch=${BUILDKITE_BRANCH}
