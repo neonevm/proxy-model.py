@@ -29,3 +29,9 @@ variable "branch" {
 variable "revision" {
   type = string
 }
+
+
+variable "neon_evm_commit" {
+  type = string
+}
+
