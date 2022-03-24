@@ -3,6 +3,7 @@ set -euo pipefail
 
 cd .buildkite/steps/full_test_suite
 
+export NEON_EVM_COMMIT=${NEON_EVM_COMMIT:-latest}
 export PROXY_MODEL_COMMIT=${BUILDKITE_COMMIT}
 
 # Terraform part
@@ -12,7 +13,7 @@ export TFSTATE_KEY="tests/test-${BUILDKITE_COMMIT}"
 export TFSTATE_REGION="us-east-2"
 export TF_BACKEND_CONFIG="-backend-config="bucket=${TFSTATE_BUCKET}" -backend-config="key=${TFSTATE_KEY}" -backend-config="region=${TFSTATE_REGION}""
 export TF_VAR_revision=${PROXY_MODEL_COMMIT}
-export TF_VAR_neon_evm_commit=${NEON_EVM_COMMIT:-latest}
+export TF_VAR_neon_evm_commit=${NEON_EVM_COMMIT}
 terraform init ${TF_BACKEND_CONFIG}
 terraform apply --auto-approve=true
 
