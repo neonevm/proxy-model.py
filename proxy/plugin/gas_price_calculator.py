@@ -88,7 +88,7 @@ class GasPriceCalculator:
                 price = self.pyth_network_client.get_price('Crypto.SOL/USD')
                 if price['status'] != 1:  # tradable
                     raise RuntimeError('Price status is not tradable')
-                self.sol_price_usd = price['price']
+                self.sol_price_usd = Decimal(price['price'])
 
                 return (self.sol_price_usd / NEON_PRICE_USD) * pow(Decimal(10), 9)
             except Exception as err:
@@ -100,13 +100,13 @@ class GasPriceCalculator:
         self.error('Failed to estimate gas price. Try again later')
         return 0
 
-    def get_sol_price_usd(self) -> float:
+    def get_sol_price_usd(self) -> Decimal:
         if self.sol_price_usd:
-            return float(self.sol_price_usd)
-        return 0.0
+            return self.sol_price_usd
+        return Decimal(0)
 
-    def get_neon_price_usd(self) -> float:
-        return float(NEON_PRICE_USD)
+    def get_neon_price_usd(self) -> Decimal:
+        return NEON_PRICE_USD
 
-    def get_operator_fee(self) -> float:
-        return float(OPERATOR_FEE)
+    def get_operator_fee(self) -> Decimal:
+        return OPERATOR_FEE

@@ -42,11 +42,11 @@ OPERATOR_ACCOUNT_RENT = Gauge(
     ['account'],
     registry=registry,
 )
-USD_PRISE_SOL = Gauge(
+USD_PRICE_SOL = Gauge(
     'usd_price_sol', 'Sol Price USD',
     registry=registry,
 )
-USD_PRISE_NEON = Gauge(
+USD_PRICE_NEON = Gauge(
     'usd_price_neon', 'Neon Price USD',
     registry=registry,
 )

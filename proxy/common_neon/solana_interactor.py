@@ -217,22 +217,22 @@ class SolanaInteractor:
         }
         return self._send_rpc_request('getBalance', str(account), opts)['result']['value']
 
-    def get_sol_balance_list(self, account_list: List[Union[str, PublicKey]], commitment='confirmed') -> List[int]:
+    def get_sol_balance_list(self, accounts_list: List[Union[str, PublicKey]], commitment='confirmed') -> List[int]:
         opts = {
-            "commitment": commitment
+            'commitment': commitment
         }
-        request_list = []
-        for account in account_list:
-            request_list.append((str(account), opts))
+        requests_list = []
+        for account in accounts_list:
+            requests_list.append((str(account), opts))
 
-        balance_list = []
-        response_list = self._send_rpc_batch_request('getBalance', request_list)
+        balances_list = []
+        response_list = self._send_rpc_batch_request('getBalance', requests_list)
         for response in response_list:
             value = get_from_dict(response, 'result', 'value')
             balance = int(value) if value else 0
-            balance_list.append(balance)
+            balances_list.append(balance)
 
-        return balance_list
+        return balances_list
 
     def get_token_account_balance(self, pubkey: Union[str, PublicKey], commitment='confirmed') -> int:
         opts = {
@@ -272,18 +272,18 @@ class SolanaInteractor:
         return AccountInfoLayout.frombytes(info.data)
 
     def get_account_info_layout_list(self, eth_accounts: List[EthereumAddress]) -> List[Optional[AccountInfoLayout]]:
-        request_list = []
+        requests_list = []
         for eth_account in eth_accounts:
             account_sol, _nonce = ether2program(eth_account)
-            request_list.append(account_sol)
-        response_list = self.get_account_info_list(request_list)
-        account_list = []
-        for info in response_list:
+            requests_list.append(account_sol)
+        responses_list = self.get_account_info_list(requests_list)
+        accounts_list = []
+        for info in responses_list:
             if info is None or len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
-                account_list.append(None)
+                accounts_list.append(None)
                 continue
-            account_list.append(AccountInfoLayout.frombytes(info.data))
-        return account_list
+            accounts_list.append(AccountInfoLayout.frombytes(info.data))
+        return accounts_list
 
     def get_multiple_rent_exempt_balances_for_size(self, size_list: [int], commitment='confirmed') -> [int]:
         opts = {

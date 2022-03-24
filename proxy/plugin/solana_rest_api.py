@@ -8,6 +8,7 @@
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
 """
+from decimal import Decimal
 import eth_utils
 import json
 import threading
@@ -97,7 +98,7 @@ class EthereumModel:
         return self.neon_config_dict['NEON_CHAIN_ID']
 
     def eth_gasPrice(self):
-        gas_price = int(self.gas_price_calculator.get_suggested_gas_price())
+        gas_price = self.gas_price_calculator.get_suggested_gas_price()
         sol_price_usd = self.gas_price_calculator.get_sol_price_usd()
         neon_price_usd = self.gas_price_calculator.get_neon_price_usd()
         operator_fee = self.gas_price_calculator.get_operator_fee()
@@ -417,7 +418,7 @@ class EthereumModel:
         self.stat_exporter.stat_commit_tx_begin()
         return self._stat_operator_balance()
 
-    def _stat_tx_end(self, pre_balance: Tuple[Dict[str, int], str, Dict[str, int], str] = None):
+    def _stat_tx_end(self, pre_balance: Tuple[Dict[str, Decimal], str, Dict[str, Decimal], str] = None):
         post_sol_balance, post_neon_balance = self._stat_operator_balance()
         if pre_balance is not None:
             pre_sol_balance, sol_acc, pre_neon_balance, neon_acc = pre_balance
@@ -428,20 +429,20 @@ class EthereumModel:
         else:
             self.stat_exporter.stat_commit_tx_end_failed(None)
 
-    def _stat_operator_balance(self) -> Tuple[Dict[str, int], Dict[str, int]]:
+    def _stat_operator_balance(self) -> Tuple[Dict[str, Decimal], Dict[str, Decimal]]:
         operator_accounts = get_solana_accounts()
         sol_accounts = [str(sol_account.public_key()) for sol_account in operator_accounts]
         sol_balances = self._solana.get_sol_balance_list(sol_accounts)
         operator_sol_balance = dict(zip(sol_accounts, sol_balances))
         for account, balance in operator_sol_balance.items():
-            self.stat_exporter.stat_commit_operator_sol_balance(str(account), balance / 1_000_000_000)
+            self.stat_exporter.stat_commit_operator_sol_balance(str(account), Decimal(balance) / 1_000_000_000)
 
         neon_accounts = [str(EthereumAddress.from_private_key(neon_account.secret_key())) for neon_account in operator_accounts]
         neon_layouts = self._solana.get_account_info_layout_list(neon_accounts)
         operator_neon_balance = {}
         for sol_account, neon_account, neon_layout in zip(operator_accounts, neon_accounts, neon_layouts):
             if neon_layout:
-                neon_balance = neon_layout.balance / 1_000_000_000 / 1_000_000_000
+                neon_balance = Decimal(neon_layout.balance) / 1_000_000_000 / 1_000_000_000
                 operator_neon_balance[neon_account] = neon_balance
                 self.stat_exporter.stat_commit_operator_neon_balance(str(sol_account), str(neon_account), neon_balance)
             else:
