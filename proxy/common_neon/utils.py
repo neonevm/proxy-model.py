@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import Dict, Optional, Any
-from .eth_proto import Trx as EthTx
 
 import json
 import base58
