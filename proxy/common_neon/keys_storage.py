@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from proxy.common_neon.address import EthereumAddress
 
 
@@ -48,3 +49,11 @@ class KeyStorage:
 
     def get_list(self) -> [EthereumAddress]:
         return [EthereumAddress.from_private_key(bytes.fromhex(p)) for p in self._key_list]
+
+    def get_key(self, address) -> Optional[EthereumAddress]:
+        account_list = self.get_list()
+        for account in account_list:
+            if str(account) == address:
+                return account
+        return None
+

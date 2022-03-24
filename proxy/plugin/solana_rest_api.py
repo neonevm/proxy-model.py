@@ -393,6 +393,27 @@ class EthereumModel:
         account_list = storage.get_list()
         return [str(a) for a in account_list]
 
+    @staticmethod
+    def eth_sign(address: str, data: str):
+        try:
+            address = address.lower()
+            bin_address = bytes.fromhex(address[2:])
+            assert len(bin_address) == 20
+        except:
+            return 'bad account'
+
+        account = KeyStorage().get_key(address)
+        if not account:
+            return 'unknown account'  # the same error retufrom geth
+
+        try:
+            data = bytes.fromhex(data[2:])
+        except:
+            return 'data is not hex string'
+
+        message = str.encode(f'\x19Ethereum Signed Message:\n{len(data)}') + data
+        return str(account.private.sign_msg(message))
+
     def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
         if not isinstance(neonTxId, str):
             return []
