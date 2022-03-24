@@ -179,6 +179,7 @@ class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
 
     def __init__(self, sender, account_desc):
         NeonCreateAccountWithSeedStage.__init__(self, sender)
+        self.tx = TransactionWithComputeBudget()
         self._account_desc = account_desc
         self._seed_base = ACCOUNT_SEED_VERSION + os.urandom(20)
         self._init_sol_account()
