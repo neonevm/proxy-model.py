@@ -8,6 +8,7 @@ if [ -z "$SOLANA_URL" ]; then
 fi
 
 solana config set -u $SOLANA_URL
+ln -s /opt/proxy/operator-keypairs/id?*.json /root/.config/solana/
 
 echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Dumping evm_loader and extracting ELF parameters"
 export EVM_LOADER=$(solana address -k /spl/bin/evm_loader-keypair.json)
@@ -24,13 +25,6 @@ for i in $(seq 1 $NUM_ACCOUNTS); do
     ID_FILE="${ID_FILE}${i}.json"
   else
     ID_FILE="${ID_FILE}.json"
-  fi
-
-  if [ "$(spl-token balance --owner "$ID_FILE" "$NEON_TOKEN_MINT" || echo '0')" == "0" ]; then
-    echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Create balance and mint token"
-    TOKEN_ACCOUNT=$( (spl-token create-account --owner "$ID_FILE" "$NEON_TOKEN_MINT" || true) | grep -Po 'Creating account \K[^\n]*')
-    echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} TOKEN_ACCOUNT=$TOKEN_ACCOUNT"
-    spl-token mint "$NEON_TOKEN_MINT" 10000000 --owner /spl/bin/evm_loader-keypair.json -- "$TOKEN_ACCOUNT"
   fi
 done
 

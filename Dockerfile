@@ -1,5 +1,5 @@
-ARG SOLANA_REVISION=v1.8.12-testnet
-ARG EVM_LOADER_REVISION=latest
+ARG SOLANA_REVISION=v1.9.12-testnet
+ARG EVM_LOADER_REVISION=develop
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 
@@ -13,7 +13,7 @@ WORKDIR /opt
 
 RUN apt update && \
     DEBIAN_FRONTEND=noninteractive apt install -y git software-properties-common openssl curl parallel \
-                                                  ca-certificates python3-pip python3-venv && \
+                                                  ca-certificates python3-pip python3-venv postgresql-client && \
     python3 -m venv venv && \
     pip3 install --upgrade pip && \
     /bin/bash -c "source venv/bin/activate" && \
@@ -40,7 +40,7 @@ COPY --from=spl /opt/solana_utils.py \
                 /spl/bin/
 COPY --from=spl /opt/neon-cli /spl/bin/emulator
 
-COPY proxy/operator-keypairs/* /root/.config/solana/
+COPY proxy/operator-keypairs/id.json /root/.config/solana/
 
 COPY . /opt
 ARG PROXY_REVISION
