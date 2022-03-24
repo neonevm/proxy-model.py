@@ -33,6 +33,7 @@ from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.utils import SolanaBlockInfo
+from ..common_neon.keys_storage import KeyStorage
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEP_COUNT
 from ..environment import neon_cli
 from ..memdb.memdb import MemDB
@@ -386,11 +387,16 @@ class EthereumModel:
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
 
+    @staticmethod
+    def eth_accounts():
+        storage = KeyStorage()
+        account_list = storage.get_list()
+        return [str(a) for a in account_list]
+
     def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
         if not isinstance(neonTxId, str):
             return []
         return self._db.get_sol_sign_list_by_neon_sign(neonTxId)
-
 
 
 class JsonEncoder(json.JSONEncoder):
