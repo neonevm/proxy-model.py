@@ -13,6 +13,7 @@ from .proxy import entry_point
 import os
 from .indexer.indexer import run_indexer
 
+
 if __name__ == '__main__':
     solana_url = os.environ['SOLANA_URL']
     evm_loader_id = os.environ['EVM_LOADER']
@@ -24,4 +25,9 @@ if __name__ == '__main__':
         print("Will run in indexer mode")
         run_indexer(solana_url)
     else:
+        from .statistics_exporter.prometheus_metrics import registry
+        from prometheus_client import start_http_server
+
+        print("Will run in proxy mode")
+        start_http_server(8888, registry=registry)
         entry_point()
