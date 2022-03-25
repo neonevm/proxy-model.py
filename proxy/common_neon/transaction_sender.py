@@ -518,16 +518,15 @@ class NeonTxSender:
         tx_nonce = int(self.eth_tx.nonce)
         if info.trx_count == tx_nonce:
             return
+        elif info.trx_count > tx_nonce:
+            message = 'nonce too low'
+        elif info.trx_count < tx_nonce:
+            message = 'nonce too high'
+        else:
+            message = 'nonce has max value'
 
-        raise EthereumError(
-            -32002,
-            'Verifying nonce before send transaction: Error processing Instruction 1: invalid program argument',
-            {
-                'logs': [
-                    f'/src/entrypoint.rs Invalid Ethereum transaction nonce: acc {info.trx_count}, trx {tx_nonce}',
-                ]
-            }
-        )
+        raise EthereumError(code=-32002,
+                            message=f'{message}: address {self.eth_sender}, tx: {tx_nonce} state: {info.trx_count}')
 
     def _execute(self):
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy]:

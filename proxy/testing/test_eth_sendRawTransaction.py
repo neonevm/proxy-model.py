@@ -213,11 +213,11 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_04_execute_with_bad_nonce(self):
-        test_nonce_map = {
-            'grade_up_one': 1,
-            'grade_down_one': -1,
-        }
-        for name, offset in test_nonce_map.items():
+        test_nonce_list = [
+            ('grade_up_one', 1, 'nonce too high:'),
+            ('grade_down_one', -1, 'nonce too low: ')
+        ]
+        for name, offset, message in test_nonce_list:
             with self.subTest(name=name):
                 print("\ntest_04_execute_with_bad_nonce {} offsets".format(offset))
                 bad_nonce = offset + proxy.eth.get_transaction_count(proxy.eth.default_account)
@@ -237,14 +237,17 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                     print('response:', response)
                     print('code:', response['code'])
                     self.assertEqual(response['code'], -32002)
-                    print('substring_err_147:', SUBSTRING_LOG_ERR_147)
-                    logs = response['data']['logs']
-                    print('logs:', logs)
-                    log = [s for s in logs if SUBSTRING_LOG_ERR_147 in s][0]
-                    print(log)
-                    self.assertGreater(len(log), len(SUBSTRING_LOG_ERR_147))
-                    file_name = 'src/entrypoint.rs'
-                    self.assertTrue(file_name in log)
+                    print('code:', response['message'])
+                    self.assertEqual(response['message'][:len(message)], message)
+
+                    # print('substring_err_147:', SUBSTRING_LOG_ERR_147)
+                    # logs = response['data']['logs']
+                    # print('logs:', logs)
+                    # log = [s for s in logs if SUBSTRING_LOG_ERR_147 in s][0]
+                    # print(log)
+                    # self.assertGreater(len(log), len(SUBSTRING_LOG_ERR_147))
+                    # file_name = 'src/entrypoint.rs'
+                    # self.assertTrue(file_name in log)
 
     # @unittest.skip("a.i.")
     def test_05_transfer_one_gwei(self):
