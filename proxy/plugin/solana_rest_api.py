@@ -517,13 +517,22 @@ class EthereumModel:
         return self.eth_sendRawTransaction(tx['raw'])
 
     @staticmethod
-    def web_sha3(data: str) -> str:
+    def web3_sha3(data: str) -> str:
         try:
             data = bytes.fromhex(data[2:])
         except:
             raise EthereumError(message='data is not hex string')
 
         return sha3.keccak_256(data).hexdigest()
+
+    def eth_mining(self):
+        slot = self._db.get_latest_block_slot()
+        for i in range(12):
+            time.sleep(0.1)
+            new_slot = self._db.get_latest_block_slot()
+            if new_slot != slot:
+                return True
+        return False
 
     def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
         if not isinstance(neonTxId, str):
