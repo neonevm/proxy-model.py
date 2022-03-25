@@ -14,6 +14,7 @@ import traceback
 import time
 import hashlib
 import multiprocessing
+import sha3
 
 from logged_groups import logged_group, logging_context
 
@@ -453,6 +454,15 @@ class EthereumModel:
     def eth_sendTransaction(self, tx):
         tx = self.eth_signTransaction(tx)
         return self.eth_sendRawTransaction(tx['raw'])
+
+    @staticmethod
+    def web_sha3(data: str) -> str:
+        try:
+            data = bytes.fromhex(data[2:])
+        except:
+            raise EthereumError(message='data is not hex string')
+
+        return sha3.keccak_256(data).hexdigest()
 
     def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
         if not isinstance(neonTxId, str):
