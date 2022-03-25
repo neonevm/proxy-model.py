@@ -21,14 +21,14 @@
     );
 
     CREATE TABLE IF NOT EXISTS neon_accounts (
-        neon_account CHAR(42),
-        pda_account VARCHAR(50),
-        code_account VARCHAR(50),
+        neon_address CHAR(42),
+        pda_address VARCHAR(50),
+        code_address VARCHAR(50),
         slot BIGINT,
         code TEXT,
         sol_sign CHAR(88),
 
-        UNIQUE(pda_account, code_account)
+        UNIQUE(pda_address, code_address)
     );
 
     CREATE TABLE IF NOT EXISTS failed_airdrop_attempts (
@@ -133,7 +133,7 @@
         bpf_instructions INT,
 
         sol_cost BIGINT,
-        token_income BIGINT
+        neon_income BIGINT
     );
 
     CREATE TABLE IF NOT EXISTS constants (

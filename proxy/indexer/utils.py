@@ -4,7 +4,8 @@ import statistics
 
 from solana.publickey import PublicKey
 from logged_groups import logged_group
-from typing import Dict, Union, Callable
+from typing import Any, Dict, List, Union, Callable
+from dataclasses import astuple, dataclass
 
 from ..common_neon.address import ether2program
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, ACCOUNT_INFO_LAYOUT
@@ -43,58 +44,69 @@ class SolanaIxSignInfo:
         self.steps = steps
 
 
+@dataclass
 class CostInfo:
-    def __init__(self, sign: str, tx: dict, program: PublicKey):
+    sign: str = None
+    operator: str = None
+    heap: int = 0
+    bpf: int = 0
+    sol_spent: int = 0
+    neon_income: int = 0
+
+    def __init__(self, sign: str, tx: Dict[str, Any], program: PublicKey):
         self.sign = sign
-        self.operator = None
-        self.sol_spent = None
-        self.bpf = None
-        self.heap = None
-        self.token_income = None
         if tx:
-            self.setup(tx, program)
+            self.init_from_tx(tx, program)
 
-    def setup(self, tx: dict, program: PublicKey):
-        def bpf_log(program, msg_words: list[str]):
-            if len(msg_words) >= 7 and\
-                msg_words[0] == 'Program' and\
-                msg_words[1] == str(program) and\
-                msg_words[2] == 'consumed' and\
-                msg_words[4] == 'of' and\
-                msg_words[6] == 'compute' and\
-                msg_words[7] == 'units':
-                return int(log_words[3])
-            return None
-        def heap_log(msg_words: list[str]):
-            if len(msg_words) >= 5 and\
-                msg_words[0] == 'Program' and\
-                msg_words[1] == "log:" and\
-                msg_words[2] == 'Total' and\
-                msg_words[3] == 'memory' and\
-                msg_words[4] == 'occupied:':
-                return int(log_words[5])
-            return None
+    def __iter__(self):
+        return iter(astuple(self))
 
+    def init_from_tx(self, tx: dict, program: PublicKey):
         self.operator = tx['transaction']['message']['accountKeys'][0]
         self.sol_spent = tx['meta']['preBalances'][0] - tx['meta']['postBalances'][0]
-        for log in tx['meta']['logMessages']:
-            log_words = log.split()
-            bpf = bpf_log(program, log_words)
-            heap = heap_log(log_words)
-            if bpf:
-                self.bpf = max(self.bpf, bpf) if self.bpf else bpf
-            if heap:
-                self.heap = max(self.heap, heap) if self.heap else heap
 
+        self.fill_heap_bpf_from_logs(tx['meta']['logMessages'], program)
+        self.fill_neon_income(tx['meta']['preTokenBalances'], tx['meta']['postTokenBalances'])
+
+    def fill_heap_bpf_from_logs(self, log_messages: List[str], program: PublicKey):
+        for log in log_messages:
+            log_words = log.split()
+            self.bpf = max(self.bpf, CostInfo.bpf_log(program, log_words))
+            self.heap = max(self.heap, CostInfo.heap_log(log_words))
+
+    def fill_neon_income(self, pre_balances: List[str], post_balances: List[str]):
         pre_token = 0
         post_token = 0
-        for balance in tx['meta']['preTokenBalances']:
+        for balance in pre_balances:
             if balance['owner'] == self.operator:
                 pre_token = int(balance["uiTokenAmount"]["amount"])
-        for balance in tx['meta']['postTokenBalances']:
+        for balance in post_balances:
             if balance['owner'] == self.operator:
                 post_token = int(balance["uiTokenAmount"]["amount"])
-        self.token_income = post_token - pre_token
+        self.neon_income = post_token - pre_token
+
+    @staticmethod
+    def bpf_log(program: PublicKey, msg_words: list[str]):
+        if len(msg_words) >= 7 and\
+            msg_words[0] == 'Program' and\
+            msg_words[1] == str(program) and\
+            msg_words[2] == 'consumed' and\
+            msg_words[4] == 'of' and\
+            msg_words[6] == 'compute' and\
+            msg_words[7] == 'units':
+            return int(msg_words[3])
+        return 0
+
+    @staticmethod
+    def heap_log(msg_words: list[str]):
+        if len(msg_words) >= 5 and\
+            msg_words[0] == 'Program' and\
+            msg_words[1] == "log:" and\
+            msg_words[2] == 'Total' and\
+            msg_words[3] == 'memory' and\
+            msg_words[4] == 'occupied:':
+            return int(msg_words[5])
+        return 0
 
 
 @logged_group("neon.Indexer")

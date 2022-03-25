@@ -11,20 +11,11 @@ class CostsDB(BaseDB):
     def add_costs(self, tx_costs: List[CostInfo]):
         rows = []
         for cost_info in tx_costs:
-            rows.append((
-                cost_info.sign,
-                cost_info.operator,
-
-                cost_info.heap,
-                cost_info.bpf,
-
-                cost_info.sol_spent,
-                cost_info.token_income
-            ))
+            rows.append(tuple(cost_info))
 
         with self._conn.cursor() as cursor:
             cursor.executemany(f'''
-                INSERT INTO {self._table_name}
-                (sol_sign, operator, heap_size, bpf_instructions, sol_cost, token_income)
+                INSERT INTO solana_neon_transactions_costs
+                (sol_sign, operator, heap_size, bpf_instructions, sol_cost, neon_income)
                 VALUES(%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING''',
                 rows)

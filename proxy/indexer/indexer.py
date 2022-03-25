@@ -5,6 +5,7 @@ import time
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 
+from ..indexer.accounts_db import NeonAccountInfo
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff, CostInfo
@@ -258,8 +259,8 @@ class ReceiptsParserState:
         for tx in self._tx_table.values():
             yield tx
 
-    def add_account_to_db(self, neon_account: str, pda_account: str, code_account: str, slot: int, sol_sign: str):
-        self._db.fill_account_info_by_indexer(neon_account, pda_account, code_account, slot, sol_sign)
+    def add_account_to_db(self, neon_account: NeonAccountInfo):
+        self._db.fill_account_info_by_indexer(neon_account)
 
 
 @logged_group("neon.Indexer")
@@ -481,7 +482,7 @@ class CreateAccountIxDecoder(DummyIxDecoder):
 
         self.debug(f"neon_account({neon_account}), pda_account({pda_account}), code_account({code_account}), slot({self.ix.sign.slot})")
 
-        self.state.add_account_to_db(neon_account, pda_account, code_account, self.ix.sign.slot, self.ix.sign.sign)
+        self.state.add_account_to_db(NeonAccountInfo(neon_account, pda_account, code_account, self.ix.sign.slot, None, self.ix.sign.sign))
         return True
 
 class CreateAccount2IxDecoder(DummyIxDecoder):
@@ -505,7 +506,7 @@ class CreateAccount2IxDecoder(DummyIxDecoder):
 
         self.debug(f"neon_account({neon_account}), pda_account({pda_account}), code_account({code_account}), slot({self.ix.sign.slot})")
 
-        self.state.add_account_to_db(neon_account, pda_account, code_account, self.ix.sign.slot, self.ix.sign.sign)
+        self.state.add_account_to_db(NeonAccountInfo(neon_account, pda_account, code_account, self.ix.sign.slot, None, self.ix.sign.sign))
         return True
 
 class ResizeStorageAccountIxDecoder(DummyIxDecoder):
@@ -523,7 +524,7 @@ class ResizeStorageAccountIxDecoder(DummyIxDecoder):
 
         self.debug(f"pda_account({pda_account}), code_account({code_account}), slot({self.ix.sign.slot})")
 
-        self.state.add_account_to_db(None, pda_account, code_account, self.ix.sign.slot, self.ix.sign.sign)
+        self.state.add_account_to_db(NeonAccountInfo(None, pda_account, code_account, self.ix.sign.slot, None, self.ix.sign.sign))
         return True
 
 
