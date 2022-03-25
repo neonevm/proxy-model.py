@@ -135,6 +135,13 @@ class SolanaInteractor:
 
         return full_response_data
 
+    def get_cluster_nodes(self) -> [dict]:
+        return self._send_rpc_request("getClusterNodes").get('result', [])
+
+    def is_health(self) -> bool:
+        status = self._send_rpc_request('getHealth').get('result', 'bad')
+        return status == 'ok'
+
     def get_signatures_for_address(self, before: Optional[str], limit: int, commitment='confirmed') -> []:
         opts: Dict[str, Union[int, str]] = {}
         if before is not None:

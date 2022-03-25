@@ -126,6 +126,19 @@ class EthereumModel:
             raise EthereumError(message=f'Failed to parse block tag: {tag}')
         return block
 
+    def _getFullBlockByNumber(self, tag) -> SolanaBlockInfo:
+        block = self.process_block_tag(tag)
+        if block.slot is None:
+            self.debug(f"Not found block by number {tag}")
+            return block
+
+        if block.is_empty():
+            block = self._db.get_full_block_by_slot(block.slot)
+            if block.is_empty():
+                self.debug(f"Not found block by slot {block.slot}")
+
+        return block
+
     def eth_blockNumber(self):
         slot = self._db.get_latest_block_slot()
         return hex(slot)
@@ -421,7 +434,7 @@ class EthereumModel:
 
     def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[dict]:
         block = self.process_block_tag(tag)
-        if block.slot is None:
+        if block.is_empty():
             self.debug(f"Not found block by number {tag}")
             return None
 
@@ -429,7 +442,7 @@ class EthereumModel:
 
     def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[dict]:
         block = self._getBlockByHash(block_hash)
-        if block.slot is None:
+        if block.is_empty():
             return None
         return self._getTransactionByIndex(block, tx_idx)
 
@@ -442,6 +455,14 @@ class EthereumModel:
             if block.is_empty():
                 self.debug(f"Not found block by slot {block.slot}")
                 return hex(0)
+
+        tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
+        return hex(len(tx_list))
+
+    def eth_getBlockTransactionCountByNumber(self, tag: str) -> str:
+        block = self._getFullBlockByNumber(tag)
+        if block.is_empty():
+            return hex(0)
 
         tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
         return hex(len(tx_list))
@@ -525,13 +546,27 @@ class EthereumModel:
 
         return sha3.keccak_256(data).hexdigest()
 
-    def eth_mining(self):
-        slot = self._db.get_latest_block_slot()
-        for i in range(12):
-            time.sleep(0.1)
-            new_slot = self._db.get_latest_block_slot()
-            if new_slot != slot:
-                return True
+    @staticmethod
+    def eth_mining() -> bool:
+        return False
+
+    @staticmethod
+    def eth_hashrate() -> str:
+        return hex(0)
+
+    @staticmethod
+    def eth_getWork() -> [str]:
+        return ['', '', '', '']
+
+    def eth_syncing(self) -> bool:
+        return self._solana.is_health()
+
+    def net_peerCount(self) -> str:
+        cluster_node_list = self._solana.get_cluster_nodes()
+        return hex(len(cluster_node_list))
+
+    @staticmethod
+    def net_listening() -> bool:
         return False
 
     def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
@@ -592,7 +627,6 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 "eth_sign",
                 "eth_sendTransaction",
                 "eth_signTransaction",
-                "eth_mining",
             ])
             return method in private_method_map
 
