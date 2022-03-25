@@ -109,13 +109,16 @@ class EthereumModel:
     def __repr__(self):
         return str(self.__dict__)
 
-    def process_block_tag(self, tag):
+    def process_block_tag(self, tag) -> SolanaBlockInfo:
         if tag == "latest":
             block = self._db.get_latest_block()
         elif tag in ('earliest', 'pending'):
-            raise EthereumError(message="Invalid tag {}".format(tag))
+            raise EthereumError(message=f"Invalid tag {tag}")
         elif isinstance(tag, str):
-            block = SolanaBlockInfo(slot=int(tag, 16))
+            try:
+                block = SolanaBlockInfo(slot=int(tag.strip(), 16))
+            except:
+                raise EthereumError(message=f'Failed to parse block tag: {tag}')
         elif isinstance(tag, int):
             block = SolanaBlockInfo(slot=tag)
         else:
@@ -126,7 +129,7 @@ class EthereumModel:
         slot = self._db.get_latest_block_slot()
         return hex(slot)
 
-    def eth_getBalance(self, account, tag):
+    def eth_getBalance(self, account, tag) -> str:
         """account - address to check for balance.
            tag - integer block number, or the string "latest", "earliest" or "pending"
         """
@@ -382,6 +385,31 @@ class EthereumModel:
         except Exception as err:
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
+
+    def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> dict:
+        try:
+            if isinstance(tx_idx, str):
+                tx_idx = int(tag, 16)
+            assert tx_idx >= 0
+        except:
+            raise EthereumError(message=f'Invalid transaction index {tx_idx}')
+
+        block = self.process_block_tag(tag)
+        if block.slot is None:
+            self.debug(f"Not found block by number {tag}")
+            return {}
+
+        if block.is_empty():
+            block = self._db.get_full_block_by_slot(block.slot)
+            if block.is_empty():
+                self.debug(f"Not found block by slot {block.slot}")
+                return {}
+
+        tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
+        if tx_idx > len(tx_list):
+            return {}
+
+        return self._getTransaction(tx_list[tx_idx])
 
     @staticmethod
     def eth_accounts() -> [str]:
