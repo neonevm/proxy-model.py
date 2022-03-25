@@ -17,6 +17,7 @@ import multiprocessing
 import sha3
 
 from logged_groups import logged_group, logging_context
+from typing import Optional
 
 from ..common.utils import build_http_response
 from ..http.codes import httpStatusCodes
@@ -228,7 +229,13 @@ class EthereumModel:
             block_hash - Hash of a block.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
-        block_hash = block_hash.lower()
+        try:
+            block_hash = block_hash.lower()
+            bin_block_hash = bytes.fromhex(block_hash[2:])
+            assert len(bin_block_hash) == 32
+        except:
+            raise EthereumError(message=f'bad block hash {block_hash}')
+
         block = self._db.get_block_by_hash(block_hash)
         if block.slot is None:
             self.debug("Not found block by hash %s", block_hash)
@@ -386,30 +393,49 @@ class EthereumModel:
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
 
-    def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> dict:
+    def _getTransactionByIndex(self, block: SolanaBlockInfo, tx_idx: int) -> Optional[dict]:
         try:
             if isinstance(tx_idx, str):
-                tx_idx = int(tag, 16)
+                tx_idx = int(tx_idx, 16)
             assert tx_idx >= 0
         except:
-            raise EthereumError(message=f'Invalid transaction index {tx_idx}')
-
-        block = self.process_block_tag(tag)
-        if block.slot is None:
-            self.debug(f"Not found block by number {tag}")
-            return {}
+            raise EthereumError(message=f'invalid transaction index {tx_idx}')
 
         if block.is_empty():
             block = self._db.get_full_block_by_slot(block.slot)
             if block.is_empty():
                 self.debug(f"Not found block by slot {block.slot}")
-                return {}
+                return None
 
         tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
         if tx_idx > len(tx_list):
-            return {}
+            return None
 
         return self._getTransaction(tx_list[tx_idx])
+
+    def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[dict]:
+        block = self.process_block_tag(tag)
+        if block.slot is None:
+            self.debug(f"Not found block by number {tag}")
+            return None
+
+        return self._getTransactionByIndex(block, tx_idx)
+
+    def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[dict]:
+        try:
+            block_hash = block_hash.lower()
+            bin_block_hash = bytes.fromhex(block_hash[2:])
+            assert len(bin_block_hash) == 32
+        except:
+            raise EthereumError(message=f'bad block hash {block_hash}')
+
+        block_hash = block_hash.lower()
+        block = self._db.get_block_by_hash(block_hash)
+        if block.slot is None:
+            self.debug("Not found block by hash %s", block_hash)
+            return None
+
+        return self._getTransactionByIndex(block, tx_idx)
 
     @staticmethod
     def eth_accounts() -> [str]:
