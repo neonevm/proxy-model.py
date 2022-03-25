@@ -414,7 +414,7 @@ class EthereumModel:
                 return None
 
         tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
-        if tx_idx > len(tx_list):
+        if tx_idx >= len(tx_list):
             return None
 
         return self._getTransaction(tx_list[tx_idx])
@@ -486,11 +486,9 @@ class EthereumModel:
             raise EthereumError(message='unknown account')
 
         try:
-            receiver = ''
             if 'from' in tx:
                 del tx['from']
             if 'to' in tx:
-                receiver = tx['to']
                 del tx['to']
             if 'nonce' not in tx:
                 tx['nonce'] = self.eth_getTransactionCount(sender, 'latest')
@@ -501,7 +499,7 @@ class EthereumModel:
             raw_tx = signed_tx.rawTransaction.hex()
 
             tx['from'] = sender
-            tx['to'] = receiver
+            tx['to'] = EthTrx.fromString(bytearray.fromhex(raw_tx[2:])).toAddress.hex()
             tx['hash'] = signed_tx.hash.hex()
             tx['r'] = hex(signed_tx.r)
             tx['s'] = hex(signed_tx.s)
