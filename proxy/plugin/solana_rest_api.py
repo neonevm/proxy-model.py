@@ -35,7 +35,7 @@ from ..common_neon.errors import EthereumError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.keys_storage import KeyStorage
-from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEP_COUNT, CHAIN_ID
+from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEP_COUNT, CHAIN_ID, ENABLE_PRIVATE_API
 from ..environment import neon_cli
 from ..memdb.memdb import MemDB
 from .gas_price_calculator import GasPriceCalculator
@@ -583,16 +583,29 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             'jsonrpc': '2.0',
             'id': request.get('id', None),
         }
+        def is_private_api(method: str) -> bool:
+            if ENABLE_PRIVATE_API:
+                return False
+
+            private_method_map = set([
+                "eth_accounts",
+                "eth_sign",
+                "eth_sendTransaction",
+                "eth_signTransaction",
+                "eth_mining",
+            ])
+            return method in private_method_map
+
         try:
-            if not hasattr(self.model, request['method']):
-                response['error'] = {'code': -32000, 'message': f'method {request["method"]} is not supported'}
+            if (not hasattr(self.model, request['method'])) or is_private_api(request["method"]):
+                response['error'] = {'code': -32601, 'message': f'method {request["method"]} is not supported'}
             else:
                 method = getattr(self.model, request['method'])
                 params = request.get('params', [])
                 response['result'] = method(*params)
         except SolTxError as err:
             # traceback.print_exc()
-            raise EthereumError(message=err.error)
+            response['error'] = {'code': -32000, 'message': err.error}
         except EthereumError as err:
             # traceback.print_exc()
             response['error'] = err.getError()
