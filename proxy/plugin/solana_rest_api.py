@@ -224,11 +224,7 @@ class EthereumModel:
             self.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
             return '0x00'
 
-    def eth_getBlockByHash(self, block_hash, full):
-        """Returns information about a block by hash.
-            block_hash - Hash of a block.
-            full - If true it returns the full transaction objects, if false only the hashes of the transactions.
-        """
+    def _getBlockByHash(self, block_hash: str) -> SolanaBlockInfo:
         try:
             block_hash = block_hash.lower()
             bin_block_hash = bytes.fromhex(block_hash[2:])
@@ -239,6 +235,16 @@ class EthereumModel:
         block = self._db.get_block_by_hash(block_hash)
         if block.slot is None:
             self.debug("Not found block by hash %s", block_hash)
+
+        return block
+
+    def eth_getBlockByHash(self, block_hash: str, full):
+        """Returns information about a block by hash.
+            block_hash - Hash of a block.
+            full - If true it returns the full transaction objects, if false only the hashes of the transactions.
+        """
+        block = self._getBlockByHash(block_hash)
+        if block.slot is None:
             return None
         ret = self.getBlockBySlot(block, full, False)
         return ret
@@ -422,20 +428,23 @@ class EthereumModel:
         return self._getTransactionByIndex(block, tx_idx)
 
     def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[dict]:
-        try:
-            block_hash = block_hash.lower()
-            bin_block_hash = bytes.fromhex(block_hash[2:])
-            assert len(bin_block_hash) == 32
-        except:
-            raise EthereumError(message=f'bad block hash {block_hash}')
-
-        block_hash = block_hash.lower()
-        block = self._db.get_block_by_hash(block_hash)
+        block = self._getBlockByHash(block_hash)
         if block.slot is None:
-            self.debug("Not found block by hash %s", block_hash)
             return None
-
         return self._getTransactionByIndex(block, tx_idx)
+
+    def eth_getBlockTransactionCountByHash(self, block_hash: str) -> str:
+        block = self._getBlockByHash(block_hash)
+        if block.slot is None:
+            return hex(0)
+        if block.is_empty():
+            block = self._db.get_full_block_by_slot(block.slot)
+            if block.is_empty():
+                self.debug(f"Not found block by slot {block.slot}")
+                return hex(0)
+
+        tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
+        return hex(len(tx_list))
 
     @staticmethod
     def eth_accounts() -> [str]:
