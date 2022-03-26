@@ -112,6 +112,12 @@ services:
     networks:
       - net
     entrypoint: proxy/run-test-proxy.sh
+    healthcheck:
+      test: [ CMD-SHELL, "/opt/health_check_proxy.sh" ]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 5s
 
   faucet:
     container_name: faucet
@@ -139,7 +145,13 @@ services:
     entrypoint: ./run-test-faucet.sh
     depends_on:
       proxy:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: [ CMD-SHELL, "/opt/health_check_faucet.sh" ]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 5s
 
   airdropper:
     container_name: airdropper
@@ -168,7 +180,7 @@ services:
       dbcreation:
         condition: service_completed_successfully
       faucet:
-        condition: service_started
+        condition: service_healthy
 
   indexer:
     container_name: indexer
