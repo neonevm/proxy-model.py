@@ -1,27 +1,30 @@
+from __future__ import annotations
+
 import random
 
 from eth_keys import keys as eth_keys
 from hashlib import sha256
 from solana.publickey import PublicKey
-from spl.token.instructions import get_associated_token_address
 from typing import NamedTuple
 
-from .layouts import ACCOUNT_INFO_LAYOUT
-from ..environment import neon_cli, ETH_TOKEN_MINT_ID, EVM_LOADER_ID
-from .constants import ACCOUNT_SEED_VERSION
 
 class EthereumAddress:
-    def __init__(self, data, private=None):
+    def __init__(self, data, private: eth_keys.PrivateKey = None):
         if isinstance(data, str):
             data = bytes(bytearray.fromhex(data[2:]))
         self.data = data
         self.private = private
 
     @staticmethod
-    def random():
+    def random() -> EthereumAddress:
         letters = '0123456789abcdef'
         data = bytearray.fromhex(''.join([random.choice(letters) for k in range(64)]))
         pk = eth_keys.PrivateKey(data)
+        return EthereumAddress(pk.public_key.to_canonical_address(), pk)
+
+    @staticmethod
+    def from_private_key(pk_data: bytes) -> EthereumAddress:
+        pk = eth_keys.PrivateKey(pk_data)
         return EthereumAddress(pk.public_key.to_canonical_address(), pk)
 
     def __str__(self):
@@ -34,11 +37,16 @@ class EthereumAddress:
 
 
 def accountWithSeed(base, seed):
+    from ..environment import EVM_LOADER_ID
+
     result = PublicKey(sha256(bytes(base) + bytes(seed) + bytes(PublicKey(EVM_LOADER_ID))).digest())
     return result
 
 
 def ether2program(ether):
+    from .constants import ACCOUNT_SEED_VERSION
+    from ..environment import EVM_LOADER_ID
+
     if isinstance(ether, str):
         pass
     elif isinstance(ether, EthereumAddress):
@@ -53,16 +61,23 @@ def ether2program(ether):
     return str(pda), nonce
 
 
-def getTokenAddr(account):
-    return get_associated_token_address(PublicKey(account), ETH_TOKEN_MINT_ID)
-
-
-class AccountInfo(NamedTuple):
+class AccountInfoLayout(NamedTuple):
     ether: eth_keys.PublicKey
+    balance: int
     trx_count: int
     code_account: PublicKey
 
+    def is_payed(self) -> bool:
+        return self.state != 0
+
     @staticmethod
-    def frombytes(data):
+    def frombytes(data) -> AccountInfoLayout:
+        from .layouts import ACCOUNT_INFO_LAYOUT
+
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
+        return AccountInfoLayout(
+            ether=cont.ether,
+            balance=int.from_bytes(cont.balance, "little"),
+            trx_count=int.from_bytes(cont.trx_count, "little"),
+            code_account=PublicKey(cont.code_account)
+        )

@@ -44,6 +44,7 @@ function cleanup_docker {
 
     if docker logs solana >solana.log 2>&1; then echo "solana logs saved"; fi
     if docker logs evm_loader >evm_loader.log 2>&1; then echo "evm_loader logs saved"; fi
+    if docker logs dbcreation >dbcreation.log 2>&1; then echo "dbcreation logs saved"; fi
     if docker logs faucet >faucet.log 2>&1; then echo "faucet logs saved"; fi
     if docker logs airdropper >airdropper.log 2>&1; then echo "airdropper logs saved"; fi
     if docker logs indexer >indexer.log 2>&1; then echo "indexer logs saved"; fi
@@ -79,6 +80,24 @@ export FAUCET_URL=$(docker exec proxy bash -c 'echo "$FAUCET_URL"')
 echo "EVM_LOADER" $EVM_LOADER
 echo "SOLANA_URL" $SOLANA_URL
 echo "FAUCET_URL" $FAUCET_URL
+
+#echo "Run tests..."
+#echo $PROXY_IMAGE $UNISWAP_V2_CORE_IMAGE | parallel --halt now,fail=1 --jobs 2 docker run
+#         --rm -ti \
+#         --network=container:proxy \
+#         -e PROXY_URL \
+#         -e EVM_LOADER \
+#         -e SOLANA_URL \
+#         -e FAUCET_URL \
+#         -e EXTRA_GAS=100000 \
+#         -e POSTGRES_DB=neon-db \
+#         -e POSTGRES_USER=neon-proxy \
+#         -e POSTGRES_PASSWORD=neon-proxy-pass \
+#         -e POSTGRES_HOST=postgres \
+#         --entrypoint ./proxy/deploy-test.sh \
+#         ${EXTRA_ARGS:-} \
+#         {} \
+#         all
 
 echo "Run proxy tests..."
 docker run --rm -ti --network=container:proxy \

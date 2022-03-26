@@ -3,7 +3,7 @@ version: "3"
 services:
   solana:
     container_name: solana
-    image: neonlabsorg/solana:${SOLANA_REVISION:-v1.8.12-testnet}
+    image: neonlabsorg/solana:${SOLANA_REVISION:-v1.9.12-testnet}
     environment:
       SOLANA_URL: http://solana:8899
       RUST_LOG: solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
@@ -26,7 +26,7 @@ services:
 
   evm_loader:
     container_name: evm_loader
-    image: neonlabsorg/evm_loader:${EVM_LOADER_REVISION:-latest}
+    image: neonlabsorg/evm_loader:${NEON_EVM_COMMIT:-latest}
     environment:
       - SOLANA_URL=http://solana:8899
     networks:
@@ -53,8 +53,28 @@ services:
       start_period: 5s
     expose:
       - "5432"
+    ports:
+      - "5432"
     networks:
       - net
+
+  dbcreation:
+    container_name: dbcreation
+    image: neonlabsorg/proxy:${REVISION}
+    environment:
+      SOLANA_URL: http://solana:8899
+      POSTGRES_DB: neon-db
+      POSTGRES_USER: neon-proxy
+      POSTGRES_PASSWORD: neon-proxy-pass
+      POSTGRES_HOST: postgres
+    entrypoint: proxy/run-dbcreation.sh
+    networks:
+      - net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      evm_loader:
+        condition: service_completed_successfully
 
   proxy:
     container_name: proxy
@@ -69,13 +89,16 @@ services:
       LOG_NEON_CLI_DEBUG: "YES"
       FUZZING_BLOCKHASH: "YES"
       CONFIG: ci
-      PP_SOLANA_URL: https://api.devnet.solana.com
-      PYTH_MAPPING_ACCOUNT: BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2
+      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
+      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
       MIN_OPERATOR_BALANCE_TO_WARN: 4565760000 # = 913152000 * 5 (5 storage accounts) = 4.56576 SOL
       MIN_OPERATOR_BALANCE_TO_ERR: 913152000 # = solana rent 131072 (= Rent-exempt minimum: 0.913152 SOL) SOLs to create a storage
       MINIMAL_GAS_PRICE: 1
+      OPERATOR_GAS_ACCOUNTS: 0x8966Ef2ae7A109Fd0977F5151b4607dc42929fBD;0x619d670152103a972B67a45b9Be764FF11979E4E
     hostname: proxy
     depends_on:
+      dbcreation:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       evm_loader:
@@ -108,7 +131,7 @@ services:
       TEST_FAUCET_INIT_NEON_BALANCE: 100000
     hostname: faucet
     ports:
-      - 127.0.0.1:3333:3333
+      - 3333
     expose:
       - "3333"
     networks:
@@ -132,8 +155,8 @@ services:
       INDEXER_ERC20_WRAPPER_WHITELIST: ANY
       PRICE_UPDATE_INTERVAL: 10
       START_SLOT: LATEST
-      PP_SOLANA_URL: https://api.mainnet-beta.solana.com
-      PYTH_MAPPING_ACCOUNT: AHtgzX45WTKfkPG53L6WYhGEXwQkN1BVknET3sVsLL8J
+      PP_SOLANA_URL: ${PP_SOLANA_URL:-https://api.devnet.solana.com}
+      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
       MAX_CONFIDENCE_INTERVAL: 0.01
     hostname: airdropper
     entrypoint: ./run-airdropper.sh
@@ -142,6 +165,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      dbcreation:
+        condition: service_completed_successfully
       faucet:
         condition: service_started
 
@@ -159,6 +184,8 @@ services:
       postgres:
         condition: service_healthy
       evm_loader:
+        condition: service_completed_successfully
+      dbcreation:
         condition: service_completed_successfully
     networks:
       - net

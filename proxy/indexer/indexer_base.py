@@ -1,32 +1,41 @@
 import os
 import time
 import traceback
-from solana.rpc.api import Client
 from multiprocessing.dummy import Pool as ThreadPool
-from typing import Dict, Union
 from logged_groups import logged_group
+from typing import Optional
 
 from .trx_receipts_storage import TrxReceiptsStorage
 from .utils import MetricsToLogBuff
+from ..common_neon.solana_interactor import SolanaInteractor
+from ..indexer.sql_dict import SQLDict
 
 from ..environment import RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION
-from ..environment import HISTORY_START, PARALLEL_REQUESTS, FINALIZED
+from ..environment import HISTORY_START, PARALLEL_REQUESTS, FINALIZED, EVM_LOADER_ID
 
 
 @logged_group("neon.Indexer")
 class IndexerBase:
     def __init__(self,
-                 solana_url,
-                 evm_loader_id,
-                 last_slot):
-        self.evm_loader_id = evm_loader_id
-        self.solana_client = Client(solana_url)
+                 solana: SolanaInteractor,
+                 last_slot: int):
+        self.solana = solana
         self.transaction_receipts = TrxReceiptsStorage('transaction_receipts')
-        self.max_known_tx = self.transaction_receipts.max_known_trx()
         self.last_slot = self._init_last_slot('receipt', last_slot)
         self.current_slot = 0
         self.counter_ = 0
         self.count_log = MetricsToLogBuff()
+        self._constants = SQLDict(tablename="constants")
+        self._maximum_tx = self._get_maximum_tx()
+
+    def _get_maximum_tx(self) -> str:
+        if "maximum_tx" in self._constants:
+            return self._constants["maximum_tx"]
+        return ""
+
+    def _set_maximum_tx(self, tx: str):
+        self._maximum_tx = tx
+        self._constants["maximum_tx"] = tx
 
     def _init_last_slot(self, name: str, last_known_slot: int):
         """
@@ -36,7 +45,7 @@ class IndexerBase:
         - NUMBER - first start from the number, then continue from last parsed slot
         """
         last_known_slot = 0 if not isinstance(last_known_slot, int) else last_known_slot
-        latest_slot = self.solana_client.get_slot(commitment=FINALIZED)["result"]
+        latest_slot = self.solana.get_slot(FINALIZED)["result"]
         start_int_slot = 0
         name = f'{name} slot'
 
@@ -69,12 +78,12 @@ class IndexerBase:
         return start_int_slot
 
     def run(self):
-        while (True):
+        while True:
             try:
                 self.process_functions()
             except Exception as err:
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.warning('Exception on submitting transaction. ' +
+                self.warning('Exception on transactions processing. ' +
                              f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
             time.sleep(1.0)
 
@@ -86,24 +95,26 @@ class IndexerBase:
         poll_txs = set()
 
         minimal_tx = None
+        maximum_tx = None
+        maximum_slot = None
         continue_flag = True
-        current_slot = self.solana_client.get_slot(commitment=FINALIZED)["result"]
-
-        max_known_tx = self.max_known_tx
+        current_slot = self.solana.get_slot(commitment=FINALIZED)["result"]
 
         counter = 0
         gathered_signatures = 0
-        while (continue_flag):
-            results = self._get_signatures(minimal_tx, self.max_known_tx[1])
-
-            if len(results) == 0:
+        while continue_flag:
+            results = self._get_signatures(minimal_tx, 1000)
+            len_results = len(results)
+            if len_results == 0:
                 break
 
             minimal_tx = results[-1]["signature"]
-            max_tx = (results[0]["slot"], results[0]["signature"])
-            max_known_tx = max(max_known_tx, max_tx)
+            if maximum_tx is None:
+                tx = results[0]
+                maximum_tx = tx["signature"]
+                maximum_slot = tx["slot"]
 
-            gathered_signatures += len(results)
+            gathered_signatures += len_results
             counter += 1
 
             for tx in results:
@@ -114,8 +125,7 @@ class IndexerBase:
                     continue_flag = False
                     break
 
-                if solana_signature in HISTORY_START:
-                    self.debug(solana_signature)
+                if solana_signature in [HISTORY_START, self._maximum_tx]:
                     continue_flag = False
                     break
 
@@ -127,24 +137,22 @@ class IndexerBase:
 
         self.current_slot = current_slot
         self.counter_ = 0
-        self.max_known_tx = max_known_tx
+        self._set_maximum_tx(maximum_tx)
 
         get_history_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
         self.count_log.print(
             self.debug,
             list_params={"get_history_ms": get_history_ms, "gathered_signatures": gathered_signatures, "counter": counter},
-            latest_params={"max_known_tx": max_known_tx}
+            latest_params={"maximum_tx": maximum_tx, "maximum_slot": maximum_slot}
         )
 
-    def _get_signatures(self, before, until):
-        opts: Dict[str, Union[int, str]] = {}
-        if until is not None:
-            opts["until"] = until
-        if before is not None:
-            opts["before"] = before
-        opts["commitment"] = FINALIZED
-        result = self.solana_client._provider.make_request("getSignaturesForAddress", self.evm_loader_id, opts)
-        return result['result']
+    def _get_signatures(self, before: Optional[str], limit: int) -> []:
+        response = self.solana.get_signatures_for_address(before, limit, FINALIZED)
+        error = response.get('error')
+        result = response.get('result', [])
+        if error:
+            self.warning(f'Fail to get signatures: {error}')
+        return result
 
     def _get_tx_receipts(self, solana_signature):
         # trx = None
@@ -152,7 +160,7 @@ class IndexerBase:
 
         while retry > 0:
             try:
-                trx = self.solana_client.get_confirmed_transaction(solana_signature)['result']
+                trx = self.solana.get_confirmed_transaction(solana_signature)['result']
                 self._add_trx(solana_signature, trx)
                 retry = 0
             except Exception as err:
@@ -170,7 +178,7 @@ class IndexerBase:
         if trx is not None:
             add = False
             for instruction in trx['transaction']['message']['instructions']:
-                if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] == self.evm_loader_id:
+                if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] == EVM_LOADER_ID:
                     add = True
             if add:
                 self.debug((trx['slot'], solana_signature))
