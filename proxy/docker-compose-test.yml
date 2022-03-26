@@ -114,7 +114,7 @@ services:
     entrypoint: proxy/run-test-proxy.sh
     healthcheck:
       test: [ CMD-SHELL, "/opt/health_check_proxy.sh" ]
-      interval: 5s
+      interval: 10s
       timeout: 10s
       retries: 10
       start_period: 5s
@@ -148,7 +148,7 @@ services:
         condition: service_healthy
     healthcheck:
       test: [ CMD-SHELL, "/opt/health_check_faucet.sh" ]
-      interval: 5s
+      interval: 10s
       timeout: 10s
       retries: 10
       start_period: 5s
