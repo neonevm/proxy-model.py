@@ -14,10 +14,6 @@ proxy = Web3(Web3.HTTPProvider(proxy_url))
 eth_account = proxy.eth.account.create('https://github.com/neonlabsorg/proxy-model.py/issues/147')
 proxy.eth.default_account = eth_account.address
 
-SUBSTRING_LOG_ERR_147 = 'Invalid Ethereum transaction nonce:'
-
-SUBSTRING_ERR_484 = 'The account balance is less than required:'
-
 STORAGE_SOLIDITY_SOURCE_147 = '''
 pragma solidity >=0.7.0 <0.9.0;
 /**
@@ -237,17 +233,8 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                     print('response:', response)
                     print('code:', response['code'])
                     self.assertEqual(response['code'], -32002)
-                    print('code:', response['message'])
+                    print('message:', response['message'])
                     self.assertEqual(response['message'][:len(message)], message)
-
-                    # print('substring_err_147:', SUBSTRING_LOG_ERR_147)
-                    # logs = response['data']['logs']
-                    # print('logs:', logs)
-                    # log = [s for s in logs if SUBSTRING_LOG_ERR_147 in s][0]
-                    # print(log)
-                    # self.assertGreater(len(log), len(SUBSTRING_LOG_ERR_147))
-                    # file_name = 'src/entrypoint.rs'
-                    # self.assertTrue(file_name in log)
 
     # @unittest.skip("a.i.")
     def test_05_transfer_one_gwei(self):
@@ -407,7 +394,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         self.assertEqual(alice_balance_after_transfer, alice_balance_before_transfer - one_and_a_half_gweis - gas_cost)
         self.assertEqual(bob_balance_after_transfer, bob_balance_before_transfer + one_and_a_half_gweis)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_07_execute_long_transaction(self):
         print("\ntest_07_execute_long_transaction")
         trx_initValue = self.test_185_solidity_contract.functions.initValue('185 init value').buildTransaction({'nonce': proxy.eth.get_transaction_count(proxy.eth.default_account)})
@@ -481,7 +468,10 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
     def test_08_execute_with_huge_gas(self):
         print("\ntest_08_execute_with_huge_gas_limit")
         nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        trx_store = self.storage_contract.functions.store(147).buildTransaction({'gas': 987654321987654321, 'nonce': nonce, 'gasPrice': 1000000000})
+        trx_store = self.storage_contract.functions.store(147).buildTransaction({
+            'nonce': nonce,
+            'gas': 987654321987654321,
+            'gasPrice': 1000000000})
         print('trx_store:', trx_store)
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
         print('trx_store_signed:', trx_store_signed)
@@ -497,12 +487,9 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             print('response:', response)
             print('code:', response['code'])
             self.assertEqual(response['code'], -32000)
-            substring_err_484 = SUBSTRING_ERR_484
-            print('substring_err_484:', substring_err_484)
             print('message:', response['message'])
-            message = response['message']
-            self.assertTrue(substring_err_484 in message)
-            self.assertGreater(len(message), len(substring_err_484))
+            message = 'insufficient funds for gas * price + value'
+            self.assertEqual(response['message'][:len(message)], message)
 
     # @unittest.skip("a.i.")
     def test_09_prior_eip_155(self):

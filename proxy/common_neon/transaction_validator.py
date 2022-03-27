@@ -27,6 +27,7 @@ class NeonTxValidator:
 
     def prevalidate_tx(self, signer):
         self._prevalidate_tx_nonce()
+        self._prevalidate_sender_balance()
         self._prevalidate_whitelist(signer)
 
     def extract_ethereum_error(self, e: Exception):
@@ -55,6 +56,23 @@ class NeonTxValidator:
                 return
 
         self._raise_nonce_error(self._account_info.trx_count, tx_nonce)
+
+    def _prevalidate_sender_balance(self):
+        if self._account_info:
+            user_balance = self._account_info.balance
+        else:
+            user_balance = 0
+
+        required_balance = self._tx.gasPrice * self._tx.gasLimit + self._tx.value
+
+        if required_balance < user_balance:
+            return
+
+        self._raise_balance_error(user_balance, required_balance)
+
+    def _raise_balance_error(self, user_balance: int, required_balance: int):
+        message = 'insufficient funds for gas * price + value'
+        raise EthereumError(f"{message}: address {self._sender} have {user_balance} want {required_balance}")
 
     def _raise_nonce_error(self, account_tx_count: int, tx_nonce: int):
         if self.MAX_U64 in (account_tx_count, tx_nonce):
