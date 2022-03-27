@@ -122,7 +122,8 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
     def deploy_test_185_solidity_contract(self):
         compiled_sol = compile_source(SOLIDITY_SOURCE_185)
         contract_id, contract_interface = compiled_sol.popitem()
-        test_185_solidity_contract = proxy.eth.contract(abi=contract_interface['abi'], bytecode=contract_interface['bin'])
+        test_185_solidity_contract = proxy.eth.contract(
+            abi=contract_interface['abi'], bytecode=contract_interface['bin'])
         trx_deploy = proxy.eth.account.sign_transaction(dict(
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
@@ -195,17 +196,29 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
     def test_03_execute_with_low_gas(self):
         print("\ntest_03_execute_with_low_gas")
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        trx_store = self.storage_contract.functions.store(148).buildTransaction({'nonce': right_nonce, 'gasPrice': 1000000000, 'gas': 0})
+        trx_store = self.storage_contract.functions.store(148).buildTransaction({
+            'nonce': right_nonce,
+            'gasPrice': 1000000000,
+            'gas': 0})
         print('trx_store:', trx_store)
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
         print('trx_store_signed:', trx_store_signed)
 
-        trx_store_hash = proxy.eth.send_raw_transaction(trx_store_signed.rawTransaction)
-        print(trx_store_hash)
-        print('trx_store_hash:', trx_store_hash.hex())
-        trx_store_receipt = proxy.eth.wait_for_transaction_receipt(trx_store_hash)
-        print('trx_store_receipt (low_gas):', trx_store_receipt)
-        self.assertEqual(trx_store_receipt['status'], 0)  # false Transaction mined but execution failed
+        try:
+            trx_store_hash = proxy.eth.send_raw_transaction(trx_store_signed.rawTransaction)
+            print('trx_store_hash:', trx_store_hash)
+            self.assertTrue(False)
+        except Exception as e:
+            print('type(e):', type(e))
+            print('e:', e)
+            import json
+            response = json.loads(str(e).replace('\'', '\"').replace('None', 'null'))
+            print('response:', response)
+            print('code:', response['code'])
+            self.assertEqual(response['code'], -32000)
+            print('message:', response['message'])
+            message = 'gas limit reached'
+            self.assertEqual(response['message'][:len(message)], message)
 
     # @unittest.skip("a.i.")
     def test_04_execute_with_bad_nonce(self):
@@ -397,7 +410,9 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_07_execute_long_transaction(self):
         print("\ntest_07_execute_long_transaction")
-        trx_initValue = self.test_185_solidity_contract.functions.initValue('185 init value').buildTransaction({'nonce': proxy.eth.get_transaction_count(proxy.eth.default_account)})
+        contract = self.test_185_solidity_contract
+        trx_initValue = contract.functions.initValue('185 init value').buildTransaction({
+            'nonce': proxy.eth.get_transaction_count(proxy.eth.default_account)})
         print('trx_initValue:', trx_initValue)
         trx_initValue_signed = proxy.eth.account.sign_transaction(trx_initValue, eth_account.key)
         print('trx_initValue_signed:', trx_initValue_signed)
@@ -406,15 +421,16 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_initValue_receipt = proxy.eth.wait_for_transaction_receipt(trx_initValue_hash)
         print('trx_initValue_hash_receipt:', trx_initValue_receipt)
 
-        value = self.test_185_solidity_contract.functions.getValue().call()
+        value = contract.functions.getValue().call()
         print('value:', value.hex())
         self.assertEqual(value.hex(), '36fb9ea61aba18555110881836366c8d7701685174abe4926673754580ee26c5')
 
         from datetime import datetime
         start = datetime.now()
 
-        times_to_calculate = 10
-        trx_calculate = self.test_185_solidity_contract.functions.calculateKeccakAndStore(times_to_calculate).buildTransaction({'nonce': proxy.eth.get_transaction_count(proxy.eth.default_account)})
+        times_to_calculate = 1000
+        trx_calculate = contract.functions.calculateKeccakAndStore(times_to_calculate).buildTransaction({
+            'nonce': proxy.eth.get_transaction_count(proxy.eth.default_account)})
         print('trx_calculate:', trx_calculate)
         trx_calculate_signed = proxy.eth.account.sign_transaction(trx_calculate, eth_account.key)
         print('trx_calculate_signed:', trx_calculate_signed)
@@ -425,12 +441,13 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
 
         time_duration = datetime.now() - start
 
-        value = self.test_185_solidity_contract.functions.getValue().call()
+        value = contract.functions.getValue().call()
         print('value:', value.hex())
-        self.assertEqual(value.hex(), 'e6d201b1e3aab3b3cc100ea7a0b76fcbb3c2fef88fc4e540f9866d8d2e6e2131')
+        self.assertEqual(value.hex(), 'a6bfac152f9071fbc21a73ca991a28898ec14f4df54c01cad49daf05d4012b4c')
         print('times_to_calculate:', times_to_calculate)
         print('time_duration:', time_duration)
 
+    # @unittest.skip("a.i.")
     def test_get_storage_at(self):
         print("\nhttps://github.com/neonlabsorg/proxy-model.py/issues/289")
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)

@@ -99,7 +99,8 @@ class EthereumModel:
     def eth_estimateGas(self, param):
         try:
             calculator = GasEstimate(param, self._solana)
-            return calculator.estimate()
+            calculator.execute()
+            return hex(calculator.estimate())
 
         except EthereumError:
             raise

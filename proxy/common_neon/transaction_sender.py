@@ -496,7 +496,8 @@ class NeonTxSender:
         self._resource_list.init_resource_info()
 
         self._validate_pend_tx()
-        self._neon_tx_validator.prevalidate_tx(self.signer)
+        self._call_emulated()
+        self._neon_tx_validator.prevalidate_tx(self.signer, self._emulator_json)
 
     def _validate_pend_tx(self):
         operator = f'{str(self.resource.public_key())}:{self.resource.rid}'
@@ -544,8 +545,6 @@ class NeonTxSender:
         self._db.submit_transaction(neon_tx, neon_res)
 
     def _prepare_execution(self):
-        self._call_emulated()
-
         # Parse information from the emulator output
         self._parse_accounts_list()
         self._parse_token_list()

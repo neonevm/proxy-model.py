@@ -6,6 +6,10 @@ from .address import EthereumAddress
 from .errors import EthereumError
 from .account_whitelist import AccountWhitelist
 from .solana_receipt_parser import SolReceiptParser
+from .solana_interactor import SolanaInteractor
+from .estimate import GasEstimate
+
+from solana.account import Account as SolanaAccount
 
 from ..environment import ACCOUNT_PERMISSION_UPDATE_INT
 
@@ -14,7 +18,7 @@ from ..environment import ACCOUNT_PERMISSION_UPDATE_INT
 class NeonTxValidator:
     MAX_U64 = pow(2, 64)
 
-    def __init__(self, solana, tx: EthTx):
+    def __init__(self, solana: SolanaInteractor, tx: EthTx):
         self._solana = solana
         self._tx = tx
 
@@ -25,10 +29,18 @@ class NeonTxValidator:
         if self._deployed_contract:
             self._deployed_contract = '0x' + self._deployed_contract
 
-    def prevalidate_tx(self, signer):
+        self._to_address = tx.toAddress.hex()
+        if self._to_address:
+            self._to_address = '0x' + self._to_address
+
+        self._tx_hash = '0x' + self._tx.hash_signed().hex()
+
+    def prevalidate_tx(self, signer: SolanaAccount, emulator_json: dict):
+        self._prevalidate_whitelist(signer)
+
         self._prevalidate_tx_nonce()
         self._prevalidate_sender_balance()
-        self._prevalidate_whitelist(signer)
+        self._prevalidate_gas_usage(emulator_json)
 
     def extract_ethereum_error(self, e: Exception):
         receipt_parser = SolReceiptParser(e)
@@ -68,11 +80,25 @@ class NeonTxValidator:
         if required_balance < user_balance:
             return
 
-        self._raise_balance_error(user_balance, required_balance)
-
-    def _raise_balance_error(self, user_balance: int, required_balance: int):
         message = 'insufficient funds for gas * price + value'
         raise EthereumError(f"{message}: address {self._sender} have {user_balance} want {required_balance}")
+
+    def _prevalidate_gas_usage(self, emulator_json: dict):
+        request = {
+            'from': self._sender,
+            'to': self._to_address,
+            'data': self._tx.callData.hex(),
+            'value': hex(self._tx.value)
+        }
+
+        calculator = GasEstimate(request, self._solana)
+        calculator.emulator_json = emulator_json
+        gas = calculator.estimate()
+        if gas <= self._tx.gasLimit:
+            return
+
+        message = 'gas limit reached'
+        raise EthereumError(f"{message}: have {self._tx.gasLimit} want {gas}")
 
     def _raise_nonce_error(self, account_tx_count: int, tx_nonce: int):
         if self.MAX_U64 in (account_tx_count, tx_nonce):
@@ -84,6 +110,3 @@ class NeonTxValidator:
 
         raise EthereumError(code=-32002,
                             message=f'{message}: address {self._sender}, tx: {tx_nonce} state: {account_tx_count}')
-
-
-
