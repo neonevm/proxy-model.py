@@ -57,13 +57,14 @@ PYTH_MAPPING_ACCOUNT = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
 if PYTH_MAPPING_ACCOUNT is not None:
     PYTH_MAPPING_ACCOUNT = PublicKey(PYTH_MAPPING_ACCOUNT)
 
-class CliBase:
 
+class CliBase:
     def run_cli(self, cmd: List[str], **kwargs) -> bytes:
         self.debug("Calling: " + " ".join(cmd))
         proc_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
         if proc_result.stderr is not None:
             print(proc_result.stderr, file=sys.stderr)
+        proc_result.check_returncode()
         return proc_result.stdout
 
 
@@ -124,7 +125,6 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
 
 @logged_group("neon.Proxy")
 class neon_cli(CliBase):
-
     def call(self, *args):
         try:
             ctx = json.dumps(LogMng.get_logging_context())
