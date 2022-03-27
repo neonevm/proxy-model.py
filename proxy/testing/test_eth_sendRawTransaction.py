@@ -211,7 +211,6 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         except Exception as e:
             print('type(e):', type(e))
             print('e:', e)
-            import json
             response = json.loads(str(e).replace('\'', '\"').replace('None', 'null'))
             print('response:', response)
             print('code:', response['code'])
@@ -241,7 +240,6 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 except Exception as e:
                     print('type(e):', type(e))
                     print('e:', e)
-                    import json
                     response = json.loads(str(e).replace('\'', '\"').replace('None', 'null'))
                     print('response:', response)
                     print('code:', response['code'])
@@ -499,7 +497,6 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         except Exception as e:
             print('type(e):', type(e))
             print('e:', e)
-            import json
             response = json.loads(str(e).replace('\'', '\"').replace('None', 'null'))
             print('response:', response)
             print('code:', response['code'])
@@ -538,6 +535,43 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         print('balance_after_transfer:', balance_after_transfer)
 
         self.assertLessEqual(balance_after_transfer, balance_before_transfer + eth_utils.denoms.gwei)
+
+    # @unittest.skip("a.i.")
+    def test_10_transfer_not_enough_funds(self):
+        print("\ntest_10_transfer_not_enough_funds")
+
+        eth_account_alice = proxy.eth.account.create('alice.whale')
+        eth_account_bob = proxy.eth.account.create('bob.carp')
+        print('eth_account_alice.address:', eth_account_alice.address)
+        print('eth_account_bob.address:', eth_account_bob.address)
+        request_airdrop(eth_account_alice.address)
+
+        tx_transfer = proxy.eth.account.sign_transaction(
+            {
+                "nonce": proxy.eth.get_transaction_count(eth_account_alice.address),
+                "chainId": proxy.eth.chain_id,
+                "gas": 987654321,
+                "gasPrice": 1000000000,
+                "to": eth_account_bob.address,
+                "value": proxy.eth.get_balance(eth_account_alice.address) + 1,
+            },
+            eth_account_alice.key
+        )
+        print('trx_transfer:', tx_transfer)
+        try:
+            tx_transfer_hash = proxy.eth.send_raw_transaction(tx_transfer.rawTransaction)
+            print('trx_transfer_hash:', tx_transfer_hash.hex())
+            self.assertTrue(False)
+        except Exception as e:
+            print('type(e):', type(e))
+            print('e:', e)
+            response = json.loads(str(e).replace('\'', '\"').replace('None', 'null'))
+            print('response:', response)
+            print('code:', response['code'])
+            self.assertEqual(response['code'], -32000)
+            print('message:', response['message'])
+            message = 'insufficient funds for transfer'
+            self.assertEqual(response['message'][:len(message)], message)
 
 
 if __name__ == '__main__':

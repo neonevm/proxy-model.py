@@ -80,7 +80,11 @@ class NeonTxValidator:
         if required_balance < user_balance:
             return
 
-        message = 'insufficient funds for gas * price + value'
+        if len(self._tx.callData) == 0:
+            message = 'insufficient funds for transfer'
+        else:
+            message = 'insufficient funds for gas * price + value'
+
         raise EthereumError(f"{message}: address {self._sender} have {user_balance} want {required_balance}")
 
     def _prevalidate_gas_usage(self, emulator_json: dict):
