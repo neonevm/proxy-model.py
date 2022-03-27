@@ -11,12 +11,13 @@ from .estimate import GasEstimate
 
 from solana.account import Account as SolanaAccount
 
-from ..environment import ACCOUNT_PERMISSION_UPDATE_INT
+from ..environment import ACCOUNT_PERMISSION_UPDATE_INT, CHAIN_ID
 
 
 @logged_group("neon.Proxy")
 class NeonTxValidator:
     MAX_U64 = pow(2, 64)
+    MAX_U256 = pow(2, 256)
 
     def __init__(self, solana: SolanaInteractor, tx: EthTx):
         self._solana = solana
@@ -39,6 +40,9 @@ class NeonTxValidator:
         self._prevalidate_whitelist(signer)
 
         self._prevalidate_tx_nonce()
+        self._prevalidate_tx_gas()
+        self._prevalidate_tx_chain_id()
+        self._prevalidate_tx_size()
         self._prevalidate_sender_balance()
         self._prevalidate_gas_usage(emulator_json)
 
@@ -52,11 +56,25 @@ class NeonTxValidator:
         w = AccountWhitelist(self._solana, ACCOUNT_PERMISSION_UPDATE_INT, signer)
         if not w.has_client_permission(self._sender[2:]):
             self.warning(f'Sender account {self._sender} is not allowed to execute transactions')
-            raise RuntimeError(f'Sender account {self._sender} is not allowed to execute transactions')
+            raise EthereumError(message=f'Sender account {self._sender} is not allowed to execute transactions')
 
         if (self._deployed_contract is not None) and (not w.has_contract_permission(self._deployed_contract[2:])):
             self.warning(f'Contract account {self._deployed_contract} is not allowed for deployment')
-            raise RuntimeError(f'Contract account {self._deployed_contract} is not allowed for deployment')
+            raise EthereumError(message=f'Contract account {self._deployed_contract} is not allowed for deployment')
+
+    def _prevalidate_tx_gas(self):
+        if self._tx.gasLimit > self.MAX_U64:
+            raise EthereumError(message='gas uint64 overflow')
+        if (self._tx.gasLimit * self._tx.gasPrice) > self.MAX_U256 - 1:
+            raise EthereumError(message='max fee per gas higher than 2^256-1')
+
+    def _prevalidate_tx_chain_id(self):
+        if self._tx.chainId() not in (None, CHAIN_ID):
+            raise EthereumError(message='wrong chain id')
+
+    def _prevalidate_tx_size(self):
+        if len(self._tx.callData) > (128 * 1024 - 1024):
+            raise EthereumError(message='transaction size is too big')
 
     def _prevalidate_tx_nonce(self):
         if not self._account_info:
@@ -68,6 +86,13 @@ class NeonTxValidator:
                 return
 
         self._raise_nonce_error(self._account_info.trx_count, tx_nonce)
+
+    def _prevalidate_sender_eoa(self):
+        if not self._account_info:
+            return
+
+        if self._account_info.code_account:
+            raise EthereumError("sender not an eoa")
 
     def _prevalidate_sender_balance(self):
         if self._account_info:
