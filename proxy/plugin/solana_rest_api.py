@@ -28,7 +28,8 @@ from typing import List, Tuple
 
 from .solana_rest_api_tools import neon_config_load
 from ..common_neon.transaction_sender import NeonTxSender
-from ..common_neon.solana_interactor import SolanaInteractor, SolTxError
+from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_receipt_parser import SolTxError
 from ..common_neon.address import EthereumAddress
 from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError, PendingTxError
