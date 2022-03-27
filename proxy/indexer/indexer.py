@@ -130,7 +130,6 @@ class NeonTxObject(BaseEvmObject):
         self.storage_account = storage_account
         self.neon_tx = (neon_tx or NeonTxInfo())
         self.neon_res = (neon_res or NeonTxResultInfo())
-        self.step_count = []
         self.holder_account = ''
         self.blocked_accounts = []
         self.canceled = False
@@ -576,7 +575,6 @@ class PartialCallIxDecoder(DummyIxDecoder):
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
         tx = self._getadd_tx(storage_account, neon_tx=neon_tx, blocked_accounts=blocked_accounts)
-        tx.step_count.append(step_count)
 
         self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
@@ -610,7 +608,6 @@ class ContinueIxDecoder(DummyIxDecoder):
         step_count = int.from_bytes(self.ix.ix_data[5:13], 'little')
 
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
-        tx.step_count.append(step_count)
 
         self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
@@ -641,7 +638,6 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
         tx = self._init_tx_from_holder(holder_account, storage_account, blocked_accounts)
         if not tx:
             return self._decoding_skip(f'fail to init in storage {storage_account} from holder {holder_account}')
-        tx.step_count.append(step_count)
 
         self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
@@ -701,7 +697,6 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
         tx = self._init_tx_from_holder(holder_account, storage_account, blocked_accounts)
         if not tx:
             return self._decoding_skip(f'fail to init the storage {storage_account} from the holder {holder_account}')
-        tx.step_count.append(step_count)
 
         self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
