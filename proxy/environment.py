@@ -32,8 +32,7 @@ RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION = max(int(os.environ.get("RETRY_O
 FUZZING_BLOCKHASH = os.environ.get("FUZZING_BLOCKHASH", "NO") == "YES"
 CONFIRM_TIMEOUT = max(int(os.environ.get("CONFIRM_TIMEOUT", 10)), 10)
 PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", "2"))
-DEVNET_HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn"
-HISTORY_START = [DEVNET_HISTORY_START]
+HISTORY_START = "7BdwyUQ61RUZP63HABJkbW66beLk22tdXnP69KsvQBJekCPVaHoJY47Rw68b3VV1UbQNHxX3uxUSLfiJrfy2bTn"
 START_SLOT = os.environ.get('START_SLOT', 0)
 FINALIZED = os.environ.get('FINALIZED', 'finalized')
 CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", "60"))
@@ -52,18 +51,20 @@ MIN_OPERATOR_BALANCE_TO_ERR = max(int(os.environ.get("MIN_OPERATOR_BALANCE_TO_ER
 SKIP_PREFLIGHT = os.environ.get("SKIP_PREFLIGHT", "NO") == "YES"
 CONTRACT_EXTRA_SPACE = int(os.environ.get("CONTRACT_EXTRA_SPACE", 2048))
 EVM_STEP_COUNT = int(os.environ.get("EVM_STEP_COUNT", 750))  # number of evm-steps, performed by one iteration
+ENABLE_PRIVATE_API = os.environ.get("ENABLE_PRIVATE_API", "NO") == "YES"
 
 PYTH_MAPPING_ACCOUNT = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
 if PYTH_MAPPING_ACCOUNT is not None:
     PYTH_MAPPING_ACCOUNT = PublicKey(PYTH_MAPPING_ACCOUNT)
 
-class CliBase:
 
+class CliBase:
     def run_cli(self, cmd: List[str], **kwargs) -> bytes:
         self.debug("Calling: " + " ".join(cmd))
         proc_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
         if proc_result.stderr is not None:
             print(proc_result.stderr, file=sys.stderr)
+        proc_result.check_returncode()
         return proc_result.stdout
 
 
@@ -124,7 +125,6 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
 
 @logged_group("neon.Proxy")
 class neon_cli(CliBase):
-
     def call(self, *args):
         try:
             ctx = json.dumps(LogMng.get_logging_context())
@@ -150,11 +150,14 @@ class neon_cli(CliBase):
             raise
 
 
-def read_elf_params(out_dict):
+@logged_group("neon.Proxy")
+def read_elf_params(out_dict, *, logger):
+    logger.debug("Read ELF params")
     for param in neon_cli().call("neon-elf-params").splitlines():
         if param.startswith('NEON_') and '=' in param:
             v = param.split('=')
             out_dict[v[0]] = v[1]
+            logger.debug(f"ELF param: {v[0]}: {v[1]}")
 
 
 ELF_PARAMS = {}
