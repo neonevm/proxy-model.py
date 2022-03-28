@@ -393,7 +393,7 @@ class EthereumModel:
             tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             tx_sender.execute()
             sol_acc, neon_acc, new_accs = tx_sender.get_stat_values()
-            self._stat_tx_end( ( operator_sol_balance, str(sol_acc), operator_neon_balance, str(neon_acc) ) )
+            self._stat_tx_end( ( operator_sol_balance, str(sol_acc), operator_neon_balance, str(neon_acc) ), new_accs )
             return eth_signature
 
         except PendingTxError as err:
@@ -418,7 +418,7 @@ class EthereumModel:
         self.stat_exporter.stat_commit_tx_begin()
         return self._stat_operator_balance()
 
-    def _stat_tx_end(self, pre_balance: Tuple[Dict[str, Decimal], str, Dict[str, Decimal], str] = None):
+    def _stat_tx_end(self, pre_balance: Tuple[Dict[str, Decimal], str, Dict[str, Decimal], str] = None, holder_accounts: Dict[str, int] = None):
         post_sol_balance, post_neon_balance = self._stat_operator_balance()
         if pre_balance is not None:
             pre_sol_balance, sol_acc, pre_neon_balance, neon_acc = pre_balance
@@ -428,6 +428,9 @@ class EthereumModel:
             self.stat_exporter.stat_commit_tx_balance_change(sol_acc, sol_diff, neon_acc, neon_diff)
         else:
             self.stat_exporter.stat_commit_tx_end_failed(None)
+        if holder_accounts:
+            for acc, rent in holder_accounts.items():
+                self.stat_exporter.stat_commit_create_resource_account(str(acc), Decimal(rent) / 1_000_000_000)
 
     def _stat_operator_balance(self) -> Tuple[Dict[str, Decimal], Dict[str, Decimal]]:
         operator_accounts = get_solana_accounts()
