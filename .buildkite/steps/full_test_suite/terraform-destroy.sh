@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# error handler
 handle_error() {
   if [[ $? -ne 0 ]]
   then
