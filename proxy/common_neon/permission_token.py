@@ -3,12 +3,11 @@ from solana.account import Account as SolanaAccount
 from spl.token.instructions import get_associated_token_address
 from proxy.common_neon.address import EthereumAddress, ether2program
 from typing import Union
-from solana.transaction import Transaction
 import spl.token.instructions as spl_token
-from proxy.common_neon.solana_interactor import SolanaInteractor, SolTxListSender
+from proxy.common_neon.solana_interactor import SolanaInteractor
+from proxy.common_neon.solana_tx_list_sender import SolTxListSender
 from decimal import Decimal
 import os
-
 from .compute_budget import TransactionWithComputeBudget
 
 class PermissionToken:
