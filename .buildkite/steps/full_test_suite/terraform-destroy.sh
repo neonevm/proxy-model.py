@@ -1,11 +1,10 @@
 #!/bin/bash
 
 # error handler
-check_res() {
+handle_error() {
   if [[ $? -ne 0 ]]
   then
-    # Print error message and interrupt script
-    echo "Interrupt at step: $1"
+    echo "Interrupt at step. $1"
     exit 1
   fi
 }
@@ -18,16 +17,17 @@ cd .buildkite/steps/full_test_suite
 export SSH_KEY="~/.ssh/ci-stands"
 export ARTIFACTS_LOGS="./logs"
 mkdir -p $ARTIFACTS_LOGS
-check_res "Create directory for logs '$ARTIFACTS_LOGS'"
+handle_error "Failed to create artifacts dir at: '$ARTIFACTS_LOGS'"
 
 
 # solana
 export REMOTE_HOST=`buildkite-agent meta-data get "SOLANA_IP"`
 ssh-keyscan -H $REMOTE_HOST >> ~/.ssh/known_hosts
+handle_error "Can't scan host for fingerprint"
 ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} 'sudo docker logs solana > /tmp/solana.log 2>&1'
-check_res "Dump solana logs to the file"
+handle_error "Failed to dump logs remotely at: ' ubuntu@${REMOTE_HOST}' with key file: '${SSH_KEY}'"
 scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/solana.log ${ARTIFACTS_LOGS}
-check_res "Retrieve log file for atrifact"
+handle_error "Retrieve log file for atrifact"
 
 
 # proxy
@@ -39,9 +39,9 @@ for service in "${services[@]}"
 do
    echo "$service"
    ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} "sudo docker logs $service > /tmp/$service.log 2>&1"
-   check_res "Dump $service log to the file"
+   handle_error "Dump $service log to the file"
    scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/$service.log ${ARTIFACTS_LOGS}
-   check_res "Retrieve log file from service $service"
+   handle_error "Retrieve log file from service $service"
 done
 
 export NEON_EVM_COMMIT=${NEON_EVM_COMMIT:-latest}
@@ -56,9 +56,9 @@ export TFSTATE_KEY="tests/test-$BUILDKITE_COMMIT"
 export TFSTATE_REGION="us-east-2"
 export TF_BACKEND_CONFIG="-backend-config="bucket=${TFSTATE_BUCKET}" -backend-config="key=${TFSTATE_KEY}" -backend-config="region=${TFSTATE_REGION}""
 terraform init $TF_BACKEND_CONFIG
-check_res "Terraform init step"
+handle_error "Failed to proceed the terraform init step. TF_BACKEND_CONFIG: ${TF_BACKEND_CONFIG}"
 terraform destroy --auto-approve=true
-check_res "Terraform destroy step"
+handle_error "Failed to proceed terraform destroy step"
 
 
 # info
