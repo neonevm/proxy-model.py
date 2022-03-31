@@ -25,8 +25,8 @@ declare -a services=("evm_loader" "postgres" "dbcreation" "indexer" "proxy" "fau
 for service in "${services[@]}"
 do
    echo "$service"
-   ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} "sudo docker logs $service > /tmp/$service.log 2>&1"
-   scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/$service.log ${ARTIFACTS_LOGS}
+   ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} "sudo docker logs $service 2>&1 | bzip2 > /tmp/$service.log.bz2"
+   scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/$service.log.bz2 ${ARTIFACTS_LOGS}
 done
 
 export NEON_EVM_COMMIT=${NEON_EVM_COMMIT:-latest}
