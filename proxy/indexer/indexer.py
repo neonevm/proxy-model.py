@@ -100,15 +100,19 @@ class SolanaIxInfo:
 class BaseEvmObject:
     def __init__(self):
         self.used_ixs = []
+        self.ixs_cost = []
         self.slot = 0
 
     def mark_ix_used(self, ix_info: SolanaIxInfo):
         self.used_ixs.append(ix_info.sign)
+        self.ixs_cost.append(ix_info.cost_info)
         self.slot = max(self.slot, ix_info.sign.slot)
 
     def move_ix_used(self, obj):
         self.used_ixs += obj.used_ixs
+        self.ixs_cost += obj.ixs_cost
         obj.used_ixs.clear()
+        obj.ixs_cost.clear()
         self.slot = max(self.slot, obj.slot)
 
 
@@ -175,6 +179,7 @@ class ReceiptsParserState:
         self._holder_table = {}
         self._tx_table = {}
         self._done_tx_list = []
+        self.stat_info = []
         self._used_ixs = {}
         self.ix = SolanaIxInfo(sign='', slot=-1, tx=None)
 
@@ -242,6 +247,7 @@ class ReceiptsParserState:
             if tx.neon_tx.is_valid() and tx.neon_res.is_valid():
                 with logging_context(neon_tx=tx.neon_tx.sign[:7]):
                     self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
+                    self.stat_info.append(copy.deepcopy(tx))
             self.del_tx(tx)
         self._done_tx_list.clear()
 
@@ -260,6 +266,11 @@ class ReceiptsParserState:
 
     def add_account_to_db(self, neon_account: NeonAccountInfo):
         self._db.fill_account_info_by_indexer(neon_account)
+
+    def iter_stat_info(self) -> Iterator[NeonTxObject]:
+        for tx in self.stat_info:
+            yield tx
+        self.stat_info.clear()
 
 
 @logged_group("neon.Indexer")
@@ -770,6 +781,7 @@ class Indexer(IndexerBase):
         self.process_receipts()
         self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
+        self.commit_statistics()
 
     def process_receipts(self):
         tx_costs = []
@@ -796,7 +808,6 @@ class Indexer(IndexerBase):
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
             tx_costs.append(ix_info.cost_info)
-
 
         self.indexed_slot = last_block_slot
         self.db.set_min_receipt_slot(self.state.find_min_used_slot(self.indexed_slot))
@@ -851,6 +862,9 @@ class Indexer(IndexerBase):
         tx.canceled = True
         return True
 
+    def commit_statistics(self):
+        for stat_info in self.state.iter_stat_info():
+            pass
 
 @logged_group("neon.Indexer")
 def run_indexer(solana_url, *, logger):
