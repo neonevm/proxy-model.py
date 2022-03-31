@@ -41,8 +41,8 @@ from ..memdb.memdb import MemDB
 from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx
 
-from ..statistics_exporter.common_metrics import StatisticsExporter
-from ..statistics_exporter.prometheus_exporter import PrometheusExporter
+from ..statistics_exporter.proxy_metrics_interface import ProxyStatisticsExporter
+from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -74,7 +74,7 @@ class EthereumModel:
 
         neon_config_load(self)
 
-    def set_stat_exporter(self, stat_exporter: StatisticsExporter):
+    def set_stat_exporter(self, stat_exporter: ProxyStatisticsExporter):
         self.stat_exporter = stat_exporter
 
     def neon_proxy_version(self):

@@ -1,9 +1,12 @@
-from typing import Optional
+import copy
+from typing import Iterator, Optional
 
 import base58
 import time
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
+
+from proxy.statistics_exporter.prometheus_indexer_exporter import PrometheusExporter
 
 from ..indexer.accounts_db import NeonAccountInfo
 from ..indexer.indexer_base import IndexerBase
@@ -745,6 +748,7 @@ class Indexer(IndexerBase):
         self.blocked_storages = {}
         self.block_indexer = BlocksIndexer(db=self.db, solana=solana)
         self.counted_logger = MetricsToLogBuff()
+        self.stat_exporter = PrometheusExporter()
 
         self.state = ReceiptsParserState(db=self.db, solana=solana)
         self.ix_decoder_map = {
@@ -864,7 +868,22 @@ class Indexer(IndexerBase):
 
     def commit_statistics(self):
         for stat_info in self.state.iter_stat_info():
-            pass
+            neon_tx_hash = stat_info.neon_tx.sign
+            self.stat_exporter.stat_commit_tx_count(True if stat_info.neon_res.status == '0x0' else False)
+            for sign_info, cost_info in zip(stat_info.used_ixs, stat_info.ixs_cost):
+                sol_tx_hash = sign_info.sign
+                self.stat_exporter.stat_commit_tx_sol_spent(neon_tx_hash, sol_tx_hash, cost_info.sol_spent)
+                self.stat_exporter.stat_commit_tx_steps_bpf(neon_tx_hash, sol_tx_hash, sign_info.steps, cost_info.bpf)
+            if stat_info.holder_account != '':
+                tx_type = 'holder'
+            elif stat_info.storage_account != '':
+                tx_type = 'iterative'
+            else:
+                tx_type = 'single'
+            self.stat_exporter.stat_commit_count_sol_tx_per_neon_tx(tx_type, len(stat_info.used_ixs))
+        self.stat_exporter.stat_commit_postgres_availability(self.solana.status())
+        self.stat_exporter.stat_commit_solana_rpc_health(self.db.status())
+
 
 @logged_group("neon.Indexer")
 def run_indexer(solana_url, *, logger):

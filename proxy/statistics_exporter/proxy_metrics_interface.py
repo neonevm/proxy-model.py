@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 
 
-class StatisticsExporter(ABC):
+class ProxyStatisticsExporter(ABC):
 
     @abstractmethod
     def stat_commit_request_and_timeout(self, method: str, latency: float):
