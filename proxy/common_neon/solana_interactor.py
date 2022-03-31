@@ -135,6 +135,14 @@ class SolanaInteractor:
 
         return full_response_data
 
+    def status(self) -> bool:
+        try:
+            if self._send_rpc_request('getHealth')['result'] == 'ok':
+                return True
+            return False
+        except:
+            return False
+
     def get_signatures_for_address(self, before: Optional[str], limit: int, commitment='confirmed') -> []:
         opts: Dict[str, Union[int, str]] = {}
         if before is not None:
