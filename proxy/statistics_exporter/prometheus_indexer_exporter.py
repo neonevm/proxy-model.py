@@ -5,7 +5,7 @@ from .indexer_metrics_interface import IndexerStatisticsExporter
 class PrometheusExporter(IndexerStatisticsExporter):
     registry = CollectorRegistry()
     TX_SOL_SPENT = Histogram(
-        'tx_sol_spent', 'How many SOLs being spend in Neon transaction per iteration',
+        'tx_sol_spent', 'How many lamports being spend in Neon transaction per iteration',
         ['neon_tx_hash', 'sol_tx_hash'],
         registry=registry
     )
