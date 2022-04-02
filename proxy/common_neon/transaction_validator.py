@@ -36,7 +36,7 @@ class NeonTxValidator:
 
         self._tx_hash = '0x' + self._tx.hash_signed().hex()
 
-    def prevalidate_tx(self, signer: SolanaAccount, emulator_json: dict):
+    def prevalidate_tx(self, signer: SolanaAccount):
         self._prevalidate_whitelist(signer)
 
         self._prevalidate_tx_nonce()
@@ -44,6 +44,8 @@ class NeonTxValidator:
         self._prevalidate_tx_chain_id()
         self._prevalidate_tx_size()
         self._prevalidate_sender_balance()
+
+    def prevalidate_emulator(self, emulator_json: dict):
         self._prevalidate_gas_usage(emulator_json)
 
     def extract_ethereum_error(self, e: Exception):
