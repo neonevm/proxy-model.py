@@ -534,8 +534,9 @@ class NeonTxSender:
         self._resource_list.init_resource_info()
 
         self._validate_pend_tx()
+        self._neon_tx_validator.prevalidate_tx(self.signer)
         self._call_emulated()
-        self._neon_tx_validator.prevalidate_tx(self.signer, self._emulator_json)
+        self._neon_tx_validator.prevalidate_emulator(self._emulator_json)
 
     def _validate_pend_tx(self):
         operator = f'{str(self.resource.public_key())}:{self.resource.rid}'
