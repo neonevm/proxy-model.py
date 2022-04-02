@@ -13,7 +13,7 @@ mkdir -p $ARTIFACTS_LOGS
 # solana
 export REMOTE_HOST=`buildkite-agent meta-data get "SOLANA_IP"`
 ssh-keyscan -H $REMOTE_HOST >> ~/.ssh/known_hosts
-ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} 'sudo docker logs solana | pbzip2 > /tmp/solana.log.bz2'
+ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} 'sudo docker logs solana 2>&1 | pbzip2 > /tmp/solana.log.bz2'
 scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/solana.log.bz2 ${ARTIFACTS_LOGS}
 
 
@@ -25,7 +25,7 @@ declare -a services=("evm_loader" "postgres" "dbcreation" "indexer" "proxy" "fau
 for service in "${services[@]}"
 do
    echo "$service"
-   ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} "sudo docker logs $service | pbzip2 > /tmp/$service.log.bz2"
+   ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} "sudo docker logs $service 2>&1 | pbzip2 > /tmp/$service.log.bz2"
    scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/$service.log.bz2 ${ARTIFACTS_LOGS}
 done
 
