@@ -16,20 +16,20 @@ steps:
 
   - wait
 
-#  - label: ":cop::skin-tone-2: deploy check"
-#    command: ".buildkite/steps/deploy-test.sh"
-#    timeout: 90
-#    agents:
-#       queue: "testing"
-#    artifact_paths:
-#      - "proxy.log"
-#      - "solana.log"
-#      - "measurements.log"
-#      - "evm_loader.log"
-#      - "dbcreation.log"
-#      - "faucet.log"
-#      - "airdropper.log"
-#      - "indexer.log"
+  - label: ":cop::skin-tone-2: deploy check"
+    command: ".buildkite/steps/deploy-test.sh"
+    timeout: 90
+    agents:
+       queue: "testing"
+    artifact_paths:
+      - "proxy.log"
+      - "solana.log"
+      - "measurements.log"
+      - "evm_loader.log"
+      - "dbcreation.log"
+      - "faucet.log"
+      - "airdropper.log"
+      - "indexer.log"
 
   - label: ":coverage: full test suite (FTS)"
     key: "full_test_suite"
