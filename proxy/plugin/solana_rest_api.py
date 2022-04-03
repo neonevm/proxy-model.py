@@ -111,9 +111,9 @@ class EthereumModel:
         return str(self.__dict__)
 
     def _process_block_tag(self, tag) -> SolanaBlockInfo:
-        if tag == "latest":
+        if tag in ("latest", "pending"):
             block = self._db.get_latest_block()
-        elif tag in ('earliest', 'pending'):
+        elif tag in ('earliest'):
             raise EthereumError(message=f"invalid tag {tag}")
         elif isinstance(tag, str):
             try:
@@ -161,7 +161,7 @@ class EthereumModel:
         """account - address to check for balance.
            tag - integer block number, or the string "latest", "earliest" or "pending"
         """
-        if tag != "latest":
+        if tag not in ("latest", "pending"):
             self.debug(f"Block type '{tag}' is not supported yet")
             raise EthereumError(message=f"Not supported block identifier: {tag}")
 
@@ -192,7 +192,7 @@ class EthereumModel:
 
         if 'fromBlock' in obj and obj['fromBlock'] != '0':
             from_block = self._process_block_tag(obj['fromBlock']).slot
-        if 'toBlock' in obj and obj['toBlock'] != 'latest':
+        if 'toBlock' in obj and obj['toBlock'] not in ('latest', 'pending'):
             to_block = self._process_block_tag(obj['toBlock']).slot
         if 'address' in obj:
             addresses = to_list(obj['address'])
@@ -241,7 +241,7 @@ class EthereumModel:
         '''Retrieves storage data by given position
         Currently supports only 'latest' block
         '''
-        if block_identifier != "latest":
+        if block_identifier not in ("latest", "pending"):
             self.debug(f"Block type '{block_identifier}' is not supported yet")
             raise EthereumError(message=f"Not supported block identifier: {block_identifier}")
 
@@ -288,7 +288,7 @@ class EthereumModel:
         if block.slot is None:
             self.debug(f"Not found block by number {tag}")
             return None
-        ret = self._get_block_by_slot(block, full, tag == 'latest')
+        ret = self._get_block_by_slot(block, full, tag in ('latest', 'pending'))
         return ret
 
     def eth_call(self, obj, tag):
@@ -303,7 +303,7 @@ class EthereumModel:
                 data: DATA - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
             tag - integer block number, or the string "latest", "earliest" or "pending", see the default block parameter
         """
-        if tag != "latest":
+        if tag not in ("latest", "pending"):
             self.debug(f"Block type '{tag}' is not supported yet")
             raise EthereumError(message=f"Not supported block identifier: {tag}")
 
@@ -321,7 +321,7 @@ class EthereumModel:
             raise
 
     def eth_getTransactionCount(self, account, tag):
-        if tag != "latest":
+        if tag not in ("latest", "pending"):
             self.debug(f"Block type '{tag}' is not supported yet")
             raise EthereumError(message=f"Not supported block identifier: {tag}")
 
