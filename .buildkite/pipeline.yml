@@ -51,6 +51,7 @@ steps:
     artifact_paths:
       - allure-reports.tar.gz
       - fts_${BUILDKITE_BUILD_NUMBER}.log
+      - *.log.bz2
 
   - wait
 
