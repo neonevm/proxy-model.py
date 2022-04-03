@@ -882,8 +882,8 @@ class Indexer(IndexerBase):
             else:
                 tx_type = 'single'
             self.stat_exporter.stat_commit_count_sol_tx_per_neon_tx(tx_type, len(stat_info.used_ixs))
-        self.stat_exporter.stat_commit_postgres_availability(self.solana.status())
-        self.stat_exporter.stat_commit_solana_rpc_health(self.db.status())
+        self.stat_exporter.stat_commit_postgres_availability(self.db.status())
+        self.stat_exporter.stat_commit_solana_rpc_health(self.solana.is_health())
 
 
 @logged_group("neon.Indexer")

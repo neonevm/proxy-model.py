@@ -61,9 +61,9 @@ class PrometheusExporter(IndexerStatisticsExporter):
         pass
 
     def stat_commit_postgres_availability(self, status: bool):
-        self.POSTGRES_AVAILABILITY.set(status)
+        self.POSTGRES_AVAILABILITY.set(1 if status else 0)
         pass
 
     def stat_commit_solana_rpc_health(self, status: bool):
-        self.SOLANA_RPC_HEALTH.set(status)
+        self.SOLANA_RPC_HEALTH.set(1 if status else 0)
         pass
