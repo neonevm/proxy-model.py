@@ -21,7 +21,7 @@ class AccountsApp:
         return 0
 
     def do_work(self):
-        resorce_tags = {
+        resource_tags = {
             0: 'TAG_EMPTY',
             1: 'TAG_ACCOUNT_V1',
             10: 'TAG_ACCOUNT',
@@ -60,7 +60,7 @@ class AccountsApp:
                     account_info = self._solana.get_account_info(account)
                     resource_account['address'] = str(account)
                     if account_info:
-                        resource_account['status'] = resorce_tags.get(account_info.tag, 'unknown')
+                        resource_account['status'] = resource_tags.get(account_info.tag, 'unknown')
                     else:
                         resource_account['status'] = 'uninitialized'
                     resources.append(resource_account)
