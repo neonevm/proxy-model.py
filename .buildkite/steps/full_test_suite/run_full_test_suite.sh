@@ -16,15 +16,15 @@ echo "External URL for faucet: ${FAUCET_URL}"
 echo "External URL for solana: ${SOLANA_URL}"
 
 # Start tests
-echo Full test suite container name - ${FTS_CONTAINER_NAME}
-docker-compose -f docker-compose/docker-compose-full-test-suite.yml pull
-docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
-FTS_RESULT=$(docker logs ${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
-# Retreive logs
-docker cp ${FTS_CONTAINER_NAME}:/opt/allure-reports.tar.gz ./
-docker logs ${FTS_CONTAINER_NAME} > ./${FTS_CONTAINER_NAME}.log
-# Clean resources
-docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
+#echo Full test suite container name - ${FTS_CONTAINER_NAME}
+#docker-compose -f docker-compose/docker-compose-full-test-suite.yml pull
+#docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
+#FTS_RESULT=$(docker logs ${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
+## Retreive logs
+#docker cp ${FTS_CONTAINER_NAME}:/opt/allure-reports.tar.gz ./
+#docker logs ${FTS_CONTAINER_NAME} > ./${FTS_CONTAINER_NAME}.log
+## Clean resources
+#docker-compose -f docker-compose/docker-compose-full-test-suite.yml rm -f
 
 # Results
 echo Full test passing - ${FTS_RESULT}
