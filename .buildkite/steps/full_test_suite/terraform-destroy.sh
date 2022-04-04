@@ -20,26 +20,26 @@ handle_error "Failed to create artifacts dir at: '$ARTIFACTS_LOGS'"
 
 
 # solana
-export REMOTE_HOST=`buildkite-agent meta-data get "SOLANA_IP"`
-ssh-keyscan -H $REMOTE_HOST >> ~/.ssh/known_hosts
+export SOLANA_HOST=`buildkite-agent meta-data get "SOLANA_IP"`
+ssh-keyscan -H $SOLANA_HOST >> ~/.ssh/known_hosts
+echo "Upload logs for service: solana"
+ssh -i ${SSH_KEY} ubuntu@${SOLANA_HOST} 'sudo docker logs solana 2>&1 | pbzip2 > /tmp/solana.log.bz2'
 handle_error "Can't scan host for fingerprint"
-ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} 'sudo docker logs solana > /tmp/solana.log 2>&1'
-handle_error "Failed to dump logs remotely at: ' ubuntu@${REMOTE_HOST}' with key file: '${SSH_KEY}'"
-scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/solana.log ${ARTIFACTS_LOGS}
+scp -i ${SSH_KEY} ubuntu@${SOLANA_HOST}:/tmp/solana.log.bz2 ${ARTIFACTS_LOGS}
 handle_error "Retrieve log file for atrifact"
 
 
 # proxy
-export REMOTE_HOST=`buildkite-agent meta-data get "PROXY_IP"`
-ssh-keyscan -H $REMOTE_HOST >> ~/.ssh/known_hosts
+export PROXY_HOST=`buildkite-agent meta-data get "PROXY_IP"`
+ssh-keyscan -H $PROXY_HOST >> ~/.ssh/known_hosts
 declare -a services=("evm_loader" "postgres" "dbcreation" "indexer" "proxy" "faucet" "airdropper")
 
 for service in "${services[@]}"
 do
-   echo "$service"
-   ssh -i ${SSH_KEY} ubuntu@${REMOTE_HOST} "sudo docker logs $service > /tmp/$service.log 2>&1"
+   echo "Upload logs for service: $service"
+   ssh -i ${SSH_KEY} ubuntu@${PROXY_HOST} "sudo docker logs $service 2>&1 | pbzip2 > /tmp/$service.log.bz2"
    handle_error "Dump $service log to the file"
-   scp -i ${SSH_KEY} ubuntu@${REMOTE_HOST}:/tmp/$service.log ${ARTIFACTS_LOGS}
+   scp -i ${SSH_KEY} ubuntu@${PROXY_HOST}:/tmp/$service.log.bz2 ${ARTIFACTS_LOGS}
    handle_error "Retrieve log file from service $service"
 done
 

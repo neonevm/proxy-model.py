@@ -64,8 +64,10 @@ class CliBase:
         proc_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
         if proc_result.stderr is not None:
             print(proc_result.stderr, file=sys.stderr)
-        proc_result.check_returncode()
-        return proc_result.stdout
+        output = proc_result.stdout
+        if not output:
+            proc_result.check_returncode()
+        return output
 
 
 @logged_group("neon.Proxy")
@@ -166,3 +168,5 @@ COLLATERAL_POOL_BASE = ELF_PARAMS.get("NEON_POOL_BASE")
 NEON_TOKEN_MINT: PublicKey = PublicKey(ELF_PARAMS.get("NEON_TOKEN_MINT"))
 HOLDER_MSG_SIZE = int(ELF_PARAMS.get("NEON_HOLDER_MSG_SIZE"))
 CHAIN_ID = int(ELF_PARAMS.get('NEON_CHAIN_ID', None))
+NEON_EVM_VERSION = ELF_PARAMS.get("NEON_PKG_VERSION")
+NEON_EVM_REVISION = ELF_PARAMS.get('NEON_REVISION')

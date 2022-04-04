@@ -10,6 +10,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from logged_groups import logged_group
 
 from .address import accountWithSeed, ether2program, EthereumAddress
+from .compute_budget import TransactionWithComputeBudget
 from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from .layouts import CREATE_ACCOUNT_LAYOUT
 from ..environment import EVM_LOADER_ID,  COLLATERAL_POOL_BASE
@@ -138,7 +139,7 @@ class NeonInstruction:
 
         base = self.operator_account
         data = create_account_layout(bytes(eth_address), nonce)
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         if code_acc is None:
             trx.add(TransactionInstruction(
                 program_id=EVM_LOADER_ID,
@@ -161,7 +162,7 @@ class NeonInstruction:
         return trx
 
     def createERC20TokenAccountTrx(self, token_info) -> Transaction:
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=bytes.fromhex('0F'),
@@ -196,7 +197,7 @@ class NeonInstruction:
         )
 
     def make_write_transaction(self, offset: int, data: bytes) -> Transaction:
-        return Transaction().add(TransactionInstruction(
+        return TransactionWithComputeBudget().add(TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=write_holder_layout(self.perm_accs_id, offset, data),
             keys=[
@@ -230,22 +231,26 @@ class NeonInstruction:
         )
 
     def make_noniterative_call_transaction(self, length_before: int = 0) -> Transaction:
-        trx = Transaction()
-        trx.add(self.make_keccak_instruction(length_before + 1, len(self.eth_trx.unsigned_msg()), 5))
+        trx = TransactionWithComputeBudget()
+        trx.add(self.make_keccak_instruction(len(trx.instructions) + length_before + 1, len(self.eth_trx.unsigned_msg()), 5))
         trx.add(self.make_05_call_instruction())
         return trx
 
-    def make_cancel_transaction(self, cancel_keys=None) -> Transaction:
+    def make_cancel_transaction(self, storage=None, nonce=None, cancel_keys=None) -> Transaction:
         if cancel_keys:
             append_keys = cancel_keys
         else:
             append_keys = self.eth_accounts
             append_keys += obligatory_accounts
-        return Transaction().add(TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=bytearray.fromhex("15") + self.eth_trx.nonce.to_bytes(8, 'little'),
+        if not nonce:
+            nonce = self.eth_trx.nonce
+        if not storage:
+            storage = self.storage
+        return TransactionWithComputeBudget().add(TransactionInstruction(
+            program_id = EVM_LOADER_ID,
+            data = bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
             keys=[
-                AccountMeta(pubkey=self.storage, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=INCINERATOR_PUBKEY, is_signer=False, is_writable=True),
             ] + append_keys
@@ -269,8 +274,8 @@ class NeonInstruction:
         )
 
     def make_partial_call_or_continue_transaction(self, steps=0, length_before=0) -> Transaction:
-        trx = Transaction()
-        trx.add(self.make_keccak_instruction(length_before + 1, len(self.eth_trx.unsigned_msg()), 13))
+        trx = TransactionWithComputeBudget()
+        trx.add(self.make_keccak_instruction(len(trx.instructions) + length_before + 1, len(self.eth_trx.unsigned_msg()), 13))
         trx.add(self.make_partial_call_or_continue_instruction(steps))
         return trx
 
@@ -278,10 +283,10 @@ class NeonInstruction:
         data = bytearray.fromhex("0E") + self.collateral_pool_index_buf + steps.to_bytes(8, byteorder='little')
         if index:
             data = data + index.to_bytes(8, byteorder="little")
-        return Transaction().add(TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=data,
-            keys=[
+        return TransactionWithComputeBudget().add(TransactionInstruction(
+            program_id = EVM_LOADER_ID,
+            data = data,
+            keys = [
                 AccountMeta(pubkey=self.holder, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.storage, is_signer=False, is_writable=True),
 
