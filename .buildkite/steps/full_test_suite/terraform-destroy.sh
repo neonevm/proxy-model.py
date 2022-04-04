@@ -1,12 +1,6 @@
 #!/bin/bash
 
-handle_error() {
-  if [[ $? -ne 0 ]]
-  then
-    echo "Interrupt at step. $1"
-    exit 1
-  fi
-}
+source .buildkite/steps/full_test_suite/utils.sh
 
 
 cd .buildkite/steps/full_test_suite
