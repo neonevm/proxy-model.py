@@ -46,7 +46,7 @@ from web3.auto import w3
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-NEON_PROXY_PKG_VERSION = '0.7.7'
+NEON_PROXY_PKG_VERSION = '0.7.8'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -303,9 +303,9 @@ class EthereumModel:
                 data: DATA - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
             tag - integer block number, or the string "latest", "earliest" or "pending", see the default block parameter
         """
-        if tag not in ("latest", "pending"):
-            self.debug(f"Block type '{tag}' is not supported yet")
-            raise EthereumError(message=f"Not supported block identifier: {tag}")
+        # if tag not in ("latest", "pending"):
+        #     self.debug(f"Block type '{tag}' is not supported yet")
+        #     raise EthereumError(message=f"Not supported block identifier: {tag}")
 
         if not obj['data']: raise EthereumError(message="Missing data")
         try:
@@ -321,9 +321,9 @@ class EthereumModel:
             raise
 
     def eth_getTransactionCount(self, account, tag):
-        if tag not in ("latest", "pending"):
-            self.debug(f"Block type '{tag}' is not supported yet")
-            raise EthereumError(message=f"Not supported block identifier: {tag}")
+        # if tag not in ("latest", "pending"):
+        #     self.debug(f"Block type '{tag}' is not supported yet")
+        #     raise EthereumError(message=f"Not supported block identifier: {tag}")
 
         try:
             neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account))
@@ -700,7 +700,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
     def handle_request_impl(self, request: HttpParser) -> None:
         if request.method == b'OPTIONS':
-            self._client.queue(memoryview(build_http_response(
+            self.client.queue(memoryview(build_http_response(
                 httpStatusCodes.OK, body=None,
                 headers={
                     b'Access-Control-Allow-Origin': b'*',
@@ -710,10 +710,11 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 })))
             return
         start_time = time.time()
-        self.info('handle_request <<< %s 0x%x %s', threading.get_ident(), id(self.model), request.body.decode('utf8'))
-        response = None
 
         try:
+            self.info('handle_request <<< %s 0x%x %s', threading.get_ident(), id(self.model),
+                      request.body.decode('utf8'))
+            response = None
             request = json.loads(request.body)
             if isinstance(request, list):
                 response = []
@@ -730,11 +731,16 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             response = {'jsonrpc': '2.0', 'error': {'code': -32000, 'message': str(err)}}
 
         resp_time_ms = (time.time() - start_time)*1000  # convert this into milliseconds
+
+        method = '---'
+        if isinstance(request, dict):
+            method = request.get('method', '---')
+
         self.info('handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
                   threading.get_ident(),
                   id(self.model),
                   json.dumps(response),
-                  request.get('method', '---'),
+                  method,
                   resp_time_ms)
 
         self.client.queue(memoryview(build_http_response(
