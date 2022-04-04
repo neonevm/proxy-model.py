@@ -113,8 +113,8 @@ class EthereumModel:
     def _process_block_tag(self, tag) -> SolanaBlockInfo:
         if tag in ("latest", "pending"):
             block = self._db.get_latest_block()
-        elif tag in ('earliest'):
-            raise EthereumError(message=f"invalid tag {tag}")
+        elif tag == 'earliest':
+            block = self._db.get_starting_block()
         elif isinstance(tag, str):
             try:
                 block = SolanaBlockInfo(slot=int(tag.strip(), 16))
@@ -161,9 +161,9 @@ class EthereumModel:
         """account - address to check for balance.
            tag - integer block number, or the string "latest", "earliest" or "pending"
         """
-        if tag not in ("latest", "pending"):
-            self.debug(f"Block type '{tag}' is not supported yet")
-            raise EthereumError(message=f"Not supported block identifier: {tag}")
+        # if tag not in ("latest", "pending"):
+        #     self.debug(f"Block type '{tag}' is not supported yet")
+        #     raise EthereumError(message=f"Not supported block identifier: {tag}")
 
         self.debug(f'eth_getBalance: {account}')
         try:
@@ -241,9 +241,9 @@ class EthereumModel:
         '''Retrieves storage data by given position
         Currently supports only 'latest' block
         '''
-        if block_identifier not in ("latest", "pending"):
-            self.debug(f"Block type '{block_identifier}' is not supported yet")
-            raise EthereumError(message=f"Not supported block identifier: {block_identifier}")
+        # if block_identifier not in ("latest", "pending"):
+        #     self.debug(f"Block type '{block_identifier}' is not supported yet")
+        #     raise EthereumError(message=f"Not supported block identifier: {block_identifier}")
 
         try:
             value = neon_cli().call('get-storage-at', account, position)
