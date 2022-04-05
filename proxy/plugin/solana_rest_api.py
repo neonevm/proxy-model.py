@@ -44,8 +44,8 @@ from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx
 from web3.auto import w3
 
-from ..statistics_exporter.common_metrics import StatisticsExporter
-from ..statistics_exporter.prometheus_exporter import PrometheusExporter
+from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
+from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
