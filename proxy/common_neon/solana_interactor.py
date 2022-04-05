@@ -111,7 +111,7 @@ class StorageAccountInfo(NamedTuple):
 
 class SendResult(NamedTuple):
     error: dict
-    result: Union[str, bytes, None]
+    result: Optional[str]
 
 
 @logged_group("neon.Proxy")
@@ -496,9 +496,9 @@ class SolanaInteractor:
             if isinstance(raw_result, dict):
                 self.debug(f'Got strange result on transaction execution: {json.dumps(raw_result)}')
             elif isinstance(raw_result, str):
-                result = str(raw_result)
+                result = b58encode(b58decode(raw_result)).decode("utf-8")
             elif isinstance(raw_result, bytes):
-                result = bytes(raw_result)
+                result = b58encode(raw_result).decode("utf-8")
             elif raw_result is not None:
                 self.debug(f'Got strange result on transaction execution: {str(raw_result)}')
 
@@ -509,6 +509,7 @@ class SolanaInteractor:
                     error = None
                 else:
                     self.debug(f'Got error on transaction execution: {json.dumps(error)}')
+                    result = None
 
             result_list.append(SendResult(result=result, error=error))
         return result_list
@@ -517,14 +518,7 @@ class SolanaInteractor:
                                    skip_preflight: bool, preflight_commitment: str) -> [{}]:
         send_result_list = self._send_multiple_transactions(signer, tx_list, skip_preflight, preflight_commitment)
         # Filter good transactions and wait the confirmations for them
-
-        sign_list: List[str] = []
-        for sign in [s.result for s in send_result_list if s.result]:
-            if isinstance(sign, str):
-                sign_list.append(b58encode(b58decode(sign)).decode("utf-8"))
-            elif isinstance(sign, bytes):
-                sign_list.append(b58encode(sign).decode("utf-8"))
-
+        sign_list = [s.result for s in send_result_list if s.result]
         self._confirm_multiple_transactions(sign_list, waiter)
         # Get receipts for good transactions
         confirmed_list = self._get_multiple_receipts(sign_list)
@@ -544,13 +538,6 @@ class SolanaInteractor:
             self.debug('No confirmations, because transaction list is empty')
             return
 
-        base58_sign_list: List[str] = []
-        for sign in sign_list:
-            if isinstance(sign, str):
-                base58_sign_list.append(b58encode(b58decode(sign)).decode("utf-8"))
-            else:
-                base58_sign_list.append(b58encode(sign).decode("utf-8"))
-
         opts = {
             "searchTransactionHistory": False
         }
@@ -561,7 +548,7 @@ class SolanaInteractor:
                 time.sleep(CONFIRMATION_CHECK_DELAY)
             elapsed_time += CONFIRMATION_CHECK_DELAY
 
-            response = self._send_rpc_request("getSignatureStatuses", base58_sign_list, opts)
+            response = self._send_rpc_request("getSignatureStatuses", sign_list, opts)
             result = response.get('result', None)
             if not result:
                 continue
