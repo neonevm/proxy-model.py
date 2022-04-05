@@ -132,7 +132,7 @@ services:
       - "3333"
     networks:
       - net
-    entrypoint: ./run-faucet.sh
+    entrypoint: ./run-test-faucet.sh
     depends_on:
       proxy:
         condition: service_started
