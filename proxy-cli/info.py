@@ -126,6 +126,7 @@ class InfoHandler:
         ret_js = {}
         ret_js['accounts'] = []
         ret_js['total_balance'] = 0
+        ret_js['resource_balance'] = 0
 
         operator_accounts = get_solana_accounts()
 
@@ -134,9 +135,9 @@ class InfoHandler:
 
             ret_js['total_balance'] += acc_info_js['balance']
             for holder_account in acc_info_js['holder']:
-                ret_js['total_balance'] += holder_account['balance']
+                ret_js['resource_balance'] += holder_account['balance']
             for storage_account in acc_info_js['storage']:
-                ret_js['total_balance'] += storage_account['balance']
+                ret_js['resource_balance'] += storage_account['balance']
 
             ret_js['accounts'].append(acc_info_js)
 
@@ -145,6 +146,9 @@ class InfoHandler:
     def _all_info(self, args):
         ret_js = {}
         ret_js['accounts'] = []
+        ret_js['total_balance'] = 0
+        ret_js['resource_balance'] = 0
+        ret_js['total_neon_balance'] = 0
 
         operator_accounts = get_solana_accounts()
         neon_accounts = [EthereumAddress.from_private_key(operator.secret_key()) for operator in operator_accounts]
@@ -152,8 +156,17 @@ class InfoHandler:
         for sol_account, neon_account in zip(operator_accounts, neon_accounts):
             acc_info_js = self._get_solana_accounts(sol_account)
 
+            ret_js['total_balance'] += acc_info_js['balance']
+
+            for holder_account in acc_info_js['holder']:
+                ret_js['resource_balance'] += holder_account['balance']
+            for storage_account in acc_info_js['storage']:
+                ret_js['resource_balance'] += storage_account['balance']
+
             acc_info_js['neon_address'] = str(neon_account)
             acc_info_js['neon_balance'] = self._get_neon_balance(neon_account)
+
+            ret_js['total_neon_balance'] += acc_info_js['neon_balance']
 
             ret_js['accounts'].append(acc_info_js)
 
