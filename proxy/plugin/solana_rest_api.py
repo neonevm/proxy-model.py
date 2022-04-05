@@ -415,7 +415,7 @@ class EthereumModel:
         self._stat_tx_begin()
 
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
-        self.debug(f"{json.dumps(trx.as_dict(), cls=json.JSONEncoder, sort_keys=True)}")
+        self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
 
         if trx.gasPrice < min_gas_price:
