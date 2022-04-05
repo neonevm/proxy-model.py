@@ -522,20 +522,7 @@ class NeonTxSender:
         self.resource = resource
         self.signer = resource.signer
         self.operator_key = resource.public_key()
-        self.sol_acc = resource.public_key()
-        self.neon_acc = EthereumAddress.from_private_key(resource.secret_key())
-        self.created_accounts = {}
         self.builder = NeonIxBuilder(self.operator_key)
-
-    def set_created_resources(self, account: PublicKey, balance: int):
-        self.created_accounts[str(account)] = balance
-
-    def get_stat_values(self) -> tuple[PublicKey, EthereumAddress, Dict[str, int]]:
-        return_value = ( self.sol_acc, self.neon_acc, self.created_accounts )
-        self.sol_acc = None
-        self.neon_acc = None
-        self.created_accounts = None
-        return return_value
 
     def clear_resource(self):
         self.resource = None
