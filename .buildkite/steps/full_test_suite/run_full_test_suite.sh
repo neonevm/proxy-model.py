@@ -19,14 +19,16 @@ echo "External URL for solana: ${SOLANA_URL}"
 # Start tests
 echo Full test suite container name - ${FTS_CONTAINER_NAME}
 docker-compose -f docker-compose/docker-compose-full-test-suite.yml pull
-handle_error "Failed to docker image pulling"
+handle_error "Failed to pull full test suite docker image"
 docker-compose -f docker-compose/docker-compose-full-test-suite.yml up
-handle_error "Failed to tests running"
+handle_error "Failed to run full test suite docker container"
 FTS_RESULT=$(docker logs ${FTS_CONTAINER_NAME} | (grep -oP "(?<=Passing - )\d+" || echo 0))
 
 # Retreive logs from local containers
 docker cp ${FTS_CONTAINER_NAME}:/opt/allure-reports.tar.gz ./
+handle_error "Failed to retreive allure logs from local container"
 docker logs ${FTS_CONTAINER_NAME} > ./${FTS_CONTAINER_NAME}.log
+handle_error "Failed to retreive test suite logs from local container"
 
 # Retreive logs from remote instances
 export SSH_KEY="~/.ssh/ci-stands"
@@ -40,9 +42,9 @@ ssh-keyscan -H $SOLANA_ADDR >> ~/.ssh/known_hosts
 handle_error "Failed to retrieve ssh fingerprint"
 echo "Upload logs for service: solana"
 ssh -i ${SSH_KEY} ubuntu@${SOLANA_ADDR} 'sudo docker logs solana 2>&1 | pbzip2 > /tmp/solana.log.bz2'
-handle_error "Failed to scan host for fingerprint"
+handle_error "Failed to dump log for service: solana"
 scp -i ${SSH_KEY} ubuntu@${SOLANA_ADDR}:/tmp/solana.log.bz2 ${ARTIFACTS_LOGS}
-handle_error "Failed to retrieve log file for atrifact"
+handle_error "Failed to retrieve log file from service: solana"
 
 # proxy
 export PROXY_ADDR=`buildkite-agent meta-data get "PROXY_IP"`
@@ -54,9 +56,9 @@ for service in "${services[@]}"
 do
    echo "Upload logs for service: $service"
    ssh -i ${SSH_KEY} ubuntu@${PROXY_ADDR} "sudo docker logs $service 2>&1 | pbzip2 > /tmp/$service.log.bz2"
-   handle_error "Failed to dump $service log to the file"
+   handle_error "Failed to dump log for service: $service"
    scp -i ${SSH_KEY} ubuntu@${PROXY_ADDR}:/tmp/$service.log.bz2 ${ARTIFACTS_LOGS}
-   handle_error "Failed to retrieve log file from service $service"
+   handle_error "Failed to retrieve log file from service: $service"
 done
 
 # Clean resources
