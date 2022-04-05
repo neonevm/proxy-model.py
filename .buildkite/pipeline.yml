@@ -14,9 +14,7 @@ steps:
     command:
       - ".buildkite/steps/full_test_suite/terraform-build.sh"
 
-
   - wait
-
 
   - label: ":cop::skin-tone-2: deploy check"
     command: ".buildkite/steps/deploy-test.sh"
@@ -32,7 +30,6 @@ steps:
       - "faucet.log"
       - "airdropper.log"
       - "indexer.log"
-
 
   - label: ":coverage: full test suite (FTS)"
     key: "full_test_suite"
@@ -54,10 +51,9 @@ steps:
     artifact_paths:
       - allure-reports.tar.gz
       - fts_${BUILDKITE_BUILD_NUMBER}.log
-
+      - "./logs/*"
 
   - wait
-
 
   - label: ":floppy_disk: publish image"
     command: ".buildkite/steps/publish-image.sh"
@@ -75,5 +71,5 @@ steps:
       - "full_test_suite"
       - "create_infrastructure"
     allow_dependency_failure: true
-    artifact_paths:
-      - ".buildkite/steps/full_test_suite/logs/*"
+
+      
