@@ -431,7 +431,11 @@ class EthereumModel:
         return self._db.get_contract_code(account)
 
     def eth_sendRawTransaction(self, rawTrx: str) -> str:
-        trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
+        try:
+            trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
+        except:
+            raise EthereumError(message="wrong transaction format")
+
         eth_signature = '0x' + trx.hash_signed().hex()
         self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
 
