@@ -672,7 +672,7 @@ class NeonTxSender:
 
     def build_account_txs(self, skip_create_accounts=False) -> [Transaction]:
         tx_list = [s.tx for s in self._resize_contract_list]
-        if (not skip_create_accounts) and len(self.create_account_tx.instructions):
+        if (not skip_create_accounts) and len(self._create_account_list):
             tx_list.append(self.create_account_tx)
         return tx_list
 
