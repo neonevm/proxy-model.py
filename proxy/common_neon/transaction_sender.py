@@ -564,7 +564,7 @@ class NeonTxSender:
                     raise
 
         self.error(f'No strategy to execute the Neon transaction: {self.eth_tx}')
-        raise RuntimeError('No strategy to execute the Neon transaction')
+        raise EthereumError(message="transaction is too big for execution")
 
     def on_wait_confirm(self, _, slot: int):
         self._pend_tx_into_db(slot)
