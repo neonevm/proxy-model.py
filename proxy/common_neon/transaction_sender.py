@@ -833,10 +833,10 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         if self._strategy.steps <= 10:
             return self._cancel()
 
-        if self._strategy.steps < 150:
-            self._strategy.steps = 10
-        else:
+        if self._strategy.steps > 170:
             self._strategy.steps -= 150
+        else:
+            self._strategy.steps = 10
         total_cnt = math.ceil(total_steps / self._strategy.steps)
 
         self.debug(f'Decrease EVM steps from {prev_steps} to {self._strategy.steps}, ' +
