@@ -2,14 +2,15 @@ from __future__ import annotations
 from argparse import _SubParsersAction, ArgumentParser
 
 import sys
-import os
 import math
 import json
 from typing import Any
 from coincurve import PublicKey
 import sha3
 
-from proxy.common_neon.keys_storage import KeyStorage
+import logging
+neon_logger = logging.getLogger("neon")
+neon_logger.setLevel(logging.CRITICAL)
 
 from proxy.common_neon.address import EthereumAddress, accountWithSeed
 from proxy.common_neon.solana_interactor import SolanaInteractor
