@@ -12,14 +12,6 @@ class NeonAccountInfo:
     code: str = None
     sol_sign: str = None
 
-    def __init__(self, neon_address: str = None, pda_address: str = None, code_address: str = None, slot: int = 0, code: str = None, sol_sign: str = None):
-        self.neon_address = neon_address
-        self.pda_address = pda_address
-        self.code_address = code_address
-        self.slot = slot
-        self.code = code
-        self.sol_sign = sol_sign
-
     def __str__(self):
         return str_fmt_object(self)
 
@@ -44,8 +36,7 @@ class NeonAccountDB(BaseDB):
                 tuple(neon_account))
 
     def set_acc_indexer(self, neon_account: NeonAccountInfo):
-        neon_account = self.fill_neon_address_if_missing(neon_account)
-        if not neon_account.neon_address:
+        if not self.fill_neon_address_if_missing(neon_account):
             return
         with self._conn.cursor() as cursor:
             cursor.execute(f'''
@@ -58,14 +49,14 @@ class NeonAccountDB(BaseDB):
                 ''',
                 tuple(neon_account))
 
-    def fill_neon_address_if_missing(self, neon_account: NeonAccountInfo) -> NeonAccountInfo:
-        if not neon_account.neon_address:
+    def fill_neon_address_if_missing(self, neon_account: NeonAccountInfo) -> bool:
+        if neon_account.neon_address is None:
             value = self.get_account_info_by_pda_address(neon_account.pda_address)
             if not value.neon_address:
                 self.error(f"Not found account for pda_address: {neon_account.pda_address}")
-                return neon_account
+                return False
             neon_account.neon_address = value.neon_address
-        return neon_account
+        return True
 
     def _acc_from_value(self, value) -> NeonAccountInfo:
         self.debug(f"accounts db returned {value}")

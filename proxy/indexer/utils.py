@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 
 import statistics
 
@@ -70,9 +71,8 @@ class CostInfo:
 
     def fill_heap_bpf_from_logs(self, log_messages: List[str], program: PublicKey):
         for log in log_messages:
-            log_words = log.split()
-            self.bpf = max(self.bpf, CostInfo.bpf_log(program, log_words))
-            self.heap = max(self.heap, CostInfo.heap_log(log_words))
+            self.bpf = max(self.bpf, CostInfo.bpf_log(program, log))
+            self.heap = max(self.heap, CostInfo.heap_log(log))
 
     def fill_neon_income(self, pre_balances: List[str], post_balances: List[str]):
         pre_token = 0
@@ -86,27 +86,14 @@ class CostInfo:
         self.neon_income = post_token - pre_token
 
     @staticmethod
-    def bpf_log(program: PublicKey, msg_words: list[str]):
-        if len(msg_words) >= 7 and\
-            msg_words[0] == 'Program' and\
-            msg_words[1] == str(program) and\
-            msg_words[2] == 'consumed' and\
-            msg_words[4] == 'of' and\
-            msg_words[6] == 'compute' and\
-            msg_words[7] == 'units':
-            return int(msg_words[3])
-        return 0
+    def bpf_log(program: PublicKey, logging_note: str):
+        match = re.match(f"Program {program} consumed (\d+) of \d+ compute units", logging_note)
+        return 0 if match is None else int(match[1])
 
     @staticmethod
-    def heap_log(msg_words: list[str]):
-        if len(msg_words) >= 5 and\
-            msg_words[0] == 'Program' and\
-            msg_words[1] == "log:" and\
-            msg_words[2] == 'Total' and\
-            msg_words[3] == 'memory' and\
-            msg_words[4] == 'occupied:':
-            return int(msg_words[5])
-        return 0
+    def heap_log(logging_note: str):
+        match = re.match(f"Program log: Total memory occupied: (\d+)", logging_note)
+        return 0 if match is None else int(match[1])
 
 
 @logged_group("neon.Indexer")
