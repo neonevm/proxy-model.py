@@ -330,6 +330,7 @@ class SolanaInteractor:
         if info is None:
             return None
         elif info.tag != 30:
+            self.debug(f'Storage account {str(storage_account)} has tag {info.tag}')
             return None
         elif len(info.data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
             raise RuntimeError(f"Wrong data length for storage data {storage_account}: " +
