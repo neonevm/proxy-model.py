@@ -206,15 +206,9 @@ class SolanaInteractor:
             return int(slots_behind)
         return None
 
-    def get_slots_behind(self) -> Optional[int]:
-        response = self._send_rpc_request('getHealth')
-        status = response.get('result')
-        if status == 'ok':
-            return 0
-        slots_behind = get_from_dict(response, 'error', 'data', 'numSlotsBehind')
-        if slots_behind:
-            return int(slots_behind)
-        return None
+    def is_health(self) -> bool:
+        status = self._send_rpc_request('getHealth').get('result', 'bad')
+        return status == 'ok'
 
     def get_signatures_for_address(self, before: Optional[str], limit: int, commitment='confirmed') -> []:
         opts: Dict[str, Union[int, str]] = {}
