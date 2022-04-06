@@ -506,7 +506,8 @@ class SolanaInteractor:
             error = response.get('error')
             if error:
                 if get_from_dict(error, 'data', 'err') == 'AlreadyProcessed':
-                    result = tx.signature()
+                    result = b58encode(tx.signature()).decode("utf-8")
+                    self.debug(f'Transaction is already processed: {str(result)}')
                     error = None
                 else:
                     self.debug(f'Got error on transaction execution: {json.dumps(error)}')
