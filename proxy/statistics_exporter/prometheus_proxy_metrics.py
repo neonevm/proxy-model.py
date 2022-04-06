@@ -4,7 +4,6 @@ from prometheus_client import Gauge, Counter, Histogram, REGISTRY, multiprocess
 registry = REGISTRY
 multiprocess_registry = multiprocess.MultiProcessCollector(registry)
 
-
 REQUEST_COUNT = Counter(
     'request_count', 'App Request Count',
     ['endpoint'],

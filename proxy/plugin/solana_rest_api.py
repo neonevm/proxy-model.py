@@ -25,7 +25,7 @@ from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from ..common_neon.transaction_sender import NeonTxSender
 from ..common_neon.solana_interactor import SolanaInteractor
@@ -101,15 +101,6 @@ class EthereumModel:
 
     def eth_gasPrice(self):
         gas_price = self.gas_price_calculator.get_suggested_gas_price()
-        sol_price_usd = self.gas_price_calculator.get_sol_price_usd()
-        neon_price_usd = self.gas_price_calculator.get_neon_price_usd()
-        operator_fee = self.gas_price_calculator.get_operator_fee()
-        self.stat_exporter.stat_commit_gas_parameters(
-            gas_price,
-            sol_price_usd,
-            neon_price_usd,
-            operator_fee,
-        )
         return hex(gas_price)
 
     def eth_estimateGas(self, param):
@@ -449,7 +440,7 @@ class EthereumModel:
         return self._db.get_contract_code(account)
 
     def eth_sendRawTransaction(self, rawTrx: str) -> str:
-        operator_sol_balance, operator_neon_balance = self._stat_tx_begin()
+        self._stat_tx_begin()
 
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
@@ -465,8 +456,7 @@ class EthereumModel:
         try:
             tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             tx_sender.execute()
-            sol_acc, neon_acc, new_accs = tx_sender.get_stat_values()
-            self._stat_tx_end( ( operator_sol_balance, str(sol_acc), operator_neon_balance, str(neon_acc) ), new_accs )
+            self._stat_tx_end(True)
             return eth_signature
 
         except PendingTxError as err:
@@ -484,42 +474,12 @@ class EthereumModel:
 
     def _stat_tx_begin(self):
         self.stat_exporter.stat_commit_tx_begin()
-        return self._stat_operator_balance()
 
-    def _stat_tx_end(self, pre_balance: Tuple[Dict[str, Decimal], str, Dict[str, Decimal], str] = None, holder_accounts: Dict[str, int] = None):
-        post_sol_balance, post_neon_balance = self._stat_operator_balance()
-        if pre_balance is not None:
-            pre_sol_balance, sol_acc, pre_neon_balance, neon_acc = pre_balance
-            sol_diff = pre_sol_balance[sol_acc] - post_sol_balance[sol_acc]
-            neon_diff = post_neon_balance[neon_acc] - pre_neon_balance[neon_acc]
+    def _stat_tx_end(self, succeed: bool = False):
+        if succeed:
             self.stat_exporter.stat_commit_tx_end_success()
-            self.stat_exporter.stat_commit_tx_balance_change(sol_acc, sol_diff, neon_acc, neon_diff)
         else:
             self.stat_exporter.stat_commit_tx_end_failed(None)
-        if holder_accounts:
-            for acc, rent in holder_accounts.items():
-                self.stat_exporter.stat_commit_create_resource_account(str(acc), Decimal(rent) / 1_000_000_000)
-
-    def _stat_operator_balance(self) -> Tuple[Dict[str, Decimal], Dict[str, Decimal]]:
-        operator_accounts = get_solana_accounts()
-        sol_accounts = [str(sol_account.public_key()) for sol_account in operator_accounts]
-        sol_balances = self._solana.get_sol_balance_list(sol_accounts)
-        operator_sol_balance = dict(zip(sol_accounts, sol_balances))
-        for account, balance in operator_sol_balance.items():
-            self.stat_exporter.stat_commit_operator_sol_balance(str(account), Decimal(balance) / 1_000_000_000)
-
-        neon_accounts = [str(EthereumAddress.from_private_key(neon_account.secret_key())) for neon_account in operator_accounts]
-        neon_layouts = self._solana.get_account_info_layout_list(neon_accounts)
-        operator_neon_balance = {}
-        for sol_account, neon_account, neon_layout in zip(operator_accounts, neon_accounts, neon_layouts):
-            if neon_layout:
-                neon_balance = Decimal(neon_layout.balance) / 1_000_000_000 / 1_000_000_000
-                operator_neon_balance[neon_account] = neon_balance
-                self.stat_exporter.stat_commit_operator_neon_balance(str(sol_account), str(neon_account), neon_balance)
-            else:
-                operator_neon_balance[neon_account] = 0
-
-        return operator_sol_balance, operator_neon_balance
 
     def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: int) -> Optional[dict]:
         try:
