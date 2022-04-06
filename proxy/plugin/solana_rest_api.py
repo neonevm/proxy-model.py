@@ -17,7 +17,7 @@ import multiprocessing
 import sha3
 
 from logged_groups import logged_group, logging_context
-from typing import Optional
+from typing import Optional, Union
 
 from ..common.utils import build_http_response
 from ..http.codes import httpStatusCodes
@@ -31,7 +31,7 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_receipt_parser import SolTxError
 from ..common_neon.address import EthereumAddress
 from ..common_neon.emulator_interactor import call_emulated
-from ..common_neon.errors import EthereumError, PendingTxError
+from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.keys_storage import KeyStorage
@@ -46,7 +46,7 @@ from web3.auto import w3
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-NEON_PROXY_PKG_VERSION = '0.7.5-dev'
+NEON_PROXY_PKG_VERSION = '0.7.9-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -71,19 +71,24 @@ class EthereumModel:
 
         self.debug(f"Worker id {self.proxy_id}")
 
-    def neon_proxy_version(self):
+    @staticmethod
+    def neon_proxy_version():
         return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
 
-    def web3_clientVersion(self):
+    @staticmethod
+    def web3_clientVersion():
         return 'Neon/v' + NEON_EVM_VERSION + '-' + NEON_EVM_REVISION
 
-    def eth_chainId(self):
+    @staticmethod
+    def eth_chainId():
         return hex(int(CHAIN_ID))
 
-    def neon_cli_version(self):
+    @staticmethod
+    def neon_cli_version():
         return neon_cli().version()
 
-    def net_version(self):
+    @staticmethod
+    def net_version():
         return str(CHAIN_ID)
 
     def eth_gasPrice(self):
@@ -105,24 +110,69 @@ class EthereumModel:
     def __repr__(self):
         return str(self.__dict__)
 
-    def process_block_tag(self, tag) -> SolanaBlockInfo:
-        if tag == "latest":
+    def _process_block_tag(self, tag) -> SolanaBlockInfo:
+        if tag in ("latest", "pending"):
             block = self._db.get_latest_block()
-        elif tag in ('earliest', 'pending'):
-            raise EthereumError(message=f"Invalid tag {tag}")
+        elif tag == 'earliest':
+            block = self._db.get_starting_block()
         elif isinstance(tag, str):
             try:
                 block = SolanaBlockInfo(slot=int(tag.strip(), 16))
             except:
-                raise EthereumError(message=f'Failed to parse block tag: {tag}')
+                raise InvalidParamError(message=f'failed to parse block tag: {tag}')
         elif isinstance(tag, int):
             block = SolanaBlockInfo(slot=tag)
         else:
-            raise EthereumError(message=f'Failed to parse block tag: {tag}')
+            raise InvalidParamError(message=f'failed to parse block tag: {tag}')
         return block
 
-    def _getFullBlockByNumber(self, tag) -> SolanaBlockInfo:
-        block = self.process_block_tag(tag)
+    @staticmethod
+    def _normalize_tx_id(tag: str) -> str:
+        if not isinstance(tag, str):
+            raise InvalidParamError(message='bad transaction-id format')
+
+        try:
+            tag = tag.lower().strip()
+            assert len(tag) == 66
+            assert tag[:2] == '0x'
+
+            int(tag[2:], 16)
+            return tag
+        except:
+            raise InvalidParamError(message='transaction-id is not hex')
+
+    @staticmethod
+    def _validate_block_tag(tag: str):
+        # if tag not in ("latest", "pending"):
+        #     self.debug(f"Block type '{tag}' is not supported yet")
+        #     raise EthereumError(message=f"Not supported block identifier: {tag}")
+
+        if isinstance(tag, int):
+            return
+
+        try:
+            tag.strip().lower()
+            if tag in ('latest', 'pending', 'earliest'):
+                return
+
+            assert tag[:2] == '0x'
+            int(tag[2:], 16)
+        except:
+            raise InvalidParamError(message=f'invalid block tag {tag}')
+
+    @staticmethod
+    def _normalize_account(account: str) -> str:
+        try:
+            sender = account.strip().lower()
+            bin_sender = bytes.fromhex(sender[2:])
+            assert len(bin_sender) == 20
+
+            return sender
+        except:
+            raise InvalidParamError(message='bad account')
+
+    def _get_full_block_by_number(self, tag) -> SolanaBlockInfo:
+        block = self._process_block_tag(tag)
         if block.slot is None:
             self.debug(f"Not found block by number {tag}")
             return block
@@ -138,17 +188,20 @@ class EthereumModel:
         slot = self._db.get_latest_block_slot()
         return hex(slot)
 
-    def eth_getBalance(self, account, tag) -> str:
+    def eth_getBalance(self, account: str, tag: str) -> str:
         """account - address to check for balance.
            tag - integer block number, or the string "latest", "earliest" or "pending"
         """
-        self.debug(f'eth_getBalance: {account}')
+
+        self._validate_block_tag(tag)
+        account = self._normalize_account(account)
+
         try:
-            acc_info = self._solana.get_account_info_layout(EthereumAddress(account))
-            if acc_info is None:
+            neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account))
+            if neon_account_info is None:
                 return hex(0)
 
-            return hex(acc_info.balance)
+            return hex(neon_account_info.balance)
         except Exception as err:
             self.debug(f"eth_getBalance: Can't get account info: {err}")
             return hex(0)
@@ -168,9 +221,9 @@ class EthereumModel:
         block_hash = None
 
         if 'fromBlock' in obj and obj['fromBlock'] != '0':
-            from_block = self.process_block_tag(obj['fromBlock']).slot
-        if 'toBlock' in obj and obj['toBlock'] != 'latest':
-            to_block = self.process_block_tag(obj['toBlock']).slot
+            from_block = self._process_block_tag(obj['fromBlock']).slot
+        if 'toBlock' in obj and obj['toBlock'] not in ('latest', 'pending'):
+            to_block = self._process_block_tag(obj['toBlock']).slot
         if 'address' in obj:
             addresses = to_list(obj['address'])
         if 'topics' in obj:
@@ -180,7 +233,7 @@ class EthereumModel:
 
         return self._db.get_logs(from_block, to_block, addresses, topics, block_hash)
 
-    def getBlockBySlot(self, block: SolanaBlockInfo, full, skip_transaction):
+    def _get_block_by_slot(self, block: SolanaBlockInfo, full: bool, skip_transaction: bool) -> Optional[dict]:
         if block.is_empty():
             block = self._db.get_full_block_by_slot(block.slot)
             if block.is_empty():
@@ -188,7 +241,6 @@ class EthereumModel:
 
         sign_list = []
         gas_used = 0
-        tx_index = 0
         if skip_transaction:
             tx_list = []
         else:
@@ -198,9 +250,7 @@ class EthereumModel:
             gas_used += int(tx.neon_res.gas_used, 16)
 
             if full:
-                receipt = self._getTransaction(tx)
-                receipt['transactionIndex'] = hex(tx_index)
-                tx_index += 1
+                receipt = self._get_transaction(tx)
                 sign_list.append(receipt)
             else:
                 sign_list.append(tx.neon_tx.sign)
@@ -217,13 +267,14 @@ class EthereumModel:
         }
         return result
 
-    def eth_getStorageAt(self, account, position, block_identifier):
-        '''Retrieves storage data by given position
+    def eth_getStorageAt(self, account: str, position, tag: str) -> str:
+        """
+        Retrieves storage data by given position
         Currently supports only 'latest' block
-        '''
-        if block_identifier != "latest":
-            self.debug(f"Block type '{block_identifier}' is not supported yet")
-            raise EthereumError(message=f"Not supported block identifier: {block_identifier}")
+        """
+
+        self._validate_block_tag(tag)
+        account = self._normalize_account(account)
 
         try:
             value = neon_cli().call('get-storage-at', account, position)
@@ -232,13 +283,15 @@ class EthereumModel:
             self.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
             return '0x00'
 
-    def _getBlockByHash(self, block_hash: str) -> SolanaBlockInfo:
+    def _get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         try:
-            block_hash = block_hash.lower()
+            block_hash = block_hash.strip().lower()
+            assert block_hash[:2] == '0x'
+
             bin_block_hash = bytes.fromhex(block_hash[2:])
             assert len(bin_block_hash) == 32
         except:
-            raise EthereumError(message=f'bad block hash {block_hash}')
+            raise InvalidParamError(message=f'bad block hash {block_hash}')
 
         block = self._db.get_block_by_hash(block_hash)
         if block.slot is None:
@@ -246,30 +299,30 @@ class EthereumModel:
 
         return block
 
-    def eth_getBlockByHash(self, block_hash: str, full):
+    def eth_getBlockByHash(self, block_hash: str, full: bool) -> Optional[dict]:
         """Returns information about a block by hash.
             block_hash - Hash of a block.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
-        block = self._getBlockByHash(block_hash)
+        block = self._get_block_by_hash(block_hash)
         if block.slot is None:
             return None
-        ret = self.getBlockBySlot(block, full, False)
+        ret = self._get_block_by_slot(block, full, False)
         return ret
 
-    def eth_getBlockByNumber(self, tag, full):
+    def eth_getBlockByNumber(self, tag: str, full: bool) -> Optional[dict]:
         """Returns information about a block by block number.
             tag - integer of a block number, or the string "earliest", "latest" or "pending", as in the default block parameter.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
-        block = self.process_block_tag(tag)
+        block = self._process_block_tag(tag)
         if block.slot is None:
             self.debug(f"Not found block by number {tag}")
             return None
-        ret = self.getBlockBySlot(block, full, tag == 'latest')
+        ret = self._get_block_by_slot(block, full, tag in ('latest', 'pending'))
         return ret
 
-    def eth_call(self, obj, tag):
+    def eth_call(self, obj: dict, tag: str) -> str:
         """Executes a new message call immediately without creating a transaction on the block chain.
            Parameters
             obj - The transaction call object
@@ -281,7 +334,13 @@ class EthereumModel:
                 data: DATA - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
             tag - integer block number, or the string "latest", "earliest" or "pending", see the default block parameter
         """
-        if not obj['data']: raise EthereumError(message="Missing data")
+        self._validate_block_tag(tag)
+        if not isinstance(obj, dict):
+            raise InvalidParamError(message='invalid object type')
+
+        if not obj['data']:
+            raise InvalidParamError(message="missing data")
+
         try:
             caller_id = obj.get('from', "0x0000000000000000000000000000000000000000")
             contract_id = obj.get('to', 'deploy')
@@ -294,18 +353,22 @@ class EthereumModel:
             self.error("eth_call Exception %s", err)
             raise
 
-    def eth_getTransactionCount(self, account, tag):
+    def eth_getTransactionCount(self, account: str, tag: str) -> str:
+        self._validate_block_tag(tag)
+        account = self._normalize_account(account)
+
         try:
-            acc_info = self._solana.get_account_info_layout(EthereumAddress(account))
-            return hex(acc_info.trx_count)
+            neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account))
+            return hex(neon_account_info.trx_count)
         except Exception as err:
             self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
 
-    def _getTransactionReceipt(self, tx):
+    @staticmethod
+    def _get_transaction_receipt(tx) -> dict:
         result = {
             "transactionHash": tx.neon_tx.sign,
-            "transactionIndex": hex(0),
+            "transactionIndex": hex(tx.neon_tx.tx_idx),
             "blockHash": tx.neon_res.block_hash,
             "blockNumber": hex(tx.neon_res.slot),
             "from": tx.neon_tx.addr,
@@ -320,17 +383,17 @@ class EthereumModel:
 
         return result
 
-    def eth_getTransactionReceipt(self, trxId):
-        self.debug('eth_getTransactionReceipt: %s', trxId)
+    def eth_getTransactionReceipt(self, NeonTxId: str) -> Optional[dict]:
+        neon_sign = self._normalize_tx_id(NeonTxId)
 
-        neon_sign = trxId.lower()
         tx = self._db.get_tx_by_neon_sign(neon_sign)
         if not tx:
             self.debug("Not found receipt")
             return None
-        return self._getTransactionReceipt(tx)
+        return self._get_transaction_receipt(tx)
 
-    def _getTransaction(self, tx):
+    @staticmethod
+    def _get_transaction(tx) -> dict:
         t = tx.neon_tx
         r = tx.neon_res
 
@@ -338,7 +401,7 @@ class EthereumModel:
             "blockHash": r.block_hash,
             "blockNumber": hex(r.slot),
             "hash": t.sign,
-            "transactionIndex": hex(0),
+            "transactionIndex": hex(t.tx_idx),
             "from": t.addr,
             "nonce":  t.nonce,
             "gasPrice": t.gas_price,
@@ -353,21 +416,21 @@ class EthereumModel:
 
         return result
 
-    def eth_getTransactionByHash(self, trxId):
-        self.debug('eth_getTransactionByHash: %s', trxId)
+    def eth_getTransactionByHash(self, NeonTxId: str) -> Optional[dict]:
+        neon_sign = self._normalize_tx_id(NeonTxId)
 
-        neon_sign = trxId.lower()
         tx = self._db.get_tx_by_neon_sign(neon_sign)
         if tx is None:
             self.debug("Not found receipt")
             return None
-        return self._getTransaction(tx)
+        return self._get_transaction(tx)
 
-    def eth_getCode(self, account, _tag):
-        account = account.lower()
+    def eth_getCode(self, account: str, tag) -> str:
+        self._validate_block_tag(tag)
+        account = self._normalize_account(account)
         return self._db.get_contract_code(account)
 
-    def eth_sendRawTransaction(self, rawTrx):
+    def eth_sendRawTransaction(self, rawTrx: str) -> str:
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
@@ -386,10 +449,6 @@ class EthereumModel:
         except PendingTxError as err:
             self.debug(f'{err}')
             return eth_signature
-        except SolTxError as err:
-            err_msg = json.dumps(err.result, indent=3)
-            self.error(f"Got SendTransactionError: {err_msg}")
-            raise
         except EthereumError as err:
             # self.debug(f"eth_sendRawTransaction EthereumError: {err}")
             raise
@@ -397,7 +456,7 @@ class EthereumModel:
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
 
-    def _getTransactionByIndex(self, block: SolanaBlockInfo, tx_idx: int) -> Optional[dict]:
+    def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: int) -> Optional[dict]:
         try:
             if isinstance(tx_idx, str):
                 tx_idx = int(tx_idx, 16)
@@ -415,24 +474,24 @@ class EthereumModel:
         if tx_idx >= len(tx_list):
             return None
 
-        return self._getTransaction(tx_list[tx_idx])
+        return self._get_transaction(tx_list[tx_idx])
 
     def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[dict]:
-        block = self.process_block_tag(tag)
+        block = self._process_block_tag(tag)
         if block.is_empty():
             self.debug(f"Not found block by number {tag}")
             return None
 
-        return self._getTransactionByIndex(block, tx_idx)
+        return self._get_transaction_by_index(block, tx_idx)
 
     def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[dict]:
-        block = self._getBlockByHash(block_hash)
+        block = self._get_block_by_hash(block_hash)
         if block.is_empty():
             return None
-        return self._getTransactionByIndex(block, tx_idx)
+        return self._get_transaction_by_index(block, tx_idx)
 
     def eth_getBlockTransactionCountByHash(self, block_hash: str) -> str:
-        block = self._getBlockByHash(block_hash)
+        block = self._get_block_by_hash(block_hash)
         if block.slot is None:
             return hex(0)
         if block.is_empty():
@@ -445,7 +504,7 @@ class EthereumModel:
         return hex(len(tx_list))
 
     def eth_getBlockTransactionCountByNumber(self, tag: str) -> str:
-        block = self._getFullBlockByNumber(tag)
+        block = self._get_full_block_by_number(tag)
         if block.is_empty():
             return hex(0)
 
@@ -458,34 +517,26 @@ class EthereumModel:
         account_list = storage.get_list()
         return [str(a) for a in account_list]
 
-    @staticmethod
-    def eth_sign(address: str, data: str) -> str:
-        try:
-            address = address.lower()
-            bin_address = bytes.fromhex(address[2:])
-            assert len(bin_address) == 20
-        except:
-            raise EthereumError(message='bad account')
-
-        account = KeyStorage().get_key(address)
-        if not account:
-            raise EthereumError(message='unknown account')
-
+    def eth_sign(self, address: str, data: str) -> str:
+        address = self._normalize_account(address)
         try:
             data = bytes.fromhex(data[2:])
         except:
             raise EthereumError(message='data is not hex string')
 
+        account = KeyStorage().get_key(address)
+        if not account:
+            raise EthereumError(message='unknown account')
+
         message = str.encode(f'\x19Ethereum Signed Message:\n{len(data)}') + data
         return str(account.private.sign_msg(message))
 
     def eth_signTransaction(self, tx: dict) -> dict:
-        try:
-            sender = tx['from']
-            bin_sender = bytes.fromhex(sender[2:])
-            assert len(bin_sender) == 20
-        except:
-            raise EthereumError(message='bad account')
+        if 'from' not in tx:
+            raise InvalidParamError(message='no sender in transaction')
+
+        sender = tx['from']
+        sender = self._normalize_account(sender)
 
         account = KeyStorage().get_key(sender)
         if not account:
@@ -516,9 +567,9 @@ class EthereumModel:
                 'tx': tx
             }
         except:
-            raise EthereumError(message='bad transaction')
+            raise InvalidParamError(message='bad transaction')
 
-    def eth_sendTransaction(self, tx):
+    def eth_sendTransaction(self, tx: dict) -> str:
         tx = self.eth_signTransaction(tx)
         return self.eth_sendRawTransaction(tx['raw'])
 
@@ -527,7 +578,7 @@ class EthereumModel:
         try:
             data = bytes.fromhex(data[2:])
         except:
-            raise EthereumError(message='data is not hex string')
+            raise InvalidParamError(message='data is not hex string')
 
         return sha3.keccak_256(data).hexdigest()
 
@@ -543,8 +594,23 @@ class EthereumModel:
     def eth_getWork() -> [str]:
         return ['', '', '', '']
 
-    def eth_syncing(self) -> bool:
-        return self._solana.is_health()
+    def eth_syncing(self) -> Union[bool, dict]:
+        try:
+            slots_behind = self._solana.get_slots_behind()
+            latest_slot = self._db.get_latest_block_slot()
+            first_slot = self._db.get_starting_block_slot()
+
+            self.debug(f'slots_behind: {slots_behind}, latest_slot: {latest_slot}, first_slot: {first_slot}')
+            if (slots_behind is None) or (latest_slot is None) or (first_slot is None):
+                return False
+
+            return {
+                'startingblock': first_slot,
+                'currentblock': latest_slot,
+                'highestblock': latest_slot + slots_behind
+            }
+        except:
+            return False
 
     def net_peerCount(self) -> str:
         cluster_node_list = self._solana.get_cluster_nodes()
@@ -554,10 +620,9 @@ class EthereumModel:
     def net_listening() -> bool:
         return False
 
-    def neon_getSolanaTransactionByNeonTransaction(self, neonTxId: str) -> [str]:
-        if not isinstance(neonTxId, str):
-            return []
-        return self._db.get_sol_sign_list_by_neon_sign(neonTxId)
+    def neon_getSolanaTransactionByNeonTransaction(self, NeonTxId: str) -> Union[str, list]:
+        neon_sign = self._normalize_tx_id(NeonTxId)
+        return self._db.get_sol_sign_list_by_neon_sign(neon_sign)
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -603,7 +668,11 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             'jsonrpc': '2.0',
             'id': request.get('id', None),
         }
+
         def is_private_api(method: str) -> bool:
+            if method.startswith('_'):
+                return True
+
             if ENABLE_PRIVATE_API:
                 return False
 
@@ -648,7 +717,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
     def handle_request_impl(self, request: HttpParser) -> None:
         if request.method == b'OPTIONS':
-            self._client.queue(memoryview(build_http_response(
+            self.client.queue(memoryview(build_http_response(
                 httpStatusCodes.OK, body=None,
                 headers={
                     b'Access-Control-Allow-Origin': b'*',
@@ -658,10 +727,10 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 })))
             return
         start_time = time.time()
-        self.info('handle_request <<< %s 0x%x %s', threading.get_ident(), id(self.model), request.body.decode('utf8'))
-        response = None
 
         try:
+            self.info('handle_request <<< %s 0x%x %s', threading.get_ident(), id(self.model),
+                      request.body.decode('utf8'))
             request = json.loads(request.body)
             if isinstance(request, list):
                 response = []
@@ -678,11 +747,16 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             response = {'jsonrpc': '2.0', 'error': {'code': -32000, 'message': str(err)}}
 
         resp_time_ms = (time.time() - start_time)*1000  # convert this into milliseconds
+
+        method = '---'
+        if isinstance(request, dict):
+            method = request.get('method', '---')
+
         self.info('handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
                   threading.get_ident(),
                   id(self.model),
                   json.dumps(response),
-                  request.get('method', '---'),
+                  method,
                   resp_time_ms)
 
         self.client.queue(memoryview(build_http_response(
