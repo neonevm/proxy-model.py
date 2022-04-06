@@ -5,6 +5,7 @@ import sys
 import os
 import math
 import json
+from typing import Any
 from coincurve import PublicKey
 import sha3
 
@@ -20,6 +21,7 @@ class InfoHandler:
         self._solana = SolanaInteractor(SOLANA_URL)
         self.command = 'info'
         self._storage = None
+        self.print_stdout = True
 
     @staticmethod
     def init_args_parser(parsers: _SubParsersAction[ArgumentParser]) -> InfoHandler:
@@ -36,23 +38,24 @@ class InfoHandler:
 
     def execute(self, args):
         if args.subcommand == 'holder-accounts':
-            ret_js = self._holder_accounts_info(args)
+            self._holder_accounts_info(args)
         elif args.subcommand == 'storage-accounts':
-            ret_js = self._storage_accounts_info(args)
+            self._storage_accounts_info(args)
         elif args.subcommand == 'solana-private-key':
-            ret_js = self._solana_private_key_info(args)
+            self._solana_private_key_info(args)
         elif args.subcommand == 'neon-private-key':
-            ret_js = self._neon_private_key_info(args)
+            self._neon_private_key_info(args)
         elif args.subcommand == 'neon-address':
-            ret_js = self._neon_address_info(args)
+            self._neon_address_info(args)
         elif args.subcommand == 'solana-accounts':
-            ret_js = self._solana_accounts_info(args)
+            self._solana_accounts_info(args)
         elif args.subcommand == None:
+            self.print_stdout = False
             ret_js = self._all_info(args)
+            print(json.dumps(ret_js))
         else:
             print(f'Unknown command {args.subcommand} for account', file=sys.stderr)
             return
-        print(json.dumps(ret_js))
 
     def _holder_accounts_info(self, args):
         ret_js = {}
@@ -62,6 +65,7 @@ class InfoHandler:
             for rid in range(max(PERM_ACCOUNT_LIMIT, 16)):
                 holder_address = self._generate_holder_address(sol_account.public_key(), rid)
                 ret_js['holder-accounts'].append(str(holder_address))
+                self._print(str(holder_address))
 
         return ret_js
 
@@ -73,6 +77,7 @@ class InfoHandler:
             for rid in range(max(PERM_ACCOUNT_LIMIT, 16)):
                 storage_address = self._generate_storage_address(sol_account.public_key(), rid)
                 ret_js['storage-accounts'].append(str(storage_address))
+                self._print(str(storage_address))
 
         return ret_js
 
@@ -84,6 +89,8 @@ class InfoHandler:
             acc_info_js = {}
             acc_info_js['address'] = str(sol_account.public_key())
             acc_info_js['private'] = list(sol_account.keypair())
+
+            self._print(f"{acc_info_js['address']}    {acc_info_js['private']}")
 
             ret_js['solana-accounts'].append(acc_info_js)
 
@@ -99,6 +106,8 @@ class InfoHandler:
             acc_info_js = {}
             acc_info_js['address'] = str(neon_account)
             acc_info_js['private'] = str(neon_account.private)
+
+            self._print(f"{acc_info_js['address']}    {acc_info_js['private']}")
 
             ret_js['neon-accounts'].append(acc_info_js)
 
@@ -117,9 +126,12 @@ class InfoHandler:
             acc_info_js['address'] = str(neon_account)
             acc_info_js['balance'] = self._get_neon_balance(neon_account)
 
+            self._print(f"{acc_info_js['address']}    {acc_info_js['balance']}")
+
             ret_js['total_balance'] += acc_info_js['balance']
             ret_js['neon-accounts'].append(acc_info_js)
 
+        self._print(f"total_balance    {ret_js['total_balance']}")
         return ret_js
 
     def _solana_accounts_info(self, args):
@@ -132,15 +144,22 @@ class InfoHandler:
 
         for sol_account in operator_accounts:
             acc_info_js = self._get_solana_accounts(sol_account)
+            self._print(f"{acc_info_js['address']}    {acc_info_js['balance']}")
 
             ret_js['total_balance'] += acc_info_js['balance']
+            self._print(f"holder:")
             for holder_account in acc_info_js['holder']:
+                self._print(f"    {acc_info_js['address']}    {acc_info_js['balance']}")
                 ret_js['resource_balance'] += holder_account['balance']
+            self._print(f"storage:")
             for storage_account in acc_info_js['storage']:
+                self._print(f"    {acc_info_js['address']}    {acc_info_js['balance']}")
                 ret_js['resource_balance'] += storage_account['balance']
 
             ret_js['accounts'].append(acc_info_js)
 
+        self._print(f"total_balance       {ret_js['total_balance']}")
+        self._print(f"resource_balance    {ret_js['resource_balance']}")
         return ret_js
 
     def _all_info(self, args):
@@ -155,6 +174,7 @@ class InfoHandler:
 
         for sol_account, neon_account in zip(operator_accounts, neon_accounts):
             acc_info_js = self._get_solana_accounts(sol_account)
+            acc_info_js['private'] = list(sol_account.keypair())
 
             ret_js['total_balance'] += acc_info_js['balance']
 
@@ -164,6 +184,7 @@ class InfoHandler:
                 ret_js['resource_balance'] += storage_account['balance']
 
             acc_info_js['neon_address'] = str(neon_account)
+            acc_info_js['neon_private'] = str(neon_account.private)
             acc_info_js['neon_balance'] = self._get_neon_balance(neon_account)
 
             ret_js['total_neon_balance'] += acc_info_js['neon_balance']
@@ -187,7 +208,7 @@ class InfoHandler:
         return account
 
     def _get_neon_balance(self, neon_address: EthereumAddress):
-        neon_layout = self._solana.get_account_info_layout(neon_address)
+        neon_layout = self._solana.get_neon_account_info(neon_address)
         return neon_layout.balance if neon_layout else 0
 
     def _get_solana_accounts(self, sol_account):
@@ -205,6 +226,7 @@ class InfoHandler:
         acc_info_js = {}
         acc_info_js['address'] = str(sol_account.public_key())
         acc_info_js['balance'] = self._solana.get_sol_balance(sol_account.public_key())
+        self._print(f"address: {acc_info_js['address']}")
 
         acc_info_js['storage'] = []
         acc_info_js['holder'] = []
@@ -228,3 +250,7 @@ class InfoHandler:
                 acc_info_js['holder'].append(holder_account)
 
         return acc_info_js
+
+    def _print(self, msg: Any):
+        if self.print_stdout:
+            print(f"{msg}")
