@@ -889,7 +889,7 @@ class Indexer(IndexerBase):
     def commit_statistics(self):
         for stat_info in self.state.iter_stat_info():
             neon_tx_hash = stat_info.neon_tx.sign
-            self.stat_exporter.stat_commit_tx_count(True if stat_info.neon_res.status == '0x0' else False)
+            neon_income = int(stat_info.neon_res.gas_used, 0) * int(stat_info.neon_tx.gas_price, 0)
             for sign_info, cost_info in zip(stat_info.used_ixs, stat_info.ixs_cost):
                 sol_tx_hash = sign_info.sign
                 self.stat_exporter.stat_commit_tx_sol_spent(neon_tx_hash, sol_tx_hash, cost_info.sol_spent)
@@ -900,6 +900,8 @@ class Indexer(IndexerBase):
                 tx_type = 'iterative'
             else:
                 tx_type = 'single'
+            self.stat_exporter.stat_commit_tx_count(True if stat_info.neon_res.status == '0x0' else False)
+            self.stat_exporter.stat_commit_tx_neon_income(neon_tx_hash, neon_income)
             self.stat_exporter.stat_commit_count_sol_tx_per_neon_tx(tx_type, len(stat_info.used_ixs))
         self.stat_exporter.stat_commit_postgres_availability(self.db.status())
         self.stat_exporter.stat_commit_solana_rpc_health(self.solana.is_health())

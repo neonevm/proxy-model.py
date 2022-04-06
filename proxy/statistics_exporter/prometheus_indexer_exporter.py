@@ -9,6 +9,11 @@ class PrometheusExporter(IndexerStatisticsExporter):
         ['neon_tx_hash', 'sol_tx_hash'],
         registry=registry
     )
+    TX_NEON_INCOME = Histogram(
+        'tx_neon_income', 'Neon payed for transaction',
+        ['neon_tx_hash'],
+        registry=registry
+    )
     TX_BPF_PER_ITERATION = Histogram(
         'tx_bpf_per_iteration', 'How many BPF cycles was used in each iteration',
         ['neon_tx_hash', 'sol_tx_hash'],
@@ -40,6 +45,10 @@ class PrometheusExporter(IndexerStatisticsExporter):
 
     def stat_commit_tx_sol_spent(self, neon_tx_hash: str, sol_tx_hash: str, sol_spent: int):
         self.TX_SOL_SPENT.labels(neon_tx_hash, sol_tx_hash).observe(sol_spent)
+        pass
+
+    def stat_commit_tx_neon_income(self, neon_tx_hash: str, neon_income: int):
+        self.TX_NEON_INCOME.labels(neon_tx_hash).observe(neon_income)
         pass
 
     def stat_commit_tx_steps_bpf(self, neon_tx_hash: str, sol_tx_hash: str, steps: int, bpf: int):

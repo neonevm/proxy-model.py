@@ -196,6 +196,10 @@ class SolanaInteractor:
     def get_cluster_nodes(self) -> [dict]:
         return self._send_rpc_request("getClusterNodes").get('result', [])
 
+    def is_health(self) -> bool:
+        status = self._send_rpc_request('getHealth').get('result', 'bad')
+        return status == 'ok'
+
     def get_slots_behind(self) -> Optional[int]:
         response = self._send_rpc_request('getHealth')
         status = response.get('result')
