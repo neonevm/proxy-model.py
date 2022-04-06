@@ -432,14 +432,14 @@ class EthereumModel:
 
     def eth_sendRawTransaction(self, rawTrx: str) -> str:
         trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
-        self.debug(f"{json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
+        eth_signature = '0x' + trx.hash_signed().hex()
+        self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
+
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
 
         if trx.gasPrice < min_gas_price:
             raise EthereumError(message="The transaction gasPrice is less than the minimum allowable value" +
                                 f"({trx.gasPrice}<{min_gas_price})")
-
-        eth_signature = '0x' + trx.hash_signed().hex()
 
         try:
             tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
