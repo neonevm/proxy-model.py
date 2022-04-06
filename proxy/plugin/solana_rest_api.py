@@ -46,7 +46,7 @@ from web3.auto import w3
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-NEON_PROXY_PKG_VERSION = '0.7.11'
+NEON_PROXY_PKG_VERSION = '0.7.12'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
