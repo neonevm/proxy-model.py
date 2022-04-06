@@ -446,7 +446,7 @@ class EthereumModel:
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
 
         if trx.gasPrice < min_gas_price:
-            self._stat_tx_end()
+            self._stat_tx_failed()
             raise EthereumError(message="The transaction gasPrice is less than the minimum allowable value" +
                                 f"({trx.gasPrice}<{min_gas_price})")
 
@@ -455,30 +455,30 @@ class EthereumModel:
         try:
             tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             tx_sender.execute()
-            self._stat_tx_end(True)
+            self._stat_tx_success()
             return eth_signature
 
         except PendingTxError as err:
-            self._stat_tx_end()
+            self._stat_tx_failed()
             self.debug(f'{err}')
             return eth_signature
         except EthereumError as err:
-            self._stat_tx_end()
+            self._stat_tx_failed()
             # self.debug(f"eth_sendRawTransaction EthereumError: {err}")
             raise
         except Exception as err:
-            self._stat_tx_end()
+            self._stat_tx_failed()
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
 
     def _stat_tx_begin(self):
         self.stat_exporter.stat_commit_tx_begin()
 
-    def _stat_tx_end(self, succeed: bool = False):
-        if succeed:
-            self.stat_exporter.stat_commit_tx_end_success()
-        else:
-            self.stat_exporter.stat_commit_tx_end_failed(None)
+    def _stat_tx_success(self):
+        self.stat_exporter.stat_commit_tx_end_success()
+
+    def _stat_tx_failed(self):
+        self.stat_exporter.stat_commit_tx_end_failed(None)
 
     def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: int) -> Optional[dict]:
         try:
@@ -792,7 +792,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 b'Access-Control-Allow-Origin': b'*',
             })))
 
-        self.stat_exporter.stat_commit_request_and_timeout(request.get('method', '---'), resp_time_ms)
+        self.stat_exporter.stat_commit_request_and_timeout(method, resp_time_ms)
 
     def on_websocket_open(self) -> None:
         pass
