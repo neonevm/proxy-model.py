@@ -32,7 +32,7 @@
     ALTER TABLE neon_accounts ADD COLUMN IF NOT EXISTS pda_address VARCHAR(50);
     ALTER TABLE neon_accounts ADD COLUMN IF NOT EXISTS code_address VARCHAR(50);
     ALTER TABLE neon_accounts ADD COLUMN IF NOT EXISTS sol_sign CHAR(88);
-    ALTER TABLE neon_accounts ADD UNIQUE (pda_address, code_address);
+    CREATE UNIQUE INDEX IF NOT EXISTS neon_accounts_pda_address_code_address_key ON neon_accounts (pda_address, code_address);
     CREATE INDEX IF NOT EXISTS neon_accounts_neon_address_idx ON neon_accounts (neon_address);
 
     CREATE TABLE IF NOT EXISTS failed_airdrop_attempts (
