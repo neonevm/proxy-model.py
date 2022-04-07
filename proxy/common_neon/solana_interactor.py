@@ -354,7 +354,7 @@ class SolanaInteractor:
                                f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
         return StorageAccountInfo.frombytes(info.data)
 
-    def get_account_info_layout_list(self, eth_accounts: List[EthereumAddress]) -> List[Optional[AccountInfoLayout]]:
+    def get_account_info_layout_list(self, eth_accounts: List[EthereumAddress]) -> List[Optional[NeonAccountInfo]]:
         requests_list = []
         for eth_account in eth_accounts:
             account_sol, _nonce = ether2program(eth_account)
@@ -365,7 +365,7 @@ class SolanaInteractor:
             if info is None or len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
                 accounts_list.append(None)
                 continue
-            accounts_list.append(AccountInfoLayout.frombytes(info.data))
+            accounts_list.append(NeonAccountInfo.frombytes(info.data))
         return accounts_list
 
     def get_multiple_rent_exempt_balances_for_size(self, size_list: [int], commitment='confirmed') -> [int]:

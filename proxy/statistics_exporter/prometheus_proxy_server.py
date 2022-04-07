@@ -11,7 +11,10 @@ from proxy.environment import PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, SOLANA_URL, g
 from proxy.plugin.gas_price_calculator import GasPriceCalculator
 from .prometheus_proxy_exporter import PrometheusExporter
 
+from logged_groups import logged_group
 
+
+@logged_group("neon.Prometheus")
 class PrometheusProxyServer:
     def __init__(self):
         self.start_http_server()
