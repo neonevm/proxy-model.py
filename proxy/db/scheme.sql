@@ -31,6 +31,11 @@
         UNIQUE(pda_address, code_address)
     );
 
+    ALTER TABLE neon_accounts ADD COLUMN IF NOT EXISTS neon_address CHAR(42);
+    ALTER TABLE neon_accounts ADD COLUMN IF NOT EXISTS pda_address VARCHAR(50);
+    ALTER TABLE neon_accounts ADD COLUMN IF NOT EXISTS code_address VARCHAR(50);
+    ALTER TABLE neon_accounts ADD COLUMN IF NOT EXISTS sol_sign CHAR(88);
+
     CREATE TABLE IF NOT EXISTS failed_airdrop_attempts (
         attempt_time    BIGINT,
         eth_address     TEXT,
@@ -85,6 +90,8 @@
         UNIQUE(sol_sign, neon_sign, idx),
         UNIQUE(neon_sign, sol_sign, idx)
     );
+
+    ALTER TABLE solana_neon_transactions ADD COLUMN IF NOT EXISTS neon_steps INT DEFAULT 0;
 
     CREATE TABLE IF NOT EXISTS neon_transactions (
         neon_sign CHAR(66),
