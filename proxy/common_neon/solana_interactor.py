@@ -111,7 +111,7 @@ class StorageAccountInfo(NamedTuple):
 
 class SendResult(NamedTuple):
     error: dict
-    result: dict
+    result: Optional[str]
 
 
 @logged_group("neon.Proxy")
@@ -282,11 +282,28 @@ class SolanaInteractor:
 
         return accounts_info
 
-    def get_sol_balance(self, account, commitment='confirmed'):
+    def get_sol_balance(self, account, commitment='confirmed') -> int:
         opts = {
             "commitment": commitment
         }
         return self._send_rpc_request('getBalance', str(account), opts)['result']['value']
+
+    def get_sol_balance_list(self, accounts_list: List[Union[str, PublicKey]], commitment='confirmed') -> List[int]:
+        opts = {
+            'commitment': commitment
+        }
+        requests_list = []
+        for account in accounts_list:
+            requests_list.append((str(account), opts))
+
+        balances_list = []
+        response_list = self._send_rpc_batch_request('getBalance', requests_list)
+        for response in response_list:
+            value = get_from_dict(response, 'result', 'value')
+            balance = int(value) if value else 0
+            balances_list.append(balance)
+
+        return balances_list
 
     def get_token_account_balance(self, pubkey: Union[str, PublicKey], commitment='confirmed') -> int:
         opts = {
@@ -330,11 +347,26 @@ class SolanaInteractor:
         if info is None:
             return None
         elif info.tag != 30:
+            self.debug(f'Storage account {str(storage_account)} has tag {info.tag}')
             return None
         elif len(info.data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
             raise RuntimeError(f"Wrong data length for storage data {storage_account}: " +
                                f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
         return StorageAccountInfo.frombytes(info.data)
+
+    def get_account_info_layout_list(self, eth_accounts: List[EthereumAddress]) -> List[Optional[AccountInfoLayout]]:
+        requests_list = []
+        for eth_account in eth_accounts:
+            account_sol, _nonce = ether2program(eth_account)
+            requests_list.append(account_sol)
+        responses_list = self.get_account_info_list(requests_list)
+        accounts_list = []
+        for info in responses_list:
+            if info is None or len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
+                accounts_list.append(None)
+                continue
+            accounts_list.append(AccountInfoLayout.frombytes(info.data))
+        return accounts_list
 
     def get_multiple_rent_exempt_balances_for_size(self, size_list: [int], commitment='confirmed') -> [int]:
         opts = {
@@ -488,12 +520,30 @@ class SolanaInteractor:
         request_list = self._fuzzing_transactions(signer, tx_list, opts, request_list)
         response_list = self._send_rpc_batch_request('sendTransaction', request_list)
         result_list = []
+
         for response, tx in zip(response_list, tx_list):
-            result = response.get('result')
+            raw_result = response.get('result')
+
+            result = None
+            if isinstance(raw_result, dict):
+                self.debug(f'Got strange result on transaction execution: {json.dumps(raw_result)}')
+            elif isinstance(raw_result, str):
+                result = b58encode(b58decode(raw_result)).decode("utf-8")
+            elif isinstance(raw_result, bytes):
+                result = b58encode(raw_result).decode("utf-8")
+            elif raw_result is not None:
+                self.debug(f'Got strange result on transaction execution: {str(raw_result)}')
+
             error = response.get('error')
-            if error and get_from_dict(error, 'data', 'err') == 'AlreadyProcessed':
-                error = None
-                result = tx.signature()
+            if error:
+                if get_from_dict(error, 'data', 'err') == 'AlreadyProcessed':
+                    result = b58encode(tx.signature()).decode("utf-8")
+                    self.debug(f'Transaction is already processed: {str(result)}')
+                    error = None
+                else:
+                    self.debug(f'Got error on transaction execution: {json.dumps(error)}')
+                    result = None
+
             result_list.append(SendResult(result=result, error=error))
         return result_list
 
@@ -509,7 +559,6 @@ class SolanaInteractor:
         receipt_list = []
         for s in send_result_list:
             if s.error:
-                self.debug(f'Got error on preflight check of transaction: {json.dumps(s.error, sort_keys=True)}')
                 receipt_list.append(s.error)
             else:
                 receipt_list.append(confirmed_list.pop(0))
@@ -522,13 +571,6 @@ class SolanaInteractor:
             self.debug('No confirmations, because transaction list is empty')
             return
 
-        base58_sign_list: List[str] = []
-        for sign in sign_list:
-            if isinstance(sign, str):
-                base58_sign_list.append(b58encode(b58decode(sign)).decode("utf-8"))
-            else:
-                base58_sign_list.append(b58encode(sign).decode("utf-8"))
-
         opts = {
             "searchTransactionHistory": False
         }
@@ -539,7 +581,7 @@ class SolanaInteractor:
                 time.sleep(CONFIRMATION_CHECK_DELAY)
             elapsed_time += CONFIRMATION_CHECK_DELAY
 
-            response = self._send_rpc_request("getSignatureStatuses", base58_sign_list, opts)
+            response = self._send_rpc_request("getSignatureStatuses", sign_list, opts)
             result = response.get('result', None)
             if not result:
                 continue
