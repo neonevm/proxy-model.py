@@ -17,14 +17,13 @@ import multiprocessing
 import sha3
 
 from logged_groups import logged_group, logging_context
-from typing import Optional, Union
 
 from ..common.utils import build_http_response
 from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-from typing import Dict, List, Tuple, Optional
+from typing import Union, List, Tuple, Optional
 
 from ..common_neon.transaction_sender import NeonTxSender
 from ..common_neon.solana_interactor import SolanaInteractor
@@ -38,7 +37,6 @@ from ..common_neon.keys_storage import KeyStorage
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEP_COUNT, CHAIN_ID, ENABLE_PRIVATE_API
 from ..environment import NEON_EVM_VERSION, NEON_EVM_REVISION
 from ..environment import neon_cli
-from ..environment import get_solana_accounts
 from ..memdb.memdb import MemDB
 from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx

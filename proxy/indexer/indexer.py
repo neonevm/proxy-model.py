@@ -489,6 +489,7 @@ class CreateAccountIxDecoder(DummyIxDecoder):
         self.state.add_account_to_db(NeonAccountInfo(neon_account, pda_account, code_account, self.ix.sign.slot, None, self.ix.sign.sign))
         return True
 
+
 class CreateAccount2IxDecoder(DummyIxDecoder):
     def __init__(self, state: ReceiptsParserState):
         DummyIxDecoder.__init__(self, 'CreateAccount2', state)
@@ -512,6 +513,7 @@ class CreateAccount2IxDecoder(DummyIxDecoder):
 
         self.state.add_account_to_db(NeonAccountInfo(neon_account, pda_account, code_account, self.ix.sign.slot, None, self.ix.sign.sign))
         return True
+
 
 class ResizeStorageAccountIxDecoder(DummyIxDecoder):
     def __init__(self, state: ReceiptsParserState):
