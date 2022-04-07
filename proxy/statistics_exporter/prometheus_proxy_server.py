@@ -1,17 +1,19 @@
-from decimal import Decimal
-from multiprocessing import Process
 import time
 import traceback
-from typing import Dict, Tuple
+from decimal import Decimal
+from logged_groups import logged_group
+from multiprocessing import Process
+
 from prometheus_client import start_http_server
 from proxy.common_neon.address import EthereumAddress
 from proxy.common_neon.solana_interactor import SolanaInteractor
-
 from proxy.environment import PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, SOLANA_URL, get_solana_accounts
 from proxy.plugin.gas_price_calculator import GasPriceCalculator
+
 from .prometheus_proxy_exporter import PrometheusExporter
 
 
+@logged_group("neon.ProxyStatExporter")
 class PrometheusProxyServer:
     def __init__(self):
         self.start_http_server()
