@@ -67,7 +67,7 @@ class BaseDB:
     def encode_list(self, v: []):
         return None if (not v) or (len(v) == 0) else encode(v)
 
-    def connected(self) -> bool:
+    def is_connected(self) -> bool:
         try:
             cur = self._conn.cursor()
             cur.execute('SELECT 1')

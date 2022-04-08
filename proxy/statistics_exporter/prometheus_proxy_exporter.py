@@ -1,8 +1,8 @@
 from decimal import Decimal
-from .proxy_metrics_interface import ProxyStatisticsExporter
+from .proxy_metrics_interface import StatisticsExporter
 
 
-class PrometheusExporter(ProxyStatisticsExporter):
+class PrometheusExporter(StatisticsExporter):
     def stat_commit_request_and_timeout(self, method: str, latency: float):
         from .prometheus_proxy_metrics import (
             REQUEST_COUNT, REQUEST_LATENCY,
@@ -65,4 +65,22 @@ class PrometheusExporter(ProxyStatisticsExporter):
         USD_PRICE_SOL.set(sol_price_usd)
         OPERATOR_FEE.set(operator_fee)
         GAS_PRICE.set(gas_price)
+
+    def stat_commit_tx_sol_spent(self, *args):
+        pass
+
+    def stat_commit_tx_steps_bpf(self, *args):
+        pass
+
+    def stat_commit_tx_count(self, *args):
+        pass
+
+    def stat_commit_count_sol_tx_per_neon_tx(self, *args):
+        pass
+
+    def stat_commit_postgres_availability(self, *args):
+        pass
+
+    def stat_commit_solana_rpc_health(self, *args):
+        pass
 

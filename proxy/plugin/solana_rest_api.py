@@ -44,7 +44,7 @@ from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx
 from web3.auto import w3
 
-from ..statistics_exporter.proxy_metrics_interface import ProxyStatisticsExporter
+from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
 
 modelInstanceLock = threading.Lock()
@@ -75,7 +75,7 @@ class EthereumModel:
 
         self.debug(f"Worker id {self.proxy_id}")
 
-    def set_stat_exporter(self, stat_exporter: ProxyStatisticsExporter):
+    def set_stat_exporter(self, stat_exporter: StatisticsExporter):
         self.stat_exporter = stat_exporter
 
     @staticmethod

@@ -1,8 +1,8 @@
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, start_http_server
-from .indexer_metrics_interface import IndexerStatisticsExporter
+from .proxy_metrics_interface import StatisticsExporter
 
 
-class PrometheusExporter(IndexerStatisticsExporter):
+class IndexerStatistics(StatisticsExporter):
     registry = CollectorRegistry()
     TX_SOL_SPENT = Histogram(
         'tx_sol_spent', 'How many lamports being spend in Neon transaction per iteration',
@@ -41,38 +41,57 @@ class PrometheusExporter(IndexerStatisticsExporter):
 
     def __init__(self):
         start_http_server(8887, registry=self.registry)
-        pass
 
     def stat_commit_tx_sol_spent(self, neon_tx_hash: str, sol_tx_hash: str, sol_spent: int):
         self.TX_SOL_SPENT.labels(neon_tx_hash, sol_tx_hash).observe(sol_spent)
-        pass
 
     def stat_commit_tx_neon_income(self, neon_tx_hash: str, neon_income: int):
         self.TX_NEON_INCOME.labels(neon_tx_hash).observe(neon_income)
-        pass
 
     def stat_commit_tx_steps_bpf(self, neon_tx_hash: str, sol_tx_hash: str, steps: int, bpf: int):
         if bpf:
             self.TX_BPF_PER_ITERATION.labels(neon_tx_hash, sol_tx_hash).observe(bpf)
         if steps:
             self.TX_STEPS_PER_ITERATION.labels(neon_tx_hash, sol_tx_hash).observe(steps)
-        pass
 
     def stat_commit_tx_count(self, canceled: bool = False):
         self.TX_COUNT.inc()
         if canceled:
             self.TX_CANCELED.inc()
-        pass
 
     def stat_commit_count_sol_tx_per_neon_tx(self, type: str, sol_tx_count: int):
         self.COUNT_TX_COUNT_BY_TYPE.labels(type).inc()
         self.COUNT_SOL_TX_PER_NEON_TX.labels(type).observe(sol_tx_count)
-        pass
 
     def stat_commit_postgres_availability(self, status: bool):
         self.POSTGRES_AVAILABILITY.set(1 if status else 0)
-        pass
 
     def stat_commit_solana_rpc_health(self, status: bool):
         self.SOLANA_RPC_HEALTH.set(1 if status else 0)
+
+    def stat_commit_request_and_timeout(self, *args):
+        pass
+
+    def stat_commit_tx_begin(self, *args):
+        pass
+
+    def stat_commit_tx_end_success(self, *args):
+        pass
+
+    def stat_commit_tx_end_failed(self, *args):
+        pass
+
+    def stat_commit_tx_balance_change(self, *args):
+        pass
+
+    def stat_commit_operator_sol_balance(self, *args):
+        pass
+
+    def stat_commit_operator_neon_balance(self, *args):
+        pass
+
+    def stat_commit_create_resource_account(self, *args):
+        pass
+
+    def stat_commit_gas_parameters(self, *args):
         pass
