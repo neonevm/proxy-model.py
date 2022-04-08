@@ -346,18 +346,7 @@ class SolanaInteractor:
                                f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
         return NeonAccountInfo.frombytes(info.data)
 
-    def get_storage_account_info(self, storage_account: PublicKey) -> Optional[StorageAccountInfo]:
-        info = self.get_account_info(storage_account, length=0)
-        if info is None:
-            return None
-        elif info.tag != 30:
-            return None
-        elif len(info.data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for storage data {storage_account}: " +
-                               f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return StorageAccountInfo.frombytes(info.data)
-
-    def get_account_info_layout_list(self, eth_accounts: List[EthereumAddress]) -> List[Optional[AccountInfoLayout]]:
+    def get_neon_account_info_list(self, eth_accounts: List[EthereumAddress]) -> List[Optional[NeonAccountInfo]]:
         requests_list = []
         for eth_account in eth_accounts:
             account_sol, _nonce = ether2program(eth_account)
@@ -368,8 +357,20 @@ class SolanaInteractor:
             if info is None or len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
                 accounts_list.append(None)
                 continue
-            accounts_list.append(AccountInfoLayout.frombytes(info.data))
+            accounts_list.append(NeonAccountInfo.frombytes(info.data))
         return accounts_list
+
+    def get_storage_account_info(self, storage_account: PublicKey) -> Optional[StorageAccountInfo]:
+        info = self.get_account_info(storage_account, length=0)
+        if info is None:
+            return None
+        elif info.tag != 30:
+            self.debug(f'Storage account {str(storage_account)} has tag {info.tag}')
+            return None
+        elif len(info.data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
+            raise RuntimeError(f"Wrong data length for storage data {storage_account}: " +
+                               f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
+        return StorageAccountInfo.frombytes(info.data)
 
     def get_multiple_rent_exempt_balances_for_size(self, size_list: [int], commitment='confirmed') -> [int]:
         opts = {
@@ -540,7 +541,8 @@ class SolanaInteractor:
             error = response.get('error')
             if error:
                 if get_from_dict(error, 'data', 'err') == 'AlreadyProcessed':
-                    result = tx.signature()
+                    result = b58encode(tx.signature()).decode("utf-8")
+                    self.debug(f'Transaction is already processed: {str(result)}')
                     error = None
                 else:
                     self.debug(f'Got error on transaction execution: {json.dumps(error)}')
