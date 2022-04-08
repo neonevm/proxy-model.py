@@ -1,9 +1,9 @@
-ARG SOLANA_REVISION=v1.9.12-testnet
-ARG EVM_LOADER_REVISION=develop
+ARG SOLANA_REVISION=v1.9.12-testnet-with_trx_cap
+ARG NEON_EVM_COMMIT=latest
 
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS cli
 
-FROM neonlabsorg/evm_loader:${EVM_LOADER_REVISION} AS spl
+FROM neonlabsorg/evm_loader:${NEON_EVM_COMMIT} AS spl
 
 FROM ubuntu:20.04
 
@@ -34,7 +34,7 @@ COPY --from=spl /opt/solana/bin/solana /cli/bin/
 COPY --from=spl /opt/spl-token \
                 /opt/create-test-accounts.sh \
                 /opt/evm_loader-keypair.json /spl/bin/
-COPY --from=spl /opt/neon-cli /opt/faucet /spl/bin/
+COPY --from=spl /opt/neon-cli /spl/bin/
 COPY --from=spl /opt/solana_utils.py \
                 /opt/eth_tx_utils.py \
                 /spl/bin/

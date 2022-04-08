@@ -10,16 +10,15 @@ class SolanaNeonTxsDB(BaseDB):
         BaseDB.__init__(self, 'solana_neon_transactions')
 
     def set_txs(self, neon_sign: str, used_ixs: [SolanaIxSignInfo]):
-
         used_ixs = set(used_ixs)
         rows = []
         for ix in used_ixs:
-            rows.append((ix.sign, neon_sign, ix.slot, ix.idx))
+            rows.append((ix.sign, neon_sign, ix.slot, ix.idx, ix.steps))
 
         with self._conn.cursor() as cursor:
             cursor.executemany(f'''
-                INSERT INTO {self._table_name}(sol_sign, neon_sign, slot, idx)
-                VALUES(%s, %s, %s, %s) ON CONFLICT DO NOTHING''',
+                INSERT INTO {self._table_name}(sol_sign, neon_sign, slot, idx, neon_steps)
+                VALUES(%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING''',
                 rows)
 
     def get_sol_sign_list_by_neon_sign(self, neon_sign: str) -> [str]:
@@ -42,9 +41,9 @@ class SolanaNeonTxsDB(BaseDB):
 class NeonTxsDB(BaseDB):
     def __init__(self):
         BaseDB.__init__(self, 'neon_transactions')
-        self._column_lst = ('neon_sign', 'from_addr', 'sol_sign', 'slot', 'block_hash', 'idx',
+        self._column_lst = ['neon_sign', 'from_addr', 'sol_sign', 'slot', 'block_hash', 'idx', 'tx_idx',
                             'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value', 'calldata',
-                            'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs')
+                            'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs']
         self._sol_neon_txs_db = SolanaNeonTxsDB()
 
     def _tx_from_value(self, value) -> Optional[NeonTxFullInfo]:

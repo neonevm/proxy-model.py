@@ -1,20 +1,19 @@
-
 import traceback
 
 from logged_groups import logged_group
 from solana.transaction import AccountMeta
 from proxy.common_neon.neon_instruction import NeonInstruction
-from proxy.common_neon.solana_interactor import SolanaInteractor, SolTxListSender
-from proxy.common_neon.utils import get_from_dict
+from proxy.common_neon.solana_interactor import SolanaInteractor
+from proxy.common_neon.solana_tx_list_sender import SolTxListSender
 from proxy.environment import SOLANA_URL, get_solana_accounts
 
 
 @logged_group("neon.Indexer")
 class Canceller:
-    def __init__(self):
+    def __init__(self, solana: SolanaInteractor):
         # Initialize user account
         self.signer = get_solana_accounts()[0]
-        self.solana = SolanaInteractor(SOLANA_URL)
+        self.solana = solana
         self.waiter = None
         self._operator = self.signer.public_key()
         self.builder = NeonInstruction(self._operator)
@@ -30,10 +29,9 @@ class Canceller:
                 for is_writable, acc in blocked_accounts:
                     keys.append(AccountMeta(pubkey=acc, is_signer=False, is_writable=is_writable))
 
-                self.builder.init_eth_trx(neon_tx.tx, None)
                 self.builder.init_iterative(storage, None, 0)
 
-                tx = self.builder.make_cancel_transaction(keys)
+                tx = self.builder.make_cancel_transaction(nonce=int(neon_tx.nonce[2:], 16), cancel_keys=keys)
                 tx_list.append(tx)
 
         if not len(tx_list):

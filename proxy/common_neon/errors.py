@@ -1,8 +1,5 @@
-from enum import Enum
-
-
 class EthereumError(Exception):
-    def __init__(self, code, message, data=None):
+    def __init__(self, message, code=-32000, data=None):
         self.code = code
         self.message = message
         self.data = data
@@ -13,14 +10,9 @@ class EthereumError(Exception):
         return error
 
 
-class SolanaErrors(Enum):
-    AccountNotFound = "Invalid param: could not find account"
-
-
-class SolanaAccountNotFoundError(Exception):
-    """Provides special error processing"""
-    def __init__(self):
-        super().__init__(SolanaErrors.AccountNotFound.value)
+class InvalidParamError(EthereumError):
+    def __init__(self, message, data=None):
+        EthereumError.__init__(self, message=message, code=-32602, data=data)
 
 
 class PendingTxError(Exception):

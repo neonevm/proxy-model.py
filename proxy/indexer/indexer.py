@@ -5,10 +5,11 @@ import time
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 
+from ..indexer.accounts_db import NeonAccountInfo
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
-from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff
-from ..indexer.utils import get_accounts_from_storage, check_error
+from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff, CostInfo
+from ..indexer.utils import check_error
 from ..indexer.canceller import Canceller
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
@@ -21,6 +22,7 @@ from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
 class SolanaIxInfo:
     def __init__(self, sign: str, slot: int, tx: {}):
         self.sign = SolanaIxSignInfo(sign=sign, slot=slot, idx=-1)
+        self.cost_info = CostInfo(sign, tx, EVM_LOADER_ID)
         self.tx = tx
         self._is_valid = isinstance(tx, dict)
         self._msg = self.tx['transaction']['message'] if self._is_valid else None
@@ -132,6 +134,7 @@ class NeonTxObject(BaseEvmObject):
         self.holder_account = ''
         self.blocked_accounts = []
         self.canceled = False
+        self.done = False
 
     def __str__(self):
         return str_fmt_object(self)
@@ -230,6 +233,9 @@ class ReceiptsParserState:
         Continue waiting of ixs in the slot with the same neon tx,
         because the parsing order can be other than the execution order.
         """
+        if tx.done:
+            return
+        tx.done = True
         self._done_tx_list.append(tx)
 
     def complete_done_txs(self):
@@ -257,8 +263,8 @@ class ReceiptsParserState:
         for tx in self._tx_table.values():
             yield tx
 
-    def add_account_to_db(self, neon_account: str, pda_account: str, code_account: str, slot: int):
-        self._db.fill_account_info_by_indexer(neon_account, pda_account, code_account, slot)
+    def add_account_to_db(self, neon_account: NeonAccountInfo):
+        self._db.fill_account_info_by_indexer(neon_account)
 
 
 @logged_group("neon.Indexer")
@@ -480,7 +486,7 @@ class CreateAccountIxDecoder(DummyIxDecoder):
 
         self.debug(f"neon_account({neon_account}), pda_account({pda_account}), code_account({code_account}), slot({self.ix.sign.slot})")
 
-        self.state.add_account_to_db(neon_account, pda_account, code_account, self.ix.sign.slot)
+        self.state.add_account_to_db(NeonAccountInfo(neon_account, pda_account, code_account, self.ix.sign.slot, None, self.ix.sign.sign))
         return True
 
 class CreateAccount2IxDecoder(DummyIxDecoder):
@@ -504,7 +510,7 @@ class CreateAccount2IxDecoder(DummyIxDecoder):
 
         self.debug(f"neon_account({neon_account}), pda_account({pda_account}), code_account({code_account}), slot({self.ix.sign.slot})")
 
-        self.state.add_account_to_db(neon_account, pda_account, code_account, self.ix.sign.slot)
+        self.state.add_account_to_db(NeonAccountInfo(neon_account, pda_account, code_account, self.ix.sign.slot, None, self.ix.sign.sign))
         return True
 
 class ResizeStorageAccountIxDecoder(DummyIxDecoder):
@@ -522,7 +528,7 @@ class ResizeStorageAccountIxDecoder(DummyIxDecoder):
 
         self.debug(f"pda_account({pda_account}), code_account({code_account}), slot({self.ix.sign.slot})")
 
-        self.state.add_account_to_db(None, pda_account, code_account, self.ix.sign.slot)
+        self.state.add_account_to_db(NeonAccountInfo(None, pda_account, code_account, self.ix.sign.slot, None, self.ix.sign.sign))
         return True
 
 
@@ -545,6 +551,7 @@ class CallFromRawIxDecoder(DummyIxDecoder):
 
         neon_res = NeonTxResultInfo(neon_tx.sign, self.ix.tx, self.ix.sign.idx)
         tx = NeonTxObject('', neon_tx=neon_tx, neon_res=neon_res)
+
         return self._decoding_done(tx, 'call success')
 
 
@@ -574,6 +581,8 @@ class PartialCallIxDecoder(DummyIxDecoder):
 
         tx = self._getadd_tx(storage_account, neon_tx=neon_tx, blocked_accounts=blocked_accounts)
         tx.step_count.append(step_count)
+
+        self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
 
 
@@ -606,6 +615,8 @@ class ContinueIxDecoder(DummyIxDecoder):
 
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
         tx.step_count.append(step_count)
+
+        self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
 
 
@@ -635,6 +646,8 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
         if not tx:
             return self._decoding_skip(f'fail to init in storage {storage_account} from holder {holder_account}')
         tx.step_count.append(step_count)
+
+        self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
 
 
@@ -651,7 +664,7 @@ class CancelIxDecoder(DummyIxDecoder):
     def execute(self) -> bool:
         self._decoding_start()
 
-        blocked_accounts_start = 6
+        blocked_accounts_start = 3
         if self.ix.get_account_cnt() < blocked_accounts_start + 1:
             return self._decoding_skip('no enough accounts')
 
@@ -663,6 +676,7 @@ class CancelIxDecoder(DummyIxDecoder):
             return self._decoding_fail(tx, f'cannot find storage {tx}')
 
         tx.neon_res.canceled(self.ix.tx)
+
         return self._decoding_done(tx, f'cancel success')
 
 
@@ -692,6 +706,8 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
         if not tx:
             return self._decoding_skip(f'fail to init the storage {storage_account} from the holder {holder_account}')
         tx.step_count.append(step_count)
+
+        self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
 
 
@@ -723,7 +739,7 @@ class Indexer(IndexerBase):
         last_known_slot = self.db.get_min_receipt_slot()
         IndexerBase.__init__(self, solana, last_known_slot)
         self.indexed_slot = self.last_slot
-        self.canceller = Canceller()
+        self.canceller = Canceller(solana)
         self.blocked_storages = {}
         self.block_indexer = BlocksIndexer(db=self.db, solana=solana)
         self.counted_logger = MetricsToLogBuff()
@@ -765,12 +781,14 @@ class Indexer(IndexerBase):
         self.blocked_storages = {}
 
     def process_receipts(self):
+        tx_costs = []
+
         start_time = time.time()
 
         max_slot = 0
-        last_block_slot = self.db.get_latest_block().slot
+        last_block_slot = self.db.get_latest_block_slot()
 
-        for slot, sign, tx in self.transaction_receipts.get_trxs(self.indexed_slot, reverse=False):
+        for slot, sign, tx in self.transaction_receipts.get_txs(self.indexed_slot):
             if slot > last_block_slot:
                 break
 
@@ -778,13 +796,16 @@ class Indexer(IndexerBase):
                 self.state.complete_done_txs()
                 max_slot = max(max_slot, slot)
 
-            ix_info = SolanaIxInfo(sign=sign, slot=slot,  tx=tx)
+            ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
 
             for _ in ix_info.iter_ixs():
                 req_id = ix_info.sign.get_req_id()
                 with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
+
+            tx_costs.append(ix_info.cost_info)
+
 
         self.indexed_slot = last_block_slot
         self.db.set_min_receipt_slot(self.state.find_min_used_slot(self.indexed_slot))
@@ -798,6 +819,7 @@ class Indexer(IndexerBase):
 
         # after last instruction and slot
         self.state.complete_done_txs()
+        self.db.add_tx_costs(tx_costs)
 
         process_receipts_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
         self.counted_logger.print(
@@ -819,22 +841,38 @@ class Indexer(IndexerBase):
             self.warning(f"Transaction {tx.neon_tx} hasn't blocked accounts.")
             return False
 
-        storage_accounts_list = get_accounts_from_storage(self.solana, tx.storage_account)
-        if storage_accounts_list is None:
-            self.warning(f"Transaction {tx.neon_tx} has empty storage.")
+        storage = self.solana.get_storage_account_info(tx.storage_account)
+        if not storage:
+            self.warning(f"Storage {str(tx.storage_account)} for tx {tx.neon_tx.sign} is empty")
             return False
 
-        if len(storage_accounts_list) != len(tx.blocked_accounts):
+        if storage.caller != tx.neon_tx.addr[2:]:
+            self.warning(f"Storage {str(tx.storage_account)} for tx {tx.neon_tx.sign} has another caller: "+
+                         f"{str(storage.caller)} != {tx.neon_tx.addr[2:]}")
+            return False
+
+        tx_nonce = int(tx.neon_tx.nonce[2:], 16)
+        if storage.nonce != tx_nonce:
+            self.warning(f"Storage {str(tx.storage_account)} for tx {tx.neon_tx.sign} has another nonce: " +
+                         f"{storage.nonce} != {tx_nonce}")
+            return False
+
+        if not len(storage.account_list):
+            self.warning(f"Storage {str(tx.storage_account)} for tx {tx.neon_tx.sign} has empty account list.")
+            return False
+
+        if len(storage.account_list) != len(tx.blocked_accounts):
             self.warning(f"Transaction {tx.neon_tx} has another list of accounts than storage.")
             return False
 
-        for (writable, account), tx_account in zip(storage_accounts_list, tx.blocked_accounts):
+        for (writable, account), (idx, tx_account) in zip(storage.account_list, enumerate(tx.blocked_accounts)):
             if account != tx_account:
-                self.warning(f"Transaction {tx.neon_tx} has another list of accounts than storage.")
+                self.warning(f"Transaction {tx.neon_tx} has another list of accounts than storage: " +
+                             f"{idx}: {account} != {tx_account}")
                 return False
 
-        self.debug(f'Neon tx is blocked: storage {tx.storage_account}, {tx.neon_tx}')
-        self.blocked_storages[tx.storage_account] = (tx.neon_tx, storage_accounts_list)
+        self.debug(f'Neon tx is blocked: storage {tx.storage_account}, {tx.neon_tx}, {storage.account_list}')
+        self.blocked_storages[tx.storage_account] = (tx.neon_tx, storage.account_list)
         tx.canceled = True
         return True
 
