@@ -695,7 +695,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
         }
 
         def is_private_api(method: str) -> bool:
-            if method.startswith('_'):
+            if (not method.startswith('eth_')) and (not method.startswith('neon_')):
                 return True
 
             if ENABLE_PRIVATE_API:
