@@ -6,8 +6,7 @@ import time
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 
-from proxy.statistics_exporter.prometheus_indexer_exporter import PrometheusExporter
-
+from ..indexer.indexer_app_interface import IIndexerUser
 from ..indexer.accounts_db import NeonAccountInfo
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
@@ -18,7 +17,7 @@ from ..indexer.canceller import Canceller
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
 from ..common_neon.solana_interactor import SolanaInteractor
 
-from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
+from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT
 
 
 @logged_group("neon.Indexer")
@@ -183,7 +182,7 @@ class ReceiptsParserState:
         self._holder_table = {}
         self._tx_table = {}
         self._done_tx_list = []
-        self.stat_info = []
+        self.neon_tx_result = []
         self._used_ixs = {}
         self.ix = SolanaIxInfo(sign='', slot=-1, tx=None)
 
@@ -254,7 +253,7 @@ class ReceiptsParserState:
             if tx.neon_tx.is_valid() and tx.neon_res.is_valid():
                 with logging_context(neon_tx=tx.neon_tx.sign[:7]):
                     self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
-                    self.stat_info.append(copy.deepcopy(tx))
+                    self.neon_tx_result.append(copy.deepcopy(tx))
             self.del_tx(tx)
         self._done_tx_list.clear()
 
@@ -274,10 +273,10 @@ class ReceiptsParserState:
     def add_account_to_db(self, neon_account: NeonAccountInfo):
         self._db.fill_account_info_by_indexer(neon_account)
 
-    def iter_stat_info(self) -> Iterator[NeonTxObject]:
-        for tx in self.stat_info:
+    def iter_neon_tx_results(self) -> Iterator[NeonTxObject]:
+        for tx in self.neon_tx_result:
             yield tx
-        self.stat_info.clear()
+        self.neon_tx_result.clear()
 
 
 @logged_group("neon.Indexer")
@@ -741,7 +740,7 @@ class BlocksIndexer:
 
 @logged_group("neon.Indexer")
 class Indexer(IndexerBase):
-    def __init__(self, solana_url):
+    def __init__(self, solana_url, indexer_user: IIndexerUser):
         self.debug(f'Finalized commitment: {FINALIZED}')
         solana = SolanaInteractor(solana_url)
         self.db = IndexerDB(solana)
@@ -752,7 +751,7 @@ class Indexer(IndexerBase):
         self.blocked_storages = {}
         self.block_indexer = BlocksIndexer(db=self.db, solana=solana)
         self.counted_logger = MetricsToLogBuff()
-        self.stat_exporter = PrometheusExporter()
+        self._user = indexer_user
 
         self.state = ReceiptsParserState(db=self.db, solana=solana)
         self.ix_decoder_map = {
@@ -789,7 +788,7 @@ class Indexer(IndexerBase):
         self.process_receipts()
         self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
-        self.commit_statistics()
+        self.process_neon_tx_results()
 
     def process_receipts(self):
         tx_costs = []
@@ -886,37 +885,8 @@ class Indexer(IndexerBase):
         tx.canceled = True
         return True
 
-    def commit_statistics(self):
-        for stat_info in self.state.iter_stat_info():
-            neon_tx_hash = stat_info.neon_tx.sign
-            neon_income = int(stat_info.neon_res.gas_used, 0) * int(stat_info.neon_tx.gas_price, 0)
-            for sign_info, cost_info in zip(stat_info.used_ixs, stat_info.ixs_cost):
-                sol_tx_hash = sign_info.sign
-                self.stat_exporter.stat_commit_tx_sol_spent(neon_tx_hash, sol_tx_hash, cost_info.sol_spent)
-                self.stat_exporter.stat_commit_tx_steps_bpf(neon_tx_hash, sol_tx_hash, sign_info.steps, cost_info.bpf)
-            if stat_info.holder_account != '':
-                tx_type = 'holder'
-            elif stat_info.storage_account != '':
-                tx_type = 'iterative'
-            else:
-                tx_type = 'single'
-            self.stat_exporter.stat_commit_tx_count(True if stat_info.neon_res.status == '0x0' else False)
-            self.stat_exporter.stat_commit_tx_neon_income(neon_tx_hash, neon_income)
-            self.stat_exporter.stat_commit_count_sol_tx_per_neon_tx(tx_type, len(stat_info.used_ixs))
-        self.stat_exporter.stat_commit_postgres_availability(self.db.status())
-        self.stat_exporter.stat_commit_solana_rpc_health(self.solana.is_health())
-
-
-@logged_group("neon.Indexer")
-def run_indexer(solana_url, *, logger):
-    logger.info(f"""Running indexer with params:
-        solana_url: {solana_url},
-        evm_loader_id: {EVM_LOADER_ID}""")
-
-    indexer = Indexer(solana_url)
-    indexer.run()
-
-
-if __name__ == "__main__":
-    solana_url = SOLANA_URL
-    run_indexer(solana_url)
+    def process_neon_tx_results(self):
+        for neon_tx_result in self.state.iter_neon_tx_results():
+            self._user.on_neon_tx_result(neon_tx_result)
+        self._user.on_db_status(self.db.status())
+        self._user.on_solana_rpc_status(self.solana.is_healthy())

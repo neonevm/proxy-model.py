@@ -36,7 +36,7 @@ class IndexerDB:
                 self._constants[k] = 0
 
     def status(self) -> bool:
-        return self._logs_db.connected()
+        return self._logs_db.is_connected()
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, used_ixs: [SolanaIxSignInfo]):
         try:
