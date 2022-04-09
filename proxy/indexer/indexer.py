@@ -130,7 +130,7 @@ class NeonHolderObject(BaseEvmObject):
         return str_fmt_object(self)
 
 
-class NeonTxObject(BaseEvmObject):
+class NeonTxResult(BaseEvmObject):
     def __init__(self, storage_account: str, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo):
         BaseEvmObject.__init__(self)
         self.storage_account = storage_account
@@ -220,21 +220,21 @@ class ReceiptsParserState:
     def del_holder(self, holder: NeonHolderObject):
         self._holder_table.pop(holder.account, None)
 
-    def get_tx(self, storage_account: str) -> Optional[NeonTxObject]:
+    def get_tx(self, storage_account: str) -> Optional[NeonTxResult]:
         return self._tx_table.get(storage_account)
 
-    def add_tx(self, storage_account: str, neon_tx=None, neon_res=None) -> NeonTxObject:
+    def add_tx(self, storage_account: str, neon_tx=None, neon_res=None) -> NeonTxResult:
         if storage_account in self._tx_table:
             self.debug(f'{self.ix} ATTENTION: the tx {storage_account} is already used!')
 
-        tx = NeonTxObject(storage_account=storage_account, neon_tx=neon_tx, neon_res=neon_res)
+        tx = NeonTxResult(storage_account=storage_account, neon_tx=neon_tx, neon_res=neon_res)
         self._tx_table[storage_account] = tx
         return tx
 
-    def del_tx(self, tx: NeonTxObject):
+    def del_tx(self, tx: NeonTxResult):
         self._tx_table.pop(tx.storage_account, None)
 
-    def done_tx(self, tx: NeonTxObject):
+    def done_tx(self, tx: NeonTxResult):
         """
         Continue waiting of ixs in the slot with the same neon tx,
         because the parsing order can be other than the execution order.
@@ -273,7 +273,7 @@ class ReceiptsParserState:
     def add_account_to_db(self, neon_account: NeonAccountInfo):
         self._db.fill_account_info_by_indexer(neon_account)
 
-    def iter_neon_tx_results(self) -> Iterator[NeonTxObject]:
+    def iter_neon_tx_results(self) -> Iterator[NeonTxResult]:
         for tx in self.neon_tx_result:
             yield tx
         self.neon_tx_result.clear()
@@ -292,7 +292,7 @@ class DummyIxDecoder:
     def neon_addr_fmt(neon_tx: NeonTxInfo):
         return f'Neon tx {neon_tx.sign}, Neon addr {neon_tx.addr}'
 
-    def _getadd_tx(self, storage_account, neon_tx=None, blocked_accounts=None) -> NeonTxObject:
+    def _getadd_tx(self, storage_account, neon_tx=None, blocked_accounts=None) -> NeonTxResult:
         if blocked_accounts is None:
             blocked_accounts = ['']
         tx = self.state.get_tx(storage_account)
@@ -332,7 +332,7 @@ class DummyIxDecoder:
         """
         Assembling of the object has been successfully finished.
         """
-        if isinstance(obj, NeonTxObject):
+        if isinstance(obj, NeonTxResult):
             self.state.mark_ix_used(obj)
             self.state.done_tx(obj)
         elif isinstance(obj, NeonHolderObject):
@@ -359,7 +359,7 @@ class DummyIxDecoder:
         self.warning(f'{reason} - {obj}')
         self.state.unmark_ix_used(obj)
 
-        if isinstance(obj, NeonTxObject):
+        if isinstance(obj, NeonTxResult):
             self.state.del_tx(obj)
         elif isinstance(obj, NeonHolderObject):
             self.state.del_holder(obj)
@@ -367,7 +367,7 @@ class DummyIxDecoder:
             assert False, 'Unknown type of object'
         return False
 
-    def _decode_tx(self, tx: NeonTxObject):
+    def _decode_tx(self, tx: NeonTxResult):
         """
         If the transaction doesn't have results, then try to get results for the transaction.
         If the transaction has received results, then call done for the transaction.
@@ -380,7 +380,7 @@ class DummyIxDecoder:
                 return self._decoding_done(tx, 'found Neon results')
         return self._decoding_success(tx, 'mark ix used')
 
-    def _init_tx_from_holder(self, holder_account: str, storage_account: str, blocked_accounts: [str]) -> Optional[NeonTxObject]:
+    def _init_tx_from_holder(self, holder_account: str, storage_account: str, blocked_accounts: [str]) -> Optional[NeonTxResult]:
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
         if tx.holder_account:
             return tx
@@ -562,7 +562,7 @@ class CallFromRawIxDecoder(DummyIxDecoder):
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
         neon_res = NeonTxResultInfo(neon_tx.sign, self.ix.tx, self.ix.sign.idx)
-        tx = NeonTxObject('', neon_tx=neon_tx, neon_res=neon_res)
+        tx = NeonTxResult('', neon_tx=neon_tx, neon_res=neon_res)
 
         return self._decoding_done(tx, 'call success')
 
