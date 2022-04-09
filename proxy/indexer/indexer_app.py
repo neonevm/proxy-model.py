@@ -1,5 +1,5 @@
 from proxy.environment import EVM_LOADER_ID, SOLANA_URL
-from .indexer import Indexer, NeonTxObject
+from .indexer import Indexer, NeonTxResult
 from .indexer_app_interface import IIndexerUser
 from proxy.statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
 from logged_groups import logged_group
@@ -13,7 +13,7 @@ class IndexerApp(IIndexerUser):
         indexer = Indexer(solana_url, self)
         indexer.run()
 
-    def on_neon_tx_result(self, neon_tx_result: NeonTxObject):
+    def on_neon_tx_result(self, neon_tx_result: NeonTxResult):
         neon_tx_hash = neon_tx_result.neon_tx.sign
         neon_income = int(neon_tx_result.neon_res.gas_used, 0) * int(neon_tx_result.neon_tx.gas_price, 0)
         for sign_info, cost_info in zip(neon_tx_result.used_ixs, neon_tx_result.ixs_cost):

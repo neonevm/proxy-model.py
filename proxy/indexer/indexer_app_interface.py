@@ -1,16 +1,17 @@
-from abc import ABC, abstractclassmethod
+from abc import ABC, abstractmethod
 
 
 class IIndexerUser(ABC):
 
-    @abstractclassmethod
-    def on_neon_tx_result(self, status):
-        ''' on status '''
+    @abstractmethod
+#   TODO: def on_neon_tx_result(self, result: NeonTxStatInfo):
+    def on_neon_tx_result(self, result):
+        """On Neon transaction result """
 
-    @abstractclassmethod
+    @abstractmethod
     def on_solana_rpc_status(self, status):
-        ''' on status '''
+        """On Solana status"""
 
-    @abstractclassmethod
+    @abstractmethod
     def on_db_status(self, status):
-        ''' on status '''
+        """On Neon database status"""
