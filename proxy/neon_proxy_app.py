@@ -1,18 +1,19 @@
-# from .proxy import entry_point
-from .mempool.MemPollService import MemPoolService
-# from .statistics_exporter.prometheus_proxy_server import PrometheusProxyServer
+from .proxy import entry_point
+from .mempool.mempool_service import MemPoolService
+from .statistics_exporter.prometheus_proxy_server import PrometheusProxyServer
+import multiprocessing as mp
 
 
 class NeonProxyApp:
 
     def __init__(self):
-        self._mem_pool_service = MemPoolService()
+        self._mem_pool_process = mp.Process(target=NeonProxyApp.run_mempool_service)
+
+    @staticmethod
+    def run_mempool_service():
+        MemPoolService().start()
 
     def start(self):
-        # PrometheusProxyServer()
-        self._mem_pool_service.start()
-        # entry_point()
-
-    def __del__(self):
-        self._mem_pool_service.finish()
-        self._mem_pool_service.join(timeout=5)
+        PrometheusProxyServer()
+        self._mem_pool_process.start()
+        entry_point()

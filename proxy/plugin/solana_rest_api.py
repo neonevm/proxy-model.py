@@ -17,14 +17,14 @@ import multiprocessing
 import sha3
 
 from logged_groups import logged_group, logging_context
-from typing import Optional, Union
+from typing import Union
 
 from ..common.utils import build_http_response
 from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-from typing import Dict, List, Tuple, Optional
+from typing import List, Tuple, Optional
 
 from ..common_neon.transaction_sender import NeonTxSender
 from ..common_neon.solana_interactor import SolanaInteractor
@@ -35,10 +35,10 @@ from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxErro
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.keys_storage import KeyStorage
+from ..mempool.mempool_client import MemPoolClient
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEP_COUNT, CHAIN_ID, ENABLE_PRIVATE_API
 from ..environment import NEON_EVM_VERSION, NEON_EVM_REVISION
 from ..environment import neon_cli
-from ..environment import get_solana_accounts
 from ..memdb.memdb import MemDB
 from .gas_price_calculator import GasPriceCalculator
 from ..common_neon.eth_proto import Trx as EthTrx
@@ -61,6 +61,7 @@ class EthereumModel:
     def __init__(self):
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = MemDB(self._solana)
+        self._mempool_client = MemPoolClient()
 
         if PP_SOLANA_URL == SOLANA_URL:
             self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
@@ -454,9 +455,11 @@ class EthereumModel:
         self._stat_tx_begin()
 
         try:
+            #TODO: move it into MemPoolService
             tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             tx_sender.execute()
             self._stat_tx_success()
+            self._mempool_client.on_eth_send_raw_transaction(eth_signature)
             return eth_signature
 
         except PendingTxError as err:
