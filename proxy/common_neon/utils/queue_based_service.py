@@ -41,10 +41,10 @@ class QueueBasedService(abc.ABC):
     BREAK_PROC_INVOCATION = 0
     JOIN_PROC_TIMEOUT_SEC = 5
 
-    def __init__(self, port: int, is_main_proc: bool):
+    def __init__(self, *, port: int, is_background: bool):
         self._queue = mp.Queue()
         self._port = port
-        self._is_main_proc = is_main_proc
+        self._is_back_ground = is_background
 
         class MemPoolQueueManager(BaseManager):
             pass
@@ -63,7 +63,7 @@ class QueueBasedService(abc.ABC):
         self.info(f"Starting queue server: {self._port}")
         self._mempool_server_process.start()
         self._queue_process.start()
-        if self._is_main_proc:
+        if not self._is_back_ground:
             self._queue_process.join()
 
     def run(self):
