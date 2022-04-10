@@ -1,5 +1,8 @@
-from proxy.common_neon.utils import QueueBasedServiceClient
 from logged_groups import logged_group
+
+from ..common_neon.utils import QueueBasedServiceClient
+from ..common_neon import Result
+
 from . import MemPoolService
 
 
@@ -12,5 +15,5 @@ class MemPoolClient(QueueBasedServiceClient):
         self.info("Construct MemPoolClient")
         QueueBasedServiceClient.__init__(self, self.MEM_POOL_SERVICE_HOST, MemPoolService.MEM_POOL_SERVICE_PORT)
 
-    def on_eth_send_raw_transaction(self, eth_trx_signature):
-        self.invoke("on_eth_send_raw_transaction", eth_trx_hash=eth_trx_signature)
+    def on_eth_send_raw_transaction(self, eth_trx_signature) -> Result:
+        return self.invoke("on_eth_send_raw_transaction", eth_trx_hash=eth_trx_signature)

@@ -455,7 +455,6 @@ class EthereumModel:
         self._stat_tx_begin()
 
         try:
-            #TODO: move it into MemPoolService
             tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             tx_sender.execute()
             self._stat_tx_success()

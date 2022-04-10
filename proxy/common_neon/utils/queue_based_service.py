@@ -1,6 +1,7 @@
 import abc
 import multiprocessing as mp
 import os
+import queue
 import signal
 
 from multiprocessing.managers import BaseManager
@@ -8,6 +9,8 @@ from dataclasses import dataclass, astuple, field
 from typing import Tuple, Dict, Any
 
 from logged_groups import logged_group
+
+from ..types import Result
 
 
 @dataclass
@@ -17,6 +20,7 @@ class ServiceInvocation:
     kwargs: Dict[str, Any] = field(default_factory=dict)
 
 
+@logged_group("neon")
 class QueueBasedServiceClient:
 
     def __init__(self, host: str, port: int):
@@ -28,9 +32,16 @@ class QueueBasedServiceClient:
         queue_manager.connect()
         self._queue = queue_manager.get_queue()
 
-    def invoke(self, method_name, *args, **kwargs):
-        invocation = ServiceInvocation(method_name=method_name, args=args, kwargs=kwargs)
+    def invoke(self, method_name, *args, **kwargs) -> Result:
+        try:
+            self._invoke_impl(method_name, *args, **kwargs)
+        except queue.Full:
+            self.error(f"Failed to invoke the method: {method_name}, queue is full")
+            return Result("Mempool queue full")
+        return Result()
 
+    def _invoke_impl(self, method_name, *args, **kwargs):
+        invocation = ServiceInvocation(method_name=method_name, args=args, kwargs=kwargs)
         self._queue.put(invocation)
 
 
@@ -42,19 +53,19 @@ class QueueBasedService(abc.ABC):
     JOIN_PROC_TIMEOUT_SEC = 5
 
     def __init__(self, *, port: int, is_background: bool):
-        self._queue = mp.Queue()
         self._port = port
         self._is_back_ground = is_background
+        self._timeout = self.QUEUE_TIMEOUT_SEC
 
         class MemPoolQueueManager(BaseManager):
             pass
 
+        self._queue = mp.Queue()
         MemPoolQueueManager.register("get_queue", callable=lambda: self._queue)
         self._queue_manager = MemPoolQueueManager(address=('', port), authkey=b'abracadabra')
         self._mempool_server = self._queue_manager.get_server()
-        self._mempool_server_process = mp.Process(target=self._mempool_server.serve_forever, name="mempool_service")
+        self._mempool_server_process = mp.Process(target=self._mempool_server.serve_forever, name="mempool_listen_proc")
         self._queue_process = mp.Process(target=self.run, name="mempool_queue_proc")
-        self._timeout = self.QUEUE_TIMEOUT_SEC
 
         pid = os.getpid()
         signal.signal(signal.SIGINT, lambda sif, frame: self.finish() if os.getpid() == pid else 0)
@@ -72,11 +83,10 @@ class QueueBasedService(abc.ABC):
             try:
                 if not self._run_impl():
                     break
-            except BaseException as e:
+            except queue.Empty:
                 self.do_extras()
 
     def _run_impl(self) -> bool:
-
         invocation = self._queue.get(block=True, timeout=self._timeout)
         if invocation == self.BREAK_PROC_INVOCATION:
             return False
