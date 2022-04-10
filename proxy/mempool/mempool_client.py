@@ -1,6 +1,6 @@
 from proxy.common_neon.utils import QueueBasedServiceClient
 from logged_groups import logged_group
-from .mempool_service import MemPoolService
+from . import MemPoolService
 
 
 @logged_group("neon")

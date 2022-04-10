@@ -35,7 +35,7 @@ from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxErro
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.keys_storage import KeyStorage
-from ..mempool.mempool_client import MemPoolClient
+from ..mempool import MemPoolClient
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, EVM_STEP_COUNT, CHAIN_ID, ENABLE_PRIVATE_API
 from ..environment import NEON_EVM_VERSION, NEON_EVM_REVISION
 from ..environment import neon_cli
