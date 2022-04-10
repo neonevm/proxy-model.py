@@ -9,7 +9,7 @@ from eth_utils import big_endian_to_int
 #TODO: move it out from here
 from ...environment import EVM_LOADER_ID
 
-from ...common_neon.eth_proto import Trx as EthTx
+from ..eth_proto import Trx as EthTx
 
 
 def str_fmt_object(obj):

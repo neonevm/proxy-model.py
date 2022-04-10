@@ -10,7 +10,7 @@ class MemPoolClient(QueueBasedServiceClient):
 
     def __init__(self):
         self.info("Construct MemPoolClient")
-        QueueBasedServiceClient.__init__(self, "localhost", 9091)
+        QueueBasedServiceClient.__init__(self, self.MEM_POOL_SERVICE_HOST, MemPoolService.MEM_POOL_SERVICE_PORT)
 
     def on_eth_send_raw_transaction(self, eth_trx_signature):
         self.invoke("on_eth_send_raw_transaction", eth_trx_hash=eth_trx_signature)
