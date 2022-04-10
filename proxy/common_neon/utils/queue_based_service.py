@@ -37,7 +37,7 @@ class QueueBasedServiceClient:
 @logged_group("neon")
 class QueueBasedService(abc.ABC):
 
-    QUEUE_TIMEOUT_SEC = 10
+    QUEUE_TIMEOUT_SEC = 0.4
     BREAK_PROC_INVOCATION = 0
     JOIN_PROC_TIMEOUT_SEC = 5
 
