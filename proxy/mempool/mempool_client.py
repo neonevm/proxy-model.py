@@ -12,7 +12,7 @@ class MemPoolClient(QueueBasedServiceClient):
     MEM_POOL_SERVICE_HOST = "127.0.0.1"
 
     def __init__(self):
-        port, host = (self.MEM_POOL_SERVICE_PORT, self.MEM_POOL_SERVICE_HOST)
+        port, host = (MemPoolService.MEM_POOL_SERVICE_PORT, self.MEM_POOL_SERVICE_HOST)
         self.info(f"Initialize MemPoolClient connecting to: {port} at: {host}")
         QueueBasedServiceClient.__init__(self, host, port)
 

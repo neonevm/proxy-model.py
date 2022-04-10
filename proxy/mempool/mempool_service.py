@@ -2,7 +2,7 @@ from logged_groups import logged_group
 
 from ..common_neon.utils import QueueBasedService
 
-from . import MemPool
+from .mem_pool import MemPool
 
 
 @logged_group("neon")
