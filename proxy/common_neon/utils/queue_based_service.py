@@ -1,5 +1,8 @@
 import abc
 import multiprocessing as mp
+import os
+import signal
+
 from multiprocessing.managers import BaseManager
 from dataclasses import dataclass, astuple, field
 from typing import Tuple, Dict, Any
@@ -38,9 +41,10 @@ class QueueBasedService(abc.ABC):
     BREAK_PROC_INVOCATION = 0
     JOIN_PROC_TIMEOUT_SEC = 5
 
-    def __init__(self, port: int):
+    def __init__(self, port: int, is_main_proc: bool):
         self._queue = mp.Queue()
         self._port = port
+        self._is_main_proc = is_main_proc
 
         class MemPoolQueueManager(BaseManager):
             pass
@@ -48,22 +52,28 @@ class QueueBasedService(abc.ABC):
         MemPoolQueueManager.register("get_queue", callable=lambda: self._queue)
         self._queue_manager = MemPoolQueueManager(address=('', port), authkey=b'abracadabra')
         self._mempool_server = self._queue_manager.get_server()
-        self._mempool_server_process = mp.Process(target=self._mempool_server.serve_forever)
+        self._mempool_server_process = mp.Process(target=self._mempool_server.serve_forever, name="mempool_service")
+        self._queue_process = mp.Process(target=self.run, name="mempool_queue_proc")
         self._timeout = self.QUEUE_TIMEOUT_SEC
+
+        pid = os.getpid()
+        signal.signal(signal.SIGINT, lambda sif, frame: self.finish() if os.getpid() == pid else 0)
 
     def start(self):
         self.info(f"Starting queue server: {self._port}")
         self._mempool_server_process.start()
-        self.run()
+        self._queue_process.start()
+        if self._is_main_proc:
+            self._queue_process.join()
 
     def run(self):
+        self.service_process_init()
         while True:
             try:
                 if not self._run_impl():
                     break
             except BaseException as e:
                 self.do_extras()
-        self.info("Processing has been finished")
 
     def _run_impl(self) -> bool:
 
@@ -81,17 +91,17 @@ class QueueBasedService(abc.ABC):
         handler(*args, **kwargs)
 
     def finish(self):
-        self._queue.put(self.BREAK_PROC_INVOCATION)
-        # self._mempool_queue_process.join(timeout=self.JOIN_PROC_TIMEOUT_SEC)
-        # self._mempool_service_process.join(timeout=self.JOIN_PROC_TIMEOUT_SEC)
+        self.info("Finishing the queue and listening processes")
+        self._mempool_server_process.terminate()
+        if not self._queue_process.is_alive():
+            return
+        self._queue.put_nowait(self.BREAK_PROC_INVOCATION)
+        self._queue_process.join(timeout=self.JOIN_PROC_TIMEOUT_SEC)
 
     @abc.abstractmethod
     def do_extras(self):
         assert "To be implemented in derived class"
 
-    def wait(self):
-        self._mempool_queue_process.join()
-        self._mempool_service_process.join()
-
-    def __del__(self):
-        self.finish()
+    @abc.abstractmethod
+    def service_process_init(self):
+        assert "To be implemented in derived class"
