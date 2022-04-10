@@ -12,8 +12,9 @@ class MemPoolClient(QueueBasedServiceClient):
     MEM_POOL_SERVICE_HOST = "127.0.0.1"
 
     def __init__(self):
-        self.info("Construct MemPoolClient")
-        QueueBasedServiceClient.__init__(self, self.MEM_POOL_SERVICE_HOST, MemPoolService.MEM_POOL_SERVICE_PORT)
+        port, host = (self.MEM_POOL_SERVICE_PORT, self.MEM_POOL_SERVICE_HOST)
+        self.info(f"Initialize MemPoolClient connecting to: {port} at: {host}")
+        QueueBasedServiceClient.__init__(self, host, port)
 
     def on_eth_send_raw_transaction(self, eth_trx_signature) -> Result:
         return self.invoke("on_eth_send_raw_transaction", eth_trx_hash=eth_trx_signature)
