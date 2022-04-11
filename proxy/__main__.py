@@ -11,8 +11,9 @@
 
 
 import os
-from .indexer.indexer import run_indexer
 from .neon_proxy_app import NeonProxyApp
+from .indexer.indexer_app import run_indexer
+
 
 if __name__ == '__main__':
     solana_url = os.environ['SOLANA_URL']
