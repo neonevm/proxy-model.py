@@ -23,10 +23,18 @@ class SolTxError(Exception):
         super().__init__(self.error)
 
     @staticmethod
-    def _is_program_log(log):
-        PROGRAM_LOG = 'Program log: '
-        TOTAL_MEMORY = 'Program log: Total memory occupied: '
-        return log.startswith(PROGRAM_LOG) and (not log.startswith(TOTAL_MEMORY))
+    def _is_program_log(log: str) -> bool:
+        if log.startswith('Program log: Total memory occupied: '):
+            return False
+
+        prefix_list = (
+            'Program log: ',
+            'Program failed to complete: '
+        )
+        for prefix in prefix_list:
+            if log.startswith(prefix):
+                return True
+        return False
 
 
 @logged_group("neon.Proxy")
@@ -190,6 +198,8 @@ class Measurements:
     # Do not change headers in info logs! This name used in CI measurements (see function `cleanup_docker` in
     # .buildkite/steps/deploy-test.sh)
     def extract(self, reason: str, receipt: {}):
+        return
+
         if not LOG_SENDING_SOLANA_TRANSACTION:
             return
 
