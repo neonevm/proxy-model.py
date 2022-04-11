@@ -27,7 +27,7 @@ from .emulator_interactor import call_emulated
 from .neon_instruction import NeonInstruction as NeonIxBuilder
 from .solana_interactor import SolanaInteractor
 from .solana_tx_list_sender import SolTxListSender
-from .solana_receipt_parser import SolTxError, SolReceiptParser, Measurements
+from .solana_receipt_parser import SolTxError, SolReceiptParser
 from .transaction_validator import NeonTxValidator
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
@@ -737,8 +737,7 @@ class SimpleNeonTxSender(SolTxListSender):
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         if not self.neon_res.is_valid():
-            if self.neon_res.decode(self._s.neon_sign, receipt).is_valid():
-                Measurements().extract(self._name, receipt)
+            self.neon_res.decode(self._s.neon_sign, receipt).is_valid()
         super()._on_success_send(tx, receipt)
 
     def _on_post_send(self):
@@ -850,7 +849,6 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         if self._is_canceled:
             # Transaction with cancel is confirmed
             self.neon_res.canceled(receipt)
-            Measurements().extract(self._name, receipt)
         else:
             super()._on_success_send(tx, receipt)
 
