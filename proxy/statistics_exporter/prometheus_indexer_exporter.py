@@ -1,6 +1,8 @@
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, start_http_server
-from .proxy_metrics_interface import StatisticsExporter
 
+from ..common_neon.data import NeonTxStatData
+
+from .proxy_metrics_interface import StatisticsExporter
 
 class IndexerStatistics(StatisticsExporter):
     registry = CollectorRegistry()
@@ -41,6 +43,15 @@ class IndexerStatistics(StatisticsExporter):
 
     def __init__(self):
         start_http_server(8887, registry=self.registry)
+
+    def on_neon_tx_result(self, tx_stat: NeonTxStatData):
+        for instruction_info in tx_stat.instructions:
+            sol_tx_hash, sol_spent, steps, bpf = instruction_info
+            self.stat_commit_tx_sol_spent(tx_stat.neon_tx_hash, sol_tx_hash, sol_spent)
+            self.stat_commit_tx_steps_bpf(tx_stat.neon_tx_hash, sol_tx_hash, steps, bpf)
+        self.stat_commit_tx_count(tx_stat.is_canceled)
+        self.stat_commit_tx_neon_income(tx_stat.neon_tx_hash, tx_stat.neon_income)
+        self.stat_commit_count_sol_tx_per_neon_tx(tx_stat.tx_type, len(tx_stat.instructions))
 
     def stat_commit_tx_sol_spent(self, neon_tx_hash: str, sol_tx_hash: str, sol_spent: int):
         self.TX_SOL_SPENT.labels(neon_tx_hash, sol_tx_hash).observe(sol_spent)

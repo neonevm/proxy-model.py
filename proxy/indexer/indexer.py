@@ -6,7 +6,7 @@ import time
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 
-from ..indexer.data import NeonTxStatData
+from ..common_neon.data import NeonTxStatData
 from ..indexer.indexer_app_interface import IIndexerUser
 from ..indexer.accounts_db import NeonAccountInfo
 from ..indexer.indexer_base import IndexerBase
