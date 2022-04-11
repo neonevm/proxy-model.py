@@ -195,9 +195,9 @@ services:
     image: prom/prometheus
     privileged: true
     volumes:
-      - ./statistics_exporter/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./statistics_exporter/config/prometheus-config.yml:/etc/prometheus/prometheus-config.yml:ro
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/etc/prometheus/prometheus-config.yml'
     ports:
       - 127.0.0.1:9009:9090
     expose:

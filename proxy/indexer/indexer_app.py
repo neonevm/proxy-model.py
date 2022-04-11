@@ -1,8 +1,8 @@
-from proxy.environment import EVM_LOADER_ID, SOLANA_URL
+from ..environment import EVM_LOADER_ID, SOLANA_URL
+from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
 from .data import NeonTxStatData
 from .indexer import Indexer
 from .indexer_app_interface import IIndexerUser
-from proxy.statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
 from logged_groups import logged_group
 
 
