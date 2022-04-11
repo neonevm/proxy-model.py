@@ -6,7 +6,7 @@ from ..common_neon import Result
 from . import MemPoolService
 
 
-@logged_group("neon")
+@logged_group("neon.Proxy")
 class MemPoolClient(QueueBasedServiceClient):
 
     MEM_POOL_SERVICE_HOST = "127.0.0.1"

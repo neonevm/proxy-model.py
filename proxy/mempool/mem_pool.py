@@ -2,7 +2,7 @@ from logged_groups import logged_group
 from multiprocessing import Pool
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class MemPool:
 
     POOL_PROC_COUNT = 20

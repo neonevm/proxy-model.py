@@ -5,7 +5,7 @@ from ..common_neon.utils import QueueBasedService
 from .mem_pool import MemPool
 
 
-@logged_group("neon")
+@logged_group("neon.MemPool")
 class MemPoolService(QueueBasedService):
 
     MEM_POOL_SERVICE_PORT = 9091
