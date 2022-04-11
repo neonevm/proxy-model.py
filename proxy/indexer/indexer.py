@@ -6,6 +6,7 @@ import time
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 
+from ..indexer.data import NeonTxStatData
 from ..indexer.indexer_app_interface import IIndexerUser
 from ..indexer.accounts_db import NeonAccountInfo
 from ..indexer.indexer_base import IndexerBase
@@ -887,6 +888,23 @@ class Indexer(IndexerBase):
 
     def process_neon_tx_results(self):
         for neon_tx_result in self.state.iter_neon_tx_results():
-            self._user.on_neon_tx_result(neon_tx_result)
+            neon_tx_hash = neon_tx_result.neon_tx.sign
+            neon_income = int(neon_tx_result.neon_res.gas_used, 0) * int(neon_tx_result.neon_tx.gas_price, 0)
+            if neon_tx_result.holder_account != '':
+                tx_type = 'holder'
+            elif neon_tx_result.storage_account != '':
+                tx_type = 'iterative'
+            else:
+                tx_type = 'single'
+            is_canceled = neon_tx_result.neon_res.status == '0x0'
+            neon_tx_stat_data = NeonTxStatData(neon_tx_hash, neon_income, tx_type, is_canceled)
+            for sign_info, cost_info in zip(neon_tx_result.used_ixs, neon_tx_result.ixs_cost):
+                sol_tx_hash = sign_info.sign
+                sol_spent = cost_info.sol_spent
+                steps = sign_info.steps
+                bpf = cost_info.bpf
+                neon_tx_stat_data.add_instruction(sol_tx_hash, sol_spent, steps, bpf)
+
+            self._user.on_neon_tx_result(neon_tx_stat_data)
         self._user.on_db_status(self.db.status())
         self._user.on_solana_rpc_status(self.solana.is_healthy())
