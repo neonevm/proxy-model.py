@@ -4,7 +4,7 @@ from ..environment import EVM_LOADER_ID, SOLANA_URL
 from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
 from ..common_neon.data import NeonTxStatData
 from .indexer import Indexer
-from .indexer_app_interface import IIndexerUser
+from .i_inidexer_user import IIndexerUser
 
 
 @logged_group("neon.Indexer")
