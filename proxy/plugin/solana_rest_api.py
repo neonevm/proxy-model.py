@@ -48,7 +48,7 @@ from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
-NEON_PROXY_PKG_VERSION = '0.7.14'
+NEON_PROXY_PKG_VERSION = '0.7.15'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
