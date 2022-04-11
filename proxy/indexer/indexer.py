@@ -14,6 +14,7 @@ from ..indexer.canceller import Canceller
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
 from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_receipt_parser import SolReceiptParser
 
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
 
@@ -669,6 +670,9 @@ class CancelIxDecoder(DummyIxDecoder):
         blocked_accounts_start = 3
         if self.ix.get_account_cnt() < blocked_accounts_start + 1:
             return self._decoding_skip('no enough accounts')
+
+        if SolReceiptParser(self.ix.tx).check_if_error():
+            return self._decoding_skip('failed Cancel instruction')
 
         storage_account = self.ix.get_account(0)
         blocked_accounts = self.ix.get_account_list(blocked_accounts_start)
