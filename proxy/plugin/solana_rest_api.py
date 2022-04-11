@@ -59,6 +59,7 @@ class EthereumModel:
     def __init__(self):
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = MemDB(self._solana)
+        self._stat_exporter: Optional[StatisticsExporter] = None
 
         if PP_SOLANA_URL == SOLANA_URL:
             self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
@@ -74,7 +75,7 @@ class EthereumModel:
         self.debug(f"Worker id {self.proxy_id}")
 
     def set_stat_exporter(self, stat_exporter: StatisticsExporter):
-        self.stat_exporter = stat_exporter
+        self._stat_exporter = stat_exporter
 
     @staticmethod
     def neon_proxy_version():
@@ -124,7 +125,7 @@ class EthereumModel:
         elif isinstance(tag, str):
             try:
                 block = SolanaBlockInfo(slot=int(tag.strip(), 16))
-            except:
+            except (Exception,):
                 raise InvalidParamError(message=f'failed to parse block tag: {tag}')
         elif isinstance(tag, int):
             block = SolanaBlockInfo(slot=tag)
@@ -144,7 +145,7 @@ class EthereumModel:
 
             int(tag[2:], 16)
             return tag
-        except:
+        except (Exception,):
             raise InvalidParamError(message='transaction-id is not hex')
 
     @staticmethod
@@ -163,7 +164,7 @@ class EthereumModel:
 
             assert tag[:2] == '0x'
             int(tag[2:], 16)
-        except:
+        except (Exception,):
             raise InvalidParamError(message=f'invalid block tag {tag}')
 
     @staticmethod
@@ -174,7 +175,7 @@ class EthereumModel:
             assert len(bin_sender) == 20
 
             return sender
-        except:
+        except (Exception,):
             raise InvalidParamError(message='bad account')
 
     def _get_full_block_by_number(self, tag) -> SolanaBlockInfo:
@@ -208,8 +209,8 @@ class EthereumModel:
                 return hex(0)
 
             return hex(neon_account_info.balance)
-        except Exception as err:
-            self.debug(f"eth_getBalance: Can't get account info: {err}")
+        except (Exception,):
+            # self.debug(f"eth_getBalance: Can't get account info: {err}")
             return hex(0)
 
     def eth_getLogs(self, obj):
@@ -285,8 +286,8 @@ class EthereumModel:
         try:
             value = neon_cli().call('get-storage-at', account, position)
             return value
-        except Exception as err:
-            self.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
+        except (Exception,):
+            # self.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
             return '0x00'
 
     def _get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
@@ -296,7 +297,7 @@ class EthereumModel:
 
             bin_block_hash = bytes.fromhex(block_hash[2:])
             assert len(bin_block_hash) == 32
-        except:
+        except (Exception,):
             raise InvalidParamError(message=f'bad block hash {block_hash}')
 
         block = self._db.get_block_by_hash(block_hash)
@@ -356,7 +357,7 @@ class EthereumModel:
         except EthereumError:
             raise
         except Exception as err:
-            self.error("eth_call Exception %s", err)
+            self.error(f"eth_call Exception {err}")
             raise
 
     def eth_getTransactionCount(self, account: str, tag: str) -> str:
@@ -366,8 +367,8 @@ class EthereumModel:
         try:
             neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account))
             return hex(neon_account_info.trx_count)
-        except Exception as err:
-            self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
+        except (Exception,):
+            # self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
 
     @staticmethod
@@ -439,7 +440,7 @@ class EthereumModel:
     def eth_sendRawTransaction(self, rawTrx: str) -> str:
         try:
             trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
-        except:
+        except (Exception,):
             raise EthereumError(message="wrong transaction format")
 
         eth_signature = '0x' + trx.hash_signed().hex()
@@ -461,30 +462,30 @@ class EthereumModel:
             self._stat_tx_failed()
             self.debug(f'{err}')
             return eth_signature
-        except EthereumError as err:
+        except EthereumError:
             self._stat_tx_failed()
             # self.debug(f"eth_sendRawTransaction EthereumError: {err}")
             raise
-        except Exception as err:
+        except Exception:
             self._stat_tx_failed()
             # self.error(f"eth_sendRawTransaction type(err): {type(err}}, Exception: {err}")
             raise
 
     def _stat_tx_begin(self):
-        self.stat_exporter.stat_commit_tx_begin()
+        self._stat_exporter.stat_commit_tx_begin()
 
     def _stat_tx_success(self):
-        self.stat_exporter.stat_commit_tx_end_success()
+        self._stat_exporter.stat_commit_tx_end_success()
 
     def _stat_tx_failed(self):
-        self.stat_exporter.stat_commit_tx_end_failed(None)
+        self._stat_exporter.stat_commit_tx_end_failed(None)
 
     def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: int) -> Optional[dict]:
         try:
             if isinstance(tx_idx, str):
                 tx_idx = int(tx_idx, 16)
             assert tx_idx >= 0
-        except:
+        except (Exception,):
             raise EthereumError(message=f'invalid transaction index {tx_idx}')
 
         if block.is_empty():
@@ -544,7 +545,7 @@ class EthereumModel:
         address = self._normalize_account(address)
         try:
             data = bytes.fromhex(data[2:])
-        except:
+        except (Exception,):
             raise EthereumError(message='data is not hex string')
 
         account = KeyStorage().get_key(address)
@@ -589,7 +590,7 @@ class EthereumModel:
                 'raw': raw_tx,
                 'tx': tx
             }
-        except:
+        except (Exception,):
             raise InvalidParamError(message='bad transaction')
 
     def eth_sendTransaction(self, tx: dict) -> str:
@@ -600,7 +601,7 @@ class EthereumModel:
     def web3_sha3(data: str) -> str:
         try:
             data = bytes.fromhex(data[2:])
-        except:
+        except (Exception,):
             raise InvalidParamError(message='data is not hex string')
 
         return sha3.keccak_256(data).hexdigest()
@@ -632,7 +633,7 @@ class EthereumModel:
                 'currentblock': latest_slot,
                 'highestblock': latest_slot + slots_behind
             }
-        except:
+        except (Exception,):
             return False
 
     def net_peerCount(self) -> str:
@@ -669,9 +670,9 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
-        self.stat_exporter = PrometheusExporter()
+        self._stat_exporter = PrometheusExporter()
         self.model = SolanaProxyPlugin.getModel()
-        self.model.set_stat_exporter(self.stat_exporter)
+        self.model.set_stat_exporter(self._stat_exporter)
 
     @classmethod
     def getModel(cls):
@@ -694,20 +695,23 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
             'id': request.get('id', None),
         }
 
-        def is_private_api(method: str) -> bool:
-            if (not method.startswith('eth_')) and (not method.startswith('neon_')):
+        def is_private_api(method_name: str) -> bool:
+            for prefix in ('eth_', 'net_', 'web3_', 'neon_'):
+                if method_name.startswith(prefix):
+                    break
+            else:
                 return True
 
             if ENABLE_PRIVATE_API:
                 return False
 
-            private_method_map = set([
+            private_method_map = (
                 "eth_accounts",
                 "eth_sign",
                 "eth_sendTransaction",
                 "eth_signTransaction",
-            ])
-            return method in private_method_map
+            )
+            return method_name in private_method_map
 
         try:
             if (not hasattr(self.model, request['method'])) or is_private_api(request["method"]):
@@ -763,7 +767,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                     raise Exception("Empty batch request")
                 for r in request:
                     response.append(self.process_request(r))
-            elif isinstance(request, object):
+            elif isinstance(request, dict):
                 response = self.process_request(request)
             else:
                 raise Exception("Invalid request")
@@ -791,7 +795,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
                 b'Access-Control-Allow-Origin': b'*',
             })))
 
-        self.stat_exporter.stat_commit_request_and_timeout(method, resp_time_ms)
+        self._stat_exporter.stat_commit_request_and_timeout(method, resp_time_ms)
 
     def on_websocket_open(self) -> None:
         pass

@@ -244,6 +244,6 @@ def get_from_dict(src: Dict, *path) -> Any:
     return val
 
 
-def get_holder_msg(eth_trx: EthTx):
+def get_holder_msg(eth_trx: EthTx) -> bytes:
     unsigned_msg = eth_trx.unsigned_msg()
-    return  eth_trx.signature() + len(unsigned_msg).to_bytes(8, byteorder="little") + unsigned_msg
+    return eth_trx.signature() + len(unsigned_msg).to_bytes(8, byteorder="little") + unsigned_msg
