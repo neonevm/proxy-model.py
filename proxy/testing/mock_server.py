@@ -9,7 +9,6 @@ class MockServer(Thread):
         self.port = port
         self.app = Flask(__name__)
         self.url = "http://localhost:%s" % self.port
-        self.app.add_url_rule("/shutdown", view_func=self.shutdown_server)
 
     def add_url_rule(self, url, callback, methods):
         self.app.add_url_rule(url, view_func=callback, methods=methods)
