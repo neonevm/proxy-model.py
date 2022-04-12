@@ -37,7 +37,7 @@ from ..environment import MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_
 from ..environment import HOLDER_MSG_SIZE, CONTRACT_EXTRA_SPACE
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..environment import get_solana_accounts
-from proxy.common_neon.utils import get_holder_msg
+from ..common_neon.utils import get_holder_msg
 
 
 class NeonTxStage(metaclass=abc.ABCMeta):
