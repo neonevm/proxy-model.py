@@ -20,15 +20,15 @@ from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
 
-from .address import accountWithSeed, EthereumAddress, ether2program
-from .compute_budget import TransactionWithComputeBudget
-from .constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACTIVE_STORAGE_TAG, ACCOUNT_SEED_VERSION
-from .emulator_interactor import call_emulated
-from .neon_instruction import NeonInstruction as NeonIxBuilder
-from .solana_interactor import SolanaInteractor, StorageAccountInfo
-from .solana_tx_list_sender import SolTxListSender
-from .solana_receipt_parser import SolTxError, SolReceiptParser, Measurements
-from .transaction_validator import NeonTxValidator
+from ..common_neon.address import accountWithSeed, EthereumAddress, ether2program
+from ..common_neon.compute_budget import TransactionWithComputeBudget
+from ..common_neon.constants import STORAGE_SIZE, EMPTY_STORAGE_TAG, FINALIZED_STORAGE_TAG, ACTIVE_STORAGE_TAG, ACCOUNT_SEED_VERSION
+from ..common_neon.emulator_interactor import call_emulated
+from ..common_neon.neon_instruction import NeonInstruction as NeonIxBuilder
+from ..common_neon.solana_interactor import SolanaInteractor, StorageAccountInfo
+from ..common_neon.solana_tx_list_sender import SolTxListSender
+from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser, Measurements
+from ..common_neon.transaction_validator import NeonTxValidator
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
 from ..common_neon.errors import EthereumError

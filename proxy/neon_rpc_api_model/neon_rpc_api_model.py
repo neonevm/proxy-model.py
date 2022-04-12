@@ -14,14 +14,15 @@ from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.transaction_sender import NeonTxSender
 from ..common_neon.utils import SolanaBlockInfo
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_EVM_VERSION, NEON_EVM_REVISION, \
-    CHAIN_ID, neon_cli, EVM_STEP_COUNT
+                          CHAIN_ID, neon_cli, EVM_STEP_COUNT
 from ..memdb.memdb import MemDB
 from ..mempool import MemPoolClient
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
+
+from .transaction_sender import NeonTxSender
 
 NEON_PROXY_PKG_VERSION = '0.7.14-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
