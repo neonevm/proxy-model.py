@@ -35,7 +35,7 @@ modelInstance = None
 
 
 @logged_group("neon.Proxy")
-class SolanaProxyPlugin(HttpWebServerBasePlugin):
+class NeonRpcApiPlugin(HttpWebServerBasePlugin):
     """Extend in-built Web Server to add Reverse Proxy capabilities.
     """
 
@@ -47,7 +47,7 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
         self.stat_exporter = PrometheusExporter()
-        self.model = SolanaProxyPlugin.getModel()
+        self.model = NeonRpcApiPlugin.getModel()
         self.model.set_stat_exporter(self.stat_exporter)
 
     @classmethod
@@ -61,8 +61,8 @@ class SolanaProxyPlugin(HttpWebServerBasePlugin):
 
     def routes(self) -> List[Tuple[int, str]]:
         return [
-            (httpProtocolTypes.HTTP, SolanaProxyPlugin.SOLANA_PROXY_LOCATION),
-            (httpProtocolTypes.HTTPS, SolanaProxyPlugin.SOLANA_PROXY_LOCATION)
+            (httpProtocolTypes.HTTP, NeonRpcApiPlugin.SOLANA_PROXY_LOCATION),
+            (httpProtocolTypes.HTTPS, NeonRpcApiPlugin.SOLANA_PROXY_LOCATION)
         ]
 
     def process_request(self, request):
