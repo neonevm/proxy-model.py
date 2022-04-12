@@ -37,7 +37,7 @@ class JsonEncoder(json.JSONEncoder):
 
 
 @logged_group("neon.Proxy")
-class NeonRpcGate:
+class NeonRpcApiModel:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
     def __init__(self):

@@ -27,7 +27,7 @@ from ..common_neon.solana_receipt_parser import SolTxError
 from ..common_neon.errors import EthereumError
 from ..environment import ENABLE_PRIVATE_API
 
-from ..neon_rpc_gate.neon_rpc_gate import NeonRpcGate
+from ..neon_rpc_api_model import NeonRpcApiModel
 from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
 
 modelInstanceLock = threading.Lock()
@@ -56,7 +56,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         global modelInstance
         with modelInstanceLock:
             if modelInstance is None:
-                modelInstance = NeonRpcGate()
+                modelInstance = NeonRpcApiModel()
             return modelInstance
 
     def routes(self) -> List[Tuple[int, str]]:
