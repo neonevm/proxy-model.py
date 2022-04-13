@@ -47,6 +47,7 @@ class NeonRpcApiModel:
         self._solana_interactor = SolanaInteractor(SOLANA_URL)
         self._db = MemDB(self._solana_interactor)
         self._stat_exporter: Optional[StatisticsExporter] = None
+        self._mempool_client = MemPoolClient()
 
         interactor = self._solana_interactor if PP_SOLANA_URL == SOLANA_URL else SolanaInteractor(PP_SOLANA_URL)
         self.gas_price_calculator = GasPriceCalculator(interactor, PYTH_MAPPING_ACCOUNT)
@@ -445,6 +446,7 @@ class NeonRpcApiModel:
                 tx_sender.execute(emulating_result)
 
             self._stat_tx_success()
+            self._mempool_client.on_eth_send_raw_transaction(eth_signature)
             return eth_signature
 
         except PendingTxError as err:
