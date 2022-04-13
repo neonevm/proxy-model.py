@@ -8,8 +8,6 @@ from solana.publickey import PublicKey
 from solana.account import Account as SolanaAccount
 from typing import Optional, List
 
-from proxy.common_neon.address import EthereumAddress
-
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
 PP_SOLANA_URL = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
 EVM_LOADER_ID = os.environ.get("EVM_LOADER")
@@ -24,9 +22,7 @@ if MINIMAL_GAS_PRICE is not None:
     MINIMAL_GAS_PRICE = int(MINIMAL_GAS_PRICE)*10**9
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
-LOG_SENDING_SOLANA_TRANSACTION = os.environ.get("LOG_SENDING_SOLANA_TRANSACTION", "NO") == "YES"
 LOG_NEON_CLI_DEBUG = os.environ.get("LOG_NEON_CLI_DEBUG", "NO") == "YES"
-WRITE_TRANSACTION_COST_IN_DB = os.environ.get("WRITE_TRANSACTION_COST_IN_DB", "NO") == "YES"
 RETRY_ON_FAIL = int(os.environ.get("RETRY_ON_FAIL", "10"))
 RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION = max(int(os.environ.get("RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION", "1000")), 1)
 FUZZING_BLOCKHASH = os.environ.get("FUZZING_BLOCKHASH", "NO") == "YES"
@@ -52,6 +48,7 @@ SKIP_PREFLIGHT = os.environ.get("SKIP_PREFLIGHT", "NO") == "YES"
 CONTRACT_EXTRA_SPACE = int(os.environ.get("CONTRACT_EXTRA_SPACE", 2048))
 EVM_STEP_COUNT = int(os.environ.get("EVM_STEP_COUNT", 750))  # number of evm-steps, performed by one iteration
 ENABLE_PRIVATE_API = os.environ.get("ENABLE_PRIVATE_API", "NO") == "YES"
+GATHER_STATISTICS = os.environ.get("GATHER_STATISTICS", "NO") == "YES"
 
 PYTH_MAPPING_ACCOUNT = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
 if PYTH_MAPPING_ACCOUNT is not None:
