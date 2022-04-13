@@ -36,9 +36,8 @@ class NeonTxValidator:
 
         self._tx_hash = '0x' + self._tx.hash_signed().hex()
 
-    def prevalidate_tx(self, signer: SolanaAccount):
-        self._prevalidate_whitelist(signer)
-
+    def prevalidate_tx(self):
+        self._prevalidate_whitelist()
         self._prevalidate_tx_nonce()
         self._prevalidate_tx_gas()
         self._prevalidate_tx_chain_id()
@@ -55,13 +54,13 @@ class NeonTxValidator:
         if nonce_error:
             self._raise_nonce_error(nonce_error[0], nonce_error[1])
 
-    def _prevalidate_whitelist(self, signer):
-        w = AccountWhitelist(self._solana, ACCOUNT_PERMISSION_UPDATE_INT, signer)
-        if not w.has_client_permission(self._sender[2:]):
+    def _prevalidate_whitelist(self):
+        white_list = AccountWhitelist(self._solana, ACCOUNT_PERMISSION_UPDATE_INT)
+        if not white_list.has_client_permission(self._sender[2:]):
             self.warning(f'Sender account {self._sender} is not allowed to execute transactions')
             raise EthereumError(message=f'Sender account {self._sender} is not allowed to execute transactions')
 
-        if (self._deployed_contract is not None) and (not w.has_contract_permission(self._deployed_contract[2:])):
+        if (self._deployed_contract is not None) and (not white_list.has_contract_permission(self._deployed_contract[2:])):
             self.warning(f'Contract account {self._deployed_contract} is not allowed for deployment')
             raise EthereumError(message=f'Contract account {self._deployed_contract} is not allowed for deployment')
 

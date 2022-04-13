@@ -8,7 +8,7 @@ from logged_groups import logged_group
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
-from ..common_neon.emulator_interactor import call_emulated
+from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
 from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import Trx as EthTrx
@@ -25,6 +25,9 @@ from .transaction_sender import NeonTxSender
 
 NEON_PROXY_PKG_VERSION = '0.7.15-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
+from .operator_resource_list import OperatorResourceList
+
+from .transaction_validator import NeonTxValidator
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -41,14 +44,12 @@ class NeonRpcApiModel:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
     def __init__(self):
-        self._solana = SolanaInteractor(SOLANA_URL)
-        self._db = MemDB(self._solana)
+        self._solana_interactor = SolanaInteractor(SOLANA_URL)
+        self._db = MemDB(self._solana_interactor)
         self._stat_exporter: Optional[StatisticsExporter] = None
 
-        if PP_SOLANA_URL == SOLANA_URL:
-            self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
-        else:
-            self.gas_price_calculator = GasPriceCalculator(SolanaInteractor(PP_SOLANA_URL), PYTH_MAPPING_ACCOUNT)
+        interactor = self._solana_interactor if PP_SOLANA_URL == SOLANA_URL else SolanaInteractor(PP_SOLANA_URL)
+        self.gas_price_calculator = GasPriceCalculator(interactor, PYTH_MAPPING_ACCOUNT)
         self.gas_price_calculator.update_mapping()
         self.gas_price_calculator.try_update_gas_price()
 
@@ -87,7 +88,7 @@ class NeonRpcApiModel:
 
     def eth_estimateGas(self, param):
         try:
-            calculator = GasEstimate(param, self._solana)
+            calculator = GasEstimate(param, self._solana_interactor)
             calculator.execute()
             return hex(calculator.estimate())
 
@@ -188,7 +189,7 @@ class NeonRpcApiModel:
         account = self._normalize_account(account)
 
         try:
-            neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account))
+            neon_account_info = self._solana_interactor.get_neon_account_info(EthereumAddress(account))
             if neon_account_info is None:
                 return hex(0)
 
@@ -349,7 +350,7 @@ class NeonRpcApiModel:
         account = self._normalize_account(account)
 
         try:
-            neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account))
+            neon_account_info = self._solana_interactor.get_neon_account_info(EthereumAddress(account))
             return hex(neon_account_info.trx_count)
         except (Exception,):
             # self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
@@ -423,22 +424,33 @@ class NeonRpcApiModel:
 
     def eth_sendRawTransaction(self, rawTrx: str) -> str:
         try:
-            trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
+            neon_trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         except (Exception,):
             raise EthereumError(message="wrong transaction format")
 
-        eth_signature = '0x' + trx.hash_signed().hex()
-        self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
+        eth_signature = '0x' + neon_trx.hash_signed().hex()
+        self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(neon_trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
 
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
-        if trx.gasPrice < min_gas_price:
+        if neon_trx.gasPrice < min_gas_price:
             raise EthereumError(message="The transaction gasPrice is less than the minimum allowable value" +
-                                f"({trx.gasPrice}<{min_gas_price})")
+                                f"({neon_trx.gasPrice}<{min_gas_price})")
         self._stat_tx_begin()
 
         try:
-            tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
-            tx_sender.execute()
+            emulating_result = call_trx_emulated(neon_trx)
+            tx_sender = NeonTxSender(self._db, self._solana_interactor, neon_trx, steps=EVM_STEP_COUNT)
+            neon_tx_validator = NeonTxValidator(self._solana_interactor, neon_trx)
+            try:
+                neon_tx_validator.prevalidate_tx()
+                neon_tx_validator.prevalidate_emulator(emulating_result)
+            except Exception as e:
+                neon_tx_validator.extract_ethereum_error(e)
+                raise
+
+            with OperatorResourceList(tx_sender):
+                tx_sender.execute(emulating_result)
+
             self._stat_tx_success()
             return eth_signature
 
@@ -602,7 +614,7 @@ class NeonRpcApiModel:
 
     def eth_syncing(self) -> Union[bool, dict]:
         try:
-            slots_behind = self._solana.get_slots_behind()
+            slots_behind = self._solana_interactor.get_slots_behind()
             latest_slot = self._db.get_latest_block_slot()
             first_slot = self._db.get_starting_block_slot()
 
@@ -619,7 +631,7 @@ class NeonRpcApiModel:
             return False
 
     def net_peerCount(self) -> str:
-        cluster_node_list = self._solana.get_cluster_nodes()
+        cluster_node_list = self._solana_interactor.get_cluster_nodes()
         return hex(len(cluster_node_list))
 
     @staticmethod
