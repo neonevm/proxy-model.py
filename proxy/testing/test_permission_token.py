@@ -24,21 +24,9 @@ class TestPermissionToken(unittest.TestCase):
         cls.payer = SolanaAccount()
         client = SolanaClient(os.environ['SOLANA_URL'])
         client.request_airdrop(cls.payer.public_key(), 1000_000_000_000, Confirmed)
-        cls.allowance_token = PermissionToken(cls.solana,
-                                              PublicKey(os.environ['NEON_PERMISSION_ALLOWANCE_TOKEN']),
-                                              cls.payer)
+        cls.allowance_token = PermissionToken(cls.solana, PublicKey(os.environ['NEON_PERMISSION_ALLOWANCE_TOKEN']))
 
-        cls.denial_token = PermissionToken(cls.solana,
-                                           PublicKey(os.environ['NEON_PERMISSION_DENIAL_TOKEN']),
-                                           cls.payer)
-
-    # def test_get_balance_non_existing_account(self):
-    #     """
-    #     Should return zero balance for non existing token-account
-    #     """
-    #     new_acc = self.proxy.eth.account.create(f'test_get_balance_non_existing_account')
-    #     self.assertEqual(self.allowance_token.get_balance(new_acc.address), 0)
-    #     self.assertEqual(self.denial_token.get_balance(new_acc.address), 0)
+        cls.denial_token = PermissionToken(cls.solana, PublicKey(os.environ['NEON_PERMISSION_DENIAL_TOKEN']))
 
     def test_mint_permission_tokens(self):
         """
@@ -47,7 +35,7 @@ class TestPermissionToken(unittest.TestCase):
         new_acc = self.proxy.eth.account.create(f'test_mint_permission_tokens')
         allowance_amount = 1234
         denial_amount = 4321
-        self.allowance_token.mint_to(allowance_amount, new_acc.address, self.mint_authority_file)
-        self.denial_token.mint_to(denial_amount, new_acc.address, self.mint_authority_file)
+        self.allowance_token.mint_to(allowance_amount, new_acc.address, self.mint_authority_file, self.payer)
+        self.denial_token.mint_to(denial_amount, new_acc.address, self.mint_authority_file, self.payer)
         self.assertEqual(self.allowance_token.get_balance(new_acc.address), allowance_amount)
         self.assertEqual(self.denial_token.get_balance(new_acc.address), denial_amount)
