@@ -28,7 +28,3 @@ if __name__ == '__main__':
     else:
         neon_proxy_app = NeonProxyApp()
         neon_proxy_app.start()
-
-
-
-
