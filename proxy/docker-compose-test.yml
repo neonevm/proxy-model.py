@@ -121,7 +121,7 @@ services:
 
   deploy_contracts:
     container_name: deploy_contracts
-    image: neonlabsorg/evm_loader:${NEON_EVM_COMMIT:-latest}
+    image: neonlabsorg/evm_loader:${NEON_EVM_COMMIT:-ca22cdb487c1d103280a05eaf9b73c7327aa756d}
     environment:
       - SOLANA_URL=http://solana:8899
     networks:
