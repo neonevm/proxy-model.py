@@ -119,6 +119,18 @@ services:
       retries: 10
       start_period: 5s
 
+  deploy_contracts:
+    container_name: deploy_contracts
+    image: neonlabsorg/evm_loader:${NEON_EVM_COMMIT:-latest}
+    environment:
+      - SOLANA_URL=http://solana:8899
+    networks:
+      - net
+    depends_on:
+      proxy:
+        condition: service_healthy
+    command: bash -c "deploy-contracts.sh"
+
   faucet:
     container_name: faucet
     image: neonlabsorg/faucet:latest
@@ -142,6 +154,8 @@ services:
     depends_on:
       proxy:
         condition: service_healthy
+      deploy_contracts:
+        condition: service_completed_successfully
     healthcheck:
       test: [ CMD-SHELL, "/opt/health_check_faucet.sh" ]
       interval: 10s
