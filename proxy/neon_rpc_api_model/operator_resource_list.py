@@ -231,7 +231,7 @@ class OperatorResourceList:
         stage.build()
 
         self.debug(f"Create new ether account {str(solana_address)} for resource {opkey}:{rid}")
-        SolTxListSender(self._neon_tx_sender, [stage.tx], NeonCreateAccountTxStage.NAME).send()
+        SolTxListSender(self._neon_tx_sender, [stage.tx], NeonCreateAccountTxStage.NAME).send(self._resource.signer)
 
         return ether_address
 
@@ -271,7 +271,7 @@ class OperatorResourceList:
                 raise RuntimeError(f"not empty, not finalized: {str(stage.sol_account)}")
 
         if len(tx_name_list):
-            SolTxListSender(self._neon_tx_sender, [tx], ' + '.join(tx_name_list)).send()
+            SolTxListSender(self._neon_tx_sender, [tx], ' + '.join(tx_name_list)).send(self._resource.signer)
         else:
             self.debug(f"Use existing accounts for resource {opkey}:{rid}")
         return account_list

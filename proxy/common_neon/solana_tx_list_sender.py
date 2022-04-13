@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from solana.account import Account as SolanaAccount
 import time
 
 from logged_groups import logged_group
@@ -49,9 +50,9 @@ class SolTxListSender:
     def _get_full_list(self):
         return [tx for lst in self._all_tx_list for tx in lst]
 
-    def send(self) -> SolTxListSender:
+    def send(self, signer: SolanaAccount) -> SolTxListSender:
         solana = self._neon_tx_sender.solana
-        signer = self._neon_tx_sender.signer
+        signer = signer
         waiter = self._neon_tx_sender.waiter
         skip = self._skip_preflight
         commitment = self._preflight_commitment

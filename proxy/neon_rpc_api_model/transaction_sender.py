@@ -310,12 +310,13 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         return tx
 
     def execute(self) -> (NeonTxResultInfo, [str]):
+        signer = self._neon_tx_sender.resource.signer
         tx_list = self._neon_tx_sender.build_account_tx_list(not self._skip_create_account)
         if len(tx_list) > 0:
-            SolTxListSender(self._neon_tx_sender, tx_list, self._neon_tx_sender.account_txs_name).send()
+            SolTxListSender(self._neon_tx_sender, tx_list, self._neon_tx_sender.account_txs_name).send(signer)
             self._neon_tx_sender.done_account_tx_list(self._skip_create_account)
 
-        tx_sender = SimpleNeonTxSender(self, self._neon_tx_sender, [self.build_tx()], self.NAME).send()
+        tx_sender = SimpleNeonTxSender(self, self._neon_tx_sender, [self.build_tx()], self.NAME).send(signer)
         if not tx_sender.neon_res.is_valid():
             raise tx_sender.raise_budget_exceeded()
         return tx_sender.neon_res, tx_sender.success_sign_list
@@ -463,9 +464,10 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         return self._neon_tx_sender.build_account_tx_list(False)
 
     def execute(self) -> (NeonTxResultInfo, [str]):
+        signer = self._neon_tx_sender.resource.signer
         tx_list = self._build_preparation_tx_list()
         if len(tx_list):
-            SolTxListSender(self._neon_tx_sender, tx_list, self._preparation_txs_name).send()
+            SolTxListSender(self._neon_tx_sender, tx_list, self._preparation_txs_name).send(signer)
             self._neon_tx_sender.done_account_tx_list()
 
         cnt = math.ceil(self._steps_emulated / self.steps)
@@ -473,7 +475,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         tx_list = [self.build_tx(idx) for idx in range(cnt)]
         self.debug(f'Total iterations {len(tx_list)} for {self._steps_emulated} ({self.steps}) EVM steps')
         tx_sender = IterativeNeonTxSender(self, self._neon_tx_sender, tx_list, self.NAME)
-        tx_sender.send()
+        tx_sender.send(signer)
         return tx_sender.neon_res, tx_sender.success_sign_list
 
 

@@ -38,7 +38,7 @@ class PermissionToken:
             mint=self.token_mint
         )
         txn.add(create_txn)
-        SolTxListSender(self, [txn], 'CreateAssociatedTokenAccount(1)', skip_preflight=True).send()
+        SolTxListSender(self, [txn], 'CreateAssociatedTokenAccount(1)', skip_preflight=True).send(signer)
         return token_account
 
     def mint_to(self, amount: int, ether_addr: Union[str, EthereumAddress], mint_authority_file: str, signer: SolanaAccount):

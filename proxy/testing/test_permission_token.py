@@ -1,14 +1,18 @@
 import os
 import unittest
 from solana.rpc.api import Client as SolanaClient
-from proxy.common_neon.permission_token import PermissionToken
-from proxy.common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.permission_token import PermissionToken
+from ..common_neon.solana_interactor import SolanaInteractor
 from solana.publickey import PublicKey
 from solana.account import Account as SolanaAccount
 from web3 import Web3
 from solana.rpc.commitment import Confirmed
+from ..environment import ELF_PARAMS
 
-from proxy.testing.testing_helpers import request_airdrop
+from .testing_helpers import request_airdrop
+
+ALLOWANCE_TOKEN_ADDR = ELF_PARAMS.get("NEON_PERMISSION_ALLOWANCE_TOKEN", '')
+DENIAL_TOKEN_ADDR = ELF_PARAMS.get("NEON_PERMISSION_DENIAL_TOKEN", '')
 
 
 class TestPermissionToken(unittest.TestCase):
@@ -24,9 +28,8 @@ class TestPermissionToken(unittest.TestCase):
         cls.payer = SolanaAccount()
         client = SolanaClient(os.environ['SOLANA_URL'])
         client.request_airdrop(cls.payer.public_key(), 1000_000_000_000, Confirmed)
-        cls.allowance_token = PermissionToken(cls.solana, PublicKey(os.environ['NEON_PERMISSION_ALLOWANCE_TOKEN']))
-
-        cls.denial_token = PermissionToken(cls.solana, PublicKey(os.environ['NEON_PERMISSION_DENIAL_TOKEN']))
+        cls.allowance_token = PermissionToken(cls.solana, PublicKey(ALLOWANCE_TOKEN_ADDR))
+        cls.denial_token = PermissionToken(cls.solana, PublicKey(DENIAL_TOKEN_ADDR))
 
     def test_mint_permission_tokens(self):
         """
