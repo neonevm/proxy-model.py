@@ -23,7 +23,7 @@ from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 
 from .transaction_sender import NeonTxSender
 
-NEON_PROXY_PKG_VERSION = '0.7.15'
+NEON_PROXY_PKG_VERSION = '0.7.16'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
