@@ -10,6 +10,7 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..memdb.memdb import MemDB
 from ..neon_rpc_api_model.operator_resource_list import OperatorResourceList
 
+
 @logged_groups.logged_group("neon.TestCases")
 class TestNeonTxSender(unittest.TestCase):
     @classmethod
@@ -25,9 +26,10 @@ class TestNeonTxSender(unittest.TestCase):
         self.neon_tx_sender._set_pending_tx.side_effect = [None]
         self.neon_tx_sender._validate_whitelist.side_effect = [None]
         self.neon_tx_sender._validate_tx_count.side_effect = [None]
-        self.neon_tx_sender._resource_list._min_operator_balance_to_warn = Mock()
-        self.neon_tx_sender._resource_list._min_operator_balance_to_err = Mock()
-        self.neon_tx_sender._resource_list._recheck_bad_resource_list = Mock()
+        self._resource_list = OperatorResourceList(self.neon_tx_sender)
+        self._resource_list._min_operator_balance_to_warn = Mock()
+        self._resource_list._min_operator_balance_to_err = Mock()
+        self._resource_list._recheck_bad_resource_list = Mock()
 
     def tearDown(self) -> None:
         pass
@@ -40,13 +42,12 @@ class TestNeonTxSender(unittest.TestCase):
         then an error is returned to the client who requested the execution of the transaction
         and an error is written to the log.
         """
-        with OperatorResourceList(self.neon_tx_sender) as operator_resource_info:
-            self.neon_tx_sender._resource_list._recheck_bad_resource_list.return_value = 1
-            self.neon_tx_sender._resource_list._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2, 1_000_000_000 * 2]
-            self.neon_tx_sender._resource_list._min_operator_balance_to_err.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000]
+        self._resource_list._recheck_bad_resource_list.return_value = 1
+        self._resource_list._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2, 1_000_000_000 * 2]
+        self._resource_list._min_operator_balance_to_err.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000]
 
-            with self.assertLogs('neon', level='ERROR') as logs:
-                self.neon_tx_sender._resource_list.get_active_resource()
+        with self.assertLogs('neon', level='ERROR') as logs:
+            with self._resource_list:
                 print('logs.output:', str(logs.output))
                 self.assertRegex(str(logs.output), 'ERROR:neon.Proxy:Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
 
@@ -57,14 +58,14 @@ class TestNeonTxSender(unittest.TestCase):
         the value of the variable MIN_OPERATOR_BALANCE_TO_WARN or less,
         then a warning is written to the log.:
         """
-        self.neon_tx_sender._resource_list._recheck_bad_resource_list.return_value = 2
-        self.neon_tx_sender._resource_list._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000 * 2]
-        self.neon_tx_sender._resource_list._min_operator_balance_to_err.side_effect = [1_049_049_000, 1_000_000_000]
+        self._resource_list._recheck_bad_resource_list.return_value = 2
+        self._resource_list._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000 * 2]
+        self._resource_list._min_operator_balance_to_err.side_effect = [1_049_049_000, 1_000_000_000]
 
         with self.assertLogs('neon', level='WARNING') as logs:
-            self.neon_tx_sender._resource_list.get_active_resource()
-            print('logs.output:', str(logs.output))
-            self.assertRegex(str(logs.output), 'WARNING:neon.Proxy:Operator account [A-Za-z0-9]{40,}:[0-9]+ SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
+            with self._resource_list:
+                print('logs.output:', str(logs.output))
+                self.assertRegex(str(logs.output), 'WARNING:neon.Proxy:Operator account [A-Za-z0-9]{40,}:[0-9]+ SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
 
     # @unittest.skip("a.i.")
     def test_03_validate_execution_when_not_enough_sols_for_all_operator_accounts(self):
@@ -75,13 +76,14 @@ class TestNeonTxSender(unittest.TestCase):
         who requested the execution of the transaction
         and an error is written to the log.
         """
-        self.neon_tx_sender._resource_list._recheck_bad_resource_list.return_value = 3
-        self.neon_tx_sender._resource_list._min_operator_balance_to_warn.return_value = 1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2
-        self.neon_tx_sender._resource_list._min_operator_balance_to_err.return_value = 1_049_000_000 * 1_000_000_000 * 1_000_000_000
+        self._resource_list._recheck_bad_resource_list.return_value = 3
+        self._resource_list._min_operator_balance_to_warn.return_value = 1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2
+        self._resource_list._min_operator_balance_to_err.return_value = 1_049_000_000 * 1_000_000_000 * 1_000_000_000
 
         with self.assertLogs('neon', level='ERROR') as logs:
             with self.assertRaises(RuntimeError, msg='Operator has NO resources!'):
-                self.neon_tx_sender._resource_list.get_active_resource()
+                with self._resource_list:
+                    pass
 
             print('logs.output:', str(logs.output))
             self.assertRegex(str(logs.output), 'ERROR:neon.Proxy:Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')

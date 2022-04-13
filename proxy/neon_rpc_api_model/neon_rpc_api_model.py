@@ -8,7 +8,7 @@ from logged_groups import logged_group
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
-from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
+from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated, NeonEmulatingResult
 from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import Trx as EthTrx
@@ -438,16 +438,9 @@ class NeonRpcApiModel:
         self._stat_tx_begin()
 
         try:
-            emulating_result = call_trx_emulated(neon_trx)
-            tx_sender = NeonTxSender(self._db, self._solana_interactor, neon_trx, steps=EVM_STEP_COUNT)
-            neon_tx_validator = NeonTxValidator(self._solana_interactor, neon_trx)
-            try:
-                neon_tx_validator.prevalidate_tx()
-                neon_tx_validator.prevalidate_emulator(emulating_result)
-            except Exception as e:
-                neon_tx_validator.extract_ethereum_error(e)
-                raise
+            emulating_result = self.prevalidate(neon_trx)
 
+            tx_sender = NeonTxSender(self._db, self._solana_interactor, neon_trx, steps=EVM_STEP_COUNT)
             with OperatorResourceList(tx_sender):
                 tx_sender.execute(emulating_result)
 
@@ -464,6 +457,12 @@ class NeonRpcApiModel:
         except Exception:
             self._stat_tx_failed()
             raise
+
+    def prevalidate(self, neon_trx: EthTrx) -> NeonEmulatingResult:
+        emulating_result = call_trx_emulated(neon_trx)
+        neon_validator = NeonTxValidator(self._solana_interactor, neon_trx)
+        neon_validator.prevalidate(emulating_result)
+        return emulating_result
 
     def _stat_tx_begin(self):
         self._stat_exporter.stat_commit_tx_begin()

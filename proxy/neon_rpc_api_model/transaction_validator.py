@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from solana.account import Account as SolanaAccount
 from logged_groups import logged_group
 
 from ..common_neon.eth_proto import Trx as EthTx
@@ -12,6 +11,8 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.estimate import GasEstimate
 
 from ..environment import ACCOUNT_PERMISSION_UPDATE_INT, CHAIN_ID
+
+from ..common_neon.emulator_interactor import NeonEmulatingResult
 
 
 @logged_group("neon.Proxy")
@@ -36,7 +37,15 @@ class NeonTxValidator:
 
         self._tx_hash = '0x' + self._tx.hash_signed().hex()
 
-    def prevalidate_tx(self):
+    def prevalidate(self, emulating_result: NeonEmulatingResult):
+        try:
+            self._prevalidate_tx()
+            self._prevalidate_emulator(emulating_result)
+        except Exception as e:
+            self.extract_ethereum_error(e)
+            raise
+
+    def _prevalidate_tx(self):
         self._prevalidate_whitelist()
         self._prevalidate_tx_nonce()
         self._prevalidate_tx_gas()
@@ -44,7 +53,7 @@ class NeonTxValidator:
         self._prevalidate_tx_size()
         self._prevalidate_sender_balance()
 
-    def prevalidate_emulator(self, emulator_json: dict):
+    def _prevalidate_emulator(self, emulator_json: dict):
         self._prevalidate_gas_usage(emulator_json)
         self._prevalidate_account_sizes(emulator_json)
 
