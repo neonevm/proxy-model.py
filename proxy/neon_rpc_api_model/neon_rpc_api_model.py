@@ -24,7 +24,7 @@ from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 
 from .transaction_sender import NeonTxSender
 
-NEON_PROXY_PKG_VERSION = '0.7.14-dev'
+NEON_PROXY_PKG_VERSION = '0.7.15-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -44,7 +44,7 @@ class NeonRpcApiModel:
     def __init__(self):
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = MemDB(self._solana)
-        self._mempool_client = MemPoolClient()
+        self._stat_exporter: Optional[StatisticsExporter] = None
 
         if PP_SOLANA_URL == SOLANA_URL:
             self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
@@ -60,7 +60,7 @@ class NeonRpcApiModel:
         self.debug(f"Worker id {self.proxy_id}")
 
     def set_stat_exporter(self, stat_exporter: StatisticsExporter):
-        self.stat_exporter = stat_exporter
+        self._stat_exporter = stat_exporter
 
     @staticmethod
     def neon_proxy_version():
@@ -110,7 +110,7 @@ class NeonRpcApiModel:
         elif isinstance(tag, str):
             try:
                 block = SolanaBlockInfo(slot=int(tag.strip(), 16))
-            except:
+            except (Exception,):
                 raise InvalidParamError(message=f'failed to parse block tag: {tag}')
         elif isinstance(tag, int):
             block = SolanaBlockInfo(slot=tag)
@@ -130,7 +130,7 @@ class NeonRpcApiModel:
 
             int(tag[2:], 16)
             return tag
-        except:
+        except (Exception,):
             raise InvalidParamError(message='transaction-id is not hex')
 
     @staticmethod
@@ -149,7 +149,7 @@ class NeonRpcApiModel:
 
             assert tag[:2] == '0x'
             int(tag[2:], 16)
-        except:
+        except (Exception,):
             raise InvalidParamError(message=f'invalid block tag {tag}')
 
     @staticmethod
@@ -160,7 +160,7 @@ class NeonRpcApiModel:
             assert len(bin_sender) == 20
 
             return sender
-        except:
+        except (Exception,):
             raise InvalidParamError(message='bad account')
 
     def _get_full_block_by_number(self, tag) -> SolanaBlockInfo:
@@ -194,8 +194,8 @@ class NeonRpcApiModel:
                 return hex(0)
 
             return hex(neon_account_info.balance)
-        except Exception as err:
-            self.debug(f"eth_getBalance: Can't get account info: {err}")
+        except (Exception,):
+            # self.debug(f"eth_getBalance: Can't get account info: {err}")
             return hex(0)
 
     def eth_getLogs(self, obj):
@@ -271,8 +271,8 @@ class NeonRpcApiModel:
         try:
             value = neon_cli().call('get-storage-at', account, position)
             return value
-        except Exception as err:
-            self.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
+        except (Exception,):
+            # self.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
             return '0x00'
 
     def _get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
@@ -282,7 +282,7 @@ class NeonRpcApiModel:
 
             bin_block_hash = bytes.fromhex(block_hash[2:])
             assert len(bin_block_hash) == 32
-        except:
+        except (Exception,):
             raise InvalidParamError(message=f'bad block hash {block_hash}')
 
         block = self._db.get_block_by_hash(block_hash)
@@ -342,7 +342,7 @@ class NeonRpcApiModel:
         except EthereumError:
             raise
         except Exception as err:
-            self.error("eth_call Exception %s", err)
+            self.error(f"eth_call Exception {err}")
             raise
 
     def eth_getTransactionCount(self, account: str, tag: str) -> str:
@@ -352,8 +352,8 @@ class NeonRpcApiModel:
         try:
             neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account))
             return hex(neon_account_info.trx_count)
-        except Exception as err:
-            self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
+        except (Exception,):
+            # self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
 
     @staticmethod
@@ -425,7 +425,7 @@ class NeonRpcApiModel:
     def eth_sendRawTransaction(self, rawTrx: str) -> str:
         try:
             trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
-        except:
+        except (Exception,):
             raise EthereumError(message="wrong transaction format")
 
         eth_signature = '0x' + trx.hash_signed().hex()
@@ -441,35 +441,34 @@ class NeonRpcApiModel:
             tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             tx_sender.execute()
             self._stat_tx_success()
-            self._mempool_client.on_eth_send_raw_transaction(eth_signature)
             return eth_signature
 
         except PendingTxError as err:
             self._stat_tx_failed()
             self.debug(f'{err}')
             return eth_signature
-        except EthereumError as err:
+        except EthereumError:
             self._stat_tx_failed()
             raise
-        except Exception as err:
+        except Exception:
             self._stat_tx_failed()
             raise
 
     def _stat_tx_begin(self):
-        self.stat_exporter.stat_commit_tx_begin()
+        self._stat_exporter.stat_commit_tx_begin()
 
     def _stat_tx_success(self):
-        self.stat_exporter.stat_commit_tx_end_success()
+        self._stat_exporter.stat_commit_tx_end_success()
 
     def _stat_tx_failed(self):
-        self.stat_exporter.stat_commit_tx_end_failed(None)
+        self._stat_exporter.stat_commit_tx_end_failed(None)
 
     def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: int) -> Optional[dict]:
         try:
             if isinstance(tx_idx, str):
                 tx_idx = int(tx_idx, 16)
             assert tx_idx >= 0
-        except:
+        except (Exception,):
             raise EthereumError(message=f'invalid transaction index {tx_idx}')
 
         if block.is_empty():
@@ -529,7 +528,7 @@ class NeonRpcApiModel:
         address = self._normalize_account(address)
         try:
             data = bytes.fromhex(data[2:])
-        except:
+        except (Exception,):
             raise EthereumError(message='data is not hex string')
 
         account = KeyStorage().get_key(address)
@@ -574,7 +573,7 @@ class NeonRpcApiModel:
                 'raw': raw_tx,
                 'tx': tx
             }
-        except:
+        except (Exception,):
             raise InvalidParamError(message='bad transaction')
 
     def eth_sendTransaction(self, tx: dict) -> str:
@@ -585,7 +584,7 @@ class NeonRpcApiModel:
     def web3_sha3(data: str) -> str:
         try:
             data = bytes.fromhex(data[2:])
-        except:
+        except (Exception,):
             raise InvalidParamError(message='data is not hex string')
 
         return sha3.keccak_256(data).hexdigest()
@@ -617,7 +616,7 @@ class NeonRpcApiModel:
                 'currentblock': latest_slot,
                 'highestblock': latest_slot + slots_behind
             }
-        except:
+        except (Exception,):
             return False
 
     def net_peerCount(self) -> str:

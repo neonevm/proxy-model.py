@@ -13,6 +13,7 @@ import threading
 import traceback
 import time
 import hashlib
+from typing import List, Tuple
 
 from logged_groups import logged_group, logging_context
 
@@ -21,12 +22,9 @@ from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-from typing import List, Tuple
-
 from ..common_neon.solana_receipt_parser import SolTxError
 from ..common_neon.errors import EthereumError
 from ..environment import ENABLE_PRIVATE_API
-
 from ..neon_rpc_api_model import NeonRpcApiModel
 from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
 
@@ -46,9 +44,9 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
 
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
-        self.stat_exporter = PrometheusExporter()
+        self._stat_exporter = PrometheusExporter()
         self.model = NeonRpcApiPlugin.getModel()
-        self.model.set_stat_exporter(self.stat_exporter)
+        self.model.set_stat_exporter(self._stat_exporter)
 
     @classmethod
     def getModel(cls):
@@ -71,20 +69,23 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             'id': request.get('id', None),
         }
 
-        def is_private_api(method: str) -> bool:
-            if method.startswith('_'):
+        def is_private_api(method_name: str) -> bool:
+            for prefix in ('eth_', 'net_', 'web3_', 'neon_'):
+                if method_name.startswith(prefix):
+                    break
+            else:
                 return True
 
             if ENABLE_PRIVATE_API:
                 return False
 
-            private_method_map = set([
+            private_method_map = (
                 "eth_accounts",
                 "eth_sign",
                 "eth_sendTransaction",
                 "eth_signTransaction",
-            ])
-            return method in private_method_map
+            )
+            return method_name in private_method_map
 
         try:
             if (not hasattr(self.model, request['method'])) or is_private_api(request["method"]):
@@ -140,7 +141,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                     raise Exception("Empty batch request")
                 for r in request:
                     response.append(self.process_request(r))
-            elif isinstance(request, object):
+            elif isinstance(request, dict):
                 response = self.process_request(request)
             else:
                 raise Exception("Invalid request")
@@ -168,7 +169,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 b'Access-Control-Allow-Origin': b'*',
             })))
 
-        self.stat_exporter.stat_commit_request_and_timeout(method, resp_time_ms)
+        self._stat_exporter.stat_commit_request_and_timeout(method, resp_time_ms)
 
     def on_websocket_open(self) -> None:
         pass
