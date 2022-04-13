@@ -29,6 +29,7 @@ from .operator_resource_list import OperatorResourceList
 
 from .transaction_validator import NeonTxValidator
 
+from ..mempool import MemPoolClient
 
 class JsonEncoder(json.JSONEncoder):
     def default(self, obj):
