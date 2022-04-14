@@ -125,7 +125,7 @@ services:
     image: neonlabsorg/evm_loader:${NEON_EVM_COMMIT:-latest}
     environment:
       - SOLANA_URL=http://solana:8899
-      - SPL_TOKEN_AUTHORITY=/opt/contracts/ci-tokens/owner-keyfile.json
+      - SPL_TOKEN_AUTHORITY=/opt/contracts/ci-tokens/owner-keypair.json
     networks:
       - net
     depends_on:
