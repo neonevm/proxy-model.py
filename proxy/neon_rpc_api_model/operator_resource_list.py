@@ -58,7 +58,7 @@ class OperatorResourceList:
     def __init__(self, sender):
         self._s = sender
         self._solana = sender.solana
-        self._builder = sender._builder
+        self._builder = sender.builder
         self._resource: Optional[OperatorResourceInfo] = None
 
     def __enter__(self):
