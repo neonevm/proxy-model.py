@@ -442,8 +442,7 @@ class NeonRpcApiModel:
         try:
             neon_tx_precheck_result = self.precheck(neon_trx)
 
-            min_gas_price = self.gas_price_calculator.get_min_gas_price()
-            tx_sender = NeonTxSender(self._db, self._solana_interactor, neon_trx, steps=EVM_STEP_COUNT, min_gas_price=min_gas_price)
+            tx_sender = NeonTxSender(self._db, self._solana_interactor, neon_trx, steps=EVM_STEP_COUNT)
             with OperatorResourceList(tx_sender):
                 tx_sender.execute(neon_tx_precheck_result)
 

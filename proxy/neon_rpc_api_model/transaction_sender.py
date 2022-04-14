@@ -31,7 +31,7 @@ from ..common_neon.utils import get_holder_msg
 
 @logged_group("neon.Proxy")
 class NeonTxSender:
-    def __init__(self, db: MemDB, solana: SolanaInteractor, eth_tx: EthTx, min_gas_price: int, steps: int):
+    def __init__(self, db: MemDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
         self._db = db
         self.eth_tx = eth_tx
         self.neon_sign = '0x' + eth_tx.hash_signed().hex()
