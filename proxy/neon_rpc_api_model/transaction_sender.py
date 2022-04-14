@@ -267,7 +267,7 @@ class SimpleNeonTxSender(SolTxListSender):
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         if not self.neon_res.is_valid():
-            self.neon_res.decode(self._neon_tx_sender.neon_sign, receipt).is_valid()
+            self.neon_res.decode(self._s.neon_sign, receipt).is_valid()
         super()._on_success_send(tx, receipt)
 
     def _on_post_send(self):
@@ -354,7 +354,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         self._is_canceled = True
         self._retry_idx = 0  # force the cancel sending
         tx = TransactionWithComputeBudget()
-        tx.add(self._neon_tx_sender.builder.make_cancel_instruction())
+        tx.add(self._s.builder.make_cancel_instruction())
         self._tx_list = [tx]
 
     def _decrease_steps(self):
