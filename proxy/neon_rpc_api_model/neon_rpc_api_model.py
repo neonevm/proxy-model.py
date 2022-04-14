@@ -22,12 +22,11 @@ from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 
 from .transaction_sender import NeonTxSender
-
-NEON_PROXY_PKG_VERSION = '0.7.15-dev'
-NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 from .operator_resource_list import OperatorResourceList
-
 from .transaction_validator import NeonTxValidator
+
+NEON_PROXY_PKG_VERSION = '0.7.16-dev'
+NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -47,7 +46,6 @@ class NeonRpcApiModel:
         self._solana_interactor = SolanaInteractor(SOLANA_URL)
         self._db = MemDB(self._solana_interactor)
         self._stat_exporter: Optional[StatisticsExporter] = None
-        self._mempool_client = MemPoolClient()
 
         interactor = self._solana_interactor if PP_SOLANA_URL == SOLANA_URL else SolanaInteractor(PP_SOLANA_URL)
         self.gas_price_calculator = GasPriceCalculator(interactor, PYTH_MAPPING_ACCOUNT)
@@ -351,7 +349,7 @@ class NeonRpcApiModel:
         account = self._normalize_account(account)
 
         try:
-            neon_account_info = self._solana_interactor.get_neon_account_info(EthereumAddress(account))
+            neon_account_info = self._solana.get_neon_account_info(account)
             return hex(neon_account_info.trx_count)
         except (Exception,):
             # self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
@@ -421,13 +419,20 @@ class NeonRpcApiModel:
     def eth_getCode(self, account: str, tag) -> str:
         self._validate_block_tag(tag)
         account = self._normalize_account(account)
-        return self._db.get_contract_code(account)
+
+        try:
+            code_info = self._solana.get_neon_code_info(account)
+            if (not code_info) or (not code_info.code):
+                return '0x'
+            return code_info.code
+        except (Exception,):
+            return '0x'
 
     def eth_sendRawTransaction(self, rawTrx: str) -> str:
         try:
             neon_trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         except (Exception,):
-            raise EthereumError(message="wrong transaction format")
+            raise InvalidParamError(message="wrong transaction format")
 
         eth_signature = '0x' + neon_trx.hash_signed().hex()
         self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(neon_trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
@@ -446,7 +451,6 @@ class NeonRpcApiModel:
                 tx_sender.execute(emulating_result)
 
             self._stat_tx_success()
-            self._mempool_client.on_eth_send_raw_transaction(eth_signature)
             return eth_signature
 
         except PendingTxError as err:
@@ -541,7 +545,7 @@ class NeonRpcApiModel:
         try:
             data = bytes.fromhex(data[2:])
         except (Exception,):
-            raise EthereumError(message='data is not hex string')
+            raise InvalidParamError(message='data is not hex string')
 
         account = KeyStorage().get_key(address)
         if not account:
