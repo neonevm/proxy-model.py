@@ -79,7 +79,7 @@ class OperatorResourceList:
         signer_list: List[SolanaAccount] = get_solana_accounts()
         for rid in range(PERM_ACCOUNT_LIMIT):
             for signer in signer_list:
-                info = self(signer=signer, rid=rid, idx=idx)
+                info = OperatorResourceInfo(signer=signer, rid=rid, idx=idx)
                 self._resource_list.append(info)
                 idx += 1
 
