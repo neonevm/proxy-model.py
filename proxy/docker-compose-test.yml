@@ -157,12 +157,6 @@ services:
         condition: service_healthy
       deploy_contracts:
         condition: service_completed_successfully
-    healthcheck:
-      test: [ CMD-SHELL, "/opt/health_check_faucet.sh" ]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 5s
 
   airdropper:
     container_name: airdropper
@@ -191,7 +185,7 @@ services:
       dbcreation:
         condition: service_completed_successfully
       faucet:
-        condition: service_healthy
+        condition: service_started
 
   indexer:
     container_name: indexer
