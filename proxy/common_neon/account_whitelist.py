@@ -17,8 +17,8 @@ DENIAL_TOKEN_ADDR = ELF_PARAMS.get("NEON_PERMISSION_DENIAL_TOKEN", '')
 
 @logged_group("neon.AccountWhitelist")
 class AccountWhitelist:
-    def __init__(self, solana_interactor: SolanaInteractor, permission_update_int: int):
-        self.solana = solana_interactor
+    def __init__(self, solana: SolanaInteractor, permission_update_int: int):
+        self.solana = solana
         self.account_cache = {}
         self.permission_update_int = permission_update_int
         self.allowance_token = None
