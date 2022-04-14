@@ -41,7 +41,11 @@ class NeonTxValidator:
         self._estimated_gas = 0
 
         self._tx_gas_limit = self._tx.gasLimit
+
         if self._tx.hasChainId() or (not ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID):
+            return
+
+        if len(self._tx.callData) == 0:
             return
 
         tx_gas_limit = self._tx_gas_limit * NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID
