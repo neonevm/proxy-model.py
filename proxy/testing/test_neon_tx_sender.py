@@ -31,9 +31,6 @@ class TestNeonTxSender(unittest.TestCase):
         self._resource_list._min_operator_balance_to_err = Mock()
         self._resource_list._recheck_bad_resource_list = Mock()
 
-    def tearDown(self) -> None:
-        pass
-
     # @unittest.skip("a.i.")
     def test_01_validate_execution_when_not_enough_sols(self):
         """
