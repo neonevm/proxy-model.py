@@ -271,7 +271,7 @@ class ReceiptsParserState:
         holders = len(self._holder_table)
         transactions = len(self._tx_table)
         used_ixs = len(self._used_ixs)
-        if ((holders > 0) or (transactions > 0) or (used_ixs > 0)) and (min_used_slot != -1):
+        if ((holders > 0) or (transactions > 0) or (used_ixs > 0)) and (min_used_slot != 0):
             self.debug('Receipt state stats: ' +
                        f'holders {holders}, ' +
                        f'transactions {transactions}, ' +
@@ -773,6 +773,7 @@ class Indexer(IndexerBase):
         last_known_slot = self.db.get_min_receipt_slot()
         IndexerBase.__init__(self, solana, last_known_slot)
         self.indexed_slot = self.last_slot
+        self.min_used_slot = 0
         self.canceller = Canceller(solana)
         self.blocked_storages = {}
         self.block_indexer = BlocksIndexer(db=self.db, solana=solana)
@@ -831,7 +832,7 @@ class Indexer(IndexerBase):
                 break
 
             if max_slot != slot:
-                self.state.complete_done_objects(-1)
+                self.state.complete_done_objects(self.min_used_slot)
                 max_slot = max(max_slot, slot)
 
             ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
@@ -846,8 +847,8 @@ class Indexer(IndexerBase):
 
         if max_slot > 0:
             self.indexed_slot = max_slot + 1
-            min_used_slot = self.state.find_min_used_slot(self.indexed_slot)
-            self.db.set_min_receipt_slot(min_used_slot)
+            self.min_used_slot = self.state.find_min_used_slot(self.indexed_slot)
+            self.db.set_min_receipt_slot(self.state.find_min_used_slot(self.indexed_slot))
 
         # cancel transactions with long inactive time
         for tx in self.state.iter_txs():
@@ -861,16 +862,23 @@ class Indexer(IndexerBase):
             if abs(holder.slot - self.current_slot) > HOLDER_TIMEOUT:
                 self.state.done_holder(holder)
 
-        if max_slot > 0:
-            # after last instruction and slot
-            self.state.complete_done_objects(min_used_slot)
+        # after last instruction and slot
+        self.state.complete_done_objects(self.min_used_slot)
+
+        if max_slot:
             self.db.add_tx_costs(tx_costs)
 
         process_receipts_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
         self.counted_logger.print(
             self.debug,
-            list_params={"process_receipts_ms": process_receipts_ms, "processed_slots": self.current_slot - self.indexed_slot},
-            latest_params={"transaction_receipts.len": self.transaction_receipts.size(), "indexed_slot": self.indexed_slot}
+            list_params={
+                "process_receipts_ms": process_receipts_ms,
+                "processed_slots": self.current_slot - self.indexed_slot
+            },
+            latest_params={
+                "transaction_receipts.len": self.transaction_receipts.size(),
+                "indexed_slot": self.indexed_slot
+            }
         )
 
     def unlock_accounts(self, tx) -> bool:
