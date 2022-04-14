@@ -437,10 +437,6 @@ class NeonRpcApiModel:
         eth_signature = '0x' + neon_trx.hash_signed().hex()
         self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(neon_trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
 
-        min_gas_price = self.gas_price_calculator.get_min_gas_price()
-        if neon_trx.gasPrice < min_gas_price:
-            raise EthereumError(message="The transaction gasPrice is less than the minimum allowable value" +
-                                f"({neon_trx.gasPrice}<{min_gas_price})")
         self._stat_tx_begin()
 
         try:
@@ -466,7 +462,8 @@ class NeonRpcApiModel:
 
     def prevalidate(self, neon_trx: EthTrx) -> NeonEmulatingResult:
         emulating_result = call_trx_emulated(neon_trx)
-        neon_validator = NeonTxValidator(self._solana_interactor, neon_trx)
+        min_gas_price = self.gas_price_calculator.get_min_gas_price()
+        neon_validator = NeonTxValidator(self._solana_interactor, neon_trx, min_gas_price)
         neon_validator.prevalidate(emulating_result)
         return emulating_result
 
