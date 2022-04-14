@@ -55,10 +55,10 @@ class OperatorResourceList:
     _last_checked_time = mp.Value(ctypes.c_ulonglong, 0)
     _resource_list = []
 
-    def __init__(self, neon_tx_sender):
-        self._neon_tx_sender = neon_tx_sender
-        self._solana_interactor = neon_tx_sender.solana
-        self._instruction_builder = neon_tx_sender.builder
+    def __init__(self, sender):
+        self._s = sender
+        self._solana = sender.solana
+        self._builder = sender._builder
         self._resource: Optional[OperatorResourceInfo] = None
 
     def __enter__(self):
@@ -71,32 +71,31 @@ class OperatorResourceList:
     def _get_current_time() -> int:
         return math.ceil(datetime.now().timestamp())
 
-    @staticmethod
-    def _init_resource_list():
-        if len(OperatorResourceList._resource_list):
+    def _init_resource_list(self):
+        if len(self._resource_list):
             return
 
         idx = 0
         signer_list: List[SolanaAccount] = get_solana_accounts()
         for rid in range(PERM_ACCOUNT_LIMIT):
             for signer in signer_list:
-                info = OperatorResourceInfo(signer=signer, rid=rid, idx=idx)
-                OperatorResourceList._resource_list.append(info)
+                info = self(signer=signer, rid=rid, idx=idx)
+                self._resource_list.append(info)
                 idx += 1
 
-        with OperatorResourceList._resource_list_len.get_lock():
-            if OperatorResourceList._resource_list_len.value != 0:
+        with self._resource_list_len.get_lock():
+            if self._resource_list_len.value != 0:
                 return True
 
-            for idx in range(len(OperatorResourceList._resource_list)):
-                OperatorResourceList._free_resource_list.append(idx)
-                OperatorResourceList._check_time_resource_list.append(0)
+            for idx in range(len(self._resource_list)):
+                self._free_resource_list.append(idx)
+                self._check_time_resource_list.append(0)
 
-            OperatorResourceList._resource_list_len.value = len(OperatorResourceList._resource_list)
-            if OperatorResourceList._resource_list_len.value == 0:
+            self._resource_list_len.value = len(self._resource_list)
+            if self._resource_list_len.value == 0:
                 raise RuntimeError('Operator has NO resources!')
 
-    def _recheck_bad_resource_list(self) -> int:
+    def _recheck_bad_resource_list(self):
         def is_time_come(now, prev_time):
             time_diff = now - prev_time
             return time_diff > RECHECK_RESOURCE_LIST_INTERVAL
@@ -127,7 +126,7 @@ class OperatorResourceList:
         if self._resource:
             return self._resource
 
-        OperatorResourceList._init_resource_list()
+        self._init_resource_list()
         check_time = self._recheck_bad_resource_list()
 
         timeout = 0.01
@@ -145,9 +144,9 @@ class OperatorResourceList:
                 idx = self._free_resource_list.pop(0)
 
             self._resource = self._resource_list[idx]
-            self._neon_tx_sender.set_resource(self._resource)
+            self._s.set_resource(self._resource)
             if not self._init_perm_accounts(check_time, self._resource):
-                self._neon_tx_sender.clear_resource()
+                self._s.clear_resource()
                 continue
 
             self.debug(f'Resource is selected: {str(self._resource.public_key())}:{self._resource.rid}, ' +
@@ -199,7 +198,7 @@ class OperatorResourceList:
 
     def _validate_operator_balance(self):
         # Validate operator's account has enough SOLs
-        sol_balance = self._solana_interactor.get_sol_balance(self._resource.public_key())
+        sol_balance = self._solana.get_sol_balance(self._resource.public_key())
         min_operator_balance_to_err = self._min_operator_balance_to_err()
         rid = self._resource.rid
         opkey = str(self._resource.public_key())
@@ -221,17 +220,17 @@ class OperatorResourceList:
         ether_address = EthereumAddress.from_private_key(self._resource.secret_key())
         solana_address = ether2program(ether_address)[0]
 
-        account_info = self._solana_interactor.get_account_info(solana_address)
+        account_info = self._solana.get_account_info(solana_address)
         if account_info is not None:
             self.debug(f"Use existing ether account {str(solana_address)} for resource {opkey}:{rid}")
             return ether_address
 
-        stage = NeonCreateAccountTxStage(self._neon_tx_sender, {"address": ether_address})
-        stage.balance = self._solana_interactor.get_multiple_rent_exempt_balances_for_size([stage.size])[0]
+        stage = NeonCreateAccountTxStage(self._s, {"address": ether_address})
+        stage.balance = self._solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0]
         stage.build()
 
         self.debug(f"Create new ether account {str(solana_address)} for resource {opkey}:{rid}")
-        SolTxListSender(self._neon_tx_sender, [stage.tx], NeonCreateAccountTxStage.NAME).send(self._resource.signer)
+        SolTxListSender(self._s, [stage.tx], NeonCreateAccountTxStage.NAME).send(self._resource.signer)
 
         return ether_address
 
@@ -242,10 +241,10 @@ class OperatorResourceList:
         tx = TransactionWithComputeBudget()
         tx_name_list = set()
 
-        stage_list = [NeonCreatePermAccount(self._neon_tx_sender, seed, STORAGE_SIZE) for seed in seed_list]
+        stage_list = [NeonCreatePermAccount(self._s, seed, STORAGE_SIZE) for seed in seed_list]
         account_list = [s.sol_account for s in stage_list]
-        info_list = self._solana_interactor.get_account_info_list(account_list)
-        balance = self._solana_interactor.get_multiple_rent_exempt_balances_for_size([STORAGE_SIZE])[0]
+        info_list = self._solana.get_account_info_list(account_list)
+        balance = self._solana.get_multiple_rent_exempt_balances_for_size([STORAGE_SIZE])[0]
         for idx, account, stage in zip(range(len(seed_list)), info_list, stage_list):
             if not account:
                 self.debug(f"Create new accounts for resource {opkey}:{rid}")
@@ -263,7 +262,7 @@ class OperatorResourceList:
 
             if account.tag == ACTIVE_STORAGE_TAG:
                 self.debug(f"Cancel transaction in {str(stage.sol_account)} for resource {opkey}:{rid}")
-                cancel_stage = NeonCancelTxStage(self._neon_tx_sender, stage.sol_account)
+                cancel_stage = NeonCancelTxStage(self._s, stage.sol_account)
                 cancel_stage.build()
                 tx_name_list.add(cancel_stage.NAME)
                 tx.add(cancel_stage.tx)
@@ -271,7 +270,7 @@ class OperatorResourceList:
                 raise RuntimeError(f"not empty, not finalized: {str(stage.sol_account)}")
 
         if len(tx_name_list):
-            SolTxListSender(self._neon_tx_sender, [tx], ' + '.join(tx_name_list)).send(self._resource.signer)
+            SolTxListSender(self._s, [tx], ' + '.join(tx_name_list)).send(self._resource.signer)
         else:
             self.debug(f"Use existing accounts for resource {opkey}:{rid}")
         return account_list
@@ -281,7 +280,7 @@ class OperatorResourceList:
             return
         resource = self._resource
         self._resource = None
-        self._neon_tx_sender.clear_resource()
+        self._s.clear_resource()
         self._free_resource_list.append(resource.idx)
 
 
