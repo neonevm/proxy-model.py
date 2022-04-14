@@ -422,7 +422,7 @@ class NeonRpcApiModel:
         account = self._normalize_account(account)
 
         try:
-            code_info = self._solana.get_neon_code_info(account)
+            code_info = self._solana_interactor.get_neon_code_info(account)
             if (not code_info) or (not code_info.code):
                 return '0x'
             return code_info.code
