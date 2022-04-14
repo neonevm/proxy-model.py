@@ -433,18 +433,18 @@ class NeonRpcApiModel:
 
     def eth_sendRawTransaction(self, rawTrx: str) -> str:
         try:
-            neon_trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
+            trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
         except (Exception,):
             raise InvalidParamError(message="wrong transaction format")
 
-        eth_signature = '0x' + neon_trx.hash_signed().hex()
-        self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(neon_trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
+        eth_signature = '0x' + trx.hash_signed().hex()
+        self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
 
         self._stat_tx_begin()
         try:
-            neon_tx_precheck_result = self.precheck(neon_trx)
+            neon_tx_precheck_result = self.precheck(trx)
 
-            tx_sender = NeonTxSender(self._db, self._solana, neon_trx, steps=EVM_STEP_COUNT)
+            tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             with OperatorResourceList(tx_sender):
                 tx_sender.execute(neon_tx_precheck_result)
 
