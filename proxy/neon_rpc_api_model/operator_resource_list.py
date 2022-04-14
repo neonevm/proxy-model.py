@@ -20,7 +20,7 @@ from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.constants import STORAGE_SIZE, ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..environment import get_solana_accounts, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL, \
-    MIN_OPERATOR_BALANCE_TO_ERR, MIN_OPERATOR_BALANCE_TO_WARN, EVM_LOADER_ID
+                          MIN_OPERATOR_BALANCE_TO_ERR, MIN_OPERATOR_BALANCE_TO_WARN, EVM_LOADER_ID
 
 
 ## TODO: DIP corruption, get rid of back dependency
