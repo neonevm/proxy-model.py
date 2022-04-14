@@ -48,8 +48,10 @@ class NeonRpcApiModel:
         self._db = MemDB(self._solana_interactor)
         self._stat_exporter: Optional[StatisticsExporter] = None
 
-        interactor = self._solana_interactor if PP_SOLANA_URL == SOLANA_URL else SolanaInteractor(PP_SOLANA_URL)
-        self.gas_price_calculator = GasPriceCalculator(interactor, PYTH_MAPPING_ACCOUNT)
+        if PP_SOLANA_URL == SOLANA_URL:
+            self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
+        else:
+            self.gas_price_calculator = GasPriceCalculator(SolanaInteractor(PP_SOLANA_URL), PYTH_MAPPING_ACCOUNT)
         self.gas_price_calculator.update_mapping()
         self.gas_price_calculator.try_update_gas_price()
 
