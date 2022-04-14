@@ -350,10 +350,10 @@ class NeonRpcApiModel:
         account = self._normalize_account(account)
 
         try:
-            neon_account_info = self._solana.get_neon_account_info(account)
+            neon_account_info = self._solana_interactor.get_neon_account_info(account)
             return hex(neon_account_info.trx_count)
-        except (Exception,):
-            # self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
+        except (Exception,) as err:
+            # self.error(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
 
     @staticmethod

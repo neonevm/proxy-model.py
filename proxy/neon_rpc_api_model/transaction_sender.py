@@ -457,7 +457,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
                 self._validate_gas_limit())
 
     def _validate_evm_steps(self):
-        if self._steps_emulated > (self._neon_tx_sender.steps * 25):
+        if self._precheck_result.emulating_result["steps_executed"] > (self._neon_tx_sender.steps * 25):
             self.error = 'Big number of EVM steps'
             return False
         return True
