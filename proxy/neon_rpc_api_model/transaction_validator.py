@@ -10,7 +10,8 @@ from ..common_neon.solana_receipt_parser import SolReceiptParser
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.estimate import GasEstimate
 
-from ..environment import ACCOUNT_PERMISSION_UPDATE_INT, CHAIN_ID, NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID, ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
+from ..environment import ACCOUNT_PERMISSION_UPDATE_INT, CHAIN_ID, NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID,\
+                          ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
 
 from ..common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult

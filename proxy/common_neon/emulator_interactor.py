@@ -1,6 +1,7 @@
 import json
 import subprocess
 from logged_groups import logged_group
+
 from typing import Optional, Dict, Any
 from ethereum.transactions import Transaction as NeonTrx
 
@@ -34,6 +35,7 @@ def call_trx_emulated(neon_trx: NeonTrx, *, logger) -> NeonEmulatingResult:
     emulator_json = call_emulated(dst, neon_sender_acc, neon_trx.callData.hex(), hex(neon_trx.value))
     logger.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
     return emulator_json
+
 
 @logged_group("neon.Proxy")
 def check_emulated_exit_status(result: Dict[str, Any], *, logger):
