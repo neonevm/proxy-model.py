@@ -4,11 +4,10 @@ from logged_groups import logged_group
 from typing import Optional, Dict, Any
 from ethereum.transactions import Transaction as NeonTrx
 
+from .types import NeonEmulatingResult
 from ..environment import neon_cli, NEON_TOKEN_MINT, CHAIN_ID
 
 from .errors import EthereumError
-
-NeonEmulatingResult = Dict[str, Any]
 
 
 @logged_group("neon.Proxy")
