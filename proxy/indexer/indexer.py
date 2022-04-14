@@ -857,7 +857,7 @@ class Indexer(IndexerBase):
 
         # remove old holders with long inactive time
         for holder in self.state.iter_holders():
-            if (holder.slot - self.current_slot) > HOLDER_TIMEOUT:
+            if abs(holder.slot - self.current_slot) > HOLDER_TIMEOUT:
                 self.state.done_holder(holder)
 
         # after last instruction and slot
