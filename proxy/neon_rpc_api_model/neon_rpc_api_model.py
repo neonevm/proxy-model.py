@@ -44,8 +44,8 @@ class NeonRpcApiModel:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
     def __init__(self):
-        self._solana_interactor = SolanaInteractor(SOLANA_URL)
-        self._db = MemDB(self._solana_interactor)
+        self._solana = SolanaInteractor(SOLANA_URL)
+        self._db = MemDB(self._solana)
         self._stat_exporter: Optional[StatisticsExporter] = None
 
         if PP_SOLANA_URL == SOLANA_URL:
@@ -90,7 +90,7 @@ class NeonRpcApiModel:
 
     def eth_estimateGas(self, param):
         try:
-            calculator = GasEstimate(param, self._solana_interactor)
+            calculator = GasEstimate(param, self._solana)
             calculator.execute()
             return hex(calculator.estimate())
 
@@ -191,7 +191,7 @@ class NeonRpcApiModel:
         account = self._normalize_account(account)
 
         try:
-            neon_account_info = self._solana_interactor.get_neon_account_info(EthereumAddress(account))
+            neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account))
             if neon_account_info is None:
                 return hex(0)
 
@@ -352,7 +352,7 @@ class NeonRpcApiModel:
         account = self._normalize_account(account)
 
         try:
-            neon_account_info = self._solana_interactor.get_neon_account_info(account)
+            neon_account_info = self._solana.get_neon_account_info(account)
             return hex(neon_account_info.trx_count)
         except (Exception,) as err:
             # self.error(f"eth_getTransactionCount: Can't get account info: {err}")
@@ -424,7 +424,7 @@ class NeonRpcApiModel:
         account = self._normalize_account(account)
 
         try:
-            code_info = self._solana_interactor.get_neon_code_info(account)
+            code_info = self._solana.get_neon_code_info(account)
             if (not code_info) or (not code_info.code):
                 return '0x'
             return code_info.code
@@ -444,7 +444,7 @@ class NeonRpcApiModel:
         try:
             neon_tx_precheck_result = self.precheck(neon_trx)
 
-            tx_sender = NeonTxSender(self._db, self._solana_interactor, neon_trx, steps=EVM_STEP_COUNT)
+            tx_sender = NeonTxSender(self._db, self._solana, neon_trx, steps=EVM_STEP_COUNT)
             with OperatorResourceList(tx_sender):
                 tx_sender.execute(neon_tx_precheck_result)
 
@@ -465,7 +465,7 @@ class NeonRpcApiModel:
     def precheck(self, neon_trx: EthTrx) -> NeonTxPrecheckResult:
 
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
-        neon_validator = NeonTxValidator(self._solana_interactor, neon_trx, min_gas_price)
+        neon_validator = NeonTxValidator(self._solana, neon_trx, min_gas_price)
         precheck_result = neon_validator.precheck()
 
         return precheck_result
@@ -619,7 +619,7 @@ class NeonRpcApiModel:
 
     def eth_syncing(self) -> Union[bool, dict]:
         try:
-            slots_behind = self._solana_interactor.get_slots_behind()
+            slots_behind = self._solana.get_slots_behind()
             latest_slot = self._db.get_latest_block_slot()
             first_slot = self._db.get_starting_block_slot()
 
@@ -636,7 +636,7 @@ class NeonRpcApiModel:
             return False
 
     def net_peerCount(self) -> str:
-        cluster_node_list = self._solana_interactor.get_cluster_nodes()
+        cluster_node_list = self._solana.get_cluster_nodes()
         return hex(len(cluster_node_list))
 
     @staticmethod

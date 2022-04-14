@@ -16,7 +16,8 @@ from ..environment import SKIP_PREFLIGHT, RETRY_ON_FAIL
 
 @logged_group("neon.Proxy")
 class SolTxListSender:
-    def __init__(self, sender, tx_list: [Transaction], name: str, skip_preflight=SKIP_PREFLIGHT, preflight_commitment='confirmed'):
+    def __init__(self, sender, tx_list: [Transaction], name: str,
+                 skip_preflight=SKIP_PREFLIGHT, preflight_commitment='confirmed'):
         self._s = sender
         self._name = name
         self._skip_preflight = skip_preflight
