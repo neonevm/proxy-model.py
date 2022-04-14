@@ -83,7 +83,7 @@ class solana_cli(CliBase):
 
 
 @logged_group("neon.Proxy")
-def get_solana_accounts(*, logger) -> List[SolanaAccount]:
+def get_solana_accounts(*, logger) -> [SolanaAccount]:
     def read_sol_account(name) -> Optional[SolanaAccount]:
         if not os.path.isfile(name):
             return None
