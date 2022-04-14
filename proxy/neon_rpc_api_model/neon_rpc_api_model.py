@@ -465,10 +465,8 @@ class NeonRpcApiModel:
 
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
         neon_validator = NeonTxValidator(self._solana_interactor, neon_trx, min_gas_price)
-        neon_validator.precheck()
-        is_underpriced_tx_without_chainid = neon_validator.is_underpriced_tx_without_chainid()
-        precheck_result = NeonTxPrecheckResult(emulating_result=emulating_result,
-                                               is_underpriced_tx_without_chainid=is_underpriced_tx_without_chainid)
+        precheck_result = neon_validator.precheck()
+
         return precheck_result
 
     def _stat_tx_begin(self):
