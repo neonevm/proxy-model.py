@@ -271,7 +271,7 @@ class ReceiptsParserState:
         holders = len(self._holder_table)
         transactions = len(self._tx_table)
         used_ixs = len(self._used_ixs)
-        if holders > 0 or transactions > 0 or used_ixs > 0:
+        if ((holders > 0) or (transactions > 0) or (used_ixs > 0)) and (min_used_slot != -1):
             self.debug('Receipt state stats: ' +
                        f'holders {holders}, ' +
                        f'transactions {transactions}, ' +
@@ -831,7 +831,7 @@ class Indexer(IndexerBase):
                 break
 
             if max_slot != slot:
-                self.state.complete_done_objects()
+                self.state.complete_done_objects(-1)
                 max_slot = max(max_slot, slot)
 
             ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
