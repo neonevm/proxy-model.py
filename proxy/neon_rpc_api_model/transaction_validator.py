@@ -12,7 +12,7 @@ from ..common_neon.estimate import GasEstimate
 
 from ..environment import ACCOUNT_PERMISSION_UPDATE_INT, CHAIN_ID, NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID, ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
 
-from ..common_neon.emulator_interactor import NeonEmulatingResult
+from ..common_neon.types import NeonEmulatingResult
 
 
 @logged_group("neon.Proxy")
@@ -52,7 +52,7 @@ class NeonTxValidator:
             return False
         return (self._tx.gasPrice < self._min_gas_price) or (self._tx.gasLimit < self._estimated_gas)
 
-    def prevalidate(self, emulating_result: NeonEmulatingResult):
+    def precheck(self, emulating_result: NeonEmulatingResult):
         try:
             self._prevalidate_tx()
             self._prevalidate_emulator(emulating_result)
