@@ -32,6 +32,7 @@ steps:
       - "faucet.log"
       - "airdropper.log"
       - "indexer.log"
+      - "deploy_contracts.log"
 
 
   - label: ":coverage: full test suite (FTS)"
