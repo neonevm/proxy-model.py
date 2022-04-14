@@ -8,10 +8,10 @@ from logged_groups import logged_group
 from solana.publickey import PublicKey
 from solana.transaction import AccountMeta
 
-from proxy.common_neon.address import accountWithSeed
-from proxy.common_neon.compute_budget import TransactionWithComputeBudget
-from proxy.common_neon.constants import ACCOUNT_SEED_VERSION
-from proxy.environment import CONTRACT_EXTRA_SPACE
+from ..common_neon.address import accountWithSeed
+from ..common_neon.compute_budget import TransactionWithComputeBudget
+from ..common_neon.constants import ACCOUNT_SEED_VERSION
+from ..environment import CONTRACT_EXTRA_SPACE
 
 
 class NeonTxStage(metaclass=abc.ABCMeta):
