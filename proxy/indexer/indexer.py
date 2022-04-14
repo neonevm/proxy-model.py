@@ -250,7 +250,7 @@ class ReceiptsParserState:
     def done_holder(self, holder: NeonHolderObject):
         self._done_holder_list.append(holder)
 
-    def complete_done_objects(self):
+    def complete_done_objects(self, min_used_slot: int):
         """
         Slot is done, store all done neon txs into the DB.
         """
@@ -271,7 +271,7 @@ class ReceiptsParserState:
         holders = len(self._holder_table)
         transactions = len(self._tx_table)
         used_ixs = len(self._used_ixs)
-        if ((holders > 0) or (transactions > 0) or (used_ixs > 0)) and (self.min_used_slot != 0):
+        if ((holders > 0) or (transactions > 0) or (used_ixs > 0)) and (min_used_slot != 0):
             self.debug('Receipt state stats: ' +
                        f'holders {holders}, ' +
                        f'transactions {transactions}, ' +
@@ -832,7 +832,7 @@ class Indexer(IndexerBase):
                 break
 
             if max_slot != slot:
-                self.state.complete_done_objects()
+                self.state.complete_done_objects(self.min_used_slot)
                 max_slot = max(max_slot, slot)
 
             ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
@@ -863,7 +863,7 @@ class Indexer(IndexerBase):
                 self.state.done_holder(holder)
 
         # after last instruction and slot
-        self.state.complete_done_objects()
+        self.state.complete_done_objects(self.min_used_slot)
 
         if max_slot:
             self.db.add_tx_costs(tx_costs)
