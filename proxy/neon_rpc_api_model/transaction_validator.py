@@ -55,6 +55,9 @@ class NeonTxValidator:
     def is_underpriced_tx_without_chainid(self) -> bool:
         if self._tx.hasChainId():
             return False
+        if len(self._tx.callData) == 0:
+            return False
+
         return (self._tx.gasPrice < self._min_gas_price) or (self._tx.gasLimit < self._estimated_gas)
 
     def prevalidate_tx(self, signer: SolanaAccount):
