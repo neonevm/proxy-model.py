@@ -19,7 +19,7 @@ from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_receipt_parser import SolReceiptParser
 
-from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT
+from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
 
 @logged_group("neon.Indexer")
@@ -184,6 +184,7 @@ class ReceiptsParserState:
         self._holder_table = {}
         self._tx_table = {}
         self._done_tx_list = []
+        self._done_holder_list = []
         self.neon_tx_result = []
         self._used_ixs = {}
         self.ix = SolanaIxInfo(sign='', slot=-1, tx=None)
@@ -203,7 +204,7 @@ class ReceiptsParserState:
             if self._used_ixs[ix] == 0:
                 del self._used_ixs[ix]
 
-    def find_min_used_slot(self, min_slot):
+    def find_min_used_slot(self, min_slot) -> int:
         for ix in self._used_ixs:
             min_slot = min(min_slot, ix.slot)
         return min_slot
@@ -246,7 +247,10 @@ class ReceiptsParserState:
         tx.done = True
         self._done_tx_list.append(tx)
 
-    def complete_done_txs(self):
+    def done_holder(self, holder: NeonHolderObject):
+        self._done_holder_list.append(holder)
+
+    def complete_done_objects(self, min_used_slot: int):
         """
         Slot is done, store all done neon txs into the DB.
         """
@@ -259,18 +263,28 @@ class ReceiptsParserState:
             self.del_tx(tx)
         self._done_tx_list.clear()
 
+        for holder in self._done_holder_list:
+            self.unmark_ix_used(holder)
+            self.del_holder(holder)
+        self._done_holder_list.clear()
+
         holders = len(self._holder_table)
         transactions = len(self._tx_table)
         used_ixs = len(self._used_ixs)
         if holders > 0 or transactions > 0 or used_ixs > 0:
             self.debug('Receipt state stats: ' +
-                        f'holders {holders}, ' +
-                        f'transactions {transactions}, ' +
-                        f'used ixs {used_ixs}')
+                       f'holders {holders}, ' +
+                       f'transactions {transactions}, ' +
+                       f'used ixs {used_ixs}, ' +
+                       f'min_used_slot {min_used_slot}')
 
-    def iter_txs(self):
+    def iter_txs(self) -> Iterator[NeonTxResult]:
         for tx in self._tx_table.values():
             yield tx
+
+    def iter_holders(self) -> Iterator[NeonHolderObject]:
+        for holder in self._holder_table.values():
+            yield holder
 
     def add_account_to_db(self, neon_account: NeonAccountInfo):
         self._db.fill_account_info_by_indexer(neon_account)
@@ -817,7 +831,7 @@ class Indexer(IndexerBase):
                 break
 
             if max_slot != slot:
-                self.state.complete_done_txs()
+                self.state.complete_done_objects()
                 max_slot = max(max_slot, slot)
 
             ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
@@ -831,7 +845,8 @@ class Indexer(IndexerBase):
             tx_costs.append(ix_info.cost_info)
 
         self.indexed_slot = last_block_slot
-        self.db.set_min_receipt_slot(self.state.find_min_used_slot(self.indexed_slot))
+        min_used_slot = self.state.find_min_used_slot(self.indexed_slot)
+        self.db.set_min_receipt_slot(min_used_slot)
 
         # cancel transactions with long inactive time
         for tx in self.state.iter_txs():
@@ -840,8 +855,13 @@ class Indexer(IndexerBase):
                     tx.neon_res.slot = self.indexed_slot
                     self.state.done_tx(tx)
 
+        # remove old holders with long inactive time
+        for holder in self.state.iter_holders():
+            if (holder.slot - self.current_slot) > HOLDER_TIMEOUT:
+                self.state.done_holder(holder)
+
         # after last instruction and slot
-        self.state.complete_done_txs()
+        self.state.complete_done_objects(min_used_slot)
         self.db.add_tx_costs(tx_costs)
 
         process_receipts_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
