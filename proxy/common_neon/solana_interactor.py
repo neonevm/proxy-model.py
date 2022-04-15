@@ -72,6 +72,7 @@ class NeonCodeInfo(NamedTuple):
     pda_address: PublicKey
     owner: PublicKey
     code_size: int
+    generation: int
     code: Optional[str]
 
     @staticmethod
@@ -87,6 +88,7 @@ class NeonCodeInfo(NamedTuple):
             pda_address=pda_address,
             owner=PublicKey(cont.owner),
             code_size=cont.code_size,
+            generation=cont.generation,
             code=code
         )
 
