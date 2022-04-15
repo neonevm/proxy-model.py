@@ -153,11 +153,6 @@ services:
     networks:
       - net
     entrypoint: ./run-test-faucet.sh
-    depends_on:
-      proxy:
-        condition: service_healthy
-      deploy_contracts:
-        condition: service_completed_successfully
 
   airdropper:
     container_name: airdropper
