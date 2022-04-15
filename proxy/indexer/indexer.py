@@ -830,7 +830,8 @@ class Indexer(IndexerBase):
 
             tx_costs.append(ix_info.cost_info)
 
-        self.indexed_slot = last_block_slot
+        if max_slot:
+            self.indexed_slot = max_slot + 1
         self.db.set_min_receipt_slot(self.state.find_min_used_slot(self.indexed_slot))
 
         # cancel transactions with long inactive time
