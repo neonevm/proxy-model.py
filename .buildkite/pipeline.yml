@@ -41,7 +41,7 @@ steps:
     commands:
       - ".buildkite/steps/full_test_suite/run_full_test_suite.sh"
     env:
-      FTS_THRESHOLD: 1700
+      FTS_THRESHOLD: 1920
       FTS_CONTAINER_NAME: fts_${BUILDKITE_BUILD_NUMBER}
       FTS_IMAGE: neonlabsorg/full_test_suite:develop
       FTS_USERS_NUMBER: 15
@@ -76,5 +76,3 @@ steps:
       - "full_test_suite"
       - "create_infrastructure"
     allow_dependency_failure: true
-    artifact_paths:
-      - ".buildkite/steps/full_test_suite/logs/*"
