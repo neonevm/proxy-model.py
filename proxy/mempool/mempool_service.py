@@ -1,26 +1,29 @@
 from logged_groups import logged_group
+from multiprocessing import Process
 
-from ..common_neon.utils import QueueBasedService
-
+from .mempool_server import MemPoolServer, MemPoolServerUser
 from .mem_pool import MemPool
+
+from ..common_neon.data import NeonTxData
 
 
 @logged_group("neon.MemPool")
-class MemPoolService(QueueBasedService):
+class MemPoolService(MemPoolServerUser):
 
-    MEM_POOL_SERVICE_PORT = 9091
+    MEMPOOL_SERVICE_PORT = 9091
+    MEMPOOL_SERVICE_HOST = "127.0.0.1"
 
-    def __init__(self, *, is_background: bool):
-        QueueBasedService.__init__(self, port=self.MEM_POOL_SERVICE_PORT, is_background=is_background)
-        self._mem_pool = None
+    def __init__(self):
+        self._mempool_server = MemPoolServer(user=self, host=self.MEMPOOL_SERVICE_HOST, port=self.MEMPOOL_SERVICE_PORT)
+        self._mempool = MemPool()
+        self._mempool_proc = Process(target=self.run_mempool)
 
-    def on_eth_send_raw_transaction(self, *, eth_trx_hash):
-        self._mem_pool.on_eth_send_raw_transaction(eth_trx_hash=eth_trx_hash)
+    def start(self):
+        self._mempool_server.start()
+        self._mempool_proc.start()
 
-    # QueueBasedService abstracts
+    def on_eth_send_raw_transaction(self, neon_tx_data: NeonTxData):
+        self._mempool.on_eth_send_raw_transaction(neon_tx_data)
 
-    def service_process_init(self):
-        self._mem_pool = MemPool()
-
-    def do_extras(self):
-        self._mem_pool.do_extras()
+    def run_mempool(self):
+        self._mempool.run()
