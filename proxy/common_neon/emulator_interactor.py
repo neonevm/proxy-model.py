@@ -8,7 +8,7 @@ from ethereum.transactions import Transaction as NeonTrx
 from ..environment import neon_cli, NEON_TOKEN_MINT, CHAIN_ID
 
 from .errors import EthereumError
-from .types import NeonEmulatingResult
+from .data import NeonEmulatingResult
 
 
 @logged_group("neon.Proxy")

@@ -1,3 +1,15 @@
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import Dict, Any
+
+
+@dataclass
+class NeonTxPrecheckResult:
+    is_underpriced_tx_without_chainid: bool
+    emulating_result: NeonEmulatingResult
+
+
+NeonEmulatingResult = Dict[str, Any]
 
 
 class NeonTxStatData:
@@ -10,3 +22,9 @@ class NeonTxStatData:
 
     def add_instruction(self, sol_tx_hash: str, sol_spent: int, steps: int, bpf: int) -> None:
         self.instructions.append((sol_tx_hash, sol_spent, steps, bpf))
+
+
+@dataclass
+class NeonTxData:
+    tx_signed: bytes
+
