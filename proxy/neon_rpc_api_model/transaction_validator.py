@@ -14,7 +14,7 @@ from ..environment import ACCOUNT_PERMISSION_UPDATE_INT, CHAIN_ID, NEON_GAS_LIMI
                           ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
 
 from ..common_neon.emulator_interactor import call_trx_emulated
-from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
+from ..common_neon.data import NeonTxPrecheckResult, NeonEmulatingResult
 
 
 @logged_group("neon.Proxy")
