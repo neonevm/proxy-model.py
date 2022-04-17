@@ -45,13 +45,9 @@ class TxReceiptsStorage(BaseDB):
 
     def get_txs(self, start_slot=0):
         with self._conn.cursor() as cur:
-            cur.execute(f'''
-                    SELECT MIN(slot) FROM {self._table_name}' +
-                     WHERE slot > %s'
-                ''',
-                (start_slot,))
+            cur.execute(f'SELECT MIN(slot) FROM {self._table_name} WHERE slot > %s', (start_slot,))
             min_slot_row = cur.fetchone()
-            min_slot = (min_slot_row[0] if min_slot_row else 0)
+            min_slot = (min_slot_row[0] if min_slot_row and min_slot_row[0] else 0)
 
             cur.execute(f'''
                     SELECT MAX(t.slot) FROM (
@@ -63,7 +59,7 @@ class TxReceiptsStorage(BaseDB):
                 ''',
                 (start_slot,))
             limit_slot_row = cur.fetchone()
-            limit_slot = (limit_slot_row[0] if limit_slot_row else 0)
+            limit_slot = (limit_slot_row[0] if limit_slot_row and limit_slot_row[0] else 0)
 
             stop_slot = max(min_slot, limit_slot, start_slot + 1)
 
