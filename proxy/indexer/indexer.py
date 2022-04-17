@@ -844,9 +844,10 @@ class Indexer(IndexerBase):
 
             tx_costs.append(ix_info.cost_info)
 
-        self.indexed_slot = last_block_slot
-        min_used_slot = self.state.find_min_used_slot(self.indexed_slot)
-        self.db.set_min_receipt_slot(min_used_slot)
+        if max_slot > 0:
+            self.indexed_slot = max_slot + 1
+            min_used_slot = self.state.find_min_used_slot(self.indexed_slot)
+            self.db.set_min_receipt_slot(min_used_slot)
 
         # cancel transactions with long inactive time
         for tx in self.state.iter_txs():
@@ -860,9 +861,10 @@ class Indexer(IndexerBase):
             if abs(holder.slot - self.current_slot) > HOLDER_TIMEOUT:
                 self.state.done_holder(holder)
 
-        # after last instruction and slot
-        self.state.complete_done_objects(min_used_slot)
-        self.db.add_tx_costs(tx_costs)
+        if max_slot > 0:
+            # after last instruction and slot
+            self.state.complete_done_objects(min_used_slot)
+            self.db.add_tx_costs(tx_costs)
 
         process_receipts_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
         self.counted_logger.print(
