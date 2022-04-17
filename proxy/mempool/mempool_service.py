@@ -2,7 +2,7 @@ from logged_groups import logged_group
 import asyncio
 from multiprocessing import Process
 
-from .mempool_server import PickableDataServer, PickableDataServerUser
+from .pickable_data_server import PickableDataServer, PickableDataServerUser
 from .mem_pool import MemPool
 
 from typing import Any
