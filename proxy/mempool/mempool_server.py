@@ -47,11 +47,12 @@ class PickableDataServer(ABC):
                 payload = await loop.sock_recv(client, payload_len_data)
                 data = pickle.loads(payload)
                 self._user.on_data_received(data)
-                response = pickle.dumps({"data": data, "status": "ok"})
-                await loop.sock_sendall(client, response)
             except ConnectionResetError:
                 self.error(f"Client connection: {peer_name} - has been interrupted")
                 break
+            except Exception as err:
+                self.error(f"Failed to receive data over: {peer_name} - err: {err}")
+                continue
         client.close()
 
     async def run_server(self):

@@ -21,8 +21,8 @@ class MemPoolClient:
             payload = self.decode_neon_tx_data(neon_tx_data)
             self._connection.send(payload)
         except BaseException as err:
-            self.error(f"Failed to send raw transaction onto mempool: {err}")
-            raise Exception("Failed to send to the mempool")
+            self.error(f"Failed to enqueue raw transaction into mempool: {err}")
+            raise Exception("Failed to enqueue neon tx")
 
     def decode_neon_tx_data(self, neon_tx_data: NeonTxData):
         data = pickle.dumps(neon_tx_data)
@@ -30,3 +30,6 @@ class MemPoolClient:
         packed_len = struct.pack("!I", data_len)
         payload = packed_len + data
         return payload
+
+    def __del__(self):
+        self._connection.close()
