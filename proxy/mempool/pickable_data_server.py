@@ -22,13 +22,6 @@ class PickableDataServer(ABC):
         self._port = port
         self._host = host
 
-    def start(self):
-        self.info(f"Start listen on: {self._port} at: {self._host}")
-        self._mempool_server_process.start()
-
-    def finish(self):
-        self._mempool_server_process.terminate()
-
     async def handle_client(self, client):
         loop = asyncio.get_event_loop()
         peer_name = client.getpeername()
