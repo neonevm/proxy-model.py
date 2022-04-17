@@ -45,18 +45,34 @@ class TxReceiptsStorage(BaseDB):
 
     def get_txs(self, start_slot=0):
         with self._conn.cursor() as cur:
-            cur.execute(f'SELECT slot FROM {self._table_name}' +
-                        f' WHERE slot >= {start_slot} ORDER BY slot ASC, tx_idx DESC' +
-                        f' OFFSET {INDEXER_RECEIPTS_COUNT_LIMIT} LIMIT 1')
-            slot_row = cur.fetchone()
+            cur.execute(f'''
+                    SELECT MIN(slot) FROM {self._table_name}' +
+                     WHERE slot > %s'
+                ''',
+                (start_slot,))
+            min_slot_row = cur.fetchone()
+            min_slot = (min_slot_row[0] if min_slot_row else 0)
 
-            stop_slot_req_part = ''
-            if slot_row is not None:
-                stop_slot_req_part = f' AND slot <= {slot_row[0]}'
+            cur.execute(f'''
+                    SELECT MAX(t.slot) FROM (
+                            SELECT slot FROM {self._table_name}
+                             WHERE slot > %s
+                             ORDER BY slot
+                             LIMIT {INDEXER_RECEIPTS_COUNT_LIMIT}
+                        ) AS t
+                ''',
+                (start_slot,))
+            limit_slot_row = cur.fetchone()
+            limit_slot = (limit_slot_row[0] if limit_slot_row else 0)
 
-            cur.execute(f'SELECT slot, signature, tx FROM {self._table_name}' +
-                        f' WHERE slot >= {start_slot}' + stop_slot_req_part +
-                        f' ORDER BY slot ASC, tx_idx DESC')
+            stop_slot = max(min_slot, limit_slot, start_slot + 1)
+
+            cur.execute(f'''
+                    SELECT slot, signature, tx FROM {self._table_name}
+                     WHERE slot >= %s AND slot <= %s
+                     ORDER BY slot ASC, tx_idx DESC
+                ''',
+                (start_slot, stop_slot,))
             rows = cur.fetchall()
 
             for row in rows:
