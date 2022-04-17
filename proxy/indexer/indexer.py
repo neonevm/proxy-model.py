@@ -300,7 +300,7 @@ class ReceiptsParserState:
                        f'holders {holders}, ' +
                        f'transactions {transactions}, ' +
                        f'used ixs {used_ixs}, ' +
-                       f'min_used_slot {self.min_used_slot}')
+                       f'min_used_slot {min_used_slot}')
 
     def iter_txs(self) -> Iterator[NeonTxResult]:
         for tx in self._tx_table.values():
