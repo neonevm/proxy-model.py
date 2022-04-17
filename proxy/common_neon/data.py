@@ -26,5 +26,5 @@ class NeonTxStatData:
 
 @dataclass
 class NeonTxData:
-    tx_signed: bytes
+    tx_signed: str
 

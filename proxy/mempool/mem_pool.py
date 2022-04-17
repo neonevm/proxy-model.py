@@ -1,6 +1,7 @@
+import asyncio
 from logged_groups import logged_group
-from multiprocessing import Pool, Queue
-import queue
+from concurrent.futures import ProcessPoolExecutor
+import time
 
 from ..common_neon.data import NeonTxData
 
@@ -8,53 +9,32 @@ from ..common_neon.data import NeonTxData
 @logged_group("neon.MemPool")
 class MemPool:
 
-    POOL_PROC_COUNT = 3
-    TX_QUEUE_TIMEOUT_SEC = 0.04
-    BREAK_PROC_INVOCATION = 0
+    POOL_PROC_COUNT = 8
 
     def __init__(self):
         self._pool = None
-        self._tx_queue = Queue()
-
-    def _process_init(self):
-        self._pool = Pool(processes=self.POOL_PROC_COUNT)
+        self._tx_queue = asyncio.Queue()
+        self._pool = ProcessPoolExecutor(self.POOL_PROC_COUNT)
+        self._neon_tx_futures = set()
+        self._event_loop = asyncio.get_event_loop()
+        self._event_loop.create_task(self.do_mempool_stuff())
+        self._send_tx_futures = list()
 
     def on_eth_send_raw_transaction(self, neon_tx_data: NeonTxData):
-        self._tx_queue.put(neon_tx_data)
-
-    def error_callback(self, error):
-        self.error("Failed to invoke on worker process: ", error)
-
-    def on_eth_send_raw_transaction_callback(self, result):
-        self.debug(f"Processing result: {result}")
+        self._tx_queue.put_nowait(neon_tx_data)
 
     @staticmethod
-    def _on_eth_send_raw_transaction_impl(neon_tx_data: NeonTxData) -> bool:
+    def on_eth_send_raw_transaction_impl(neon_tx_data: NeonTxData) -> bool:
+        print(f"neon_tx_data: {neon_tx_data}")
+        time.sleep(0.1)
         return True
 
-    def do_extras(self):
-        pass
+    async def do_mempool_stuff(self):
+        with self._pool as pool:
+            while True:
+                try:
+                    neon_tx_data = await self._tx_queue.get()
+                    pool.submit(MemPool.on_eth_send_raw_transaction_impl, neon_tx_data)
+                except Exception as err:
+                    print(f"Failed to submit neon tx onto the mempool worker: {err}")
 
-    def __getstate__(self):
-        self_dict = self.__dict__.copy()
-        del self_dict['_pool']
-        return self_dict
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-
-    def run(self):
-        self._process_init()
-        while True:
-            try:
-                if not self._process_queue():
-                    break
-            except queue.Empty:
-                self.do_extras()
-
-    def _process_queue(self) -> bool:
-        neon_tx_data = self._tx_queue.get(block=True, timeout=self.TX_QUEUE_TIMEOUT_SEC)
-        if neon_tx_data == self.BREAK_PROC_INVOCATION:
-            return False
-        self._pool.apply_async(MemPool._on_eth_send_raw_transaction_impl, (neon_tx_data, ), callback=self.on_eth_send_raw_transaction_callback, error_callback=self.error_callback)
-        return True

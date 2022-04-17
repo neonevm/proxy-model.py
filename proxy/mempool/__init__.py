@@ -1,4 +1,4 @@
-from .mempool_server import MemPoolServer
+from .mempool_server import PickableDataServer
 from .mempool_client import MemPoolClient
 from .mempool_service import MemPoolService
 from .mempool_client import MemPoolClient

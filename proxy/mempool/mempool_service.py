@@ -1,29 +1,27 @@
 from logged_groups import logged_group
-from multiprocessing import Process
+import asyncio
 
-from .mempool_server import MemPoolServer, MemPoolServerUser
+from .mempool_server import PickableDataServer, PickableDataServerUser
 from .mem_pool import MemPool
 
-from ..common_neon.data import NeonTxData
-
+from typing import Any
 
 @logged_group("neon.MemPool")
-class MemPoolService(MemPoolServerUser):
+class MemPoolService(PickableDataServerUser):
 
     MEMPOOL_SERVICE_PORT = 9091
-    MEMPOOL_SERVICE_HOST = "127.0.0.1"
+    MEMPOOL_SERVICE_HOST = "0.0.0.0"
 
     def __init__(self):
-        self._mempool_server = MemPoolServer(user=self, host=self.MEMPOOL_SERVICE_HOST, port=self.MEMPOOL_SERVICE_PORT)
+        self.event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.event_loop)
+
+        self._mempool_server = PickableDataServer(user=self, host=self.MEMPOOL_SERVICE_HOST, port=self.MEMPOOL_SERVICE_PORT)
         self._mempool = MemPool()
-        self._mempool_proc = Process(target=self.run_mempool)
 
     def start(self):
-        self._mempool_server.start()
-        self._mempool_proc.start()
+        self.info("Run until complete")
+        self.event_loop.run_until_complete(self._mempool_server.run_server())
 
-    def on_eth_send_raw_transaction(self, neon_tx_data: NeonTxData):
-        self._mempool.on_eth_send_raw_transaction(neon_tx_data)
-
-    def run_mempool(self):
-        self._mempool.run()
+    def on_data_received(self, data: Any):
+        self._mempool.on_eth_send_raw_transaction(data)
