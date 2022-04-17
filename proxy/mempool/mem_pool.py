@@ -25,6 +25,7 @@ class MemPool:
 
     @staticmethod
     def on_eth_send_raw_transaction_impl(neon_tx_data: NeonTxData) -> bool:
+        print(f"neon_tx_data: {neon_tx_data}")
         time.sleep(0.1)
         return True
 
