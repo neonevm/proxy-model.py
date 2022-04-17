@@ -17,10 +17,6 @@ class PickableDataServerUser(ABC):
 @logged_group("neon.MemPool")
 class PickableDataServer(ABC):
 
-    QUEUE_TIMEOUT_SEC = 0.4
-    BREAK_PROC_INVOCATION = 0
-    JOIN_PROC_TIMEOUT_SEC = 5
-
     def __init__(self, *, user: PickableDataServerUser, host: str, port: int):
         self._user = user
         self._port = port
