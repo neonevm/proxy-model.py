@@ -17,11 +17,11 @@ class MemPool:
         self._pool = ProcessPoolExecutor(self.POOL_PROC_COUNT)
         self._event_loop = asyncio.get_event_loop()
 
-    def on_eth_send_raw_transaction(self, neon_tx_data: NeonTxData):
-        self._pool.submit(MemPool.on_eth_send_raw_transaction_impl, neon_tx_data)
+    def send_raw_transaction(self, neon_tx_data: NeonTxData):
+        self._pool.submit(MemPool._send_raw_transaction_impl, neon_tx_data)
 
     @staticmethod
-    def on_eth_send_raw_transaction_impl(neon_tx_data: NeonTxData) -> bool:
+    def _send_raw_transaction_impl(neon_tx_data: NeonTxData) -> bool:
         pid = os.getpid()
         print(f"PID: {pid}, neon_tx_data: {neon_tx_data}")
         time.sleep(0.1)

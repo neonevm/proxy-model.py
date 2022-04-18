@@ -2,7 +2,7 @@ from logged_groups import logged_group
 import asyncio
 from multiprocessing import Process
 
-from .pickable_data_server import PickableDataServer, PickableDataServerUser
+from ..common_neon.utils.pickable_data_server import PickableDataServer, PickableDataServerUser
 from .mem_pool import MemPool
 
 from typing import Any
@@ -26,7 +26,7 @@ class MemPoolService(PickableDataServerUser):
         self._process.start()
 
     def on_data_received(self, data: Any):
-        self._mempool.on_eth_send_raw_transaction(data)
+        self._mempool.send_raw_transaction(data)
 
     def run(self):
         self._mempool_server = PickableDataServer(user=self, host=self.MEMPOOL_SERVICE_HOST, port=self.MEMPOOL_SERVICE_PORT)
