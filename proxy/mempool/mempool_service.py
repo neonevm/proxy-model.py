@@ -1,26 +1,34 @@
 from logged_groups import logged_group
+import asyncio
+from multiprocessing import Process
 
-from ..common_neon.utils import QueueBasedService
-
+from ..common_neon.utils.pickable_data_server import PickableDataServer, PickableDataServerUser
 from .mem_pool import MemPool
+
+from typing import Any
 
 
 @logged_group("neon.MemPool")
-class MemPoolService(QueueBasedService):
+class MemPoolService(PickableDataServerUser):
 
-    MEM_POOL_SERVICE_PORT = 9091
+    MEMPOOL_SERVICE_PORT = 9091
+    MEMPOOL_SERVICE_HOST = "0.0.0.0"
 
-    def __init__(self, *, is_background: bool):
-        QueueBasedService.__init__(self, port=self.MEM_POOL_SERVICE_PORT, is_background=is_background)
-        self._mem_pool = None
+    def __init__(self):
+        self.event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.event_loop)
+        self._mempool_server = None
+        self._mempool = None
+        self._process = Process(target=self.run)
 
-    def on_eth_send_raw_transaction(self, *, eth_trx_hash):
-        self._mem_pool.on_eth_send_raw_transaction(eth_trx_hash=eth_trx_hash)
+    def start(self):
+        self.info("Run until complete")
+        self._process.start()
 
-    # QueueBasedService abstracts
+    def on_data_received(self, data: Any):
+        self._mempool.send_raw_transaction(data)
 
-    def service_process_init(self):
-        self._mem_pool = MemPool()
-
-    def do_extras(self):
-        self._mem_pool.do_extras()
+    def run(self):
+        self._mempool_server = PickableDataServer(user=self, host=self.MEMPOOL_SERVICE_HOST, port=self.MEMPOOL_SERVICE_PORT)
+        self._mempool = MemPool()
+        self.event_loop.run_until_complete(self._mempool_server.run_server())

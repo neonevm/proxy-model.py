@@ -8,19 +8,20 @@ from logged_groups import logged_group
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
-from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
+from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import SolanaBlockInfo
-from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
+from ..common_neon.data import NeonTxPrecheckResult, NeonTxData
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_EVM_VERSION, NEON_EVM_REVISION, \
                           CHAIN_ID, neon_cli, EVM_STEP_COUNT
 from ..memdb.memdb import MemDB
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
+from ..mempool import MemPoolClient, MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT
 
 from .transaction_sender import NeonTxSender
 from .operator_resource_list import OperatorResourceList
@@ -47,7 +48,7 @@ class NeonRpcApiModel:
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = MemDB(self._solana)
         self._stat_exporter: Optional[StatisticsExporter] = None
-        self._mempool_client = MemPoolClient()
+        self._mempool_client = MemPoolClient(MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT)
 
         if PP_SOLANA_URL == SOLANA_URL:
             self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
@@ -450,7 +451,8 @@ class NeonRpcApiModel:
                 tx_sender.execute(neon_tx_precheck_result)
 
             self._stat_tx_success()
-            self._mempool_client.on_eth_send_raw_transaction(eth_signature)
+            neon_tx_data = NeonTxData(tx_signed=rawTrx)
+            self._mempool_client.send_raw_transaction(neon_tx_data)
             return eth_signature
 
         except PendingTxError as err:

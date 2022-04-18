@@ -1,20 +1,12 @@
-from logged_groups import logged_group
+from ..common_neon.data import NeonTxData
 
-from ..common_neon.utils import QueueBasedServiceClient
-from ..common_neon import Result
-
-from . import MemPoolService
+from ..common_neon.utils import PickableDataClient
 
 
-@logged_group("neon.Proxy")
-class MemPoolClient(QueueBasedServiceClient):
+class MemPoolClient:
 
-    MEM_POOL_SERVICE_HOST = "127.0.0.1"
+    def __init__(self, host: str, port: int):
+        self._pickable_data_client = PickableDataClient(host, port)
 
-    def __init__(self):
-        port, host = (MemPoolService.MEM_POOL_SERVICE_PORT, self.MEM_POOL_SERVICE_HOST)
-        self.info(f"Initialize MemPoolClient connecting to: {port} at: {host}")
-        QueueBasedServiceClient.__init__(self, host, port)
-
-    def on_eth_send_raw_transaction(self, eth_trx_signature) -> Result:
-        return self.invoke("on_eth_send_raw_transaction", eth_trx_hash=eth_trx_signature)
+    def send_raw_transaction(self, neon_tx_data: NeonTxData):
+        self._pickable_data_client.send_data(neon_tx_data)
