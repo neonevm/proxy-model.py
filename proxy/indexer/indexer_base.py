@@ -158,7 +158,7 @@ class IndexerBase:
             latest_params={"maximum_tx": maximum_tx, "maximum_slot": maximum_slot}
         )
 
-    def _get_signatures(self, before: Optional[str], limit: int) -> []:
+    def _get_signatures(self, before: Optional[str], limit: int) -> List:
         response = self.solana.get_signatures_for_address(before, limit, FINALIZED)
         error = response.get('error')
         result = response.get('result', [])

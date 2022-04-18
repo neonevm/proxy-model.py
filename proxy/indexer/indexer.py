@@ -1,5 +1,5 @@
 import copy
-from typing import Iterator, Optional, Dict
+from typing import Iterator, List, Optional, Dict
 
 import base58
 import time
@@ -24,7 +24,7 @@ from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, HOLDER_TIMEO
 
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
-    def __init__(self, sign: str, slot: int, tx: {}):
+    def __init__(self, sign: str, slot: int, tx: Dict):
         self.sign = SolanaIxSignInfo(sign=sign, slot=slot, idx=-1)
         self.cost_info = CostInfo(sign, tx, EVM_LOADER_ID)
         self.tx = tx
@@ -93,7 +93,7 @@ class SolanaIxInfo:
             return msg_keys[ix_accounts[idx]]
         return ''
 
-    def get_account_list(self, start: int) -> [str]:
+    def get_account_list(self, start: int) -> List[str]:
         assert self._is_valid
 
         msg_keys = self._msg['accountKeys']
@@ -420,7 +420,7 @@ class DummyIxDecoder:
                 return self._decoding_done(tx, 'found Neon results')
         return self._decoding_success(tx, 'mark ix used')
 
-    def _init_tx_from_holder(self, holder_account: str, storage_account: str, blocked_accounts: [str]) -> Optional[NeonTxResult]:
+    def _init_tx_from_holder(self, holder_account: str, storage_account: str, blocked_accounts: List[str]) -> Optional[NeonTxResult]:
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
         if tx.holder_account:
             return tx
