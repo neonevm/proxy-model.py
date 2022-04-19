@@ -1,5 +1,5 @@
 from dataclasses import astuple, dataclass
-from typing import Optional
+from typing import Optional, Dict
 from ..indexer.base_db import BaseDB, DBQuery
 from ..common_neon.utils import str_fmt_object
 
@@ -13,8 +13,11 @@ class NeonAccountInfo:
     code: Optional[str] = None
     sol_sign: Optional[str] = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str_fmt_object(self)
+
+    def __str_dict__(self) -> Dict:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
 
     def __iter__(self):
         return iter(astuple(self))
