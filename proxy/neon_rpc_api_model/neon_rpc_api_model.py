@@ -59,6 +59,8 @@ class NeonRpcApiModel:
             self.proxy_id = self.proxy_id_glob.value
             self.proxy_id_glob.value += 1
 
+        if self.proxy_id == 0:
+            self.debug(f'Neon Proxy version: {self.neon_proxy_version()}')
         self.debug(f"Worker id {self.proxy_id}")
 
     def set_stat_exporter(self, stat_exporter: StatisticsExporter):
