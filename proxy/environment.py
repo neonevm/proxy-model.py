@@ -54,6 +54,7 @@ EVM_STEP_COUNT = int(os.environ.get("EVM_STEP_COUNT", 750))  # number of evm-ste
 ENABLE_PRIVATE_API = os.environ.get("ENABLE_PRIVATE_API", "NO") == "YES"
 GATHER_STATISTICS = os.environ.get("GATHER_STATISTICS", "NO") == "YES"
 ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID = os.environ.get("ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID", "NO") == "YES"
+LOG_FULL_OBJECT_INFO = os.environ.get("LOG_FULL_OBJECT_INFO", "NO") == "YES"
 
 PYTH_MAPPING_ACCOUNT = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
 if PYTH_MAPPING_ACCOUNT is not None:

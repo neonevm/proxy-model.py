@@ -1,5 +1,5 @@
 import copy
-from typing import Iterator, Optional, Dict
+from typing import Iterator, Optional
 
 import base58
 import time
@@ -130,17 +130,6 @@ class NeonHolderObject(BaseEvmObject):
     def __str__(self) -> str:
         return str_fmt_object(self)
 
-    def __str_dict__(self) -> Dict:
-        return {
-            'len(used_ixs)': len(self.used_ixs),
-            'len(ixs_cost)': len(self.ixs_cost),
-            'slot': self.slot,
-            'account': str(self.account),
-            'len(self.data)': len(self.data),
-            'count_written': self.count_written,
-            'max_written': self.max_written
-        }
-
 
 class NeonTxResult(BaseEvmObject):
     def __init__(self, storage_account: str, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo):
@@ -155,20 +144,6 @@ class NeonTxResult(BaseEvmObject):
 
     def __str__(self):
         return str_fmt_object(self)
-
-    def __str_dict__(self) -> Dict:
-        return {
-            'len(used_ixs)': len(self.used_ixs),
-            'len(ixs_cost)': len(self.ixs_cost),
-            'slot': self.slot,
-            'storage_account': str(self.storage_account),
-            'holder_account': str(self.holder_account),
-            'neon_tx': self.neon_tx,
-            'neon_res': self.neon_res,
-            'len(blocked_accounts)': len(self.blocked_accounts),
-            'canceled': self.canceled,
-            'done': self.done
-        }
 
 
 @logged_group("neon.Indexer")
