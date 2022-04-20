@@ -5,7 +5,6 @@ import unittest
 import os
 import requests
 from web3 import Web3
-from proxy.testing.testing_helpers import request_airdrop
 
 issue = 'https://github.com/neonlabsorg/neon-evm/issues/166'
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
@@ -13,14 +12,13 @@ proxy = Web3(Web3.HTTPProvider(proxy_url))
 admin = proxy.eth.account.create(issue + '/admin')
 user = proxy.eth.account.create(issue + '/user')
 proxy.eth.default_account = admin.address
-request_airdrop(admin.address)
 
 class Test_Neon_Faucet(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print('\n\n' + issue)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_neon_faucet_00_ping(self):
         print()
         url = '{}/request_ping'.format(os.environ['FAUCET_URL'])
@@ -31,7 +29,7 @@ class Test_Neon_Faucet(unittest.TestCase):
             print('Response:', r.status_code)
         assert(r.ok)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_neon_faucet_01_version(self):
         print()
         url = '{}/request_version'.format(os.environ['FAUCET_URL'])
@@ -40,7 +38,7 @@ class Test_Neon_Faucet(unittest.TestCase):
             print('Response:', r.status_code)
         assert(r.ok)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_neon_faucet_02_neon_in_galans(self):
         print()
         url = '{}/request_neon_in_galans'.format(os.environ['FAUCET_URL'])
@@ -57,7 +55,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         print('NEO balance difference:', balance_before - balance_after)
         self.assertEqual(balance_after, 99999000000000)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_neon_faucet_03_neon(self):
         print()
         url = '{}/request_neon'.format(os.environ['FAUCET_URL'])
@@ -84,6 +82,22 @@ class Test_Neon_Faucet(unittest.TestCase):
         assert(r.ok)
         self.assertEqual(r.text, "['0x00000000000000000000000000000000CafeBabe','0x00000000000000000000000000000000DeadBeef']")
 
+    # @unittest.skip("a.i.")
+    def test_neon_faucet_06_erc20_single(self):
+        print()
+        url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
+        before = self.get_token_balance(self.token_a)
+        print('token A balance before:', before)
+        data = '{"wallet": "' + user.address + '", "token_addr": "' + token_a + '", "amount": 1}'
+        print('data:', data)
+        r = requests.post(url, data=data)
+        if not r.ok:
+            print('Response:', r.status_code)
+        assert(r.ok)
+        after = self.get_token_balance(self.token_a, user.address)
+        print('token A balance after:', after)
+        self.assertEqual(after - before, 1000000000000000000)
+
     @unittest.skip("a.i.")
     def test_neon_faucet_05_erc20_all(self):
         print()
@@ -103,11 +117,6 @@ class Test_Neon_Faucet(unittest.TestCase):
         print('token B balance after:', b_after)
         self.assertEqual(a_after - a_before, 1000000000000000000)
         self.assertEqual(b_after - b_before, 1000000000000000000)
-
-    @unittest.skip("a.i.")
-    def test_neon_faucet_06_erc20_single(self):
-        print()
-        url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
 
     # Returns balance of a token account.
     # Note: the result is in 10E-18 fractions.
