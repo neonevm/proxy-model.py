@@ -9,6 +9,7 @@ from ..common_neon.account_whitelist import AccountWhitelist
 from ..common_neon.solana_receipt_parser import SolReceiptParser
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.estimate import GasEstimate
+from ..common_neon.emulator_interactor import call_trx_emulated
 
 from ..environment import ACCOUNT_PERMISSION_UPDATE_INT, CHAIN_ID, NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID,\
                           ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
@@ -57,9 +58,10 @@ class NeonTxValidator:
             return False
         return (self._tx.gasPrice < self._min_gas_price) or (self._tx.gasLimit < self._estimated_gas)
 
-    def precheck(self, emulating_result: NeonEmulatingResult) -> NeonTxCfg:
+    def precheck(self) -> NeonTxCfg:
         try:
             self._prevalidate_tx()
+            emulating_result: NeonEmulatingResult = call_trx_emulated(self._tx)
             self._prevalidate_emulator(emulating_result)
 
             is_without_chainid = self.is_underpriced_tx_without_chainid()

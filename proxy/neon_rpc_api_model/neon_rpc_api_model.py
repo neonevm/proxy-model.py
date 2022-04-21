@@ -8,7 +8,7 @@ from logged_groups import logged_group
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
-from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
+from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import Trx as EthTrx
@@ -477,7 +477,7 @@ class NeonRpcApiModel:
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
         neon_validator = NeonTxValidator(self._solana, neon_trx, min_gas_price)
 
-        precheck_result = neon_validator.precheck(emulating_result)
+        precheck_result = neon_validator.precheck()
 
         return precheck_result
 
