@@ -13,8 +13,7 @@ from ..common_neon.estimate import GasEstimate
 from ..environment import ACCOUNT_PERMISSION_UPDATE_INT, CHAIN_ID, NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID,\
                           ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
 
-from ..common_neon.emulator_interactor import call_trx_emulated
-from ..common_neon.data import NeonTxPrecheckResult, NeonEmulatingResult
+from ..common_neon.data import NeonTxCfg, NeonEmulatingResult
 
 
 @logged_group("neon.Proxy")
@@ -58,15 +57,14 @@ class NeonTxValidator:
             return False
         return (self._tx.gasPrice < self._min_gas_price) or (self._tx.gasLimit < self._estimated_gas)
 
-    def precheck(self) -> NeonTxPrecheckResult:
+    def precheck(self, emulating_result: NeonEmulatingResult) -> NeonTxCfg:
         try:
             self._prevalidate_tx()
-            emulating_result: NeonEmulatingResult = call_trx_emulated(self._tx)
             self._prevalidate_emulator(emulating_result)
 
-            is_underpriced_tx_without_chainid = self.is_underpriced_tx_without_chainid()
-            precheck_result = NeonTxPrecheckResult(emulating_result=emulating_result,
-                                                   is_underpriced_tx_without_chainid=is_underpriced_tx_without_chainid)
+            is_without_chainid = self.is_underpriced_tx_without_chainid()
+            precheck_result = NeonTxCfg(steps_executed=emulating_result["steps_executed"],
+                                        is_without_chainid=is_without_chainid)
             return precheck_result
 
         except Exception as e:
@@ -195,7 +193,6 @@ class NeonTxValidator:
             if account_desc['code_size'] > ((9 * 1024 + 512) * 1024):
                 raise EthereumError(f"contract {account_desc['address']} " +
                                     f"requests a size increase to more than 9.5Mb")
-
 
     def _raise_nonce_error(self, account_tx_count: int, tx_nonce: int):
         if self.MAX_U64 in (account_tx_count, tx_nonce):
