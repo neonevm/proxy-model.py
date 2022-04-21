@@ -611,6 +611,9 @@ class PartialCallIxDecoder(DummyIxDecoder):
     def execute(self) -> bool:
         self._decoding_start()
 
+        if SolReceiptParser(self.ix.tx).check_if_error():
+            return self._decoding_skip(f'ignore failed {self.name} instruction')
+
         blocked_accounts_start = 7
 
         if self.ix.get_account_cnt() < blocked_accounts_start + 1:
@@ -652,6 +655,9 @@ class ContinueIxDecoder(DummyIxDecoder):
     def execute(self) -> bool:
         self._decoding_start()
 
+        if SolReceiptParser(self.ix.tx).check_if_error():
+            return self._decoding_skip(f'ignore failed {self.name} instruction')
+
         if self.ix.get_account_cnt() < self._blocked_accounts_start + 1:
             return self._decoding_skip('no enough accounts')
         if len(self.ix.ix_data) < 14:
@@ -680,6 +686,9 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
 
     def execute(self) -> bool:
         self._decoding_start()
+
+        if SolReceiptParser(self.ix.tx).check_if_error():
+            return self._decoding_skip(f'ignore failed {self.name} instruction')
 
         if self.ix.get_account_cnt() < self._blocked_accounts_start + 1:
             return self._decoding_skip('no enough accounts')
@@ -740,6 +749,9 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
 
     def execute(self) -> bool:
         self._decoding_start()
+
+        if SolReceiptParser(self.ix.tx).check_if_error():
+            return self._decoding_skip(f'ignore failed {self.name} instruction')
 
         blocked_accounts_start = 7
 
