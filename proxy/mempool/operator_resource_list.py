@@ -23,9 +23,7 @@ from ..environment import get_solana_accounts, PERM_ACCOUNT_LIMIT, RECHECK_RESOU
                           MIN_OPERATOR_BALANCE_TO_ERR, MIN_OPERATOR_BALANCE_TO_WARN, EVM_LOADER_ID
 
 
-## TODO: DIP corruption, get rid of back dependency
-# from .transaction_sender import NeonTxSender
-from .neon_tx_stages import NeonCancelTxStage, NeonCreateAccountTxStage, NeonCreateAccountWithSeedStage
+from ..mempool.neon_tx_stages import NeonCancelTxStage, NeonCreateAccountTxStage, NeonCreateAccountWithSeedStage
 
 
 class OperatorResourceInfo:

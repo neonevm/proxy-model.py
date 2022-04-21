@@ -5,15 +5,14 @@ import math
 import time
 
 from logged_groups import logged_group
-from typing import Dict, Optional, Any
+from typing import Dict, Optional
 
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 
-from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage, \
-                            NeonResizeContractTxStage
+from ..mempool.neon_tx_stages import NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage, \
+                                         NeonResizeContractTxStage
 
-from .operator_resource_list import OperatorResourceInfo
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.neon_instruction import NeonInstruction as NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
@@ -22,11 +21,13 @@ from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
 from ..common_neon.errors import EthereumError
-from ..common_neon.data import NeonTxPrecheckResult, NeonEmulatingResult
+from ..common_neon.data import NeonTxCfg, NeonEmulatingResult
 from ..environment import RETRY_ON_FAIL
 from ..environment import HOLDER_MSG_SIZE
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..common_neon.utils import get_holder_msg
+
+from .operator_resource_list import OperatorResourceInfo
 
 
 @logged_group("neon.Proxy")
@@ -61,10 +62,10 @@ class NeonTxSender:
         self._create_account_list = []
         self._eth_meta_dict: Dict[str, AccountMeta] = dict()
 
-    def execute(self, precheck_result: NeonTxPrecheckResult) -> NeonTxResultInfo:
+    def execute(self, exec_cfg: NeonTxCfg, emulating_result: NeonEmulatingResult) -> NeonTxResultInfo:
         self._validate_pend_tx()
-        self._prepare_execution(precheck_result.emulating_result)
-        return self._execute(precheck_result)
+        self._prepare_execution(emulating_result)
+        return self._execute(exec_cfg)
 
     def set_resource(self, resource: Optional[OperatorResourceInfo]):
         self.resource = resource
@@ -82,11 +83,11 @@ class NeonTxSender:
         self._pending_tx = NeonPendingTxInfo(neon_sign=self.neon_sign, operator=operator, slot=0)
         self._pend_tx_into_db(self.solana.get_recent_blockslot())
 
-    def _execute(self, precheck_result: NeonTxPrecheckResult):
+    def _execute(self, exec_cfg: NeonTxCfg):
 
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy, NoChainIdNeonTxStrategy]:
             try:
-                strategy = Strategy(precheck_result, self)
+                strategy = Strategy(exec_cfg, self)
                 if not strategy.is_valid:
                     self.debug(f'Skip strategy {Strategy.NAME}: {strategy.error}')
                     continue
@@ -208,8 +209,8 @@ class NeonTxSender:
 class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
     NAME = 'UNKNOWN STRATEGY'
 
-    def __init__(self, precheck_result: NeonTxPrecheckResult, neon_tx_sender: NeonTxSender):
-        self._precheck_result = precheck_result
+    def __init__(self, exec_cfg: NeonTxCfg, neon_tx_sender: NeonTxSender):
+        self._neon_tx_exec_cfg = exec_cfg
         self.is_valid = False
         self.error = None
         self.s = neon_tx_sender
@@ -251,7 +252,7 @@ class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
             raise
 
     def _validate_gas_limit(self):
-        if not self._precheck_result.is_underpriced_tx_without_chainid:
+        if not self._neon_tx_exec_cfg.is_without_chainid:
             return True
 
         self.error = "Underpriced transaction without chain-id"
@@ -302,7 +303,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         return self._validate_txsize()
 
     def _validate_steps(self) -> bool:
-        steps_emulated = self._precheck_result.emulating_result["steps_executed"]
+        steps_emulated = self._neon_tx_exec_cfg.steps_executed
         if steps_emulated > self.steps:
             self.error = 'Too big number of EVM steps'
             return False
@@ -457,7 +458,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
                 self._validate_gas_limit())
 
     def _validate_evm_steps(self):
-        if self._precheck_result.emulating_result["steps_executed"] > (self.s.steps * 25):
+        if self._neon_tx_exec_cfg.steps_executed > (self.s.steps * 25):
             self.error = 'Big number of EVM steps'
             return False
         return True
@@ -479,7 +480,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
             SolTxListSender(self.s, tx_list, self._preparation_txs_name).send(signer)
             self.s.done_account_tx_list()
 
-        steps_emulated = self._precheck_result.emulating_result["steps_executed"]
+        steps_emulated = self._neon_tx_exec_cfg.steps_executed
         cnt = math.ceil(steps_emulated / self.steps)
         cnt = math.ceil(steps_emulated / (self.steps - cnt))
         if steps_emulated > 200:
@@ -538,7 +539,7 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy, abc.ABC):
         HolderNeonTxStrategy.__init__(self, *args, **kwargs)
 
     def _validate(self) -> bool:
-        if not self._precheck_result.is_underpriced_tx_without_chainid:
+        if not self._neon_tx_exec_cfg.is_without_chainid:
             self.error = 'Normal transaction'
             return False
 
