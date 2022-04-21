@@ -178,7 +178,7 @@ class IndexerBase:
         (sol_sign, slot, tx_idx) = param
         while retry > 0:
             try:
-                tx = self.solana.get_confirmed_transaction(sol_sign)['result']
+                tx = self.solana._send_rpc_request("getTransaction", sol_sign)['result']
                 self._add_tx(sol_sign, tx, slot, tx_idx)
                 retry = 0
             except Exception as err:
@@ -194,14 +194,7 @@ class IndexerBase:
 
     def _add_tx(self, sol_sign, tx, slot, tx_idx):
         if tx is not None:
-            add = False
-            msg = tx['transaction']['message']
-            for instruction in msg['instructions']:
-                if msg["accountKeys"][instruction["programIdIndex"]] == EVM_LOADER_ID:
-                    add = True
-            if add:
-                self.debug((slot, tx_idx, sol_sign))
-                self.transaction_receipts.add_tx(slot, tx_idx, sol_sign, tx)
+            self.debug((slot, tx_idx, sol_sign))
+            self.transaction_receipts.add_tx(slot, tx_idx, sol_sign, tx)
         else:
             self.debug(f"trx is None {sol_sign}")
-

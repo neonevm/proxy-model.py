@@ -40,9 +40,9 @@ class SolanaIxInfo:
         self.evm_ix = 0xFF
         self.ix_data = None
 
-    def _decode_ixdata(self) -> bool:
+    def _decode_ixdata(self, data_base58: str) -> bool:
         try:
-            self.ix_data = base58.b58decode(self.ix['data'])
+            self.ix_data = base58.b58decode(data_base58)
             self.evm_ix = int(self.ix_data[0])
             return True
         except Exception as e:
@@ -69,9 +69,18 @@ class SolanaIxInfo:
             if 'programIdIndex' not in self.ix:
                 self.debug(f'{self} error: fail to get program id')
                 continue
-            if accounts[self.ix['programIdIndex']] != EVM_LOADER_ID:
-                continue
-            if not self._decode_ixdata():
+            if accounts[self.ix['programIdIndex']] == EVM_LOADER_ID:
+                if not self._decode_ixdata(self.ix['data']):
+                    continue
+            else:
+                for inner_tx in self.tx['meta']['innerInstructions']:
+                    if inner_tx['index'] == ix_idx:
+                        for instruction in inner_tx['instructions']:
+                            if accounts[instruction['programIdIndex']] == EVM_LOADER_ID:
+                                if self._decode_ixdata(instruction['data']):
+                                    self.ix['accounts'] = instruction['accounts']
+                                    evm_ix_idx += 1
+                                    yield evm_ix_idx
                 continue
 
             evm_ix_idx += 1
