@@ -21,7 +21,7 @@ class MemPoolTxExecutor:
 
     def execute_neon_tx(self, mempool_tx_request: MemPoolTxRequest):
         neon_tx = mempool_tx_request.neon_tx
-        neon_tx_cfg = mempool_tx_request.neon_tx_cfg
+        neon_tx_cfg = mempool_tx_request.neon_tx_exec_cfg
         emulating_result = mempool_tx_request.emulating_result
         emv_step_count = self._config.get_evm_count()
         tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=emv_step_count)

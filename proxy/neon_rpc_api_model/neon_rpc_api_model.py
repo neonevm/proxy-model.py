@@ -15,7 +15,7 @@ from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import SolanaBlockInfo
-from ..common_neon.data import NeonTxCfg, NeonEmulatingResult
+from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_EVM_VERSION, NEON_EVM_REVISION, \
@@ -452,7 +452,7 @@ class NeonRpcApiModel:
 
             self._stat_tx_success()
             mempool_tx_request = MemPoolTxRequest(neon_tx=trx,
-                                                  neon_tx_cfg=neon_tx_cfg,
+                                                  neon_tx_exec_cfg=neon_tx_cfg,
                                                   emulating_result=emulating_result)
 
             if not self._mempool_client.send_raw_transaction(mempool_tx_request):
@@ -471,7 +471,7 @@ class NeonRpcApiModel:
             self._stat_tx_failed()
             raise
 
-    def precheck(self, neon_trx: EthTrx) -> Tuple[NeonTxCfg, NeonEmulatingResult]:
+    def precheck(self, neon_trx: EthTrx) -> Tuple[NeonTxExecCfg, NeonEmulatingResult]:
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
         neon_validator = NeonTxValidator(self._solana, neon_trx, min_gas_price)
         return neon_validator.precheck()

@@ -21,7 +21,7 @@ from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
 from ..common_neon.errors import EthereumError
-from ..common_neon.data import NeonTxCfg, NeonEmulatingResult
+from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 from ..environment import RETRY_ON_FAIL
 from ..environment import HOLDER_MSG_SIZE
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
@@ -62,7 +62,7 @@ class NeonTxSender:
         self._create_account_list = []
         self._eth_meta_dict: Dict[str, AccountMeta] = dict()
 
-    def execute(self, exec_cfg: NeonTxCfg, emulating_result: NeonEmulatingResult) -> NeonTxResultInfo:
+    def execute(self, exec_cfg: NeonTxExecCfg, emulating_result: NeonEmulatingResult) -> NeonTxResultInfo:
         self._validate_pend_tx()
         self._prepare_execution(emulating_result)
         return self._execute(exec_cfg)
@@ -83,7 +83,7 @@ class NeonTxSender:
         self._pending_tx = NeonPendingTxInfo(neon_sign=self.neon_sign, operator=operator, slot=0)
         self._pend_tx_into_db(self.solana.get_recent_blockslot())
 
-    def _execute(self, exec_cfg: NeonTxCfg):
+    def _execute(self, exec_cfg: NeonTxExecCfg):
 
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy, NoChainIdNeonTxStrategy]:
             try:
@@ -209,7 +209,7 @@ class NeonTxSender:
 class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
     NAME = 'UNKNOWN STRATEGY'
 
-    def __init__(self, exec_cfg: NeonTxCfg, neon_tx_sender: NeonTxSender):
+    def __init__(self, exec_cfg: NeonTxExecCfg, neon_tx_sender: NeonTxSender):
         self._neon_tx_exec_cfg = exec_cfg
         self.is_valid = False
         self.error = None

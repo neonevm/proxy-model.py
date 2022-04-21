@@ -14,7 +14,7 @@ from ..common_neon.emulator_interactor import call_trx_emulated
 from ..environment import ACCOUNT_PERMISSION_UPDATE_INT, CHAIN_ID, NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID,\
                           ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
 
-from ..common_neon.data import NeonTxCfg, NeonEmulatingResult
+from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 
 
 @logged_group("neon.Proxy")
@@ -58,16 +58,16 @@ class NeonTxValidator:
             return False
         return (self._tx.gasPrice < self._min_gas_price) or (self._tx.gasLimit < self._estimated_gas)
 
-    def precheck(self) -> Tuple[NeonTxCfg, NeonEmulatingResult]:
+    def precheck(self) -> Tuple[NeonTxExecCfg, NeonEmulatingResult]:
         try:
             self._prevalidate_tx()
             emulating_result: NeonEmulatingResult = call_trx_emulated(self._tx)
             self._prevalidate_emulator(emulating_result)
 
             is_underpriced_tx_without_chainid = self.is_underpriced_tx_without_chainid()
-            neon_tx_cfg = NeonTxCfg(steps_executed=emulating_result["steps_executed"],
-                                    is_underpriced_tx_without_chainid=is_underpriced_tx_without_chainid)
-            return neon_tx_cfg, emulating_result
+            neon_tx_exec_cfg = NeonTxExecCfg(steps_executed=emulating_result["steps_executed"],
+                                             is_underpriced_tx_without_chainid=is_underpriced_tx_without_chainid)
+            return neon_tx_exec_cfg, emulating_result
 
         except Exception as e:
             self.extract_ethereum_error(e)

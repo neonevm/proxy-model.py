@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 
 @dataclass
-class NeonTxCfg:
+class NeonTxExecCfg:
     is_underpriced_tx_without_chainid: bool
     steps_executed: int
 
