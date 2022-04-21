@@ -11,7 +11,7 @@ from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 
 from ..mempool.neon_tx_stages import NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage, \
-                                         NeonResizeContractTxStage
+                                     NeonResizeContractTxStage
 
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.neon_instruction import NeonInstruction as NeonIxBuilder
@@ -252,7 +252,7 @@ class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
             raise
 
     def _validate_gas_limit(self):
-        if not self._neon_tx_exec_cfg.is_without_chainid:
+        if not self._neon_tx_exec_cfg.is_underpriced_tx_without_chainid:
             return True
 
         self.error = "Underpriced transaction without chain-id"
@@ -539,7 +539,7 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy, abc.ABC):
         HolderNeonTxStrategy.__init__(self, *args, **kwargs)
 
     def _validate(self) -> bool:
-        if not self._neon_tx_exec_cfg.is_without_chainid:
+        if not self._neon_tx_exec_cfg.is_underpriced_tx_without_chainid:
             self.error = 'Normal transaction'
             return False
 

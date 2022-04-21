@@ -1,7 +1,7 @@
 import json
 import multiprocessing
 import traceback
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 
 import sha3
 from logged_groups import logged_group
@@ -15,7 +15,7 @@ from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import SolanaBlockInfo
-from ..common_neon.data import MemPoolTxCfg, NeonTxCfg, NeonEmulatingResult
+from ..common_neon.data import NeonTxCfg, NeonEmulatingResult
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_EVM_VERSION, NEON_EVM_REVISION, \
@@ -23,7 +23,7 @@ from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_
 
 from ..memdb.memdb import MemDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
-from ..mempool import MemPoolClient, MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT
+from ..mempool import MemPoolTxRequest, MemPoolClient, MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT
 
 from .transaction_validator import NeonTxValidator
 
@@ -444,20 +444,19 @@ class NeonRpcApiModel:
 
         self._stat_tx_begin()
         try:
-            emulating_result: NeonEmulatingResult = call_trx_emulated(trx)
-            neon_tx_cfg = self.precheck(trx, emulating_result)
+            neon_tx_cfg, emulating_result = self.precheck(trx)
 
             # tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
             # with OperatorResourceList(tx_sender):
             #     tx_sender.execute(neon_tx_cfg)
 
             self._stat_tx_success()
-            mempool_tx_cfg = MemPoolTxCfg(neon_tx=trx,
-                                          neon_tx_cfg=neon_tx_cfg,
-                                          emulating_result=emulating_result)
+            mempool_tx_request = MemPoolTxRequest(neon_tx=trx,
+                                                  neon_tx_cfg=neon_tx_cfg,
+                                                  emulating_result=emulating_result)
 
-            if not self._mempool_client.send_raw_transaction(mempool_tx_cfg):
-                raise Exception("Failed to pass tx into MemPool")
+            if not self._mempool_client.send_raw_transaction(mempool_tx_request):
+                raise Exception("Failed to pass neon_tx into MemPool")
 
             return eth_signature
 
@@ -472,14 +471,10 @@ class NeonRpcApiModel:
             self._stat_tx_failed()
             raise
 
-    def precheck(self, neon_trx: EthTrx, emulating_result: NeonEmulatingResult) -> NeonTxCfg:
-
+    def precheck(self, neon_trx: EthTrx) -> Tuple[NeonTxCfg, NeonEmulatingResult]:
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
         neon_validator = NeonTxValidator(self._solana, neon_trx, min_gas_price)
-
-        precheck_result = neon_validator.precheck()
-
-        return precheck_result
+        return neon_validator.precheck()
 
     def _stat_tx_begin(self):
         self._stat_exporter.stat_commit_tx_begin()

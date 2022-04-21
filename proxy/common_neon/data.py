@@ -1,20 +1,12 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Any
-from .eth_proto import Trx as NeonTx
 
 
 @dataclass
 class NeonTxCfg:
-    is_without_chainid: bool
+    is_underpriced_tx_without_chainid: bool
     steps_executed: int
-
-
-@dataclass
-class MemPoolTxCfg:
-    neon_tx: NeonTx
-    neon_tx_cfg: NeonTxCfg
-    emulating_result: NeonEmulatingResult
 
 
 NeonEmulatingResult = Dict[str, Any]
