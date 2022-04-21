@@ -1,12 +1,11 @@
-from ..common_neon.data import NeonTxData
-
-from ..common_neon.utils import PickableDataClient
+from ..common_neon.data import MemPoolTxCfg
+from ..common_neon.utils import AddrPickableDataClient
 
 
 class MemPoolClient:
 
     def __init__(self, host: str, port: int):
-        self._pickable_data_client = PickableDataClient(host, port)
+        self._pickable_data_client = AddrPickableDataClient((host, port))
 
-    def send_raw_transaction(self, neon_tx_data: NeonTxData):
-        self._pickable_data_client.send_data(neon_tx_data)
+    def send_raw_transaction(self, mempool_tx_cfg: MemPoolTxCfg):
+        self._pickable_data_client.send_data(mempool_tx_cfg)
