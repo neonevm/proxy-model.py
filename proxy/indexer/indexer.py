@@ -316,9 +316,7 @@ class DummyIxDecoder:
     def neon_addr_fmt(neon_tx: NeonTxInfo):
         return f'Neon tx {neon_tx.sign}, Neon addr {neon_tx.addr}'
 
-    def _getadd_tx(self, storage_account, neon_tx=None, blocked_accounts=None) -> NeonTxResult:
-        if blocked_accounts is None:
-            blocked_accounts = ['']
+    def _getadd_tx(self, storage_account, neon_tx=None, blocked_accounts=None) -> Optional[NeonTxResult]:
         tx = self.state.get_tx(storage_account)
         if tx and neon_tx and tx.neon_tx and (neon_tx.sign != tx.neon_tx.sign):
             self.warning(f'tx.neon_tx({tx.neon_tx}) != neon_tx({neon_tx}), storage: {storage_account}')
@@ -326,11 +324,14 @@ class DummyIxDecoder:
             self.state.del_tx(tx)
             tx = None
 
-        if not tx:
-            tx = self.state.add_tx(storage_account=storage_account)
-            tx.blocked_accounts = blocked_accounts
-        if neon_tx:
-            tx.neon_tx = neon_tx
+        if tx:
+            return tx
+        elif not neon_tx:
+            return None
+
+        tx = self.state.add_tx(storage_account=storage_account)
+        tx.blocked_accounts = (blocked_accounts or [''])
+        tx.neon_tx = neon_tx
         return tx
 
     def _decoding_start(self):
@@ -408,7 +409,7 @@ class DummyIxDecoder:
                              storage_account: str,
                              blocked_accounts: [str]) -> Optional[NeonTxResult]:
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
-        if tx.holder_account:
+        if tx and tx.holder_account:
             return tx
 
         holder = self.state.get_holder(holder_account)
@@ -421,13 +422,15 @@ class DummyIxDecoder:
         rlp_endpos = 73 + rlp_len
         rlp_data = holder.data[73:rlp_endpos]
 
-        rlp_error = tx.neon_tx.decode(rlp_sign=rlp_sign, rlp_data=bytes(rlp_data)).error
-        if rlp_error:
-            self.error(f'Neon tx rlp error: {rlp_error}')
+        neon_tx = NeonTxInfo(rlp_sign=rlp_sign, rlp_data=bytes(rlp_data))
+        if neon_tx.error:
+            self.error(f'Neon tx rlp error: {neon_tx.error}')
+            return None
 
+        tx = self._getadd_tx(storage_account, neon_tx=neon_tx, blocked_accounts=blocked_accounts)
         tx.holder_account = holder_account
         tx.move_ix_used(holder)
-        self._decoding_done(holder, f'init {self.neon_addr_fmt(tx.neon_tx)} from holder')
+        self._decoding_done(holder, f'init {tx.neon_tx} from holder')
         return tx
 
     def execute(self) -> bool:
@@ -662,6 +665,8 @@ class ContinueIxDecoder(DummyIxDecoder):
         step_count = int.from_bytes(self.ix.ix_data[5:13], 'little')
 
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
+        if not tx:
+            return self._decode_skip(f'no transaction at the storage {storage_account}')
 
         self.ix.sign.set_steps(step_count)
         return self._decode_tx(tx)
@@ -721,11 +726,10 @@ class CancelIxDecoder(DummyIxDecoder):
         blocked_accounts = self.ix.get_account_list(blocked_accounts_start)
 
         tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
-        if not tx.neon_tx.is_valid():
-            return self._decoding_fail(tx, f'cannot find storage {tx}')
+        if not tx:
+            return self._decoding_fail(tx, f'cannot find tx in the storage {storage_account}')
 
         tx.neon_res.canceled(self.ix.tx)
-
         return self._decoding_done(tx, f'cancel success')
 
 
