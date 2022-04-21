@@ -200,6 +200,8 @@ class ReceiptsParserState:
 
     def unmark_ix_used(self, obj: BaseEvmObject):
         for ix in obj.used_ixs:
+            if ix not in self._used_ixs:
+                self.error(f'{ix} is absent in the used ix list')
             self._used_ixs[ix] -= 1
             if self._used_ixs[ix] == 0:
                 del self._used_ixs[ix]
@@ -255,6 +257,7 @@ class ReceiptsParserState:
         Slot is done, store all done neon txs into the DB.
         """
         for tx in self._done_tx_list:
+            self.debug(f'Done {tx}')
             self.unmark_ix_used(tx)
             if tx.neon_tx.is_valid() and tx.neon_res.is_valid():
                 with logging_context(neon_tx=tx.neon_tx.sign[:7]):
@@ -264,6 +267,7 @@ class ReceiptsParserState:
         self._done_tx_list.clear()
 
         for holder in self._done_holder_list:
+            self.debug(f'Done {holder}')
             self.unmark_ix_used(holder)
             self.del_holder(holder)
         self._done_holder_list.clear()
