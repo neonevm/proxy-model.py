@@ -6,9 +6,6 @@ import base58
 
 from eth_utils import big_endian_to_int
 
-#TODO: move it out from here
-from ...environment import EVM_LOADER_ID
-
 from ..eth_proto import Trx as EthTx
 
 
@@ -129,6 +126,8 @@ class NeonTxResultInfo:
             rec['blockNumber'] = hex(block.slot)
 
     def decode(self, neon_sign: str, tx: {}, ix_idx=-1) -> NeonTxResultInfo:
+        # TODO: move it out from here
+        from ...environment import EVM_LOADER_ID
         self._set_defaults()
         meta_ixs = tx['meta']['innerInstructions']
         msg = tx['transaction']['message']
