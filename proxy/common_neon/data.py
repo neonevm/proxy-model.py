@@ -4,9 +4,9 @@ from typing import Dict, Any
 
 
 @dataclass
-class NeonTxPrecheckResult:
+class NeonTxExecCfg:
     is_underpriced_tx_without_chainid: bool
-    emulating_result: NeonEmulatingResult
+    steps_executed: int
 
 
 NeonEmulatingResult = Dict[str, Any]

@@ -1,11 +1,10 @@
-import asyncio
-import os
-
 from logged_groups import logged_group
 from concurrent.futures import ProcessPoolExecutor
-import time
 
-from ..common_neon.data import NeonTxData
+from ..common_neon.config import IConfig
+
+from .mempool_api import MemPoolTxRequest
+from .mempool_tx_executor import MemPoolTxExecutor
 
 
 @logged_group("neon.MemPool")
@@ -13,16 +12,19 @@ class MemPool:
 
     POOL_PROC_COUNT = 8
 
-    def __init__(self):
+    def __init__(self, config: IConfig):
         self._pool = ProcessPoolExecutor(self.POOL_PROC_COUNT)
-        self._event_loop = asyncio.get_event_loop()
+        self._tx_executor = MemPoolTxExecutor(config)
 
-    def send_raw_transaction(self, neon_tx_data: NeonTxData):
-        self._pool.submit(MemPool._send_raw_transaction_impl, neon_tx_data)
+    def send_raw_transaction(self, mempool_tx_request: MemPoolTxRequest) -> bool:
+        try:
+           self._pool.submit(MemPool._send_raw_transaction_impl, mempool_tx_request)
+        except Exception as err:
+            print(f"Failed enqueue mempool_tx_request into the worker pool: {err}")
+            return False
+        return True
 
     @staticmethod
-    def _send_raw_transaction_impl(neon_tx_data: NeonTxData) -> bool:
-        pid = os.getpid()
-        print(f"PID: {pid}, neon_tx_data: {neon_tx_data}")
-        time.sleep(0.1)
+    def _send_raw_transaction_impl(mempool_tx_request: MemPoolTxRequest) -> bool:
+        print(f"mempool_tx_request: {mempool_tx_request}")
         return True
