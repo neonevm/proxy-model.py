@@ -24,7 +24,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         url = '{}/request_ping'.format(os.environ['FAUCET_URL'])
         print(url)
         data = '{"ping": "Hello"}'
-        r = requests.post(url, data=data)
+        r = requests.get(url, data=data)
         if not r.ok:
             print('Response:', r.status_code)
         assert(r.ok)
@@ -33,7 +33,7 @@ class Test_Neon_Faucet(unittest.TestCase):
     def test_neon_faucet_01_version(self):
         print()
         url = '{}/request_version'.format(os.environ['FAUCET_URL'])
-        r = requests.post(url)
+        r = requests.get(url)
         if not r.ok:
             print('Response:', r.status_code)
         assert(r.ok)
@@ -76,25 +76,26 @@ class Test_Neon_Faucet(unittest.TestCase):
     def test_neon_faucet_04_erc20_list(self):
         print()
         url = '{}/request_erc20_list'.format(os.environ['FAUCET_URL'])
-        r = requests.post(url)
+        r = requests.get(url)
         if not r.ok:
             print('Response:', r.status_code)
         assert(r.ok)
-        self.assertEqual(r.text, "['0x00000000000000000000000000000000CafeBabe','0x00000000000000000000000000000000DeadBeef']")
+        self.assertEqual(r.text, '["0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d","0x8a2a66CA0E5D491A001957edD45A6350bC76D708","0x914782059DC42d4E590aeFCfdbF004B2EcBB9fAA","0x7A7510b9b18241C788a7aAE8299D1fA6010D8128"]')
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_neon_faucet_06_erc20_single(self):
         print()
         url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
-        before = self.get_token_balance(self.token_a)
+        token = '0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d'
+        before = self.get_token_balance(token, user.address)
         print('token A balance before:', before)
-        data = '{"wallet": "' + user.address + '", "token_addr": "' + token_a + '", "amount": 1}'
+        data = '{"wallet": "' + user.address + '", "token_addr": "' + token + '", "amount": 1}'
         print('data:', data)
         r = requests.post(url, data=data)
         if not r.ok:
             print('Response:', r.status_code)
         assert(r.ok)
-        after = self.get_token_balance(self.token_a, user.address)
+        after = self.get_token_balance(token, user.address)
         print('token A balance after:', after)
         self.assertEqual(after - before, 1000000000000000000)
 
