@@ -28,8 +28,8 @@ class MemPoolService(PickableDataServerUser):
         self.info("Run until complete")
         self._process.start()
 
-    def on_data_received(self, data: Any) -> Any:
-        return self._mempool.send_raw_transaction(data)
+    async def on_data_received(self, data: Any) -> Any:
+        return await self._mempool.send_raw_transaction(data)
 
     def run(self):
         self._mempool_server = AddrPickableDataSrv(user=self, address=(self.MEMPOOL_SERVICE_HOST, self.MEMPOOL_SERVICE_PORT))

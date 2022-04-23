@@ -12,7 +12,7 @@ from logged_groups import logged_group
 class PickableDataServerUser(ABC):
 
     @abstractmethod
-    def on_data_received(self, data: Any) -> Any:
+    async def on_data_received(self, data: Any) -> Any:
         """Gets neon_tx_data from the neon rpc api service worker"""
 
 
@@ -37,23 +37,26 @@ class PickableDataServer(ABC):
         while True:
             try:
                 data = await self._recv_pickable_data(reader)
-                result = self._user.on_data_received(data)
+                result = await self._user.on_data_received(data)
                 result_data = encode_pickable(result)
                 writer.write(result_data)
                 await writer.drain()
             except ConnectionResetError:
                 self.error(f"Client connection has been closed")
                 break
+            except asyncio.exceptions.IncompleteReadError as err:
+                self.error(f"Incomplete read error: {err}")
+                break
             except Exception as err:
                 self.error(f"Failed to receive data err: {err}, type: {type(err)}")
                 break
 
     async def _recv_pickable_data(self, reader: StreamReader):
-        len_packed: bytes = await reader.readexactly(4)
+        len_packed: bytes = await reader.read(4)
         if len(len_packed) == 0:
             raise ConnectionResetError()
         payload_len_data = struct.unpack("!I", len_packed)[0]
-        payload = await reader.readexactly(payload_len_data)
+        payload = await reader.read(payload_len_data)
         data = pickle.loads(payload)
 
         return data
@@ -78,29 +81,25 @@ class PipePickableDataSrv(PickableDataServer):
         PickableDataServer.__init__(self, user=user)
 
     async def run_server(self):
-        print("run_server_by_conn")
         reader, writer = await asyncio.streams.open_connection(sock=self._srv_sock)
-        print("Got reader, writer")
         await self.handle_client(reader, writer)
 
 
 @logged_group("neon.Proxy")
 class PickableDataClient:
 
-    CONNECTION_TIMEOUT_SEC = 5
+    CONNECTION_TIMEOUT_SEC = 600
 
     def __init__(self):
         self._client_sock = None
 
     def _set_client_sock(self, client_sock: socket.socket):
         self._client_sock = client_sock
-        self._client_sock.setblocking(False)
-        self._client_sock.settimeout(self.CONNECTION_TIMEOUT_SEC)
 
     def send_data(self, pickable_object: Any):
         try:
             payload = encode_pickable(pickable_object)
-            self._client_sock.send(payload)
+            sent = self._client_sock.send(payload)
             len_packed: bytes = self._client_sock.recv(4)
             data_len = struct.unpack("!I", len_packed)[0]
             data = self._client_sock.recv(data_len)
@@ -131,8 +130,6 @@ class PickableDataClient:
             self.error(f"Failed to send data: {err}")
             raise Exception("Failed to send pickable data")
 
-    def __del__(self):
-        self._client_sock.close()
 
 
 class PipePickableDataClient(PickableDataClient):

@@ -22,9 +22,3 @@ class NeonTxStatData:
 
     def add_instruction(self, sol_tx_hash: str, sol_spent: int, steps: int, bpf: int) -> None:
         self.instructions.append((sol_tx_hash, sol_spent, steps, bpf))
-
-
-@dataclass
-class NeonTxData:
-    tx_signed: str
-

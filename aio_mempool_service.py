@@ -68,10 +68,10 @@ def addr_interaction_sample():
     srv_proc.start()
 
     client = AddrPickableDataClient(('localhost', 9091))
-    result = client.send_data({"a": 1})
-    print(f"Result: {result}")
-    result = client.send_data({"a": 2})
-    print(f"Result: {result}")
+    for i in range(100000):
+        result = client.send_data({"a": i})
+        print(f"Result: {result}")
+
     srv_proc.kill()
 
 #pipe_interaction_sample()
