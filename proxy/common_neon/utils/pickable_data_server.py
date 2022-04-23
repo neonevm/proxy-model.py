@@ -93,6 +93,7 @@ class PickableDataClient:
     def __init__(self):
         self._client_sock = None
 
+
     def _set_client_sock(self, client_sock: socket.socket):
         self._client_sock = client_sock
 
@@ -112,16 +113,16 @@ class PickableDataClient:
             raise Exception("Failed to send pickable data")
 
     async def send_data_async(self, pickable_object):
-        reader, writer = await asyncio.streams.open_connection(sock=self._client_sock)
+        loop = asyncio.get_event_loop()
         try:
             payload = encode_pickable(pickable_object)
-            writer.write(payload)
-            await writer.drain()
-            len_packed: bytes = await reader.readexactly(4)
+            await loop.sock_sendall(self._client_sock, payload)
+
+            len_packed: bytes = await loop.sock_recv(self._client_sock, 4)
             if not len_packed:
                 return None
             data_len = struct.unpack("!I", len_packed)[0]
-            data = await reader.readexactly(data_len)
+            data = await loop.sock_recv(self._client_sock, data_len)
             if not data:
                 return None
             result = pickle.loads(data)
@@ -129,7 +130,6 @@ class PickableDataClient:
         except BaseException as err:
             self.error(f"Failed to send data: {err}")
             raise Exception("Failed to send pickable data")
-
 
 
 class PipePickableDataClient(PickableDataClient):
