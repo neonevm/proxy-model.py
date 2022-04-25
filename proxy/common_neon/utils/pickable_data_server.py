@@ -93,7 +93,6 @@ class PickableDataClient:
     def __init__(self):
         self._client_sock = None
 
-
     def _set_client_sock(self, client_sock: socket.socket):
         self._client_sock = client_sock
 

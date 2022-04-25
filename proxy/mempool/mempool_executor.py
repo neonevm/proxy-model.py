@@ -40,14 +40,12 @@ class MemPoolExecutor(mp.Process, PickableDataServerUser):
         self._db = MemDB(self._solana)
 
     def execute_neon_tx(self, mempool_tx_cfg: ExecTxRequest):
-        time.sleep(0.2)
-        return ExecTxResult(ExecTxResultCode.ToBeRepeat, None)
         try:
             self.execute_neon_tx_impl(mempool_tx_cfg)
         except Exception as err:
             self.error(f"Failed to execute neon_tx: {err}")
-            return False
-        return True
+            return ExecTxResult(ExecTxResultCode.ToBeRepeat)
+        return ExecTxResultCode.Done
 
     def execute_neon_tx_impl(self, mempool_tx_cfg: ExecTxRequest):
         neon_tx = mempool_tx_cfg.neon_tx
