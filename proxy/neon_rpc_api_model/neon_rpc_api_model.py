@@ -24,7 +24,7 @@ from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_
 
 from ..memdb.memdb import MemDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
-from ..mempool import ExecTxRequest, MemPoolClient, MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT
+from ..mempool import MemPoolRequest, MemPoolClient, MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT
 
 from .transaction_validator import NeonTxValidator
 
@@ -447,17 +447,12 @@ class NeonRpcApiModel:
         try:
             neon_tx_cfg, emulating_result = self.precheck(trx)
 
-            # tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
-            # with OperatorResourceList(tx_sender):
-            #     tx_sender.execute(neon_tx_cfg)
-
             self._stat_tx_success()
-            mempool_tx_request = ExecTxRequest(signature=eth_signature,
-                                               neon_tx=trx,
-                                               neon_tx_exec_cfg=neon_tx_cfg,
-                                               emulating_result=emulating_result)
-            sock: socket.socket = self._mempool_client._pickable_data_client._client_sock
-            self.debug(f"Client sock: {sock}")
+
+            mempool_tx_request = MemPoolRequest(signature=eth_signature,
+                                                neon_tx=trx,
+                                                neon_tx_exec_cfg=neon_tx_cfg,
+                                                emulating_result=emulating_result)
             self._mempool_client.send_raw_transaction(mempool_tx_request)
 
             return eth_signature

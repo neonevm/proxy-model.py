@@ -1,4 +1,5 @@
 import asyncio
+from asyncio import Task
 import dataclasses
 import socket
 from collections import deque
@@ -8,8 +9,8 @@ from logged_groups import logged_group
 from ..common_neon.config import IConfig
 from ..common_neon.utils import PipePickableDataClient
 
+from .mempool_api import MemPoolRequest, IMemPoolExecutor
 from .mempool_executor import MemPoolExecutor
-from .mempool_api import ExecTxRequest
 
 
 class MpExecutorClient(PipePickableDataClient):
@@ -17,12 +18,12 @@ class MpExecutorClient(PipePickableDataClient):
     def __init__(self, client_sock: socket.socket):
         PipePickableDataClient.__init__(self, client_sock=client_sock)
 
-    async def send_tx_request(self, mempool_tx_request: ExecTxRequest):
+    async def send_tx_request(self, mempool_tx_request: MemPoolRequest):
         return await self.send_data_async(mempool_tx_request)
 
 
 @logged_group("neon.MemPool")
-class ExecutorMng:
+class ExecutorMng(IMemPoolExecutor):
 
     BRING_BACK_EXECUTOR_TIMEOUT_SEC = 120
 
@@ -43,26 +44,36 @@ class ExecutorMng:
             self._available_pool.appendleft(i)
             executor_info.executor.start()
 
-    def has_available(self) -> bool:
+    def submit_mempool_request(self, mp_reqeust: MemPoolRequest) -> Tuple[int, Task]:
+        executor_id, executor = self._get_executor()
+        tx_hash = "0x" + mp_reqeust.neon_tx.hash_signed().hex()
+        self.debug(f"Tx: {tx_hash} - scheduled on executor: {executor_id}")
+        task = asyncio.get_event_loop().create_task(executor.send_data_async(mp_reqeust))
+        return executor_id, task
+
+    def is_available(self) -> bool:
+        return self._has_available()
+
+    def _has_available(self) -> bool:
         return len(self._available_pool) > 0
 
-    def get_executor(self) -> Tuple[int, MpExecutorClient]:
+    def _get_executor(self) -> Tuple[int, MpExecutorClient]:
         executor_id = self._available_pool.pop()
         self._busy_pool.add(executor_id)
         executor_info = self._executors[executor_id]
         return executor_id, executor_info.client
 
-    def on_no_liquidity(self, executor_id: int):
-        asyncio.get_event_loop().create_task(self._release_executor_later(executor_id))
+    def on_no_liquidity(self, resource_id: int):
+        asyncio.get_event_loop().create_task(self._release_executor_later(resource_id))
 
     async def _release_executor_later(self, executor_id: int):
         await asyncio.sleep(ExecutorMng.BRING_BACK_EXECUTOR_TIMEOUT_SEC)
-        self.release_executor(executor_id)
+        self.release_resource(executor_id)
 
-    def release_executor(self, executor_id: int):
-        self.debug(f"Release executor: {executor_id}")
-        self._busy_pool.remove(executor_id)
-        self._available_pool.appendleft(executor_id)
+    def release_resource(self, resource_id: int):
+        self.debug(f"Release executor: {resource_id}")
+        self._busy_pool.remove(resource_id)
+        self._available_pool.appendleft(resource_id)
 
     @staticmethod
     def _create_executor(executor_id: int, config: IConfig) -> ExecutorInfo:
