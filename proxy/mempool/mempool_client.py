@@ -13,6 +13,3 @@ class MemPoolClient:
 
     def send_raw_transaction(self, mempool_tx_request: MemPoolRequest):
         return self._pickable_data_client.send_data(mempool_tx_request)
-
-    def __del__(self):
-        self.debug("mempool_client garbage collected")

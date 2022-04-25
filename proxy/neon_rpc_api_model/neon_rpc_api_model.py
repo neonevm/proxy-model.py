@@ -649,6 +649,3 @@ class NeonRpcApiModel:
     def neon_getSolanaTransactionByNeonTransaction(self, NeonTxId: str) -> Union[str, list]:
         neon_sign = self._normalize_tx_id(NeonTxId)
         return self._db.get_sol_sign_list_by_neon_sign(neon_sign)
-
-    def __del__(self):
-        self.debug("Model garbage collected")
