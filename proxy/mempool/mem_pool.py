@@ -87,8 +87,7 @@ class MemPool:
             self._executor.release_resource(resource_id)
         elif mp_result.code == MemPoolResultCode.NoLiquidity:
             self._executor.on_no_liquidity(resource_id)
-
-        await self.enqueue_mp_request(mp_request)
+            await self.enqueue_mp_request(mp_request)
 
     def _on_request_done(self, tx_request: MemPoolRequest):
         pass
