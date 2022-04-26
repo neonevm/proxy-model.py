@@ -109,7 +109,7 @@ class PickableDataClient:
             return result
         except BaseException as err:
             self.error(f"Failed to send data: {err}")
-            raise Exception("Failed to send pickable data")
+            raise
 
     async def send_data_async(self, pickable_object):
         loop = asyncio.get_event_loop()
@@ -128,7 +128,7 @@ class PickableDataClient:
             return result
         except BaseException as err:
             self.error(f"Failed to send data: {err}")
-            raise Exception("Failed to send pickable data")
+            raise
 
 
 class PipePickableDataClient(PickableDataClient):
