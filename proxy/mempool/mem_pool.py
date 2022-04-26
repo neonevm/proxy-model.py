@@ -85,6 +85,7 @@ class MemPool:
         self.warning(f"Failed to process tx: {hash} - on executor: {resource_id}, status: {mp_result} - reschedule")
         if mp_result.code == MemPoolResultCode.ToBeRepeat:
             self._executor.release_resource(resource_id)
+            await self._kick_tx_queue()
         elif mp_result.code == MemPoolResultCode.NoLiquidity:
             self._executor.on_no_liquidity(resource_id)
             await self.enqueue_mp_request(mp_request)
