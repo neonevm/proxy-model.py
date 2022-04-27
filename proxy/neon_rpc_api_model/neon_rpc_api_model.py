@@ -26,7 +26,7 @@ from .transaction_sender import NeonTxSender
 from .operator_resource_list import OperatorResourceList
 from .transaction_validator import NeonTxValidator
 
-NEON_PROXY_PKG_VERSION = '0.7.19-dev'
+NEON_PROXY_PKG_VERSION = '0.7.20-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
