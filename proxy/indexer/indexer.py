@@ -186,14 +186,13 @@ class ReceiptsParserState:
     - All instructions are removed from the _used_ixs;
     - If number of the smallest slot in the _used_ixs is changed, it's stored into the DB for the future restart.
     """
-    def __init__(self, db: IndexerDB, solana: SolanaInteractor):
+    def __init__(self, db: IndexerDB, solana: SolanaInteractor, indexer_user: IIndexerUser):
         self._db = db
         self._solana = solana
+        self._user = indexer_user
         self._holder_table = {}
         self._tx_table = {}
         self._done_tx_list = []
-        self._done_holder_list = []
-        self._neon_tx_result = []
         self._used_ixs = {}
         self._tx_costs = []
         self._min_used_slot = 0
@@ -264,13 +263,21 @@ class ReceiptsParserState:
         tx.status = NeonTxIndexingStatus.DONE
         self._done_tx_list.append(tx)
 
-    def done_holder(self, holder: NeonHolderObject):
-        self._done_holder_list.append(holder)
+    def _remove_old_holders(self, indexed_slot: int):
+        """
+        Remove old holders with a long inactive time
+        """
+        done_holder_list = []
+        for holder in self._holder_table.values():
+            if abs(holder.slot - indexed_slot) > HOLDER_TIMEOUT:
+                done_holder_list.append(holder)
 
-    def complete_done_objects(self, indexed_slot: int) -> int:
-        """
-        Slot is done, store all done neon txs into the DB.
-        """
+        for holder in done_holder_list:
+            self.debug(f'{holder}')
+            self.unmark_ix_used(holder)
+            self.del_holder(holder)
+
+    def _complete_done_txs(self):
         for tx in self._done_tx_list:
             if tx.status != NeonTxIndexingStatus.DONE:
                 continue
@@ -279,18 +286,41 @@ class ReceiptsParserState:
             if tx.neon_tx.is_valid() and tx.neon_res.is_valid():
                 with logging_context(neon_tx=tx.neon_tx.sign[:7]):
                     self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
-                    self._neon_tx_result.append(copy.deepcopy(tx))
+                    self._complete_neon_tx_result(tx)
             self.del_tx(tx)
         self._done_tx_list.clear()
 
-        for holder in self._done_holder_list:
-            self.debug(f'{holder}')
-            self.unmark_ix_used(holder)
-            self.del_holder(holder)
-        self._done_holder_list.clear()
+    def _complete_neon_tx_result(self, tx):
+        neon_tx_hash = tx.neon_tx.sign
+        neon_income = int(tx.neon_res.gas_used, 0) * int(tx.neon_tx.gas_price, 0)
+        if tx.holder_account != '':
+            tx_type = 'holder'
+        elif tx.storage_account != '':
+            tx_type = 'iterative'
+        else:
+            tx_type = 'single'
+        is_canceled = tx.neon_res.status == '0x0'
+        neon_tx_stat_data = NeonTxStatData(neon_tx_hash, neon_income, tx_type, is_canceled)
+        for sign_info, cost_info in zip(tx.used_ixs, tx.ixs_cost):
+            sol_tx_hash = sign_info.sign
+            sol_spent = cost_info.sol_spent
+            steps = sign_info.steps
+            bpf = cost_info.bpf
+            neon_tx_stat_data.add_instruction(sol_tx_hash, sol_spent, steps, bpf)
 
+        self._user.on_neon_tx_result(neon_tx_stat_data)
+
+    def _complete_tx_costs(self):
         self._db.add_tx_costs(self._tx_costs)
         self._tx_costs.clear()
+
+    def complete_done_objects(self, indexed_slot: int) -> int:
+        """
+        Slot is done, store all done neon txs into the DB.
+        """
+        self._remove_old_holders(indexed_slot)
+        self._complete_done_txs()
+        self._complete_tx_costs()
 
         self._min_used_slot = self.find_min_used_slot(indexed_slot)
         self._db.set_min_receipt_slot(self._min_used_slot)
@@ -315,17 +345,8 @@ class ReceiptsParserState:
         for tx in self._tx_table.values():
             yield tx
 
-    def iter_holders(self) -> Iterator[NeonHolderObject]:
-        for holder in self._holder_table.values():
-            yield holder
-
     def add_account_to_db(self, neon_account: NeonAccountInfo):
         self._db.fill_account_info_by_indexer(neon_account)
-
-    def iter_neon_tx_results(self) -> Iterator[NeonTxResult]:
-        for tx in self._neon_tx_result:
-            yield tx
-        self._neon_tx_result.clear()
 
 
 @logged_group("neon.Indexer")
@@ -848,7 +869,7 @@ class Indexer(IndexerBase):
         self.counted_logger = MetricsToLogBuff()
         self._user = indexer_user
 
-        self.state = ReceiptsParserState(db=self.db, solana=solana)
+        self.state = ReceiptsParserState(db=self.db, solana=solana, indexer_user=indexer_user)
         self.ix_decoder_map = {
             0x00: WriteIxDecoder(self.state),
             0x01: DummyIxDecoder('Finalize', self.state),
@@ -885,7 +906,6 @@ class Indexer(IndexerBase):
         self.process_receipts()
         self.canceller.unlock_accounts(self.blocked_storages)
         self.blocked_storages = {}
-        self.process_neon_tx_results()
 
     def process_receipts(self):
         start_time = time.time()
@@ -910,13 +930,9 @@ class Indexer(IndexerBase):
 
             if max_slot > 0:
                 self.indexed_slot = max_slot + 1
-
-                # remove old holders with a long inactive time
-                for holder in self.state.iter_holders():
-                    if abs(holder.slot - self.indexed_slot) > HOLDER_TIMEOUT:
-                        self.state.done_holder(holder)
-
                 self.min_used_slot = self.state.complete_done_objects(self.indexed_slot)
+
+            self._process_status()
 
         was_skipped_tx = False
         # cancel transactions with long inactive time
@@ -993,25 +1009,6 @@ class Indexer(IndexerBase):
         tx.canceled = True
         return True
 
-    def process_neon_tx_results(self):
-        for neon_tx_result in self.state.iter_neon_tx_results():
-            neon_tx_hash = neon_tx_result.neon_tx.sign
-            neon_income = int(neon_tx_result.neon_res.gas_used, 0) * int(neon_tx_result.neon_tx.gas_price, 0)
-            if neon_tx_result.holder_account != '':
-                tx_type = 'holder'
-            elif neon_tx_result.storage_account != '':
-                tx_type = 'iterative'
-            else:
-                tx_type = 'single'
-            is_canceled = neon_tx_result.neon_res.status == '0x0'
-            neon_tx_stat_data = NeonTxStatData(neon_tx_hash, neon_income, tx_type, is_canceled)
-            for sign_info, cost_info in zip(neon_tx_result.used_ixs, neon_tx_result.ixs_cost):
-                sol_tx_hash = sign_info.sign
-                sol_spent = cost_info.sol_spent
-                steps = sign_info.steps
-                bpf = cost_info.bpf
-                neon_tx_stat_data.add_instruction(sol_tx_hash, sol_spent, steps, bpf)
-
-            self._user.on_neon_tx_result(neon_tx_stat_data)
+    def _process_status(self):
         self._user.on_db_status(self.db.status())
         self._user.on_solana_rpc_status(self.solana.is_healthy())
