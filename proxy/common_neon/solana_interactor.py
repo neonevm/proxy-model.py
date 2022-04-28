@@ -504,12 +504,15 @@ class SolanaInteractor:
             block_list.append(block)
         return block_list
 
-    def get_recent_blockslot(self, commitment='confirmed') -> int:
+    def get_recent_blockslot(self, commitment='confirmed', default: Optional[int] = None) -> int:
         opts = {
             'commitment': commitment
         }
         blockhash_resp = self._send_rpc_request('getLatestBlockhash', opts)
-        if not blockhash_resp["result"]:
+        if not blockhash_resp.get("result"):
+            if default:
+                return default
+            self.debug(f'{blockhash_resp}')
             raise RuntimeError("failed to get latest blockhash")
         return blockhash_resp['result']['context']['slot']
 
@@ -518,7 +521,7 @@ class SolanaInteractor:
             'commitment': commitment
         }
         blockhash_resp = self._send_rpc_request('getLatestBlockhash', opts)
-        if not blockhash_resp["result"]:
+        if not blockhash_resp.get("result"):
             raise RuntimeError("failed to get recent blockhash")
         blockhash = blockhash_resp["result"]["value"]["blockhash"]
         return Blockhash(blockhash)
