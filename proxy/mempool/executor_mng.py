@@ -64,6 +64,7 @@ class ExecutorMng(IMemPoolExecutor):
         return executor_id, executor_info.client
 
     def on_no_liquidity(self, resource_id: int):
+        self.debug(f"No liquidity, executor: {resource_id} - will be unblocked in: {ExecutorMng.BRING_BACK_EXECUTOR_TIMEOUT_SEC} sec")
         asyncio.get_event_loop().create_task(self._release_executor_later(resource_id))
 
     async def _release_executor_later(self, executor_id: int):

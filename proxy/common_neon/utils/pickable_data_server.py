@@ -42,7 +42,6 @@ class PickableDataServer(ABC):
                 writer.write(result_data)
                 await writer.drain()
             except ConnectionResetError:
-                self.error(f"Client connection has been closed")
                 break
             except asyncio.exceptions.IncompleteReadError as err:
                 self.error(f"Incomplete read error: {err}")

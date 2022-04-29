@@ -29,7 +29,7 @@ class NeonTxStage(metaclass=abc.ABCMeta):
         pass
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class NeonCancelTxStage(NeonTxStage, abc.ABC):
     NAME = 'cancelWithNonce'
 
@@ -78,7 +78,7 @@ class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
         return self.s.builder.create_account_with_seed_instruction(self.sol_account, self._seed, self.balance, self.size)
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class NeonCreateAccountTxStage(NeonTxStage):
     NAME = 'createNeonAccount'
 
@@ -98,7 +98,7 @@ class NeonCreateAccountTxStage(NeonTxStage):
         self.tx.add(self._create_account())
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class NeonCreateERC20TxStage(NeonTxStage, abc.ABC):
     NAME = 'createERC20Account'
 
@@ -124,7 +124,7 @@ class NeonCreateERC20TxStage(NeonTxStage, abc.ABC):
         self.tx.add(self._create_erc20_account())
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
     NAME = 'createNeonContract'
 
@@ -150,7 +150,7 @@ class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
         self.tx.add(self._create_account())
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
     NAME = 'resizeNeonContract'
 

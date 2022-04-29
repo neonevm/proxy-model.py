@@ -25,14 +25,15 @@ class MemPool:
 
     async def enqueue_mp_request(self, mp_request: MemPoolRequest):
         tx_hash = mp_request.neon_tx.hash_signed().hex()
+        log_ctx = {"context": {"req_id": mp_request.req_id}}
         try:
-            self.debug(f"Got mp_tx_request: 0x{tx_hash} to be scheduled on the mempool")
+            self.debug(f"Got mp_tx_request: 0x{tx_hash} to be scheduled on the mempool", extra=log_ctx)
             if len(self._tx_req_queue) > MemPool.TX_QUEUE_MAX_SIZE:
                 self._tx_req_queue = self._tx_req_queue[-MemPool.TX_QUEUE_SIZE:]
             bisect.insort_left(self._tx_req_queue, mp_request)
             await self._kick_tx_queue()
         except Exception as err:
-            self.error(f"Failed enqueue tx: {tx_hash} into queue: {err}")
+            self.error(f"Failed enqueue tx: {tx_hash} into queue: {err}", extra=log_ctx)
 
     async def process_tx_queue(self):
         while True:
@@ -76,15 +77,17 @@ class MemPool:
 
     async def _process_mp_result(self, resource_id: int, mp_result: MemPoolResult, mp_request: MemPoolRequest):
         hash = "0x" + mp_request.neon_tx.hash_signed().hex()
+        log_ctx = {"context": {"req_id": mp_request.req_id}}
         if mp_result.code == MemPoolResultCode.Done:
-            self.debug(f"Neon tx: {hash} - processed on executor: {resource_id} - done")
+            self.debug(f"Neon tx: {hash} - processed on executor: {resource_id} - done", extra=log_ctx)
             self._on_request_done(mp_request)
             self._executor.release_resource(resource_id)
             await self._kick_tx_queue()
             return
-        self.warning(f"Failed to process tx: {hash} - on executor: {resource_id}, status: {mp_result} - reschedule")
-        if mp_result.code == MemPoolResultCode.ToBeRepeat:
+        self.warning(f"Failed to process tx: {hash} - on executor: {resource_id}, status: {mp_result} - reschedule", extra=log_ctx)
+        if mp_result.code == MemPoolResultCode.BlockedAccount:
             self._executor.release_resource(resource_id)
+            await self.enqueue_mp_request(mp_request)
             await self._kick_tx_queue()
         elif mp_result.code == MemPoolResultCode.NoLiquidity:
             self._executor.on_no_liquidity(resource_id)

@@ -3,7 +3,7 @@ import multiprocessing as mp
 import socket
 import time
 
-from logged_groups import logged_group
+from logged_groups import logged_group, logging_context
 
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
@@ -39,13 +39,14 @@ class MemPoolExecutor(mp.Process, PickableDataServerUser):
         self._solana = SolanaInteractor(self._config.get_solana_url())
         self._db = MemDB(self._solana)
 
-    def execute_neon_tx(self, mempool_tx_cfg: MemPoolRequest):
-        try:
-            self.execute_neon_tx_impl(mempool_tx_cfg)
-        except Exception as err:
-            self.error(f"Failed to execute neon_tx: {err}")
-            return MemPoolResult(MemPoolResultCode.ToBeRepeat, None)
-        return MemPoolResult(MemPoolResultCode.Done, None)
+    def execute_neon_tx(self, mempool_request: MemPoolRequest):
+        with logging_context(req_id=mempool_request.req_id, exectr=self._id):
+            try:
+                self.execute_neon_tx_impl(mempool_request)
+            except Exception as err:
+                self.error(f"Failed to execute neon_tx: {err}")
+                return MemPoolResult(MemPoolResultCode.BlockedAccount, None)
+            return MemPoolResult(MemPoolResultCode.Done, None)
 
     def execute_neon_tx_impl(self, mempool_tx_cfg: MemPoolRequest):
         neon_tx = mempool_tx_cfg.neon_tx

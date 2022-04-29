@@ -31,6 +31,7 @@ class IMemPoolExecutor(ABC):
 
 @dataclass(order=True)
 class MemPoolRequest:
+    req_id: int
     signature: str
     neon_tx: NeonTx = field(compare=False)
     neon_tx_exec_cfg: NeonTxExecCfg = field(compare=False)
@@ -44,8 +45,10 @@ class MemPoolRequest:
 
 class MemPoolResultCode(IntEnum):
     Done = 0
-    ToBeRepeat = 1,
-    NoLiquidity = 2,
+    BlockedAccount = 1,
+    SolanaUnavailable = 2,
+    NoLiquidity = 3,
+    Unspecified = 4,
     Dummy = -1
 
 

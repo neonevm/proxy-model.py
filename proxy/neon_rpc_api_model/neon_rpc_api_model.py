@@ -1,11 +1,10 @@
 import json
 import multiprocessing
-import socket
 import traceback
 from typing import Optional, Union, Tuple
 
 import sha3
-from logged_groups import logged_group
+from logged_groups import logged_group, LogMng
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
@@ -450,13 +449,13 @@ class NeonRpcApiModel:
             neon_tx_cfg, emulating_result = self.precheck(trx)
 
             self._stat_tx_success()
-
-            mempool_tx_request = MemPoolRequest(signature=eth_signature,
+            req_id = LogMng.get_logging_context().get("req_id")
+            mempool_tx_request = MemPoolRequest(req_id=req_id,
+                                                signature=eth_signature,
                                                 neon_tx=trx,
                                                 neon_tx_exec_cfg=neon_tx_cfg,
                                                 emulating_result=emulating_result)
             self._mempool_client.send_raw_transaction(mempool_tx_request)
-
             return eth_signature
 
         except PendingTxError as err:
