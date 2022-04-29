@@ -102,7 +102,8 @@ class MemTxsDB:
                     if log in indexed_logs:
                         continue
                     result_list.append(log)
-
+        self.debug(f"Indexed logs: {indexed_logs}")
+        self.debug(f"Result list: {result_list}")
         return indexed_logs + result_list
 
     def get_sol_sign_list_by_neon_sign(self, neon_sign: str, is_pended_tx: bool, before_slot: int) -> [str]:
