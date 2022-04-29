@@ -182,5 +182,6 @@ class Test_eth_getLogs(unittest.TestCase):
         print('receipts: ', receipts)
         self.assertEqual(len(receipts), 6)
 
+
 if __name__ == '__main__':
     unittest.main()
