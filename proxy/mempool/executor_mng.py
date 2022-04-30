@@ -59,6 +59,7 @@ class ExecutorMng(IMemPoolExecutor):
 
     def _get_executor(self) -> Tuple[int, MpExecutorClient]:
         executor_id = self._available_pool.pop()
+        self.debug(f"Acquire executor: {executor_id}")
         self._busy_pool.add(executor_id)
         executor_info = self._executors[executor_id]
         return executor_id, executor_info.client

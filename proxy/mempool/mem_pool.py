@@ -14,9 +14,9 @@ class MemPool:
     CHECK_TASK_TIMEOUT_SEC = 0.05
 
     def __init__(self, executor: IMemPoolExecutor):
-        self._tx_req_queue = []
+        self._req_queue = []
         self._lock = asyncio.Lock()
-        self._tx_req_queue_cond = asyncio.Condition()
+        self._req_queue_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MemPoolRequest]] = []
         self._process_tx_results_task = asyncio.get_event_loop().create_task(self.check_processing_tasks())
         self._process_tx_queue_task = asyncio.get_event_loop().create_task(self.process_tx_queue())
@@ -28,25 +28,25 @@ class MemPool:
         log_ctx = {"context": {"req_id": mp_request.req_id}}
         try:
             self.debug(f"Got mp_tx_request: 0x{tx_hash} to be scheduled on the mempool", extra=log_ctx)
-            if len(self._tx_req_queue) > MemPool.TX_QUEUE_MAX_SIZE:
-                self._tx_req_queue = self._tx_req_queue[-MemPool.TX_QUEUE_SIZE:]
-            bisect.insort_left(self._tx_req_queue, mp_request)
+            if len(self._req_queue) > MemPool.TX_QUEUE_MAX_SIZE:
+                self._req_queue = self._req_queue[-MemPool.TX_QUEUE_SIZE:]
+            bisect.insort_left(self._req_queue, mp_request)
             await self._kick_tx_queue()
         except Exception as err:
             self.error(f"Failed enqueue tx: {tx_hash} into queue: {err}", extra=log_ctx)
 
     async def process_tx_queue(self):
         while True:
-            async with self._tx_req_queue_cond:
-                await self._tx_req_queue_cond.wait()
-                if len(self._tx_req_queue) == 0:
+            async with self._req_queue_cond:
+                await self._req_queue_cond.wait()
+                if len(self._req_queue) == 0:
                     self.debug("Tx queue empty - continue waiting for new")
                     continue
                 if not self._executor.is_available():
                     self.debug("No way to process tx - no available executor")
                     continue
-                mp_tx_request: MemPoolRequest = self._tx_req_queue.pop()
-                self.submit_request_to_executor(mp_tx_request)
+                mp_request: MemPoolRequest = self._req_queue.pop()
+                self.submit_request_to_executor(mp_request)
 
     def submit_request_to_executor(self, mp_tx_request: MemPoolRequest):
         resource_id, task = self._executor.submit_mempool_request(mp_tx_request)
@@ -100,5 +100,5 @@ class MemPool:
         pass
 
     async def _kick_tx_queue(self):
-        async with self._tx_req_queue_cond:
-            self._tx_req_queue_cond.notify()
+        async with self._req_queue_cond:
+            self._req_queue_cond.notify()

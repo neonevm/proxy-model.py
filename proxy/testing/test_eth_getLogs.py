@@ -160,8 +160,9 @@ class Test_eth_getLogs(unittest.TestCase):
         self.assertEqual(len(receipts), 0)
 
     def test_get_logs_by_fromBlock(self):
-        print("\ntest_get_logs_by_fromBlock")
-        receipts = proxy.eth.get_logs({'fromBlock': self.block_numbers[2]})
+        from_block = self.block_numbers[2]
+        print(f"\ntest_get_logs_by_fromBlock: {from_block} ")
+        receipts = proxy.eth.get_logs({'fromBlock': from_block})
         print('receipts: ', receipts)
         self.assertEqual(len(receipts), 4)
 

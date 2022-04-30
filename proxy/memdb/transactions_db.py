@@ -101,6 +101,7 @@ class MemTxsDB:
                         continue
                     if log in indexed_logs:
                         continue
+                    self.debug(f"Seq log: {log}")
                     result_list.append(log)
         self.debug(f"Indexed logs: {indexed_logs}")
         self.debug(f"Result list: {result_list}")
