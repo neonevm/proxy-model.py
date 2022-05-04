@@ -62,15 +62,15 @@ class LogsDB(BaseDB):
             queries.append(address_query)
             params += addresses
 
-        query_string = f"SELECT * FROM {self._table_name} "
+        query_string = f"SELECT * FROM {self._table_name}"
         if len(queries):
-            query_string += "WHERE "
+            query_string += " WHERE "
             for idx, query in enumerate(queries):
                 query_string += query
                 if idx < len(queries) - 1:
                     query_string += " AND "
 
-        query_string += ' ORDER BY blockNumber desc LIMIT 1000'
+        query_string += " ORDER BY blockNumber desc LIMIT 1000"
 
         self.debug(query_string)
         self.debug(params)
