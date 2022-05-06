@@ -1,4 +1,6 @@
+import json
 import os
+import time
 
 os.environ['SOLANA_URL'] = "http://solana:8899"
 os.environ['EVM_LOADER'] = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
@@ -19,7 +21,7 @@ from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.system_program import SYS_PROGRAM_ID
-from solana.transaction import AccountMeta, TransactionInstruction
+from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from solana_utils import *
 from solcx import compile_source
 from web3 import Web3
@@ -87,6 +89,7 @@ class CancelTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_cancel_hanged.py setUpClass")
+
         request_airdrop(eth_account.address)
         request_airdrop(eth_account_invoked.address)
         request_airdrop(eth_account_getter.address)
@@ -130,6 +133,7 @@ class CancelTest(unittest.TestCase):
 
         cls.create_hanged_transaction(cls)
         cls.create_invoked_transaction(cls)
+        cls.create_invoked_transaction_combined(cls)
 
     def get_accounts(self, ether):
         (sol_address, _) = self.loader.ether2program(str(ether))
@@ -228,6 +232,59 @@ class CancelTest(unittest.TestCase):
 
         SolanaClient(solana_url).send_transaction(tx, self.acc, opts=TxOpts(skip_preflight=False, skip_confirmation=False))
 
+    def create_invoked_transaction_combined(self):
+        print("\ncreate_invoked_transaction_combined")
+
+        trx_transfer_signed = proxy.eth.account.sign_transaction(dict(
+            nonce=proxy.eth.get_transaction_count(eth_account_invoked.address),
+            chainId=proxy.eth.chain_id,
+            gas=987654321,
+            gasPrice=1000000000,
+            to=eth_account_getter.address,
+            value=500_000_000_000_000_000),
+            eth_account_invoked.key
+        )
+
+        (from_addr, sign, msg) = make_instruction_data_from_tx(trx_transfer_signed.rawTransaction.hex())
+
+        (trx_raw, self.tx_hash_invoked_combined, from_address) = self.get_trx_receipts(self, msg, sign)
+        print(self.tx_hash_invoked_combined)
+        print(from_address)
+
+        storage_for_invoked = self.create_storage_account(self, sign[:8].hex())
+        time.sleep(10)
+
+        eth_meta_list = [
+            AccountMeta(pubkey=self.caller_getter, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=self.caller_invoked, is_signer=False, is_writable=True),
+        ]
+        eth_tx = Trx.fromString(bytearray.fromhex(trx_transfer_signed.rawTransaction.hex()[2:]))
+
+        tx = TransactionWithComputeBudget()
+        builder = NeonInstruction(self.acc.public_key())
+        builder.init_operator_ether(self.caller_ether)
+        builder.init_eth_trx(eth_tx, eth_meta_list)
+        builder.init_iterative(storage_for_invoked, None, None)
+        # builder.make_partial_call_or_continue_transaction(250, len(tx.instructions))
+
+        keccak_instruction = builder.make_keccak_instruction(len(tx.instructions) + 1, len(eth_tx.unsigned_msg()), 14)
+        iterative_transaction = builder.make_partial_call_or_continue_instruction(250)
+
+        # noniterative_transaction.instructions[-1].program_id = proxy_program
+        iterative_transaction.keys.insert(0, AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False))
+        iterative_transaction = TransactionInstruction(
+            keys=iterative_transaction.keys,
+            data=bytearray.fromhex("ef") + iterative_transaction.data,
+            program_id=proxy_program
+        )
+
+        tx.add(keccak_instruction)
+        tx.add(iterative_transaction)
+
+        print(tx.__dict__)
+
+        SolanaClient(solana_url).send_transaction(tx, self.acc, opts=TxOpts(skip_preflight=False, skip_confirmation=False))
+
     def get_trx_receipts(self, unsigned_msg, signature):
         trx = rlp.decode(unsigned_msg, EthTrx)
 
@@ -304,6 +361,11 @@ class CancelTest(unittest.TestCase):
     def test_03_invoked_found(self):
         print("\ntest_03_invoked_found")
         trx_receipt = proxy.eth.wait_for_transaction_receipt(self.tx_hash_invoked)
+        print('trx_receipt:', trx_receipt)
+
+    def test_04_right_result_for_invoked(self):
+        print("\ntest_04_right_result_for_invoked")
+        trx_receipt = proxy.eth.wait_for_transaction_receipt(self.tx_hash_invoked_combined)
         print('trx_receipt:', trx_receipt)
 
 
