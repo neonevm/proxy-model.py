@@ -675,6 +675,9 @@ class OnResultIxDecoder(DummyIxDecoder):
     def execute(self) -> bool:
         self._decoding_start()
 
+        if self.ix.neon_obj is None:
+            return self._decoding_skip('no transaction to add result')
+
         log = self.ix.ix_data
 
         status = '0x1' if log[1] < 0xd0 else '0x0'
@@ -691,6 +694,9 @@ class OnEventIxDecoder(DummyIxDecoder):
 
     def execute(self) -> bool:
         self._decoding_start()
+
+        if self.ix.neon_obj is None:
+            return self._decoding_skip('no transaction to add events')
 
         log = self.ix.ix_data
 
