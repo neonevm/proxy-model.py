@@ -259,15 +259,16 @@ class NeonRpcApiModel:
             "gasLimit": '0xec8563e271ac',
             "transactionsRoot": '0x' + '0' * 63 + '1',
             "receiptsRoot": '0x' + '0' * 63 + '1',
-            "stateRoot": '0x' + '0' * 64 + '1',
+            "stateRoot": '0x' + '0' * 63 + '1',
 
             "uncles": [],
             "sha3Uncles": '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347',
 
             "miner": '0x' + '0' * 40,
-            "nonce": '0x0',
-            "mixHash": '0x0',
-            "size": '0x0',
+            # 8 byte nonce
+            "nonce": '0x0000000000000000',
+            "mixHash": '0x' + '0' * 63 + '1',
+            "size": '0x' + '0' * 63 + '1',
 
             "gasUsed": hex(gas_used),
             "hash": block.hash,
