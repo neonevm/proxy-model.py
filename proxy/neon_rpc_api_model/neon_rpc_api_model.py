@@ -200,8 +200,8 @@ class NeonRpcApiModel:
                 return hex(0)
 
             return hex(neon_account_info.balance)
-        except (Exception,):
-            # self.debug(f"eth_getBalance: Can't get account info: {err}")
+        except (Exception,) as err:
+            self.debug(f"eth_getBalance: Can't get account info: {err}")
             return hex(0)
 
     def eth_getLogs(self, obj):
@@ -363,7 +363,7 @@ class NeonRpcApiModel:
                 req_id = LogMng.get_logging_context().get("req_id")
                 pending_trx_count = self._mempool_client.get_pending_tx_count(req_id=req_id, sender=account)
                 self.debug(f"Pending tx count for: {account} - is: {pending_trx_count}")
-            trx_count += pending_trx_count
+                trx_count += pending_trx_count
 
             return hex(trx_count)
         except (Exception,):
