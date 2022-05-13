@@ -36,11 +36,10 @@ class MemPool:
 
     async def on_send_tx_request(self, mp_request: MemPoolTxRequest):
         await self.enqueue_mp_transaction(mp_request)
-        sender = mp_request.neon_tx.sender()
+        sender = "0x" + mp_request.neon_tx.sender()
         self._inc_pending_tx_counter(sender)
-        sender = mp_request.neon_tx.sender()
         count = self.get_pending_trx_count(sender)
-        self.debug(f"On send tx request. Sender: {sender}, , pending tx count: {count}")
+        self.debug(f"On send tx request. Sender: {sender}, pending tx count: {count}")
 
     async def enqueue_mp_transaction(self, mp_request: MemPoolTxRequest):
         tx_hash = mp_request.neon_tx.hash_signed().hex()
@@ -121,13 +120,13 @@ class MemPool:
             await self._kick_tx_queue()
 
     def _on_request_done(self, tx_request: MemPoolTxRequest):
-        sender = tx_request.neon_tx.sender()
+        sender = "0x" + tx_request.neon_tx.sender()
         self._dec_pending_tx_counter(sender)
         count = self.get_pending_trx_count(sender)
         self.debug(f"Reqeust done. Sender: {sender}, pending tx count: {count}")
 
     def _on_request_dropped_away(self, tx_request: MemPoolTxRequest):
-        sender = tx_request.neon_tx.sender()
+        sender = "0x" + tx_request.neon_tx.sender()
         self._dec_pending_tx_counter(sender)
         count = self.get_pending_trx_count(sender)
         self.debug(f"Reqeust dropped away. Sender: {sender}, pending tx count: {count}")
