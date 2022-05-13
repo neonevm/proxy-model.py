@@ -29,18 +29,38 @@ class IMemPoolExecutor(ABC):
         pass
 
 
+class MemPoolReqType(IntEnum):
+    SendTransaction = 0,
+    GetTrxCount = 1,
+    Dummy = -1
+
+
 @dataclass(order=True)
 class MemPoolRequest:
     req_id: int
-    signature: str
-    neon_tx: NeonTx = field(compare=False)
-    neon_tx_exec_cfg: NeonTxExecCfg = field(compare=False)
-    emulating_result: NeonEmulatingResult = field(compare=False)
+    type: MemPoolReqType = field(default=MemPoolReqType.Dummy)
+
+
+@dataclass
+class MemPoolTxRequest(MemPoolRequest):
+    signature: str = field(compare=False, default=None)
+    neon_tx: NeonTx = field(compare=False, default=None)
+    neon_tx_exec_cfg: NeonTxExecCfg = field(compare=False, default=None)
+    emulating_result: NeonEmulatingResult = field(compare=False, default=None)
     _gas_price: int = field(compare=True, default=None)
 
     def __post_init__(self):
-        """Calculate and store content length on init"""
         self._gas_price = self.neon_tx.gasPrice
+        self.type = MemPoolReqType.SendTransaction
+
+
+@dataclass
+class MemPoolPendingTxCountReq(MemPoolRequest):
+
+    sender: str = None
+
+    def __post_init__(self):
+        self.type = MemPoolReqType.GetTrxCount
 
 
 class MemPoolResultCode(IntEnum):

@@ -45,7 +45,7 @@ class MemPoolExecutor(mp.Process, PickableDataServerUser):
                 self.execute_neon_tx_impl(mempool_request)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
-                return MemPoolResult(MemPoolResultCode.BlockedAccount, None)
+                return MemPoolResult(MemPoolResultCode.Unspecified, None)
             return MemPoolResult(MemPoolResultCode.Done, None)
 
     def execute_neon_tx_impl(self, mempool_tx_cfg: MemPoolRequest):

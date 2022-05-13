@@ -23,7 +23,7 @@ from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_
 
 from ..memdb.memdb import MemDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
-from ..mempool import MemPoolRequest, MemPoolClient, MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT
+from ..mempool import MemPoolClient, MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT
 
 from .transaction_validator import NeonTxValidator
 
@@ -357,7 +357,15 @@ class NeonRpcApiModel:
 
         try:
             neon_account_info = self._solana.get_neon_account_info(account)
-            return hex(neon_account_info.trx_count)
+            trx_count = neon_account_info.trx_count
+            self.debug(f"Get transaction count. Account: {account}, tag: {tag}")
+            if tag == "pending":
+                req_id = LogMng.get_logging_context().get("req_id")
+                pending_trx_count = self._mempool_client.get_pending_tx_count(req_id=req_id, sender=account)
+                self.debug(f"Pending tx count for: {account} - is: {pending_trx_count}")
+            trx_count += pending_trx_count
+
+            return hex(trx_count)
         except (Exception,):
             # self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
@@ -450,12 +458,12 @@ class NeonRpcApiModel:
 
             self._stat_tx_success()
             req_id = LogMng.get_logging_context().get("req_id")
-            mempool_tx_request = MemPoolRequest(req_id=req_id,
-                                                signature=eth_signature,
-                                                neon_tx=trx,
-                                                neon_tx_exec_cfg=neon_tx_cfg,
-                                                emulating_result=emulating_result)
-            self._mempool_client.send_raw_transaction(mempool_tx_request)
+
+            self._mempool_client.send_raw_transaction(req_id=req_id,
+                                                      signature=eth_signature,
+                                                      neon_tx=trx,
+                                                      neon_tx_exec_cfg=neon_tx_cfg,
+                                                      emulating_result=emulating_result)
             return eth_signature
 
         except PendingTxError as err:
