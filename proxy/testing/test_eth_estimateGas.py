@@ -26,7 +26,7 @@ contract Reverting {
     }
 
     function consume_a_lot() public returns (uint256) {
-        uint256 BIG_INT = 2**255;
+        uint256 BIG_INT = 2**254;
         require(gasleft() >= BIG_INT, "!gas");
         return 1;
     }
