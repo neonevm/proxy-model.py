@@ -92,6 +92,7 @@ class IndexerBase:
         self.gather_unknown_transactions()
 
     def get_tx_receipts(self, stop_slot=None):
+        self.debug(f'get_tx_receipts')
         signatures = self.gather_unknown_transactions()
 
         poll_txs = []
@@ -129,6 +130,7 @@ class IndexerBase:
         while continue_flag:
             results = self._get_signatures(minimal_tx, self._maximum_tx, INDEXER_POLL_COUNT)
             len_results = len(results)
+            self.debug(f'{len_results}')
             if len_results == 0:
                 break
 
