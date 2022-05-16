@@ -1,6 +1,8 @@
 import json
 import multiprocessing
 import traceback
+import eth_utils
+
 from typing import Optional, Union, Tuple
 
 import sha3
@@ -19,15 +21,14 @@ from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_EVM_VERSION, NEON_EVM_REVISION, \
-                          CHAIN_ID, neon_cli
-
+                          CHAIN_ID, USE_EARLIEST_BLOCK_IF_0_PASSED, neon_cli, EVM_STEP_COUNT
 from ..memdb.memdb import MemDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..mempool import MemPoolClient, MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT
 
 from .transaction_validator import NeonTxValidator
 
-NEON_PROXY_PKG_VERSION = '0.7.18-dev'
+NEON_PROXY_PKG_VERSION = '0.7.21-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -92,7 +93,14 @@ class NeonRpcApiModel:
         gas_price = self.gas_price_calculator.get_suggested_gas_price()
         return hex(gas_price)
 
-    def eth_estimateGas(self, param):
+    def eth_estimateGas(self, param: dict) -> str:
+        if not isinstance(param, dict):
+            raise InvalidParamError('invalid param')
+        if 'from' in param:
+            param['from'] = self._normalize_account(param['from'])
+        if 'to' in param:
+            param['to'] = self._normalize_account(param['to'])
+
         try:
             calculator = GasEstimate(param, self._solana)
             calculator.execute()
@@ -108,10 +116,13 @@ class NeonRpcApiModel:
     def __repr__(self):
         return str(self.__dict__)
 
+    def _should_return_starting_block(self, tag) -> bool:
+        return tag == 'earliest' \
+            or ((tag == '0x0' or str(tag) == '0') and USE_EARLIEST_BLOCK_IF_0_PASSED)
     def _process_block_tag(self, tag) -> SolanaBlockInfo:
         if tag in ("latest", "pending"):
             block = self._db.get_latest_block()
-        elif tag == 'earliest':
+        elif self._should_return_starting_block(tag):
             block = self._db.get_starting_block()
         elif isinstance(tag, str):
             try:
@@ -162,10 +173,13 @@ class NeonRpcApiModel:
     def _normalize_account(account: str) -> str:
         try:
             sender = account.strip().lower()
-            bin_sender = bytes.fromhex(sender[2:])
+            assert sender[:2] == '0x'
+            sender = sender[2:]
+
+            bin_sender = bytes.fromhex(sender)
             assert len(bin_sender) == 20
 
-            return sender
+            return eth_utils.to_checksum_address(sender)
         except (Exception,):
             raise InvalidParamError(message='bad account')
 
@@ -254,14 +268,30 @@ class NeonRpcApiModel:
                 sign_list.append(tx.neon_tx.sign)
 
         result = {
+            "difficulty": '0x20000',
+            "totalDifficulty": '0x20000',
+            "extraData": "0x" + '0' * 63 + '1',
+            "logsBloom": '0x' + '0' * 512,
+            "gasLimit": '0xec8563e271ac',
+            "transactionsRoot": '0x' + '0' * 63 + '1',
+            "receiptsRoot": '0x' + '0' * 63 + '1',
+            "stateRoot": '0x' + '0' * 63 + '1',
+
+            "uncles": [],
+            "sha3Uncles": '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347',
+
+            "miner": '0x' + '0' * 40,
+            # 8 byte nonce
+            "nonce": '0x0000000000000000',
+            "mixHash": '0x' + '0' * 63 + '1',
+            "size": '0x' + '0' * 63 + '1',
+
             "gasUsed": hex(gas_used),
             "hash": block.hash,
             "number": hex(block.slot),
             "parentHash": block.parent_hash,
             "timestamp": hex(block.time),
             "transactions": sign_list,
-            "logsBloom": '0x'+'0'*512,
-            "gasLimit": '0x6691b7',
         }
         return result
 
@@ -375,6 +405,7 @@ class NeonRpcApiModel:
         result = {
             "transactionHash": tx.neon_tx.sign,
             "transactionIndex": hex(tx.neon_tx.tx_idx),
+            "type": "0x0",
             "blockHash": tx.neon_res.block_hash,
             "blockNumber": hex(tx.neon_res.slot),
             "from": tx.neon_tx.addr,
@@ -408,6 +439,7 @@ class NeonRpcApiModel:
             "blockNumber": hex(r.slot),
             "hash": t.sign,
             "transactionIndex": hex(t.tx_idx),
+            "type": "0x0",
             "from": t.addr,
             "nonce":  t.nonce,
             "gasPrice": t.gas_price,
@@ -571,22 +603,23 @@ class NeonRpcApiModel:
             raise InvalidParamError(message='no sender in transaction')
 
         sender = tx['from']
+        del tx['from']
         sender = self._normalize_account(sender)
+
+        if 'to' in tx:
+            tx['to'] = self._normalize_account(tx['to'])
 
         account = KeyStorage().get_key(sender)
         if not account:
             raise EthereumError(message='unknown account')
 
-        try:
-            if 'from' in tx:
-                del tx['from']
-            if 'to' in tx:
-                del tx['to']
-            if 'nonce' not in tx:
-                tx['nonce'] = self.eth_getTransactionCount(sender, 'latest')
-            if 'chainId' not in tx:
-                tx['chainId'] = hex(CHAIN_ID)
+        if 'nonce' not in tx:
+            tx['nonce'] = self.eth_getTransactionCount(sender, 'latest')
 
+        if 'chainId' not in tx:
+            tx['chainId'] = hex(CHAIN_ID)
+
+        try:
             signed_tx = w3.eth.account.sign_transaction(tx, account.private)
             raw_tx = signed_tx.rawTransaction.hex()
 
@@ -601,7 +634,9 @@ class NeonRpcApiModel:
                 'raw': raw_tx,
                 'tx': tx
             }
-        except (Exception,):
+        except Exception as e:
+            err_tb = "".join(traceback.format_tb(e.__traceback__))
+            self.error(f'Exception {type(e)}({str(e)}: {err_tb}')
             raise InvalidParamError(message='bad transaction')
 
     def eth_sendTransaction(self, tx: dict) -> str:

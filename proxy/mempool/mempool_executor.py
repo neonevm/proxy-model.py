@@ -1,7 +1,6 @@
 import asyncio
 import multiprocessing as mp
 import socket
-import time
 
 from logged_groups import logged_group, logging_context
 
