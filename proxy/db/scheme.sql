@@ -125,22 +125,6 @@
         neon_income BIGINT
     );
 
-    CREATE TABLE IF NOT EXISTS solana_transaction_receipts (
-        slot        BIGINT,
-        tx_idx      INT,
-        signature   VARCHAR(88),
-        tx          BYTEA,
-        PRIMARY KEY (slot, signature)
-    );
-
-    CREATE TABLE IF NOT EXISTS test_storage (
-        slot        BIGINT,
-        tx_idx      INT,
-        signature   VARCHAR(88),
-        tx          BYTEA,
-        PRIMARY KEY (slot, signature)
-    );
-
     CREATE TABLE IF NOT EXISTS solana_transaction_signatures (
         slot        BIGINT,
         signature   VARCHAR(88),
