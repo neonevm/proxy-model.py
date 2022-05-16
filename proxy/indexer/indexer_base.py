@@ -101,7 +101,8 @@ class IndexerBase:
                 tx_list.append(signature)
                 if len(tx_list) >= 20:
                     poll_txs.append(tx_list)
-        poll_txs.append(tx_list)
+        if len(tx_list) > 0:
+            poll_txs.append(tx_list)
         self._get_txs(poll_txs)
 
         for signature in signatures:
@@ -172,11 +173,17 @@ class IndexerBase:
         return result
 
     def _get_txs(self, poll_txs: List[List[str]]) -> None:
-        pool = ThreadPool(PARALLEL_REQUESTS)
-        pool.map(self._get_tx_receipts, poll_txs)
-        poll_txs.clear()
+        self.debug(f'{len(poll_txs)}')
+        if len(poll_txs) > 1:
+            pool = ThreadPool(min(PARALLEL_REQUESTS, len(poll_txs)))
+            pool.map(self._get_tx_receipts, poll_txs)
+            poll_txs.clear()
+        else:
+            if len(poll_txs) > 0:
+                self._get_tx_receipts(poll_txs[0])
 
     def _get_tx_receipts(self, sign_list: List[str]) -> None:
+        self.debug(f'{len(sign_list)}')
         if len(sign_list) == 0:
             return
 
