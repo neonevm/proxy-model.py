@@ -13,6 +13,8 @@ admin = proxy.eth.account.create(issue + '/admin')
 user = proxy.eth.account.create(issue + '/user')
 proxy.eth.default_account = admin.address
 
+erc20_abi = '[{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"tokenOwner","type":"address"},{"indexed":true,"internalType":"address","name":"spender","type":"address"},{"indexed":false,"internalType":"uint256","name":"tokens","type":"uint256"}],"name":"Approval","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"tokens","type":"uint256"}],"name":"Transfer","type":"event"},{"inputs":[],"name":"_totalSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"tokenOwner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"remaining","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"tokens","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"success","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"tokenOwner","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"balance","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"decimals","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"name","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"}],"name":"safeAdd","outputs":[{"internalType":"uint256","name":"c","type":"uint256"}],"stateMutability":"pure","type":"function"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"}],"name":"safeSub","outputs":[{"internalType":"uint256","name":"c","type":"uint256"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"symbol","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"tokens","type":"uint256"}],"name":"transfer","outputs":[{"internalType":"bool","name":"success","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"tokens","type":"uint256"}],"name":"transferFrom","outputs":[{"internalType":"bool","name":"success","type":"bool"}],"stateMutability":"nonpayable","type":"function"}]'
+
 class Test_Neon_Faucet(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -82,7 +84,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         assert(r.ok)
         self.assertEqual(r.text, '["0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d","0x8a2a66CA0E5D491A001957edD45A6350bC76D708","0x914782059DC42d4E590aeFCfdbF004B2EcBB9fAA","0x7A7510b9b18241C788a7aAE8299D1fA6010D8128"]')
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_neon_faucet_06_erc20_single(self):
         print()
         url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
@@ -99,7 +101,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         print('token A balance after:', after)
         self.assertEqual(after - before, 1000000000000000000)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_neon_faucet_05_erc20_all(self):
         print()
         url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
@@ -122,7 +124,7 @@ class Test_Neon_Faucet(unittest.TestCase):
     # Returns balance of a token account.
     # Note: the result is in 10E-18 fractions.
     def get_token_balance(self, token_address, address):
-        erc20 = proxy.eth.contract(address=token_address, abi=self.contract['abi'])
+        erc20 = proxy.eth.contract(address=token_address, abi=erc20_abi)
         return erc20.functions.balanceOf(address).call()
 
 if __name__ == '__main__':
