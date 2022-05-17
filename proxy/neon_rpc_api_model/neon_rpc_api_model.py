@@ -1,5 +1,6 @@
 import json
 import multiprocessing
+import time
 import traceback
 import eth_utils
 
@@ -386,14 +387,15 @@ class NeonRpcApiModel:
         account = self._normalize_account(account).lower()
 
         try:
-            neon_account_info = self._solana.get_neon_account_info(account)
-            trx_count = neon_account_info.trx_count
             self.debug(f"Get transaction count. Account: {account}, tag: {tag}")
+            pending_trx_count = 0
             if tag == "pending":
                 req_id = LogMng.get_logging_context().get("req_id")
                 pending_trx_count = self._mempool_client.get_pending_tx_count(req_id=req_id, sender=account)
                 self.debug(f"Pending tx count for: {account} - is: {pending_trx_count}")
-                trx_count += pending_trx_count
+
+            neon_account_info = self._solana.get_neon_account_info(account)
+            trx_count = neon_account_info.trx_count + pending_trx_count
 
             return hex(trx_count)
         except (Exception,):
@@ -496,6 +498,7 @@ class NeonRpcApiModel:
                                                       neon_tx=trx,
                                                       neon_tx_exec_cfg=neon_tx_cfg,
                                                       emulating_result=emulating_result)
+            time.sleep(1)
             return eth_signature
 
         except PendingTxError as err:
