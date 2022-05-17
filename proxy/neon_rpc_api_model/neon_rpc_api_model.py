@@ -498,7 +498,6 @@ class NeonRpcApiModel:
                                                       neon_tx=trx,
                                                       neon_tx_exec_cfg=neon_tx_cfg,
                                                       emulating_result=emulating_result)
-            time.sleep(1)
             return eth_signature
 
         except PendingTxError as err:
