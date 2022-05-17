@@ -383,7 +383,7 @@ class NeonRpcApiModel:
 
     def eth_getTransactionCount(self, account: str, tag: str) -> str:
         self._validate_block_tag(tag)
-        account = self._normalize_account(account)
+        account = self._normalize_account(account).lower()
 
         try:
             neon_account_info = self._solana.get_neon_account_info(account)
