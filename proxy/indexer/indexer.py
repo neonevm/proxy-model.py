@@ -59,7 +59,7 @@ class SolanaIxInfo:
             self.debug(f'{self} error: fail to get program id')
             return False
         if accounts[self.ix['programIdIndex']] != EVM_LOADER_ID:
-                return False
+            return False
         if not self._decode_ixdata():
             return False
         return True
