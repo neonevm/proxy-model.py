@@ -491,7 +491,6 @@ class NeonRpcApiModel:
 
             if not self._mempool_client.send_raw_transaction(mempool_tx_request):
                 raise Exception("Failed to pass neon_tx into MemPool")
-            time.sleep(3)
             return eth_signature
 
         except PendingTxError as err:
