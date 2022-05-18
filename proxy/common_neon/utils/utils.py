@@ -124,7 +124,9 @@ class NeonTxResultInfo:
             'transactionLogIndex': hex(log_idx),
             'transactionIndex': hex(tx_idx),
             'logIndex': hex(log_idx),
-            'transactionHash': neon_sign
+            'transactionHash': neon_sign,
+            # 'blockNumber': block_number, # set when transaction found
+            # 'blockHash': block_hash # set when transaction found
         }
         self.logs.append(rec)
 
@@ -151,7 +153,6 @@ class NeonTxResultInfo:
 
         for inner_ix in meta_ixs:
             ix_idx = inner_ix['index']
-
             for event in inner_ix['instructions']:
                 if accounts[event['programIdIndex']] == EVM_LOADER_ID:
                     log = base58.b58decode(event['data'])
