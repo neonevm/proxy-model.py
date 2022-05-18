@@ -97,7 +97,7 @@ class IndexerBase:
 
         poll_txs = []
         tx_list = []
-        for signature in signatures:
+        for signature, _ in reversed(signatures):
             if signature not in self._tx_receipts:
                 tx_list.append(signature)
                 if len(tx_list) >= 20:
@@ -107,7 +107,7 @@ class IndexerBase:
             poll_txs.append(tx_list)
         self._get_txs(poll_txs)
 
-        for signature in signatures:
+        for signature, _ in reversed(signatures):
             if signature not in self._tx_receipts:
                 self.error(f'{signature} receipt not found')
                 continue
@@ -157,10 +157,7 @@ class IndexerBase:
 
                 tx_list.append((sol_sign, slot))
 
-        signatures = []
-        for signature, _ in reversed(tx_list):
-            signatures.append(signature)
-        return signatures
+        return tx_list
 
 
     def _get_signatures(self, before: Optional[str], until: Optional[str], limit: int) -> List[Dict[str, Union[int, str]]]:
