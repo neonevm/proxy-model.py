@@ -21,8 +21,6 @@ from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 
 from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_EVM_VERSION, NEON_EVM_REVISION, \
-                          CHAIN_ID, neon_cli
-
                           CHAIN_ID, USE_EARLIEST_BLOCK_IF_0_PASSED, neon_cli, EVM_STEP_COUNT
 from ..memdb.memdb import MemDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
@@ -493,7 +491,7 @@ class NeonRpcApiModel:
 
             if not self._mempool_client.send_raw_transaction(mempool_tx_request):
                 raise Exception("Failed to pass neon_tx into MemPool")
-
+            time.sleep(3)
             return eth_signature
 
         except PendingTxError as err:
