@@ -383,7 +383,8 @@ class SolanaInteractor:
         elif info.tag != NEON_ACCOUNT_TAG:
             raise RuntimeError(f"Wrong tag {info.tag} for neon account info {str(account_sol)}")
         elif len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for account data {account_sol}: " + f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
+            raise RuntimeError(f"Wrong data length for account data {account_sol}: " +
+                               f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
         return NeonAccountInfo.frombytes(PublicKey(account_sol), info.data)
 
     def get_neon_code_info(self, account: Union[str, EthereumAddress, NeonAccountInfo, PublicKey, None]) -> Optional[NeonCodeInfo]:
