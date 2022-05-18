@@ -143,6 +143,10 @@ class IndexerBase:
                 sol_sign = tx["signature"]
                 slot = tx["slot"]
 
+                if sol_sign == self._maximum_tx:
+                    continue_flag = False
+                    break
+
                 if slot < self.last_slot:
                     continue_flag = False
                     break
