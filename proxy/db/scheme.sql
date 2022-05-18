@@ -126,7 +126,6 @@
     );
 
     CREATE TABLE IF NOT EXISTS solana_transaction_signatures (
-        slot        BIGINT,
-        signature   VARCHAR(88),
-        PRIMARY KEY (slot, signature)
+        slot        BIGINT UNIQUE,
+        signature   VARCHAR(88)
     );
