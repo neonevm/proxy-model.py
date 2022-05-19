@@ -6,15 +6,15 @@ from typing import Any
 from ..common_neon.utils.pickable_data_server import AddrPickableDataSrv, PickableDataServerUser
 from ..common_neon.config import IConfig
 
-from .mem_pool import MemPool
+from .mempool import MemPool
 from .executor_mng import MPExecutorMng
 
 
 @logged_group("neon.MemPool")
-class MemPoolService(PickableDataServerUser):
+class MPService(PickableDataServerUser):
 
-    MEMPOOL_SERVICE_PORT = 9091
-    MEMPOOL_SERVICE_HOST = "0.0.0.0"
+    MP_SERVICE_PORT = 9091
+    MP_SERVICE_HOST = "0.0.0.0"
     EXECUTOR_COUNT = 8
 
     def __init__(self, config: IConfig):
@@ -34,7 +34,7 @@ class MemPoolService(PickableDataServerUser):
         return await self._mempool.enqueue_mp_request(data)
 
     def run(self):
-        self._mempool_server = AddrPickableDataSrv(user=self, address=(self.MEMPOOL_SERVICE_HOST, self.MEMPOOL_SERVICE_PORT))
+        self._mempool_server = AddrPickableDataSrv(user=self, address=(self.MP_SERVICE_HOST, self.MP_SERVICE_PORT))
         self._mp_executor_mng = MPExecutorMng(self.EXECUTOR_COUNT, self._config)
         self._mempool = MemPool(self._mp_executor_mng)
         self.event_loop.run_forever()
