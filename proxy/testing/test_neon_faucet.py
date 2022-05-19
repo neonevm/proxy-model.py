@@ -87,10 +87,15 @@ class Test_Neon_Faucet(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_neon_faucet_06_erc20_single(self):
         print()
-        url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
         token = '0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d' # USDT
+        url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
+
+        bank = '0xb4cc4ae703ae5fbf5a678c7cc51868e0a367597f'
+        bank_balance = self.get_token_balance(token, bank)
+        print('Bank balance before:', bank_balance)
+        
         before = self.get_token_balance(token, user.address)
-        print('token A balance before:', before)
+        print('token USDT balance before:', before)
         data = '{"wallet": "' + user.address + '", "token_addr": "' + token + '", "amount": 1}'
         print('data:', data)
         r = requests.post(url, data=data)
@@ -98,7 +103,7 @@ class Test_Neon_Faucet(unittest.TestCase):
             print('Response:', r.status_code)
         assert(r.ok)
         after = self.get_token_balance(token, user.address)
-        print('token A balance after:', after)
+        print('token USDT balance after:', after)
         self.assertEqual(after - before, 1000000000000000000)
 
     @unittest.skip("a.i.")
