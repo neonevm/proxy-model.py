@@ -161,7 +161,7 @@ class Test_eth_getLogs(unittest.TestCase):
 
     def test_get_logs_by_fromBlock(self):
         from_block = self.block_numbers[2]
-        print(f"\ntest_get_logs_by_fromBlock: {from_block} ")
+        print(f"\ntest_get_logs_by_fromBlock: {from_block}, by storage contract address: {self.storage_contract.address}")
         receipts = proxy.eth.get_logs({'fromBlock': from_block,
                                        'address': self.storage_contract.address})
         print('receipts: ', receipts)
@@ -172,8 +172,7 @@ class Test_eth_getLogs(unittest.TestCase):
         receipts = proxy.eth.get_logs({'fromBlock': 0,
                                        'toBlock': 'latest',
                                        'address': self.storage_contract.address,
-                                       'topics': self.topics,
-        })
+                                       'topics': self.topics})
         print('receipts: ', receipts)
         self.assertEqual(len(receipts), 6)
 
