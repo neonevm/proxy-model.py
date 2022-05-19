@@ -28,7 +28,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         data = '{"ping": "Hello"}'
         r = requests.get(url, data=data)
         if not r.ok:
-            print('Response:', r.status_code)
+            print('Response:', r.status_code, r.reason, r.text)
         assert(r.ok)
 
     # @unittest.skip("a.i.")
@@ -37,7 +37,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         url = '{}/request_version'.format(os.environ['FAUCET_URL'])
         r = requests.get(url)
         if not r.ok:
-            print('Response:', r.status_code)
+            print('Response:', r.status_code, r.reason, r.text)
         assert(r.ok)
 
     # @unittest.skip("a.i.")
@@ -49,7 +49,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         data = '{"wallet": "' + user.address + '", "amount": 99999}'
         r = requests.post(url, data=data)
         if not r.ok:
-            print('Response:', r.status_code)
+            print('Response:', r.status_code, r.reason, r.text)
         assert(r.ok)
         # Check
         balance_after = proxy.eth.get_balance(user.address)
@@ -66,7 +66,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         data = '{"wallet": "' + user.address + '", "amount": 1}'
         r = requests.post(url, data=data)
         if not r.ok:
-            print('Response:', r.status_code)
+            print('Response:', r.status_code, r.reason, r.text)
         assert(r.ok)
         # Check
         balance_after = proxy.eth.get_balance(user.address)
@@ -80,14 +80,15 @@ class Test_Neon_Faucet(unittest.TestCase):
         url = '{}/request_erc20_list'.format(os.environ['FAUCET_URL'])
         r = requests.get(url)
         if not r.ok:
-            print('Response:', r.status_code)
+            print('Response:', r.status_code, r.reason, r.text)
         assert(r.ok)
         self.assertEqual(r.text, '["0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d","0x51F74c4f148044699113C74A74A64212b0812bE9"]')
 
     # @unittest.skip("a.i.")
     def test_neon_faucet_06_erc20_single(self):
         print()
-        token = '0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d' # USDT
+        #token = '0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d' # USDT
+        token = '0x51F74c4f148044699113C74A74A64212b0812bE9' # AAVE
 
         bank = '0xb4cC4Ae703Ae5FBF5a678C7CC51868E0A367597F'
         bank_balance = self.get_token_balance(token, bank)
@@ -101,7 +102,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         print('data:', data)
         r = requests.post(url, data=data)
         if not r.ok:
-            print('Response:', r.status_code, r.reason)
+            print('Response:', r.status_code, r.reason, r.text)
         assert(r.ok)
         
         after = self.get_token_balance(token, user.address)
@@ -121,7 +122,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         data = '{"wallet": "' + user.address + '", "amount": 1}'
         r = requests.post(url, data=data)
         if not r.ok:
-            print('Response:', r.status_code)
+            print('Response:', r.status_code, r.reason, r.text)
         assert(r.ok)
         a_after = self.get_token_balance(token_a, user.address)
         b_after = self.get_token_balance(token_b, user.address)
@@ -130,7 +131,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         self.assertEqual(a_after - a_before, 1000000000000000000)
         self.assertEqual(b_after - b_before, 1000000000000000000)
 
-    # Returns balance of a token account.
+    # Returns balance of a ERC20 token account.
     # Note: the result is in 10E-18 fractions.
     def get_token_balance(self, token_address, address):
         erc20 = proxy.eth.contract(address=token_address, abi=erc20_abi)
