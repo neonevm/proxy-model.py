@@ -7,7 +7,7 @@ from ..common_neon.utils.pickable_data_server import AddrPickableDataSrv, Pickab
 from ..common_neon.config import IConfig
 
 from .mem_pool import MemPool
-from .executor_mng import ExecutorMng
+from .executor_mng import MPExecutorMng
 
 
 @logged_group("neon.MemPool")
@@ -35,6 +35,6 @@ class MemPoolService(PickableDataServerUser):
 
     def run(self):
         self._mempool_server = AddrPickableDataSrv(user=self, address=(self.MEMPOOL_SERVICE_HOST, self.MEMPOOL_SERVICE_PORT))
-        self._mp_executor_mng = ExecutorMng(self.EXECUTOR_COUNT, self._config)
+        self._mp_executor_mng = MPExecutorMng(self.EXECUTOR_COUNT, self._config)
         self._mempool = MemPool(self._mp_executor_mng)
         self.event_loop.run_forever()

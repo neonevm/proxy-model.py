@@ -23,7 +23,7 @@ class MpExecutorClient(PipePickableDataClient):
 
 
 @logged_group("neon.MemPool")
-class ExecutorMng(IMemPoolExecutor):
+class MPExecutorMng(IMemPoolExecutor):
 
     BRING_BACK_EXECUTOR_TIMEOUT_SEC = 1800
 
@@ -37,9 +37,9 @@ class ExecutorMng(IMemPoolExecutor):
         self.info(f"Initialize executor mng with executor_count: {executor_count}")
         self._available_executor_pool: Deque[int] = deque()
         self._busy_executor_pool: Set[int] = set()
-        self._executors: List[ExecutorMng.ExecutorInfo] = list()
+        self._executors: List[MPExecutorMng.ExecutorInfo] = list()
         for i in range(executor_count):
-            executor_info = ExecutorMng._create_executor(i, config)
+            executor_info = MPExecutorMng._create_executor(i, config)
             self._executors.append(executor_info)
             self._available_executor_pool.appendleft(i)
             executor_info.executor.start()
@@ -65,11 +65,11 @@ class ExecutorMng(IMemPoolExecutor):
         return executor_id, executor_info.client
 
     def on_no_liquidity(self, resource_id: int):
-        self.debug(f"No liquidity, executor: {resource_id} - will be unblocked in: {ExecutorMng.BRING_BACK_EXECUTOR_TIMEOUT_SEC} sec")
+        self.debug(f"No liquidity, executor: {resource_id} - will be unblocked in: {MPExecutorMng.BRING_BACK_EXECUTOR_TIMEOUT_SEC} sec")
         asyncio.get_event_loop().create_task(self._release_executor_later(resource_id))
 
     async def _release_executor_later(self, executor_id: int):
-        await asyncio.sleep(ExecutorMng.BRING_BACK_EXECUTOR_TIMEOUT_SEC)
+        await asyncio.sleep(MPExecutorMng.BRING_BACK_EXECUTOR_TIMEOUT_SEC)
         self.release_resource(executor_id)
 
     def release_resource(self, resource_id: int):
@@ -82,7 +82,7 @@ class ExecutorMng(IMemPoolExecutor):
         client_sock, srv_sock = socket.socketpair()
         executor = MPExecutor(executor_id, srv_sock, config)
         client = MpExecutorClient(client_sock)
-        return ExecutorMng.ExecutorInfo(executor=executor, client=client, id=executor_id)
+        return MPExecutorMng.ExecutorInfo(executor=executor, client=client, id=executor_id)
 
     def __del__(self):
         for executor_info in self._executors:
