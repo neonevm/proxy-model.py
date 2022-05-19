@@ -83,7 +83,8 @@ class MemPool:
                     continue
                 exception = task.exception()
                 if exception is not None:
-                    self.error(f"Exception during processing request: {exception} - tx will be dropped away")
+                    log_ctx = {"context": {"req_id": mp_request.req_id}}
+                    self.error(f"Exception during processing request: {exception} - tx will be dropped away", extra=log_ctx)
                     self._on_request_dropped_away(mp_request)
                     self._executor.release_resource(resource_id)
                     continue
@@ -123,13 +124,15 @@ class MemPool:
         sender = "0x" + tx_request.neon_tx.sender()
         self._dec_pending_tx_counter(sender)
         count = self.get_pending_trx_count(sender)
-        self.debug(f"Reqeust done. Sender: {sender}, pending tx count: {count}")
+        log_ctx = {"context": {"req_id": tx_request.req_id}}
+        self.debug(f"Reqeust done. Sender: {sender}, pending tx count: {count}", extra=log_ctx)
 
     def _on_request_dropped_away(self, tx_request: MPTxRequest):
         sender = "0x" + tx_request.neon_tx.sender()
         self._dec_pending_tx_counter(sender)
         count = self.get_pending_trx_count(sender)
-        self.debug(f"Reqeust dropped away. Sender: {sender}, pending tx count: {count}")
+        log_ctx = {"context": {"req_id": tx_request.req_id}}
+        self.debug(f"Reqeust dropped away. Sender: {sender}, pending tx count: {count}", extra=log_ctx)
 
     def _inc_pending_tx_counter(self, sender: str):
         counts = self._pending_trx_counters.get(sender, 0)
