@@ -87,8 +87,6 @@ class PipePickableDataSrv(PickableDataServer):
 @logged_group("neon.Proxy")
 class PickableDataClient:
 
-    CONNECTION_TIMEOUT_SEC = 600
-
     def __init__(self):
         self._client_sock = None
 
