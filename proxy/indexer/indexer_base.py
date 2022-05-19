@@ -211,15 +211,8 @@ class IndexerBase:
 
     def _add_tx(self, sol_sign, tx):
         if tx is not None:
-            add = False
-            msg = tx['transaction']['message']
             slot = tx['slot']
-            for instruction in msg['instructions']:
-                if msg["accountKeys"][instruction["programIdIndex"]] == EVM_LOADER_ID:
-                    add = True
-            if add:
-                self.debug(f'{(slot, sol_sign)}')
-                self._tx_receipts[sol_sign] = tx
+            self.debug(f'{(slot, sol_sign)}')
+            self._tx_receipts[sol_sign] = tx
         else:
             self.debug(f"trx is None {sol_sign}")
-
