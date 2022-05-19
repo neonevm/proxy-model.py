@@ -16,7 +16,7 @@ from .mempool_api import MemPoolRequest, MemPoolResult, MemPoolResultCode
 
 
 @logged_group("neon.MemPool")
-class MemPoolExecutor(mp.Process, PickableDataServerUser):
+class MPExecutor(mp.Process, PickableDataServerUser):
 
     def __init__(self, executor_id: int, srv_sock: socket.socket, config: IConfig):
         self.info(f"Initialize mempool_executor: {executor_id}")

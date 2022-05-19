@@ -3,14 +3,14 @@ from asyncio import Task
 import dataclasses
 import socket
 from collections import deque
-from typing import List, Tuple
+from typing import List, Tuple, Deque, Set
 from logged_groups import logged_group
 
 from ..common_neon.config import IConfig
 from ..common_neon.utils import PipePickableDataClient
 
 from .mempool_api import MemPoolRequest, IMemPoolExecutor
-from .mempool_executor import MemPoolExecutor
+from .mempool_executor import MPExecutor
 
 
 class MpExecutorClient(PipePickableDataClient):
@@ -25,23 +25,23 @@ class MpExecutorClient(PipePickableDataClient):
 @logged_group("neon.MemPool")
 class ExecutorMng(IMemPoolExecutor):
 
-    BRING_BACK_EXECUTOR_TIMEOUT_SEC = 120
+    BRING_BACK_EXECUTOR_TIMEOUT_SEC = 1800
 
     @dataclasses.dataclass
     class ExecutorInfo:
-        executor: MemPoolExecutor
+        executor: MPExecutor
         client: MpExecutorClient
         id: int
 
     def __init__(self, executor_count: int, config: IConfig):
         self.info(f"Initialize executor mng with executor_count: {executor_count}")
-        self._available_pool = deque()
-        self._busy_pool = set()
+        self._available_executor_pool: Deque[int] = deque()
+        self._busy_executor_pool: Set[int] = set()
         self._executors: List[ExecutorMng.ExecutorInfo] = list()
         for i in range(executor_count):
             executor_info = ExecutorMng._create_executor(i, config)
             self._executors.append(executor_info)
-            self._available_pool.appendleft(i)
+            self._available_executor_pool.appendleft(i)
             executor_info.executor.start()
 
     def submit_mempool_request(self, mp_reqeust: MemPoolRequest) -> Tuple[int, Task]:
@@ -55,12 +55,12 @@ class ExecutorMng(IMemPoolExecutor):
         return self._has_available()
 
     def _has_available(self) -> bool:
-        return len(self._available_pool) > 0
+        return len(self._available_executor_pool) > 0
 
     def _get_executor(self) -> Tuple[int, MpExecutorClient]:
-        executor_id = self._available_pool.pop()
+        executor_id = self._available_executor_pool.pop()
         self.debug(f"Acquire executor: {executor_id}")
-        self._busy_pool.add(executor_id)
+        self._busy_executor_pool.add(executor_id)
         executor_info = self._executors[executor_id]
         return executor_id, executor_info.client
 
@@ -74,18 +74,18 @@ class ExecutorMng(IMemPoolExecutor):
 
     def release_resource(self, resource_id: int):
         self.debug(f"Release executor: {resource_id}")
-        self._busy_pool.remove(resource_id)
-        self._available_pool.appendleft(resource_id)
+        self._busy_executor_pool.remove(resource_id)
+        self._available_executor_pool.appendleft(resource_id)
 
     @staticmethod
     def _create_executor(executor_id: int, config: IConfig) -> ExecutorInfo:
         client_sock, srv_sock = socket.socketpair()
-        executor = MemPoolExecutor(executor_id, srv_sock, config)
+        executor = MPExecutor(executor_id, srv_sock, config)
         client = MpExecutorClient(client_sock)
         return ExecutorMng.ExecutorInfo(executor=executor, client=client, id=executor_id)
 
     def __del__(self):
         for executor_info in self._executors:
             executor_info.executor.kill()
-        self._busy_pool.clear()
-        self._available_pool.clear()
+        self._busy_executor_pool.clear()
+        self._available_executor_pool.clear()
