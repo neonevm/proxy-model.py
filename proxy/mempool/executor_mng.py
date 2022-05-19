@@ -1,7 +1,7 @@
 import asyncio
-from asyncio import Task
 import dataclasses
 import socket
+
 from collections import deque
 from typing import List, Tuple, Deque, Set
 from logged_groups import logged_group
@@ -44,7 +44,7 @@ class ExecutorMng(IMemPoolExecutor):
             self._available_executor_pool.appendleft(i)
             executor_info.executor.start()
 
-    def submit_mempool_request(self, mp_reqeust: MemPoolRequest) -> Tuple[int, Task]:
+    def submit_mempool_request(self, mp_reqeust: MemPoolRequest) -> Tuple[int, asyncio.Task]:
         executor_id, executor = self._get_executor()
         tx_hash = "0x" + mp_reqeust.neon_tx.hash_signed().hex()
         self.debug(f"Tx: {tx_hash} - scheduled on executor: {executor_id}")
