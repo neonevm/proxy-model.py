@@ -101,7 +101,7 @@ class Test_Neon_Faucet(unittest.TestCase):
         print('token A balance after:', after)
         self.assertEqual(after - before, 1000000000000000000)
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_neon_faucet_05_erc20_all(self):
         print()
         url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
