@@ -82,13 +82,13 @@ class Test_Neon_Faucet(unittest.TestCase):
         if not r.ok:
             print('Response:', r.status_code)
         assert(r.ok)
-        self.assertEqual(r.text, '["0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d","0x8a2a66CA0E5D491A001957edD45A6350bC76D708","0x914782059DC42d4E590aeFCfdbF004B2EcBB9fAA","0x7A7510b9b18241C788a7aAE8299D1fA6010D8128"]')
+        self.assertEqual(r.text, '["0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d","0x51F74c4f148044699113C74A74A64212b0812bE9"]')
 
     # @unittest.skip("a.i.")
     def test_neon_faucet_06_erc20_single(self):
         print()
         url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
-        token = '0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d'
+        token = '0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d' # USDT
         before = self.get_token_balance(token, user.address)
         print('token A balance before:', before)
         data = '{"wallet": "' + user.address + '", "token_addr": "' + token + '", "amount": 1}'
@@ -105,8 +105,10 @@ class Test_Neon_Faucet(unittest.TestCase):
     def test_neon_faucet_05_erc20_all(self):
         print()
         url = '{}/request_erc20'.format(os.environ['FAUCET_URL'])
-        a_before = self.get_token_balance(self.token_a, user.address)
-        b_before = self.get_token_balance(self.token_b, user.address)
+        token_a = '0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d' # USDT
+        token_b = '0x51F74c4f148044699113C74A74A64212b0812bE9' # AAVE
+        a_before = self.get_token_balance(token_a, user.address)
+        b_before = self.get_token_balance(token_b, user.address)
         print('token A balance before:', a_before)
         print('token B balance before:', b_before)
         data = '{"wallet": "' + user.address + '", "amount": 1}'
@@ -114,8 +116,8 @@ class Test_Neon_Faucet(unittest.TestCase):
         if not r.ok:
             print('Response:', r.status_code)
         assert(r.ok)
-        a_after = self.get_token_balance(self.token_a, user.address)
-        b_after = self.get_token_balance(self.token_b, user.address)
+        a_after = self.get_token_balance(token_a, user.address)
+        b_after = self.get_token_balance(token_b, user.address)
         print('token A balance after:', a_after)
         print('token B balance after:', b_after)
         self.assertEqual(a_after - a_before, 1000000000000000000)
