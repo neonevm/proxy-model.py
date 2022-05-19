@@ -9,7 +9,7 @@ from logged_groups import logged_group
 from ..common_neon.config import IConfig
 from ..common_neon.utils import PipePickableDataClient
 
-from .mempool_api import MemPoolRequest, IMemPoolExecutor
+from .mempool_api import MPRequest, IMPExecutor
 from .mempool_executor import MPExecutor
 
 
@@ -18,12 +18,12 @@ class MpExecutorClient(PipePickableDataClient):
     def __init__(self, client_sock: socket.socket):
         PipePickableDataClient.__init__(self, client_sock=client_sock)
 
-    async def send_tx_request(self, mempool_tx_request: MemPoolRequest):
+    async def send_tx_request(self, mempool_tx_request: MPRequest):
         return await self.send_data_async(mempool_tx_request)
 
 
 @logged_group("neon.MemPool")
-class MPExecutorMng(IMemPoolExecutor):
+class MPExecutorMng(IMPExecutor):
 
     BRING_BACK_EXECUTOR_TIMEOUT_SEC = 1800
 
@@ -44,7 +44,7 @@ class MPExecutorMng(IMemPoolExecutor):
             self._available_executor_pool.appendleft(i)
             executor_info.executor.start()
 
-    def submit_mempool_request(self, mp_reqeust: MemPoolRequest) -> Tuple[int, asyncio.Task]:
+    def submit_mp_request(self, mp_reqeust: MPRequest) -> Tuple[int, asyncio.Task]:
         executor_id, executor = self._get_executor()
         tx_hash = "0x" + mp_reqeust.neon_tx.hash_signed().hex()
         self.debug(f"Tx: {tx_hash} - scheduled on executor: {executor_id}")

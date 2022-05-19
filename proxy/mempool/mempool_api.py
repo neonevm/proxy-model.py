@@ -10,10 +10,10 @@ from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 
 
-class IMemPoolExecutor(ABC):
+class IMPExecutor(ABC):
 
     @abstractmethod
-    def submit_mempool_request(self, mp_reqeust: MemPoolRequest) -> Tuple[int, Task]:
+    def submit_mp_request(self, mp_reqeust: MPRequest) -> Tuple[int, Task]:
         pass
 
     @abstractmethod
@@ -29,20 +29,20 @@ class IMemPoolExecutor(ABC):
         pass
 
 
-class MemPoolReqType(IntEnum):
+class MPRequestType(IntEnum):
     SendTransaction = 0,
     GetTrxCount = 1,
     Dummy = -1
 
 
 @dataclass(order=True)
-class MemPoolRequest:
+class MPRequest:
     req_id: int
-    type: MemPoolReqType = field(default=MemPoolReqType.Dummy)
+    type: MPRequestType = field(default=MPRequestType.Dummy)
 
 
 @dataclass
-class MemPoolTxRequest(MemPoolRequest):
+class MPTxRequest(MPRequest):
     signature: str = field(compare=False, default=None)
     neon_tx: NeonTx = field(compare=False, default=None)
     neon_tx_exec_cfg: NeonTxExecCfg = field(compare=False, default=None)
@@ -51,19 +51,19 @@ class MemPoolTxRequest(MemPoolRequest):
 
     def __post_init__(self):
         self._gas_price = self.neon_tx.gasPrice
-        self.type = MemPoolReqType.SendTransaction
+        self.type = MPRequestType.SendTransaction
 
 
 @dataclass
-class MemPoolPendingTxCountReq(MemPoolRequest):
+class MPPendingTxCountReq(MPRequest):
 
     sender: str = None
 
     def __post_init__(self):
-        self.type = MemPoolReqType.GetTrxCount
+        self.type = MPRequestType.GetTrxCount
 
 
-class MemPoolResultCode(IntEnum):
+class MPResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
@@ -73,6 +73,6 @@ class MemPoolResultCode(IntEnum):
 
 
 @dataclass
-class MemPoolResult:
-    code: MemPoolResultCode
+class MPResult:
+    code: MPResultCode
     data: Any

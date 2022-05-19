@@ -12,7 +12,7 @@ from ..memdb.memdb import MemDB
 
 from .transaction_sender import NeonTxSender
 from .operator_resource_list import OperatorResourceList
-from .mempool_api import MemPoolRequest, MemPoolResult, MemPoolResultCode
+from .mempool_api import MPRequest, MPResult, MPResultCode
 
 
 @logged_group("neon.MemPool")
@@ -38,16 +38,16 @@ class MPExecutor(mp.Process, PickableDataServerUser):
         self._solana = SolanaInteractor(self._config.get_solana_url())
         self._db = MemDB(self._solana)
 
-    def execute_neon_tx(self, mempool_request: MemPoolRequest):
+    def execute_neon_tx(self, mempool_request: MPRequest):
         with logging_context(req_id=mempool_request.req_id, exectr=self._id):
             try:
                 self.execute_neon_tx_impl(mempool_request)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
-                return MemPoolResult(MemPoolResultCode.Unspecified, None)
-            return MemPoolResult(MemPoolResultCode.Done, None)
+                return MPResult(MPResultCode.Unspecified, None)
+            return MPResult(MPResultCode.Done, None)
 
-    def execute_neon_tx_impl(self, mempool_tx_cfg: MemPoolRequest):
+    def execute_neon_tx_impl(self, mempool_tx_cfg: MPRequest):
         neon_tx = mempool_tx_cfg.neon_tx
         neon_tx_cfg = mempool_tx_cfg.neon_tx_exec_cfg
         emulating_result = mempool_tx_cfg.emulating_result
