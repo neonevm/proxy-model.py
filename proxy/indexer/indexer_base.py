@@ -107,6 +107,7 @@ class IndexerBase:
             poll_txs.append(tx_list)
         self._get_txs(poll_txs)
 
+        max_tx = self._maximum_tx
         for signature, _ in reversed(signatures):
             if signature not in self._tx_receipts:
                 self.error(f'{signature} receipt not found')
@@ -118,9 +119,10 @@ class IndexerBase:
                 break
             yield (slot, signature, tx)
 
-            self._set_maximum_tx(signature)
             self.solana_signatures.remove_signature(signature)
             del self._tx_receipts[signature]
+            max_tx = signature
+        self._set_maximum_tx(max_tx)
 
     def gather_unknown_transactions(self):
         minimal_tx = self.solana_signatures.get_minimal_tx()
