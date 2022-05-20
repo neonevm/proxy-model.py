@@ -1,3 +1,4 @@
+from typing import List
 from ..indexer.base_db import BaseDB
 
 
@@ -13,9 +14,9 @@ class SolanaSignatures(BaseDB):
                 VALUES(%s, %s) ON CONFLICT DO NOTHING''',
                 (slot, signature))
 
-    def remove_signature(self, signature):
+    def remove_signature(self, signatures: List[str]):
         with self._conn.cursor() as cursor:
-            cursor.execute(f'DELETE FROM solana_transaction_signatures WHERE signature = %s', (signature,))
+            cursor.executemany(f'DELETE FROM solana_transaction_signatures WHERE signature = %s', [*zip(iter(signatures))])
 
     def get_minimal_tx(self):
         with self._conn.cursor() as cursor:

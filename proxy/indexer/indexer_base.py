@@ -3,7 +3,7 @@ import time
 import traceback
 from multiprocessing.dummy import Pool as ThreadPool
 from logged_groups import logged_group
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from .solana_signatures_db import SolanaSignatures
 from .utils import MetricsToLogBuff
@@ -108,6 +108,7 @@ class IndexerBase:
         self._get_txs(poll_txs)
 
         max_tx = self._maximum_tx
+        remove_signatures: List[str] = []
         for signature, _ in reversed(signatures):
             if signature not in self._tx_receipts:
                 self.error(f'{signature} receipt not found')
@@ -119,10 +120,13 @@ class IndexerBase:
                 break
             yield (slot, signature, tx)
 
-            self.solana_signatures.remove_signature(signature)
+            remove_signatures.append(signature)
             del self._tx_receipts[signature]
             max_tx = signature
+
+        self.solana_signatures.remove_signature(remove_signatures)
         self._set_maximum_tx(max_tx)
+        self._clear_tx_receipts()
 
     def gather_unknown_transactions(self):
         minimal_tx = self.solana_signatures.get_minimal_tx()
@@ -198,10 +202,6 @@ class IndexerBase:
                     self.debug(f'Fail to get solana receipts: "{err}"')
                     time.sleep(3)
 
-        self.counter_ += 1
-        if self.counter_ % 100 == 0:
-            self.debug(f"Acquired {self.counter_} receipts")
-
     def _add_tx(self, sol_sign, tx):
         if tx is not None:
             slot = tx['slot']
@@ -209,3 +209,9 @@ class IndexerBase:
             self._tx_receipts[sol_sign] = tx
         else:
             self.debug(f"trx is None {sol_sign}")
+
+    def _clear_tx_receipts(self):
+        self.counter_ += 1
+        if self.counter_ > 1000:
+            self._tx_receipts = {}
+            self.counter_ = 0
