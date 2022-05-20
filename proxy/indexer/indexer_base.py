@@ -131,7 +131,7 @@ class IndexerBase:
         gathered_signatures = 0
         tx_list = []
         while continue_flag:
-            results = self._get_signatures(minimal_tx, self._maximum_tx, INDEXER_POLL_COUNT)
+            results = self._get_signatures(minimal_tx, INDEXER_POLL_COUNT)
             len_results = len(results)
             if len_results == 0:
                 break
@@ -162,15 +162,8 @@ class IndexerBase:
         return tx_list
 
 
-    def _get_signatures(self, before: Optional[str], until: Optional[str], limit: int) -> List[Dict[str, Union[int, str]]]:
-        opts: Dict[str, Union[int, str]] = {}
-        if before is not None:
-            opts["before"] = before
-        if until is not None:
-            opts["until"] = until
-        opts["limit"] = limit
-        opts["commitment"] = FINALIZED
-        response =  self.solana._send_rpc_request("getSignaturesForAddress", EVM_LOADER_ID, opts)
+    def _get_signatures(self, before: Optional[str], limit: int) -> List[Dict[str, Union[int, str]]]:
+        response = self.solana.get_signatures_for_address(before, limit, FINALIZED)
         error = response.get('error')
         result = response.get('result', [])
         if error:
