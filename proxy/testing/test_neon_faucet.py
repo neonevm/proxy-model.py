@@ -87,8 +87,7 @@ class Test_Neon_Faucet(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_neon_faucet_06_erc20_single(self):
         print()
-        #token = '0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d' # USDT
-        token = '0x51F74c4f148044699113C74A74A64212b0812bE9' # AAVE
+        token = '0xB521b9F3484deF53545F276F1DAA50ef0Ca82E2d' # USDT
 
         bank = '0xb4cC4Ae703Ae5FBF5a678C7CC51868E0A367597F'
         bank_balance = self.get_token_balance(token, bank)
