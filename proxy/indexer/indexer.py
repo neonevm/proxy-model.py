@@ -1,23 +1,26 @@
-import time
-from enum import Enum
+import copy
 from typing import Iterator, List, Optional, Dict
 
 import base58
+import time
 import sha3
+from enum import Enum
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 
 from ..common_neon.data import NeonTxStatData
-from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.solana_receipt_parser import SolReceiptParser
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
-from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
-from ..indexer.accounts_db import NeonAccountInfo
-from ..indexer.canceller import Canceller
 from ..indexer.i_inidexer_user import IIndexerUser
+from ..indexer.accounts_db import NeonAccountInfo
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff, CostInfo
+from ..indexer.canceller import Canceller
+
+from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
+from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_receipt_parser import SolReceiptParser
+
+from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
 
 @logged_group("neon.Indexer")
