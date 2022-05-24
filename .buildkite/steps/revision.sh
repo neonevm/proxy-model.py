@@ -1,4 +1,4 @@
-set ${NEON_EVM_COMMIT:=latest}
+set ${NEON_EVM_COMMIT:=a2289919cae45f6ad08611e9d6c33b539ddd0aef}
 set ${FAUCET_COMMIT:=latest}
 export REVISION=${BUILDKITE_COMMIT}
 export NEON_EVM_COMMIT
