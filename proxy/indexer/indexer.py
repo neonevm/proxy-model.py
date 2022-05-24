@@ -1,26 +1,23 @@
-import copy
+import time
+from enum import Enum
 from typing import Iterator, List, Optional, Dict
 
 import base58
-import time
 import sha3
-from enum import Enum
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 
 from ..common_neon.data import NeonTxStatData
-from ..indexer.i_inidexer_user import IIndexerUser
+from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_receipt_parser import SolReceiptParser
+from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
+from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 from ..indexer.accounts_db import NeonAccountInfo
+from ..indexer.canceller import Canceller
+from ..indexer.i_inidexer_user import IIndexerUser
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff, CostInfo
-from ..indexer.canceller import Canceller
-
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
-from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.solana_receipt_parser import SolReceiptParser
-
-from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
 
 @logged_group("neon.Indexer")
@@ -31,6 +28,7 @@ class SolanaIxInfo:
         self.tx = tx
         self._is_valid = isinstance(tx, dict)
         self._msg = self.tx['transaction']['message'] if self._is_valid else None
+        self._logs = self.tx['meta']['logMessages'] if self._is_valid else None
         self._set_defaults()
 
     def __str__(self):
@@ -91,6 +89,9 @@ class SolanaIxInfo:
                             yield evm_ix_idx
 
         self._set_defaults()
+
+    def process_logs(self):
+        print(self._logs)
 
     def get_account_cnt(self):
         assert self._is_valid
@@ -986,6 +987,8 @@ class Indexer(IndexerBase):
                     with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
+
+                ix_info.process_logs()
 
                 self.state.add_tx_cost(ix_info.cost_info)
 
