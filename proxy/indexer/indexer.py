@@ -94,7 +94,8 @@ class SolanaIxInfo:
         self._set_defaults()
 
     def process_logs(self):
-        print(self._logs)
+        for log in self._logs:
+            print(log)
 
     def get_account_cnt(self):
         assert self._is_valid
