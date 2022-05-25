@@ -1,6 +1,5 @@
 import json
 import multiprocessing
-import time
 import traceback
 import eth_utils
 
