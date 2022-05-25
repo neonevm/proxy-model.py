@@ -28,7 +28,7 @@ case "${option}" in
 esac
 done
 
-export REVISION=$(git rev-parse HEAD)
+. .buildkite/steps/revision.sh
 PROXY_IMAGE=neonlabsorg/proxy:${IMAGETAG:-$REVISION}
 
 UNISWAP_V2_CORE_IMAGE=neonlabsorg/uniswap-v2-core:stable
@@ -42,15 +42,16 @@ function cleanup_docker {
     fi
 
     if docker logs solana >solana.log 2>&1; then echo "solana logs saved"; fi
-    if docker logs evm_loader >evm_loader.log 2>&1; then echo "evm_loader logs saved"; fi
+    if docker logs proxy_program_loader >proxy_program_loader.log 2>&1; then echo "proxy_program_loader logs saved"; fi
     if docker logs dbcreation >dbcreation.log 2>&1; then echo "dbcreation logs saved"; fi
     if docker logs faucet >faucet.log 2>&1; then echo "faucet logs saved"; fi
     if docker logs airdropper >airdropper.log 2>&1; then echo "airdropper logs saved"; fi
     if docker logs indexer >indexer.log 2>&1; then echo "indexer logs saved"; fi
     if docker logs deploy_contracts >deploy_contracts.log 2>&1; then echo "deploy_contracts logs saved"; fi
+    if docker logs proxy_program >proxy_program.log 2>&1; then echo "proxy_program.log logs saved"; fi
 
     echo "\nCleanup docker-compose..."
-    docker-compose -f proxy/docker-compose-test.yml down
+    docker-compose -f proxy/docker-compose-test.yml down -t 1
     echo "Cleanup docker-compose done."
     echo "\nRemoving temporary data volumes..."
     docker volume prune -f
@@ -58,7 +59,7 @@ function cleanup_docker {
 trap cleanup_docker EXIT
 
 echo "\nCleanup docker-compose..."
-docker-compose -f proxy/docker-compose-test.yml down
+docker-compose -f proxy/docker-compose-test.yml down -t 1
 if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
   echo "docker-compose failed to start"
   exit 1;
