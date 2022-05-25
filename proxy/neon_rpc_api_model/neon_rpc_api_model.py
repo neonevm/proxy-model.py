@@ -395,7 +395,7 @@ class NeonRpcApiModel:
                 self.debug(f"Pending tx count for: {account} - is: {pending_trx_count}")
 
             neon_account_info = self._solana.get_neon_account_info(account)
-            trx_count = neon_account_info.trx_count + pending_trx_count
+            trx_count = max(neon_account_info.trx_count, pending_trx_count)
 
             return hex(trx_count)
         except (Exception,):
