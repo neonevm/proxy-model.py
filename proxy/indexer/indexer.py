@@ -73,6 +73,7 @@ class SolanaIxInfo:
         if not self._is_valid:
             return
 
+        print("@@@@ begin iter_ixs")
         self._set_defaults()
         tx_ixs = enumerate(self._msg['instructions'])
 
@@ -93,8 +94,13 @@ class SolanaIxInfo:
                             yield evm_ix_idx
 
         self._set_defaults()
+        print("@@@@ end iter_ixs")
 
     def process_logs(self):
+        if not self._is_valid:
+            return
+
+        print("---- begin process_logs")
         program_invoke = re.compile('Program \w+ invoke \S+')
         program_success = re.compile('Program \w+ success')
         program_failed = re.compile('Program \w+ failed:')
@@ -112,6 +118,7 @@ class SolanaIxInfo:
             m = program_data.match(log)
             if m:
                 print("----", log)
+        print("---- end process_logs")
 
     def get_account_cnt(self):
         assert self._is_valid
@@ -1001,11 +1008,11 @@ class Indexer(IndexerBase):
                 max_slot = max(max_slot, slot)
 
                 ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
-                print("====", ix_info)
+                print("==== ix_info", ix_info)
 
                 for _ in ix_info.iter_ixs():
                     req_id = ix_info.sign.get_req_id()
-                    print("====", req_id)
+                    print("==== req_id", req_id)
                     with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
