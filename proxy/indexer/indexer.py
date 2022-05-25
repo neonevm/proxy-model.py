@@ -4,6 +4,7 @@ from typing import Iterator, List, Optional, Dict
 import base58
 import time
 import sha3
+import re
 from enum import Enum
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
@@ -94,8 +95,23 @@ class SolanaIxInfo:
         self._set_defaults()
 
     def process_logs(self):
+        program_invoke = re.compile('Program \w+ invoke \S+')
+        program_success = re.compile('Program \w+ success')
+        program_failed = re.compile('Program \w+ failed:')
+        program_data = re.compile('Program data:')
         for log in self._logs:
-            print("----", log)
+            m = program_invoke.match(log)
+            if m:
+                print("----", log)
+            m = program_success.match(log)
+            if m:
+                print("----", log)
+            m = program_failed.match(log)
+            if m:
+                print("----", log)
+            m = program_data.match(log)
+            if m:
+                print("----", log)
 
     def get_account_cnt(self):
         assert self._is_valid
@@ -985,9 +1001,11 @@ class Indexer(IndexerBase):
                 max_slot = max(max_slot, slot)
 
                 ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
+                print("====", ix_info)
 
                 for _ in ix_info.iter_ixs():
                     req_id = ix_info.sign.get_req_id()
+                    print("====", req_id)
                     with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
