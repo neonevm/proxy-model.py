@@ -30,7 +30,7 @@ from ..common_neon.utils import get_holder_msg
 from .operator_resource_list import OperatorResourceInfo
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class NeonTxSender:
     def __init__(self, db: MemDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
         self._db = db
@@ -205,7 +205,7 @@ class NeonTxSender:
             self.create_account_tx.instructions.clear()
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
     NAME = 'UNKNOWN STRATEGY'
 
@@ -259,7 +259,7 @@ class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
         return False
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class SimpleNeonTxSender(SolTxListSender):
     def __init__(self, strategy: BaseNeonTxStrategy, *args, **kwargs):
         SolTxListSender.__init__(self, *args, **kwargs)
@@ -282,7 +282,7 @@ class SimpleNeonTxSender(SolTxListSender):
                 raise RuntimeError('Run out of attempts to execute transaction')
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
     NAME = 'CallFromRawEthereumTX'
     IS_SIMPLE = True
@@ -329,7 +329,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         return tx_sender.neon_res, tx_sender.success_sign_list
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class IterativeNeonTxSender(SimpleNeonTxSender):
     def __init__(self, *args, **kwargs):
         SimpleNeonTxSender.__init__(self, *args, **kwargs)
@@ -443,7 +443,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             self._tx_list.append(self._strategy.build_tx())
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
     NAME = 'PartialCallOrContinueFromRawEthereumTX'
     IS_SIMPLE = False
@@ -492,7 +492,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         return tx_sender.neon_res, tx_sender.success_sign_list
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
     NAME = 'ExecuteTrxFromAccountDataIterativeOrContinue'
 
@@ -531,7 +531,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
         return tx_list
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class NoChainIdNeonTxStrategy(HolderNeonTxStrategy, abc.ABC):
     NAME = 'ExecuteTrxFromAccountDataIterativeOrContinueNoChainId'
 

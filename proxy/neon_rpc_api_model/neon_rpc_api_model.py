@@ -6,7 +6,7 @@ import eth_utils
 from typing import Optional, Union, Tuple
 
 import sha3
-from logged_groups import logged_group
+from logged_groups import logged_group, LogMng
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
@@ -24,7 +24,7 @@ from ..environment import SOLANA_URL, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, NEON_
                           CHAIN_ID, USE_EARLIEST_BLOCK_IF_0_PASSED, neon_cli, EVM_STEP_COUNT
 from ..memdb.memdb import MemDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
-from ..mempool import MemPoolTxRequest, MemPoolClient, MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT
+from ..mempool import MemPoolClient, MP_SERVICE_HOST, MP_SERVICE_PORT
 
 from .transaction_validator import NeonTxValidator
 
@@ -49,7 +49,7 @@ class NeonRpcApiModel:
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = MemDB(self._solana)
         self._stat_exporter: Optional[StatisticsExporter] = None
-        self._mempool_client = MemPoolClient(MEMPOOL_SERVICE_HOST, MEMPOOL_SERVICE_PORT)
+        self._mempool_client = MemPoolClient(MP_SERVICE_HOST, MP_SERVICE_PORT)
 
         if PP_SOLANA_URL == SOLANA_URL:
             self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
@@ -214,8 +214,8 @@ class NeonRpcApiModel:
                 return hex(0)
 
             return hex(neon_account_info.balance)
-        except (Exception,):
-            # self.debug(f"eth_getBalance: Can't get account info: {err}")
+        except (Exception,) as err:
+            self.debug(f"eth_getBalance: Can't get account info: {err}")
             return hex(0)
 
     def eth_getLogs(self, obj):
@@ -383,11 +383,20 @@ class NeonRpcApiModel:
 
     def eth_getTransactionCount(self, account: str, tag: str) -> str:
         self._validate_block_tag(tag)
-        account = self._normalize_account(account)
+        account = self._normalize_account(account).lower()
 
         try:
+            self.debug(f"Get transaction count. Account: {account}, tag: {tag}")
+            pending_trx_count = 0
+            if tag == "pending":
+                req_id = LogMng.get_logging_context().get("req_id")
+                pending_trx_count = self._mempool_client.get_pending_tx_count(req_id=req_id, sender=account)
+                self.debug(f"Pending tx count for: {account} - is: {pending_trx_count}")
+
             neon_account_info = self._solana.get_neon_account_info(account)
-            return hex(neon_account_info.trx_count)
+            trx_count = neon_account_info.trx_count + pending_trx_count
+
+            return hex(trx_count)
         except (Exception,):
             # self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
@@ -480,17 +489,14 @@ class NeonRpcApiModel:
         try:
             neon_tx_cfg, emulating_result = self.precheck(trx)
 
-            # tx_sender = NeonTxSender(self._db, self._solana, trx, steps=EVM_STEP_COUNT)
-            # with OperatorResourceList(tx_sender):
-            #     tx_sender.execute(neon_tx_cfg)
-
             self._stat_tx_success()
-            mempool_tx_request = MemPoolTxRequest(neon_tx=trx,
-                                                  neon_tx_exec_cfg=neon_tx_cfg,
-                                                  emulating_result=emulating_result)
+            req_id = LogMng.get_logging_context().get("req_id")
 
-            if not self._mempool_client.send_raw_transaction(mempool_tx_request):
-                raise Exception("Failed to pass neon_tx into MemPool")
+            self._mempool_client.send_raw_transaction(req_id=req_id,
+                                                      signature=eth_signature,
+                                                      neon_tx=trx,
+                                                      neon_tx_exec_cfg=neon_tx_cfg,
+                                                      emulating_result=emulating_result)
             return eth_signature
 
         except PendingTxError as err:

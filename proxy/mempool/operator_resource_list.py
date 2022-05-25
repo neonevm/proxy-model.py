@@ -42,7 +42,7 @@ class OperatorResourceInfo:
         return self.signer.secret_key()
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class OperatorResourceList:
     # These variables are global for class, they will be initialized one time
     _manager = mp.Manager()
@@ -282,7 +282,7 @@ class OperatorResourceList:
         self._free_resource_list.append(resource.idx)
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class NeonCreatePermAccount(NeonCreateAccountWithSeedStage, abc.ABC):
     NAME = 'createPermAccount'
 
