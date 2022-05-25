@@ -101,7 +101,7 @@ class SolanaIxInfo:
             return
 
         print("---- begin process_logs")
-        program_invoke = re.compile(r'Program (\w+) invoke [(\d+)]')
+        program_invoke = re.compile(r'Program (\w+) invoke \[(\d+)\]')
         program_success = re.compile(r'Program (\w+) success')
         program_failed = re.compile(r'Program (\w+) failed')
         program_data = re.compile(r'Program data: (.+)')
