@@ -101,23 +101,23 @@ class SolanaIxInfo:
             return
 
         print("---- begin process_logs")
-        program_invoke = re.compile('Program \w+ invoke \S+')
-        program_success = re.compile('Program \w+ success')
-        program_failed = re.compile('Program \w+ failed:')
-        program_data = re.compile('Program data:')
+        program_invoke = re.compile(r'Program (\w+) invoke [(\d+)]')
+        program_success = re.compile(r'Program (\w+) success')
+        program_failed = re.compile(r'Program (\w+) failed')
+        program_data = re.compile(r'Program data: (.+)')
         for log in self._logs:
             m = program_invoke.match(log)
             if m:
-                print("----", log)
+                print("---- Program", m.group(1), "invoke depth", m.group(2))
             m = program_success.match(log)
             if m:
-                print("----", log)
+                print("---- Program", m.group(1), "success")
             m = program_failed.match(log)
             if m:
-                print("----", log)
+                print("---- Program", m.group(1), "failed")
             m = program_data.match(log)
             if m:
-                print("----", log)
+                print("---- Program data", m.group(1))
         print("---- end process_logs")
 
     def get_account_cnt(self):
