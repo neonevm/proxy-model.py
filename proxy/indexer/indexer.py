@@ -119,7 +119,7 @@ class SolanaIxInfo:
                 tail = m.group(1)
                 print("---- Program data:", tail)
                 data = re.findall("\S+", tail)
-                mnemonic = base64.b64decode(data[0]).str()
+                mnemonic = base64.b64decode(data[0]).decode('utf-8')
                 print("---- mnemonic", mnemonic)
                 if mnemonic == "RETURN":
                     self.unpack_return(data[1:])
@@ -132,12 +132,12 @@ class SolanaIxInfo:
     def unpack_return(self, data: Iterable[str]):
         for s in data:
             bs = base64.b64decode(s)
-            print("---- bs", bs)
+            print("---- rr", bs)
 
     def unpack_event_log(self, data: Iterable[str]):
         for s in data:
             bs = base64.b64decode(s)
-            print("---- bs", bs)
+            print("---- ee", bs)
 
     def get_account_cnt(self):
         assert self._is_valid
