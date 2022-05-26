@@ -119,12 +119,22 @@ class SolanaIxInfo:
                 tail = m.group(1)
                 print("---- Program data:", tail)
                 data = re.findall("\S+", tail)
-                mnemonic = base64.b64decode(data[0])
+                mnemonic = base64.b64decode(data[0]).str()
                 print("---- mnemonic", mnemonic)
-                self.unpack_program_data(data[1:])
+                if mnemonic == "RETURN":
+                    self.unpack_return(data[1:])
+                elif mnemonic.startswith("LOG"):
+                    self.unpack_event_log(data[1:])
+                else:
+                    print("---- Unknown mnemonic", mnemonic)
         print("---- end process_logs")
 
-    def unpack_program_data(self, data: Iterable[str]):
+    def unpack_return(self, data: Iterable[str]):
+        for s in data:
+            bs = base64.b64decode(s)
+            print("---- bs", bs)
+
+    def unpack_event_log(self, data: Iterable[str]):
         for s in data:
             bs = base64.b64decode(s)
             print("---- bs", bs)
