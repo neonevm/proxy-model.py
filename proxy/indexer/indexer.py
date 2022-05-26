@@ -117,6 +117,7 @@ class SolanaIxInfo:
             m = program_data.match(log)
             if m:
                 print("---- Program data", m.group(1))
+                print("---- m.end", m.end())
                 mnemonic = base64.b64decode(m.group(1))
                 print("---- mnemonic", mnemonic)
                 data = []
