@@ -2,6 +2,7 @@ import copy
 from typing import Iterator, List, Optional, Dict
 
 import base58
+import base64
 import time
 import sha3
 import re
@@ -97,9 +98,6 @@ class SolanaIxInfo:
         print("@@@@ end iter_ixs")
 
     def process_logs(self):
-        if not self._is_valid:
-            return
-
         print("---- begin process_logs")
         program_invoke = re.compile(r'Program (\w+) invoke \[(\d+)\]')
         program_success = re.compile(r'Program (\w+) success')
@@ -118,7 +116,18 @@ class SolanaIxInfo:
             m = program_data.match(log)
             if m:
                 print("---- Program data", m.group(1))
+                mnemonic = base64.b64decode(m.group(1))
+                print("---- mnemonic", mnemonic)
+                data = []
+                for i in 2..m.end():
+                    data.append(m.group(i))
+                self.unpack_program_data(data)
         print("---- end process_logs")
+
+    def unpack_program_data(self, data: list[str]):
+        for s in list:
+            bs = base64.b64decode(s)
+            print("---- bs", bs)
 
     def get_account_cnt(self):
         assert self._is_valid
