@@ -6,6 +6,7 @@ import base64
 import time
 import sha3
 import re
+from typing import List
 from enum import Enum
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
@@ -124,7 +125,7 @@ class SolanaIxInfo:
                 self.unpack_program_data(data)
         print("---- end process_logs")
 
-    def unpack_program_data(self, data: list[str]):
+    def unpack_program_data(self, data: List[str]):
         for s in list:
             bs = base64.b64decode(s)
             print("---- bs", bs)
