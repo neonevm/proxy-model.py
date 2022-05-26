@@ -383,7 +383,7 @@ class ReceiptsParserState:
 
     def process_logs(self, logs: List[str]):
         print("---- begin process_logs")
-        print("---- receipts parser state", self)
+        print("---- receipts parser state", self._done_tx_list)
         program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
         program_success = re.compile(r'^Program (\w+) success')
         program_failed = re.compile(r'^Program (\w+) failed')
