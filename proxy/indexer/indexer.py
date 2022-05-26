@@ -25,6 +25,21 @@ from ..common_neon.solana_receipt_parser import SolReceiptParser
 
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
+def unpack_return(self, data: Iterable[str]):
+    """
+    Unpack base64-encoded return data like 'UkVUVVJO Eg== jGOHAQAAAAA='
+    """
+    for s in data:
+        bs = base64.b64decode(s)
+        print("---- rr", bs)
+
+def unpack_event_log(self, data: Iterable[str]):
+    """
+    Unpack base64-encoded event data like 'TE9HMQ== t3r68RP7szj0B5I2LdaE33WLVKI='
+    """
+    for s in data:
+        bs = base64.b64decode(s)
+        print("---- ee", bs)
 
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
@@ -97,54 +112,6 @@ class SolanaIxInfo:
 
         self._set_defaults()
         print("@@@@ end iter_ixs")
-
-    def process_logs(self, state: ReceiptsParserState):
-        print("---- begin process_logs")
-        print("---- receipts parser state", state)
-        program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
-        program_success = re.compile(r'^Program (\w+) success')
-        program_failed = re.compile(r'^Program (\w+) failed')
-        program_data = re.compile(r'^Program data: (.+)$')
-        for log in self._logs:
-            m = program_invoke.match(log)
-            if m:
-                print("---- Program", m.group(1), "invoke depth", m.group(2))
-            m = program_success.match(log)
-            if m:
-                print("---- Program", m.group(1), "success")
-            m = program_failed.match(log)
-            if m:
-                print("---- Program", m.group(1), "failed")
-            m = program_data.match(log)
-            if m:
-                tail = m.group(1)
-                print("---- Program data:", tail)
-                data = re.findall("\S+", tail)
-                mnemonic = base64.b64decode(data[0]).decode('utf-8')
-                print("---- mnemonic", mnemonic)
-                if mnemonic == "RETURN":
-                    self.unpack_return(data[1:])
-                elif mnemonic.startswith("LOG"):
-                    self.unpack_event_log(data[1:])
-                else:
-                    self.debug(f'{self} warning: unrecognized mnemonic {mnemonic}')
-        print("---- end process_logs")
-
-    def unpack_return(self, data: Iterable[str]):
-        """
-        Unpack base64-encoded return data like 'UkVUVVJO Eg== jGOHAQAAAAA='
-        """
-        for s in data:
-            bs = base64.b64decode(s)
-            print("---- rr", bs)
-
-    def unpack_event_log(self, data: Iterable[str]):
-        """
-        Unpack base64-encoded event data like 'TE9HMQ== t3r68RP7szj0B5I2LdaE33WLVKI='
-        """
-        for s in data:
-            bs = base64.b64decode(s)
-            print("---- ee", bs)
 
     def get_account_cnt(self):
         assert self._is_valid
@@ -414,6 +381,37 @@ class ReceiptsParserState:
     def add_account_to_db(self, neon_account: NeonAccountInfo):
         self._db.fill_account_info_by_indexer(neon_account)
 
+    def process_logs(self, logs: List[str]):
+        print("---- begin process_logs")
+        print("---- receipts parser state", self)
+        program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
+        program_success = re.compile(r'^Program (\w+) success')
+        program_failed = re.compile(r'^Program (\w+) failed')
+        program_data = re.compile(r'^Program data: (.+)$')
+        for log in logs:
+            m = program_invoke.match(log)
+            if m:
+                print("---- Program", m.group(1), "invoke depth", m.group(2))
+            m = program_success.match(log)
+            if m:
+                print("---- Program", m.group(1), "success")
+            m = program_failed.match(log)
+            if m:
+                print("---- Program", m.group(1), "failed")
+            m = program_data.match(log)
+            if m:
+                tail = m.group(1)
+                print("---- Program data:", tail)
+                data = re.findall("\S+", tail)
+                mnemonic = base64.b64decode(data[0]).decode('utf-8')
+                print("---- mnemonic", mnemonic)
+                if mnemonic == "RETURN":
+                    unpack_return(data[1:])
+                elif mnemonic.startswith("LOG"):
+                    unpack_event_log(data[1:])
+                else:
+                    self.debug(f'{self} warning: unrecognized mnemonic {mnemonic}')
+        print("---- end process_logs")
 
 @logged_group("neon.Indexer")
 class DummyIxDecoder:
@@ -1043,8 +1041,7 @@ class Indexer(IndexerBase):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
-                ix_info.process_logs(self.state)
-
+                self.state.process_logs(ix_info._logs)
                 self.state.add_tx_cost(ix_info.cost_info)
 
             if max_slot > 0:
