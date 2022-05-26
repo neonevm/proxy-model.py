@@ -414,8 +414,9 @@ class ReceiptsParserState:
         print("---- end process_logs")
         print("@@@@ begin iterate ixs")
         for t in self._done_tx_list:
-            print("@@@@ neon_tx", t.neon_tx)
+            print("@@@@ neon_tx", t.neon_tx.addr)
             print("@@@@ neon_res", t.neon_res)
+            print("@@@@ --------------------------------------------")
         print("@@@@ end iterate ixs")
 
 @logged_group("neon.Indexer")
