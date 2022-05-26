@@ -98,8 +98,9 @@ class SolanaIxInfo:
         self._set_defaults()
         print("@@@@ end iter_ixs")
 
-    def process_logs(self):
+    def process_logs(self, state: ReceiptsParserState):
         print("---- begin process_logs")
+        print("---- receipts parser state", state)
         program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
         program_success = re.compile(r'^Program (\w+) success')
         program_failed = re.compile(r'^Program (\w+) failed')
@@ -126,15 +127,21 @@ class SolanaIxInfo:
                 elif mnemonic.startswith("LOG"):
                     self.unpack_event_log(data[1:])
                 else:
-                    print("---- Unknown mnemonic", mnemonic)
+                    self.debug(f'{self} warning: unrecognized mnemonic {mnemonic}')
         print("---- end process_logs")
 
     def unpack_return(self, data: Iterable[str]):
+        """
+        Unpack base64-encoded return data like 'UkVUVVJO Eg== jGOHAQAAAAA='
+        """
         for s in data:
             bs = base64.b64decode(s)
             print("---- rr", bs)
 
     def unpack_event_log(self, data: Iterable[str]):
+        """
+        Unpack base64-encoded event data like 'TE9HMQ== t3r68RP7szj0B5I2LdaE33WLVKI='
+        """
         for s in data:
             bs = base64.b64decode(s)
             print("---- ee", bs)
@@ -1036,7 +1043,7 @@ class Indexer(IndexerBase):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
-                ix_info.process_logs()
+                ix_info.process_logs(self.state)
 
                 self.state.add_tx_cost(ix_info.cost_info)
 
