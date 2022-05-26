@@ -116,12 +116,11 @@ class SolanaIxInfo:
                 print("---- Program", m.group(1), "failed")
             m = program_data.match(log)
             if m:
-                end_index = m.end()
                 print("---- Program data", m.group(1))
                 mnemonic = base64.b64decode(m.group(1))
                 print("---- mnemonic", mnemonic)
                 data = []
-                for i in 2..end_index:
+                for i in range(2, m.end()):
                     data.append(m.group(i))
                 self.unpack_program_data(data)
         print("---- end process_logs")
