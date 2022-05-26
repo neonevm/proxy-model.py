@@ -100,10 +100,10 @@ class SolanaIxInfo:
 
     def process_logs(self):
         print("---- begin process_logs")
-        program_invoke = re.compile(r'Program (\w+) invoke \[(\d+)\]')
-        program_success = re.compile(r'Program (\w+) success')
-        program_failed = re.compile(r'Program (\w+) failed')
-        program_data = re.compile(r'Program data: (.+)')
+        program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
+        program_success = re.compile(r'^Program (\w+) success')
+        program_failed = re.compile(r'^Program (\w+) failed')
+        program_data = re.compile(r'^Program data: (\S+)+')
         for log in self._logs:
             m = program_invoke.match(log)
             if m:
@@ -116,14 +116,11 @@ class SolanaIxInfo:
                 print("---- Program", m.group(1), "failed")
             m = program_data.match(log)
             if m:
-                print("---- Program data", m.group(1))
-                print("---- m.end", m.end())
-                mnemonic = base64.b64decode(m.group(1))
+                chunks = m.groups()
+                print("---- Program data", chunks)
+                mnemonic = base64.b64decode(chunks[1])
                 print("---- mnemonic", mnemonic)
-                data = []
-                for i in range(2, m.end()):
-                    data.append(m.group(i))
-                self.unpack_program_data(data)
+                self.unpack_program_data(chunks)
         print("---- end process_logs")
 
     def unpack_program_data(self, data: List[str]):
