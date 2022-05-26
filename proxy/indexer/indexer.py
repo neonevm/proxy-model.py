@@ -6,7 +6,7 @@ import base64
 import time
 import sha3
 import re
-from typing import List
+from typing import Iterable
 from enum import Enum
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
@@ -121,11 +121,11 @@ class SolanaIxInfo:
                 data = re.findall("\S+", tail)
                 mnemonic = base64.b64decode(data[0])
                 print("---- mnemonic", mnemonic)
-                self.unpack_program_data(data)
+                self.unpack_program_data(data[1:])
         print("---- end process_logs")
 
-    def unpack_program_data(self, data: List[str]):
-        for s in list:
+    def unpack_program_data(self, data: Iterable[str]):
+        for s in data:
             bs = base64.b64decode(s)
             print("---- bs", bs)
 
