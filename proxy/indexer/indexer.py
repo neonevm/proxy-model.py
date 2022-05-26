@@ -25,7 +25,7 @@ from ..common_neon.solana_receipt_parser import SolReceiptParser
 
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
-def unpack_return(self, data: Iterable[str]):
+def unpack_return(data: Iterable[str]):
     """
     Unpack base64-encoded return data like 'UkVUVVJO Eg== jGOHAQAAAAA='
     """
@@ -33,7 +33,7 @@ def unpack_return(self, data: Iterable[str]):
         bs = base64.b64decode(s)
         print("---- rr", bs)
 
-def unpack_event_log(self, data: Iterable[str]):
+def unpack_event_log(data: Iterable[str]):
     """
     Unpack base64-encoded event data like 'TE9HMQ== t3r68RP7szj0B5I2LdaE33WLVKI='
     """
