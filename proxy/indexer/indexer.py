@@ -383,7 +383,7 @@ class ReceiptsParserState:
 
     def process_logs(self, logs: List[str]):
         print("---- begin process_logs")
-        print("---- receipts parser state", self._done_tx_list)
+        print("---- done tx list len", len(self._done_tx_list))
         program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
         program_success = re.compile(r'^Program (\w+) success')
         program_failed = re.compile(r'^Program (\w+) failed')
@@ -412,6 +412,11 @@ class ReceiptsParserState:
                 else:
                     self.debug(f'{self} warning: unrecognized mnemonic {mnemonic}')
         print("---- end process_logs")
+        print("@@@@ begin iterate ixs")
+        for t in self._done_tx_list:
+            print("@@@@ neon_tx", t.neon_tx)
+            print("@@@@ neon_res", t.neon_res)
+        print("@@@@ end iterate ixs")
 
 @logged_group("neon.Indexer")
 class DummyIxDecoder:
