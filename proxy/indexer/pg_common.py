@@ -1,10 +1,10 @@
 import psycopg2
 import os
 
-POSTGRES_DB = os.environ.get("POSTGRES_DB", "neon-db")
-POSTGRES_USER = os.environ.get("POSTGRES_USER", "neon-proxy")
-POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "neon-proxy-pass")
-POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
+POSTGRES_DB = os.environ["POSTGRES_DB"]
+POSTGRES_USER = os.environ["POSTGRES_USER"]
+POSTGRES_PASSWORD = os.environ["POSTGRES_PASSWORD"]
+POSTGRES_HOST = os.environ["POSTGRES_HOST"]
 
 try:
     from cPickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL

@@ -57,14 +57,14 @@ def str_fmt_object(obj) -> str:
 
 
 class SolanaBlockInfo:
-    def __init__(self, slot: int, is_finalized=False, hash=None, parent_hash=None, time=None, signs=None, is_fake=False):
+    def __init__(self, slot: int, hash=None, time=None, is_finalized=False, is_fake=False):
         self.slot = slot
         self.is_finalized = is_finalized
         self.is_fake = is_fake
         self.hash = hash
-        self.parent_hash = parent_hash
         self.time = time
-        self.signs = (signs or [])
+        self.parent_hash = None
+        self.signs = []
 
     def __str__(self) -> str:
         return str_fmt_object(self)

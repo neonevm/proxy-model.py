@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxFullInfo
 from ..indexer.base_db import BaseDB, DBQuery
@@ -105,23 +105,12 @@ class NeonTxsDB(BaseDB):
             ))
         )
 
-    def get_tx_list_by_sol_sign(self, sol_sign_list: [str]) -> [NeonTxFullInfo]:
-        e = self._build_expression(DBQuery(
+    def get_tx_list_by_block_slot(self, block_slot: int) -> List[NeonTxFullInfo]:
+        values = self._fetchall(DBQuery(
             column_list=self._column_lst,
-            key_list=[],
-            order_list=[],
+            key_list=[('slot', block_slot)],
+            order_list=['tx_idx ASC'],
         ))
-
-        request = f'''
-            SELECT {e.column_expr}
-              FROM {self._table_name} AS a
-             WHERE sol_sign in ({','.join(['%s' for _ in sol_sign_list])})
-             LIMIT {len(sol_sign_list)}
-        '''
-
-        with self._conn.cursor() as cursor:
-            cursor.execute(request, sol_sign_list)
-            values = cursor.fetchall()
 
         if not values:
             return []

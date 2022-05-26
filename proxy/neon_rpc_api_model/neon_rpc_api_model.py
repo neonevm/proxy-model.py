@@ -117,9 +117,11 @@ class NeonRpcApiModel:
     def __repr__(self):
         return str(self.__dict__)
 
-    def _should_return_starting_block(self, tag) -> bool:
+    @staticmethod
+    def _should_return_starting_block(tag) -> bool:
         return tag == 'earliest' \
             or ((tag == '0x0' or str(tag) == '0') and USE_EARLIEST_BLOCK_IF_0_PASSED)
+
     def _process_block_tag(self, tag) -> SolanaBlockInfo:
         if tag in ("latest", "pending"):
             block = self._db.get_latest_block()
@@ -197,7 +199,7 @@ class NeonRpcApiModel:
 
         return block
 
-    def eth_blockNumber(self):
+    def eth_blockNumber(self) -> str:
         slot = self._db.get_latest_block_slot()
         return hex(slot)
 
@@ -257,7 +259,7 @@ class NeonRpcApiModel:
         if skip_transaction:
             tx_list = []
         else:
-            tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
+            tx_list = self._db.get_tx_list_by_block_slot(block.is_finalized, block.slot)
 
         for tx in tx_list:
             gas_used += int(tx.neon_res.gas_used, 16)
@@ -530,7 +532,7 @@ class NeonRpcApiModel:
                 self.debug(f"Not found block by slot {block.slot}")
                 return None
 
-        tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
+        tx_list = self._db.get_tx_list_by_block_slot(block.is_finalized, block.slot)
         if tx_idx >= len(tx_list):
             return None
 
@@ -560,7 +562,7 @@ class NeonRpcApiModel:
                 self.debug(f"Not found block by slot {block.slot}")
                 return hex(0)
 
-        tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
+        tx_list = self._db.get_tx_list_by_block_slot(block.is_finalized, block.slot)
         return hex(len(tx_list))
 
     def eth_getBlockTransactionCountByNumber(self, tag: str) -> str:
@@ -568,7 +570,7 @@ class NeonRpcApiModel:
         if block.is_empty():
             return hex(0)
 
-        tx_list = self._db.get_tx_list_by_sol_sign(block.is_finalized, block.signs)
+        tx_list = self._db.get_tx_list_by_block_slot(block.is_finalized, block.slot)
         return hex(len(tx_list))
 
     @staticmethod
@@ -686,3 +688,7 @@ class NeonRpcApiModel:
     def neon_getSolanaTransactionByNeonTransaction(self, NeonTxId: str) -> Union[str, list]:
         neon_sign = self._normalize_tx_id(NeonTxId)
         return self._db.get_sol_sign_list_by_neon_sign(neon_sign)
+
+    def neon_finalizedBlockNumber(self) -> str:
+        slot = self._db.get_finalized_block_slot()
+        return hex(slot)

@@ -58,6 +58,21 @@ class BaseDB:
             cursor.execute(request, e.where_keys)
             return cursor.fetchone()
 
+    def _fetchall(self, query: DBQuery) -> []:
+        e = self._build_expression(query)
+
+        request = f'''
+            SELECT {e.column_expr}
+              FROM {self._table_name} AS a
+             WHERE {e.where_expr}
+                   {e.order_expr}
+             LIMIT 1
+        '''
+
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, e.where_keys)
+            return cursor.fetchall()
+
     def __del__(self):
         self._conn.close()
 
