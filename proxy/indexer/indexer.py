@@ -36,12 +36,13 @@ def unpack_return(data: Iterable[str]):
         bs = base64.b64decode(s)
         if i == 0:
             exit_status = int.from_bytes(bs, "little")
+            exit_status = 0x1 if exit_status < 0xd0 else 0x0
         elif i == 1:
             gas_used = int.from_bytes(bs, "little")
         elif i == 2:
             return_value = bs
     print("return exit_status", exit_status)
-    print("return gas_used", gas_used)
+    print("return gas_used", hex(gas_used))
     print("return value", return_value)
 
 def unpack_event_log(data: Iterable[str]):
