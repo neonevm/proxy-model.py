@@ -27,7 +27,7 @@ from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_
 
 def unpack_return(data: Iterable[str]):
     """
-    Unpack base64-encoded return data like 'UkVUVVJO Eg== jGOHAQAAAAA='
+    Unpack base64-encoded return data.
     """
     for s in data:
         bs = base64.b64decode(s)
@@ -35,7 +35,7 @@ def unpack_return(data: Iterable[str]):
 
 def unpack_event_log(data: Iterable[str]):
     """
-    Unpack base64-encoded event data like 'TE9HMQ== t3r68RP7szj0B5I2LdaE33WLVKI='
+    Unpack base64-encoded event data.
     """
     for s in data:
         bs = base64.b64decode(s)
@@ -90,7 +90,7 @@ class SolanaIxInfo:
         if not self._is_valid:
             return
 
-        print("@@@@ begin iter_ixs")
+        print("==== begin iter_ixs")
         self._set_defaults()
         tx_ixs = enumerate(self._msg['instructions'])
 
@@ -111,7 +111,7 @@ class SolanaIxInfo:
                             yield evm_ix_idx
 
         self._set_defaults()
-        print("@@@@ end iter_ixs")
+        print("==== end iter_ixs")
 
     def get_account_cnt(self):
         assert self._is_valid
@@ -410,14 +410,14 @@ class ReceiptsParserState:
                 elif mnemonic.startswith("LOG"):
                     unpack_event_log(data[1:])
                 else:
-                    self.debug(f'{self} warning: unrecognized mnemonic {mnemonic}')
+                    self.error(f'{self} unrecognized mnemonic {mnemonic}')
         print("---- end process_logs")
-        print("@@@@ begin iterate ixs")
+        print("==== begin iterate ixs")
         for t in self._done_tx_list:
-            print("@@@@ neon_tx", t.neon_tx.addr)
-            print("@@@@ neon_res", t.neon_res)
-            print("@@@@ --------------------------------------------")
-        print("@@@@ end iterate ixs")
+            print("==== neon_tx", t.neon_tx.addr)
+            print("==== neon_res", t.neon_res)
+            print("================================================================")
+        print("==== end iterate ixs")
 
 @logged_group("neon.Indexer")
 class DummyIxDecoder:
@@ -1038,11 +1038,9 @@ class Indexer(IndexerBase):
                 max_slot = max(max_slot, slot)
 
                 ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
-                print("==== ix_info", ix_info)
 
                 for _ in ix_info.iter_ixs():
                     req_id = ix_info.sign.get_req_id()
-                    print("==== req_id", req_id)
                     with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
