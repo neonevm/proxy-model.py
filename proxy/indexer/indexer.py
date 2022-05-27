@@ -29,9 +29,20 @@ def unpack_return(data: Iterable[str]):
     """
     Unpack base64-encoded return data.
     """
-    for s in data:
+    exit_status = 0
+    gas_used = 0
+    return_value = b''
+    for i, s in enumerate(data):
         bs = base64.b64decode(s)
-        print("---- rr", bs)
+        if i == 0:
+            exit_status = int.from_bytes(bs, "little")
+        elif i == 1:
+            gas_used = int.from_bytes(bs, "little")
+        elif i == 2:
+            return_value = bs
+    print("return exit_status", exit_status)
+    print("return gas_used", gas_used)
+    print("return value", return_value)
 
 def unpack_event_log(data: Iterable[str]):
     """
