@@ -59,7 +59,7 @@ def unpack_event_log(data: Iterable[str]):
             address = bs
         elif i == 1:
             count_topics = int.from_bytes(bs, "little")
-        elif i > 1 && i < 6:
+        elif 1 < i < 6:
             if count_topics > (i - 2):
                 t.append(bs)
             else:
