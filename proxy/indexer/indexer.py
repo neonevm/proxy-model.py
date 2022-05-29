@@ -43,15 +43,33 @@ def unpack_return(data: Iterable[str]):
             return_value = bs
     print("return exit_status", exit_status)
     print("return gas_used", hex(gas_used))
-    print("return value", return_value)
+    print("return value", hex(return_value))
 
 def unpack_event_log(data: Iterable[str]):
     """
     Unpack base64-encoded event data.
     """
-    for s in data:
+    address = b''
+    count_topics = 0
+    t = []
+    log_data = b''
+    for i, s in enumerate(data):
         bs = base64.b64decode(s)
-        print("---- ee", bs)
+        if i == 0:
+            address = bs
+        elif i == 1:
+            count_topics = int.from_bytes(bs, "little")
+        elif i > 1 && i < 6:
+            if count_topics > (i - 2):
+                t.append(bs)
+            else:
+                log_data = bs
+        else:
+            log_data = bs
+    print('event address', hex(address))
+    print('event count_topics', count_topics)
+    print('event topics', t)
+    print('event log_data', hex(log_data))
 
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
