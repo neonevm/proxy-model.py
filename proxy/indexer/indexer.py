@@ -468,7 +468,8 @@ class ReceiptsParserState:
 
         print("---- tx_list len", len(tx_list))
         print("---- done_tx_list len", len(self._done_tx_list))
-        assert len(tx_list) == len(self._done_tx_list)
+        if len(tx_list) != len(self._done_tx_list):
+            print("XXXX")
 
         print("==== begin iterate ixs")
         for i, t in enumerate(self._done_tx_list):
