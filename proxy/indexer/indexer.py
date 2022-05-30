@@ -31,8 +31,6 @@ class ReturnDTO:
     exit_status: int = 0
     gas_used: int = 0
     return_value:bytes = None
-    def __str__(self):
-        return f'{self.exit_status} {hex(self.gas_used)} {self.return_value}'
 
 def unpack_return(data: Iterable[str]) -> ReturnDTO:
     """
@@ -476,7 +474,10 @@ class ReceiptsParserState:
 
         print("==== begin iterate _done_tx_list")
         for i, t in enumerate(self._done_tx_list):
-            print("==== neon_tx", t.neon_tx.addr)
+            print("==== canceled", t.canceled)
+            print("==== status", t.status)
+            print("==== neon_tx.addr", t.neon_tx.addr)
+            print("==== neon_tx.sign", t.neon_tx.sign)
             print("==== neon_res", t.neon_res)
             print("================================================================")
         print("==== end iterate _done_tx_list")
