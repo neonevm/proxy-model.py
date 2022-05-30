@@ -7,6 +7,7 @@ import time
 import sha3
 import re
 from typing import Iterable
+from dataclasses import astuple, dataclass
 from enum import Enum
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
@@ -25,7 +26,13 @@ from ..common_neon.solana_receipt_parser import SolReceiptParser
 
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
-def unpack_return(data: Iterable[str]):
+@dataclass
+class ReturnDTO:
+    exit_status: int = 0
+    gas_used: int = 0
+    return_value:bytes = None
+
+def unpack_return(data: Iterable[str]) -> ReturnDTO:
     """
     Unpack base64-encoded return data.
     """
@@ -41,11 +48,16 @@ def unpack_return(data: Iterable[str]):
             gas_used = int.from_bytes(bs, "little")
         elif i == 2:
             return_value = bs
-    print("return exit_status", exit_status)
-    print("return gas_used", hex(gas_used))
-    print("return value", return_value)
+    return ReturnDTO(exit_status, gas_used, return_value)
 
-def unpack_event_log(data: Iterable[str]):
+@dataclass
+class EventDTO:
+    address: bytes = None
+    count_topics: int = 0
+    topics: List[bytes] = None
+    log_data: bytes = None
+
+def unpack_event_log(data: Iterable[str]) -> EventDTO:
     """
     Unpack base64-encoded event data.
     """
@@ -66,10 +78,7 @@ def unpack_event_log(data: Iterable[str]):
                 log_data = bs
         else:
             log_data = bs
-    print('event address', address)
-    print('event count_topics', count_topics)
-    print('event topics', t)
-    print('event log_data', log_data)
+    return EventDTO(address, count_topics, t, log_data)
 
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
@@ -217,6 +226,10 @@ class NeonTxResult(BaseEvmObject):
     def __str__(self):
         return str_fmt_object(self)
 
+@dataclass
+class LogIxDTO:
+    return_dto: ReturnDTO = None
+    event_dto: EventDTO = None
 
 @logged_group("neon.Indexer")
 class ReceiptsParserState:
@@ -418,10 +431,13 @@ class ReceiptsParserState:
         program_success = re.compile(r'^Program (\w+) success')
         program_failed = re.compile(r'^Program (\w+) failed')
         program_data = re.compile(r'^Program data: (.+)$')
+        tx_list: List[LogIxDTO] = None
+
         for log in logs:
             m = program_invoke.match(log)
             if m:
                 print("---- Program", m.group(1), "invoke depth", m.group(2))
+                tx_list.append(LogIxDTO())
             m = program_success.match(log)
             if m:
                 print("---- Program", m.group(1), "success")
@@ -442,6 +458,7 @@ class ReceiptsParserState:
                 else:
                     self.error(f'{self} unrecognized mnemonic {mnemonic}')
         print("---- end process_logs")
+
         print("==== begin iterate ixs")
         for t in self._done_tx_list:
             print("==== neon_tx", t.neon_tx.addr)
