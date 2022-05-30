@@ -31,6 +31,8 @@ class ReturnDTO:
     exit_status: int = 0
     gas_used: int = 0
     return_value:bytes = None
+    def __str__(self):
+        return f'{self.exit_status} {hex(self.gas_used)} {self.return_value}'
 
 def unpack_return(data: Iterable[str]) -> ReturnDTO:
     """
