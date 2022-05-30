@@ -439,17 +439,21 @@ class ReceiptsParserState:
         for line in logs:
             m = program_invoke.match(line)
             if m:
-                print("---- Program", m.group(1), "invoke depth", m.group(2))
-                tx_list.append(LogIxDTO())
+                program_id = m.group(1)
+                print("---- Program", program_id, "invoke depth", m.group(2))
+                if program_id == EVM_LOADER_ID:
+                    tx_list.append(LogIxDTO())
             m = program_success.match(line)
             if m:
-                print("---- Program", m.group(1), "success")
-                if tx_list[-1].empty():
+                program_id = m.group(1)
+                print("---- Program", program_id, "success")
+                if program_id == EVM_LOADER_ID and tx_list[-1].empty():
                     tx_list.pop(-1)
             m = program_failed.match(line)
             if m:
-                print("---- Program", m.group(1), "failed")
-                if tx_list[-1].empty():
+                program_id = m.group(1)
+                print("---- Program", program_id, "failed")
+                if program_id == EVM_LOADER_ID and tx_list[-1].empty():
                     tx_list.pop(-1)
             m = program_data.match(line)
             if m:
