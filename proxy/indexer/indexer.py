@@ -480,8 +480,7 @@ class ReceiptsParserState:
 
         print("==== begin iterate _done_tx_list")
         for t in self._done_tx_list:
-            print("==== canceled", t.canceled)
-            print("==== status", t.status)
+            print("==== neon_res_complete", t.neon_res_complete)
             print("==== neon_tx.addr", t.neon_tx.addr)
             print("==== neon_tx.sign", t.neon_tx.sign)
             print("==== neon_res", t.neon_res)
