@@ -436,22 +436,23 @@ class ReceiptsParserState:
         program_data = re.compile(r'^Program data: (.+)$')
         tx_list: List[LogIxDTO] = []
 
-        for log in logs:
-            m = program_invoke.match(log)
+        for line in logs:
+            print("....", line)
+            m = program_invoke.match(line)
             if m:
                 print("---- Program", m.group(1), "invoke depth", m.group(2))
                 tx_list.append(LogIxDTO())
-            m = program_success.match(log)
+            m = program_success.match(line)
             if m:
                 print("---- Program", m.group(1), "success")
                 if tx_list[-1].empty():
                     tx_list.pop(-1)
-            m = program_failed.match(log)
+            m = program_failed.match(line)
             if m:
                 print("---- Program", m.group(1), "failed")
                 if tx_list[-1].empty():
                     tx_list.pop(-1)
-            m = program_data.match(log)
+            m = program_data.match(line)
             if m:
                 tail = m.group(1)
                 print("---- Program data:", tail)
