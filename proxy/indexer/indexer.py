@@ -492,7 +492,11 @@ class ReceiptsParserState:
             while self._done_tx_list[curr].neon_res_complete:
                 curr += 1
             # assign result & events
+            self._done_tx_list[curr].neon_res.gas_used = hex(t.return_dto.gas_used)
+            self._done_tx_list[curr].neon_res.status = hex(t.return_dto.exit_status)
+            self._done_tx_list[curr].neon_res.return_value = t.return_dto.return_value.hex()
             self._done_tx_list[curr].neon_res_complete = True
+            print("++++ new neon_res", self._done_tx_list[curr].neon_res)
 
 @logged_group("neon.Indexer")
 class DummyIxDecoder:
