@@ -222,6 +222,7 @@ class NeonTxResult(BaseEvmObject):
         self.blocked_accounts = []
         self.canceled = False
         self.status = NeonTxIndexingStatus.IN_PROGRESS
+        self.neon_res_complete = False
 
     def __str__(self):
         return str_fmt_object(self)
@@ -469,11 +470,16 @@ class ReceiptsParserState:
                     self.error(f'{self} unrecognized mnemonic {mnemonic}')
         print("---- end process_logs")
 
-        print("---- _done_tx_list len", len(self._done_tx_list))
         print("---- tx_list len", len(tx_list))
+        print("---- _done_tx_list len", len(self._done_tx_list))
+
+        print("++++ begin iterate tx_list")
+        for t in tx_list:
+            print("++++ dto", t)
+        print("++++ end iterate tx_list")
 
         print("==== begin iterate _done_tx_list")
-        for i, t in enumerate(self._done_tx_list):
+        for t in self._done_tx_list:
             print("==== canceled", t.canceled)
             print("==== status", t.status)
             print("==== neon_tx.addr", t.neon_tx.addr)
@@ -482,10 +488,12 @@ class ReceiptsParserState:
             print("================================================================")
         print("==== end iterate _done_tx_list")
 
-        print("++++ begin iterate tx_list")
-        for i, t in enumerate(tx_list):
-            print("++++ dto", t)
-        print("++++ end iterate tx_list")
+        curr = 0
+        for t in tx_list:
+            while self._done_tx_list[curr].neon_res_complete:
+                curr += 1
+            # assign result & events
+            self._done_tx_list[curr].neon_res_complete = True
 
 @logged_group("neon.Indexer")
 class DummyIxDecoder:
