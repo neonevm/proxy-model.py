@@ -431,7 +431,7 @@ class ReceiptsParserState:
         program_success = re.compile(r'^Program (\w+) success')
         program_failed = re.compile(r'^Program (\w+) failed')
         program_data = re.compile(r'^Program data: (.+)$')
-        tx_list: List[LogIxDTO] = None
+        tx_list: List[LogIxDTO] = []
 
         for log in logs:
             m = program_invoke.match(log)
