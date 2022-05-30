@@ -429,7 +429,7 @@ class ReceiptsParserState:
 
     def process_logs(self, logs: List[str]):
         print("---- begin process_logs")
-        print("---- done tx list len", len(self._done_tx_list))
+        print("---- _done_tx_list len", len(self._done_tx_list))
         program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
         program_success = re.compile(r'^Program (\w+) success')
         program_failed = re.compile(r'^Program (\w+) failed')
@@ -437,7 +437,6 @@ class ReceiptsParserState:
         tx_list: List[LogIxDTO] = []
 
         for line in logs:
-            print("....", line)
             m = program_invoke.match(line)
             if m:
                 print("---- Program", m.group(1), "invoke depth", m.group(2))
@@ -468,7 +467,6 @@ class ReceiptsParserState:
         print("---- end process_logs")
 
         print("---- tx_list len", len(tx_list))
-        print("---- done_tx_list len", len(self._done_tx_list))
 
         print("==== begin iterate ixs")
         for i, t in enumerate(tx_list):
