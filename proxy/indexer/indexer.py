@@ -466,8 +466,13 @@ class ReceiptsParserState:
                     self.error(f'{self} unrecognized mnemonic {mnemonic}')
         print("---- end process_logs")
 
+        print("---- tx_list len", len(tx_list))
+        print("---- done_tx_list len", len(self._done_tx_list))
+        assert len(tx_list) == len(self._done_tx_list)
+
         print("==== begin iterate ixs")
-        for t in self._done_tx_list:
+        for i, t in enumerate(self._done_tx_list):
+            print("==== dto", tx_list[i])
             print("==== neon_tx", t.neon_tx.addr)
             print("==== neon_res", t.neon_res)
             print("================================================================")
