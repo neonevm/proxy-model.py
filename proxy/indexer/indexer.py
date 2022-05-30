@@ -469,14 +469,13 @@ class ReceiptsParserState:
 
         print("---- tx_list len", len(tx_list))
         print("---- done_tx_list len", len(self._done_tx_list))
-        if len(tx_list) != len(self._done_tx_list):
-            print("XXXX")
 
         print("==== begin iterate ixs")
-        for i, t in enumerate(self._done_tx_list):
-            print("==== dto", tx_list[i])
-            print("==== neon_tx", t.neon_tx.addr)
-            print("==== neon_res", t.neon_res)
+        for i, t in enumerate(tx_list):
+            dt = self._done_tx_list[i]
+            print("==== dto", t)
+            print("==== neon_tx", dt.neon_tx.addr)
+            print("==== neon_res", dt.neon_res)
             print("================================================================")
         print("==== end iterate ixs")
 
