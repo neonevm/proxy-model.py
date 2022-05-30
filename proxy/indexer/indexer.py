@@ -429,7 +429,6 @@ class ReceiptsParserState:
 
     def process_logs(self, logs: List[str]):
         print("---- begin process_logs")
-        print("---- _done_tx_list len", len(self._done_tx_list))
         program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
         program_success = re.compile(r'^Program (\w+) success')
         program_failed = re.compile(r'^Program (\w+) failed')
@@ -470,16 +469,20 @@ class ReceiptsParserState:
                     self.error(f'{self} unrecognized mnemonic {mnemonic}')
         print("---- end process_logs")
 
+        print("---- _done_tx_list len", len(self._done_tx_list))
         print("---- tx_list len", len(tx_list))
 
-        print("==== begin iterate ixs")
-        for i, t in enumerate(tx_list):
-            dt = self._done_tx_list[i]
-            print("==== dto", t)
-            print("==== neon_tx", dt.neon_tx.addr)
-            print("==== neon_res", dt.neon_res)
+        print("==== begin iterate _done_tx_list")
+        for i, t in enumerate(self._done_tx_list):
+            print("==== neon_tx", t.neon_tx.addr)
+            print("==== neon_res", t.neon_res)
             print("================================================================")
-        print("==== end iterate ixs")
+        print("==== end iterate _done_tx_list")
+
+        print("++++ begin iterate tx_list")
+        for i, t in enumerate(tx_list):
+            print("++++ dto", t)
+        print("++++ end iterate tx_list")
 
 @logged_group("neon.Indexer")
 class DummyIxDecoder:
