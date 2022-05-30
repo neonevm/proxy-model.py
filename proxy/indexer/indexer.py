@@ -231,6 +231,9 @@ class LogIxDTO:
     return_dto: ReturnDTO = None
     event_dto: EventDTO = None
 
+    def empty(self) -> bool:
+        return (self.return_dto is None) and (self.event_dto is None)
+
 @logged_group("neon.Indexer")
 class ReceiptsParserState:
     """
@@ -441,9 +444,13 @@ class ReceiptsParserState:
             m = program_success.match(log)
             if m:
                 print("---- Program", m.group(1), "success")
+                if tx_list[-1].empty():
+                    tx_list.pop(-1)
             m = program_failed.match(log)
             if m:
                 print("---- Program", m.group(1), "failed")
+                if tx_list[-1].empty():
+                    tx_list.pop(-1)
             m = program_data.match(log)
             if m:
                 tail = m.group(1)
@@ -452,9 +459,9 @@ class ReceiptsParserState:
                 mnemonic = base64.b64decode(data[0]).decode('utf-8')
                 print("---- mnemonic", mnemonic)
                 if mnemonic == "RETURN":
-                    unpack_return(data[1:])
+                    tx_list[-1].return_dto = unpack_return(data[1:])
                 elif mnemonic.startswith("LOG"):
-                    unpack_event_log(data[1:])
+                    tx_list[-1].event_dto = unpack_event_log(data[1:])
                 else:
                     self.error(f'{self} unrecognized mnemonic {mnemonic}')
         print("---- end process_logs")
