@@ -227,6 +227,7 @@ class NeonTxResult(BaseEvmObject):
     def __str__(self):
         return str_fmt_object(self)
 
+
 @dataclass
 class LogIxDTO:
     return_dto: ReturnDTO = None
@@ -234,6 +235,7 @@ class LogIxDTO:
 
     def empty(self) -> bool:
         return (self.return_dto is None) and (self.event_dto is None)
+
 
 @logged_group("neon.Indexer")
 class ReceiptsParserState:
@@ -486,10 +488,12 @@ class ReceiptsParserState:
         print("==== end iterate _done_tx_list")
 
         curr = 0
+        print("++++ tx_list len", len(tx_list))
         for t in tx_list:
             while self._done_tx_list[curr].neon_res_complete:
                 curr += 1
             # assign result & events
+            print("++++ _done_tx_list len", len(self._done_tx_list))
             print("++++ curr", curr)
             self._done_tx_list[curr].neon_res.gas_used = hex(t.return_dto.gas_used)
             self._done_tx_list[curr].neon_res.status = hex(t.return_dto.exit_status)
