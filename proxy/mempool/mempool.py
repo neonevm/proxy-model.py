@@ -3,7 +3,7 @@ from typing import List, Tuple, Dict
 from logged_groups import logged_group
 import bisect
 
-from .mempool_api import MPRequest, MPResultCode, MPResult, IMPExecutor, MPRequestType, \
+from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, \
                          MPTxRequest, MPPendingTxCountReq
 
 
@@ -16,7 +16,6 @@ class MemPool:
 
     def __init__(self, executor: IMPExecutor):
         self._req_queue = []
-        self._lock = asyncio.Lock()
         self._req_queue_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         # signer -> pending_tx_counter
@@ -29,12 +28,12 @@ class MemPool:
     async def enqueue_mp_request(self, mp_request: MPRequest):
         if mp_request.type == MPRequestType.SendTransaction:
             tx_request: MPTxRequest = mp_request
-            return await self.on_send_tx_request(tx_request)
+            return await self._on_send_tx_request(tx_request)
         elif mp_request.type == MPRequestType.GetTrxCount:
             pending_count_req: MPPendingTxCountReq = mp_request
             return self.get_pending_trx_count(pending_count_req.sender)
 
-    async def on_send_tx_request(self, mp_request: MPTxRequest):
+    async def _on_send_tx_request(self, mp_request: MPTxRequest):
         await self.enqueue_mp_transaction(mp_request)
         sender = "0x" + mp_request.neon_tx.sender()
         self._inc_pending_tx_counter(sender)
@@ -89,33 +88,33 @@ class MemPool:
                     self._executor.release_resource(resource_id)
                     continue
 
-                mp_result: MPResult = task.result()
-                assert isinstance(mp_result, MPResult)
-                assert mp_result.code != MPResultCode.Dummy
-                await self._process_mp_result(resource_id, mp_result, mp_request)
+                mp_tx_result: MPTxResult = task.result()
+                assert isinstance(mp_tx_result, MPTxResult)
+                assert mp_tx_result.code != MPResultCode.Dummy
+                await self._process_mp_result(resource_id, mp_tx_result, mp_request)
 
             self._processing_tasks = not_finished_tasks
             await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
 
-    async def _process_mp_result(self, resource_id: int, mp_result: MPResult, mp_request: MPTxRequest):
+    async def _process_mp_result(self, resource_id: int, mp_tx_result: MPTxResult, mp_request: MPTxRequest):
         tx_hash = "0x" + mp_request.neon_tx.hash_signed().hex()
         log_ctx = {"context": {"req_id": mp_request.req_id}}
-        if mp_result.code == MPResultCode.Done:
+        if mp_tx_result.code == MPResultCode.Done:
             self.debug(f"Neon tx: {tx_hash} - processed on executor: {resource_id} - done", extra=log_ctx)
             self._on_request_done(mp_request)
             self._executor.release_resource(resource_id)
             await self._kick_tx_queue()
             return
-        self.warning(f"Failed to process tx: {tx_hash} - on executor: {resource_id}, status: {mp_result} - reschedule", extra=log_ctx)
-        if mp_result.code == MPResultCode.BlockedAccount:
+        self.warning(f"Failed to process tx: {tx_hash} - on executor: {resource_id}, status: {mp_tx_result} - reschedule", extra=log_ctx)
+        if mp_tx_result.code == MPResultCode.BlockedAccount:
             self._executor.release_resource(resource_id)
             await self.enqueue_mp_request(mp_request)
             await self._kick_tx_queue()
-        elif mp_result.code == MPResultCode.NoLiquidity:
+        elif mp_tx_result.code == MPResultCode.NoLiquidity:
             self._executor.on_no_liquidity(resource_id)
             await self.enqueue_mp_request(mp_request)
             await self._kick_tx_queue()
-        elif mp_result.code == MPResultCode.Unspecified:
+        elif mp_tx_result.code == MPResultCode.Unspecified:
             self._executor.release_resource(resource_id)
             self._on_request_dropped_away(mp_request)
             await self._kick_tx_queue()

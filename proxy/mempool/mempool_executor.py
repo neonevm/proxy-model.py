@@ -6,17 +6,17 @@ from logged_groups import logged_group, logging_context
 
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
-from ..common_neon.utils import PipePickableDataSrv, PickableDataServerUser, Any
+from ..common_neon.utils import PipePickableDataSrv, IPickableDataServerUser, Any
 from ..common_neon.config import Config
 from ..memdb.memdb import MemDB
 
 from .transaction_sender import NeonTxSender
 from .operator_resource_list import OperatorResourceList
-from .mempool_api import MPRequest, MPResult, MPResultCode
+from .mempool_api import MPRequest, MPTxResult, MPResultCode
 
 
 @logged_group("neon.MemPool")
-class MPExecutor(mp.Process, PickableDataServerUser):
+class MPExecutor(mp.Process, IPickableDataServerUser):
 
     def __init__(self, executor_id: int, srv_sock: socket.socket, config: IConfig):
         self.info(f"Initialize mempool_executor: {executor_id}")
@@ -44,8 +44,8 @@ class MPExecutor(mp.Process, PickableDataServerUser):
                 self.execute_neon_tx_impl(mempool_request)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
-                return MPResult(MPResultCode.Unspecified, None)
-            return MPResult(MPResultCode.Done, None)
+                return MPTxResult(MPResultCode.Unspecified, None)
+            return MPTxResult(MPResultCode.Done, None)
 
     def execute_neon_tx_impl(self, mempool_tx_cfg: MPRequest):
         neon_tx = mempool_tx_cfg.neon_tx
