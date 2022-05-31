@@ -103,7 +103,7 @@ class MPTransaction:
         self.mp_request = mp_request
         self.signature  = mp_request.signature
         self.nonce      = mp_request.neon_tx.nonce
-        self.address    = mp_request.neon_tx.addr
+        self.address    = mp_request.neon_tx.sender()
         self.gas_price  = mp_request.neon_tx.gasPrice
 
     def __eq__(self, other):
