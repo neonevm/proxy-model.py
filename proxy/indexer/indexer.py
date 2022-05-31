@@ -455,7 +455,7 @@ class ReceiptsParserState:
             if m:
                 program_id = m.group(1)
                 print("---- Program", program_id, "failed")
-                if program_id == EVM_LOADER_ID and tx_list[-1].empty():
+                if program_id == EVM_LOADER_ID:
                     tx_list.pop(-1)
             m = program_data.match(line)
             if m:
