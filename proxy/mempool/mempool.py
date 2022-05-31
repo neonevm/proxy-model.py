@@ -23,7 +23,7 @@ class MemPool:
         self._req_queue_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         # signer -> pending_tx_counter
-        self._pending_trx_counters: Dict[str, Set[int]] = {}
+        self._pending_trx_counters: Dict[str, int] = {}
         self._process_tx_results_task = asyncio.get_event_loop().create_task(self.check_processing_tasks())
         self._process_tx_queue_task = asyncio.get_event_loop().create_task(self.process_tx_queue())
 
@@ -40,8 +40,7 @@ class MemPool:
     async def on_send_tx_request(self, mp_request: MPTxRequest):
         await self.enqueue_mp_transaction(mp_request)
         sender = "0x" + mp_request.neon_tx.sender()
-        nonce = mp_request.neon_tx.nonce
-        self._inc_pending_tx_counter(sender, nonce)
+        self._inc_pending_tx_counter(sender)
         count = self.get_pending_trx_count(sender)
         self.debug(f"On send tx request. Sender: {sender}, pending tx count: {count}")
 
@@ -56,8 +55,7 @@ class MemPool:
             self.error(f"Failed enqueue tx: {tx_hash} into queue: {err}", extra=log_ctx)
 
     def get_pending_trx_count(self, sender: str):
-        values = self._pending_trx_counters.get(sender, Set[int])
-        return max(values, default=0)
+        return self._pending_trx_counters.get(sender, 0)
 
     async def process_tx_queue(self):
         while True:
@@ -123,32 +121,29 @@ class MemPool:
 
     def _on_request_done(self, tx_request: MPTxRequest):
         sender = "0x" + tx_request.neon_tx.sender()
-        nonce = tx_request.neon_tx.nonce
-        self._dec_pending_tx_counter(sender, nonce)
+        self._dec_pending_tx_counter(sender)
         count = self.get_pending_trx_count(sender)
         log_ctx = {"context": {"req_id": tx_request.req_id}}
-        self.debug(f"Request done. Sender: {sender}, pending tx count: {count}", extra=log_ctx)
+        self.debug(f"Reqeust done. Sender: {sender}, pending tx count: {count}", extra=log_ctx)
 
     def _on_request_dropped_away(self, tx_request: MPTxRequest):
         sender = "0x" + tx_request.neon_tx.sender()
-        nonce = tx_request.neon_tx.nonce
-        self._dec_pending_tx_counter(sender, nonce)
+        self._dec_pending_tx_counter(sender)
         count = self.get_pending_trx_count(sender)
         log_ctx = {"context": {"req_id": tx_request.req_id}}
-        self.debug(f"Request dropped away. Sender: {sender}, pending tx count: {count}", extra=log_ctx)
+        self.debug(f"Reqeust dropped away. Sender: {sender}, pending tx count: {count}", extra=log_ctx)
 
-    def _inc_pending_tx_counter(self, sender: str, nonce: int):
-        values = self._pending_trx_counters.get(sender, Set[int])
-        values.add(nonce)
-        self._pending_trx_counters.update({sender: values})
+    def _inc_pending_tx_counter(self, sender: str):
+        counts = self._pending_trx_counters.get(sender, 0)
+        self._pending_trx_counters.update({sender: counts + 1})
 
-    def _dec_pending_tx_counter(self, sender: str, nonce: int):
-        values = self._pending_trx_counters.get(sender, Set[int])
-        values.discard(nonce)
-        if len(values) == 0:
+    def _dec_pending_tx_counter(self, sender: str):
+        count = self._pending_trx_counters.get(sender, 0)
+        assert count > 0
+        count = count - 1
+        if count == 0:
             del self._pending_trx_counters[sender]
-        else:
-            self._pending_trx_counters.update({sender: values})
+        self._pending_trx_counters.update({sender: count})
 
     async def _kick_tx_queue(self):
         async with self._req_queue_cond:
