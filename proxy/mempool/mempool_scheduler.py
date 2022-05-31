@@ -32,8 +32,8 @@ class MPTransaction:
 
 
 class MPSenderTXs:
-    address: str = None
-    txs: SortedList[MPTransaction] = None
+    # address: str = None
+    # txs: SortedList[MPTransaction] = None
 
     def __init__(self, address: str = None) -> None:
         self.address = address
@@ -93,11 +93,11 @@ class MPNeonTxScheduler:
 
 
 class MPTransaction:
-    mp_request: MPTxRequest = None
-    signature: str = None
-    nonce: int = 0
-    address: str = None
-    gas_price: int = 0
+    # mp_request: MPTxRequest = None
+    # signature: str = None
+    # nonce: int = 0
+    # address: str = None
+    # gas_price: int = 0
 
     def __init__(self, mp_request: MPTxRequest):
         self.mp_request = mp_request
