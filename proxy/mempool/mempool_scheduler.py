@@ -34,7 +34,7 @@ class MPSenderTXs:
         self.txs.add(tx)
         start_index = self.txs.index(tx)
         while start_index + 1 < len(self.txs) and self.txs[start_index] == self.txs[start_index + 1]:
-            if self.txs[start_index].gas_price() < self.txs[start_index + 1].gas_price():
+            if self.txs[start_index].gas_price < self.txs[start_index + 1].gas_price:
                 self.txs.pop(start_index)
             else:
                 self.txs.pop(start_index + 1)
@@ -48,7 +48,7 @@ class MPSenderTXs:
     def first_tx_gas_price(self):
         if len(self.txs) == 0:
             return 0
-        return self.txs[0].gas_price()
+        return self.txs[0].gas_price
 
 
 class MPNeonTxScheduler:
