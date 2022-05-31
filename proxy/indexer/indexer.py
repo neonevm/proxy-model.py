@@ -489,12 +489,13 @@ class ReceiptsParserState:
 
         curr = 0
         print("++++ tx_list len", len(tx_list))
+        print("++++ _done_tx_list len", len(self._done_tx_list))
         for t in tx_list:
+            print("++++ curr before", curr)
             while self._done_tx_list[curr].neon_res_complete:
                 curr += 1
+            print("++++ curr  after", curr)
             # assign result & events
-            print("++++ _done_tx_list len", len(self._done_tx_list))
-            print("++++ curr", curr)
             self._done_tx_list[curr].neon_res.gas_used = hex(t.return_dto.gas_used)
             self._done_tx_list[curr].neon_res.status = hex(t.return_dto.exit_status)
             self._done_tx_list[curr].neon_res.return_value = t.return_dto.return_value.hex()
