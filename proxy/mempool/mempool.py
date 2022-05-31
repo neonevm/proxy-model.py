@@ -3,8 +3,10 @@ from typing import List, Set, Tuple, Dict
 from logged_groups import logged_group
 import bisect
 
-from .mempool_api import MPRequest, MPResultCode, MPResult, IMPExecutor, MPRequestType, \
-                         MPTxRequest, MPPendingTxCountReq
+from .mempool_api import (
+    MPRequest, MPResultCode, MPResult, IMPExecutor,
+    MPRequestType, MPTxRequest, MPPendingTxCountReq
+)
 from .mempool_scheduler import MPNeonTxScheduler
 
 
@@ -48,9 +50,6 @@ class MemPool:
         log_ctx = {"context": {"req_id": mp_request.req_id}}
         try:
             self.debug(f"Got mp_tx_request: 0x{tx_hash} to be scheduled on the mempool", extra=log_ctx)
-            # if len(self._req_queue) > MemPool.TX_QUEUE_MAX_SIZE:
-            #     self._req_queue = self._req_queue[-MemPool.TX_QUEUE_SIZE:]
-            # bisect.insort_left(self._req_queue, mp_request)
             self._req_queue.add_tx(mp_request)
             await self._kick_tx_queue()
         except Exception as err:
