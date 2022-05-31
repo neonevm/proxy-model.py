@@ -490,6 +490,8 @@ class ReceiptsParserState:
         curr = 0
         print("++++ tx_list len", len(tx_list))
         print("++++ _done_tx_list len", len(self._done_tx_list))
+        if len(tx_list) > len(self._done_tx_list):
+            print("++++ XXXX")
         for t in tx_list:
             print("++++ curr before", curr)
             while self._done_tx_list[curr].neon_res_complete:
