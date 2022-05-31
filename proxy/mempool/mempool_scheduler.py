@@ -5,14 +5,12 @@ from ..common_neon.eth_proto import Trx as NeonTx
 
 
 class MPTransaction:
-    signature: str = None
-    nonce: int = 0
-    neon_tx: NeonTx = None
-
-    def __init__(self, neon_tx):
-        self.neon_tx = neon_tx
-        self.signature = str(neon_tx)
-        self.nonce = neon_tx.nonce
+    def __init__(self, mp_request: MPTxRequest):
+        self.mp_request = mp_request
+        self.signature  = mp_request.signature
+        self.nonce      = mp_request.neon_tx.nonce
+        self.address    = mp_request.neon_tx.sender()
+        self.gas_price  = mp_request.neon_tx.gasPrice
 
     def __eq__(self, other):
         return self.nonce == other.nonce
@@ -20,22 +18,9 @@ class MPTransaction:
     def __lt__(self, other):
         return self.nonce < other.nonce
 
-    def __str__(self):
-        return self.signature
-
-    @property
-    def address(self):
-        return self.neon_tx.addr
-
-    def gas_price(self):
-        return self.neon_tx.gasPrice
-
 
 class MPSenderTXs:
-    # address: str = None
-    # txs: SortedList[MPTransaction] = None
-
-    def __init__(self, address: str = None) -> None:
+    def __init__(self, address: str = None):
         self.address = address
         self.txs = SortedList()
 
@@ -90,24 +75,3 @@ class MPNeonTxScheduler:
             del self.senders[0]
         self.senders.sort()
         return tx.mp_request
-
-
-class MPTransaction:
-    # mp_request: MPTxRequest = None
-    # signature: str = None
-    # nonce: int = 0
-    # address: str = None
-    # gas_price: int = 0
-
-    def __init__(self, mp_request: MPTxRequest):
-        self.mp_request = mp_request
-        self.signature  = mp_request.signature
-        self.nonce      = mp_request.neon_tx.nonce
-        self.address    = mp_request.neon_tx.sender()
-        self.gas_price  = mp_request.neon_tx.gasPrice
-
-    def __eq__(self, other):
-        return self.nonce == other.nonce
-
-    def __lt__(self, other):
-        return self.nonce < other.nonce
