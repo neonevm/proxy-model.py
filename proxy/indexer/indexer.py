@@ -825,9 +825,6 @@ class OnResultIxDecoder(DummyIxDecoder):
         DummyIxDecoder.__init__(self, 'OnResult', state)
 
     def execute(self) -> bool:
-        print("OnResultIxDecoder.execute skip")
-        return True
-
         self._decoding_start()
 
         if self.ix.neon_obj is None:
@@ -1094,7 +1091,8 @@ class Indexer(IndexerBase):
             0x03: DummyIxDecoder('Call', self.state),
             0x04: DummyIxDecoder('CreateAccountWithSeed', self.state),
             0x05: CallFromRawIxDecoder(self.state),
-            0x06: OnResultIxDecoder(self.state),
+            #0x06: OnResultIxDecoder(self.state),
+            0x06: DummyIxDecoder('OnResultIxDecoder', self.state),
             0x07: OnEventIxDecoder(self.state),
             0x09: PartialCallIxDecoder(self.state),
             0x0a: ContinueIxDecoder(self.state),
