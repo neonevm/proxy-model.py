@@ -80,12 +80,6 @@ def unpack_event_log(data: Iterable[str]) -> EventDTO:
             log_data = bs
     return EventDTO(address, count_topics, t, log_data)
 
-def assign_result_and_event(tx_result: NeonTxResult, ix: LogIxDTO):
-    tx_result.neon_res.gas_used = hex(ix.return_dto.gas_used)
-    tx_result.neon_res.status = hex(ix.return_dto.exit_status)
-    tx_result.neon_res.return_value = ix.return_dto.return_value.hex()
-    tx_result.neon_res_complete = True
-
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
     def __init__(self, sign: str, slot: int, tx: Dict):
@@ -241,6 +235,13 @@ class LogIxDTO:
 
     def empty(self) -> bool:
         return (self.return_dto is None) and (self.event_dto is None)
+
+
+def assign_result_and_event(tx_result: NeonTxResult, ix: LogIxDTO):
+    tx_result.neon_res.gas_used = hex(ix.return_dto.gas_used)
+    tx_result.neon_res.status = hex(ix.return_dto.exit_status)
+    tx_result.neon_res.return_value = ix.return_dto.return_value.hex()
+    tx_result.neon_res_complete = True
 
 
 @logged_group("neon.Indexer")
