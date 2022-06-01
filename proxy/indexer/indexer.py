@@ -1,14 +1,13 @@
-import copy
 from typing import Iterator, List, Optional, Dict
-
-import base58
 import base64
 import time
-import sha3
 import re
 from typing import Iterable
-from dataclasses import astuple, dataclass
+from dataclasses import dataclass
 from enum import Enum
+
+import base58
+import sha3
 from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 
@@ -19,18 +18,18 @@ from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff, CostInfo
 from ..indexer.canceller import Canceller
-
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_receipt_parser import SolReceiptParser
-
 from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
+
 
 @dataclass
 class ReturnDTO:
     exit_status: int = 0
     gas_used: int = 0
-    return_value:bytes = None
+    return_value: bytes = None
+
 
 def unpack_return(data: Iterable[str]) -> ReturnDTO:
     """
@@ -50,12 +49,14 @@ def unpack_return(data: Iterable[str]) -> ReturnDTO:
             return_value = bs
     return ReturnDTO(exit_status, gas_used, return_value)
 
+
 @dataclass
 class EventDTO:
     address: bytes = None
     count_topics: int = 0
     topics: List[bytes] = None
     log_data: bytes = None
+
 
 def unpack_event_log(data: Iterable[str]) -> EventDTO:
     """
@@ -79,6 +80,7 @@ def unpack_event_log(data: Iterable[str]) -> EventDTO:
         else:
             log_data = bs
     return EventDTO(address, count_topics, t, log_data)
+
 
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
@@ -237,10 +239,29 @@ class LogIxDTO:
         return (self.return_dto is None) and (self.event_dto is None)
 
 
-def assign_result_and_event(tx_result: NeonTxResult, ix: LogIxDTO):
+def assign_result_and_event(tx_result: NeonTxResult, ix: LogIxDTO, tx_idx: int):
     tx_result.neon_res.gas_used = hex(ix.return_dto.gas_used)
     tx_result.neon_res.status = hex(ix.return_dto.exit_status)
     tx_result.neon_res.return_value = ix.return_dto.return_value.hex()
+
+    if ix.event_dto is not None:
+        log_idx = len(tx_result.neon_res.logs)
+        topics = []
+        for i in range(ix.event_dto.count_topics):
+            topics.append('0x' + ix.event_dto.topics[i].hex())
+        rec = {
+            'address': '0x' + ix.event_dto.address.hex(),
+            'topics': topics,
+            'data': '0x' + ix.event_dto.log_data.hex(),
+            'transactionLogIndex': hex(log_idx),
+            'transactionIndex': hex(tx_idx),
+            'logIndex': hex(log_idx),
+            'transactionHash': tx_result.neon_tx.sign,
+            # 'blockNumber': block_number, # set when transaction found
+            # 'blockHash': block_hash # set when transaction found
+        }
+        tx_result.neon_res.logs.append(rec)
+
     tx_result.neon_res_complete = True
 
 
@@ -275,6 +296,7 @@ class ReceiptsParserState:
     - All instructions are removed from the _used_ixs;
     - If number of the smallest slot in the _used_ixs is changed, it's stored into the DB for the future restart.
     """
+
     def __init__(self, db: IndexerDB, solana: SolanaInteractor, indexer_user: IIndexerUser):
         self._db = db
         self._solana = solana
@@ -469,7 +491,7 @@ class ReceiptsParserState:
                 program_id = m.group(1)
                 print("---- Program", program_id, "failed")
                 if program_id == EVM_LOADER_ID:
-                    tx_list.pop(-1) # remove failed invocation unconditionally
+                    tx_list.pop(-1)  # remove failed invocation unconditionally
             m = program_data.match(line)
             if m:
                 tail = m.group(1)
@@ -510,8 +532,9 @@ class ReceiptsParserState:
             while self._done_tx_list[curr].neon_res_complete:
                 curr += 1
             print("++++ curr  after", curr)
-            assign_result_and_event(self._done_tx_list[curr], t)
+            assign_result_and_event(self._done_tx_list[curr], t, self.ix.sign.idx)
             print("++++ new neon_res", self._done_tx_list[curr].neon_res)
+
 
 @logged_group("neon.Indexer")
 class DummyIxDecoder:
@@ -735,7 +758,7 @@ class CreateAccountIxDecoder(DummyIxDecoder):
         if len(self.ix.ix_data) < 41:
             return self._decoding_skip(f'not enough data to get the Neon account {len(self.ix.ix_data)}')
 
-        neon_account = "0x" + self.ix.ix_data[8+8+4:][:20].hex()
+        neon_account = "0x" + self.ix.ix_data[8 + 8 + 4:][:20].hex()
         pda_account = self.ix.get_account(1)
         code_account = self.ix.get_account(3)
         if code_account == str(SYS_PROGRAM_ID) or code_account == '':
@@ -1091,8 +1114,8 @@ class Indexer(IndexerBase):
             0x03: DummyIxDecoder('Call', self.state),
             0x04: DummyIxDecoder('CreateAccountWithSeed', self.state),
             0x05: CallFromRawIxDecoder(self.state),
-            #0x06: OnResultIxDecoder(self.state),
-            0x06: DummyIxDecoder('OnResultIxDecoder', self.state),
+            0x06: OnResultIxDecoder(self.state),
+            # 0x06: DummyIxDecoder('OnResult', self.state),
             0x07: OnEventIxDecoder(self.state),
             0x09: PartialCallIxDecoder(self.state),
             0x0a: ContinueIxDecoder(self.state),
