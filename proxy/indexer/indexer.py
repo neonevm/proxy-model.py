@@ -826,7 +826,7 @@ class OnResultIxDecoder(DummyIxDecoder):
 
     def execute(self) -> bool:
         print("OnResultIxDecoder.execute skip")
-        return true
+        return True
 
         self._decoding_start()
 
