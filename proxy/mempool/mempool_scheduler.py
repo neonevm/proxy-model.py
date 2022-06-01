@@ -1,22 +1,6 @@
 from typing import List
 from sortedcontainers import SortedList
 from .mempool_api import MPTxRequest
-from ..common_neon.eth_proto import Trx as NeonTx
-
-
-class MPTransaction:
-    def __init__(self, mp_request: MPTxRequest):
-        self.mp_request = mp_request
-        self.signature  = mp_request.signature
-        self.nonce      = mp_request.neon_tx.nonce
-        self.address    = mp_request.neon_tx.sender()
-        self.gas_price  = mp_request.neon_tx.gasPrice
-
-    def __eq__(self, other):
-        return self.nonce == other.nonce
-
-    def __lt__(self, other):
-        return self.nonce < other.nonce
 
 
 class MPSenderTXs:
@@ -30,7 +14,7 @@ class MPSenderTXs:
     def __lt__(self, other):
         return self.first_tx_gas_price() > other.first_tx_gas_price()
 
-    def add_tx(self, tx: MPTransaction):
+    def add_tx(self, tx: MPTxRequest):
         self.txs.add(tx)
         start_index = self.txs.index(tx)
         while start_index + 1 < len(self.txs) and self.txs[start_index] == self.txs[start_index + 1]:
@@ -55,8 +39,7 @@ class MPNeonTxScheduler:
     def __init__(self) -> None:
         self.senders: List[MPSenderTXs] = []
 
-    def add_tx(self, mp_request: MPTxRequest):
-        tx = MPTransaction(mp_request)
+    def add_tx(self, tx: MPTxRequest):
         for sender in self.senders:
             if sender.address == tx.address:
                 sender.add_tx(tx)
@@ -74,4 +57,4 @@ class MPNeonTxScheduler:
         if self.senders[0].len() == 0:
             del self.senders[0]
         self.senders.sort()
-        return tx.mp_request
+        return tx

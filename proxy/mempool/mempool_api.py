@@ -41,16 +41,20 @@ class MPRequest:
     type: MPRequestType = field(default=MPRequestType.Dummy)
 
 
-@dataclass
+@dataclass(order=True)
 class MPTxRequest(MPRequest):
     signature: str = field(compare=False, default=None)
     neon_tx: NeonTx = field(compare=False, default=None)
     neon_tx_exec_cfg: NeonTxExecCfg = field(compare=False, default=None)
     emulating_result: NeonEmulatingResult = field(compare=False, default=None)
-    _gas_price: int = field(compare=True, default=None)
+    address: str = field(compare=False, default=None)
+    gas_price: int = field(compare=False, default=None)
+    nonce: int = field(compare=True, default=None)
 
     def __post_init__(self):
-        self._gas_price = self.neon_tx.gasPrice
+        self.gas_price = self.neon_tx.gasPrice
+        self.nonce      = self.neon_tx.nonce
+        self.address    = self.neon_tx.sender()
         self.type = MPRequestType.SendTransaction
 
 

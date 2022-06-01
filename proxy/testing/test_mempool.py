@@ -63,9 +63,9 @@ class Test_Neon_Faucet(unittest.TestCase):
             self.scheduler.add_tx(req)
         for resp in TEST_RESULT:
             tx_request = self.scheduler.get_tx_for_execution()
-            self.assertEqual(resp.neon_tx.addr, tx_request.neon_tx.addr)
-            self.assertEqual(resp.neon_tx.nonce, tx_request.neon_tx.nonce)
-            self.assertEqual(resp.neon_tx.gasPrice, tx_request.neon_tx.gasPrice)
+            self.assertEqual(resp.gas_price, tx_request.gas_price)
+            self.assertEqual(resp.nonce, tx_request.nonce)
+            self.assertEqual(resp.address, tx_request.address)
 
 
 if __name__ == '__main__':
