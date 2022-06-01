@@ -825,6 +825,9 @@ class OnResultIxDecoder(DummyIxDecoder):
         DummyIxDecoder.__init__(self, 'OnResult', state)
 
     def execute(self) -> bool:
+        print("OnResultIxDecoder.execute skip")
+        return true
+
         self._decoding_start()
 
         if self.ix.neon_obj is None:
