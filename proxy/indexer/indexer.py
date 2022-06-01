@@ -80,6 +80,12 @@ def unpack_event_log(data: Iterable[str]) -> EventDTO:
             log_data = bs
     return EventDTO(address, count_topics, t, log_data)
 
+def assign_result_and_event(tx_result: NeonTxResult, ix: LogIxDTO):
+    tx_result.neon_res.gas_used = hex(ix.return_dto.gas_used)
+    tx_result.neon_res.status = hex(ix.return_dto.exit_status)
+    tx_result.neon_res.return_value = ix.return_dto.return_value.hex()
+    tx_result.neon_res_complete = True
+
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
     def __init__(self, sign: str, slot: int, tx: Dict):
@@ -431,6 +437,12 @@ class ReceiptsParserState:
         self._db.fill_account_info_by_indexer(neon_account)
 
     def process_logs(self, logs: List[str]):
+        """
+        Read log messages from a transaction receipt.
+        Parse each line to rebuild sequence of Neon instructions.
+        Extract return and events information from these lines.
+        Put the information into corresponding objects NeonTxResult.
+        """
         print("---- begin process_logs")
         program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
         program_success = re.compile(r'^Program (\w+) success')
@@ -456,7 +468,7 @@ class ReceiptsParserState:
                 program_id = m.group(1)
                 print("---- Program", program_id, "failed")
                 if program_id == EVM_LOADER_ID:
-                    tx_list.pop(-1)
+                    tx_list.pop(-1) # remove failed invocation unconditionally
             m = program_data.match(line)
             if m:
                 tail = m.group(1)
@@ -497,11 +509,7 @@ class ReceiptsParserState:
             while self._done_tx_list[curr].neon_res_complete:
                 curr += 1
             print("++++ curr  after", curr)
-            # assign result & events
-            self._done_tx_list[curr].neon_res.gas_used = hex(t.return_dto.gas_used)
-            self._done_tx_list[curr].neon_res.status = hex(t.return_dto.exit_status)
-            self._done_tx_list[curr].neon_res.return_value = t.return_dto.return_value.hex()
-            self._done_tx_list[curr].neon_res_complete = True
+            assign_result_and_event(self._done_tx_list[curr], t)
             print("++++ new neon_res", self._done_tx_list[curr].neon_res)
 
 @logged_group("neon.Indexer")
