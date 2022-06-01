@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Tuple
+from typing import Any, List, Tuple
 from abc import ABC, abstractmethod
 from asyncio import Task
+
+from proxy.common_neon.utils.utils import NeonTxResultInfo
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
@@ -79,4 +81,4 @@ class MPResultCode(IntEnum):
 @dataclass
 class MPResult:
     code: MPResultCode
-    data: Any
+    data: Tuple[NeonTxResultInfo, List[str]]

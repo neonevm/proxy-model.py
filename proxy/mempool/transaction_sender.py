@@ -94,8 +94,8 @@ class NeonTxSender:
 
                 self.debug(f'Use strategy {Strategy.NAME}')
                 neon_res, sign_list = strategy.execute()
-                self._submit_tx_into_db(neon_res, sign_list)
-                return neon_res
+                # self._submit_tx_into_db(neon_res, sign_list)
+                return neon_res, sign_list
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
                     raise
@@ -119,10 +119,10 @@ class NeonTxSender:
             self._pending_tx.slot = slot
             self._db.pend_transaction(self._pending_tx)
 
-    def _submit_tx_into_db(self, neon_res: NeonTxResultInfo, sign_list: [str]):
-        neon_tx = NeonTxInfo()
-        neon_tx.init_from_eth_tx(self.eth_tx)
-        self._db.submit_transaction(neon_tx, neon_res, sign_list)
+    # def _submit_tx_into_db(self, neon_res: NeonTxResultInfo, sign_list: [str]):
+    #     neon_tx = NeonTxInfo()
+    #     neon_tx.init_from_eth_tx(self.eth_tx)
+    #     self._db.submit_transaction(neon_tx, neon_res, sign_list)
 
     def _prepare_execution(self, emulating_result: NeonEmulatingResult):
         # Parse information from the emulator output

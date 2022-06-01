@@ -41,11 +41,11 @@ class MPExecutor(mp.Process, PickableDataServerUser):
     def execute_neon_tx(self, mempool_request: MPRequest):
         with logging_context(req_id=mempool_request.req_id, exectr=self._id):
             try:
-                self.execute_neon_tx_impl(mempool_request)
+                return_value = self.execute_neon_tx_impl(mempool_request)
+                return MPResult(MPResultCode.Done, return_value)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
                 return MPResult(MPResultCode.Unspecified, None)
-            return MPResult(MPResultCode.Done, None)
 
     def execute_neon_tx_impl(self, mempool_tx_cfg: MPRequest):
         neon_tx = mempool_tx_cfg.neon_tx
@@ -54,7 +54,7 @@ class MPExecutor(mp.Process, PickableDataServerUser):
         emv_step_count = self._config.get_evm_count()
         tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=emv_step_count)
         with OperatorResourceList(tx_sender):
-            tx_sender.execute(neon_tx_cfg, emulating_result)
+            return tx_sender.execute(neon_tx_cfg, emulating_result)
 
     async def on_data_received(self, data: Any) -> Any:
         return self.execute_neon_tx(data)

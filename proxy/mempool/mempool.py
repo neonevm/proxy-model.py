@@ -3,11 +3,14 @@ from typing import List, Set, Tuple, Dict
 from logged_groups import logged_group
 import bisect
 
+from proxy.common_neon.config import IConfig
+
 from .mempool_api import (
     MPRequest, MPResultCode, MPResult, IMPExecutor,
     MPRequestType, MPTxRequest, MPPendingTxCountReq
 )
 from .mempool_scheduler import MPNeonTxScheduler
+from .mempool_submit import MPNeonTXSubmitter
 
 
 @logged_group("neon.MemPool")
@@ -17,8 +20,9 @@ class MemPool:
     TX_QUEUE_SIZE = 4095
     CHECK_TASK_TIMEOUT_SEC = 0.05
 
-    def __init__(self, executor: IMPExecutor):
+    def __init__(self, executor: IMPExecutor, config: IConfig):
         self._req_queue = MPNeonTxScheduler()
+        self._tx_submitter = MPNeonTXSubmitter(config)
         self._lock = asyncio.Lock()
         self._req_queue_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
@@ -101,6 +105,7 @@ class MemPool:
         log_ctx = {"context": {"req_id": mp_request.req_id}}
         if mp_result.code == MPResultCode.Done:
             self.debug(f"Neon tx: {tx_hash} - processed on executor: {resource_id} - done", extra=log_ctx)
+            self._tx_submitter.submit_tx_into_db(mp_result.data)
             self._on_request_done(mp_request)
             self._executor.release_resource(resource_id)
             await self._kick_tx_queue()
