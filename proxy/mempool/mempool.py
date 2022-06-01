@@ -105,8 +105,8 @@ class MemPool:
         log_ctx = {"context": {"req_id": mp_request.req_id}}
         if mp_result.code == MPResultCode.Done:
             self.debug(f"Neon tx: {tx_hash} - processed on executor: {resource_id} - done", extra=log_ctx)
-            self._tx_submitter.submit_tx_into_db(mp_result.data)
             self._on_request_done(mp_request)
+            self._tx_submitter.submit_tx_into_db(mp_request.neon_tx, mp_result.data)
             self._executor.release_resource(resource_id)
             await self._kick_tx_queue()
             return
