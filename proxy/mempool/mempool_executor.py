@@ -2,11 +2,12 @@ import asyncio
 import multiprocessing as mp
 import socket
 
+from typing import Any
 from logged_groups import logged_group, logging_context
 
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
-from ..common_neon.utils import PipePickableDataSrv, PickableDataServerUser, Any
+from ..common_neon.utils import PipePickableDataSrv, PickableDataServerUser
 from ..common_neon.config import Config
 from ..memdb.memdb import MemDB
 

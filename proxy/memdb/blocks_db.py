@@ -6,7 +6,6 @@ import ctypes
 import time
 import math
 import pickle
-import os
 
 from logged_groups import logged_group
 
@@ -14,7 +13,7 @@ from ..common_neon.utils import SolanaBlockInfo, NeonTxResultInfo
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.indexer_db import IndexerDB
 
-from ..environment import FINALIZED
+from ..common_neon.environment_data import FINALIZED
 
 
 @logged_group("neon.Proxy")

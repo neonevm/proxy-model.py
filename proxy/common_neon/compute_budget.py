@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from solana.transaction import TransactionInstruction, Transaction
-from .constants import COMPUTE_BUDGET_ID
-from ..environment import NEON_HEAP_FRAME, NEON_COMPUTE_UNITS, NEON_ADDITIONAL_FEE
 from typing import Union
+
+from .constants import COMPUTE_BUDGET_ID
+from .elf_params import ElfParams
 
 
 class ComputeBudget:
@@ -27,8 +28,12 @@ class ComputeBudget:
 class TransactionWithComputeBudget(Transaction):
     def __init__(self, *args, **kwargs):
         Transaction.__init__(self, *args, **kwargs)
-        self.instructions.append(ComputeBudget.requestUnits(NEON_COMPUTE_UNITS, NEON_ADDITIONAL_FEE))
-        self.instructions.append(ComputeBudget.requestHeapFrame(NEON_HEAP_FRAME))
+        elf_params = ElfParams()
+        neon_compute_units = elf_params.neon_compute_units
+        neon_additional_fee = elf_params.neon_additional_fee
+        self.instructions.append(ComputeBudget.requestUnits(neon_compute_units, neon_additional_fee))
+        neon_heap_frame = elf_params.neon_heap_frame
+        self.instructions.append(ComputeBudget.requestHeapFrame(neon_heap_frame))
 
     def add(self, *args: Union[Transaction, TransactionInstruction]) -> TransactionWithComputeBudget:
         """Add one or more instructions to this Transaction."""

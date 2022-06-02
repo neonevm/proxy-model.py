@@ -12,8 +12,8 @@ from logged_groups import logged_group
 from .address import accountWithSeed, ether2program, EthereumAddress
 from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from .layouts import CREATE_ACCOUNT_LAYOUT
-from ..environment import EVM_LOADER_ID,  COLLATERAL_POOL_BASE
-
+from .elf_params import ElfParams
+from .environment_data import EVM_LOADER_ID
 
 obligatory_accounts = [
     AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
@@ -115,7 +115,8 @@ class NeonInstruction:
     def create_collateral_pool_address(collateral_pool_index):
         COLLATERAL_SEED_PREFIX = "collateral_seed_"
         seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
-        return accountWithSeed(PublicKey(COLLATERAL_POOL_BASE), str.encode(seed))
+        collateral_pool_base = ElfParams().get_collateral_pool_base()
+        return accountWithSeed(PublicKey(collateral_pool_base), str.encode(seed))
 
     def create_account_with_seed_instruction(self, account, seed, lamports, space) -> TransactionInstruction:
         seed_str = str(seed, 'utf8')

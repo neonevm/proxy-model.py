@@ -37,7 +37,7 @@ class MPRequestType(IntEnum):
 
 @dataclass(order=True)
 class MPRequest:
-    req_id: int
+    req_id: str
     type: MPRequestType = field(default=MPRequestType.Dummy)
 
 

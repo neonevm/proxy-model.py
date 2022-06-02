@@ -20,15 +20,12 @@ from logged_groups import logged_group
 from typing import Dict, Union, Any, List, NamedTuple, cast
 from base58 import b58decode, b58encode
 
-from .utils import SolanaBlockInfo
-from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY
-from ..environment import FUZZING_BLOCKHASH, CONFIRM_TIMEOUT, FINALIZED
-from ..environment import RETRY_ON_FAIL
-
-from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
-from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG
-from ..common_neon.address import EthereumAddress, ether2program
-from ..common_neon.utils import get_from_dict
+from .layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
+from .constants import CONTRACT_ACCOUNT_TAG, ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG
+from .address import EthereumAddress, ether2program
+from .utils import get_from_dict, SolanaBlockInfo
+from .environment_data import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, RETRY_ON_FAIL, FUZZING_BLOCKHASH, \
+                              CONFIRM_TIMEOUT, FINALIZED
 
 
 class AccountInfo(NamedTuple):

@@ -100,11 +100,11 @@ class MPTransaction:
     # gas_price: int = 0
 
     def __init__(self, mp_request: MPTxRequest):
-        self.mp_request = mp_request
-        self.signature  = mp_request.signature
-        self.nonce      = mp_request.neon_tx.nonce
-        self.address    = mp_request.neon_tx.addr
-        self.gas_price  = mp_request.neon_tx.gasPrice
+        self.mp_request: MPTxRequest = mp_request
+        self.signature: str = mp_request.signature
+        self.nonce: int = mp_request.neon_tx.nonce
+        self.address: str = mp_request.neon_tx.toAddress
+        self.gas_price: int = mp_request.neon_tx.gasPrice
 
     def __eq__(self, other):
         return self.nonce == other.nonce

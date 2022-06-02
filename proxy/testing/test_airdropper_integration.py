@@ -2,25 +2,22 @@ from unittest import TestCase
 from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from spl.token.client import Token as SplToken
-from spl.token.instructions import get_associated_token_address
-from proxy.environment import SOLANA_URL, EVM_LOADER_ID
+from ..common_neon.environment_data import SOLANA_URL, EVM_LOADER_ID
 from solana.system_program import SYS_PROGRAM_ID
-from solana.sysvar import SYSVAR_RENT_PUBKEY
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.rpc.commitment import Confirmed
 from solana.publickey import PublicKey
 from solana.rpc.types import TxOpts
-from solana.transaction import TransactionInstruction, Transaction, AccountMeta
-from proxy.common_neon.neon_instruction import create_account_layout
-from proxy.common_neon.erc20_wrapper import ERC20Wrapper
-from proxy.common_neon.compute_budget import TransactionWithComputeBudget
+from solana.transaction import TransactionInstruction, AccountMeta
+from ..common_neon.neon_instruction import create_account_layout
+from ..common_neon.erc20_wrapper import ERC20Wrapper
+from ..common_neon.compute_budget import TransactionWithComputeBudget
 from time import sleep
 from web3 import Web3
 import os
 import json
-import unittest
 
-from proxy.testing.testing_helpers import request_airdrop
+from ..testing.testing_helpers import request_airdrop
 
 MAX_AIRDROP_WAIT_TIME = 45
 EVM_LOADER_ID = PublicKey(EVM_LOADER_ID)

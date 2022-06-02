@@ -3,15 +3,15 @@ import time
 import traceback
 from multiprocessing.dummy import Pool as ThreadPool
 from logged_groups import logged_group
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 from .solana_signatures_db import SolanaSignatures
 from .utils import MetricsToLogBuff
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.sql_dict import SQLDict
 
-from ..environment import INDEXER_POLL_COUNT, RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION
-from ..environment import HISTORY_START, PARALLEL_REQUESTS, FINALIZED, EVM_LOADER_ID
+from ..common_neon.environment_data import RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION, PARALLEL_REQUESTS, \
+                                           HISTORY_START, INDEXER_POLL_COUNT, FINALIZED
 
 
 @logged_group("neon.Indexer")

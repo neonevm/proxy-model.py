@@ -1,7 +1,6 @@
 import asyncio
 from typing import List, Set, Tuple, Dict
 from logged_groups import logged_group
-import bisect
 
 from .mempool_api import (
     MPRequest, MPResultCode, MPResult, IMPExecutor,
@@ -15,7 +14,7 @@ class MemPool:
 
     TX_QUEUE_MAX_SIZE = 4096
     TX_QUEUE_SIZE = 4095
-    CHECK_TASK_TIMEOUT_SEC = 0.05
+    CHECK_TASK_TIMEOUT_SEC = 0.04
 
     def __init__(self, executor: IMPExecutor):
         self._req_queue = MPNeonTxScheduler()

@@ -13,7 +13,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
-from proxy.environment import EVM_LOADER_ID
+from ..common_neon.environment_data import EVM_LOADER_ID
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from proxy.common_neon.neon_instruction import NeonInstruction
 from solana.rpc.types import TokenAccountOpts

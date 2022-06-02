@@ -7,12 +7,12 @@ from solana.publickey import PublicKey
 from solana.account import Account as SolanaAccount
 from web3 import Web3
 from solana.rpc.commitment import Confirmed
-from ..environment import ELF_PARAMS
+from ..common_neon.elf_params import ElfParams
 
 from .testing_helpers import request_airdrop
 
-ALLOWANCE_TOKEN_ADDR = ELF_PARAMS.get("NEON_PERMISSION_ALLOWANCE_TOKEN", '')
-DENIAL_TOKEN_ADDR = ELF_PARAMS.get("NEON_PERMISSION_DENIAL_TOKEN", '')
+ALLOWANCE_TOKEN_ADDR = ElfParams().neon_permission_allowance_token
+DENIAL_TOKEN_ADDR = ElfParams().neon_permission_denial_token
 
 
 class TestPermissionToken(unittest.TestCase):

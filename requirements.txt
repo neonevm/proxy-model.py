@@ -12,3 +12,4 @@ flask
 prometheus_client==0.13.1
 sortedcontainers
 git+https://github.com/neonlabsorg/python-logged-groups.git@2.1.5
+singleton-decorator==1.0.0
