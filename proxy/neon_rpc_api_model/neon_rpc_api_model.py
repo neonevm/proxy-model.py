@@ -18,7 +18,6 @@ from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
-from ..environment import NEON_EVM_VERSION, NEON_EVM_REVISION
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
 from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, EVM_STEP_COUNT, USE_EARLIEST_BLOCK_IF_0_PASSED, \
@@ -77,7 +76,7 @@ class NeonRpcApiModel:
 
     @staticmethod
     def web3_clientVersion():
-        return 'Neon/v' + NEON_EVM_VERSION + '-' + NEON_EVM_REVISION
+        return 'Neon/v' + ElfParams().neon_evm_version + '-' + ElfParams().neon_evm_revision
 
     @staticmethod
     def eth_chainId():

@@ -10,7 +10,6 @@ from ..common_neon.solana_receipt_parser import SolReceiptParser
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.estimate import GasEstimate
 
-from ..environment import NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_data import ACCOUNT_PERMISSION_UPDATE_INT, ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
 
@@ -49,8 +48,8 @@ class NeonTxValidator:
 
         if len(self._tx.callData) == 0:
             return
-
-        tx_gas_limit = self._tx_gas_limit * NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID
+        no_chainid_gas_limit_multiplier = ElfParams().neon_gas_limit_multiplier_no_chainid
+        tx_gas_limit = self._tx_gas_limit * no_chainid_gas_limit_multiplier
         if self.MAX_U64 > tx_gas_limit:
             self._tx_gas_limit = tx_gas_limit
 
