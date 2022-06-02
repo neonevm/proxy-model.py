@@ -3,7 +3,9 @@ from logged_groups import logged_group
 
 from proxy.common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_holder_msg
-from ..environment import CONTRACT_EXTRA_SPACE, EXTRA_GAS, CHAIN_ID, HOLDER_MSG_SIZE
+from ..environment import CHAIN_ID, HOLDER_MSG_SIZE
+
+from .environment_data import CONTRACT_EXTRA_SPACE, EXTRA_GAS
 from .eth_proto import Trx as EthTrx
 from .solana_interactor import SolanaInteractor
 from .layouts import ACCOUNT_INFO_LAYOUT

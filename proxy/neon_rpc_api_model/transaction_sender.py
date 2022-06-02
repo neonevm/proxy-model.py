@@ -23,7 +23,7 @@ from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
 from ..common_neon.errors import EthereumError
 from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
-from ..environment import RETRY_ON_FAIL
+from ..common_neon.environment_data import RETRY_ON_FAIL
 from ..environment import HOLDER_MSG_SIZE
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..common_neon.utils import get_holder_msg

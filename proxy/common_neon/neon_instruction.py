@@ -9,11 +9,12 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import TOKEN_PROGRAM_ID
 from logged_groups import logged_group
 
+from ..environment import COLLATERAL_POOL_BASE
+
 from .address import accountWithSeed, ether2program, EthereumAddress
 from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
 from .layouts import CREATE_ACCOUNT_LAYOUT
-from ..environment import EVM_LOADER_ID,  COLLATERAL_POOL_BASE
-
+from .environment_data import EVM_LOADER_ID
 
 obligatory_accounts = [
     AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
