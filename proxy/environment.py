@@ -4,7 +4,6 @@ from .common_neon.elf_params import read_elf_params
 
 ELF_PARAMS = {}
 read_elf_params(ELF_PARAMS)
-HOLDER_MSG_SIZE = int(ELF_PARAMS.get("NEON_HOLDER_MSG_SIZE"))
 NEON_EVM_VERSION = ELF_PARAMS.get("NEON_PKG_VERSION")
 NEON_EVM_REVISION = ELF_PARAMS.get('NEON_REVISION')
 NEON_COMPUTE_UNITS = int(ELF_PARAMS.get('NEON_COMPUTE_UNITS'))
