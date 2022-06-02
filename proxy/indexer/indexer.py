@@ -131,7 +131,7 @@ class SolanaIxInfo:
         if not self._is_valid:
             return
 
-        self.debug("==== begin iter_ixs")
+        self.debug('==== begin iter_ixs')
         self._set_defaults()
         tx_ixs = enumerate(self._msg['instructions'])
 
@@ -152,7 +152,7 @@ class SolanaIxInfo:
                             yield evm_ix_idx
 
         self._set_defaults()
-        self.debug("==== end iter_ixs")
+        self.debug('==== end iter_ixs')
 
     def get_account_cnt(self):
         assert self._is_valid
@@ -466,7 +466,7 @@ class ReceiptsParserState:
         Extract return and events information from these lines.
         Put the information into corresponding objects NeonTxResult.
         """
-        self.debug("---- begin process_logs")
+        self.debug('---- begin process_logs')
         program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
         program_success = re.compile(r'^Program (\w+) success')
         program_failed = re.compile(r'^Program (\w+) failed')
@@ -477,63 +477,63 @@ class ReceiptsParserState:
             m = program_invoke.match(line)
             if m:
                 program_id = m.group(1)
-                self.debug("---- Program", program_id, "invoke depth", m.group(2))
+                self.debug(f'---- Program {program_id} invoke depth {m.group(2)}')
                 if program_id == EVM_LOADER_ID:
                     tx_list.append(LogIxDTO())
             m = program_success.match(line)
             if m:
                 program_id = m.group(1)
-                self.debug("---- Program", program_id, "success")
+                self.debug(f'---- Program {program_id} success')
                 if program_id == EVM_LOADER_ID and tx_list[-1].empty():
                     tx_list.pop(-1)
             m = program_failed.match(line)
             if m:
                 program_id = m.group(1)
-                self.debug("---- Program", program_id, "failed")
+                self.debug(f'---- Program {program_id} failed')
                 if program_id == EVM_LOADER_ID:
                     tx_list.pop(-1)  # remove failed invocation unconditionally
             m = program_data.match(line)
             if m:
                 tail = m.group(1)
-                self.debug("---- Program data:", tail)
+                self.debug(f'---- Program data: {tail}')
                 data = re.findall("\S+", tail)
                 mnemonic = base64.b64decode(data[0]).decode('utf-8')
-                self.debug("---- mnemonic", mnemonic)
+                self.debug(f'---- mnemonic {mnemonic}')
                 if mnemonic == "RETURN":
                     tx_list[-1].return_dto = unpack_return(data[1:])
                 elif mnemonic.startswith("LOG"):
                     tx_list[-1].event_dto = unpack_event_log(data[1:])
                 else:
                     self.error(f'{self} unrecognized mnemonic {mnemonic}')
-        self.debug("---- end process_logs")
+        self.debug('---- end process_logs')
 
-        self.debug("---- tx_list len", len(tx_list))
-        self.debug("---- _done_tx_list len", len(self._done_tx_list))
+        self.debug(f'---- tx_list len {len(tx_list)}')
+        self.debug(f'---- _done_tx_list len {len(self._done_tx_list)}')
 
-        self.debug("++++ begin iterate tx_list")
+        self.debug('++++ begin iterate tx_list')
         for t in tx_list:
-            self.debug("++++ dto", t)
-        self.debug("++++ end iterate tx_list")
+            self.debug(f'++++ dto {t}')
+        self.debug('++++ end iterate tx_list')
 
-        self.debug("==== begin iterate _done_tx_list")
+        self.debug('==== begin iterate _done_tx_list')
         for t in self._done_tx_list:
-            self.debug("==== neon_res_complete", t.neon_res_complete)
-            self.debug("==== neon_res", t.neon_res)
-            self.debug("================================================================")
-        self.debug("==== end iterate _done_tx_list")
+            self.debug(f'==== neon_res_complete {t.neon_res_complete}')
+            self.debug(f'==== neon_res {t.neon_res}')
+            self.debug('================================================================')
+        self.debug('==== end iterate _done_tx_list')
 
         curr = 0
-        self.debug("++++ tx_list len", len(tx_list))
-        self.debug("++++ _done_tx_list len", len(self._done_tx_list))
+        self.debug(f'++++ tx_list len {len(tx_list)}')
+        self.debug(f'++++ _done_tx_list len {len(self._done_tx_list)}')
         if len(tx_list) > len(self._done_tx_list):
-            self.debug("++++ XXXX")
+            self.debug('++++ XXXX')
         for t in tx_list:
-            self.debug("++++ curr before", curr)
+            self.debug(f'++++ curr before {curr}')
             while self._done_tx_list[curr].neon_res_complete:
                 curr += 1
-            self.debug("++++ curr  after", curr)
+            self.debug(f'++++ curr  after {curr}')
             assign_result_and_event(self._done_tx_list[curr], t, self.ix.sign.idx)
-            self.debug("++++ new neon_res", self._done_tx_list[curr].neon_res)
+            self.debug(f'++++ new neon_res {self._done_tx_list[curr].neon_res}')
 
 
 @logged_group("neon.Indexer")
