@@ -80,11 +80,11 @@ class NeonTxValidator:
         self._prevalidate_tx_chain_id()
         self._prevalidate_tx_size()
         self._prevalidate_sender_balance()
+        self._prevalidate_underpriced_tx_without_chainid()
 
     def _prevalidate_emulator(self, emulator_json: dict):
         self._prevalidate_gas_usage(emulator_json)
         self._prevalidate_account_sizes(emulator_json)
-        self._prevalidate_underpriced_tx_without_chainid()
 
     def extract_ethereum_error(self, e: Exception):
         receipt_parser = SolReceiptParser(e)

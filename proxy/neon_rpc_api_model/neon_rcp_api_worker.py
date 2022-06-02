@@ -42,7 +42,7 @@ class JsonEncoder(json.JSONEncoder):
 
 
 @logged_group("neon.Proxy")
-class NeonRpcApiModel:
+class NeonRpcApiWorker:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
     def __init__(self):

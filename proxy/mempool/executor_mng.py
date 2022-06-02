@@ -13,7 +13,7 @@ from .mempool_api import MPRequest, IMPExecutor
 from .mempool_executor import MPExecutor
 
 
-class MpExecutorClient(PipePickableDataClient):
+class MPExecutorClient(PipePickableDataClient):
 
     def __init__(self, client_sock: socket.socket):
         PipePickableDataClient.__init__(self, client_sock=client_sock)
@@ -30,7 +30,7 @@ class MPExecutorMng(IMPExecutor):
     @dataclasses.dataclass
     class ExecutorInfo:
         executor: MPExecutor
-        client: MpExecutorClient
+        client: MPExecutorClient
         id: int
 
     def __init__(self, executor_count: int, config: IConfig):
@@ -57,7 +57,7 @@ class MPExecutorMng(IMPExecutor):
     def _has_available(self) -> bool:
         return len(self._available_executor_pool) > 0
 
-    def _get_executor(self) -> Tuple[int, MpExecutorClient]:
+    def _get_executor(self) -> Tuple[int, MPExecutorClient]:
         executor_id = self._available_executor_pool.pop()
         self.debug(f"Acquire executor: {executor_id}")
         self._busy_executor_pool.add(executor_id)
@@ -81,7 +81,7 @@ class MPExecutorMng(IMPExecutor):
     def _create_executor(executor_id: int, config: IConfig) -> ExecutorInfo:
         client_sock, srv_sock = socket.socketpair()
         executor = MPExecutor(executor_id, srv_sock, config)
-        client = MpExecutorClient(client_sock)
+        client = MPExecutorClient(client_sock)
         return MPExecutorMng.ExecutorInfo(executor=executor, client=client, id=executor_id)
 
     def __del__(self):

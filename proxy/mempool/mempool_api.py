@@ -73,6 +73,6 @@ class MPResultCode(IntEnum):
 
 
 @dataclass
-class MPResult:
+class MPTxResult:
     code: MPResultCode
     data: Any
