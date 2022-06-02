@@ -9,7 +9,7 @@ import struct
 from logged_groups import logged_group
 
 
-class PickableDataServerUser(ABC):
+class IPickableDataServerUser(ABC):
 
     @abstractmethod
     async def on_data_received(self, data: Any) -> Any:
@@ -25,7 +25,7 @@ def encode_pickable(object) -> bytes:
 @logged_group("neon.MemPool")
 class PickableDataServer(ABC):
 
-    def __init__(self, *, user: PickableDataServerUser):
+    def __init__(self, *, user: IPickableDataServerUser):
         self._user = user
         asyncio.get_event_loop().create_task(self.run_server())
 
@@ -63,7 +63,7 @@ class PickableDataServer(ABC):
 
 class AddrPickableDataSrv(PickableDataServer):
 
-    def __init__(self, *, user: PickableDataServerUser, address: Tuple[str, int]):
+    def __init__(self, *, user: IPickableDataServerUser, address: Tuple[str, int]):
         self._address = address
         PickableDataServer.__init__(self, user=user)
 
@@ -75,7 +75,7 @@ class AddrPickableDataSrv(PickableDataServer):
 
 class PipePickableDataSrv(PickableDataServer):
 
-    def __init__(self, *, user: PickableDataServerUser, srv_sock: socket.socket):
+    def __init__(self, *, user: IPickableDataServerUser, srv_sock: socket.socket):
         self._srv_sock = srv_sock
         PickableDataServer.__init__(self, user=user)
 
