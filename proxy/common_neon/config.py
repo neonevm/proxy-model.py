@@ -16,10 +16,6 @@ class IConfig(ABC):
 
 class Config(IConfig):
 
-    def __init__(self):
-        from ..environment import read_elf_params, ELF_PARAMS
-        read_elf_params(ELF_PARAMS)
-
     def get_solana_url(self) -> Optional[str]:
         return os.environ.get("SOLANA_URL", "http://localhost:8899")
 
