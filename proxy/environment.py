@@ -4,7 +4,6 @@ from .common_neon.elf_params import read_elf_params
 
 ELF_PARAMS = {}
 read_elf_params(ELF_PARAMS)
-COLLATERAL_POOL_BASE = ELF_PARAMS.get("NEON_POOL_BASE")
 NEON_TOKEN_MINT: PublicKey = PublicKey(ELF_PARAMS.get("NEON_TOKEN_MINT"))
 HOLDER_MSG_SIZE = int(ELF_PARAMS.get("NEON_HOLDER_MSG_SIZE"))
 CHAIN_ID = int(ELF_PARAMS.get('NEON_CHAIN_ID', None))
