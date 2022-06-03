@@ -3,7 +3,7 @@ import asyncio
 from multiprocessing import Process
 from typing import Any
 
-from ..common_neon.utils.pickable_data_server import AddrPickableDataSrv, PickableDataServerUser
+from ..common_neon.utils.pickable_data_server import AddrPickableDataSrv, IPickableDataServerUser
 from ..common_neon.config import IConfig
 
 from .mempool import MemPool
@@ -11,7 +11,7 @@ from .executor_mng import MPExecutorMng
 
 
 @logged_group("neon.MemPool")
-class MPService(PickableDataServerUser):
+class MPService(IPickableDataServerUser):
 
     MP_SERVICE_PORT = 9091
     MP_SERVICE_HOST = "0.0.0.0"
