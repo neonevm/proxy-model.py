@@ -4,10 +4,13 @@ from typing import Dict, Any, Optional, List
 import json
 import base58
 
+from enum import Enum
 from eth_utils import big_endian_to_int
 
+from proxy.indexer.utils import SolanaIxSignInfo
+
 #TODO: move it out from here
-from ...environment import EVM_LOADER_ID, LOG_FULL_OBJECT_INFO
+from ..environment_data import EVM_LOADER_ID, LOG_FULL_OBJECT_INFO
 
 from ..eth_proto import Trx as EthTx
 
@@ -19,7 +22,13 @@ def str_fmt_object(obj) -> str:
 
         result = {}
         for key, value in obj.__dict__.items():
-            if LOG_FULL_OBJECT_INFO:
+            if isinstance(value, Enum):
+                value = str(value)
+                idx = value.find('.')
+                if idx != -1:
+                    value = value[idx + 1:]
+                result[key] = value
+            elif LOG_FULL_OBJECT_INFO:
                 result[key] = value
             elif value is None:
                 pass
@@ -74,11 +83,8 @@ class SolanaBlockInfo:
 
 
 class NeonTxResultInfo:
-    def __init__(self, neon_sign='', tx=None, ix_idx=-1):
-        if not isinstance(tx, dict):
-            self._set_defaults()
-        else:
-            self.decode(neon_sign, tx, ix_idx)
+    def __init__(self):
+        self._set_defaults()
 
     def __str__(self):
         return str_fmt_object(self)
@@ -123,6 +129,12 @@ class NeonTxResultInfo:
         }
         self.logs.append(rec)
 
+    def append_record(self, rec):
+        log_idx = len(self.logs)
+        rec['transactionLogIndex'] = hex(log_idx)
+        rec['logIndex'] = hex(log_idx)
+        self.logs.append(rec)
+
     def _decode_return(self, log: bytes, ix_idx: int, tx: {}):
         self.status = '0x1' if log[1] < 0xd0 else '0x0'
         self.gas_used = hex(int.from_bytes(log[2:10], 'little'))
@@ -130,6 +142,14 @@ class NeonTxResultInfo:
         self.sol_sign = tx['transaction']['signatures'][0]
         self.slot = tx['slot']
         self.idx = ix_idx
+
+    def set_result(self, sign: SolanaIxSignInfo, status, gas_used, return_value):
+        self.status = status
+        self.gas_used = gas_used
+        self.return_value = return_value
+        self.sol_sign = sign.sign
+        self.slot = sign.slot
+        self.idx = sign.idx
 
     def fill_block_info(self, block: SolanaBlockInfo):
         self.slot = block.slot

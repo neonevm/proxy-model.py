@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
 
-from ..environment import NEON_PRICE_USD, EVM_LOADER_ID
+from ..common_neon.environment_data import EVM_LOADER_ID, NEON_PRICE_USD
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.pythnetwork import PythNetworkClient
@@ -258,14 +258,13 @@ class Airdropper(IndexerBase):
         """
         Overrides IndexerBase.process_functions
         """
-        IndexerBase.process_functions(self)
         self.debug("Process receipts")
         self.process_receipts()
         self.process_scheduled_trxs()
 
     def process_receipts(self):
         max_slot = 0
-        for slot, _, trx in self.transaction_receipts.get_txs(self.latest_processed_slot):
+        for slot, _, trx in self.get_tx_receipts():
             max_slot = max(max_slot, slot)
             if trx['transaction']['message']['instructions'] is not None:
                 self.process_trx_airdropper_mode(trx)

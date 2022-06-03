@@ -1,6 +1,6 @@
 from logged_groups import logged_group
 
-from ..environment import EVM_LOADER_ID, SOLANA_URL, GATHER_STATISTICS
+from ..common_neon.environment_data import EVM_LOADER_ID, SOLANA_URL, GATHER_STATISTICS
 from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
 from ..common_neon.data import NeonTxStatData
 from .indexer import Indexer
@@ -17,7 +17,6 @@ class IndexerApp(IIndexerUser):
 
     def on_neon_tx_result(self, tx_stat: NeonTxStatData):
         self.neon_statistics.on_neon_tx_result(tx_stat)
-
 
     def on_db_status(self, neon_db_status: bool):
         self.neon_statistics.stat_commit_postgres_availability(neon_db_status)
