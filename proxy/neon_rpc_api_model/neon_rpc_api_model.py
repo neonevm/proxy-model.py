@@ -387,15 +387,16 @@ class NeonRpcApiModel:
 
         try:
             self.debug(f"Get transaction count. Account: {account}, tag: {tag}")
+
+            neon_account_info = self._solana.get_neon_account_info(account)
+
             pending_trx_count = 0
             if tag == "pending":
                 req_id = LogMng.get_logging_context().get("req_id")
                 pending_trx_count = self._mempool_client.get_pending_tx_count(req_id=req_id, sender=account)
                 self.debug(f"Pending tx count for: {account} - is: {pending_trx_count}")
 
-            neon_account_info = self._solana.get_neon_account_info(account)
             trx_count = neon_account_info.trx_count + pending_trx_count
-
             return hex(trx_count)
         except (Exception,):
             # self.debug(f"eth_getTransactionCount: Can't get account info: {err}")
