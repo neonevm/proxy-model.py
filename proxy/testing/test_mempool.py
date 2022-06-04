@@ -68,7 +68,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
     @patch.object(MockMPExecutor, "submit_mp_request")
     async def test_single_sender_single_tx(self, submit_mp_request_mock: MagicMock):
         submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
-        mp_tx_request, _, _ = self.get_transfer_mp_request(req_id="0000001", nonce=0, gasPrice=30000, gas=987654321, value=1, data=b'')
+        mp_tx_request = self.get_transfer_mp_request(req_id="0000001", nonce=0, gasPrice=30000, gas=987654321, value=1, data=b'')
         await self.mempool._on_send_tx_request(mp_tx_request)
         await self.mempool._kick_tx_queue()
         await asyncio.sleep(0)
@@ -81,21 +81,42 @@ class Test(unittest.IsolatedAsyncioTestCase):
     async def test_single_sender_couple_txs(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
         is_available_mock.return_value = False
-        req_nonce_0, from_acc, to_acc = \
-            self.get_transfer_mp_request(req_id="0000000", nonce=0, gasPrice=30000, gas=987654321, value=1, data=b'')
-        req_nonce_1, _, _ = \
-            self.get_transfer_mp_request(req_id="0000001", nonce=1, gasPrice=29000, gas=987654321, value=1, data=b'',
-                                         from_acc=from_acc, to_acc=to_acc)
+        from_acc = self.create_account()
+        to_acc = self.create_account()
+        req_nonce_0 = self.get_transfer_mp_request(req_id="0000000", nonce=0, gasPrice=30000, gas=987654321, value=1, from_acc=from_acc, to_acc=to_acc)
+        req_nonce_1 = self.get_transfer_mp_request(req_id="0000001", nonce=1, gasPrice=29000, gas=987654321, value=1, from_acc=from_acc, to_acc=to_acc)
 
         await self.mempool._on_send_tx_request(req_nonce_1)
         await self.mempool._on_send_tx_request(req_nonce_0)
         await asyncio.sleep(0)
         submit_mp_request_mock.assert_not_called()
         is_available_mock.return_value = True
+        # TODO: get rid of it. MemPool should work without kicking the queue
         await self.mempool._kick_tx_queue()
-        await asyncio.sleep(0.04)
+        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
 
         submit_mp_request_mock.assert_has_calls([call(req_nonce_0), call(req_nonce_1)])
+
+    @patch.object(MockMPExecutor, "submit_mp_request")
+    @patch.object(MockMPExecutor, "is_available")
+    async def test_2_senders_4_txs(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
+        submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
+        is_available_mock.return_value = False
+        acc_0 = self.create_account()
+        acc_1 = self.create_account()
+        acc_3 = self.create_account()
+        requests = [dict(req_id="000", nonce=0, gasPrice=30000, gas=1000, value=1, from_acc=acc_0, to_acc=acc_3),
+                    dict(req_id="001", nonce=1, gasPrice=21000, gas=1000, value=1, from_acc=acc_0, to_acc=acc_3),
+                    dict(req_id="002", nonce=0, gasPrice=40000, gas=1000, value=1, from_acc=acc_1, to_acc=acc_3),
+                    dict(req_id="003", nonce=1, gasPrice=25000, gas=1000, value=1, from_acc=acc_1, to_acc=acc_3)]
+        requests = [self.get_transfer_mp_request(**req) for req in requests]
+        for req in requests:
+            await self.mempool._on_send_tx_request(req)
+        is_available_mock.return_value = True
+        await self.mempool._kick_tx_queue()
+        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 3)
+
+        submit_mp_request_mock.assert_has_calls([call(requests[2]), call(requests[0]), call(requests[3]), call(requests[1])])
 
     def create_account(self) -> Account:
         priv = secrets.token_hex(32)
@@ -104,7 +125,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
         return acct
 
     def get_transfer_mp_request(self, *, req_id: str, nonce: int, gas: int, gasPrice: int, from_acc: Account = None,
-                                         to_acc: Account = None, value: int, data: bytes = None):
+                                         to_acc: Account = None, value: int = 0, data: bytes = b'') -> MPTxRequest:
         if from_acc is None:
             from_acc = self.create_account()
 
@@ -121,4 +142,4 @@ class Test(unittest.IsolatedAsyncioTestCase):
         tx_cfg = NeonTxExecCfg(is_underpriced_tx_without_chainid=False, steps_executed=100)
         mp_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=tx_cfg,
                                     emulating_result=dict())
-        return mp_tx_request, from_acc, to_acc
+        return mp_tx_request
