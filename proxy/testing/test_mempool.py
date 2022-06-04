@@ -91,7 +91,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
         submit_mp_request_mock.assert_not_called()
         is_available_mock.return_value = True
-        # TODO: get rid of it. MemPool should work without kicking the queue
+        # TODO: get rid of it. MemPool should work without kicking the queue. It's the test case as it is.
         await self.mempool._kick_tx_queue()
         await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
 
@@ -117,6 +117,36 @@ class Test(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 3)
 
         submit_mp_request_mock.assert_has_calls([call(requests[2]), call(requests[0]), call(requests[3]), call(requests[1])])
+
+    @patch.object(MockMPExecutor, "submit_mp_request")
+    @patch.object(MockMPExecutor, "is_available")
+    async def test_subst_with_higher_gas_price(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
+        submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
+        is_available_mock.return_value = False
+        base_request = self.get_transfer_mp_request(req_id="0", nonce=0, gasPrice=30000, gas=987654321, value=1, data=b'')
+        await self.mempool._on_send_tx_request(base_request)
+        subst_request = self.get_transfer_mp_request(req_id="1", nonce=0, gasPrice=40000, gas=987654321, value=2, data=b'')
+        await self.mempool._on_send_tx_request(subst_request)
+        is_available_mock.return_value = True
+        await self.mempool._kick_tx_queue()
+        await asyncio.sleep(0)
+        submit_mp_request_mock.assert_called_once()
+        submit_mp_request_mock.assert_called_with(subst_request)
+
+    @patch.object(MockMPExecutor, "submit_mp_request")
+    @patch.object(MockMPExecutor, "is_available")
+    async def test_subst_with_higher_gas_price(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
+        submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
+        is_available_mock.return_value = False
+        base_request = self.get_transfer_mp_request(req_id="0", nonce=0, gasPrice=40000, gas=987654321, value=1, data=b'')
+        await self.mempool._on_send_tx_request(base_request)
+        subst_request = self.get_transfer_mp_request(req_id="1", nonce=0, gasPrice=30000, gas=987654321, value=2, data=b'')
+        await self.mempool._on_send_tx_request(subst_request)
+        is_available_mock.return_value = True
+        await self.mempool._kick_tx_queue()
+        await asyncio.sleep(0)
+        submit_mp_request_mock.assert_called_once()
+        submit_mp_request_mock.assert_called_with(base_request)
 
     def create_account(self) -> Account:
         priv = secrets.token_hex(32)
