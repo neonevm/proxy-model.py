@@ -185,7 +185,8 @@ class SolanaIxInfo:
         self.debug('==== begin iter_ixs')
         self._set_defaults()
         tx_ixs = enumerate(self._msg['instructions'])
-        self.debug(f'---- tx_ixs {self._msg['instructions']}')
+        xxx = self._msg['instructions']
+        self.debug(f'---- tx_ixs {xxx}')
 
         evm_ix_idx = -1
         for ix_idx, self.ix in tx_ixs:
