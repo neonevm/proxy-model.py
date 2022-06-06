@@ -185,7 +185,7 @@ class SolanaIxInfo:
         self.debug('==== begin iter_ixs')
         self._set_defaults()
         tx_ixs = enumerate(self._msg['instructions'])
-        self.debug(f'tx_ixs {tx_ixs}')
+        self.debug(f'---- tx_ixs {self._msg['instructions']}')
 
         evm_ix_idx = -1
         for ix_idx, self.ix in tx_ixs:
@@ -194,7 +194,7 @@ class SolanaIxInfo:
 
             if self._get_neon_instruction():
                 evm_ix_idx += 1
-                self.debug(f'yield A {evm_ix_idx}')
+                self.debug(f'---- yield A {evm_ix_idx}')
                 yield evm_ix_idx
 
             for inner_tx in self.tx['meta']['innerInstructions']:
@@ -202,7 +202,7 @@ class SolanaIxInfo:
                     for self.ix in inner_tx['instructions']:
                         if self._get_neon_instruction():
                             evm_ix_idx += 1
-                            self.debug(f'yield B {evm_ix_idx}')
+                            self.debug(f'---- yield B {evm_ix_idx}')
                             yield evm_ix_idx
 
         self._set_defaults()
@@ -1124,11 +1124,12 @@ class Indexer(IndexerBase):
                 max_slot = max(max_slot, slot)
 
                 log_results = process_logs(tx['meta']['logMessages'])
+                self.debug(f'#### log_results {log_results}')
                 ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
 
                 for _ in ix_info.iter_ixs():
                     req_id = ix_info.sign.get_req_id()
-                    self.debug(f'ix_info {ix_info}')
+                    self.debug(f'++++ ix_info {ix_info}')
                     with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
