@@ -104,6 +104,7 @@ def process_logs(logs: List[str]) -> List[LogIxDTO]:
     tx_list: List[LogIxDTO] = []
 
     for line in logs:
+        print('---- line', line)
         m = program_invoke.match(line)
         if m:
             program_id = m.group(1)
@@ -124,6 +125,7 @@ def process_logs(logs: List[str]) -> List[LogIxDTO]:
             tail = m.group(1)
             data = re.findall("\S+", tail)
             mnemonic = base64.b64decode(data[0]).decode('utf-8')
+            print('---- mnemonic', mnemonic)
             if mnemonic == "RETURN":
                 tx_list[-1].return_dto = unpack_return(data[1:])
             elif mnemonic.startswith("LOG"):
