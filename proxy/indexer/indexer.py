@@ -82,6 +82,15 @@ def unpack_event_log(data: Iterable[str]) -> EventDTO:
     return EventDTO(address, count_topics, t, log_data)
 
 
+@dataclass
+class LogIxDTO:
+    return_dto: ReturnDTO = None
+    event_dto: EventDTO = None
+
+    def empty(self) -> bool:
+        return (self.return_dto is None) and (self.event_dto is None)
+
+
 def process_logs(logs: List[str]) -> List[LogIxDTO]:
     """
     Read log messages from a transaction receipt.
@@ -283,39 +292,30 @@ class NeonTxResult(BaseEvmObject):
         return str_fmt_object(self)
 
 
-@dataclass
-class LogIxDTO:
-    return_dto: ReturnDTO = None
-    event_dto: EventDTO = None
-
-    def empty(self) -> bool:
-        return (self.return_dto is None) and (self.event_dto is None)
-
-
-def assign_result_and_event(tx_result: NeonTxResult, ix: LogIxDTO, tx_idx: int):
-    tx_result.neon_res.gas_used = hex(ix.return_dto.gas_used)
-    tx_result.neon_res.status = hex(ix.return_dto.exit_status)
-    tx_result.neon_res.return_value = ix.return_dto.return_value.hex()
-
-    if ix.event_dto is not None:
-        log_idx = len(tx_result.neon_res.logs)
-        topics = []
-        for i in range(ix.event_dto.count_topics):
-            topics.append('0x' + ix.event_dto.topics[i].hex())
-        rec = {
-            'address': '0x' + ix.event_dto.address.hex(),
-            'topics': topics,
-            'data': '0x' + ix.event_dto.log_data.hex(),
-            'transactionLogIndex': hex(log_idx),
-            'transactionIndex': hex(tx_idx),
-            'logIndex': hex(log_idx),
-            'transactionHash': tx_result.neon_tx.sign,
-            # 'blockNumber': block_number, # set when transaction found
-            # 'blockHash': block_hash # set when transaction found
-        }
-        tx_result.neon_res.logs.append(rec)
-
-    tx_result.neon_res_complete = True
+# def assign_result_and_event(tx_result: NeonTxResult, ix: LogIxDTO, tx_idx: int):
+#     tx_result.neon_res.gas_used = hex(ix.return_dto.gas_used)
+#     tx_result.neon_res.status = hex(ix.return_dto.exit_status)
+#     tx_result.neon_res.return_value = ix.return_dto.return_value.hex()
+#
+#     if ix.event_dto is not None:
+#         log_idx = len(tx_result.neon_res.logs)
+#         topics = []
+#         for i in range(ix.event_dto.count_topics):
+#             topics.append('0x' + ix.event_dto.topics[i].hex())
+#         rec = {
+#             'address': '0x' + ix.event_dto.address.hex(),
+#             'topics': topics,
+#             'data': '0x' + ix.event_dto.log_data.hex(),
+#             'transactionLogIndex': hex(log_idx),
+#             'transactionIndex': hex(tx_idx),
+#             'logIndex': hex(log_idx),
+#             'transactionHash': tx_result.neon_tx.sign,
+#             # 'blockNumber': block_number, # set when transaction found
+#             # 'blockHash': block_hash # set when transaction found
+#         }
+#         tx_result.neon_res.logs.append(rec)
+#
+#     tx_result.neon_res_complete = True
 
 
 @logged_group("neon.Indexer")
