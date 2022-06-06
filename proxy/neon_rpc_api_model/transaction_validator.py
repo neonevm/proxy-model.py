@@ -107,6 +107,14 @@ class NeonTxValidator:
         if (self._tx_gas_limit * self._tx.gasPrice) > (self.MAX_U256 - 1):
             raise EthereumError(message='max fee per gas higher than 2^256-1')
 
+        if self._tx.gasPrice >= self._min_gas_price:
+            return
+
+        if ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID and (not self._tx.hasChainId()) and (self._tx.gasPrice >= 10**10):
+            return
+
+        raise EthereumError(message=f"transaction underpriced: have {self._tx.gasPrice} want {self._min_gas_price}")
+
     def _prevalidate_tx_chain_id(self):
         if self._tx.chainId() not in (None, ElfParams().chain_id):
             raise EthereumError(message='wrong chain id')
