@@ -82,6 +82,57 @@ def unpack_event_log(data: Iterable[str]) -> EventDTO:
     return EventDTO(address, count_topics, t, log_data)
 
 
+def process_logs(logs: List[str]) -> List[LogIxDTO]:
+    """
+    Read log messages from a transaction receipt.
+    Parse each line to rebuild sequence of Neon instructions.
+    Extract return and events information from these lines.
+    """
+    self.debug('---- begin process_logs')
+    program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
+    program_success = re.compile(r'^Program (\w+) success')
+    program_failed = re.compile(r'^Program (\w+) failed')
+    program_data = re.compile(r'^Program data: (.+)$')
+    tx_list: List[LogIxDTO] = []
+
+    for line in logs:
+        m = program_invoke.match(line)
+        if m:
+            program_id = m.group(1)
+            self.debug(f'---- Program {program_id} invoke depth {m.group(2)}')
+            if program_id == EVM_LOADER_ID:
+                tx_list.append(LogIxDTO())
+        m = program_success.match(line)
+        if m:
+            program_id = m.group(1)
+            self.debug(f'---- Program {program_id} success')
+            if program_id == EVM_LOADER_ID and tx_list[-1].empty():
+                tx_list.pop(-1)
+        m = program_failed.match(line)
+        if m:
+            program_id = m.group(1)
+            self.debug(f'---- Program {program_id} failed')
+            if program_id == EVM_LOADER_ID:
+                tx_list.pop(-1)  # remove failed invocation unconditionally
+        m = program_data.match(line)
+        if m:
+            tail = m.group(1)
+            self.debug(f'---- Program data: {tail}')
+            data = re.findall("\S+", tail)
+            mnemonic = base64.b64decode(data[0]).decode('utf-8')
+            self.debug(f'---- mnemonic {mnemonic}')
+            if mnemonic == "RETURN":
+                tx_list[-1].return_dto = unpack_return(data[1:])
+            elif mnemonic.startswith("LOG"):
+                tx_list[-1].event_dto = unpack_event_log(data[1:])
+            else:
+                self.error(f'{self} unrecognized mnemonic {mnemonic}')
+    self.debug('---- end process_logs')
+
+    self.debug(f'---- tx_list len {len(tx_list)}')
+    return tx_list
+
+
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
     def __init__(self, sign: str, slot: int, tx: Dict):
@@ -90,7 +141,6 @@ class SolanaIxInfo:
         self.tx = tx
         self._is_valid = isinstance(tx, dict)
         self._msg = self.tx['transaction']['message'] if self._is_valid else None
-        self._logs = self.tx['meta']['logMessages'] if self._is_valid else None
         self._set_defaults()
 
     def __str__(self):
@@ -134,6 +184,7 @@ class SolanaIxInfo:
         self.debug('==== begin iter_ixs')
         self._set_defaults()
         tx_ixs = enumerate(self._msg['instructions'])
+        self.debug(f'tx_ixs {tx_ixs}')
 
         evm_ix_idx = -1
         for ix_idx, self.ix in tx_ixs:
@@ -142,6 +193,7 @@ class SolanaIxInfo:
 
             if self._get_neon_instruction():
                 evm_ix_idx += 1
+                self.debug(f'yield A {evm_ix_idx}')
                 yield evm_ix_idx
 
             for inner_tx in self.tx['meta']['innerInstructions']:
@@ -149,6 +201,7 @@ class SolanaIxInfo:
                     for self.ix in inner_tx['instructions']:
                         if self._get_neon_instruction():
                             evm_ix_idx += 1
+                            self.debug(f'yield B {evm_ix_idx}')
                             yield evm_ix_idx
 
         self._set_defaults()
@@ -458,61 +511,6 @@ class ReceiptsParserState:
 
     def add_account_to_db(self, neon_account: NeonAccountInfo):
         self._db.fill_account_info_by_indexer(neon_account)
-
-    def process_logs(self, logs: List[str]):
-        """
-        Read log messages from a transaction receipt.
-        Parse each line to rebuild sequence of Neon instructions.
-        Extract return and events information from these lines.
-        Put the information into corresponding objects NeonTxResult.
-        """
-        self.debug('---- begin process_logs')
-        program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
-        program_success = re.compile(r'^Program (\w+) success')
-        program_failed = re.compile(r'^Program (\w+) failed')
-        program_data = re.compile(r'^Program data: (.+)$')
-        tx_list: List[LogIxDTO] = []
-
-        for line in logs:
-            m = program_invoke.match(line)
-            if m:
-                program_id = m.group(1)
-                self.debug(f'---- Program {program_id} invoke depth {m.group(2)}')
-                if program_id == EVM_LOADER_ID:
-                    tx_list.append(LogIxDTO())
-            m = program_success.match(line)
-            if m:
-                program_id = m.group(1)
-                self.debug(f'---- Program {program_id} success')
-                if program_id == EVM_LOADER_ID and tx_list[-1].empty():
-                    tx_list.pop(-1)
-            m = program_failed.match(line)
-            if m:
-                program_id = m.group(1)
-                self.debug(f'---- Program {program_id} failed')
-                if program_id == EVM_LOADER_ID:
-                    tx_list.pop(-1)  # remove failed invocation unconditionally
-            m = program_data.match(line)
-            if m:
-                tail = m.group(1)
-                self.debug(f'---- Program data: {tail}')
-                data = re.findall("\S+", tail)
-                mnemonic = base64.b64decode(data[0]).decode('utf-8')
-                self.debug(f'---- mnemonic {mnemonic}')
-                if mnemonic == "RETURN":
-                    tx_list[-1].return_dto = unpack_return(data[1:])
-                elif mnemonic.startswith("LOG"):
-                    tx_list[-1].event_dto = unpack_event_log(data[1:])
-                else:
-                    self.error(f'{self} unrecognized mnemonic {mnemonic}')
-        self.debug('---- end process_logs')
-
-        self.debug(f'---- tx_list len {len(tx_list)}')
-
-        self.debug('++++ begin iterate tx_list')
-        for t in tx_list:
-            self.debug(f'++++ dto {t}')
-        self.debug('++++ end iterate tx_list')
 
 
 @logged_group("neon.Indexer")
@@ -1133,15 +1131,16 @@ class Indexer(IndexerBase):
             for slot, sign, tx in self.get_tx_receipts(last_block_slot):
                 max_slot = max(max_slot, slot)
 
+                log_results = process_logs(tx['meta']['logMessages'])
                 ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
 
                 for _ in ix_info.iter_ixs():
                     req_id = ix_info.sign.get_req_id()
+                    self.debug(f'ix_info {ix_info}')
                     with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
-                self.state.process_logs(ix_info._logs)
                 self.state.add_tx_cost(ix_info.cost_info)
 
             if max_slot > 0:
