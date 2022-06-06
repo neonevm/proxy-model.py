@@ -508,32 +508,11 @@ class ReceiptsParserState:
         self.debug('---- end process_logs')
 
         self.debug(f'---- tx_list len {len(tx_list)}')
-        self.debug(f'---- _done_tx_list len {len(self._done_tx_list)}')
 
         self.debug('++++ begin iterate tx_list')
         for t in tx_list:
             self.debug(f'++++ dto {t}')
         self.debug('++++ end iterate tx_list')
-
-        self.debug('==== begin iterate _done_tx_list')
-        for t in self._done_tx_list:
-            self.debug(f'==== neon_res_complete {t.neon_res_complete}')
-            self.debug(f'==== neon_res {t.neon_res}')
-            self.debug('================================================================')
-        self.debug('==== end iterate _done_tx_list')
-
-        curr = 0
-        self.debug(f'++++ tx_list len {len(tx_list)}')
-        self.debug(f'++++ _done_tx_list len {len(self._done_tx_list)}')
-        if len(tx_list) > len(self._done_tx_list):
-            self.debug('++++ XXXX')
-        for t in tx_list:
-            self.debug(f'++++ curr before {curr}')
-            while self._done_tx_list[curr].neon_res_complete:
-                curr += 1
-            self.debug(f'++++ curr  after {curr}')
-            assign_result_and_event(self._done_tx_list[curr], t, self.ix.sign.idx)
-            self.debug(f'++++ new neon_res {self._done_tx_list[curr].neon_res}')
 
 
 @logged_group("neon.Indexer")
