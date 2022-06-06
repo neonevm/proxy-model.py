@@ -220,34 +220,6 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             self.assertEqual(response['message'][:len(message)], message)
 
     # @unittest.skip("a.i.")
-    def test_04_execute_with_bad_nonce(self):
-        test_nonce_list = [
-            ('grade_up_one', 1, 'nonce too high:'),
-            ('grade_down_one', -1, 'nonce too low: ')
-        ]
-        for name, offset, message in test_nonce_list:
-            with self.subTest(name=name):
-                print("\ntest_04_execute_with_bad_nonce {} offsets".format(offset))
-                bad_nonce = offset + proxy.eth.get_transaction_count(proxy.eth.default_account)
-                trx_store = self.storage_contract.functions.store(147).buildTransaction({'nonce': bad_nonce})
-                print('trx_store:', trx_store)
-                trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
-                print('trx_store_signed:', trx_store_signed)
-                try:
-                    trx_store_hash = proxy.eth.send_raw_transaction(trx_store_signed.rawTransaction)
-                    print('trx_store_hash:', trx_store_hash)
-                    self.assertTrue(False)
-                except Exception as e:
-                    print('type(e):', type(e))
-                    print('e:', e)
-                    response = json.loads(str(e).replace('\'', '\"').replace('None', 'null'))
-                    print('response:', response)
-                    print('code:', response['code'])
-                    self.assertEqual(response['code'], -32002)
-                    print('message:', response['message'])
-                    self.assertEqual(response['message'][:len(message)], message)
-
-    # @unittest.skip("a.i.")
     def test_05_transfer_one_gwei(self):
         print("\ntest_05_transfer_one_gwei")
 
