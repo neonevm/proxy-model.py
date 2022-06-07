@@ -1137,6 +1137,8 @@ class Indexer(IndexerBase):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
+                self.debug(f'#### neon_res {ix_info.neon_obj}')
+
                 self.state.add_tx_cost(ix_info.cost_info)
 
             if max_slot > 0:
