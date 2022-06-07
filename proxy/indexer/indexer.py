@@ -186,6 +186,7 @@ class SolanaIxInfo:
             return
 
         self.debug('==== begin iter_ixs')
+        self.debug(f'==== logs', {self._logs})
         self._set_defaults()
         tx_ixs = enumerate(self._msg['instructions'])
         xxx = self._msg['instructions']
