@@ -144,6 +144,8 @@ class SolanaIxInfo:
         self.tx = tx
         self._is_valid = isinstance(tx, dict)
         self._msg = self.tx['transaction']['message'] if self._is_valid else None
+        self._logs = process_logs(self.tx['meta']['logMessages'])
+        self.debug(f'#### log_results {log_results}')
         self._set_defaults()
 
     def __str__(self):
@@ -1126,8 +1128,6 @@ class Indexer(IndexerBase):
             for slot, sign, tx in self.get_tx_receipts(last_block_slot):
                 max_slot = max(max_slot, slot)
 
-                log_results = process_logs(tx['meta']['logMessages'])
-                self.debug(f'#### log_results {log_results}')
                 ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
 
                 for _ in ix_info.iter_ixs():
