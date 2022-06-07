@@ -144,8 +144,7 @@ class SolanaIxInfo:
         self.tx = tx
         self._is_valid = isinstance(tx, dict)
         self._msg = self.tx['transaction']['message'] if self._is_valid else None
-        self._logs = process_logs(self.tx['meta']['logMessages'])
-        self.debug(f'#### log_results {log_results}')
+        self._logs = process_logs(self.tx['meta']['logMessages']) if self._is_valid else None
         self._set_defaults()
 
     def __str__(self):
