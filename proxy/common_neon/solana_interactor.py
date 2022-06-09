@@ -7,8 +7,6 @@ import traceback
 import requests
 import json
 
-from typing import Optional
-
 from solana.blockhash import Blockhash
 from solana.publickey import PublicKey
 from solana.rpc.api import Client as SolanaClient
@@ -17,7 +15,7 @@ from solana.rpc.types import RPCResponse
 from solana.transaction import Transaction
 from itertools import zip_longest
 from logged_groups import logged_group
-from typing import Dict, Union, Any, List, NamedTuple, cast
+from typing import Dict, Union, Any, List, NamedTuple, Optional, Iterable, Tuple, cast
 from base58 import b58decode, b58encode
 
 from .utils import SolanaBlockInfo
@@ -253,18 +251,18 @@ class SolanaInteractor:
 
     def get_signatures_for_address(self, before: Optional[str], limit: int, commitment='confirmed') -> []:
         opts: Dict[str, Union[int, str]] = {}
-        if before is not None:
+        if before:
             opts["before"] = before
         opts["limit"] = limit
         opts["commitment"] = commitment
 
         return self._send_rpc_request("getSignaturesForAddress", EVM_LOADER_ID, opts)
 
-    def get_slot(self, commitment='confirmed') -> RPCResponse:
+    def get_slot(self, commitment='confirmed') -> int:
         opts = {
             'commitment': commitment
         }
-        return self._send_rpc_request('getSlot', opts)
+        return self._send_rpc_request('getSlot', opts)['result']
 
     def get_account_info(self, pubkey: PublicKey, length=256, commitment='confirmed') -> Optional[AccountInfo]:
         opts = {

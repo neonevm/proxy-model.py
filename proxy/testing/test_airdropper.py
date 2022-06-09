@@ -255,7 +255,7 @@ class Test_Airdropper(unittest.TestCase):
     def test_init_airdropper_slot_continue(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [{'result': start_slot + 1}]
+        mock_get_slot.side_effect = [start_slot + 1]
         new_airdropper = self.create_airdropper('CONTINUE')
         self.assertEqual(new_airdropper.latest_processed_slot, start_slot - 1)
         mock_get_slot.assert_called_once_with('finalized')
@@ -266,7 +266,7 @@ class Test_Airdropper(unittest.TestCase):
     def test_init_airdropper_slot_continue_recent_slot_not_found(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [None]
-        mock_get_slot.side_effect = [{'result': start_slot + 1}]
+        mock_get_slot.side_effect = [start_slot + 1]
         new_airdropper = self.create_airdropper('CONTINUE')
         self.assertEqual(new_airdropper.latest_processed_slot, start_slot + 1)
         mock_get_slot.assert_called_once_with('finalized')
@@ -277,7 +277,7 @@ class Test_Airdropper(unittest.TestCase):
     def test_init_airdropper_start_slot_parse_error(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [{'result': start_slot + 1}]
+        mock_get_slot.side_effect = [start_slot + 1]
         new_airdropper = self.create_airdropper('Wrong value')
         self.assertEqual(new_airdropper.latest_processed_slot, start_slot - 1)
         mock_get_slot.assert_called_once_with('finalized')
@@ -288,7 +288,7 @@ class Test_Airdropper(unittest.TestCase):
     def test_init_airdropper_slot_latest(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [{'result': start_slot + 1}]
+        mock_get_slot.side_effect = [start_slot + 1]
         new_airdropper = self.create_airdropper('LATEST')
         self.assertEqual(new_airdropper.latest_processed_slot, start_slot + 1)
         mock_get_slot.assert_called_once_with('finalized')
@@ -299,7 +299,7 @@ class Test_Airdropper(unittest.TestCase):
     def test_init_airdropper_slot_number(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [{'result': start_slot + 1}]
+        mock_get_slot.side_effect = [start_slot + 1]
         new_airdropper = self.create_airdropper(str(start_slot))
         self.assertEqual(new_airdropper.latest_processed_slot, start_slot)
         mock_get_slot.assert_called_once_with('finalized')
@@ -310,7 +310,7 @@ class Test_Airdropper(unittest.TestCase):
     def test_init_airdropper_big_slot_number(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [{'result': start_slot + 1}]
+        mock_get_slot.side_effect = [start_slot + 1]
         new_airdropper = self.create_airdropper(str(start_slot + 100))
         self.assertEqual(new_airdropper.latest_processed_slot, start_slot + 1)
         mock_get_slot.assert_called_once_with('finalized')
