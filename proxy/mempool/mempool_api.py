@@ -53,8 +53,8 @@ class MPTxRequest(MPRequest):
 
     def __post_init__(self):
         self.gas_price = self.neon_tx.gasPrice
-        self.nonce      = self.neon_tx.nonce
-        self.address    = self.neon_tx.sender()
+        self.nonce     = self.neon_tx.nonce
+        self.address   = self.neon_tx.sender()
         self.type = MPRequestType.SendTransaction
 
 

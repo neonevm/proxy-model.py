@@ -1,11 +1,18 @@
 import asyncio
-from typing import List, Set, Tuple, Dict
+from typing import List, Tuple, Dict
 from logged_groups import logged_group
-import bisect
 
-from .mempool_api import MPRequest, MPResultCode, MPTxResult, MPTxRequest, IMPExecutor, \
-                         MPRequestType, MPTxRequest, MPPendingTxCountReq
-from .mempool_scheduler import MPNeonTxScheduler
+from .mempool_api import (
+    MPRequest,
+    MPResultCode,
+    MPTxResult,
+    MPTxRequest,
+    IMPExecutor,
+    MPRequestType,
+    MPTxRequest,
+    MPPendingTxCountReq
+)
+from .mempool_scheduler import MPTxScheduler
 
 
 @logged_group("neon.MemPool")
@@ -16,7 +23,7 @@ class MemPool:
     CHECK_TASK_TIMEOUT_SEC = 0.01
 
     def __init__(self, executor: IMPExecutor):
-        self._req_queue = MPNeonTxScheduler()
+        self._req_queue = MPTxScheduler()
         self._req_queue_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         # signer -> pending_tx_counter

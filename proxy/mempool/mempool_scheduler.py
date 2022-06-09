@@ -1,17 +1,19 @@
 from typing import List
+from typing_extensions import Self
 from sortedcontainers import SortedList
+
 from .mempool_api import MPTxRequest
 
 
 class MPSenderTXs:
     def __init__(self, address: str = None):
-        self.address = address
-        self.txs = SortedList()
+        self.address: str = address
+        self.txs: SortedList[MPTxRequest] = SortedList()
 
-    def __eq__(self, other):
+    def __eq__(self, other: Self) -> bool:
         return self.first_tx_gas_price() == other.first_tx_gas_price()
 
-    def __lt__(self, other):
+    def __lt__(self, other: Self) -> bool:
         return self.first_tx_gas_price() > other.first_tx_gas_price()
 
     def add_tx(self, tx: MPTxRequest):
@@ -35,7 +37,7 @@ class MPSenderTXs:
         return self.txs[0].gas_price
 
 
-class MPNeonTxScheduler:
+class MPTxScheduler:
     def __init__(self) -> None:
         self.senders: List[MPSenderTXs] = []
 
