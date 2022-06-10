@@ -7,11 +7,11 @@ from ..common_neon.utils.pickable_data_server import AddrPickableDataSrv, IPicka
 from ..common_neon.config import IConfig
 
 from .mempool import MemPool
-from .executor_mng import MPExecutorMng
+from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 
 
 @logged_group("neon.MemPool")
-class MPService(IPickableDataServerUser):
+class MPService(IPickableDataServerUser, IMPExecutorMngUser):
 
     MP_SERVICE_PORT = 9091
     MP_SERVICE_HOST = "0.0.0.0"
@@ -38,3 +38,6 @@ class MPService(IPickableDataServerUser):
         self._mp_executor_mng = MPExecutorMng(self.EXECUTOR_COUNT, self._config)
         self._mempool = MemPool(self._mp_executor_mng)
         self.event_loop.run_forever()
+
+    def on_resource_released(self, resource_id: int):
+        self._mempool.on_resource_got_available(resource_id)

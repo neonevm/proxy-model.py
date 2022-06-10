@@ -61,7 +61,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def turn_logger_off(cls) -> None:
         neon_logger = logging.getLogger("neon")
-        neon_logger.setLevel(logging.DEBUG)
+        neon_logger.setLevel(logging.ERROR)
 
     async def asyncSetUp(self):
         self.executor = MockMPExecutor()
@@ -71,8 +71,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
     async def test_single_sender_single_tx(self, submit_mp_request_mock: MagicMock):
         submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
         mp_tx_request = self.get_transfer_mp_request(req_id="0000001", nonce=0, gasPrice=30000, gas=987654321, value=1, data=b'')
-        await self.mempool._on_send_tx_request(mp_tx_request)
-        await self.mempool._kick_tx_queue()
+        await self.mempool.enqueue_mp_request(mp_tx_request)
         await asyncio.sleep(0)
 
         submit_mp_request_mock.assert_called_once()
@@ -91,8 +90,8 @@ class Test(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
         submit_mp_request_mock.assert_not_called()
         is_available_mock.return_value = True
-        # TODO: !!!!!!!!!!!!!!get rid of it. MemPool should work without kicking the queue. It's the test case as it is.
-        await self.mempool._kick_tx_queue()
+        self.mempool.on_resource_got_available(1)
+        await asyncio.sleep(0)
         await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
 
         submit_mp_request_mock.assert_has_calls([call(requests[0]), call(requests[1])])
@@ -109,8 +108,8 @@ class Test(unittest.IsolatedAsyncioTestCase):
                     dict(req_id="003", nonce=1, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2])]
         requests = await self._enqueue_requests(req_data)
         is_available_mock.return_value = True
-        await self.mempool._kick_tx_queue()
-        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 5)
+        self.mempool.on_resource_got_available(1)
+        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
 
         submit_mp_request_mock.assert_has_calls([call(requests[2]), call(requests[0]), call(requests[3]), call(requests[1])])
 
@@ -127,7 +126,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
         is_available_mock.return_value = True
         for i in range(2):
             await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
-            await self.mempool._kick_tx_queue()
+            self.mempool.on_resource_got_available(1)
         submit_mp_request_mock.assert_called_once_with(requests[0])
 
     @patch.object(MockMPExecutor, "submit_mp_request")
@@ -136,11 +135,11 @@ class Test(unittest.IsolatedAsyncioTestCase):
         submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
         is_available_mock.return_value = False
         base_request = self.get_transfer_mp_request(req_id="0", nonce=0, gasPrice=30000, gas=987654321, value=1, data=b'')
-        await self.mempool._on_send_tx_request(base_request)
+        await self.mempool._schedule_mp_tx_request(base_request)
         subst_request = self.get_transfer_mp_request(req_id="1", nonce=0, gasPrice=40000, gas=987654321, value=2, data=b'')
-        await self.mempool._on_send_tx_request(subst_request)
+        await self.mempool._schedule_mp_tx_request(subst_request)
         is_available_mock.return_value = True
-        await self.mempool._kick_tx_queue()
+        self.mempool.on_resource_got_available(1)
         await asyncio.sleep(0)
         submit_mp_request_mock.assert_called_once()
         submit_mp_request_mock.assert_called_with(subst_request)
@@ -151,11 +150,11 @@ class Test(unittest.IsolatedAsyncioTestCase):
         submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
         is_available_mock.return_value = False
         base_request = self.get_transfer_mp_request(req_id="0", nonce=0, gasPrice=40000, gas=987654321, value=1, data=b'')
-        await self.mempool._on_send_tx_request(base_request)
+        await self.mempool._schedule_mp_tx_request(base_request)
         subst_request = self.get_transfer_mp_request(req_id="1", nonce=0, gasPrice=30000, gas=987654321, value=2, data=b'')
-        await self.mempool._on_send_tx_request(subst_request)
+        await self.mempool._schedule_mp_tx_request(subst_request)
         is_available_mock.return_value = True
-        await self.mempool._kick_tx_queue()
+        self.mempool.on_resource_got_available(1)
         await asyncio.sleep(0)
         submit_mp_request_mock.assert_called_once()
         submit_mp_request_mock.assert_called_with(base_request)
@@ -177,7 +176,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
         acc_1_count = self.mempool.get_pending_trx_count(requests[3].sender_address)
         self.assertEqual(acc_1_count, 3)
         is_available_mock.return_value = True
-        await self.mempool._kick_tx_queue()
+        self.mempool.on_resource_got_available(1)
         await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
         acc_1_count = self.mempool.get_pending_trx_count(requests[3].sender_address)
         self.assertEqual(acc_1_count, 2)
@@ -185,8 +184,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
     async def _enqueue_requests(self, req_data: List[Dict[str, Any]]) -> List[MPTxRequest]:
         requests = [self.get_transfer_mp_request(**req) for req in req_data]
         for req in requests:
-            await self.mempool._on_send_tx_request(req)
-
+            await self.mempool._schedule_mp_tx_request(req)
         return requests
 
     def create_account(self) -> Account:

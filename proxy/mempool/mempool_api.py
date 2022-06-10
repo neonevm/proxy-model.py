@@ -63,7 +63,6 @@ class MPTxRequest(MPRequest):
         return f"MPTxRequest(hash={hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
 
 
-
 @dataclass
 class MPPendingTxCountReq(MPRequest):
 
