@@ -61,7 +61,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def turn_logger_off(cls) -> None:
         neon_logger = logging.getLogger("neon")
-        neon_logger.setLevel(logging.ERROR)
+        neon_logger.setLevel(logging.DEBUG)
 
     async def asyncSetUp(self):
         self.executor = MockMPExecutor()
@@ -134,9 +134,10 @@ class Test(unittest.IsolatedAsyncioTestCase):
     async def test_subst_with_higher_gas_price(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
         is_available_mock.return_value = False
-        base_request = self.get_transfer_mp_request(req_id="0", nonce=0, gasPrice=30000, gas=987654321, value=1, data=b'')
+        from_acc = self.create_account()
+        base_request = self.get_transfer_mp_request(req_id="0", from_acc=from_acc, nonce=0, gasPrice=30000, gas=987654321, value=1, data=b'')
         await self.mempool._schedule_mp_tx_request(base_request)
-        subst_request = self.get_transfer_mp_request(req_id="1", nonce=0, gasPrice=40000, gas=987654321, value=2, data=b'')
+        subst_request = self.get_transfer_mp_request(req_id="1", from_acc=from_acc, nonce=0, gasPrice=40000, gas=987654321, value=2, data=b'')
         await self.mempool._schedule_mp_tx_request(subst_request)
         is_available_mock.return_value = True
         self.mempool.on_resource_got_available(1)
@@ -149,9 +150,10 @@ class Test(unittest.IsolatedAsyncioTestCase):
     async def test_subst_with_lower_gas_price(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
         is_available_mock.return_value = False
-        base_request = self.get_transfer_mp_request(req_id="0", nonce=0, gasPrice=40000, gas=987654321, value=1, data=b'')
+        from_acc = self.create_account()
+        base_request = self.get_transfer_mp_request(req_id="0", from_acc=from_acc, nonce=0, gasPrice=40000, gas=987654321, value=1, data=b'')
         await self.mempool._schedule_mp_tx_request(base_request)
-        subst_request = self.get_transfer_mp_request(req_id="1", nonce=0, gasPrice=30000, gas=987654321, value=2, data=b'')
+        subst_request = self.get_transfer_mp_request(req_id="1", from_acc=from_acc, nonce=0, gasPrice=30000, gas=987654321, value=2, data=b'')
         await self.mempool._schedule_mp_tx_request(subst_request)
         is_available_mock.return_value = True
         self.mempool.on_resource_got_available(1)

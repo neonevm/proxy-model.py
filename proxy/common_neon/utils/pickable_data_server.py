@@ -47,7 +47,7 @@ class PickableDataServer(ABC):
                 self.error(f"Incomplete read error: {err}")
                 break
             except Exception as err:
-                self.error(f"Failed to receive data err: {err}, type: {type(err)}")
+                self.error(f"Failed to receive data err: {err}, {err.__traceback__.tb_next.tb_frame}, type: {type(err)}")
                 break
 
     async def _recv_pickable_data(self, reader: StreamReader):

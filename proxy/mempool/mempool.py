@@ -26,7 +26,7 @@ class MemPool:
     async def enqueue_mp_request(self, mp_request: MPRequest):
         if mp_request.type == MPRequestType.SendTransaction:
             tx_request: MPTxRequest = mp_request
-            return await self._schedule_mp_tx_request(tx_request)
+            await self._schedule_mp_tx_request(tx_request)
         elif mp_request.type == MPRequestType.GetTrxCount:
             pending_count_req: MPPendingTxCountReq = mp_request
             return self.get_pending_trx_count(pending_count_req.sender)
@@ -38,7 +38,8 @@ class MemPool:
             count = self.get_pending_trx_count(mp_request.sender_address)
             self.debug(f"Got and scheduled: {mp_request.log_str}, pending tx count: {count}", extra=log_ctx)
         except Exception as err:
-            self.error(f"Failed enqueue tx: {mp_request.log_str} into queue: {err}", extra=log_ctx)
+            self.error(f"Exception: {type(err)}")
+            self.error(f"Failed schedule tx: {mp_request.log_str} into queue: {err}", extra=log_ctx)
         finally:
             await self._kick_tx_schedule()
 
@@ -47,13 +48,16 @@ class MemPool:
 
     async def process_tx_schedule(self):
         while True:
+            #self.debug(f"Before acquiring condition: {self._schedule_cond.__repr__()}")
             async with self._schedule_cond:
+                ##self.debug(f"Before waiting condition: {self._schedule_cond.__repr__()}")
                 await self._schedule_cond.wait()
-                if not self._executor.is_available():
-                    self.debug("No way to process tx - no available executor")
-                    continue
-                mp_request: MPRequest = self._tx_schedule.get_tx_for_execution()
-                if mp_request is not None:
+                self.debug(f"Schedule processing  awake, condition: {self._schedule_cond.__repr__()}")
+                while self._executor.is_available():
+                    self.debug(f"About to process next transaction from schedule: {len(self._tx_schedule.senders)}")
+                    mp_request: MPRequest = self._tx_schedule.get_tx_for_execution()
+                    if mp_request is None:
+                        break
                     self.submit_request_to_executor(mp_request)
 
     def submit_request_to_executor(self, mp_tx_request: MPRequest):
@@ -82,24 +86,27 @@ class MemPool:
             await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
 
     async def _process_mp_result(self, resource_id: int, mp_tx_result: MPTxResult, mp_request: MPTxRequest):
+        try:
+            log_fn = self.warning if mp_tx_result.code != MPResultCode.Done else self.debug
+            log_ctx = {"context": {"req_id": mp_request.req_id}}
+            log_fn(f"On mp tx result:  {mp_tx_result} - of: {mp_request.log_str}", extra=log_ctx)
 
-        log_fn = self.warning if mp_tx_result.code != MPResultCode.Done else self.debug
-        log_ctx = {"context": {"req_id": mp_request.req_id}}
-        log_fn(f"On mp tx result:  {mp_tx_result} - of: {mp_request.log_str}", extra=log_ctx)
-
-        if mp_tx_result.code == MPResultCode.BlockedAccount:
-            self._executor.release_resource(resource_id)
-            await self.enqueue_mp_request(mp_request)
-        elif mp_tx_result.code == MPResultCode.NoLiquidity:
-            self._executor.on_no_liquidity(resource_id)
-            await self.enqueue_mp_request(mp_request)
-        elif mp_tx_result.code == MPResultCode.Unspecified:
-            self._executor.release_resource(resource_id)
-            self._drop_request_away(mp_request)
-        elif mp_tx_result.code == MPResultCode.Done:
-            self._on_request_done(mp_request)
-            self._executor.release_resource(resource_id)
-        await self._kick_tx_schedule()
+            if mp_tx_result.code == MPResultCode.BlockedAccount:
+                self._executor.release_resource(resource_id)
+                await self.enqueue_mp_request(mp_request)
+            elif mp_tx_result.code == MPResultCode.NoLiquidity:
+                self._executor.on_no_liquidity(resource_id)
+                await self.enqueue_mp_request(mp_request)
+            elif mp_tx_result.code == MPResultCode.Unspecified:
+                self._executor.release_resource(resource_id)
+                self._drop_request_away(mp_request)
+            elif mp_tx_result.code == MPResultCode.Done:
+                self._on_request_done(mp_request)
+                self._executor.release_resource(resource_id)
+        except Exception as err:
+            self.error(f"EXCEPTION during the result processing: {err}")
+        finally:
+            await self._kick_tx_schedule()
 
     def _on_request_done(self, tx_request: MPTxRequest):
         sender = tx_request.sender_address
@@ -110,13 +117,19 @@ class MemPool:
         self.debug(f"Reqeust done, pending tx count: {count}", extra=log_ctx)
 
     def _drop_request_away(self, tx_request: MPTxRequest):
+        # WHERE IS TH DROP!!!!!
         count = self.get_pending_trx_count(tx_request.sender_address)
         log_ctx = {"context": {"req_id": tx_request.req_id}}
         self.debug(f"Reqeust: {tx_request.log_str} dropped away, pending tx count: {count}", extra=log_ctx)
 
     async def _kick_tx_schedule(self):
+        #self.debug(f"Before acquiring the condition and kicking: {self._schedule_cond.__repr__()}")
         async with self._schedule_cond:
+            self.debug(f"Kick the schedule, condition: {self._schedule_cond.__repr__()}")
+            if len(self._schedule_cond._waiters) == 0:
+                self.critical("asdf")
             self._schedule_cond.notify()
+            #self.debug(f"Notified condition: {self._schedule_cond.__repr__()}")
 
     def on_resource_got_available(self, resource_id: int):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())

@@ -37,30 +37,27 @@ class MPRequestType(IntEnum):
 
 @dataclass(order=True)
 class MPRequest:
-    req_id: int
-    type: MPRequestType = field(default=MPRequestType.Dummy)
+    req_id: int = field(compare=False)
+    type: MPRequestType = field(compare=False, default=MPRequestType.Dummy)
 
 
-@dataclass(order=True)
+@dataclass(eq=True, order=True)
 class MPTxRequest(MPRequest):
+    nonce: int = field(compare=True, default=None)
     signature: str = field(compare=False, default=None)
     neon_tx: NeonTx = field(compare=False, default=None)
     neon_tx_exec_cfg: NeonTxExecCfg = field(compare=False, default=None)
     emulating_result: NeonEmulatingResult = field(compare=False, default=None)
     sender_address: str = field(compare=False, default=None)
     gas_price: int = field(compare=False, default=None)
-    nonce: int = field(compare=True, default=None)
 
     def __post_init__(self):
         self.gas_price = self.neon_tx.gasPrice
         self.nonce = self.neon_tx.nonce
-        self.sender_address = self.neon_tx.sender()
+        self.sender_address = "0x" + self.neon_tx.sender()
         self.type = MPRequestType.SendTransaction
-
-    @property
-    def log_str(self):
         hash = "0x" + self.neon_tx.hash_signed().hex()
-        return f"MPTxRequest(hash={hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
+        self.log_str = f"MPTxRequest(hash={hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
 
 
 @dataclass
