@@ -17,11 +17,7 @@ solana address
 solana airdrop 1000
 solana balance
 
-echo "TESTNAME: ${TESTNAME}"
-
 set ${TESTNAME:=*}
-
-echo "TESTNAME: ${TESTNAME}"
 
 export ETH_TOKEN_MINT=$NEON_TOKEN_MINT
 export TEST_PROGRAM=$(solana address -k /spl/bin/proxy_program-keypair.json)
