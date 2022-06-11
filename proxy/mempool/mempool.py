@@ -1,6 +1,7 @@
 import asyncio
-from typing import List, Tuple, Dict
-from logged_groups import logged_group
+from typing import List, Tuple
+
+from logged_groups import logged_group, logging_context
 
 from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest,\
                          MPPendingTxCountReq
@@ -34,12 +35,12 @@ class MemPool:
     async def _schedule_mp_tx_request(self, mp_request: MPTxRequest):
         log_ctx = {"context": {"req_id": mp_request.req_id}}
         try:
-            self._tx_schedule.add_tx(mp_request)
-            count = self.get_pending_trx_count(mp_request.sender_address)
-            self.debug(f"Got and scheduled: {mp_request.log_str}, pending tx count: {count}", extra=log_ctx)
+            with logging_context(req_id=mp_request.req_id):
+                self._tx_schedule.add_mp_tx_request(mp_request)
+                count = self.get_pending_trx_count(mp_request.sender_address)
+                self.debug(f"Got and scheduled mp_tx_request: {mp_request.log_str}, pending in pool: {count}")
         except Exception as err:
-            self.error(f"Exception: {type(err)}")
-            self.error(f"Failed schedule tx: {mp_request.log_str} into queue: {err}", extra=log_ctx)
+            self.error(f"Failed to schedule mp_tx_request: {mp_request.log_str}. Error: {err}", extra=log_ctx)
         finally:
             await self._kick_tx_schedule()
 
@@ -48,17 +49,19 @@ class MemPool:
 
     async def process_tx_schedule(self):
         while True:
-            #self.debug(f"Before acquiring condition: {self._schedule_cond.__repr__()}")
             async with self._schedule_cond:
-                ##self.debug(f"Before waiting condition: {self._schedule_cond.__repr__()}")
                 await self._schedule_cond.wait()
-                self.debug(f"Schedule processing  awake, condition: {self._schedule_cond.__repr__()}")
+                self.debug(f"Schedule processing  got awake, condition: {self._schedule_cond.__repr__()}")
                 while self._executor.is_available():
-                    self.debug(f"About to process next transaction from schedule: {len(self._tx_schedule.senders)}")
-                    mp_request: MPRequest = self._tx_schedule.get_tx_for_execution()
+                    mp_request: MPTxRequest = self._tx_schedule.get_tx_for_execution()
                     if mp_request is None:
                         break
-                    self.submit_request_to_executor(mp_request)
+                    with logging_context(req_id=mp_request.req_id):
+                        try:
+                            self.debug(f"Got mp_tx_request from schedule: {mp_request.log_str}, left senders in schedule: {len(self._tx_schedule.sender_tx_pools)}")
+                            self.submit_request_to_executor(mp_request)
+                        except Exception as err:
+                            self.debug(f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. Error: {err}")
 
     def submit_request_to_executor(self, mp_tx_request: MPRequest):
         resource_id, task = self._executor.submit_mp_request(mp_tx_request)
@@ -104,7 +107,7 @@ class MemPool:
                 self._on_request_done(mp_request)
                 self._executor.release_resource(resource_id)
         except Exception as err:
-            self.error(f"EXCEPTION during the result processing: {err}")
+            self.error(f"EXCEPTION during the result processing: {err}", extra=log_ctx)
         finally:
             await self._kick_tx_schedule()
 
@@ -123,13 +126,9 @@ class MemPool:
         self.debug(f"Reqeust: {tx_request.log_str} dropped away, pending tx count: {count}", extra=log_ctx)
 
     async def _kick_tx_schedule(self):
-        #self.debug(f"Before acquiring the condition and kicking: {self._schedule_cond.__repr__()}")
         async with self._schedule_cond:
-            self.debug(f"Kick the schedule, condition: {self._schedule_cond.__repr__()}")
-            if len(self._schedule_cond._waiters) == 0:
-                self.critical("asdf")
+            # self.debug(f"Kick the schedule, condition: {self._schedule_cond.__repr__()}")
             self._schedule_cond.notify()
-            #self.debug(f"Notified condition: {self._schedule_cond.__repr__()}")
 
     def on_resource_got_available(self, resource_id: int):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
