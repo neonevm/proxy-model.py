@@ -32,7 +32,7 @@ steps:
       - "deploy_contracts.log"
       - "proxy_program_loader.log"
     env:
-      - TESTNAME: 02_get_code_from_indexer
+      TESTNAME: 02_get_code_from_indexer
 
   - label: ":coverage: full test suite (FTS)"
     key: "full_test_suite"
