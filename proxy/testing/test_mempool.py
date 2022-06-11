@@ -91,8 +91,7 @@ class Test(unittest.IsolatedAsyncioTestCase):
         submit_mp_request_mock.assert_not_called()
         is_available_mock.return_value = True
         self.mempool.on_resource_got_available(1)
-        await asyncio.sleep(0)
-        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
+        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 5)
 
         submit_mp_request_mock.assert_has_calls([call(requests[0]), call(requests[1])])
 
