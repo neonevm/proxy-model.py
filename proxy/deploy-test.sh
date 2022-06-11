@@ -22,10 +22,8 @@ set ${TESTNAME:=*}
 export ETH_TOKEN_MINT=$NEON_TOKEN_MINT
 export TEST_PROGRAM=$(solana address -k /spl/bin/proxy_program-keypair.json)
 
-# python3 -m unittest discover -v -p "test_${TESTNAME}.py"
-
 if [[ -z "${UNITTEST_TESTPATH}" ]]; then
-  find . -name "test_${TESTNAME}.py" -printf "%f\n" | sort | parallel --halt now,fail=1 --jobs 4 python3 -m unittest discover -v -p {}
+  find . -name "test_*.py" -printf "%f\n" | sort | parallel --halt now,fail=1 --jobs 4 python3 -m unittest discover -v -p {}
 else
   python3 -m unittest ${UNITTEST_TESTPATH}
 fi
