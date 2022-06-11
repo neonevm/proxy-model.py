@@ -17,6 +17,8 @@ solana address
 solana airdrop 1000
 solana balance
 
+echo "TESTNAME: ${TESTNAME}"
+
 set ${TESTNAME:=*}
 
 echo "TESTNAME: ${TESTNAME}"
