@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+
+echo "TESTNAME: ${TESTNAME}"
+
 wait-for-proxy()
 {
   PROXY_URL="$1"
