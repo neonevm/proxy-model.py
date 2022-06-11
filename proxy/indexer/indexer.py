@@ -104,24 +104,31 @@ def process_logs(logs: List[str]) -> List[LogIxDTO]:
     tx_list: List[LogIxDTO] = []
 
     for line in logs:
-        print('---- line', line)
+        print('#### line', line)
         m = program_invoke.match(line)
         if m:
+            print('---- line', line)
             program_id = m.group(1)
             if program_id == EVM_LOADER_ID:
                 tx_list.append(LogIxDTO())
+            print('---- tx_list', tx_list)
         m = program_success.match(line)
         if m:
+            print('---- line', line)
             program_id = m.group(1)
-            if program_id == EVM_LOADER_ID and tx_list[-1].empty():
-                tx_list.pop(-1)
+            #if program_id == EVM_LOADER_ID and tx_list[-1].empty():
+            #    tx_list.pop(-1)
+            print('---- tx_list', tx_list)
         m = program_failed.match(line)
         if m:
+            print('---- line', line)
             program_id = m.group(1)
             if program_id == EVM_LOADER_ID:
-                tx_list.pop(-1)  # remove failed invocation unconditionally
+                tx_list.pop(-1)  # remove failed invocation
+            print('---- tx_list', tx_list)
         m = program_data.match(line)
         if m:
+            print('---- line', line)
             tail = m.group(1)
             data = re.findall("\S+", tail)
             mnemonic = base64.b64decode(data[0]).decode('utf-8')
@@ -132,7 +139,9 @@ def process_logs(logs: List[str]) -> List[LogIxDTO]:
                 tx_list[-1].event_dto = unpack_event_log(data[1:])
             else:
                 assert False, f'Wrong mnemonic {mnemonic}'
+            print('---- tx_list', tx_list)
 
+    print('==== process_logs tx_list', tx_list)
     return tx_list
 
 
@@ -144,7 +153,7 @@ class SolanaIxInfo:
         self.tx = tx
         self._is_valid = isinstance(tx, dict)
         self._msg = self.tx['transaction']['message'] if self._is_valid else None
-        self._logs = process_logs(self.tx['meta']['logMessages']) if self._is_valid else None
+        self.logs = process_logs(self.tx['meta']['logMessages']) if self._is_valid else None
         self._set_defaults()
 
     def __str__(self):
@@ -185,11 +194,9 @@ class SolanaIxInfo:
         if not self._is_valid:
             return
 
-        self.debug('==== begin iter_ixs')
+        self.debug('---- begin iter_ixs')
         self._set_defaults()
         tx_ixs = enumerate(self._msg['instructions'])
-        xxx = self._msg['instructions']
-        self.debug(f'---- tx_ixs {xxx}')
 
         evm_ix_idx = -1
         for ix_idx, self.ix in tx_ixs:
@@ -199,7 +206,6 @@ class SolanaIxInfo:
             if self._get_neon_instruction():
                 evm_ix_idx += 1
                 self.debug(f'---- yield A {evm_ix_idx}')
-                assign_result_and_event(self, self._logs[evm_ix_idx], self.sign.idx)
                 yield evm_ix_idx
 
             for inner_tx in self.tx['meta']['innerInstructions']:
@@ -208,7 +214,6 @@ class SolanaIxInfo:
                         if self._get_neon_instruction():
                             evm_ix_idx += 1
                             self.debug(f'---- yield B {evm_ix_idx}')
-                            assign_result_and_event(self, self._logs[evm_ix_idx], self.sign.idx)
                             yield evm_ix_idx
 
         self._set_defaults()
@@ -284,39 +289,39 @@ class NeonTxResult(BaseEvmObject):
         self.blocked_accounts = []
         self.canceled = False
         self.status = NeonTxIndexingStatus.IN_PROGRESS
-        self.neon_res_complete = False
 
     def __str__(self):
         return str_fmt_object(self)
 
 
-def assign_result_and_event(tx_result: NeonTxResult, ix: LogIxDTO, tx_idx: int):
-    print("---- neon_res", tx_result.neon_res)
-    print("---- ix", ix)
-    print("---- tx_idx", tx_idx)
-    tx_result.neon_res.gas_used = hex(ix.return_dto.gas_used)
-    tx_result.neon_res.status = hex(ix.return_dto.exit_status)
-    tx_result.neon_res.return_value = ix.return_dto.return_value.hex()
+def assign_result_and_events(neon_obj: NeonTxResult, log_ix: LogIxDTO, tran_index: int) -> bool:
+    print("---- assign_result_and_events", neon_obj)
 
-    if ix.event_dto is not None:
-        log_idx = len(tx_result.neon_res.logs)
+    if log_ix.return_dto is not None:
+        neon_obj.neon_res.gas_used = hex(log_ix.return_dto.gas_used)
+        neon_obj.neon_res.status = hex(log_ix.return_dto.exit_status)
+        neon_obj.neon_res.return_value = log_ix.return_dto.return_value.hex()
+
+    if log_ix.event_dto is not None:
+        log_idx = len(neon_obj.neon_res.logs)
         topics = []
-        for i in range(ix.event_dto.count_topics):
-            topics.append('0x' + ix.event_dto.topics[i].hex())
+        for i in range(log_ix.event_dto.count_topics):
+            topics.append('0x' + log_ix.event_dto.topics[i].hex())
         rec = {
-            'address': '0x' + ix.event_dto.address.hex(),
+            'address': '0x' + log_ix.event_dto.address.hex(),
             'topics': topics,
-            'data': '0x' + ix.event_dto.log_data.hex(),
+            'data': '0x' + log_ix.event_dto.log_data.hex(),
             'transactionLogIndex': hex(log_idx),
-            'transactionIndex': hex(tx_idx),
+            'transactionIndex': hex(tran_index),
             'logIndex': hex(log_idx),
-            'transactionHash': tx_result.neon_tx.sign,
+            'transactionHash': neon_obj.neon_tx.sign,
             # 'blockNumber': block_number, # set when transaction found
             # 'blockHash': block_hash # set when transaction found
         }
-        tx_result.neon_res.logs.append(rec)
+        self.neon_obj.neon_res.logs.append(rec)
 
-    tx_result.neon_res_complete = True
+    print("==== assign_result_and_events", neon_obj)
+    return log_ix.return_dto is not None
 
 
 @logged_group("neon.Indexer")
@@ -613,7 +618,7 @@ class DummyIxDecoder:
         If the transaction doesn't have results, then try to get results for the transaction.
         If the transaction has received results, then call done for the transaction.
         The transaction can already have results, because parser waits all ixs in the slot, because
-        the parsing order can be other than the execution order
+        the parsing order can be other than the execution orderOnRe
         """
         self.ix.neon_obj = tx
         return self._decoding_success(tx, 'mark ix used')
@@ -818,6 +823,10 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         tx = NeonTxResult('')
         tx.neon_tx = neon_tx
 
+        dto = self.ix.logs[neon_tx.tx_idx]
+        if assign_result_and_events(tx, dto, self.ix.sign.idx):
+            return self._decoding_done(self.ix.neon_obj, 'found Neon results')
+
         return self._decode_tx(tx)
 
 
@@ -904,8 +913,12 @@ class PartialCallIxDecoder(DummyIxDecoder):
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
         tx = self._getadd_tx(storage_account, blocked_accounts, neon_tx)
-
         self.ix.sign.set_steps(step_count)
+
+        dto = self.ix.logs[neon_tx.tx_idx]
+        if assign_result_and_events(tx, dto, self.ix.sign.idx):
+            return self._decoding_done(self.ix.neon_obj, 'found Neon results')
+
         return self._decode_tx(tx)
 
 
