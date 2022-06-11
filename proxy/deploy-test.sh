@@ -19,6 +19,8 @@ solana balance
 
 set ${TESTNAME:=*}
 
+echo "TESTNAME: ${TESTNAME}"
+
 export ETH_TOKEN_MINT=$NEON_TOKEN_MINT
 export TEST_PROGRAM=$(solana address -k /spl/bin/proxy_program-keypair.json)
 
