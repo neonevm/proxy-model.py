@@ -182,7 +182,6 @@ class Test(unittest.IsolatedAsyncioTestCase):
         acc_1_count = self.mempool.get_pending_trx_count(requests[3].sender_address)
         self.assertEqual(acc_1_count, 2)
 
-
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available")
     def test_over_9000_transfers(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
