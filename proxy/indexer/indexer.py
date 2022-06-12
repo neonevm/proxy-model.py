@@ -327,7 +327,7 @@ class ReceiptsParserState:
         self._db.add_tx_costs(self._tx_costs)
         self._tx_costs.clear()
 
-    def complete_done_objects(self, indexed_slot: int) -> int:
+    def complete_done_objects(self, indexed_slot: int) -> None:
         """
         Slot is done, store all done neon txs into the DB.
         """
@@ -352,6 +352,8 @@ class ReceiptsParserState:
                     "min used slot": self._min_used_slot,
                 }
             )
+
+    def get_min_used_slot(self) -> int:
         return self._min_used_slot
 
     def iter_txs(self) -> Iterator[NeonTxResult]:
@@ -918,7 +920,6 @@ class BlocksIndexer:
 
         start_block_slot = self._latest_block_slot
         block_list_len = 10000
-        commitment = FINALIZED
 
         while block_list_len == 10000:
             block_list = self._solana.get_block_slot_list(self._latest_block_slot + 1, block_list_len, self._commitment)
@@ -953,7 +954,6 @@ class Indexer(IndexerBase):
         self.db = IndexerDB(solana)
         last_known_slot = self.db.get_min_receipt_slot()
         super().__init__(solana, last_known_slot)
-        self.min_used_slot = 0
         self.canceller = Canceller(solana)
         self.blocked_storages = {}
         self._block_indexer = BlocksIndexer(db=self.db, solana=solana)
@@ -1020,7 +1020,7 @@ class Indexer(IndexerBase):
         indexed_slot = self._sol_tx_collector.get_last_slot()
 
         if max_slot > 0:
-            self.min_used_slot = self.state.complete_done_objects(indexed_slot)
+            self.state.complete_done_objects(indexed_slot)
 
         self._process_status()
 
@@ -1035,7 +1035,7 @@ class Indexer(IndexerBase):
                     was_skipped_tx = True
 
         if was_skipped_tx:
-            self.min_used_slot = self.state.complete_done_objects(indexed_slot)
+            self.state.complete_done_objects(indexed_slot)
 
         process_receipts_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
         self._counted_logger.print(
@@ -1046,7 +1046,7 @@ class Indexer(IndexerBase):
             },
             latest_params={
                 "indexed slot": indexed_slot,
-                "min used slot": self.min_used_slot
+                "min used slot": self.stat.get_min_used_slot()
             }
         )
 
