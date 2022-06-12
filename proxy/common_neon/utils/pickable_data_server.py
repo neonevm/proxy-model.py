@@ -16,9 +16,11 @@ class IPickableDataServerUser(ABC):
         """Gets neon_tx_data from the neon rpc api service worker"""
 
 
-def encode_pickable(object) -> bytes:
+def encode_pickable(object, logger) -> bytes:
     data = pickle.dumps(object)
+    logger.debug(f"Data: {len(data)} - bytes, bytes: {data.hex()}")
     len_data = struct.pack("!I", len(data))
+    logger.debug(f"Len data: {len(len_data)} - bytes, bytes: {len_data.hex()}")
     return len_data + data
 
 
@@ -36,9 +38,12 @@ class PickableDataServer(ABC):
     async def handle_client(self, reader: StreamReader, writer: StreamWriter):
         while True:
             try:
+                self.debug("Recv pickable data")
                 data = await self._recv_pickable_data(reader)
                 result = await self._user.on_data_received(data)
-                result_data = encode_pickable(result)
+                self.debug(f"Encode pickable result: {result}")
+                result_data = encode_pickable(result, self)
+                self.debug(f"Send result_data: {len(result_data)}, bytes: {result_data.hex()}")
                 writer.write(result_data)
                 await writer.drain()
             except ConnectionResetError:
@@ -48,15 +53,24 @@ class PickableDataServer(ABC):
                 break
             except Exception as err:
                 self.error(f"Failed to receive data err: {err}, {err.__traceback__.tb_next.tb_frame}, type: {type(err)}")
+                exit(1)
                 break
 
     async def _recv_pickable_data(self, reader: StreamReader):
         len_packed: bytes = await reader.read(4)
         if len(len_packed) == 0:
+            self.error("Got empty len_packed")
             raise ConnectionResetError()
         payload_len_data = struct.unpack("!I", len_packed)[0]
-        payload = await reader.read(payload_len_data)
+        self.debug(f"Got payload len_packed: {len_packed.hex()}, that is: {payload_len_data}")
+        payload = b''
+        while len(payload) < payload_len_data:
+            chunk = payload + await reader.read(payload_len_data - len(payload))
+            self.debug(f"Got chunk of data: {len(chunk)}")
+            payload += chunk
+        self.debug(f"Got payload data: {len(payload)}, bytes: {payload.hex()}")
         data = pickle.loads(payload)
+        self.debug(f"Loaded pickable: {data}")
 
         return data
 
@@ -95,38 +109,74 @@ class PickableDataClient:
 
     def send_data(self, pickable_object: Any):
         try:
-            payload = encode_pickable(pickable_object)
+            self.debug(f"Send pickable_object: {pickable_object.__repr__()}")
+            payload: bytes = encode_pickable(pickable_object, self)
+            self.debug(f"Payload: {len(payload)}, bytes: {payload.hex()}")
             sent = self._client_sock.send(payload)
-            len_packed: bytes = self._client_sock.recv(4)
-            data_len = struct.unpack("!I", len_packed)[0]
-            data = self._client_sock.recv(data_len)
-            if not data:
-                return None
-            result = pickle.loads(data)
-            return result
+            self.debug(f"Sent: {sent} - bytes")
         except BaseException as err:
             self.error(f"Failed to send data: {err}")
             raise
 
+        try:
+            self.debug(f"Waiting for answer")
+            len_packed: bytes = self._client_sock.recv(4)
+            data_len = struct.unpack("!I", len_packed)[0]
+            self.debug(f"Got en_packed bytes: {len_packed.hex()}, that is: {data_len} - bytes to receive")
+
+            data = b''
+            while len(data) < data_len:
+                chunk: bytes = self._client_sock.recv(data_len - len(data))
+                self.debug(f"Got chunk of answer data: {len(chunk)}")
+                data += chunk
+
+            if not data:
+                self.error(f"Got: {data_len} to receive but not data")
+                return None
+            self.debug(f"Got data: {len(data)}, bytes: {data.hex()}")
+            result = pickle.loads(data)
+            return result
+        except BaseException as err:
+            self.error(f"Failed to receive answer data: {err}")
+            raise
+
+
     async def send_data_async(self, pickable_object):
+
         loop = asyncio.get_event_loop()
         try:
-            payload = encode_pickable(pickable_object)
+            self.debug(f"Send pickable_object: {pickable_object.__repr__()}")
+            payload = encode_pickable(pickable_object, self)
+            self.debug(f"Payload: {len(payload)}, bytes: {payload.hex()}")
             await loop.sock_sendall(self._client_sock, payload)
 
+        except BaseException as err:
+            self.error(f"Failed to send data: {err}")
+            raise
+
+        try:
+            self.debug(f"Waiting for answer")
             len_packed: bytes = await loop.sock_recv(self._client_sock, 4)
             if not len_packed:
                 return None
             data_len = struct.unpack("!I", len_packed)[0]
-            data = await loop.sock_recv(self._client_sock, data_len)
+
+            data = b''
+            while len(data) < data_len:
+                chunk = await loop.sock_recv(self._client_sock, data_len)
+                self.debug(f"Got chunk of answer data: {len(chunk)}")
+                data += chunk
+
             if not data:
+                self.error(f"Got: {data_len} to receive but not data")
                 return None
+            self.debug(f"Got data: {len(data)}, bytes: {data.hex()}")
             result = pickle.loads(data)
             return result
-        except BaseException as err:
-            self.error(f"Failed to send data: {err}")
-            raise
 
+        except BaseException as err:
+            self.error(f"Failed to receive answer data: {err}")
+            raise
 
 class PipePickableDataClient(PickableDataClient):
 
