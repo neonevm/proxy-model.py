@@ -11,8 +11,6 @@ from .mempool_schedule import MPTxSchedule
 @logged_group("neon.MemPool")
 class MemPool:
 
-    TX_QUEUE_MAX_SIZE = 4096
-    TX_QUEUE_SIZE = 4095
     CHECK_TASK_TIMEOUT_SEC = 0.01
 
     def __init__(self, executor: IMPExecutor):

@@ -18,13 +18,12 @@ class IPickableDataServerUser(ABC):
 
 def encode_pickable(object, logger) -> bytes:
     data = pickle.dumps(object)
-    logger.debug(f"Data: {len(data)} - bytes, bytes: {data.hex()}")
     len_data = struct.pack("!I", len(data))
-    logger.debug(f"Len data: {len(len_data)} - bytes, bytes: {len_data.hex()}")
+    logger.debug(f"Len data: {len(len_data)} - bytes, data: {len(data)} - bytes")
     return len_data + data
 
 
-@logged_group("neon.MemPool")
+@logged_group("neon.Network")
 class PickableDataServer(ABC):
 
     def __init__(self, *, user: IPickableDataServerUser):
@@ -53,7 +52,6 @@ class PickableDataServer(ABC):
                 break
             except Exception as err:
                 self.error(f"Failed to receive data err: {err}, {err.__traceback__.tb_next.tb_frame}, type: {type(err)}")
-                exit(1)
                 break
 
     async def _recv_pickable_data(self, reader: StreamReader):
@@ -68,13 +66,14 @@ class PickableDataServer(ABC):
             chunk = payload + await reader.read(payload_len_data - len(payload))
             self.debug(f"Got chunk of data: {len(chunk)}")
             payload += chunk
-        self.debug(f"Got payload data: {len(payload)}, bytes: {payload.hex()}")
+        self.debug(f"Got payload data: {len(payload)}. Load pickled object")
         data = pickle.loads(payload)
         self.debug(f"Loaded pickable: {data}")
 
         return data
 
 
+@logged_group("neon.MemPool")
 class AddrPickableDataSrv(PickableDataServer):
 
     def __init__(self, *, user: IPickableDataServerUser, address: Tuple[str, int]):
@@ -87,6 +86,7 @@ class AddrPickableDataSrv(PickableDataServer):
         await asyncio.start_server(self.handle_client, host, port)
 
 
+@logged_group("neon.Network")
 class PipePickableDataSrv(PickableDataServer):
 
     def __init__(self, *, user: IPickableDataServerUser, srv_sock: socket.socket):
@@ -98,7 +98,6 @@ class PipePickableDataSrv(PickableDataServer):
         await self.handle_client(reader, writer)
 
 
-@logged_group("neon.Proxy")
 class PickableDataClient:
 
     def __init__(self):
@@ -111,18 +110,18 @@ class PickableDataClient:
         try:
             self.debug(f"Send pickable_object: {pickable_object.__repr__()}")
             payload: bytes = encode_pickable(pickable_object, self)
-            self.debug(f"Payload: {len(payload)}, bytes: {payload.hex()}")
+            self.debug(f"Payload: {len(payload)}, bytes: {payload[:15].hex()}")
             sent = self._client_sock.send(payload)
             self.debug(f"Sent: {sent} - bytes")
         except BaseException as err:
-            self.error(f"Failed to send data: {err}")
+            self.error(f"Failed to send client data: {err}")
             raise
 
         try:
             self.debug(f"Waiting for answer")
             len_packed: bytes = self._client_sock.recv(4)
             data_len = struct.unpack("!I", len_packed)[0]
-            self.debug(f"Got en_packed bytes: {len_packed.hex()}, that is: {data_len} - bytes to receive")
+            self.debug(f"Got len_packed bytes: {len_packed.hex()}, that is: {data_len} - bytes to receive")
 
             data = b''
             while len(data) < data_len:
@@ -133,13 +132,13 @@ class PickableDataClient:
             if not data:
                 self.error(f"Got: {data_len} to receive but not data")
                 return None
-            self.debug(f"Got data: {len(data)}, bytes: {data.hex()}")
+            self.debug(f"Got data: {len(data)}. Load pickled object")
             result = pickle.loads(data)
+            self.debug(f"Got result: {result}")
             return result
         except BaseException as err:
             self.error(f"Failed to receive answer data: {err}")
             raise
-
 
     async def send_data_async(self, pickable_object):
 
@@ -147,11 +146,11 @@ class PickableDataClient:
         try:
             self.debug(f"Send pickable_object: {pickable_object.__repr__()}")
             payload = encode_pickable(pickable_object, self)
-            self.debug(f"Payload: {len(payload)}, bytes: {payload.hex()}")
+            self.debug(f"Payload: {len(payload)}, bytes: {payload[:15].hex()}")
             await loop.sock_sendall(self._client_sock, payload)
 
         except BaseException as err:
-            self.error(f"Failed to send data: {err}")
+            self.error(f"Failed to send client data: {err}")
             raise
 
         try:
@@ -170,14 +169,17 @@ class PickableDataClient:
             if not data:
                 self.error(f"Got: {data_len} to receive but not data")
                 return None
-            self.debug(f"Got data: {len(data)}, bytes: {data.hex()}")
+            self.debug(f"Got data: {len(data)}. Load pickled object")
             result = pickle.loads(data)
+            self.debug(f"Got result: {result}")
             return result
 
         except BaseException as err:
             self.error(f"Failed to receive answer data: {err}")
             raise
 
+
+@logged_group("neon.Network")
 class PipePickableDataClient(PickableDataClient):
 
     def __init__(self, client_sock: socket.socket):
@@ -185,11 +187,14 @@ class PipePickableDataClient(PickableDataClient):
         self._set_client_sock(client_sock=client_sock)
 
 
+@logged_group("neon.Network")
 class AddrPickableDataClient(PickableDataClient):
 
     def __init__(self, addr: Tuple[str, int]):
         PickableDataClient.__init__(self)
         host, port = addr
         client_sock = socket.create_connection((host, port))
+        client_sock.setblocking(True)
+        client_sock.settimeout(0.5)
         self._set_client_sock(client_sock=client_sock)
 

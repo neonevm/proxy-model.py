@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from random import randint
 
 import secrets
 
@@ -39,7 +40,7 @@ class MockTask:
 class MockMPExecutor(IMPExecutor):
 
     def submit_mp_request(self, mp_reqeust: MPRequest) -> Tuple[int, MockTask]:
-        pass
+        return randint(0, 10), MockTask(MPTxResult(MPResultCode.Done, None))
 
     def is_available(self) -> bool:
         return True
@@ -60,8 +61,8 @@ class Test(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def turn_logger_off(cls) -> None:
-        neon_logger = logging.getLogger("neon")
-        neon_logger.setLevel(logging.DEBUG)
+        neon_logger = logging.getLogger("neon.MemPool")
+        neon_logger.setLevel(logging.ERROR)
 
     async def asyncSetUp(self):
         self.executor = MockMPExecutor()
@@ -184,13 +185,43 @@ class Test(unittest.IsolatedAsyncioTestCase):
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available")
-    def test_over_9000_transfers(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
-        pass
+    async def test_over_9000_transfers(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
+        ACC_COUNT_MAX=1_000
+        FROM_ACC_COUNT = 10
+        SLEEP_SEC = 15
+        NONCE_COUNT = 1000
+        REQ_COUNT = FROM_ACC_COUNT * NONCE_COUNT
+        acc = [self.create_account() for i in range(ACC_COUNT_MAX)]
+        submit_mp_request_mock.return_value = 1, MockTask(MPTxResult(MPResultCode.Done, None))
+        is_available_mock.return_value = False
+        # init neon requests
+        for acc_i in range(0, FROM_ACC_COUNT):
+            nonces = [i for i in range(0, NONCE_COUNT)]
+            while len(nonces) > 0:
+                index = randint(0, len(nonces) - 1)
+                nonce = nonces.pop(index)
+                request = self.get_transfer_mp_request(from_acc=acc[acc_i], to_acc=acc[randint(0, ACC_COUNT_MAX-1)],
+                                                       req_id=str(acc_i) + " " + str(nonce), nonce=NONCE_COUNT - nonce - 1,
+                                                       gasPrice=randint(50000, 100000), gas=randint(4000, 10000))
+                await self.mempool.enqueue_mp_request(request)
+        is_available_mock.return_value = True
+        self.mempool.on_resource_got_available(1)
+        await asyncio.sleep(SLEEP_SEC)
+        for ac in acc[:FROM_ACC_COUNT]:
+            acc_nonce = 0
+            for call in submit_mp_request_mock.call_args_list:
+                request = call.args[0]
+                if ac.address.lower() == request.sender_address:
+                    self.assertEqual(request.nonce, acc_nonce)
+                    acc_nonce += 1
+
+
+        self.assertEqual(submit_mp_request_mock.call_count, REQ_COUNT)
 
     async def _enqueue_requests(self, req_data: List[Dict[str, Any]]) -> List[MPTxRequest]:
         requests = [self.get_transfer_mp_request(**req) for req in req_data]
         for req in requests:
-            await self.mempool._schedule_mp_tx_request(req)
+            await self.mempool.enqueue_mp_request(req)
         return requests
 
     def create_account(self) -> Account:
