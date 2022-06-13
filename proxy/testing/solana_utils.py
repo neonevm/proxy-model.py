@@ -22,7 +22,6 @@ from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 import base58
