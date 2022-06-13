@@ -13,7 +13,7 @@ import datetime
 import multiprocessing
 import unittest
 import rlp
-from eth_tx_utils import make_instruction_data_from_tx, make_keccak_instruction_data
+from .eth_tx_utils import make_instruction_data_from_tx, make_keccak_instruction_data
 from eth_utils import big_endian_to_int
 from ethereum.transactions import Transaction as EthTrx
 from ethereum.utils import sha3
