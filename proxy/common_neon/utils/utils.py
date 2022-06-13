@@ -121,10 +121,10 @@ def unpack_event_log(data: Iterable[str]) -> EventDTO:
 @dataclass
 class LogIxDTO:
     return_dto: ReturnDTO = None
-    event_dto: EventDTO = None
+    event_dtos: List[EventDTO] = None
 
     def empty(self) -> bool:
-        return (self.return_dto is None) and (self.event_dto is None)
+        return (self.return_dto is None) and (self.event_dtos is None)
 
 
 def process_logs(logs: List[str]) -> List[LogIxDTO]:
@@ -140,7 +140,6 @@ def process_logs(logs: List[str]) -> List[LogIxDTO]:
     tx_list: List[LogIxDTO] = []
 
     for line in logs:
-        print('#### line', line)
         m = program_invoke.match(line)
         if m:
             print('---- line', line)
@@ -172,7 +171,7 @@ def process_logs(logs: List[str]) -> List[LogIxDTO]:
             if mnemonic == "RETURN":
                 tx_list[-1].return_dto = unpack_return(data[1:])
             elif mnemonic.startswith("LOG"):
-                tx_list[-1].event_dto = unpack_event_log(data[1:])
+                tx_list[-1].event_dtos.push(unpack_event_log(data[1:]))
             else:
                 assert False, f'Wrong mnemonic {mnemonic}'
             print('---- tx_list', tx_list)
@@ -299,23 +298,24 @@ class NeonTxResultInfo:
                 self.slot = tx['slot']
                 self.idx = 0 #TODO
 
-            if log_ix.event_dto is not None: #TODO
+            if log_ix.event_dtos is not None:
                 log_idx = len(self.logs)
-                topics = []
-                for i in range(log_ix.event_dto.count_topics):
-                    topics.append('0x' + log_ix.event_dto.topics[i].hex())
-                rec = {
-                    'address': '0x' + log_ix.event_dto.address.hex(),
-                    'topics': topics,
-                    'data': '0x' + log_ix.event_dto.log_data.hex(),
-                    'transactionLogIndex': hex(log_idx),
-                    'transactionIndex': hex(self.idx),
-                    'logIndex': hex(log_idx),
-                    'transactionHash': neon_sign,
-                    # 'blockNumber': block_number, # set when transaction found
-                    # 'blockHash': block_hash # set when transaction found
-                }
-                self.logs.append(rec)
+                for e in log_ix.event_dtos:
+                    topics = []
+                    for i in range(e.count_topics):
+                        topics.append('0x' + e.topics[i].hex())
+                    rec = {
+                        'address': '0x' + e.address.hex(),
+                        'topics': topics,
+                        'data': '0x' + e.log_data.hex(),
+                        'transactionLogIndex': hex(log_idx),
+                        'transactionIndex': hex(self.idx),
+                        'logIndex': hex(log_idx),
+                        'transactionHash': neon_sign,
+                        # 'blockNumber': block_number, # set when transaction found
+                        # 'blockHash': block_hash # set when transaction found
+                    }
+                    self.logs.append(rec)
 
         return self
 
