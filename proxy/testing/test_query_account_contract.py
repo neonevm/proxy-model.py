@@ -346,19 +346,6 @@ class Test_Query_Account_Contract(unittest.TestCase):
         self.contract_address = tx_deploy_receipt.contractAddress
         print('contract address:', self.contract_address)
 
-    # @unittest.skip("a.i.")
-    def test_cache(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_cache().call()
-        assert(ok)
-
-    # @unittest.skip("a.i.")
-    def test_noncached(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_noncached().call()
-        assert(ok)
 
     # @unittest.skip("a.i.")
     def test_metadata_ok(self):
@@ -372,13 +359,6 @@ class Test_Query_Account_Contract(unittest.TestCase):
         print
         query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
         ok = query.functions.test_data_ok().call()
-        assert(ok)
-
-    # @unittest.skip("a.i.")
-    def test_data_wrong_range(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_data_wrong_range().call()
         assert(ok)
 
 if __name__ == '__main__':
