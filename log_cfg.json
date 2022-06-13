@@ -40,21 +40,21 @@
             "handlers": ["standard"],
             "propagate": false
         },
-//        "neon.Proxy": {
-//            "level": "DEBUG",
-//            "handlers": ["standard"],
-//            "propagate": false
-//        },
-//        "neon.MemPool": {
-//            "level": "DEBUG",
-//            "handlers": ["standard"],
-//            "propagate": false
-//        },
-//        "neon.Network": {
-//            "level": "DEBUG",
-//            "handlers": ["standard"],
-//            "propagate": false
-//        },
+        "neon.Proxy": {
+            "level": "ERROR",
+            "handlers": ["standard"],
+            "propagate": false
+        },
+        "neon.MemPool": {
+              "level": "ERROR",
+            "handlers": ["standard"],
+            "propagate": false
+        },
+        "neon.Network": {
+            "level": "DEBUG",
+            "handlers": ["standard"],
+            "propagate": false
+        },
         "": {
             "level": "ERROR",
             "handlers": ["root"],

@@ -25,7 +25,7 @@ class MemPool:
     async def enqueue_mp_request(self, mp_request: MPRequest):
         if mp_request.type == MPRequestType.SendTransaction:
             tx_request: MPTxRequest = mp_request
-            await self._schedule_mp_tx_request(tx_request)
+            return await self._schedule_mp_tx_request(tx_request)
         elif mp_request.type == MPRequestType.GetTrxCount:
             pending_count_req: MPPendingTxCountReq = mp_request
             return self.get_pending_trx_count(pending_count_req.sender)
@@ -81,6 +81,7 @@ class MemPool:
                     continue
 
                 mp_tx_result: MPTxResult = task.result()
+                assert isinstance(mp_tx_result, MPTxResult), f"Got unexpected result: {mp_tx_result}"
                 await self._process_mp_result(resource_id, mp_tx_result, mp_request)
 
             self._processing_tasks = not_finished_tasks

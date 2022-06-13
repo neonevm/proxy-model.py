@@ -18,9 +18,6 @@ class MPExecutorClient(PipePickableDataClient):
     def __init__(self, client_sock: socket.socket):
         PipePickableDataClient.__init__(self, client_sock=client_sock)
 
-    async def send_tx_request(self, mempool_tx_request: MPRequest):
-        return await self.send_data_async(mempool_tx_request)
-
 
 class IMPExecutorMngUser(ABC):
 

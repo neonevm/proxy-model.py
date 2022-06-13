@@ -20,6 +20,7 @@ class IMPExecutor(ABC):
     def is_available(self) -> bool:
         pass
 
+    # TODO: drop it away
     @abstractmethod
     def on_no_liquidity(self, resource_id: int):
         pass

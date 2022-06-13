@@ -59,16 +59,18 @@ class PickableDataServer(ABC):
         if len(len_packed) == 0:
             self.error("Got empty len_packed")
             raise ConnectionResetError()
-        payload_len_data = struct.unpack("!I", len_packed)[0]
-        self.debug(f"Got payload len_packed: {len_packed.hex()}, that is: {payload_len_data}")
+        payload_len = struct.unpack("!I", len_packed)[0]
+        self.debug(f"Got payload len_packed: {len_packed.hex()}, that is: {payload_len}")
         payload = b''
-        while len(payload) < payload_len_data:
-            chunk = payload + await reader.read(payload_len_data - len(payload))
+        while len(payload) < payload_len:
+            to_be_read = payload_len - len(payload)
+            self.debug(f"Reading chunk of: {to_be_read} of: {payload_len} - bytes")
+            chunk = payload + await reader.read(to_be_read)
             self.debug(f"Got chunk of data: {len(chunk)}")
             payload += chunk
         self.debug(f"Got payload data: {len(payload)}. Load pickled object")
         data = pickle.loads(payload)
-        self.debug(f"Loaded pickable: {data}")
+        self.debug(f"Loaded pickable of type: {type(data)}")
 
         return data
 
@@ -101,14 +103,14 @@ class PipePickableDataSrv(PickableDataServer):
 class PickableDataClient:
 
     def __init__(self):
-        self._client_sock = None
+        self._client_sock: socket.socket = None
 
     def _set_client_sock(self, client_sock: socket.socket):
         self._client_sock = client_sock
 
     def send_data(self, pickable_object: Any):
         try:
-            self.debug(f"Send pickable_object: {pickable_object.__repr__()}")
+            self.debug(f"Send pickable_object of type: {type(pickable_object)}")
             payload: bytes = encode_pickable(pickable_object, self)
             self.debug(f"Payload: {len(payload)}, bytes: {payload[:15].hex()}")
             sent = self._client_sock.send(payload)
@@ -125,7 +127,9 @@ class PickableDataClient:
 
             data = b''
             while len(data) < data_len:
-                chunk: bytes = self._client_sock.recv(data_len - len(data))
+                to_be_read = data_len - len(data)
+                self.debug(f"Reading answer data: {to_be_read} of: {data_len} - bytes")
+                chunk: bytes = self._client_sock.recv(to_be_read)
                 self.debug(f"Got chunk of answer data: {len(chunk)}")
                 data += chunk
 
@@ -144,7 +148,7 @@ class PickableDataClient:
 
         loop = asyncio.get_event_loop()
         try:
-            self.debug(f"Send pickable_object: {pickable_object.__repr__()}")
+            self.debug(f"Send pickable_object of type: {type(pickable_object)}")
             payload = encode_pickable(pickable_object, self)
             self.debug(f"Payload: {len(payload)}, bytes: {payload[:15].hex()}")
             await loop.sock_sendall(self._client_sock, payload)
@@ -162,7 +166,9 @@ class PickableDataClient:
 
             data = b''
             while len(data) < data_len:
-                chunk = await loop.sock_recv(self._client_sock, data_len)
+                to_be_read = data_len - len(data)
+                self.debug(f"Reading answer data: {to_be_read} of: {data_len} - bytes")
+                chunk = await loop.sock_recv(self._client_sock, to_be_read)
                 self.debug(f"Got chunk of answer data: {len(chunk)}")
                 data += chunk
 
@@ -178,6 +184,8 @@ class PickableDataClient:
             self.error(f"Failed to receive answer data: {err}")
             raise
 
+    async def read_exactly(self) -> bytes:
+        pass
 
 @logged_group("neon.Network")
 class PipePickableDataClient(PickableDataClient):
@@ -194,7 +202,7 @@ class AddrPickableDataClient(PickableDataClient):
         PickableDataClient.__init__(self)
         host, port = addr
         client_sock = socket.create_connection((host, port))
-        client_sock.setblocking(True)
-        client_sock.settimeout(0.5)
+        # client_sock.setblocking(True)
+        # client_sock.settimeout(0.5)
         self._set_client_sock(client_sock=client_sock)
 
