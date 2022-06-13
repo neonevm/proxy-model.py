@@ -24,127 +24,6 @@ from ..common_neon.solana_receipt_parser import SolReceiptParser
 from ..common_neon.environment_data import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
 
-@dataclass
-class ReturnDTO:
-    exit_status: int = 0
-    gas_used: int = 0
-    return_value: bytes = None
-
-
-def unpack_return(data: Iterable[str]) -> ReturnDTO:
-    """
-    Unpack base64-encoded return data.
-    """
-    exit_status = 0
-    gas_used = 0
-    return_value = b''
-    for i, s in enumerate(data):
-        bs = base64.b64decode(s)
-        if i == 0:
-            exit_status = int.from_bytes(bs, "little")
-            exit_status = 0x1 if exit_status < 0xd0 else 0x0
-        elif i == 1:
-            gas_used = int.from_bytes(bs, "little")
-        elif i == 2:
-            return_value = bs
-    return ReturnDTO(exit_status, gas_used, return_value)
-
-
-@dataclass
-class EventDTO:
-    address: bytes = None
-    count_topics: int = 0
-    topics: List[bytes] = None
-    log_data: bytes = None
-
-
-def unpack_event_log(data: Iterable[str]) -> EventDTO:
-    """
-    Unpack base64-encoded event data.
-    """
-    address = b''
-    count_topics = 0
-    t = []
-    log_data = b''
-    for i, s in enumerate(data):
-        bs = base64.b64decode(s)
-        if i == 0:
-            address = bs
-        elif i == 1:
-            count_topics = int.from_bytes(bs, "little")
-        elif 1 < i < 6:
-            if count_topics > (i - 2):
-                t.append(bs)
-            else:
-                log_data = bs
-        else:
-            log_data = bs
-    return EventDTO(address, count_topics, t, log_data)
-
-
-@dataclass
-class LogIxDTO:
-    return_dto: ReturnDTO = None
-    event_dto: EventDTO = None
-
-    def empty(self) -> bool:
-        return (self.return_dto is None) and (self.event_dto is None)
-
-
-def process_logs(logs: List[str]) -> List[LogIxDTO]:
-    """
-    Read log messages from a transaction receipt.
-    Parse each line to rebuild sequence of Neon instructions.
-    Extract return and events information from these lines.
-    """
-    program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
-    program_success = re.compile(r'^Program (\w+) success')
-    program_failed = re.compile(r'^Program (\w+) failed')
-    program_data = re.compile(r'^Program data: (.+)$')
-    tx_list: List[LogIxDTO] = []
-
-    for line in logs:
-        print('#### line', line)
-        m = program_invoke.match(line)
-        if m:
-            print('---- line', line)
-            program_id = m.group(1)
-            if program_id == EVM_LOADER_ID:
-                tx_list.append(LogIxDTO())
-            print('---- tx_list', tx_list)
-        m = program_success.match(line)
-        if m:
-            print('---- line', line)
-            program_id = m.group(1)
-            #if program_id == EVM_LOADER_ID and tx_list[-1].empty():
-            #    tx_list.pop(-1)
-            print('---- tx_list', tx_list)
-        m = program_failed.match(line)
-        if m:
-            print('---- line', line)
-            program_id = m.group(1)
-            if program_id == EVM_LOADER_ID:
-                tx_list.pop(-1)  # remove failed invocation
-            print('---- tx_list', tx_list)
-        m = program_data.match(line)
-        if m:
-            print('---- line', line)
-            tail = m.group(1)
-            data = re.findall("\S+", tail)
-            mnemonic = base64.b64decode(data[0]).decode('utf-8')
-            print('---- mnemonic', mnemonic)
-            if mnemonic == "RETURN":
-                tx_list[-1].return_dto = unpack_return(data[1:])
-            elif mnemonic.startswith("LOG"):
-                tx_list[-1].event_dto = unpack_event_log(data[1:])
-            else:
-                assert False, f'Wrong mnemonic {mnemonic}'
-            print('---- tx_list', tx_list)
-
-    print('==== process_logs tx_list', tx_list)
-    return tx_list
-
-
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
     def __init__(self, sign: str, slot: int, tx: Dict):
@@ -153,7 +32,7 @@ class SolanaIxInfo:
         self.tx = tx
         self._is_valid = isinstance(tx, dict)
         self._msg = self.tx['transaction']['message'] if self._is_valid else None
-        self.logs = process_logs(self.tx['meta']['logMessages']) if self._is_valid else None
+        # self.logs = process_logs(self.tx['meta']['logMessages']) if self._is_valid else None
         self._set_defaults()
 
     def __str__(self):
@@ -292,36 +171,6 @@ class NeonTxResult(BaseEvmObject):
 
     def __str__(self):
         return str_fmt_object(self)
-
-
-def assign_result_and_events(neon_obj: NeonTxResult, log_ix: LogIxDTO, tran_index: int) -> bool:
-    print("---- assign_result_and_events", neon_obj)
-
-    if log_ix.return_dto is not None:
-        neon_obj.neon_res.gas_used = hex(log_ix.return_dto.gas_used)
-        neon_obj.neon_res.status = hex(log_ix.return_dto.exit_status)
-        neon_obj.neon_res.return_value = log_ix.return_dto.return_value.hex()
-
-    if log_ix.event_dto is not None:
-        log_idx = len(neon_obj.neon_res.logs)
-        topics = []
-        for i in range(log_ix.event_dto.count_topics):
-            topics.append('0x' + log_ix.event_dto.topics[i].hex())
-        rec = {
-            'address': '0x' + log_ix.event_dto.address.hex(),
-            'topics': topics,
-            'data': '0x' + log_ix.event_dto.log_data.hex(),
-            'transactionLogIndex': hex(log_idx),
-            'transactionIndex': hex(tran_index),
-            'logIndex': hex(log_idx),
-            'transactionHash': neon_obj.neon_tx.sign,
-            # 'blockNumber': block_number, # set when transaction found
-            # 'blockHash': block_hash # set when transaction found
-        }
-        self.neon_obj.neon_res.logs.append(rec)
-
-    print("==== assign_result_and_events", neon_obj)
-    return log_ix.return_dto is not None
 
 
 @logged_group("neon.Indexer")
@@ -823,9 +672,8 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         tx = NeonTxResult('')
         tx.neon_tx = neon_tx
 
-        dto = self.ix.logs[self.ix.sign.idx]
-        if assign_result_and_events(tx, dto, self.ix.sign.idx):
-            return self._decoding_done(self.ix.neon_obj, 'found Neon results')
+        if tx.neon_res.decode(neon_tx.sign, self.ix.tx).is_valid():
+            return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
 
@@ -915,9 +763,8 @@ class PartialCallIxDecoder(DummyIxDecoder):
         tx = self._getadd_tx(storage_account, blocked_accounts, neon_tx)
         self.ix.sign.set_steps(step_count)
 
-        dto = self.ix.logs[self.ix.sign.idx]
-        if assign_result_and_events(tx, dto, self.ix.sign.idx):
-            return self._decoding_done(self.ix.neon_obj, 'found Neon results')
+        if tx.neon_res.decode(neon_tx.sign, self.ix.tx).is_valid():
+            return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
 

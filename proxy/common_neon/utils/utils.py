@@ -1,5 +1,9 @@
 from __future__ import annotations
-from typing import Dict, Any, Optional, List
+from logged_groups import logged_group
+import base64
+from dataclasses import dataclass
+import re
+from typing import Dict, Any, Iterable, Optional, List
 
 import json
 import base58
@@ -56,6 +60,127 @@ def str_fmt_object(obj) -> str:
     return f'{name}: {members}'
 
 
+@dataclass
+class ReturnDTO:
+    exit_status: int = 0
+    gas_used: int = 0
+    return_value: bytes = None
+
+
+def unpack_return(data: Iterable[str]) -> ReturnDTO:
+    """
+    Unpack base64-encoded return data.
+    """
+    exit_status = 0
+    gas_used = 0
+    return_value = b''
+    for i, s in enumerate(data):
+        bs = base64.b64decode(s)
+        if i == 0:
+            exit_status = int.from_bytes(bs, "little")
+            exit_status = 0x1 if exit_status < 0xd0 else 0x0
+        elif i == 1:
+            gas_used = int.from_bytes(bs, "little")
+        elif i == 2:
+            return_value = bs
+    return ReturnDTO(exit_status, gas_used, return_value)
+
+
+@dataclass
+class EventDTO:
+    address: bytes = None
+    count_topics: int = 0
+    topics: List[bytes] = None
+    log_data: bytes = None
+
+
+def unpack_event_log(data: Iterable[str]) -> EventDTO:
+    """
+    Unpack base64-encoded event data.
+    """
+    address = b''
+    count_topics = 0
+    t = []
+    log_data = b''
+    for i, s in enumerate(data):
+        bs = base64.b64decode(s)
+        if i == 0:
+            address = bs
+        elif i == 1:
+            count_topics = int.from_bytes(bs, "little")
+        elif 1 < i < 6:
+            if count_topics > (i - 2):
+                t.append(bs)
+            else:
+                log_data = bs
+        else:
+            log_data = bs
+    return EventDTO(address, count_topics, t, log_data)
+
+
+@dataclass
+class LogIxDTO:
+    return_dto: ReturnDTO = None
+    event_dto: EventDTO = None
+
+    def empty(self) -> bool:
+        return (self.return_dto is None) and (self.event_dto is None)
+
+
+def process_logs(logs: List[str]) -> List[LogIxDTO]:
+    """
+    Read log messages from a transaction receipt.
+    Parse each line to rebuild sequence of Neon instructions.
+    Extract return and events information from these lines.
+    """
+    program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
+    program_success = re.compile(r'^Program (\w+) success')
+    program_failed = re.compile(r'^Program (\w+) failed')
+    program_data = re.compile(r'^Program data: (.+)$')
+    tx_list: List[LogIxDTO] = []
+
+    for line in logs:
+        print('#### line', line)
+        m = program_invoke.match(line)
+        if m:
+            print('---- line', line)
+            program_id = m.group(1)
+            if program_id == EVM_LOADER_ID:
+                tx_list.append(LogIxDTO())
+            print('---- tx_list', tx_list)
+        m = program_success.match(line)
+        if m:
+            print('---- line', line)
+            program_id = m.group(1)
+            #if program_id == EVM_LOADER_ID and tx_list[-1].empty():
+            #    tx_list.pop(-1)
+            print('---- tx_list', tx_list)
+        m = program_failed.match(line)
+        if m:
+            print('---- line', line)
+            program_id = m.group(1)
+            if program_id == EVM_LOADER_ID:
+                tx_list.pop(-1)  # remove failed invocation
+            print('---- tx_list', tx_list)
+        m = program_data.match(line)
+        if m:
+            print('---- line', line)
+            tail = m.group(1)
+            data = re.findall("\S+", tail)
+            mnemonic = base64.b64decode(data[0]).decode('utf-8')
+            print('---- mnemonic', mnemonic)
+            if mnemonic == "RETURN":
+                tx_list[-1].return_dto = unpack_return(data[1:])
+            elif mnemonic.startswith("LOG"):
+                tx_list[-1].event_dto = unpack_event_log(data[1:])
+            else:
+                assert False, f'Wrong mnemonic {mnemonic}'
+            print('---- tx_list', tx_list)
+
+    print('==== process_logs tx_list', tx_list)
+    return tx_list
+
+
 class SolanaBlockInfo:
     def __init__(self, slot: int, is_finalized=False, hash=None, parent_hash=None, time=None, signs=None, is_fake=False):
         self.slot = slot
@@ -82,6 +207,7 @@ class SolanaBlockInfo:
         return self.time is None
 
 
+@logged_group("neon.Parser")
 class NeonTxResultInfo:
     def __init__(self):
         self._set_defaults()
@@ -135,7 +261,7 @@ class NeonTxResultInfo:
         rec['logIndex'] = hex(log_idx)
         self.logs.append(rec)
 
-    def _decode_return(self, log: bytes, ix_idx: int, tx: {}):
+    def _decode_return(self, log: bytes, ix_idx: int, tx: Dict[Any, Any]):
         self.status = '0x1' if log[1] < 0xd0 else '0x0'
         self.gas_used = hex(int.from_bytes(log[2:10], 'little'))
         self.return_value = log[10:].hex()
@@ -158,25 +284,63 @@ class NeonTxResultInfo:
             rec['blockHash'] = block.hash
             rec['blockNumber'] = hex(block.slot)
 
-    def decode(self, neon_sign: str, tx: {}, ix_idx=-1) -> NeonTxResultInfo:
-        self._set_defaults()
-        meta_ixs = tx['meta']['innerInstructions']
-        msg = tx['transaction']['message']
-        accounts = msg['accountKeys']
+    def decode(self, neon_sign: str, tx: Dict[Any, Any], ix_idx=-1) -> NeonTxResultInfo:
+        log = process_logs(tx['meta']['logMessages'])
+        self.debug(f"___________LOG______________ {log}")
 
-        for inner_ix in meta_ixs:
-            ix_idx = inner_ix['index']
-            for event in inner_ix['instructions']:
-                if accounts[event['programIdIndex']] == EVM_LOADER_ID:
-                    log = base58.b58decode(event['data'])
-                    evm_ix = int(log[0])
-                    if evm_ix == 7:
-                        self._decode_event(neon_sign, log, ix_idx)
-                    elif evm_ix == 6:
-                        self._decode_return(log, ix_idx, tx)
+        for log_ix in log:
+            self.debug(f"___________LOG IX______________ {log_ix}")
+
+            if log_ix.return_dto is not None:
+                self.gas_used = hex(log_ix.return_dto.gas_used)
+                self.status = hex(log_ix.return_dto.exit_status)
+                self.return_value = log_ix.return_dto.return_value.hex()
+                self.sol_sign = tx['transaction']['signatures'][0]
+                self.slot = tx['slot']
+                self.idx = 0 #TODO
+
+            if log_ix.event_dto is not None: #TODO
+                log_idx = len(self.logs)
+                topics = []
+                for i in range(log_ix.event_dto.count_topics):
+                    topics.append('0x' + log_ix.event_dto.topics[i].hex())
+                rec = {
+                    'address': '0x' + log_ix.event_dto.address.hex(),
+                    'topics': topics,
+                    'data': '0x' + log_ix.event_dto.log_data.hex(),
+                    'transactionLogIndex': hex(log_idx),
+                    'transactionIndex': hex(self.idx),
+                    'logIndex': hex(log_idx),
+                    'transactionHash': neon_sign,
+                    # 'blockNumber': block_number, # set when transaction found
+                    # 'blockHash': block_hash # set when transaction found
+                }
+                self.logs.append(rec)
+
         return self
 
-    def canceled(self, tx: {}):
+    # def decode(self, neon_sign: str, tx: {}, ix_idx=-1) -> NeonTxResultInfo:
+    #     self._set_defaults()
+
+    #     logs = process_logs(self.tx['meta']['logMessages'])
+
+    #     meta_ixs = tx['meta']['innerInstructions']
+    #     msg = tx['transaction']['message']
+    #     accounts = msg['accountKeys']
+
+    #     for inner_ix in meta_ixs:
+    #         ix_idx = inner_ix['index']
+    #         for event in inner_ix['instructions']:
+    #             if accounts[event['programIdIndex']] == EVM_LOADER_ID:
+    #                 log = base58.b58decode(event['data'])
+    #                 evm_ix = int(log[0])
+    #                 if evm_ix == 7:
+    #                     self._decode_event(neon_sign, log, ix_idx)
+    #                 elif evm_ix == 6:
+    #                     self._decode_return(log, ix_idx, tx)
+    #     return self
+
+    def canceled(self, tx: Dict[Any, Any]):
         self._set_defaults()
         self.sol_sign = tx['transaction']['signatures'][0]
         self.slot = tx['slot']
