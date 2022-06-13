@@ -823,7 +823,7 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         tx = NeonTxResult('')
         tx.neon_tx = neon_tx
 
-        dto = self.ix.logs[neon_tx.tx_idx]
+        dto = self.ix.logs[self.ix.sign.idx]
         if assign_result_and_events(tx, dto, self.ix.sign.idx):
             return self._decoding_done(self.ix.neon_obj, 'found Neon results')
 
@@ -915,7 +915,7 @@ class PartialCallIxDecoder(DummyIxDecoder):
         tx = self._getadd_tx(storage_account, blocked_accounts, neon_tx)
         self.ix.sign.set_steps(step_count)
 
-        dto = self.ix.logs[neon_tx.tx_idx]
+        dto = self.ix.logs[self.ix.sign.idx]
         if assign_result_and_events(tx, dto, self.ix.sign.idx):
             return self._decoding_done(self.ix.neon_obj, 'found Neon results')
 
