@@ -36,22 +36,22 @@
     },
     "loggers": {
         "neon": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "neon.Proxy": {
             "level": "ERROR",
             "handlers": ["standard"],
             "propagate": false
         },
+        "neon.Proxy": {
+            "level": "DEBUG",
+            "handlers": ["standard"],
+            "propagate": false
+        },
         "neon.MemPool": {
-              "level": "ERROR",
+              "level": "DEBUG",
             "handlers": ["standard"],
             "propagate": false
         },
         "neon.Network": {
-            "level": "DEBUG",
+            "level": "ERROR",
             "handlers": ["standard"],
             "propagate": false
         },

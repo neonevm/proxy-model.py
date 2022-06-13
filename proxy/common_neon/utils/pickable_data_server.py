@@ -45,7 +45,8 @@ class PickableDataServer(ABC):
                 self.debug(f"Send result_data: {len(result_data)}, bytes: {result_data.hex()}")
                 writer.write(result_data)
                 await writer.drain()
-            except ConnectionResetError:
+            except ConnectionResetError as err:
+                self.warning(f"Connection reset error: {err}")
                 break
             except asyncio.exceptions.IncompleteReadError as err:
                 self.error(f"Incomplete read error: {err}")
@@ -55,7 +56,7 @@ class PickableDataServer(ABC):
                 break
 
     async def _recv_pickable_data(self, reader: StreamReader):
-        len_packed: bytes = await reader.read(4)
+        len_packed: bytes = await reader.readexactly(4)
         if len(len_packed) == 0:
             self.error("Got empty len_packed")
             raise ConnectionResetError()
@@ -65,7 +66,7 @@ class PickableDataServer(ABC):
         while len(payload) < payload_len:
             to_be_read = payload_len - len(payload)
             self.debug(f"Reading chunk of: {to_be_read} of: {payload_len} - bytes")
-            chunk = payload + await reader.read(to_be_read)
+            chunk = payload + await reader.readexactly(to_be_read)
             self.debug(f"Got chunk of data: {len(chunk)}")
             payload += chunk
         self.debug(f"Got payload data: {len(payload)}. Load pickled object")
@@ -104,9 +105,18 @@ class PickableDataClient:
 
     def __init__(self):
         self._client_sock: socket.socket = None
+        self._reader: StreamReader = None
+        self._writer: StreamWriter = None
 
     def _set_client_sock(self, client_sock: socket.socket):
         self._client_sock = client_sock
+
+    async def async_init(self):
+        self.info("Async init on client")
+        reader, writer = await asyncio.open_connection(sock=self._client_sock)
+        self._reader = reader
+        self._writer = writer
+        self.info(f"_reader: {reader}, _writer: {writer}")
 
     def send_data(self, pickable_object: Any):
         try:
@@ -146,12 +156,12 @@ class PickableDataClient:
 
     async def send_data_async(self, pickable_object):
 
-        loop = asyncio.get_event_loop()
         try:
             self.debug(f"Send pickable_object of type: {type(pickable_object)}")
             payload = encode_pickable(pickable_object, self)
             self.debug(f"Payload: {len(payload)}, bytes: {payload[:15].hex()}")
-            await loop.sock_sendall(self._client_sock, payload)
+            self._writer.write(payload)
+            await self._writer.drain()
 
         except BaseException as err:
             self.error(f"Failed to send client data: {err}")
@@ -159,7 +169,7 @@ class PickableDataClient:
 
         try:
             self.debug(f"Waiting for answer")
-            len_packed: bytes = await loop.sock_recv(self._client_sock, 4)
+            len_packed: bytes = await self._reader.readexactly(4)
             if not len_packed:
                 return None
             data_len = struct.unpack("!I", len_packed)[0]
@@ -168,7 +178,7 @@ class PickableDataClient:
             while len(data) < data_len:
                 to_be_read = data_len - len(data)
                 self.debug(f"Reading answer data: {to_be_read} of: {data_len} - bytes")
-                chunk = await loop.sock_recv(self._client_sock, to_be_read)
+                chunk = await self._reader.readexactly(to_be_read)
                 self.debug(f"Got chunk of answer data: {len(chunk)}")
                 data += chunk
 
@@ -184,8 +194,6 @@ class PickableDataClient:
             self.error(f"Failed to receive answer data: {err}")
             raise
 
-    async def read_exactly(self) -> bytes:
-        pass
 
 @logged_group("neon.Network")
 class PipePickableDataClient(PickableDataClient):
@@ -202,7 +210,5 @@ class AddrPickableDataClient(PickableDataClient):
         PickableDataClient.__init__(self)
         host, port = addr
         client_sock = socket.create_connection((host, port))
-        # client_sock.setblocking(True)
-        # client_sock.settimeout(0.5)
         self._set_client_sock(client_sock=client_sock)
 

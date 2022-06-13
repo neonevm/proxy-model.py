@@ -33,10 +33,9 @@ class MemPool:
     async def _schedule_mp_tx_request(self, mp_request: MPTxRequest):
         log_ctx = {"context": {"req_id": mp_request.req_id}}
         try:
-            with logging_context(req_id=mp_request.req_id):
-                self._tx_schedule.add_mp_tx_request(mp_request)
-                count = self.get_pending_trx_count(mp_request.sender_address)
-                self.debug(f"Got and scheduled mp_tx_request: {mp_request.log_str}, pending in pool: {count}")
+            self._tx_schedule.add_mp_tx_request(mp_request)
+            count = self.get_pending_trx_count(mp_request.sender_address)
+            self.debug(f"Got and scheduled mp_tx_request: {mp_request.log_str}, pending in pool: {count}", extra=log_ctx)
         except Exception as err:
             self.error(f"Failed to schedule mp_tx_request: {mp_request.log_str}. Error: {err}", extra=log_ctx)
         finally:
@@ -54,12 +53,13 @@ class MemPool:
                     mp_request: MPTxRequest = self._tx_schedule.get_tx_for_execution()
                     if mp_request is None:
                         break
-                    with logging_context(req_id=mp_request.req_id):
-                        try:
-                            self.debug(f"Got mp_tx_request from schedule: {mp_request.log_str}, left senders in schedule: {len(self._tx_schedule.sender_tx_pools)}")
-                            self.submit_request_to_executor(mp_request)
-                        except Exception as err:
-                            self.debug(f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. Error: {err}")
+
+                    try:
+                        log_ctx = {"context": {"req_id": mp_request.req_id}}
+                        self.debug(f"Got mp_tx_request from schedule: {mp_request.log_str}, left senders in schedule: {len(self._tx_schedule.sender_tx_pools)}", extra=log_ctx)
+                        self.submit_request_to_executor(mp_request)
+                    except Exception as err:
+                        self.debug(f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. Error: {err}")
 
     def submit_request_to_executor(self, mp_tx_request: MPRequest):
         resource_id, task = self._executor.submit_mp_request(mp_tx_request)

@@ -49,6 +49,10 @@ class MPExecutorMng(IMPExecutor):
             self._available_executor_pool.appendleft(i)
             executor_info.executor.start()
 
+    async def async_init(self):
+        for ex_info in self._executors:
+            await ex_info.client.async_init()
+
     def submit_mp_request(self, mp_reqeust: MPRequest) -> Tuple[int, asyncio.Task]:
         executor_id, executor = self._get_executor()
         tx_hash = "0x" + mp_reqeust.neon_tx.hash_signed().hex()
