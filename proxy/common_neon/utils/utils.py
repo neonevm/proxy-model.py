@@ -1,21 +1,17 @@
 from __future__ import annotations
+
 from logged_groups import logged_group
 import base64
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 from typing import Dict, Any, Iterable, Optional, List
-
 import json
-import base58
-
 from enum import Enum
 from eth_utils import big_endian_to_int
-
 from proxy.indexer.utils import SolanaIxSignInfo
 
-#TODO: move it out from here
+# TODO: move it out from here
 from ..environment_data import EVM_LOADER_ID, LOG_FULL_OBJECT_INFO
-
 from ..eth_proto import Trx as EthTx
 
 
@@ -121,10 +117,10 @@ def unpack_event_log(data: Iterable[str]) -> EventDTO:
 @dataclass
 class LogIxDTO:
     return_dto: ReturnDTO = None
-    event_dtos: List[EventDTO] = None
+    event_dtos: List[EventDTO] = field(default_factory=list)
 
     def empty(self) -> bool:
-        return (self.return_dto is None) and (self.event_dtos is None)
+        return self.return_dto is None
 
 
 def process_logs(logs: List[str]) -> List[LogIxDTO]:
@@ -171,7 +167,7 @@ def process_logs(logs: List[str]) -> List[LogIxDTO]:
             if mnemonic == "RETURN":
                 tx_list[-1].return_dto = unpack_return(data[1:])
             elif mnemonic.startswith("LOG"):
-                tx_list[-1].event_dtos.push(unpack_event_log(data[1:]))
+                tx_list[-1].event_dtos.append(unpack_event_log(data[1:]))
             else:
                 assert False, f'Wrong mnemonic {mnemonic}'
             print('---- tx_list', tx_list)
@@ -298,24 +294,23 @@ class NeonTxResultInfo:
                 self.slot = tx['slot']
                 self.idx = 0 #TODO
 
-            if log_ix.event_dtos is not None:
-                log_idx = len(self.logs)
-                for e in log_ix.event_dtos:
-                    topics = []
-                    for i in range(e.count_topics):
-                        topics.append('0x' + e.topics[i].hex())
-                    rec = {
-                        'address': '0x' + e.address.hex(),
-                        'topics': topics,
-                        'data': '0x' + e.log_data.hex(),
-                        'transactionLogIndex': hex(log_idx),
-                        'transactionIndex': hex(self.idx),
-                        'logIndex': hex(log_idx),
-                        'transactionHash': neon_sign,
-                        # 'blockNumber': block_number, # set when transaction found
-                        # 'blockHash': block_hash # set when transaction found
-                    }
-                    self.logs.append(rec)
+            log_idx = len(self.logs)
+            for e in log_ix.event_dtos:
+                topics = []
+                for i in range(e.count_topics):
+                    topics.append('0x' + e.topics[i].hex())
+                rec = {
+                    'address': '0x' + e.address.hex(),
+                    'topics': topics,
+                    'data': '0x' + e.log_data.hex(),
+                    'transactionLogIndex': hex(log_idx),
+                    'transactionIndex': hex(self.idx),
+                    'logIndex': hex(log_idx),
+                    'transactionHash': neon_sign,
+                    # 'blockNumber': block_number, # set when transaction found
+                    # 'blockHash': block_hash # set when transaction found
+                }
+                self.logs.append(rec)
 
         return self
 
