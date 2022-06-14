@@ -1,7 +1,7 @@
 import asyncio
 from typing import List, Tuple
 
-from logged_groups import logged_group, logging_context
+from logged_groups import logged_group
 
 from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest,\
                          MPPendingTxCountReq
@@ -12,9 +12,10 @@ from .mempool_schedule import MPTxSchedule
 class MemPool:
 
     CHECK_TASK_TIMEOUT_SEC = 0.01
+    MP_CAPACITY = 4096
 
-    def __init__(self, executor: IMPExecutor):
-        self._tx_schedule = MPTxSchedule()
+    def __init__(self, executor: IMPExecutor, capacity: int = MP_CAPACITY):
+        self._tx_schedule = MPTxSchedule(capacity)
         self._schedule_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         self._process_tx_results_task = asyncio.get_event_loop().create_task(self.check_processing_tasks())
@@ -119,7 +120,7 @@ class MemPool:
         self.debug(f"Reqeust done, pending tx count: {count}", extra=log_ctx)
 
     def _drop_request_away(self, tx_request: MPTxRequest):
-        # WHERE IS TH DROP!!!!!
+        self._tx_schedule.drop_away(tx_request)
         count = self.get_pending_trx_count(tx_request.sender_address)
         log_ctx = {"context": {"req_id": tx_request.req_id}}
         self.debug(f"Reqeust: {tx_request.log_str} dropped away, pending tx count: {count}", extra=log_ctx)

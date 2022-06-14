@@ -1,5 +1,5 @@
 import bisect
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from logged_groups import logged_group
 
@@ -81,11 +81,32 @@ class MPSenderTxPool:
     def is_processing(self) -> bool:
         return self._processing_tx is not None
 
+    def drop_request_away(self, mp_tx_request: MPTxRequest):
+        nonce = mp_tx_request.nonce
+        if self._processing_tx is not None and self._processing_tx.nonce == nonce:
+            self.warning(f"Failed to drop request away: {mp_tx_request.log_str} - processing")
+            return
+        index = bisect.bisect_left(self.txs, mp_tx_request)
+        if self.txs[index].nonce != nonce:
+            self.error(f"Failed to drop reqeust away for: {self.sender_address}, not request with nonce: {nonce}")
+            return
+        self.debug(f"Remove mp_tx_request from sender: {self.sender_address} - {mp_tx_request.log_str}")
+        self.txs = self.txs[index:]
+
+
+    def drop_last_reqeust(self):
+        if len(self.txs) > 0:
+            self.erorr("Failed to drop last request from empty sender tx pool")
+            return
+        self.drop_request_away(self.txs[-1])
+
+
 
 @logged_group("neon.MemPool")
 class MPTxSchedule:
 
-    def __init__(self) -> None:
+    def __init__(self, capacity: int) -> None:
+        self._capacity = capacity
         self.sender_tx_pools: List[MPSenderTxPool] = []
 
     def _pop_sender_txs(self, sender_address: str) -> Optional[MPSenderTxPool]:
@@ -95,12 +116,12 @@ class MPTxSchedule:
             return self.sender_tx_pools.pop(i)
         return None
 
-    def _get_sender_txs(self, sender_address: str) -> Optional[MPSenderTxPool]:
+    def _get_sender_txs(self, sender_address: str) -> Tuple[Optional[MPSenderTxPool], int]:
         for i, sender in enumerate(self.sender_tx_pools):
             if sender.sender_address != sender_address:
                 continue
-            return sender
-        return None
+            return sender, i
+        return None, -1
 
     def add_mp_tx_request(self, mp_tx_request: MPTxRequest):
         self.debug(f"Add mp_tx_request: {mp_tx_request.log_str}")
@@ -108,6 +129,30 @@ class MPTxSchedule:
         self.debug(f"Got collection for sender: {mp_tx_request.sender_address}, there are already txs: {sender_txs.len()}")
         sender_txs.add_tx(mp_tx_request)
         bisect.insort_left(self.sender_tx_pools, sender_txs)
+        self._check_if_overwhelmed()
+
+    def _check_if_overwhelmed(self):
+        count = 0
+        for sender_txs in self.sender_tx_pools:
+            count += sender_txs.len()
+        tx_to_remove = count - self._capacity
+        sender_to_remove = set()
+        for sender in self.sender_tx_pools[-1::-1]:
+            if tx_to_remove <= 0:
+                break
+            sender.drop_last_reqeust()
+            tx_to_remove -= 1
+            if sender.empty():
+                sender_to_remove.add(sender)
+        for sender in sender_to_remove:
+            self.sender_tx_pools.remove(sender)
+
+
+
+
+
+
+
 
     def _pop_sender_or_create(self, sender_address: str) -> MPSenderTxPool:
         sender = self._pop_sender_txs(sender_address)
@@ -128,7 +173,7 @@ class MPTxSchedule:
         return tx
 
     def reschedule(self, sender_addr: str, nonce: int):
-        sender = self._get_sender_txs(sender_addr)
+        sender, _ = self._get_sender_txs(sender_addr)
         if sender is None:
             self.error(f"Failed to reschedule tx, address: {sender_addr}, nonce: {nonce} - sender not found")
         sender.reschedule(nonce)
@@ -143,5 +188,14 @@ class MPTxSchedule:
             bisect.insort_left(self.sender_tx_pools, sender)
 
     def get_pending_trx_count(self, sender_addr: str) -> int:
-        sender = self._get_sender_txs(sender_addr)
+        sender, _ = self._get_sender_txs(sender_addr)
         return 0 if sender is None else sender.len()
+
+    def drop_reqeust_away(self, mp_tx_reqeust: MPTxRequest):
+        sender, i = self._get_sender_txs(mp_tx_reqeust.sender_address)
+        if sender is None:
+            self.warning(f"Failed drop request, no sender by sender_address: {mp_tx_reqeust.sender_address}")
+            return
+        sender.drop_request_away(mp_tx_reqeust)
+        if sender.len() == 0:
+            self.sender_tx_pools.pop(i)
