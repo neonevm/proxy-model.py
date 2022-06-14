@@ -56,15 +56,6 @@ class MPSenderTxPool:
         tx = self.get_tx()
         return tx.gas_price if tx is not None else 0
 
-    def reschedule(self, nonce: int):
-        if self._processing_tx is None:
-            self.error(f"Failed to finish tx with nonce: {nonce}, processing tx is None")
-            return
-        if self._processing_tx.nonce != nonce:
-            self.error(f"Failed to reschedule, processing tx has different nonce: {self._processing_tx.nonce} than: {nonce}")
-            return
-        self._processing_tx = None
-
     def on_tx_done(self, nonce: int):
         if self._processing_tx is None:
             self.error(f"Failed to finish tx with nonce: {nonce}, processing tx is None")
@@ -99,7 +90,6 @@ class MPTxSchedule:
     def __init__(self, capacity: int) -> None:
         self._capacity = capacity
         self.sender_tx_pools: List[MPSenderTxPool] = []
-        self._count = 0
 
     def _pop_sender_txs(self, sender_address: str) -> Optional[MPSenderTxPool]:
         for i, sender_tx_pool in enumerate(self.sender_tx_pools):
@@ -122,7 +112,7 @@ class MPTxSchedule:
         sender_txs.add_tx(mp_tx_request)
         bisect.insort_left(self.sender_tx_pools, sender_txs)
 
-        self._check_if_overwhelmed()
+        self._check_oversized_and_reduce()
 
     def get_mp_tx_count(self):
         count = 0
@@ -130,7 +120,7 @@ class MPTxSchedule:
             count += sender_txs.len()
         return count
 
-    def _check_if_overwhelmed(self):
+    def _check_oversized_and_reduce(self):
         count = self.get_mp_tx_count()
         tx_to_remove = count - self._capacity
         sender_to_remove = []
@@ -163,12 +153,6 @@ class MPTxSchedule:
             break
 
         return tx
-
-    def reschedule(self, sender_addr: str, nonce: int):
-        sender, _ = self._get_sender_txs(sender_addr)
-        if sender is None:
-            self.error(f"Failed to reschedule tx, address: {sender_addr}, nonce: {nonce} - sender not found")
-        sender.reschedule(nonce)
 
     def done(self, sender_addr: str, nonce: int):
         sender = self._pop_sender_txs(sender_addr)

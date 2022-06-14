@@ -501,9 +501,9 @@ class NeonRpcApiWorker:
                                                       emulating_result=emulating_result)
             return eth_signature
 
-        except PendingTxError as err:
+        except PendingTxError:
             self._stat_tx_failed()
-            self.error(f'Failed to process eth_sendRawTransaction, pendingTxError: {err}')
+            self.error(f'Failed to process eth_sendRawTransaction, PendingTxError')
             return eth_signature
         except EthereumError as err:
             self.error(f'Failed to process eth_sendRawTransaction, EthereumError: {err}')

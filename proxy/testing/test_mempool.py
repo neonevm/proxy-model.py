@@ -21,13 +21,12 @@ from ..common_neon.eth_proto import Trx as NeonTx
 from ..mempool.mempool_api import MPTxResult, MPResultCode
 
 
-
-
 def create_account() -> Account:
     priv = secrets.token_hex(32)
     private_key = "0x" + priv
     acct = Account.from_key(private_key)
     return acct
+
 
 def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int, from_acc: Account = None,
                             to_acc: Account = None, value: int = 0, data: bytes = b'') -> MPTxRequest:
@@ -48,8 +47,6 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int,
     mp_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=tx_cfg,
                                 emulating_result=dict())
     return mp_tx_request
-
-
 
 
 class MockTask:
@@ -254,9 +251,6 @@ class Test(unittest.IsolatedAsyncioTestCase):
             await self.mempool.enqueue_mp_request(req)
         return requests
 
-
-
-
 class TestMPSchedule(unittest.TestCase):
 
     MP_SCHEDULT_CAPACITY = 3
@@ -321,21 +315,29 @@ class TestMPSenderTxPool(unittest.TestCase):
         neon_logger.setLevel(logging.ERROR)
 
     def setUp(self) -> None:
-        self.pool = MPSenderTxPool()
+        self._pool = MPSenderTxPool()
         acc = [create_account() for i in range(2)]
         req_data = [dict(req_id="000", nonce=3, gasPrice=30000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
                     dict(req_id="001", nonce=1, gasPrice=21000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
                     dict(req_id="002", nonce=0, gasPrice=40000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
                     dict(req_id="003", nonce=2, gasPrice=25000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
                     dict(req_id="004", nonce=4, gasPrice=25000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1])]
-        self.requests = [get_transfer_mp_request(**req) for req in req_data]
-        for request in self.requests:
-            self.pool.add_tx(request)
+        self._requests = [get_transfer_mp_request(**req) for req in req_data]
+        for request in self._requests:
+            self._pool.add_tx(request)
 
     def test_drop_last_request(self):
-        self.pool.drop_last_reqeust()
-        self.assertEqual(self.pool.len(), 4)
-        self.assertEqual(self.pool.get_tx(), self.requests[2])
-        self.assertEqual(self.pool.txs[-1], self.requests[0])
+        self._pool.drop_last_reqeust()
+        self.assertEqual(self._pool.len(), 4)
+        self.assertEqual(self._pool.get_tx(), self._requests[2])
+        self.assertEqual(self._pool.txs[-1], self._requests[0])
 
+    def test_drop_last_request_if_processing(self):
+        tx = self._pool.acquire_tx()
+        self.assertIs(tx, self._requests[2])
+        with self.assertLogs("neon.MemPool", logging.WARNING) as logs:
+            for i in range(0, 5):
+                self._pool.drop_last_reqeust()
+            self.assertEqual(1, len(logs.records))
+            self.assertEqual(f"Failed to drop last request away: {tx.log_str} - processing", logs.records[0].msg)
 
