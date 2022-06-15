@@ -37,10 +37,10 @@ class PickableDataServer(ABC):
     async def handle_client(self, reader: StreamReader, writer: StreamWriter):
         while True:
             try:
-                self.debug("Recv pickable data")
+                self.debug("Got incoming connection. Waiting for pickable data")
                 data = await self._recv_pickable_data(reader)
                 result = await self._user.on_data_received(data)
-                self.debug(f"Encode pickable result: {result}")
+                self.debug(f"Encode pickable result_data: {result}")
                 result_data = encode_pickable(result, self)
                 self.debug(f"Send result_data: {len(result_data)}, bytes: {result_data.hex()}")
                 writer.write(result_data)
@@ -123,7 +123,7 @@ class PickableDataClient:
         self._client_sock = client_sock
 
     async def async_init(self):
-        self.info("Async init on client")
+        self.info("Async init pickable data client")
         reader, writer = await asyncio.open_connection(sock=self._client_sock)
         self._reader = reader
         self._writer = writer

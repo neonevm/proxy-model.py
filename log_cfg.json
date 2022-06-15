@@ -7,6 +7,14 @@
             "formatter": "standard",
             "filters": ["context_filter", "neon_prefix_dropper"]
         },
+        "file": {
+          "class": "logging.FileHandler",
+          "filename": "/opt/proxy-log.log",
+          "mode": "w",
+          "level": "DEBUG",
+          "formatter": "standard",
+          "filters": ["context_filter", "neon_prefix_dropper"]
+        },
         "root": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
@@ -42,17 +50,17 @@
         },
         "neon.Proxy": {
             "level": "DEBUG",
-            "handlers": ["standard"],
+            "handlers": ["file"],
             "propagate": false
         },
         "neon.MemPool": {
-              "level": "DEBUG",
-            "handlers": ["standard"],
+            "level": "DEBUG",
+            "handlers": ["file"],
             "propagate": false
         },
         "neon.Network": {
-            "level": "ERROR",
-            "handlers": ["standard"],
+            "level": "DEBUG",
+            "handlers": ["standard", "file"],
             "propagate": false
         },
         "": {
