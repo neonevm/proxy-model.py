@@ -51,16 +51,16 @@ class MemPool:
                 await self._schedule_cond.wait()
                 self.debug(f"Schedule processing  got awake, condition: {self._schedule_cond.__repr__()}")
                 while self._executor.is_available():
-                    mp_request: MPTxRequest = self._tx_schedule.get_tx_for_execution()
+                    mp_request: MPTxRequest = self._tx_schedule.acquire_tx_for_execution()
                     if mp_request is None:
                         break
 
                     try:
                         log_ctx = {"context": {"req_id": mp_request.req_id}}
-                        self.debug(f"Got mp_tx_request from schedule: {mp_request.log_str}, left senders in schedule: {len(self._tx_schedule.sender_tx_pools)}", extra=log_ctx)
+                        self.debug(f"Got mp_tx_request from schedule: {mp_request.log_str}, left senders in schedule: {len(self._tx_schedule._sender_tx_pools)}", extra=log_ctx)
                         self.submit_request_to_executor(mp_request)
                     except Exception as err:
-                        self.debug(f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. Error: {err}")
+                        self.error(f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. Error: {err}")
 
     def submit_request_to_executor(self, mp_tx_request: MPRequest):
         resource_id, task = self._executor.submit_mp_request(mp_tx_request)
