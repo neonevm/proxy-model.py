@@ -83,6 +83,18 @@ class MPSenderTxPool:
         self.debug(f"Remove last mp_tx_request from sender: {self.sender_address} - {self._txs[-1].log_str}")
         self._txs = self._txs[:-1]
 
+    def drop_request_away(self, mp_tx_request: MPTxRequest):
+        self.debug(f"Remove mp_tx_request: {mp_tx_request.log_str}")
+        nonce = mp_tx_request.nonce
+        if self._processing_tx is not None and self._processing_tx.nonce == nonce:
+            self._processing_tx = None
+        index = bisect.bisect_left(self._txs, mp_tx_request)
+        if self._txs[index].nonce != nonce:
+            self.error(f"Failed to drop reqeust away for: {self.sender_address}, not request with nonce: {nonce}")
+            return
+        self._txs = self._txs[index:]
+        self.debug(f"Removed mp_tx_request from sender: {self.sender_address} - {mp_tx_request.log_str}")
+
 
 @logged_group("neon.MemPool")
 class MPTxSchedule:
