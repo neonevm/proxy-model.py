@@ -8,6 +8,7 @@ from asyncio import Task
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
+from .operator_resource_list import OperatorResourceInfo
 
 
 class IMPExecutor(ABC):
@@ -53,6 +54,15 @@ class MPTxRequest(MPRequest):
         self._gas_price = self.neon_tx.gasPrice
         self.type = MPRequestType.SendTransaction
 
+class MPRequestProcStage(IntEnum):
+    StagePrepare = 0,
+    StageExecute = 1,
+
+@dataclass(order=True)
+class MPRequestContext:
+    request: MPRequest = field(compare=True, default=None)
+    resource: OperatorResourceInfo = field(compare=False, default=None)
+    processing_stage: MPRequestProcStage = field(compare=False, default=MPRequestProcStage.StagePrepare)
 
 @dataclass
 class MPPendingTxCountReq(MPRequest):
