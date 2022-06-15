@@ -15,8 +15,6 @@ from logged_groups import logged_group
 from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 
-from proxy.mempool.operator_resource_list_2 import OperatorResourceId
-
 from ..common_neon.address import EthereumAddress, ether2program, accountWithSeed
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.constants import STORAGE_SIZE, ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG
@@ -28,6 +26,7 @@ from ..common_neon.environment_data import EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, RE
 from ..mempool.neon_tx_stages import NeonCancelTxStage, NeonCreateAccountTxStage, NeonCreateAccountWithSeedStage
 from ..mempool.transaction_sender import NeonTxSender
 
+OperatorResourceId = int
 
 class OperatorResourceInfo:
     def __init__(self, signer: SolanaAccount, rid: int, idx: int):
@@ -273,7 +272,7 @@ class OperatorResourceList:
         return cls._resource_list[idx]
 
     @classmethod
-    def free_resource_info(cls, idx):
+    def free_resource_info(cls, idx: OperatorResourceId):
         cls._free_resource_list.append(idx)
 
 
