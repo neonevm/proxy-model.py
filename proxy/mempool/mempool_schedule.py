@@ -167,7 +167,7 @@ class MPTxSchedule:
         sender, _ = self._get_sender_txs(sender_addr)
         return 0 if sender is None else sender.len()
 
-    def drop_reqeust_away(self, mp_tx_reqeust: MPTxRequest):
+    def drop_request_away(self, mp_tx_reqeust: MPTxRequest):
         sender, i = self._get_sender_txs(mp_tx_reqeust.sender_address)
         if sender is None:
             self.warning(f"Failed drop request, no sender by sender_address: {mp_tx_reqeust.sender_address}")
