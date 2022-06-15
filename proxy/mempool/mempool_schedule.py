@@ -9,7 +9,7 @@ from .mempool_api import MPTxRequest
 @logged_group("neon.MemPool")
 class MPSenderTxPool:
     def __init__(self, sender_address: str = None):
-        self._sender_address = sender_address
+        self.sender_address = sender_address
         self._txs: List[MPTxRequest] = []
         self._processing_tx: Optional[MPTxRequest] = None
 
@@ -80,7 +80,7 @@ class MPSenderTxPool:
         if self._processing_tx is self._txs[-1]:
             self.warning(f"Failed to drop last request away: {self._processing_tx.log_str} - processing")
             return
-        self.debug(f"Remove last mp_tx_request from sender: {self._sender_address} - {self._txs[-1].log_str}")
+        self.debug(f"Remove last mp_tx_request from sender: {self.sender_address} - {self._txs[-1].log_str}")
         self._txs = self._txs[:-1]
 
 
@@ -93,14 +93,14 @@ class MPTxSchedule:
 
     def _pop_sender_txs(self, sender_address: str) -> Optional[MPSenderTxPool]:
         for i, sender_tx_pool in enumerate(self._sender_tx_pools):
-            if sender_tx_pool._sender_address != sender_address:
+            if sender_tx_pool.sender_address != sender_address:
                 continue
             return self._sender_tx_pools.pop(i)
         return None
 
     def _get_sender_txs(self, sender_address: str) -> Tuple[Optional[MPSenderTxPool], int]:
         for i, sender in enumerate(self._sender_tx_pools):
-            if sender._sender_address != sender_address:
+            if sender.sender_address != sender_address:
                 continue
             return sender, i
         return None, -1
@@ -166,3 +166,12 @@ class MPTxSchedule:
     def get_pending_trx_count(self, sender_addr: str) -> int:
         sender, _ = self._get_sender_txs(sender_addr)
         return 0 if sender is None else sender.len()
+
+    def drop_reqeust_away(self, mp_tx_reqeust: MPTxRequest):
+        sender, i = self._get_sender_txs(mp_tx_reqeust.sender_address)
+        if sender is None:
+            self.warning(f"Failed drop request, no sender by sender_address: {mp_tx_reqeust.sender_address}")
+            return
+        sender.drop_request_away(mp_tx_reqeust)
+        if sender.len() == 0:
+            self.sender_tx_pools.pop(i)
