@@ -9,8 +9,8 @@ from .mempool_api import MPTxRequest
 @logged_group("neon.MemPool")
 class MPSenderTxPool:
     def __init__(self, sender_address: str = None):
-        self.sender_address = sender_address
-        self.txs: List[MPTxRequest] = []
+        self._sender_address = sender_address
+        self._txs: List[MPTxRequest] = []
         self._processing_tx: Optional[MPTxRequest] = None
 
     def __eq__(self, other):
@@ -21,22 +21,22 @@ class MPSenderTxPool:
 
     def add_tx(self, mp_tx_request: MPTxRequest):
 
-        index = bisect.bisect_left(self.txs, mp_tx_request)
+        index = bisect.bisect_left(self._txs, mp_tx_request)
         if self._processing_tx is not None and mp_tx_request.nonce == self._processing_tx.nonce:
             self.warn(f"Failed to replace processing tx: {self._processing_tx.log_str} with: {mp_tx_request.log_str}")
             return
 
-        found: MPTxRequest = self.txs[index] if index < len(self.txs) else None
+        found: MPTxRequest = self._txs[index] if index < len(self._txs) else None
         if found is not None and found.nonce == mp_tx_request.nonce:
             self.debug(f"Nonce are equal: {found.nonce}, found: {found.log_str}, new: {mp_tx_request.log_str}")
             if found.gas_price < mp_tx_request.gas_price:
-                self.txs[index] = mp_tx_request
+                self._txs[index] = mp_tx_request
             return
-        self.txs.insert(index, mp_tx_request)
+        self._txs.insert(index, mp_tx_request)
         self.debug(f"New mp_tx_request: {mp_tx_request.log_str} - inserted at: {index}")
 
     def get_tx(self):
-        return None if self.empty() else self.txs[0]
+        return None if self.empty() else self._txs[0]
 
     def acquire_tx(self):
         if self.is_processing():
@@ -47,10 +47,10 @@ class MPSenderTxPool:
     def on_processed(self, tx: MPTxRequest):
         assert tx == self._processing_tx, f"tx: {tx.log_str} != processing_tx: {self._processing_tx.log_str}"
         self._processing_tx = None
-        self.txs.remove(tx)
+        self._txs.remove(tx)
 
     def len(self) -> int:
-        return len(self.txs)
+        return len(self._txs)
 
     def first_tx_gas_price(self):
         tx = self.get_tx()
@@ -63,25 +63,25 @@ class MPSenderTxPool:
         if self._processing_tx.nonce != nonce:
             self.error(f"Failed to finish tx, processing tx has different nonce: {self._processing_tx.nonce} than: {nonce}")
             return
-        self.txs.remove(self._processing_tx)
+        self._txs.remove(self._processing_tx)
         self.debug(f"On tx done: {self._processing_tx.log_str} - removed. The: {self.len()} txs are left")
         self._processing_tx = None
 
     def empty(self) -> bool:
-        return len(self.txs) == 0
+        return len(self._txs) == 0
 
     def is_processing(self) -> bool:
         return self._processing_tx is not None
 
-    def drop_last_reqeust(self):
-        if len(self.txs) == 0:
+    def drop_last_request(self):
+        if len(self._txs) == 0:
             self.erorr("Failed to drop last request from empty sender tx pool")
             return
-        if self._processing_tx is self.txs[-1]:
+        if self._processing_tx is self._txs[-1]:
             self.warning(f"Failed to drop last request away: {self._processing_tx.log_str} - processing")
             return
-        self.debug(f"Remove last mp_tx_request from sender: {self.sender_address} - {self.txs[-1].log_str}")
-        self.txs = self.txs[:-1]
+        self.debug(f"Remove last mp_tx_request from sender: {self._sender_address} - {self._txs[-1].log_str}")
+        self._txs = self._txs[:-1]
 
 
 @logged_group("neon.MemPool")
@@ -93,14 +93,14 @@ class MPTxSchedule:
 
     def _pop_sender_txs(self, sender_address: str) -> Optional[MPSenderTxPool]:
         for i, sender_tx_pool in enumerate(self.sender_tx_pools):
-            if sender_tx_pool.sender_address != sender_address:
+            if sender_tx_pool._sender_address != sender_address:
                 continue
             return self.sender_tx_pools.pop(i)
         return None
 
     def _get_sender_txs(self, sender_address: str) -> Tuple[Optional[MPSenderTxPool], int]:
         for i, sender in enumerate(self.sender_tx_pools):
-            if sender.sender_address != sender_address:
+            if sender._sender_address != sender_address:
                 continue
             return sender, i
         return None, -1
@@ -127,7 +127,7 @@ class MPTxSchedule:
         for sender in self.sender_tx_pools[-1::-1]:
             if tx_to_remove <= 0:
                 break
-            sender.drop_last_reqeust()
+            sender.drop_last_request()
             tx_to_remove -= 1
             if sender.len() == 1 and sender.is_processing():
                 continue
@@ -166,12 +166,3 @@ class MPTxSchedule:
     def get_pending_trx_count(self, sender_addr: str) -> int:
         sender, _ = self._get_sender_txs(sender_addr)
         return 0 if sender is None else sender.len()
-
-    def drop_reqeust_away(self, mp_tx_reqeust: MPTxRequest):
-        sender, i = self._get_sender_txs(mp_tx_reqeust.sender_address)
-        if sender is None:
-            self.warning(f"Failed drop request, no sender by sender_address: {mp_tx_reqeust.sender_address}")
-            return
-        sender.drop_request_away(mp_tx_reqeust)
-        if sender.len() == 0:
-            self.sender_tx_pools.pop(i)

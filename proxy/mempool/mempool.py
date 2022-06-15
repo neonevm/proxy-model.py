@@ -60,7 +60,7 @@ class MemPool:
                         self.debug(f"Got mp_tx_request from schedule: {mp_request.log_str}, left senders in schedule: {len(self._tx_schedule.sender_tx_pools)}", extra=log_ctx)
                         self.submit_request_to_executor(mp_request)
                     except Exception as err:
-                        self.debug(f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. Error: {err}")
+                        self.error(f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. Error: {err}")
 
     def submit_request_to_executor(self, mp_tx_request: MPRequest):
         resource_id, task = self._executor.submit_mp_request(mp_tx_request)
