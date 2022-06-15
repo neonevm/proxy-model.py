@@ -9,13 +9,11 @@ from asyncio import Task
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 
-from solana.publickey import PublicKey
-
 
 class IMPExecutor(ABC):
 
     @abstractmethod
-    def submit_mp_request(self, mp_reqeust: MPRequestContext) -> Tuple[int, Task]:
+    def submit_mp_request(self, mp_reqeust: MPRequest) -> Tuple[int, Task]:
         pass
 
     @abstractmethod
@@ -31,15 +29,6 @@ class IMPExecutor(ABC):
     def release_resource(self, resource_id: int):
         pass
 
-class MPRequestProcStage(IntEnum):
-    StagePrepare = 0,
-    StageExecute = 1,
-
-@dataclass(order=True)
-class MPRequestContext:
-    request: MPRequest = field(compare=True, default=None)
-    signer: PublicKey = field(compare=False, default=None)
-    processing_stage: MPRequestProcStage = field(compare=False, default=MPRequestProcStage.StagePrepare)
 
 class MPRequestType(IntEnum):
     SendTransaction = 0,
@@ -71,6 +60,7 @@ class MPTxRequest(MPRequest):
         hash = "0x" + self.neon_tx.hash_signed().hex()
         self.log_str = f"MPTxRequest(hash={hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
 
+
 @dataclass
 class MPPendingTxCountReq(MPRequest):
 
@@ -93,5 +83,3 @@ class MPResultCode(IntEnum):
 class MPTxResult:
     code: MPResultCode
     data: Any
-    signer: PublicKey = field(compare=False, default=None)
-    processing_stage: MPRequestProcStage = field(compare=False, default=None)
