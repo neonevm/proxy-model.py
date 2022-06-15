@@ -75,7 +75,6 @@ class NeonTxValidator:
 
     def _prevalidate_tx(self):
         self._prevalidate_whitelist()
-        self._prevalidate_tx_nonce()
         self._prevalidate_tx_gas()
         self._prevalidate_tx_chain_id()
         self._prevalidate_tx_size()
@@ -107,6 +106,7 @@ class NeonTxValidator:
             raise EthereumError(message='gas uint64 overflow')
         if (self._tx_gas_limit * self._tx.gasPrice) > (self.MAX_U256 - 1):
             raise EthereumError(message='max fee per gas higher than 2^256-1')
+
         if self._tx.gasPrice >= self._min_gas_price:
             return
 
@@ -122,17 +122,6 @@ class NeonTxValidator:
     def _prevalidate_tx_size(self):
         if len(self._tx.callData) > (128 * 1024 - 1024):
             raise EthereumError(message='transaction size is too big')
-
-    def _prevalidate_tx_nonce(self):
-        if not self._neon_account_info:
-            return
-
-        tx_nonce = int(self._tx.nonce)
-        if self.MAX_U64 not in (self._neon_account_info.trx_count, tx_nonce):
-            if tx_nonce == self._neon_account_info.trx_count:
-                return
-
-        self._raise_nonce_error(self._neon_account_info.trx_count, tx_nonce)
 
     def _prevalidate_sender_eoa(self):
         if not self._neon_account_info:

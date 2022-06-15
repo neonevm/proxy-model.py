@@ -388,13 +388,14 @@ class NeonRpcApiWorker:
 
         try:
             self.debug(f"Get transaction count. Account: {account}, tag: {tag}")
+            neon_account_info = self._solana.get_neon_account_info(account)
+
             pending_trx_count = 0
             if tag == "pending":
                 req_id = LogMng.get_logging_context().get("req_id")
                 pending_trx_count = self._mempool_client.get_pending_tx_count(req_id=req_id, sender=account)
                 self.debug(f"Pending tx count for: {account} - is: {pending_trx_count}")
 
-            neon_account_info = self._solana.get_neon_account_info(account)
             trx_count = neon_account_info.trx_count + pending_trx_count
 
             return hex(trx_count)
@@ -500,14 +501,16 @@ class NeonRpcApiWorker:
                                                       emulating_result=emulating_result)
             return eth_signature
 
-        except PendingTxError as err:
+        except PendingTxError:
             self._stat_tx_failed()
-            self.debug(f'{err}')
+            self.error(f'Failed to process eth_sendRawTransaction, PendingTxError')
             return eth_signature
-        except EthereumError:
+        except EthereumError as err:
+            self.error(f'Failed to process eth_sendRawTransaction, EthereumError: {err}')
             self._stat_tx_failed()
             raise
-        except Exception:
+        except Exception as err:
+            self.error(f"Failed to process eth_sendRawTransaction, Error: {err}")
             self._stat_tx_failed()
             raise
 
