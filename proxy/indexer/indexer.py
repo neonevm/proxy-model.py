@@ -653,6 +653,7 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         DummyIxDecoder.__init__(self, 'CallFromRaw', state)
 
     def execute(self) -> bool:
+        self.debug(f'---- CallFromRawIxDecoder.execute')
         self._decoding_start()
 
         if SolReceiptParser(self.ix.tx).check_if_error():
@@ -671,9 +672,11 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         tx = NeonTxResult('')
         tx.neon_tx = neon_tx
 
-        if tx.neon_res.decode(neon_tx.sign, self.ix.tx).is_valid():
+        if tx.neon_res.decode(neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+            self.debug(f'==== CallFromRawIxDecoder.execute A')
             return self._decoding_done(tx, 'found Neon results')
 
+        self.debug(f'==== CallFromRawIxDecoder.execute B')
         return self._decode_tx(tx)
 
 
@@ -737,6 +740,7 @@ class PartialCallIxDecoder(DummyIxDecoder):
         DummyIxDecoder.__init__(self, 'PartialCallFromRawEthereumTX', state)
 
     def execute(self) -> bool:
+        self.debug(f'---- PartialCallIxDecoder.execute')
         self._decoding_start()
 
         if SolReceiptParser(self.ix.tx).check_if_error():
@@ -762,9 +766,11 @@ class PartialCallIxDecoder(DummyIxDecoder):
         tx = self._getadd_tx(storage_account, blocked_accounts, neon_tx)
         self.ix.sign.set_steps(step_count)
 
-        if tx.neon_res.decode(neon_tx.sign, self.ix.tx).is_valid():
+        if tx.neon_res.decode(neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+            self.debug(f'==== PartialCallIxDecoder.execute A')
             return self._decoding_done(tx, 'found Neon results')
 
+        self.debug(f'==== PartialCallIxDecoder.execute B')
         return self._decode_tx(tx)
 
 
