@@ -43,6 +43,7 @@ class MPRequest:
     type: MPRequestType = field(compare=False, default=MPRequestType.Dummy)
 
 class MPTxProcessingStage(IntEnum):
+    StageUndefined = -1,
     StagePrepare = 0,
     StageExecute = 1,
 
@@ -89,5 +90,5 @@ class MPResultCode(IntEnum):
 class MPTxResult:
     code: MPResultCode
     data: Any
-    resource_id: OperatorResourceId
-    proc_stage: MPTxProcessingStage
+    resource_id: OperatorResourceId = field(default=None)
+    proc_stage: MPTxProcessingStage = field(default=MPTxProcessingStage.StageUndefined)

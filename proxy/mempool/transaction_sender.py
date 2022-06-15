@@ -16,7 +16,7 @@ from ..mempool.neon_tx_stages import NeonCreateAccountTxStage, NeonCreateERC20Tx
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.neon_instruction import NeonInstruction as NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.solana_tx_list_sender import SolTxListSender
+from ..common_neon.solana_tx_list_sender import BlockedAccountsError, SolTxListSender
 from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
@@ -28,14 +28,15 @@ from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..common_neon.utils import get_holder_msg
 
 from .operator_resource_list import OperatorResourceInfo
-
+from .mempool_api import MPTxProcessingStage, MPTxRequest
 
 @logged_group("neon.MemPool")
 class NeonTxSender:
-    def __init__(self, db: MemDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
+    def __init__(self, db: MemDB, solana: SolanaInteractor, mp_tx_req: MPTxRequest, steps: int):
         self._db = db
-        self.eth_tx = eth_tx
-        self.neon_sign = '0x' + eth_tx.hash_signed().hex()
+        self.mp_tx_req = mp_tx_req
+        self.eth_tx = mp_tx_req.neon_tx
+        self.neon_sign = '0x' + self.eth_tx.hash_signed().hex()
         self.steps = steps
         self.waiter = self
         self.solana = solana
@@ -47,11 +48,11 @@ class NeonTxSender:
 
         self._pending_tx = None
 
-        self.eth_sender = '0x' + eth_tx.sender()
-        self.deployed_contract = eth_tx.contract()
+        self.eth_sender = '0x' + self.eth_tx.sender()
+        self.deployed_contract = self.eth_tx.contract()
         if self.deployed_contract:
             self.deployed_contract = '0x' + self.deployed_contract
-        self.to_address = eth_tx.toAddress.hex()
+        self.to_address = self.eth_tx.toAddress.hex()
         if self.to_address:
             self.to_address = '0x' + self.to_address
 
@@ -62,10 +63,10 @@ class NeonTxSender:
         self._create_account_list = []
         self._eth_meta_dict: Dict[str, AccountMeta] = dict()
 
-    def execute(self, exec_cfg: NeonTxExecCfg, emulating_result: NeonEmulatingResult) -> NeonTxResultInfo:
+    def execute(self) -> NeonTxResultInfo:
         self._validate_pend_tx()
-        self._prepare_execution(emulating_result)
-        return self._execute(exec_cfg)
+        self._prepare_execution(self.mp_tx_req.emulating_result)
+        return self._execute(self.mp_tx_req.neon_tx_exec_cfg)
 
     def set_resource(self, resource: Optional[OperatorResourceInfo]):
         self.resource = resource
@@ -96,6 +97,8 @@ class NeonTxSender:
                 neon_res, sign_list = strategy.execute()
                 self._submit_tx_into_db(neon_res, sign_list)
                 return neon_res
+            except BlockedAccountsError:
+                raise
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
                     raise
@@ -475,10 +478,13 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
 
     def execute(self) -> (NeonTxResultInfo, [str]):
         signer = self.s.resource.signer
-        tx_list = self._build_preparation_tx_list()
-        if len(tx_list):
-            SolTxListSender(self.s, tx_list, self._preparation_txs_name).send(signer)
-            self.s.done_account_tx_list()
+
+        if self.s.mp_tx_req.proc_stage == MPTxProcessingStage.StagePrepare:
+            tx_list = self._build_preparation_tx_list()
+            if len(tx_list):
+                SolTxListSender(self.s, tx_list, self._preparation_txs_name).send(signer)
+                self.s.done_account_tx_list()
+            self.s.mp_tx_req.proc_stage = MPTxProcessingStage.StageExecute 
 
         steps_emulated = self._neon_tx_exec_cfg.steps_executed
         cnt = math.ceil(steps_emulated / self.steps)

@@ -1,8 +1,10 @@
 import asyncio
 import multiprocessing as mp
 import socket
+from webbrowser import Opera
 
 from logged_groups import logged_group, logging_context
+from proxy.common_neon.solana_tx_list_sender import BlockedAccountsError
 
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
@@ -12,7 +14,7 @@ from ..memdb.memdb import MemDB
 
 from .transaction_sender import NeonTxSender
 from .operator_resource_list import OperatorResourceList
-from .mempool_api import MPRequest, MPTxResult, MPResultCode
+from .mempool_api import MPTxProcessingStage, MPTxRequest, MPTxResult, MPResultCode
 
 
 @logged_group("neon.MemPool")
@@ -38,23 +40,43 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._solana = SolanaInteractor(self._config.get_solana_url())
         self._db = MemDB(self._solana)
 
-    def execute_neon_tx(self, mempool_request: MPRequest):
-        with logging_context(req_id=mempool_request.req_id, exectr=self._id):
+    def execute_neon_tx(self, mp_tx_req: MPTxRequest):
+        with logging_context(req_id=mp_tx_req.req_id, exectr=self._id):
             try:
-                self.execute_neon_tx_impl(mempool_request)
+                self.execute_neon_tx_impl(mp_tx_req)
+            except BlockedAccountsError:
+                return MPTxResult(
+                    MPResultCode.BlockedAccount, 
+                    None, 
+                    mp_tx_req.resource_id, 
+                    MPTxProcessingStage.StageExecute
+                )
             except Exception as err:
-                self.error(f"Failed to execute neon_tx: {err}")
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
-    def execute_neon_tx_impl(self, mempool_tx_cfg: MPRequest):
-        neon_tx = mempool_tx_cfg.neon_tx
-        neon_tx_cfg = mempool_tx_cfg.neon_tx_exec_cfg
-        emulating_result = mempool_tx_cfg.emulating_result
+    def execute_neon_tx_impl(self, mp_tx_req: MPTxRequest):
         emv_step_count = self._config.get_evm_count()
-        tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=emv_step_count)
-        with OperatorResourceList(tx_sender):
-            tx_sender.execute(neon_tx_cfg, emulating_result)
+        tx_sender = NeonTxSender(self._db, self._solana, mp_tx_req, steps=emv_step_count)
+
+        if mp_tx_req.resource_id is None:
+            try:
+                mp_tx_req.resource_id = OperatorResourceList.get_active_resource(tx_sender)
+            except Exception as e:
+                self.warning(f'Failed to obtain operator resource: {e}')
+                raise
+        else:
+            tx_sender.set_resource(OperatorResourceList.get_resource_info(mp_tx_req.resource_id))
+
+        try:
+            tx_sender.execute()
+        except BlockedAccountsError:
+            self.warning(f"Failed to execute transaction because of blocked accounts")
+            raise
+        except Exception as e:
+            self.warning(f'Failed to execute traction: {e}')
+            OperatorResourceList.free_resource_info(mp_tx_req.resource_id)
+            raise
 
     async def on_data_received(self, data: Any) -> Any:
         return self.execute_neon_tx(data)

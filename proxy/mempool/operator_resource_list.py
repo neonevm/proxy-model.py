@@ -113,7 +113,7 @@ class OperatorResourceList:
         return now
 
     @classmethod
-    def get_active_resource(cls, sender: NeonTxSender) -> OperatorResourceId:
+    def find_and_attach_resource(cls, sender: NeonTxSender) -> OperatorResourceId:
         cls._init_resource_list(cls)
         check_time = cls._recheck_bad_resource_list(cls)
 
