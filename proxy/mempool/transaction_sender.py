@@ -516,7 +516,10 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
 
         if self._skip_writing_holder:
             return tx_list
+        
+        return self.write_holder_account(tx_list)
 
+    def write_holder_account(self, tx_list):
         # write eth transaction to the holder account
         msg = get_holder_msg(self.s.eth_tx)
 
