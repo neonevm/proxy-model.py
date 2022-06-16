@@ -61,7 +61,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
         with OperatorResourceList(tx_sender) as resource:
             if mp_tx_req.resource_id is None:
-                mp_tx_req.resource_id = resource.resource_id
+                mp_tx_req.resource_id = resource._resource.idx
             tx_sender.execute()
 
     async def on_data_received(self, data: Any) -> Any:
