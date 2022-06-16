@@ -28,7 +28,7 @@ from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..common_neon.utils import get_holder_msg
 
 from .operator_resource_list import OperatorResourceInfo
-from .mempool_api import MPTxProcessingStage, MPTxRequest
+from .mempool_api import MPTxRequest
 
 @logged_group("neon.MemPool")
 class NeonTxSender:

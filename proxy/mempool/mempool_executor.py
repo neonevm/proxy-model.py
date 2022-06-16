@@ -14,7 +14,7 @@ from ..memdb.memdb import MemDB
 
 from .transaction_sender import NeonTxSender
 from .operator_resource_list import OperatorResourceList
-from .mempool_api import MPTxProcessingStage, MPTxRequest, MPTxResult, MPResultCode
+from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
 
 @logged_group("neon.MemPool")
@@ -47,12 +47,6 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             except BlockedAccountsError:
                 self.error(f"Failed to execute neon_tx: Blocked accounts")
                 await asyncio.sleep(1)
-                #return MPTxResult(
-                #    MPResultCode.BlockedAccount, 
-                #    None, 
-                #    mp_tx_req.resource_id, 
-                #    MPTxProcessingStage.StageExecute
-                #)
                 return await self.execute_neon_tx(mp_tx_req, skip_writing_holder=True)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
@@ -64,12 +58,10 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         tx_sender = NeonTxSender(self._db, self._solana, mp_tx_req, steps=emv_step_count)
 
         with OperatorResourceList(tx_sender) as resource:
-            if mp_tx_req.resource_id is None:
-                mp_tx_req.resource_id = resource.idx
             tx_sender.execute(skip_writing_holder)
 
     async def on_data_received(self, data: Any) -> Any:
-        return await self.execute_neon_tx(data, False)
+        return await self.execute_neon_tx(data, skip_writing_holder=False)
 
     def run(self) -> None:
         self._config = Config()

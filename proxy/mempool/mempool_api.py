@@ -41,10 +41,6 @@ class MPRequest:
     req_id: int = field(compare=False)
     type: MPRequestType = field(compare=False, default=MPRequestType.Dummy)
 
-class MPTxProcessingStage(IntEnum):
-    StageUndefined = -1,
-    StagePrepare = 0,
-    StageExecute = 1,
 
 @dataclass(eq=True, order=True)
 class MPTxRequest(MPRequest):
@@ -55,8 +51,6 @@ class MPTxRequest(MPRequest):
     emulating_result: NeonEmulatingResult = field(compare=False, default=None)
     sender_address: str = field(compare=False, default=None)
     gas_price: int = field(compare=False, default=None)
-    resource_id: int = field(compare=False, default = None)
-    proc_stage: MPTxProcessingStage = field(compare=False, default = MPTxProcessingStage.StagePrepare)
 
     def __post_init__(self):
         self.gas_price = self.neon_tx.gasPrice
@@ -89,5 +83,3 @@ class MPResultCode(IntEnum):
 class MPTxResult:
     code: MPResultCode
     data: Any
-    resource_id: int = field(default=None)
-    proc_stage: MPTxProcessingStage = field(default=MPTxProcessingStage.StageUndefined)
