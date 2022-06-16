@@ -14,7 +14,7 @@ from ..memdb.memdb import MemDB
 
 from .transaction_sender import NeonTxSender
 from .operator_resource_list import OperatorResourceList
-from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
+from .mempool_api import MPRequest, MPTxResult, MPResultCode
 
 
 @logged_group("neon.MemPool")
@@ -40,25 +40,27 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._solana = SolanaInteractor(self._config.get_solana_url())
         self._db = MemDB(self._solana)
 
-    async def execute_neon_tx(self, mp_tx_req: MPTxRequest, skip_writing_holder):
-        with logging_context(req_id=mp_tx_req.req_id, exectr=self._id):
+    async def execute_neon_tx(self, mempool_request: MPRequest, skip_writing_holder):
+        with logging_context(req_id=mempool_request.req_id, exectr=self._id):
             try:
-                self.execute_neon_tx_impl(mp_tx_req, skip_writing_holder)
+                self.execute_neon_tx_impl(mempool_request, skip_writing_holder)
             except BlockedAccountsError:
                 self.error(f"Failed to execute neon_tx: Blocked accounts")
                 await asyncio.sleep(1)
-                return await self.execute_neon_tx(mp_tx_req, skip_writing_holder=True)
+                return await self.execute_neon_tx(mempool_request, skip_writing_holder=True)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
-    def execute_neon_tx_impl(self, mp_tx_req: MPTxRequest, skip_writing_holder):
+    def execute_neon_tx_impl(self, mempool_tx_cfg: MPRequest, skip_writing_holder):
+        neon_tx = mempool_tx_cfg.neon_tx
+        neon_tx_cfg = mempool_tx_cfg.neon_tx_exec_cfg
+        emulating_result = mempool_tx_cfg.emulating_result
         emv_step_count = self._config.get_evm_count()
-        tx_sender = NeonTxSender(self._db, self._solana, mp_tx_req, steps=emv_step_count)
-
-        with OperatorResourceList(tx_sender) as resource:
-            tx_sender.execute(skip_writing_holder)
+        tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=emv_step_count)
+        with OperatorResourceList(tx_sender):
+            tx_sender.execute(neon_tx_cfg, emulating_result, skip_writing_holder)
 
     async def on_data_received(self, data: Any) -> Any:
         return await self.execute_neon_tx(data, skip_writing_holder=False)

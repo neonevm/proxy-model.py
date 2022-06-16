@@ -28,15 +28,14 @@ from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..common_neon.utils import get_holder_msg
 
 from .operator_resource_list import OperatorResourceInfo
-from .mempool_api import MPTxRequest
+
 
 @logged_group("neon.MemPool")
 class NeonTxSender:
-    def __init__(self, db: MemDB, solana: SolanaInteractor, mp_tx_req: MPTxRequest, steps: int):
+    def __init__(self, db: MemDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
         self._db = db
-        self.mp_tx_req = mp_tx_req
-        self.eth_tx = mp_tx_req.neon_tx
-        self.neon_sign = '0x' + self.eth_tx.hash_signed().hex()
+        self.eth_tx = eth_tx
+        self.neon_sign = '0x' + eth_tx.hash_signed().hex()
         self.steps = steps
         self.waiter = self
         self.solana = solana
@@ -63,10 +62,10 @@ class NeonTxSender:
         self._create_account_list = []
         self._eth_meta_dict: Dict[str, AccountMeta] = dict()
 
-    def execute(self, skip_writing_holder) -> NeonTxResultInfo:
+    def execute(self, exec_cfg: NeonTxExecCfg, emulating_result: NeonEmulatingResult, skip_writing_holder) -> NeonTxResultInfo:
         self._validate_pend_tx()
-        self._prepare_execution(self.mp_tx_req.emulating_result)
-        return self._execute(self.mp_tx_req.neon_tx_exec_cfg, skip_writing_holder)
+        self._prepare_execution(emulating_result)
+        return self._execute(exec_cfg, skip_writing_holder)
 
     def set_resource(self, resource: Optional[OperatorResourceInfo]):
         self.resource = resource
