@@ -25,7 +25,6 @@ from ..common_neon.environment_data import EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, RE
 
 from ..mempool.neon_tx_stages import NeonCancelTxStage, NeonCreateAccountTxStage, NeonCreateAccountWithSeedStage
 
-OperatorResourceId = int
 
 class OperatorResourceInfo:
     def __init__(self, signer: SolanaAccount, rid: int, idx: int):

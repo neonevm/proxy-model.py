@@ -8,7 +8,6 @@ from asyncio import Task
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
-from .operator_resource_list import OperatorResourceId
 
 
 class IMPExecutor(ABC):
@@ -56,7 +55,7 @@ class MPTxRequest(MPRequest):
     emulating_result: NeonEmulatingResult = field(compare=False, default=None)
     sender_address: str = field(compare=False, default=None)
     gas_price: int = field(compare=False, default=None)
-    resource_id: OperatorResourceId = field(compare=False, default = None)
+    resource_id: int = field(compare=False, default = None)
     proc_stage: MPTxProcessingStage = field(compare=False, default = MPTxProcessingStage.StagePrepare)
 
     def __post_init__(self):
@@ -90,5 +89,5 @@ class MPResultCode(IntEnum):
 class MPTxResult:
     code: MPResultCode
     data: Any
-    resource_id: OperatorResourceId = field(default=None)
+    resource_id: int = field(default=None)
     proc_stage: MPTxProcessingStage = field(default=MPTxProcessingStage.StageUndefined)
