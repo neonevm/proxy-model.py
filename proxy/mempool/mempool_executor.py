@@ -44,8 +44,8 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             try:
                 self.execute_neon_tx_impl(mempool_request, skip_writing_holder)
             except BlockedAccountsError:
-                self.error(f"Failed to execute neon_tx: Blocked accounts")
-                await asyncio.sleep(1)
+                self.error(f"Blocked accounts: postpone transaction for one block time")
+                await asyncio.sleep(0.4)
                 return await self.execute_neon_tx(mempool_request, skip_writing_holder=True)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
