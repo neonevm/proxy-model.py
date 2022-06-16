@@ -96,8 +96,6 @@ class MemPool:
 
             if mp_tx_result.code == MPResultCode.BlockedAccount:
                 self._executor.release_resource(resource_id)
-                mp_request.resource_id = mp_tx_result.resource_id
-                mp_request.proc_stage = mp_tx_result.proc_stage
                 await self.enqueue_mp_request(mp_request)
             elif mp_tx_result.code == MPResultCode.NoLiquidity:
                 self._executor.on_no_liquidity(resource_id)

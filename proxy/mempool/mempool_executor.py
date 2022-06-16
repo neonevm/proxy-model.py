@@ -40,18 +40,21 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._solana = SolanaInteractor(self._config.get_solana_url())
         self._db = MemDB(self._solana)
 
-    def execute_neon_tx(self, mp_tx_req: MPTxRequest):
+    async def execute_neon_tx(self, mp_tx_req: MPTxRequest):
         with logging_context(req_id=mp_tx_req.req_id, exectr=self._id):
             try:
                 self.execute_neon_tx_impl(mp_tx_req)
             except BlockedAccountsError:
                 self.error(f"Failed to execute neon_tx: Blocked accounts")
-                return MPTxResult(
-                    MPResultCode.BlockedAccount, 
-                    None, 
-                    mp_tx_req.resource_id, 
-                    MPTxProcessingStage.StageExecute
-                )
+                mp_tx_req.proc_stage = MPTxProcessingStage.StageExecute
+                await asyncio.sleep(1)
+                #return MPTxResult(
+                #    MPResultCode.BlockedAccount, 
+                #    None, 
+                #    mp_tx_req.resource_id, 
+                #    MPTxProcessingStage.StageExecute
+                #)
+                return await self.execute_neon_tx(mp_tx_req)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
                 return MPTxResult(MPResultCode.Unspecified, None)
@@ -67,7 +70,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             tx_sender.execute()
 
     async def on_data_received(self, data: Any) -> Any:
-        return self.execute_neon_tx(data)
+        return await self.execute_neon_tx(data)
 
     def run(self) -> None:
         self._config = Config()

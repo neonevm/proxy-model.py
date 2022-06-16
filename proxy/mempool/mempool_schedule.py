@@ -23,7 +23,7 @@ class MPSenderTxPool:
 
         index = bisect.bisect_left(self._txs, mp_tx_request)
         if self._processing_tx is not None and mp_tx_request.nonce == self._processing_tx.nonce:
-            self.warn(f"Failed to replace processing tx: {self._processing_tx.log_str} with: {mp_tx_request.log_str}")
+            self.warning(f"Failed to replace processing tx: {self._processing_tx.log_str} with: {mp_tx_request.log_str}")
             return
 
         found: MPTxRequest = self._txs[index] if index < len(self._txs) else None
