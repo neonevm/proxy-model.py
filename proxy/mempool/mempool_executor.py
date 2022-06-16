@@ -45,6 +45,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             try:
                 self.execute_neon_tx_impl(mp_tx_req)
             except BlockedAccountsError:
+                self.error(f"Failed to execute neon_tx: Blocked accounts")
                 return MPTxResult(
                     MPResultCode.BlockedAccount, 
                     None, 
@@ -52,6 +53,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
                     MPTxProcessingStage.StageExecute
                 )
             except Exception as err:
+                self.error(f"Failed to execute neon_tx: {err}")
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
