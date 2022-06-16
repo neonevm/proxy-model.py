@@ -40,13 +40,12 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._solana = SolanaInteractor(self._config.get_solana_url())
         self._db = MemDB(self._solana)
 
-    async def execute_neon_tx(self, mp_tx_req: MPTxRequest):
+    async def execute_neon_tx(self, mp_tx_req: MPTxRequest, skip_writing_holder):
         with logging_context(req_id=mp_tx_req.req_id, exectr=self._id):
             try:
-                self.execute_neon_tx_impl(mp_tx_req)
+                self.execute_neon_tx_impl(mp_tx_req, skip_writing_holder)
             except BlockedAccountsError:
                 self.error(f"Failed to execute neon_tx: Blocked accounts")
-                mp_tx_req.proc_stage = MPTxProcessingStage.StageExecute
                 await asyncio.sleep(1)
                 #return MPTxResult(
                 #    MPResultCode.BlockedAccount, 
@@ -54,23 +53,23 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
                 #    mp_tx_req.resource_id, 
                 #    MPTxProcessingStage.StageExecute
                 #)
-                return await self.execute_neon_tx(mp_tx_req)
+                return await self.execute_neon_tx(mp_tx_req, skip_writing_holder=True)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
-    def execute_neon_tx_impl(self, mp_tx_req: MPTxRequest):
+    def execute_neon_tx_impl(self, mp_tx_req: MPTxRequest, skip_writing_holder):
         emv_step_count = self._config.get_evm_count()
         tx_sender = NeonTxSender(self._db, self._solana, mp_tx_req, steps=emv_step_count)
 
         with OperatorResourceList(tx_sender) as resource:
             if mp_tx_req.resource_id is None:
                 mp_tx_req.resource_id = resource.idx
-            tx_sender.execute()
+            tx_sender.execute(skip_writing_holder)
 
     async def on_data_received(self, data: Any) -> Any:
-        return await self.execute_neon_tx(data)
+        return await self.execute_neon_tx(data, False)
 
     def run(self) -> None:
         self._config = Config()

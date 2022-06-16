@@ -63,10 +63,10 @@ class NeonTxSender:
         self._create_account_list = []
         self._eth_meta_dict: Dict[str, AccountMeta] = dict()
 
-    def execute(self) -> NeonTxResultInfo:
+    def execute(self, skip_writing_holder) -> NeonTxResultInfo:
         self._validate_pend_tx()
         self._prepare_execution(self.mp_tx_req.emulating_result)
-        return self._execute(self.mp_tx_req.neon_tx_exec_cfg)
+        return self._execute(self.mp_tx_req.neon_tx_exec_cfg, skip_writing_holder)
 
     def set_resource(self, resource: Optional[OperatorResourceInfo]):
         self.resource = resource
@@ -84,11 +84,11 @@ class NeonTxSender:
         self._pending_tx = NeonPendingTxInfo(neon_sign=self.neon_sign, operator=operator, slot=0)
         self._pend_tx_into_db(self.solana.get_recent_blockslot())
 
-    def _execute(self, exec_cfg: NeonTxExecCfg):
+    def _execute(self, exec_cfg: NeonTxExecCfg, skip_writing_holder):
 
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy, NoChainIdNeonTxStrategy]:
             try:
-                strategy = Strategy(exec_cfg, self)
+                strategy = Strategy(exec_cfg, self, skip_writing_holder)
                 if not strategy.is_valid:
                     self.debug(f'Skip strategy {Strategy.NAME}: {strategy.error}')
                     continue
@@ -212,13 +212,14 @@ class NeonTxSender:
 class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
     NAME = 'UNKNOWN STRATEGY'
 
-    def __init__(self, exec_cfg: NeonTxExecCfg, neon_tx_sender: NeonTxSender):
+    def __init__(self, exec_cfg: NeonTxExecCfg, neon_tx_sender: NeonTxSender, skip_writing_holder = False):
         self._neon_tx_exec_cfg = exec_cfg
         self.is_valid = False
         self.error = None
         self.s = neon_tx_sender
         self.steps = self.s.steps
         self.is_valid = self._validate()
+        self._skip_writing_holder = skip_writing_holder
 
     @abc.abstractmethod
     def execute(self) -> (NeonTxResultInfo, [str]):
@@ -322,12 +323,10 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
     def execute(self) -> (NeonTxResultInfo, [str]):
         signer = self.s.resource.signer
 
-        if self.s.mp_tx_req.proc_stage == MPTxProcessingStage.StagePrepare:
-            tx_list = self.s.build_account_tx_list(self._skip_create_account)
-            if len(tx_list) > 0:
-                SolTxListSender(self.s, tx_list, self.s.account_txs_name).send(signer)
-                self.s.done_account_tx_list(self._skip_create_account)
-            self.s.mp_tx_req.proc_stage = MPTxProcessingStage.StageExecute
+        tx_list = self.s.build_account_tx_list(self._skip_create_account)
+        if len(tx_list) > 0:
+            SolTxListSender(self.s, tx_list, self.s.account_txs_name).send(signer)
+            self.s.done_account_tx_list(self._skip_create_account)
 
         tx_sender = SimpleNeonTxSender(self, self.s, [self.build_tx()], self.NAME).send(signer)
         if not tx_sender.neon_res.is_valid():
@@ -482,12 +481,10 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
     def execute(self) -> (NeonTxResultInfo, [str]):
         signer = self.s.resource.signer
 
-        if self.s.mp_tx_req.proc_stage == MPTxProcessingStage.StagePrepare:
-            tx_list = self._build_preparation_tx_list()
-            if len(tx_list):
-                SolTxListSender(self.s, tx_list, self._preparation_txs_name).send(signer)
-                self.s.done_account_tx_list()
-            self.s.mp_tx_req.proc_stage = MPTxProcessingStage.StageExecute 
+        tx_list = self._build_preparation_tx_list()
+        if len(tx_list):
+            SolTxListSender(self.s, tx_list, self._preparation_txs_name).send(signer)
+            self.s.done_account_tx_list()
 
         steps_emulated = self._neon_tx_exec_cfg.steps_executed
         cnt = math.ceil(steps_emulated / self.steps)
@@ -519,6 +516,9 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
 
     def _build_preparation_tx_list(self) -> [TransactionWithComputeBudget]:
         tx_list = super()._build_preparation_tx_list()
+
+        if self._skip_writing_holder:
+            return tx_list
 
         # write eth transaction to the holder account
         msg = get_holder_msg(self.s.eth_tx)
