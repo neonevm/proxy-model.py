@@ -1,7 +1,6 @@
 import asyncio
 import multiprocessing as mp
 import socket
-from webbrowser import Opera
 
 from logged_groups import logged_group, logging_context
 from proxy.common_neon.solana_tx_list_sender import BlockedAccountsError

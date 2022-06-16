@@ -10,7 +10,6 @@ from ..memdb.memdb import MemDB
 
 from ..mempool.operator_resource_list import OperatorResourceList
 from ..mempool.transaction_sender import NeonTxSender
-from ..mempool.mempool_api import MPRequestType, MPTxRequest
 
 
 @logged_groups.logged_group("neon.TestCases")

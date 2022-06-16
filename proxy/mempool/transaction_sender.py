@@ -47,11 +47,11 @@ class NeonTxSender:
 
         self._pending_tx = None
 
-        self.eth_sender = '0x' + self.eth_tx.sender()
-        self.deployed_contract = self.eth_tx.contract()
+        self.eth_sender = '0x' + eth_tx.sender()
+        self.deployed_contract = eth_tx.contract()
         if self.deployed_contract:
             self.deployed_contract = '0x' + self.deployed_contract
-        self.to_address = self.eth_tx.toAddress.hex()
+        self.to_address = eth_tx.toAddress.hex()
         if self.to_address:
             self.to_address = '0x' + self.to_address
 

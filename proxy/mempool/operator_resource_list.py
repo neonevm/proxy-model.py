@@ -274,9 +274,6 @@ class OperatorResourceList:
             self.debug(f"Use existing accounts for resource {opkey}:{rid}")
         return account_list
 
-    def get_resource_info(self) -> OperatorResourceInfo:
-        return self._resource_list[self._resource.idx]
-
     def free_resource_info(self):
         if not self._resource:
             return
