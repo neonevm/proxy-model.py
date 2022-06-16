@@ -120,11 +120,11 @@ class NeonTxSender:
         if self._pending_tx and ((slot - self._pending_tx.slot) > 10):
             self.debug(f'Update pending transaction: diff {slot - self._pending_tx.slot}, set {slot}')
             self._pending_tx.slot = slot
-            self._db.pend_transaction(self._pending_tx)
 
     def _submit_tx_into_db(self, neon_res: NeonTxResultInfo, sign_list: [str]):
         neon_tx = NeonTxInfo()
         neon_tx.init_from_eth_tx(self.eth_tx)
+        self._db.pend_transaction(self._pending_tx)
         self._db.submit_transaction(neon_tx, neon_res, sign_list)
 
     def _prepare_execution(self, emulating_result: NeonEmulatingResult):
@@ -321,10 +321,13 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
 
     def execute(self) -> (NeonTxResultInfo, [str]):
         signer = self.s.resource.signer
-        tx_list = self.s.build_account_tx_list(self._skip_create_account)
-        if len(tx_list) > 0:
-            SolTxListSender(self.s, tx_list, self.s.account_txs_name).send(signer)
-            self.s.done_account_tx_list(self._skip_create_account)
+
+        if self.s.mp_tx_req.proc_stage == MPTxProcessingStage.StagePrepare:
+            tx_list = self.s.build_account_tx_list(self._skip_create_account)
+            if len(tx_list) > 0:
+                SolTxListSender(self.s, tx_list, self.s.account_txs_name).send(signer)
+                self.s.done_account_tx_list(self._skip_create_account)
+            self.s.mp_tx_req.proc_stage = MPTxProcessingStage.StageExecute
 
         tx_sender = SimpleNeonTxSender(self, self.s, [self.build_tx()], self.NAME).send(signer)
         if not tx_sender.neon_res.is_valid():

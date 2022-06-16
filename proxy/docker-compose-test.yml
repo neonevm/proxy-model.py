@@ -86,7 +86,7 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       LOG_NEON_CLI_DEBUG: "YES"
-      FUZZING_BLOCKHASH: "YES"
+      FUZZING_BLOCKHASH: "NO"
       CONFIG: ci
       PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
       PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
