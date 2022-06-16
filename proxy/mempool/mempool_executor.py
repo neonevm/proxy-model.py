@@ -58,26 +58,11 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
     def execute_neon_tx_impl(self, mp_tx_req: MPTxRequest):
         emv_step_count = self._config.get_evm_count()
         tx_sender = NeonTxSender(self._db, self._solana, mp_tx_req, steps=emv_step_count)
-        resource_list = OperatorResourceList()
 
-        if mp_tx_req.resource_id is None:
-            try:
-                mp_tx_req.resource_id = resource_list.get_active_resource(tx_sender)
-            except Exception as e:
-                self.warning(f'Failed to obtain operator resource: {e}')
-                raise
-        else:
-            tx_sender.set_resource(resource_list.get_resource_info(mp_tx_req.resource_id))
-
-        try:
+        with OperatorResourceList(tx_sender) as resource:
+            if mp_tx_req.resource_id is None:
+                mp_tx_req.resource_id = resource.resource_id
             tx_sender.execute()
-        except BlockedAccountsError:
-            self.warning(f"Failed to execute transaction because of blocked accounts")
-            raise
-        except Exception as e:
-            self.warning(f'Failed to execute traction: {e}')
-            resource_list.free_resource_info(mp_tx_req.resource_id)
-            raise
 
     async def on_data_received(self, data: Any) -> Any:
         return self.execute_neon_tx(data)
