@@ -54,6 +54,17 @@ class OperatorResourceList:
     _last_checked_time = mp.Value(ctypes.c_ulonglong, 0)
     _resource_list = []
 
+    def __init__(self, sender):
+        self.sender = sender
+
+    def __enter__(self):
+        self.resource_id = self.get_active_resource()
+        return self
+
+    def __exit__(self, exc_type, exc_val, traceback):
+        if not isinstance(exc_type, BlockedAccountsError):
+            self.free_resource_info(self.resource_id)
+
     @staticmethod
     def _get_current_time() -> int:
         return math.ceil(datetime.now().timestamp())
@@ -108,17 +119,6 @@ class OperatorResourceList:
 
             del self._bad_resource_list[:]
         return now
-
-    def __init__(self, sender):
-        self.sender = sender
-
-    def __enter__(self):
-        self.resource_id = self.get_active_resource()
-        return self
-
-    def __exit__(self, exc_type, exc_val, traceback):
-        if not isinstance(exc_type, BlockedAccountsError):
-            self.free_resource_info(self.resource_id)
 
     def get_active_resource(self) -> OperatorResourceId:
         self._init_resource_list()
