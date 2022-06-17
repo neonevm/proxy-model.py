@@ -319,6 +319,7 @@ class NeonTxResultInfo:
                     # 'blockHash': block_hash # set when transaction found
                 }
                 self.logs.append(rec)
+            self.debug(f"---- self {self}")
 
         return self
 

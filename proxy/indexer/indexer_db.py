@@ -38,8 +38,10 @@ class IndexerDB:
         return self._logs_db.is_connected()
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, used_ixs: [SolanaIxSignInfo]):
+        self.debug(f'IndexerDB.submit_transaction slot {neon_res.slot}')
         try:
             block = self._block
+            self.debug(f'block slot {block.slot}')
             if block.slot != neon_res.slot:
                 block = self.get_block_by_slot(neon_res.slot)
                 self._tx_idx = 0
@@ -66,8 +68,11 @@ class IndexerDB:
                        f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
 
     def _get_block_from_net(self, block: SolanaBlockInfo) -> SolanaBlockInfo:
+        self.debug(f'IndexerDB._get_block_from_net slot {block.slot}')
         net_block = self._solana.get_block_info(block.slot, FINALIZED)
+        self.debug(f'block.hash {net_block.hash}')
         if not net_block.hash:
+            self.debug(f'early return')
             return block
 
         self.debug(f'{net_block}')
@@ -75,12 +80,14 @@ class IndexerDB:
         return net_block
 
     def get_block_by_slot(self, slot) -> SolanaBlockInfo:
+        self.debug(f'IndexerDB._get_block_by_slot {slot}')
         block = self._blocks_db.get_block_by_slot(slot)
         if not block.hash:
             block = self._get_block_from_net(block)
         return block
 
     def get_full_block_by_slot(self, slot) -> SolanaBlockInfo:
+        self.debug(f'IndexerDB._get_full_block_by_slot {slot}')
         block = self._blocks_db.get_full_block_by_slot(slot)
         if not block.parent_hash:
             block = self._get_block_from_net(block)
@@ -118,6 +125,7 @@ class IndexerDB:
         return self._logs_db.get_logs(from_block, to_block, addresses, topics, block_hash)
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
+        self.debug(f'IndexerDB.get_block_by_hash {block_hash}')
         return self._blocks_db.get_block_by_hash(block_hash)
 
     def get_tx_list_by_sol_sign(self, sol_sign_list: [str]) -> [NeonTxFullInfo]:

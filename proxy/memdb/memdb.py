@@ -37,6 +37,7 @@ class MemDB:
         return self._db.get_starting_block()
 
     def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
+        self.debug(f'MemDB.get_full_block_by_slot {block_slot}')
         return self._blocks_db.get_full_block_by_slot(block_slot)
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
@@ -46,6 +47,7 @@ class MemDB:
         self._pending_tx_db.pend_transaction(tx, self._before_slot())
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, sign_list: [str]):
+        self.debug(f'MemDB.submit_transaction')
         block = self._blocks_db.submit_block(neon_res)
         neon_res.fill_block_info(block)
         self._txs_db.submit_transaction(neon_tx, neon_res, sign_list, self._before_slot())

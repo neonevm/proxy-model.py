@@ -162,6 +162,7 @@ class MemBlocksDB:
         request.pending_block_revision = self._pending_block_revision.value
 
     def _fill_block_dicts(self, request: RequestSolanaBlockList):
+        self.debug(f'MemBlocksDB._fill_block_dicts')
         self._active_block_revision = request.pending_block_revision
 
         self._first_block = request.first_block
@@ -172,6 +173,7 @@ class MemBlocksDB:
         self._block_by_hash.clear()
 
         for block in request.block_list:
+            self.debug(f'block.hash {block.hash} and block.slot {block.slot} is set')
             self._block_by_hash[block.hash] = block
             self._block_by_slot[block.slot] = block
 
@@ -200,17 +202,21 @@ class MemBlocksDB:
 
     def _request_new_block_list(self) -> bool:
         if not self._start_request():
+            self.debug(f'return False')
             return False
 
+        self.debug(f'MemBlocksDB._request_new_block_list')
         request = RequestSolanaBlockList(self)
         try:
             if not request.execute():
+                self.debug(f'return False')
                 return False
 
             with self._last_time.get_lock():
                 self._set_block_list(request)
 
             self._fill_block_dicts(request)
+            self.debug(f'return True')
             return True
         finally:
             self._stop_request()
@@ -233,13 +239,16 @@ class MemBlocksDB:
         return request
 
     def _try_to_fill_blocks_from_pending_list(self):
+        self.debug(f'MemBlocksDB._try_to_fill_blocks_from_pending_list')
         if self._pending_block_revision.value <= self._active_block_revision:
+            self.debug(f'early return')
             return
 
         request = self._restore_pending_block_list()
         self._fill_block_dicts(request)
 
     def _update_block_dicts(self):
+        self.debug(f'MemBlocksDB._update_block_dicts')
         self._try_to_fill_blocks_from_pending_list()
         self._request_new_block_list()
 
@@ -272,9 +281,11 @@ class MemBlocksDB:
         return block
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
+        self.debug(f'MemBlocksDB.get_block_by_hash {block_hash}')
         self._update_block_dicts()
         block = self._block_by_hash.get(block_hash)
         if block:
+            self.debug(f'block found in cache _block_by_hash')
             return block
 
         return self.db.get_block_by_hash(block_hash)
@@ -299,13 +310,17 @@ class MemBlocksDB:
         )
 
     def submit_block(self, neon_res: NeonTxResultInfo) -> SolanaBlockInfo:
+        self.debug(f'RequestSolanaBlockList.submit_block')
+        self.debug(f'submit_block neon_res {neon_res}')
         self._try_to_fill_blocks_from_pending_list()
 
         data = None
         block = self._block_by_slot.get(neon_res.slot, SolanaBlockInfo(slot=neon_res.slot, is_fake=True))
         # if block doesn't exist, or it's a fake block without signatures
         if block.is_empty_fake():
+            self.debug(f'block.is_empty_fake()')
             block = self.solana.get_block_info(neon_res.slot)
+            self.debug(f'get_block_info {block}')
             if not block.is_empty():
                 data = pickle.dumps(block)
 
