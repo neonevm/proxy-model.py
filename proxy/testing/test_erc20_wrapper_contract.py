@@ -10,10 +10,16 @@ from solana.rpc.types import TxOpts
 from web3 import Web3
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
+import spl.token.instructions as SplTokenInstrutions
 from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 from solana.rpc.types import TokenAccountOpts
+from solana.transaction import Transaction, AccountMeta
+from proxy.common_neon.address import EthereumAddress
+from proxy.common_neon.emulator_interactor import call_trx_emulated
+
+from proxy.common_neon.eth_proto import Trx
 
 from ..testing.testing_helpers import request_airdrop
 from ..common_neon.environment_data import EVM_LOADER_ID
@@ -78,18 +84,65 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         self.wrapper.deploy_wrapper()
 
     def create_token_accounts(self):
-        admin_token_key = self.wrapper.get_neon_erc20_account_address(admin.address)
-
-        admin_token_info = { "key": admin_token_key,
-                             "owner": self.wrapper.get_neon_account_address(admin.address),
-                             "contract": self.wrapper.solana_contract_address,
-                             "mint": self.token.pubkey }
+        amount = 10_000_000_000_000
+        token_account = SplTokenInstrutions.get_associated_token_address(self.solana_account.public_key(), self.token.pubkey)
+        admin_address = self.wrapper.get_neon_account_address(admin.address)
 
         tx = TransactionWithComputeBudget()
-        ix = NeonInstruction(self.solana_account.public_key()).make_erc20token_account_instruction(admin_token_info)
-        tx.add(ix)
-        self.solana_client.send_transaction(tx, self.solana_account, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
-        self.wrapper.mint_to(admin_token_key, 10_000_000_000_000)
+
+        tx.add(SplTokenInstrutions.create_associated_token_account(
+            self.solana_account.public_key(), self.solana_account.public_key(), self.token.pubkey
+        ))
+        tx.add(SplTokenInstrutions.mint_to(SplTokenInstrutions.MintToParams(
+            program_id=self.token.program_id,
+            mint=self.token.pubkey,
+            dest=token_account,
+            mint_authority=self.solana_account.public_key(),
+            amount=amount,
+            signers=[],
+        )))
+        tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
+            program_id=self.token.program_id,
+            source=token_account,
+            delegate=admin_address,
+            owner=self.solana_account.public_key(),
+            amount=amount,
+            signers=[],
+        )))
+
+
+        erc20 = proxy.eth.contract(address=self.wrapper.neon_contract_address, abi=self.wrapper.wrapper['abi'])
+        nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
+        claim_tx = erc20.functions.claim(bytes(token_account), amount).buildTransaction({'nonce': nonce, 'gasPrice': 0})
+        claim_tx = proxy.eth.account.sign_transaction(claim_tx, admin.key)
+
+        eth_trx = Trx.fromString(bytearray.fromhex(claim_tx.rawTransaction.hex()[2:]))
+        emulating_result = call_trx_emulated(eth_trx)
+
+        eth_accounts = dict()
+        for account in emulating_result['accounts']:
+            key = account['account']
+            eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
+            if account['contract']:
+                key = account['contract']
+                eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
+
+        for account in emulating_result['solana_accounts']:
+            key = account['pubkey']
+            eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
+
+        eth_accounts = list(eth_accounts.values())
+
+
+        neon = NeonInstruction(self.solana_account.public_key())
+        neon.init_operator_ether(EthereumAddress(admin.address))
+        neon.init_eth_trx(eth_trx, eth_accounts)
+
+
+        tx.add(neon.make_noniterative_call_transaction(len(tx.instructions)))
+
+        self.solana_client.send_transaction(tx, self.solana_account, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
+
 
     def test_erc20_name(self):
         erc20 = proxy.eth.contract(address=self.wrapper.neon_contract_address, abi=self.wrapper.wrapper['abi'])
@@ -147,7 +200,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         admin_balance_before = erc20.functions.balanceOf(admin.address).call()
         user_balance_before = erc20.functions.balanceOf(user.address).call()
 
-        with self.assertRaisesRegex(Exception, "ERC20 execution reverted"):
+        with self.assertRaisesRegex(Exception, "ERC20: transfer amount exceeds balance"):
             erc20.functions.transfer(user.address, transfer_value).buildTransaction()
 
         admin_balance_after = erc20.functions.balanceOf(admin.address).call()
@@ -160,7 +213,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         transfer_value = 0xFFFF_FFFF_FFFF_FFFF + 1
         erc20 = self.wrapper.erc20_interface()
 
-        with self.assertRaisesRegex(Exception, "ERC20 execution reverted"):
+        with self.assertRaisesRegex(Exception, "ERC20: transfer amount exceeds uint64 max"):
             erc20.functions.transfer(user.address, transfer_value).buildTransaction()
 
     def test_erc20_approve(self):
@@ -220,16 +273,25 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         transfer_value = 10_000_000
         erc20 = self.wrapper.erc20_interface()
 
-        with self.assertRaisesRegex(Exception, "ERC20 execution reverted"):
+        with self.assertRaisesRegex(Exception, "ERC20: insufficient allowance"):
             erc20.functions.transferFrom(admin.address, user.address, transfer_value).buildTransaction(
                 {'from': user.address}
             )
 
     def test_erc20_transferFrom_out_of_bounds(self):
         transfer_value = 0xFFFF_FFFF_FFFF_FFFF + 1
+        approve_value = transfer_value + 1
         erc20 = self.wrapper.erc20_interface()
 
-        with self.assertRaisesRegex(Exception, "ERC20 execution reverted"):
+        nonce = proxy.eth.get_transaction_count(admin.address)
+        tx = erc20.functions.approve(user.address, approve_value).buildTransaction({'nonce': nonce})
+        tx = proxy.eth.account.sign_transaction(tx, admin.key)
+        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
+        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+        self.assertIsNotNone(tx_receipt)
+        self.assertEqual(tx_receipt.status, 1)
+
+        with self.assertRaisesRegex(Exception, "ERC20: transfer amount exceeds uint64 max"):
             erc20.functions.transferFrom(admin.address, user.address, transfer_value).buildTransaction(
                 {'from': user.address}
             )
@@ -250,7 +312,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         accounts = self.solana_client.get_token_accounts_by_delegate(delegate.public_key(), TokenAccountOpts(mint=self.token.pubkey), commitment=Recent)
         accounts = list(map(lambda a: PublicKey(a['pubkey']), accounts['result']['value']))
 
-        self.assertIn(self.wrapper.get_neon_erc20_account_address(admin.address), accounts)
+        self.assertGreaterEqual(len(accounts), 1)
 
 
 if __name__ == '__main__':

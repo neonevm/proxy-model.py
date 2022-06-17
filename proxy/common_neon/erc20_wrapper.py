@@ -31,6 +31,12 @@ interface IERC20 {
     function approve(address spender, uint256 value) external returns (bool);
     function transferFrom(address from, address to, uint256 value) external returns (bool);
 
+    function mint(address to, uint256 amount) external;
+    function burn(uint256 amount) external returns (bool);
+    function burnFrom(address from, uint256 amount) external returns (bool);
+
+    function claim(bytes32 from, uint64 amount) external returns (bool);
+
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
@@ -39,43 +45,6 @@ interface IERC20 {
     event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 value);
 }
 '''
-
-# Copy of contract: https://github.com/neonlabsorg/neon-evm/blob/develop/evm_loader/SPL_ERC20_Wrapper.sol
-ERC20_CONTRACT_SOURCE = '''
-// SPDX-License-Identifier: MIT
-
-pragma solidity >=0.5.12;
-
-/*abstract*/ contract NeonERC20Wrapper /*is IERC20*/ {
-    address constant NeonERC20 = 0xff00000000000000000000000000000000000001;
-
-    string public name;
-    string public symbol;
-    bytes32 public tokenMint;
-
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        bytes32 _tokenMint
-    ) {
-        name = _name;
-        symbol = _symbol;
-        tokenMint = _tokenMint;
-    }
-
-    fallback() external {
-        bytes memory call_data = abi.encodePacked(tokenMint, msg.data);
-        (bool success, bytes memory result) = NeonERC20.delegatecall(call_data);
-
-        require(success, string(result));
-
-        assembly {
-            return(add(result, 0x20), mload(result))
-        }
-    }
-}
-'''
-
 
 @logged_group("neon.Proxy")
 class ERC20Wrapper:
@@ -114,8 +83,10 @@ class ERC20Wrapper:
         interface_id, interface = compiled_interface.popitem()
         self.interface = interface
 
-        compiled_wrapper = compile_source(ERC20_CONTRACT_SOURCE)
-        wrapper_id, wrapper_interface = compiled_wrapper.popitem()
+        with open('/opt/contracts/erc20_wrapper.sol', 'r') as file:
+            source = file.read()
+        compiled_wrapper = compile_source(source)
+        wrapper_interface = compiled_wrapper["<stdin>:NeonERC20Wrapper"]
         self.wrapper = wrapper_interface
 
         erc20 = self.proxy.eth.contract(abi=self.wrapper['abi'], bytecode=wrapper_interface['bin'])
