@@ -107,7 +107,7 @@ class MemPool:
                 self._on_request_done(mp_request)
                 self._executor.release_resource(resource_id)
         except Exception as err:
-            self.error(f"EXCEPTION during the result processing: {err}", extra=log_ctx)
+            self.error(f"Exception during the result processing: {err}", extra=log_ctx)
         finally:
             await self._kick_tx_schedule()
 
@@ -120,7 +120,7 @@ class MemPool:
         self.debug(f"Reqeust done, pending tx count: {count}", extra=log_ctx)
 
     def _drop_request_away(self, tx_request: MPTxRequest):
-        self._tx_schedule.drop_away(tx_request)
+        self._tx_schedule.drop_request_away(tx_request)
         count = self.get_pending_trx_count(tx_request.sender_address)
         log_ctx = {"context": {"req_id": tx_request.req_id}}
         self.debug(f"Reqeust: {tx_request.log_str} dropped away, pending tx count: {count}", extra=log_ctx)

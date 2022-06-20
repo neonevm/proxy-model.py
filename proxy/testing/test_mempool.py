@@ -88,7 +88,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def turn_logger_off(cls) -> None:
         neon_logger = logging.getLogger("neon.MemPool")
-        neon_logger.setLevel(logging.DEBUG)
+        neon_logger.setLevel(logging.ERROR)
 
     async def asyncSetUp(self):
         self._executor = MockMPExecutor()
@@ -276,7 +276,7 @@ class TestMPSchedule(unittest.TestCase):
         self.assertEqual(0, schedule.get_pending_trx_count(acc[1].address.lower()))
         self.assertEqual(2, schedule.get_pending_trx_count(acc[2].address.lower()))
 
-    def test_capacity_overwhelmed(self):
+    def test_capacity_oversized(self):
         """Checks if mp_schedule doesn't get oversized with a quite big set of mp_tx_requests"""
 
         acc_count_max = 10

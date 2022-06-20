@@ -45,7 +45,7 @@
     "loggers": {
         "neon": {
             "level": "ERROR",
-            "handlers": ["standard"],
+            "handlers": ["standard", "file"],
             "propagate": false
         },
         "neon.Proxy": {
