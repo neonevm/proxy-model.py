@@ -672,11 +672,9 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         tx = NeonTxResult('')
         tx.neon_tx = neon_tx
 
-        if tx.neon_res.decode(neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
-            self.debug(f'==== CallFromRawIxDecoder.execute A')
+        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
-        self.debug(f'==== CallFromRawIxDecoder.execute B')
         return self._decode_tx(tx)
 
 
@@ -766,11 +764,9 @@ class PartialCallIxDecoder(DummyIxDecoder):
         tx = self._getadd_tx(storage_account, blocked_accounts, neon_tx)
         self.ix.sign.set_steps(step_count)
 
-        if tx.neon_res.decode(neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
-            self.debug(f'==== PartialCallIxDecoder.execute A')
+        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
-        self.debug(f'==== PartialCallIxDecoder.execute B')
         return self._decode_tx(tx)
 
 
@@ -809,6 +805,10 @@ class ContinueIxDecoder(DummyIxDecoder):
             return self._decode_skip(f'no transaction at the storage {storage_account}')
 
         self.ix.sign.set_steps(step_count)
+
+        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+            return self._decoding_done(tx, 'found Neon results')
+
         return self._decode_tx(tx)
 
 
@@ -842,6 +842,10 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
             return self._decoding_skip(f'fail to init in storage {storage_account} from holder {holder_account}')
 
         self.ix.sign.set_steps(step_count)
+
+        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+            return self._decoding_done(tx, 'found Neon results')
+
         return self._decode_tx(tx)
 
 
@@ -906,6 +910,10 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
             return self._decoding_skip(f'fail to init the storage {storage_account} from the holder {holder_account}')
 
         self.ix.sign.set_steps(step_count)
+
+        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+            return self._decoding_done(tx, 'found Neon results')
+
         return self._decode_tx(tx)
 
 
