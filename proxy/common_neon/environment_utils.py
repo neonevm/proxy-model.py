@@ -81,8 +81,8 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
 @logged_group("neon.Proxy")
 class neon_cli(CliBase):
 
-    CLI_LOGLEVEL = { logging.CRITICAL: "off",  logging.ERROR: "error", logging.WARNING: "warn", logging.INFO: "info",
-                     logging.DEBUG: "debug", logging.NOTSET: "warn" }
+    EMULATOR_LOGLEVEL = { logging.CRITICAL: "off", logging.ERROR: "error", logging.WARNING: "warn",
+                          logging.INFO: "info", logging.DEBUG: "debug", logging.NOTSET: "warn" }
 
     def call(self, *args):
         try:
@@ -92,7 +92,7 @@ class neon_cli(CliBase):
                    "--url", SOLANA_URL,
                    f"--evm_loader={EVM_LOADER_ID}",
                    f"--logging_ctx={ctx}",
-                   f"--loglevel={self.neon_cli_logging_level}"
+                   f"--loglevel={self._emulator_logging_level}"
                    ]\
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
@@ -102,12 +102,9 @@ class neon_cli(CliBase):
             raise
 
     @property
-    def neon_cli_logging_level(self):
+    def _emulator_logging_level(self):
         level = logging.getLogger("neon.Emulator").getEffectiveLevel()
-        cli_level = self.CLI_LOGLEVEL.get(level)
-        if cli_level is None:
-            self.error(f"Failed to get cli loglevel from: {level}")
-            return "warn"
+        cli_level = self.EMULATOR_LOGLEVEL.get(level, "warn")
         return cli_level
 
     def version(self):
