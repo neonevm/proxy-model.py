@@ -103,7 +103,7 @@ def unpack_event_log(data: Iterable[str]) -> EventDTO:
         if i == 0:
             address = bs
         elif i == 1:
-            count_topics = int.from_bytes(bs, "little")
+            count_topics = int.from_bytes(bs, 'little')
         elif 1 < i < 6:
             if count_topics > (i - 2):
                 t.append(bs)
@@ -289,12 +289,13 @@ class NeonTxResultInfo:
         self.debug(f"---- NeonTxResultInfo.decode ix_idx {ix_idx}")
         self._print_logs(tx['meta']['logMessages'])
         log = process_logs(tx['meta']['logMessages'])
-        self.debug(f"---- log {log}")
+        self.debug(f"---- logs {len(log)}")
 
         for log_ix in log:
             self.debug(f"---- log_ix {log_ix}")
 
             if log_ix.return_dto is not None:
+                assert self.slot == -1, 'NeonTxResultInfo already loaded'
                 self.gas_used = hex(log_ix.return_dto.gas_used)
                 self.status = hex(log_ix.return_dto.exit_status)
                 self.return_value = log_ix.return_dto.return_value.hex()
@@ -320,6 +321,9 @@ class NeonTxResultInfo:
                 }
                 self.logs.append(rec)
             self.debug(f"---- self {self}")
+
+        if len(self.logs) > 0:
+            assert self.slot != -1, 'Events without result'
 
         return self
 
