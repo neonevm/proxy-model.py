@@ -40,12 +40,6 @@
             "handlers": ["standard"],
             "propagate": false
         },
-        "neon.Emulator": {
-            "level": "DEBUG",
-            "handlers": [],
-            "propagate": false
-
-        },
         "neon.Proxy": {
             "level": "DEBUG",
             "handlers": ["standard"],

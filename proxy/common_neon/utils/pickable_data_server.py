@@ -147,9 +147,6 @@ class PickableDataClient:
             self.debug(f"Got len_packed bytes: {len_packed.hex()}, that is: {data_len} - bytes to receive")
 
             data = read_data(self, self._client_sock, data_len)
-            if not data:
-                self.error(f"Got: {data_len} to receive but not data")
-                return None
             self.debug(f"Got data: {len(data)}. Load pickled object")
             result = pickle.loads(data)
             self.debug(f"Got result: {result}")
@@ -174,15 +171,8 @@ class PickableDataClient:
         try:
             self.debug(f"Waiting for answer")
             len_packed: bytes = await read_data_async(self, self._reader, 4)
-            if not len_packed:
-                self.error(f"Failed to read len_packed, len_packed: {len_packed}")
-                return None
             data_len = struct.unpack("!I", len_packed)[0]
             data = await read_data_async(self, self._reader, data_len)
-
-            if not data:
-                self.error(f"Got: {data_len} to receive but not data")
-                return None
             self.debug(f"Got data: {len(data)}. Load pickled object")
             result = pickle.loads(data)
             self.debug(f"Got result: {result}")
