@@ -7,14 +7,6 @@
             "formatter": "standard",
             "filters": ["context_filter", "neon_prefix_dropper"]
         },
-        "file": {
-          "class": "logging.FileHandler",
-          "filename": "/opt/proxy.log",
-          "mode": "w",
-          "level": "DEBUG",
-          "formatter": "standard",
-          "filters": ["context_filter", "neon_prefix_dropper"]
-        },
         "root": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
@@ -49,7 +41,7 @@
             "propagate": false
         },
         "neon.Emulator": {
-            "level": "WARN",
+            "level": "DEBUG",
             "handlers": [],
             "propagate": false
 
@@ -60,7 +52,7 @@
             "propagate": false
         },
         "neon.MemPool": {
-            "level": "ERROR",
+            "level": "DEBUG",
             "handlers": ["standard"],
             "propagate": false
         },
