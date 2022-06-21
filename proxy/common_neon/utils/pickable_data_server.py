@@ -52,27 +52,16 @@ class PickableDataServer(ABC):
                 self.error(f"Incomplete read error: {err}")
                 break
             except Exception as err:
-                self.error(f"Failed to receive data err: {err}, {err.__traceback__.tb_next.tb_frame}, type: {type(err)}")
+                self.error(f"Failed to receive data err: {err}")
                 break
 
     async def _recv_pickable_data(self, reader: StreamReader):
-        len_packed: bytes = await reader.read(4)
-        if len(len_packed) == 0:
-            self.error("Got empty len_packed")
-            raise ConnectionResetError()
+        len_packed: bytes = await read_data_async(self, reader, 4)
         payload_len = struct.unpack("!I", len_packed)[0]
         self.debug(f"Got payload len_packed: {len_packed.hex()}, that is: {payload_len}")
-        payload = b''
-        while len(payload) < payload_len:
-            to_be_read = payload_len - len(payload)
-            self.debug(f"Reading chunk of: {to_be_read} of: {payload_len} - bytes")
-            chunk = payload + await reader.read(to_be_read)
-            self.debug(f"Got chunk of data: {len(chunk)}")
-            payload += chunk
-        self.debug(f"Got payload data: {len(payload)}. Load pickled object")
+        payload = await read_data_async(self, reader, payload_len)
         data = pickle.loads(payload)
         self.debug(f"Loaded pickable of type: {type(data)}")
-
         return data
 
 
@@ -101,13 +90,24 @@ class PipePickableDataSrv(PickableDataServer):
         await self.handle_client(reader, writer)
 
 
-async def read_data(self, reader: StreamReader, data_len: int):
+async def read_data_async(self, reader: StreamReader, data_len: int):
     data = b''
     while len(data) < data_len:
         to_be_read = data_len - len(data)
-        self.debug(f"Reading answer data: {to_be_read} of: {data_len} - bytes")
+        self.debug(f"Reading data: {to_be_read} of: {data_len} - bytes")
         chunk = await reader.read(to_be_read)
-        self.debug(f"Got chunk of answer data: {len(chunk)}")
+        self.debug(f"Got chunk of data: {len(chunk)}")
+        data += chunk
+    return data
+
+
+def read_data(self, socket: socket.socket, data_len):
+    data = b''
+    while len(data) < data_len:
+        to_be_read = data_len - len(data)
+        self.debug(f"Reading data: {to_be_read} of: {data_len} - bytes")
+        chunk: bytes = socket.recv(to_be_read)
+        self.debug(f"Got chunk of data: {len(chunk)}")
         data += chunk
     return data
 
@@ -142,18 +142,11 @@ class PickableDataClient:
 
         try:
             self.debug(f"Waiting for answer")
-            len_packed: bytes = self._client_sock.recv(4)
+            len_packed: bytes = read_data(self, self._client_sock, 4)
             data_len = struct.unpack("!I", len_packed)[0]
             self.debug(f"Got len_packed bytes: {len_packed.hex()}, that is: {data_len} - bytes to receive")
 
-            data = b''
-            while len(data) < data_len:
-                to_be_read = data_len - len(data)
-                self.debug(f"Reading answer data: {to_be_read} of: {data_len} - bytes")
-                chunk: bytes = self._client_sock.recv(to_be_read)
-                self.debug(f"Got chunk of answer data: {len(chunk)}")
-                data += chunk
-
+            data = read_data(self, self._client_sock, data_len)
             if not data:
                 self.error(f"Got: {data_len} to receive but not data")
                 return None
@@ -180,18 +173,12 @@ class PickableDataClient:
 
         try:
             self.debug(f"Waiting for answer")
-            len_packed: bytes = await read_data(self, self._reader, 4)
+            len_packed: bytes = await read_data_async(self, self._reader, 4)
             if not len_packed:
+                self.error(f"Failed to read len_packed, len_packed: {len_packed}")
                 return None
             data_len = struct.unpack("!I", len_packed)[0]
-
-            data = b''
-            while len(data) < data_len:
-                to_be_read = data_len - len(data)
-                self.debug(f"Reading answer data: {to_be_read} of: {data_len} - bytes")
-                chunk = await self._reader.read(to_be_read)
-                self.debug(f"Got chunk of answer data: {len(chunk)}")
-                data += chunk
+            data = await read_data_async(self, self._reader, data_len)
 
             if not data:
                 self.error(f"Got: {data_len} to receive but not data")

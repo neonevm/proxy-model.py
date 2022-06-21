@@ -103,7 +103,7 @@ class neon_cli(CliBase):
 
     @property
     def neon_cli_logging_level(self):
-        level = self.debug.__self__.getEffectiveLevel()
+        level = logging.getLogger("neon.Emulator").getEffectiveLevel()
         cli_level = self.CLI_LOGLEVEL.get(level)
         if cli_level is None:
             self.error(f"Failed to get cli loglevel from: {level}")

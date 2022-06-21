@@ -9,7 +9,7 @@
         },
         "file": {
           "class": "logging.FileHandler",
-          "filename": "/opt/proxy-log.log",
+          "filename": "/opt/proxy.log",
           "mode": "w",
           "level": "DEBUG",
           "formatter": "standard",
@@ -45,22 +45,28 @@
     "loggers": {
         "neon": {
             "level": "ERROR",
-            "handlers": ["standard", "file"],
+            "handlers": ["standard"],
             "propagate": false
+        },
+        "neon.Emulator": {
+            "level": "WARN",
+            "handlers": [],
+            "propagate": false
+
         },
         "neon.Proxy": {
             "level": "DEBUG",
-            "handlers": ["file"],
+            "handlers": ["standard"],
             "propagate": false
         },
         "neon.MemPool": {
-            "level": "DEBUG",
-            "handlers": ["file"],
+            "level": "ERROR",
+            "handlers": ["standard"],
             "propagate": false
         },
         "neon.Network": {
-            "level": "DEBUG",
-            "handlers": ["standard", "file"],
+            "level": "ERROR",
+            "handlers": ["standard"],
             "propagate": false
         },
         "": {
