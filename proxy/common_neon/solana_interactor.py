@@ -15,7 +15,7 @@ from solana.rpc.types import RPCResponse
 from solana.transaction import Transaction
 from itertools import zip_longest
 from logged_groups import logged_group
-from typing import Dict, Union, Any, List, NamedTuple, Optional, Iterable, Tuple, cast
+from typing import Dict, Union, Any, List, NamedTuple, Optional, Tuple, cast
 from base58 import b58decode, b58encode
 
 from .utils import SolanaBlockInfo
@@ -104,13 +104,13 @@ class StorageAccountInfo(NamedTuple):
     gas_used_and_paid: int
     number_of_payments: int
     sign: bytes
-    account_list: [str]
+    account_list: List[Tuple[bool, str]]
 
     @staticmethod
     def frombytes(data) -> StorageAccountInfo:
         storage = STORAGE_ACCOUNT_INFO_LAYOUT.parse(data)
 
-        account_list = []
+        account_list: List[Tuple[bool, str]] = []
         offset = STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()
         for _ in range(storage.account_list_len):
             writable = (data[offset] > 0)

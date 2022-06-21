@@ -11,7 +11,7 @@ class SQLDict(MutableMapping, BaseDB):
         self.decode = decode
         self.key_encode = dummy
         self.key_decode = dummy
-        BaseDB.__init__(self, tablename)
+        super().__init__(tablename)
 
     def __len__(self):
         with self._conn.cursor() as cur:

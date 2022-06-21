@@ -193,7 +193,7 @@ class NeonRpcApiModel:
             return block
 
         if block.is_empty():
-            block = self._db.get_full_block_by_slot(block.slot)
+            block = self._db.get_block_by_slot(block.slot)
             if block.is_empty():
                 self.debug(f"Not found block by slot {block.slot}")
 
@@ -250,7 +250,7 @@ class NeonRpcApiModel:
 
     def _get_block_by_slot(self, block: SolanaBlockInfo, full: bool, skip_transaction: bool) -> Optional[dict]:
         if block.is_empty():
-            block = self._db.get_full_block_by_slot(block.slot)
+            block = self._db.get_block_by_slot(block.slot)
             if block.is_empty():
                 return None
 
@@ -527,7 +527,7 @@ class NeonRpcApiModel:
             raise EthereumError(message=f'invalid transaction index {tx_idx}')
 
         if block.is_empty():
-            block = self._db.get_full_block_by_slot(block.slot)
+            block = self._db.get_block_by_slot(block.slot)
             if block.is_empty():
                 self.debug(f"Not found block by slot {block.slot}")
                 return None
@@ -557,7 +557,7 @@ class NeonRpcApiModel:
         if block.slot is None:
             return hex(0)
         if block.is_empty():
-            block = self._db.get_full_block_by_slot(block.slot)
+            block = self._db.get_block_by_slot(block.slot)
             if block.is_empty():
                 self.debug(f"Not found block by slot {block.slot}")
                 return hex(0)

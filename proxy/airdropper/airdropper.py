@@ -9,7 +9,7 @@ from logged_groups import logged_group
 from ..common_neon.environment_data import EVM_LOADER_ID, NEON_PRICE_USD, FINALIZED
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.indexer_base import IndexerBase
-from ..indexer.sol_tx_receipt_collector import FinalizedSolTxReceiptCollector
+from ..indexer.solana_tx_meta_collector import FinalizedSolTxMetaCollector
 from ..indexer.pythnetwork import PythNetworkClient
 from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
@@ -22,7 +22,7 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 
 class FailedAttempts(BaseDB):
     def __init__(self) -> None:
-        BaseDB.__init__(self, 'failed_airdrop_attempts')
+        super().__init__('failed_airdrop_attempts')
 
     def airdrop_failed(self, eth_address, reason):
         with self._conn.cursor() as cur:
@@ -34,7 +34,7 @@ class FailedAttempts(BaseDB):
 
 class AirdropReadySet(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self, 'airdrop_ready')
+        super().__init__('airdrop_ready')
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):
         finished = int(datetime.now().timestamp())
@@ -66,9 +66,9 @@ class Airdropper(IndexerBase):
         solana = SolanaInteractor(solana_url)
         last_known_slot = self._constants.get('latest_processed_slot', None)
         super().__init__(solana, last_known_slot)
-        self.latest_processed_slot = self.last_slot
+        self.latest_processed_slot = self._last_slot
         self.current_slot = 0
-        self._sol_tx_collector = FinalizedSolTxReceiptCollector(self.last_slot, self.solana)
+        self._sol_tx_collector = FinalizedSolTxMetaCollector(self._last_slot, self._solana)
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -266,10 +266,10 @@ class Airdropper(IndexerBase):
         self.process_scheduled_trxs()
 
     def process_receipts(self):
-        last_block_slot = self.solana.get_slot(FINALIZED)
-        for receipt in self._sol_tx_collector.iter_tx_receipt(last_block_slot):
-            self.current_slot = receipt.slot
-            if receipt.tx['transaction']['message']['instructions'] is not None:
-                self.process_trx_airdropper_mode(receipt.tx)
-        self.latest_processed_slot = self._sol_tx_collector.get_last_slot()
+        last_block_slot = self._solana.get_slot(FINALIZED)
+        for meta in self._sol_tx_collector.iter_tx_meta(self._sol_tx_collector.last_block_slot, last_block_slot):
+            self.current_slot = meta.block_slot
+            if meta.tx['transaction']['message']['instructions'] is not None:
+                self.process_trx_airdropper_mode(meta.tx)
+        self.latest_processed_slot = self._sol_tx_collector.last_block_slot
         self._constants['latest_processed_slot'] = self.latest_processed_slot
