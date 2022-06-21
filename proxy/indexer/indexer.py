@@ -843,8 +843,9 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
 
         self.ix.sign.set_steps(step_count)
 
-        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
-            return self._decoding_done(tx, 'found Neon results')
+        # No need to check neon_res here: always empty
+        #if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+        #    return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
 
