@@ -98,19 +98,15 @@ class PickableDataClient:
         reader, writer = await asyncio.open_connection(sock=self._client_sock)
         self._reader = reader
         self._writer = writer
-        self.info(f"_reader: {reader}, _writer: {writer}")
 
     def send_data(self, pickable_object: Any):
         try:
-            self.debug(f"Send pickable_object of type: {type(pickable_object)}")
             payload: bytes = encode_pickable(pickable_object, self)
-            self.debug(f"Payload: {len(payload)}, bytes: {payload[:15].hex()}")
-            sent = self._client_sock.send(payload)
-            self.debug(f"Sent: {sent} - bytes")
+            self.debug(f"Send object of type: {type(pickable_object)}, payload: {len(payload)}, bytes: 0x{payload[:15].hex()}")
+            self._client_sock.sendall(payload)
         except BaseException as err:
             self.error(f"Failed to send client data: {err}")
             raise
-
         try:
             self.debug(f"Waiting for answer")
             len_packed: bytes = read_data_sync(self, self._client_sock, 4)
