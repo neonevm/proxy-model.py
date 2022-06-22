@@ -36,7 +36,7 @@
     },
     "loggers": {
         "neon": {
-            "level": "ERROR",
+            "level": "DEBUG",
             "handlers": ["standard"],
             "propagate": false
         },
@@ -46,7 +46,7 @@
             "propagate": false
         },
         "neon.MemPool": {
-              "level": "DEBUG",
+            "level": "DEBUG",
             "handlers": ["standard"],
             "propagate": false
         },

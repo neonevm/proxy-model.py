@@ -102,7 +102,7 @@ class MemPool:
                 await self.enqueue_mp_request(mp_request)
             elif mp_tx_result.code == MPResultCode.Unspecified:
                 self._executor.release_resource(resource_id)
-                self._tx_schedule.drop_request_away(mp_request)
+                self._drop_request_away(mp_request)
             elif mp_tx_result.code == MPResultCode.Done:
                 self._on_request_done(mp_request)
                 self._executor.release_resource(resource_id)
