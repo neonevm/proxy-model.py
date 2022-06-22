@@ -175,7 +175,7 @@ def encode_pickable(object, logger) -> bytes:
     return len_data + data
 
 
-async def read_data_async(self, reader: StreamReader, data_len: int):
+async def read_data_async(self, reader: StreamReader, data_len: int) -> bytes:
     data = b''
     while len(data) < data_len:
         to_be_read = data_len - len(data)
@@ -188,7 +188,7 @@ async def read_data_async(self, reader: StreamReader, data_len: int):
     return data
 
 
-def read_data_sync(self, socket: socket.socket, data_len):
+def read_data_sync(self, socket: socket.socket, data_len) -> bytes:
     data = b''
     while len(data) < data_len:
         to_be_read = data_len - len(data)

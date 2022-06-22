@@ -10,7 +10,7 @@ from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 from ..common_neon.utils import AddrPickableDataClient
 
 
-def _guard_conn(method: Callable):
+def _guard_conn(method: Callable) -> Callable:
     def wrapper(self, *args, **kwargs):
         with self._mp_conn_lock:
             return method(self, *args, **kwargs)
@@ -18,7 +18,7 @@ def _guard_conn(method: Callable):
     return wrapper
 
 
-def _reconnecting(method: Callable):
+def _reconnecting(method: Callable) -> Callable:
     def wrapper(self, *args, **kwargs):
         try:
             return method(self, *args, **kwargs)
