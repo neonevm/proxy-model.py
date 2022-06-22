@@ -131,10 +131,10 @@ class CancelTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-        #cls.create_hanged_transaction(cls)
-        #cls.create_invoked_transaction(cls)
-        #cls.create_invoked_transaction_combined(cls)
         cls.create_two_calls_in_transaction(cls)
+        cls.create_hanged_transaction(cls)
+        cls.create_invoked_transaction(cls)
+        cls.create_invoked_transaction_combined(cls)
 
     def get_accounts(self, ether):
         (sol_address, _) = self.loader.ether2program(str(ether))
@@ -192,24 +192,20 @@ class CancelTest(unittest.TestCase):
         print("\ncreate_two_calls_in_transaction")
 
         eth_meta_list = [
+            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
         ]
         
         nonce1 = proxy.eth.get_transaction_count(proxy.eth.default_account)
         tx1 = {'nonce': nonce1, 'gasPrice': MINIMAL_GAS_PRICE}
         call1_dict = self.storage_contract.functions.addReturn(1, 1).buildTransaction(tx1)
         call1_signed = proxy.eth.account.sign_transaction(call1_dict, eth_account.key)
-        #(from_addr, sign, msg) = make_instruction_data_from_tx(call1_signed.rawTransaction.hex())
-        #instruction1 = from_addr + sign + msg
-        
+
         nonce2 = nonce1 + 1
         tx2 = {'nonce': nonce2, 'gasPrice': MINIMAL_GAS_PRICE}
         call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).buildTransaction(tx2)
         call2_signed = proxy.eth.account.sign_transaction(call2_dict, eth_account.key)
-        #(from_addr, sign, msg) = make_instruction_data_from_tx(call2_signed.rawTransaction.hex())
-        #instruction2 = from_addr + sign + msg
 
         tx = TransactionWithComputeBudget()
         
@@ -228,7 +224,8 @@ class CancelTest(unittest.TestCase):
         tx.add(noniterative2)
         
         print(tx.__dict__)
-        SolanaClient(solana_url).send_transaction(tx, self.acc, opts=TxOpts(skip_preflight=False, skip_confirmation=False))
+        opts=TxOpts(skip_preflight=False, skip_confirmation=False, preflight_commitment=Confirmed)
+        SolanaClient(solana_url).send_transaction(tx, self.acc, opts=opts)
 
     def create_invoked_transaction(self):
         print("\ncreate_invoked_transaction")
