@@ -181,6 +181,8 @@ async def read_data_async(self, reader: StreamReader, data_len: int):
         to_be_read = data_len - len(data)
         self.debug(f"Reading data: {to_be_read} of: {data_len} - bytes")
         chunk = await reader.read(to_be_read)
+        if not chunk:
+            raise EOFError(f"Failed to read chunk of data: {data_len}")
         self.debug(f"Got chunk of data: {len(chunk)}")
         data += chunk
     return data
