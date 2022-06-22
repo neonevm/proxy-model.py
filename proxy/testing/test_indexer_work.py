@@ -131,10 +131,10 @@ class CancelTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-        cls.create_two_calls_in_transaction(cls)
         cls.create_hanged_transaction(cls)
         cls.create_invoked_transaction(cls)
         cls.create_invoked_transaction_combined(cls)
+        cls.create_two_calls_in_transaction(cls)
 
     def get_accounts(self, ether):
         (sol_address, _) = self.loader.ether2program(str(ether))
@@ -187,45 +187,6 @@ class CancelTest(unittest.TestCase):
         self.storage = self.create_storage_account(self, sign[:8].hex())
         print("storage", self.storage)
         self.call_begin(self, self.storage, 10, msg, instruction)
-
-    def create_two_calls_in_transaction(self):
-        print("\ncreate_two_calls_in_transaction")
-
-        eth_meta_list = [
-            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-        ]
-        
-        nonce1 = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        tx1 = {'nonce': nonce1, 'gasPrice': MINIMAL_GAS_PRICE}
-        call1_dict = self.storage_contract.functions.addReturn(1, 1).buildTransaction(tx1)
-        call1_signed = proxy.eth.account.sign_transaction(call1_dict, eth_account.key)
-
-        nonce2 = nonce1 + 1
-        tx2 = {'nonce': nonce2, 'gasPrice': MINIMAL_GAS_PRICE}
-        call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).buildTransaction(tx2)
-        call2_signed = proxy.eth.account.sign_transaction(call2_dict, eth_account.key)
-
-        tx = TransactionWithComputeBudget()
-        
-        call1_tx = Trx.fromString(bytearray.fromhex(call1_signed.rawTransaction.hex()[2:]))
-        builder = NeonInstruction(self.acc.public_key())
-        builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_trx(call1_tx, eth_meta_list)
-        noniterative1 = builder.make_noniterative_call_transaction(len(tx.instructions))
-        tx.add(noniterative1)
-        
-        call2_tx = Trx.fromString(bytearray.fromhex(call2_signed.rawTransaction.hex()[2:]))
-        builder = NeonInstruction(self.acc.public_key())
-        builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_trx(call2_tx, eth_meta_list)
-        noniterative2 = builder.make_noniterative_call_transaction(len(tx.instructions))
-        tx.add(noniterative2)
-        
-        print(tx.__dict__)
-        opts=TxOpts(skip_preflight=False, skip_confirmation=False, preflight_commitment=Confirmed)
-        SolanaClient(solana_url).send_transaction(tx, self.acc, opts=opts)
 
     def create_invoked_transaction(self):
         print("\ncreate_invoked_transaction")
@@ -324,6 +285,45 @@ class CancelTest(unittest.TestCase):
         print(tx.__dict__)
 
         SolanaClient(solana_url).send_transaction(tx, self.acc, opts=TxOpts(skip_preflight=False, skip_confirmation=False))
+
+    def create_two_calls_in_transaction(self):
+        print("\ncreate_two_calls_in_transaction")
+
+        eth_meta_list = [
+            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
+        ]
+
+        nonce1 = proxy.eth.get_transaction_count(proxy.eth.default_account)
+        tx1 = {'nonce': nonce1, 'gasPrice': MINIMAL_GAS_PRICE}
+        call1_dict = self.storage_contract.functions.addReturn(1, 1).buildTransaction(tx1)
+        call1_signed = proxy.eth.account.sign_transaction(call1_dict, eth_account.key)
+
+        nonce2 = nonce1 + 1
+        tx2 = {'nonce': nonce2, 'gasPrice': MINIMAL_GAS_PRICE}
+        call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).buildTransaction(tx2)
+        call2_signed = proxy.eth.account.sign_transaction(call2_dict, eth_account.key)
+
+        tx = TransactionWithComputeBudget()
+
+        call1_tx = Trx.fromString(bytearray.fromhex(call1_signed.rawTransaction.hex()[2:]))
+        builder = NeonInstruction(self.acc.public_key())
+        builder.init_operator_ether(self.caller_ether)
+        builder.init_eth_trx(call1_tx, eth_meta_list)
+        noniterative1 = builder.make_noniterative_call_transaction(len(tx.instructions))
+        tx.add(noniterative1)
+
+        call2_tx = Trx.fromString(bytearray.fromhex(call2_signed.rawTransaction.hex()[2:]))
+        builder = NeonInstruction(self.acc.public_key())
+        builder.init_operator_ether(self.caller_ether)
+        builder.init_eth_trx(call2_tx, eth_meta_list)
+        noniterative2 = builder.make_noniterative_call_transaction(len(tx.instructions))
+        tx.add(noniterative2)
+
+        print(tx.__dict__)
+        opts=TxOpts(skip_preflight=False, skip_confirmation=False, preflight_commitment=Confirmed)
+        SolanaClient(solana_url).send_transaction(tx, self.acc, opts=opts)
 
     def get_trx_receipts(self, unsigned_msg, signature):
         trx = rlp.decode(unsigned_msg, EthTrx)
