@@ -16,13 +16,6 @@ class IPickableDataServerUser(ABC):
         """Gets neon_tx_data from the neon rpc api service worker"""
 
 
-def encode_pickable(object, logger) -> bytes:
-    data = pickle.dumps(object)
-    len_data = struct.pack("!I", len(data))
-    logger.debug(f"Len data: {len(len_data)} - bytes, data: {len(data)} - bytes")
-    return len_data + data
-
-
 @logged_group("neon.Network")
 class PickableDataServer(ABC):
 
@@ -90,28 +83,6 @@ class PipePickableDataSrv(PickableDataServer):
         await self.handle_client(reader, writer)
 
 
-async def read_data_async(self, reader: StreamReader, data_len: int):
-    data = b''
-    while len(data) < data_len:
-        to_be_read = data_len - len(data)
-        self.debug(f"Reading data: {to_be_read} of: {data_len} - bytes")
-        chunk = await reader.read(to_be_read)
-        self.debug(f"Got chunk of data: {len(chunk)}")
-        data += chunk
-    return data
-
-
-def read_data(self, socket: socket.socket, data_len):
-    data = b''
-    while len(data) < data_len:
-        to_be_read = data_len - len(data)
-        self.debug(f"Reading data: {to_be_read} of: {data_len} - bytes")
-        chunk: bytes = socket.recv(to_be_read)
-        self.debug(f"Got chunk of data: {len(chunk)}")
-        data += chunk
-    return data
-
-
 class PickableDataClient:
 
     def __init__(self):
@@ -142,11 +113,11 @@ class PickableDataClient:
 
         try:
             self.debug(f"Waiting for answer")
-            len_packed: bytes = read_data(self, self._client_sock, 4)
+            len_packed: bytes = read_data_sync(self, self._client_sock, 4)
             data_len = struct.unpack("!I", len_packed)[0]
             self.debug(f"Got len_packed bytes: {len_packed.hex()}, that is: {data_len} - bytes to receive")
 
-            data = read_data(self, self._client_sock, data_len)
+            data = read_data_sync(self, self._client_sock, data_len)
             self.debug(f"Got data: {len(data)}. Load pickled object")
             result = pickle.loads(data)
             self.debug(f"Got result: {result}")
@@ -200,3 +171,31 @@ class AddrPickableDataClient(PickableDataClient):
         client_sock = socket.create_connection((host, port))
         self._set_client_sock(client_sock=client_sock)
 
+
+def encode_pickable(object, logger) -> bytes:
+    data = pickle.dumps(object)
+    len_data = struct.pack("!I", len(data))
+    logger.debug(f"Len data: {len(len_data)} - bytes, data: {len(data)} - bytes")
+    return len_data + data
+
+
+async def read_data_async(self, reader: StreamReader, data_len: int):
+    data = b''
+    while len(data) < data_len:
+        to_be_read = data_len - len(data)
+        self.debug(f"Reading data: {to_be_read} of: {data_len} - bytes")
+        chunk = await reader.read(to_be_read)
+        self.debug(f"Got chunk of data: {len(chunk)}")
+        data += chunk
+    return data
+
+
+def read_data_sync(self, socket: socket.socket, data_len):
+    data = b''
+    while len(data) < data_len:
+        to_be_read = data_len - len(data)
+        self.debug(f"Reading data: {to_be_read} of: {data_len} - bytes")
+        chunk: bytes = socket.recv(to_be_read)
+        self.debug(f"Got chunk of data: {len(chunk)}")
+        data += chunk
+    return data
