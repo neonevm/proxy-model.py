@@ -307,11 +307,11 @@ class CancelTest(unittest.TestCase):
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(call1_signed.rawTransaction.hex())
         (raw, self.tx_hash_call1, from_addr) = self.get_trx_receipts(self, msg, sign)
-        print('self.tx_hash_call1', self.tx_hash_call1)
+        print('tx_hash_call1:', self.tx_hash_call1)
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(call2_signed.rawTransaction.hex())
         (raw, self.tx_hash_call2, from_addr) = self.get_trx_receipts(self, msg, sign)
-        print('self.tx_hash_call1', self.tx_hash_call2)
+        print('tx_hash_call2:', self.tx_hash_call2)
 
         tx = TransactionWithComputeBudget()
 
@@ -419,9 +419,9 @@ class CancelTest(unittest.TestCase):
     def test_05_check_two_calls_in_transaction(self):
         print("\ntest_05_check_two_calls_in_transaction")
         r1 = proxy.eth.wait_for_transaction_receipt(self.tx_hash_call1)
-        print('test_05 receipt:', r1)
+        print('test_05 receipt1:', r1)
         r2 = proxy.eth.wait_for_transaction_receipt(self.tx_hash_call2)
-        print('test_05 receipt:', r2)
+        print('test_05 receipt2:', r2)
 
 
 if __name__ == '__main__':

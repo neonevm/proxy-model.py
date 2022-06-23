@@ -295,7 +295,8 @@ class NeonTxResultInfo:
             self.debug(f"---- log_ix {log_ix}")
 
             if log_ix.return_dto is not None:
-                assert self.slot == -1, 'NeonTxResultInfo already loaded'
+                if self.slot != -1:
+                    self.warning(f'NeonTxResultInfo already loaded')
                 self.gas_used = hex(log_ix.return_dto.gas_used)
                 self.status = hex(log_ix.return_dto.exit_status)
                 self.return_value = log_ix.return_dto.return_value.hex()
