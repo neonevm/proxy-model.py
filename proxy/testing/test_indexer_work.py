@@ -289,7 +289,7 @@ class CancelTest(unittest.TestCase):
     def create_two_calls_in_transaction(self):
         print("\ncreate_two_calls_in_transaction")
 
-        eth_meta_list = [
+        account_list = [
             AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
@@ -305,19 +305,27 @@ class CancelTest(unittest.TestCase):
         call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).buildTransaction(tx2)
         call2_signed = proxy.eth.account.sign_transaction(call2_dict, eth_account.key)
 
+        (from_addr, sign, msg) = make_instruction_data_from_tx(call1_signed.rawTransaction.hex())
+        (raw, self.tx_hash_call1, from_addr) = self.get_trx_receipts(self, msg, sign)
+        print('self.tx_hash_call1', self.tx_hash_call1)
+
+        (from_addr, sign, msg) = make_instruction_data_from_tx(call2_signed.rawTransaction.hex())
+        (raw, self.tx_hash_call2, from_addr) = self.get_trx_receipts(self, msg, sign)
+        print('self.tx_hash_call1', self.tx_hash_call2)
+
         tx = TransactionWithComputeBudget()
 
         call1_tx = Trx.fromString(bytearray.fromhex(call1_signed.rawTransaction.hex()[2:]))
         builder = NeonInstruction(self.acc.public_key())
         builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_trx(call1_tx, eth_meta_list)
+        builder.init_eth_trx(call1_tx, account_list)
         noniterative1 = builder.make_noniterative_call_transaction(len(tx.instructions))
         tx.add(noniterative1)
 
         call2_tx = Trx.fromString(bytearray.fromhex(call2_signed.rawTransaction.hex()[2:]))
         builder = NeonInstruction(self.acc.public_key())
         builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_trx(call2_tx, eth_meta_list)
+        builder.init_eth_trx(call2_tx, account_list)
         noniterative2 = builder.make_noniterative_call_transaction(len(tx.instructions))
         tx.add(noniterative2)
 
@@ -407,6 +415,13 @@ class CancelTest(unittest.TestCase):
         print("\ntest_04_right_result_for_invoked")
         trx_receipt = proxy.eth.wait_for_transaction_receipt(self.tx_hash_invoked_combined)
         print('trx_receipt:', trx_receipt)
+
+    def test_05_check_two_calls_in_transaction(self):
+        print("\ntest_05_check_two_calls_in_transaction")
+        r1 = proxy.eth.wait_for_transaction_receipt(self.tx_hash_call1)
+        print('test_05 receipt:', r1)
+        r2 = proxy.eth.wait_for_transaction_receipt(self.tx_hash_call2)
+        print('test_05 receipt:', r2)
 
 
 if __name__ == '__main__':
