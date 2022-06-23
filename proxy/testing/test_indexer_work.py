@@ -296,21 +296,19 @@ class CancelTest(unittest.TestCase):
         ]
 
         nonce1 = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        tx1 = {'nonce': nonce1, 'gasPrice': MINIMAL_GAS_PRICE}
-        call1_dict = self.storage_contract.functions.addReturn(1, 1).buildTransaction(tx1)
+        tx = {'nonce': nonce1, 'gasPrice': MINIMAL_GAS_PRICE}
+        call1_dict = self.storage_contract.functions.addReturn(1, 1).buildTransaction(tx)
         call1_signed = proxy.eth.account.sign_transaction(call1_dict, eth_account.key)
-
-        nonce2 = nonce1 + 1
-        tx2 = {'nonce': nonce2, 'gasPrice': MINIMAL_GAS_PRICE}
-        call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).buildTransaction(tx2)
-        call2_signed = proxy.eth.account.sign_transaction(call2_dict, eth_account.key)
-
-        (from_addr, sign, msg) = make_instruction_data_from_tx(call1_signed.rawTransaction.hex())
-        (raw, self.tx_hash_call1, from_addr) = self.get_trx_receipts(self, msg, sign)
+        (from_addr, sign1, msg1) = make_instruction_data_from_tx(call1_signed.rawTransaction.hex())
+        (raw, self.tx_hash_call1, from_addr) = self.get_trx_receipts(self, msg1, sign1)
         print('tx_hash_call1:', self.tx_hash_call1)
 
-        (from_addr, sign, msg) = make_instruction_data_from_tx(call2_signed.rawTransaction.hex())
-        (raw, self.tx_hash_call2, from_addr) = self.get_trx_receipts(self, msg, sign)
+        nonce2 = nonce1 + 1
+        tx = {'nonce': nonce2, 'gasPrice': MINIMAL_GAS_PRICE}
+        call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).buildTransaction(tx)
+        call2_signed = proxy.eth.account.sign_transaction(call2_dict, eth_account.key)
+        (from_addr, sign2, msg2) = make_instruction_data_from_tx(call2_signed.rawTransaction.hex())
+        (raw, self.tx_hash_call2, from_addr) = self.get_trx_receipts(self, msg2, sign2)
         print('tx_hash_call2:', self.tx_hash_call2)
 
         tx = TransactionWithComputeBudget()
@@ -329,7 +327,7 @@ class CancelTest(unittest.TestCase):
         noniterative2 = builder.make_noniterative_call_transaction(len(tx.instructions))
         tx.add(noniterative2)
 
-        print(tx.__dict__)
+        #print(tx.__dict__)
         opts=TxOpts(skip_preflight=False, skip_confirmation=False, preflight_commitment=Confirmed)
         SolanaClient(solana_url).send_transaction(tx, self.acc, opts=opts)
 
