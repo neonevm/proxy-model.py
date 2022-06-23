@@ -41,6 +41,7 @@ class SolanaIxInfo:
         self.ix = {}
         self.neon_obj = None
         self.evm_ix = 0xFF
+        self.evm_ix_idx = -1
         self.ix_data = None
 
     def _decode_ixdata(self) -> bool:
@@ -83,7 +84,8 @@ class SolanaIxInfo:
 
             if self._get_neon_instruction():
                 evm_ix_idx += 1
-                self.debug(f'---- yield A {evm_ix_idx}')
+                self.evm_ix_idx = evm_ix_idx
+                self.debug(f'---- A evm_ix_idx={evm_ix_idx}')
                 yield evm_ix_idx
 
             for inner_tx in self.tx['meta']['innerInstructions']:
@@ -91,7 +93,8 @@ class SolanaIxInfo:
                     for self.ix in inner_tx['instructions']:
                         if self._get_neon_instruction():
                             evm_ix_idx += 1
-                            self.debug(f'---- yield B {evm_ix_idx}')
+                            self.evm_ix_idx = evm_ix_idx
+                            self.debug(f'---- B evm_ix_idx={evm_ix_idx}')
                             yield evm_ix_idx
 
         self._set_defaults()
@@ -672,7 +675,7 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         tx = NeonTxResult('')
         tx.neon_tx = neon_tx
 
-        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
@@ -764,7 +767,7 @@ class PartialCallIxDecoder(DummyIxDecoder):
         tx = self._getadd_tx(storage_account, blocked_accounts, neon_tx)
         self.ix.sign.set_steps(step_count)
 
-        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
@@ -806,7 +809,7 @@ class ContinueIxDecoder(DummyIxDecoder):
 
         self.ix.sign.set_steps(step_count)
 
-        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
@@ -844,7 +847,7 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
         self.ix.sign.set_steps(step_count)
 
         # No need to check neon_res here: always empty
-        #if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+        #if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
         #    return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
@@ -912,7 +915,7 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
 
         self.ix.sign.set_steps(step_count)
 
-        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx).is_valid():
+        if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)

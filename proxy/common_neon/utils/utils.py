@@ -291,7 +291,8 @@ class NeonTxResultInfo:
         log = process_logs(tx['meta']['logMessages'])
         self.debug(f"---- logs {len(log)}")
 
-        for log_ix in log:
+        if ix_idx >= 0:
+            log_ix = log[ix_idx]
             self.debug(f"---- log_ix {log_ix}")
 
             if log_ix.return_dto is not None:
@@ -321,10 +322,9 @@ class NeonTxResultInfo:
                     # 'blockHash': block_hash # set when transaction found
                 }
                 self.logs.append(rec)
-            self.debug(f"---- self {self}")
 
-        if len(self.logs) > 0:
-            assert self.slot != -1, 'Events without result'
+            if len(self.logs) > 0:
+                assert self.slot != -1, 'Events without result'
 
         return self
 
