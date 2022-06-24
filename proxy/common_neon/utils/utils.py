@@ -291,6 +291,9 @@ class NeonTxResultInfo:
         log = process_logs(tx['meta']['logMessages'])
         self.debug(f"---- logs {len(log)}")
 
+        if ix_idx < 0:
+            ix_idx = 0
+
         if ix_idx >= 0:
             log_ix = log[ix_idx]
             self.debug(f"---- log_ix {log_ix}")
