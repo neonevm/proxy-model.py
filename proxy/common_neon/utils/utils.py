@@ -286,17 +286,13 @@ class NeonTxResultInfo:
                 self.debug(f">>>> {line}")
 
     def decode(self, neon_sign: str, tx: Dict[Any, Any], ix_idx=-1) -> NeonTxResultInfo:
-        self.debug(f"---- NeonTxResultInfo.decode ix_idx {ix_idx}")
-        self._print_logs(tx['meta']['logMessages'])
         log = process_logs(tx['meta']['logMessages'])
-        self.debug(f"---- logs {len(log)}")
 
         if ix_idx < 0:
             ix_idx = 0
 
         if ix_idx >= 0:
             log_ix = log[ix_idx]
-            self.debug(f"---- log_ix {log_ix}")
 
             if log_ix.return_dto is not None:
                 if self.slot != -1:
@@ -330,27 +326,6 @@ class NeonTxResultInfo:
                 assert self.slot != -1, 'Events without result'
 
         return self
-
-    # def decode(self, neon_sign: str, tx: {}, ix_idx=-1) -> NeonTxResultInfo:
-    #     self._set_defaults()
-
-    #     logs = process_logs(self.tx['meta']['logMessages'])
-
-    #     meta_ixs = tx['meta']['innerInstructions']
-    #     msg = tx['transaction']['message']
-    #     accounts = msg['accountKeys']
-
-    #     for inner_ix in meta_ixs:
-    #         ix_idx = inner_ix['index']
-    #         for event in inner_ix['instructions']:
-    #             if accounts[event['programIdIndex']] == EVM_LOADER_ID:
-    #                 log = base58.b58decode(event['data'])
-    #                 evm_ix = int(log[0])
-    #                 if evm_ix == 7:
-    #                     self._decode_event(neon_sign, log, ix_idx)
-    #                 elif evm_ix == 6:
-    #                     self._decode_return(log, ix_idx, tx)
-    #     return self
 
     def canceled(self, tx: Dict[Any, Any]):
         self._set_defaults()
