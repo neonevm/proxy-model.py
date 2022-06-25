@@ -119,7 +119,6 @@ class NeonTxSender:
             self._db.pend_transaction(self._pending_tx)
 
     def _submit_tx_into_db(self, neon_res: NeonTxResultInfo, sign_list: [str]):
-        self.debug(f'NeonTxSender._submit_tx_into_db')
         neon_tx = NeonTxInfo()
         neon_tx.init_from_eth_tx(self.eth_tx)
         self._db.submit_transaction(neon_tx, neon_res, sign_list)
@@ -267,14 +266,9 @@ class SimpleNeonTxSender(SolTxListSender):
         self.neon_res = NeonTxResultInfo()
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
-        self.debug(f'SimpleNeonTxSender._on_success_send')
-        self.debug(f'tx.recent_blockhash {tx.recent_blockhash}')
-        self.debug(f'receipt {receipt}')
-        self.debug(f'self.neon_res.is_valid {self.neon_res.is_valid()}')
         if not self.neon_res.is_valid():
             self.neon_res.decode(self._s.neon_sign, receipt).is_valid()
         super()._on_success_send(tx, receipt)
-        self.debug(f'final neon_res {self.neon_res}')
 
     def _on_post_send(self):
         if self.neon_res.is_valid():

@@ -416,10 +416,10 @@ class CancelTest(unittest.TestCase):
 
     def test_05_check_two_calls_in_transaction(self):
         print("\ntest_05_check_two_calls_in_transaction")
-        r1 = proxy.eth.wait_for_transaction_receipt(self.tx_hash_call1)
-        print('test_05 receipt1:', r1)
-        r2 = proxy.eth.wait_for_transaction_receipt(self.tx_hash_call2)
-        print('test_05 receipt2:', r2)
+        call1_receipt = proxy.eth.wait_for_transaction_receipt(self.tx_hash_call1)
+        print('test_05 receipt1:', call1_receipt)
+        call2_receipt = proxy.eth.wait_for_transaction_receipt(self.tx_hash_call2)
+        print('test_05 receipt2:', call2_receipt)
 
 
 if __name__ == '__main__':

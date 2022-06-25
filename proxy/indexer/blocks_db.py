@@ -46,7 +46,6 @@ class SolanaBlocksDB(BaseDB):
         return self._block_from_value(None, self._fetchone(q))
 
     def set_block(self, block: SolanaBlockInfo):
-        self.debug(f'SolanaBlocksDB.set_block {block.hash} and slot {block.slot}')
         with self._conn.cursor() as cursor:
             cursor.execute(f'''
                 INSERT INTO {self._table_name}

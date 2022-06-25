@@ -73,7 +73,6 @@ class SolanaIxInfo:
         if not self._is_valid:
             return
 
-        self.debug('---- begin iter_ixs')
         self._set_defaults()
         tx_ixs = enumerate(self._msg['instructions'])
 
@@ -85,7 +84,6 @@ class SolanaIxInfo:
             if self._get_neon_instruction():
                 evm_ix_idx += 1
                 self.evm_ix_idx = evm_ix_idx
-                self.debug(f'---- A evm_ix_idx={evm_ix_idx}')
                 yield evm_ix_idx
 
             for inner_tx in self.tx['meta']['innerInstructions']:
@@ -94,11 +92,9 @@ class SolanaIxInfo:
                         if self._get_neon_instruction():
                             evm_ix_idx += 1
                             self.evm_ix_idx = evm_ix_idx
-                            self.debug(f'---- B evm_ix_idx={evm_ix_idx}')
                             yield evm_ix_idx
 
         self._set_defaults()
-        self.debug('==== end iter_ixs')
 
     def get_account_cnt(self):
         assert self._is_valid
@@ -656,7 +652,6 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         DummyIxDecoder.__init__(self, 'CallFromRaw', state)
 
     def execute(self) -> bool:
-        self.debug(f'---- CallFromRawIxDecoder.execute')
         self._decoding_start()
 
         if SolReceiptParser(self.ix.tx).check_if_error():
@@ -741,7 +736,6 @@ class PartialCallIxDecoder(DummyIxDecoder):
         DummyIxDecoder.__init__(self, 'PartialCallFromRawEthereumTX', state)
 
     def execute(self) -> bool:
-        self.debug(f'---- PartialCallIxDecoder.execute')
         self._decoding_start()
 
         if SolReceiptParser(self.ix.tx).check_if_error():
@@ -1013,12 +1007,9 @@ class Indexer(IndexerBase):
 
                 for _ in ix_info.iter_ixs():
                     req_id = ix_info.sign.get_req_id()
-                    self.debug(f'++++ ix_info {ix_info}')
                     with logging_context(sol_tx=req_id):
                         self.state.set_ix(ix_info)
                         (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
-
-                self.debug(f'#### neon_res {ix_info.neon_obj}')
 
                 self.state.add_tx_cost(ix_info.cost_info)
 
