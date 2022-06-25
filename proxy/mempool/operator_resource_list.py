@@ -123,6 +123,7 @@ class OperatorResourceList:
 
     def get_active_resource(self) -> OperatorResourceInfo:
         if self._resource:
+            self.warning("Failed to get active resource because it's already gotten")
             return self._resource
 
         self._init_resource_list()

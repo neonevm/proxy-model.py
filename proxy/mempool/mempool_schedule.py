@@ -63,6 +63,7 @@ class MPSenderTxPool:
         if self._processing_tx.nonce != nonce:
             self.error(f"Failed to finish tx, processing tx has different nonce: {self._processing_tx.nonce} than: {nonce}")
             return
+
         self._txs.remove(self._processing_tx)
         self.debug(f"On tx done: {self._processing_tx.log_str} - removed. The: {self.len()} txs are left")
         self._processing_tx = None
@@ -94,6 +95,17 @@ class MPSenderTxPool:
             return
         self._txs = self._txs[index:]
         self.debug(f"Removed mp_tx_request from sender: {self.sender_address} - {mp_tx_request.log_str}")
+
+    def reschedule_tx(self, nonce):
+        if self._processing_tx is None:
+            self.error(f"Failed to reschedule tx with nonce: {nonce}, processing tx is None")
+            return
+        if self._processing_tx.nonce != nonce:
+            self.error(f"Failed to reschedule tx, processing tx has different nonce: {self._processing_tx.nonce} than: {nonce}")
+            return
+
+        self.debug(f"Reset processing tx back to pending: {self.sender_address} - {self._txs[0].log_str}")
+        self._processing_tx = None
 
 
 @logged_group("neon.MemPool")
@@ -179,11 +191,18 @@ class MPTxSchedule:
         sender, _ = self._get_sender_txs(sender_addr)
         return 0 if sender is None else sender.len()
 
-    def drop_request_away(self, mp_tx_reqeust: MPTxRequest):
-        sender, i = self._get_sender_txs(mp_tx_reqeust.sender_address)
+    def drop_request_away(self, mp_tx_request: MPTxRequest):
+        sender, i = self._get_sender_txs(mp_tx_request.sender_address)
         if sender is None:
-            self.warning(f"Failed drop request, no sender by sender_address: {mp_tx_reqeust.sender_address}")
+            self.warning(f"Failed drop request, no sender by sender_address: {mp_tx_request.sender_address}")
             return
-        sender.drop_request_away(mp_tx_reqeust)
+        sender.drop_request_away(mp_tx_request)
         if sender.len() == 0:
             self.sender_tx_pools.pop(i)
+
+    def reschedule_tx(self, sender_address: str, nonce: int):
+        sender, _ = self._get_sender_txs(sender_address)
+        if sender is None:
+            self.error(f"Failed reschedule, no sender by sender_address: {sender_address}")
+            return
+        sender.reschedule_tx(nonce)

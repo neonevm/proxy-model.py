@@ -4,7 +4,7 @@ from solana.account import Account as SolanaAccount
 import time
 
 from logged_groups import logged_group
-from typing import Optional
+from typing import Optional, List
 from solana.transaction import Transaction
 from base58 import b58encode
 
@@ -15,8 +15,10 @@ from .environment_data import SKIP_PREFLIGHT, RETRY_ON_FAIL
 
 
 class BlockedAccountsError(Exception):
-    def __init__(self):
+    def __init__(self, blocked_accounts: List[str]):
         super().__init__(self)
+        self.blocked_accounts: List[str] = blocked_accounts
+
 
 @logged_group("neon.Proxy")
 class SolTxListSender:
@@ -57,7 +59,7 @@ class SolTxListSender:
 
     def send(self, signer: SolanaAccount) -> SolTxListSender:
         solana = self._s.solana
-        waiter = self._s.waiter
+        waiter = self._s.waiter # is that often None?
         skip = self._skip_preflight
         commitment = self._preflight_commitment
 
@@ -121,7 +123,7 @@ class SolTxListSender:
             raise SolTxError(self._budget_exceeded_receipt)
 
         if len(self._blocked_account_list):
-            raise BlockedAccountsError()
+            raise BlockedAccountsError(self._blocked_account_list)
 
         # force changing of recent_blockhash if Solana doesn't accept the current one
         if len(self._bad_block_list):

@@ -39,14 +39,13 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._solana = SolanaInteractor(self._config.get_solana_url())
         self._db = MemDB(self._solana)
 
-    async def execute_neon_tx(self, mempool_request: MPRequest, skip_writing_holder):
+    def execute_neon_tx(self, mempool_request: MPRequest, skip_writing_holder):
         with logging_context(req_id=mempool_request.req_id, exectr=self._id):
             try:
                 self.execute_neon_tx_impl(mempool_request, skip_writing_holder)
-            except BlockedAccountsError:
-                self.error(f"Blocked accounts: postpone transaction for one block time")
-                await asyncio.sleep(0.4)
-                return await self.execute_neon_tx(mempool_request, skip_writing_holder=True)
+            except BlockedAccountsError as err:
+                self.warning(f"Blocked accounts: {err.blocked_accounts}, send BlockedAccount result back to the MemPool")
+                return MPTxResult(MPResultCode.BlockedAccount, err.blocked_accounts)
             except Exception as err:
                 self.error(f"Failed to execute neon_tx: {err}")
                 return MPTxResult(MPResultCode.Unspecified, None)
@@ -62,7 +61,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             tx_sender.execute(neon_tx_cfg, emulating_result, skip_writing_holder)
 
     async def on_data_received(self, data: Any) -> Any:
-        return await self.execute_neon_tx(data, skip_writing_holder=False)
+        return self.execute_neon_tx(data, skip_writing_holder=False)
 
     def run(self) -> None:
         self._config = Config()

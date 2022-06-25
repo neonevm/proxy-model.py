@@ -432,7 +432,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
         # Accounts are blocked, so try to lock them
         if len(self._blocked_account_list):
-            return self._try_lock_accounts()
+            raise BlockedAccountsError(self._blocked_account_list)
 
         # Compute budged is exceeded, so decrease EVM steps per iteration
         if len(self._budget_exceeded_list):
@@ -516,7 +516,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
 
         if self._skip_writing_holder:
             return tx_list
-        
+
         return self.write_holder_account(tx_list)
 
     def write_holder_account(self, tx_list):

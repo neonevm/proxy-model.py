@@ -13,6 +13,7 @@ class MemPool:
 
     CHECK_TASK_TIMEOUT_SEC = 0.01
     MP_CAPACITY = 4096
+    BACK_TO_PENDING_TIMEOUT_SEC = 0.4
 
     def __init__(self, executor: IMPExecutor, capacity: int = MP_CAPACITY):
         self._tx_schedule = MPTxSchedule(capacity)
@@ -95,8 +96,7 @@ class MemPool:
             log_fn(f"On mp tx result:  {mp_tx_result} - of: {mp_request.log_str}", extra=log_ctx)
 
             if mp_tx_result.code == MPResultCode.BlockedAccount:
-                self._executor.release_resource(resource_id)
-                await self.enqueue_mp_request(mp_request)
+                self._on_blocked_accounts_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.NoLiquidity:
                 self._executor.on_no_liquidity(resource_id)
                 await self.enqueue_mp_request(mp_request)
@@ -110,6 +110,15 @@ class MemPool:
             self.error(f"Exception during the result processing: {err}", extra=log_ctx)
         finally:
             await self._kick_tx_schedule()
+
+    def _on_blocked_accounts_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
+        self.warning(f"For tx: {mp_tx_request.log_str} - got blocked account transaction status: {mp_tx_result.data}. "
+                     f"Will be reset back to pending in {self.BACK_TO_PENDING_TIMEOUT_SEC} sec.")
+        asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
+
+    async def _reschedule_tx(self, tx_request: MPTxRequest):
+        await asyncio.sleep(self.BACK_TO_PENDING_TIMEOUT_SEC)
+        self._tx_schedule.reschedule_tx(tx_request.sender_address, tx_request.nonce)
 
     def _on_request_done(self, tx_request: MPTxRequest):
         sender = tx_request.sender_address
