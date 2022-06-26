@@ -84,7 +84,7 @@ class SolanaIxInfo:
             if self._get_neon_instruction():
                 evm_ix_idx += 1
                 self.evm_ix_idx = evm_ix_idx
-                yield evm_ix_idx
+                yield self.evm_ix_idx
 
             for inner_tx in self.tx['meta']['innerInstructions']:
                 if inner_tx['index'] == ix_idx:
@@ -92,7 +92,7 @@ class SolanaIxInfo:
                         if self._get_neon_instruction():
                             evm_ix_idx += 1
                             self.evm_ix_idx = evm_ix_idx
-                            yield evm_ix_idx
+                            yield self.evm_ix_idx
 
         self._set_defaults()
 
@@ -465,7 +465,7 @@ class DummyIxDecoder:
         If the transaction doesn't have results, then try to get results for the transaction.
         If the transaction has received results, then call done for the transaction.
         The transaction can already have results, because parser waits all ixs in the slot, because
-        the parsing order can be other than the execution orderOnRe
+        the parsing order can be other than the execution order.
         """
         self.ix.neon_obj = tx
         return self._decoding_success(tx, 'mark ix used')
@@ -839,10 +839,6 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
             return self._decoding_skip(f'fail to init in storage {storage_account} from holder {holder_account}')
 
         self.ix.sign.set_steps(step_count)
-
-        # No need to check neon_res here: always empty
-        #if tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
-        #    return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
 
