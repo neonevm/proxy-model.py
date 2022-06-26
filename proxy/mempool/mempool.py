@@ -13,7 +13,7 @@ class MemPool:
 
     CHECK_TASK_TIMEOUT_SEC = 0.01
     MP_CAPACITY = 4096
-    BACK_TO_PENDING_TIMEOUT_SEC = 0.4
+    RESCHEDULE_TIMEOUT_SEC = 0.4
 
     def __init__(self, executor: IMPExecutor, capacity: int = MP_CAPACITY):
         self._tx_schedule = MPTxSchedule(capacity)
@@ -113,11 +113,11 @@ class MemPool:
 
     def _on_blocked_accounts_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
         self.warning(f"For tx: {mp_tx_request.log_str} - got blocked account transaction status: {mp_tx_result.data}. "
-                     f"Will be reset back to pending in {self.BACK_TO_PENDING_TIMEOUT_SEC} sec.")
+                     f"Will be reset back to pending in {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
     async def _reschedule_tx(self, tx_request: MPTxRequest):
-        await asyncio.sleep(self.BACK_TO_PENDING_TIMEOUT_SEC)
+        await asyncio.sleep(self.RESCHEDULE_TIMEOUT_SEC)
         self._tx_schedule.reschedule_tx(tx_request.sender_address, tx_request.nonce)
 
     def _on_request_done(self, tx_request: MPTxRequest):

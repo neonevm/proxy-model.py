@@ -73,14 +73,14 @@ class OperatorResourceList:
     def _init_resource_list(self):
         if len(self._resource_list):
             return
+        self.info(f"Init resource list")
 
-        idx = 0
         signer_list: List[SolanaAccount] = get_solana_accounts()
-        for rid in range(PERM_ACCOUNT_LIMIT):
+        for idx, rid in enumerate(range(PERM_ACCOUNT_LIMIT)):
             for signer in signer_list:
+                self.debug(f"Init operator_resource_info for signer: {signer}, idx: {idx}, rid: {rid}")
                 info = OperatorResourceInfo(signer=signer, rid=rid, idx=idx)
                 self._resource_list.append(info)
-                idx += 1
 
         with self._resource_list_len.get_lock():
             if self._resource_list_len.value != 0:
@@ -123,7 +123,7 @@ class OperatorResourceList:
 
     def get_active_resource(self) -> OperatorResourceInfo:
         if self._resource:
-            self.warning("Failed to get active resource because it's already gotten")
+            self.warning(f"Reentering in active resource: {self.resource}")
             return self._resource
 
         self._init_resource_list()
@@ -138,6 +138,7 @@ class OperatorResourceList:
 
             with self._resource_list_len.get_lock():
                 if self._resource_list_len.value == 0:
+                    self.error(f"Failed to get active resource: resource list is empty")
                     raise RuntimeError('Operator has NO resources!')
                 elif len(self._free_resource_list) == 0:
                     continue
@@ -285,7 +286,7 @@ class OperatorResourceList:
 
 
 @logged_group("neon.MemPool")
-class NeonCreatePermAccount(NeonCreateAccountWithSeedStage, abc.ABC):
+class NeonCreatePermAccount(NeonCreateAccountWithSeedStage):
     NAME = 'createPermAccount'
 
     def __init__(self, sender, seed_base: bytes, size: int):

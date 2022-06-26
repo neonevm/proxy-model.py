@@ -39,7 +39,6 @@ class NeonTxSender:
         self.steps = steps
         self.waiter = self
         self.solana = solana
-        self._resource_list = None
         self.resource = None
         self.signer = None
         self.operator_key = None

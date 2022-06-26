@@ -41,8 +41,9 @@ class solana_cli(CliBase):
 def get_solana_accounts(*, logger) -> [SolanaAccount]:
     def read_sol_account(name) -> Optional[SolanaAccount]:
         if not os.path.isfile(name):
+            logger.error(f"Failed to read sol_account: {name}, that is not a file")
             return None
-
+        logger.debug(f"Open a sol_account file: {name}")
         with open(name.strip(), mode='r') as d:
             pkey = (d.read())
             num_list = [int(v) for v in pkey.strip("[] \n").split(',')]
@@ -50,6 +51,7 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
             return SolanaAccount(value_list)
 
     res = solana_cli().call('config', 'get')
+    logger.debug(f"Got solana config: {res}")
     substr = "Keypair Path: "
     path = ""
     for line in res.splitlines():
@@ -74,7 +76,7 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
 
     if not len(signer_list):
         raise Exception("No keypairs")
-
+    logger.debug(f"Got signer list of: {len(signer_list)} - keys")
     return signer_list
 
 
