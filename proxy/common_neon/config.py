@@ -21,3 +21,6 @@ class Config(IConfig):
 
     def get_evm_count(self) -> Optional[int]:
         return int(os.environ.get("EVM_STEP_COUNT", 750))
+
+    def __str__(self):
+        return f"SOLANA_URL: {self.get_solana_url()}, EVM_STEP_COUNT: {self.get_evm_count()}"
