@@ -19,61 +19,30 @@ install_solc(version='0.7.6')
 from solcx import compile_source
 
 # Standard interface of ERC20 contract to generate ABI for wrapper
-# Standard interface of ERC20 contract to generate ABI for wrapper
 ERC20_INTERFACE_SOURCE = '''
-pragma solidity >= 0.7.0;
-pragma abicoder v2;
+pragma solidity >=0.7.0;
 
-interface SPLToken {
+interface IERC20 {
+    function decimals() external view returns (uint8);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address who) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function transfer(address to, uint256 value) external returns (bool);
+    function approve(address spender, uint256 value) external returns (bool);
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
 
-    enum AccountState {
-        Uninitialized,
-        Initialized,
-        Frozen
-    }
+    function mint(address to, uint256 amount) external;
+    function burn(uint256 amount) external returns (bool);
+    function burnFrom(address from, uint256 amount) external returns (bool);
 
-    struct Account {
-        bytes32 mint;
-        bytes32 owner;
-        uint64 amount;
-        bytes32 delegate;
-        uint64 delegated_amount;
-        bytes32 close_authority;
-        AccountState state;
-    }
+    function claim(bytes32 from, uint64 amount) external returns (bool);
 
-    struct Mint {
-        uint64 supply;
-        uint8 decimals;
-        bool isInitialized;
-        bytes32 freezeAuthority;
-        bytes32 mintAuthority;
-    }
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
 
-    function findAccount(bytes32 salt) external pure returns(bytes32);
 
-    function exists(bytes32 account) external view returns(bool);
-    function getAccount(bytes32 account) external view returns(Account memory);
-    function getMint(bytes32 account) external view returns(Mint memory);
-
-    function initializeMint(bytes32 salt, uint8 decimals) external returns(bytes32);
-    function initializeMint(bytes32 salt, uint8 decimals, bytes32 mint_authority, bytes32 freeze_authority) external returns(bytes32);
-
-    function initializeAccount(bytes32 salt, bytes32 mint) external returns(bytes32);
-    function initializeAccount(bytes32 salt, bytes32 mint, bytes32 owner) external returns(bytes32);
-
-    function closeAccount(bytes32 account) external;
-
-    function mintTo(bytes32 account, uint64 amount) external;
-    function burn(bytes32 account, uint64 amount) external;
-
-    function approve(bytes32 source, bytes32 target, uint64 amount) external;
-    function revoke(bytes32 source) external;
-
-    function transfer(bytes32 source, bytes32 target, uint64 amount) external;
-
-    function freeze(bytes32 account) external;
-    function thaw(bytes32 account) external;
+    function approveSolana(bytes32 spender, uint64 value) external returns (bool);
+    event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 value);
 }
 '''
 
