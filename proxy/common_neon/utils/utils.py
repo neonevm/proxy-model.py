@@ -64,9 +64,7 @@ class ReturnDTO:
 
 
 def unpack_return(data: Iterable[str]) -> ReturnDTO:
-    """
-    Unpack base64-encoded return data.
-    """
+    '''Unpacks base64-encoded return data'''
     exit_status = 0
     gas_used = 0
     return_value = b''
@@ -91,9 +89,7 @@ class EventDTO:
 
 
 def unpack_event_log(data: Iterable[str]) -> EventDTO:
-    """
-    Unpack base64-encoded event data.
-    """
+    '''Unpacks base64-encoded event data'''
     address = b''
     count_topics = 0
     t = []
@@ -124,11 +120,7 @@ class LogIxDTO:
 
 
 def process_logs(logs: List[str]) -> List[LogIxDTO]:
-    """
-    Read log messages from a transaction receipt.
-    Parse each line to rebuild sequence of Neon instructions.
-    Extract return and events information from these lines.
-    """
+    '''Reads log messages from a transaction receipt. Parses each line to rebuild sequence of Neon instructions. Extracts return and events information from these lines.'''
     program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
     program_success = re.compile(r'^Program (\w+) success')
     program_failed = re.compile(r'^Program (\w+) failed')
@@ -419,7 +411,7 @@ class NeonTxFullInfo:
 
 
 def get_from_dict(src: Dict, *path) -> Any:
-    """Provides smart getting values from python dictionary"""
+    '''Provides smart getting values from python dictionary'''
     val = src
     for key in path:
         if not isinstance(val, dict):
