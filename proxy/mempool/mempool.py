@@ -110,7 +110,7 @@ class MemPool:
 
     def _on_blocked_accounts_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
         self.warning(f"For tx: {mp_tx_request.log_str} - got blocked account transaction status: {mp_tx_result.data}. "
-                     f"Will be reset back to pending in {self.RESCHEDULE_TIMEOUT_SEC} sec.")
+                     f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
     async def _reschedule_tx(self, tx_request: MPTxRequest):

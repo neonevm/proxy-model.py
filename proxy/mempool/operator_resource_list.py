@@ -61,8 +61,7 @@ class OperatorResourceList:
         return self.get_active_resource()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not isinstance(exc_type, BlockedAccountsError):
-            self.free_resource_info()
+        self.free_resource_info()
 
     @staticmethod
     def _get_current_time() -> int:
