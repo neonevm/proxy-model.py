@@ -4,14 +4,14 @@
 
 import re
 import base64
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
 from logged_groups import logged_group
 from .environment_data import EVM_LOADER_ID
 from .utils import NeonTxResultInfo
 from .data import NeonReturn, NeonEvent, NeonLogIx
 
 
-def decode_neon_tx_return(data: Iterable[str]) -> NeonReturn:
+def decode_neon_tx_return(data: List[str]) -> NeonReturn:
     '''Unpacks base64-encoded return data'''
     exit_status = 0
     gas_used = 0
@@ -28,7 +28,7 @@ def decode_neon_tx_return(data: Iterable[str]) -> NeonReturn:
     return NeonReturn(exit_status, gas_used, return_value)
 
 
-def decode_neon_event(data: Iterable[str]) -> NeonEvent:
+def decode_neon_event(data: List[str]) -> NeonEvent:
     '''Unpacks base64-encoded event data'''
     address = b''
     count_topics = 0
