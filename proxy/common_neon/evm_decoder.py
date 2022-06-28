@@ -11,20 +11,20 @@ from .utils import NeonTxResultInfo
 from .data import NeonReturn, NeonEvent, NeonLogIx
 
 
-def decode_neon_tx_return(data: List[str]) -> NeonReturn:
+@logged_group("neon.Decoder")
+def decode_neon_tx_return(data: List[str], logger) -> NeonReturn:
     '''Unpacks base64-encoded return data'''
-    exit_status = 0
-    gas_used = 0
+    if len(data) < 2:
+        logger.error('Failed to decode return data')
+        return None
+    bs = base64.b64decode(data[0])
+    exit_status = int.from_bytes(bs, "little")
+    exit_status = 0x1 if exit_status < 0xd0 else 0x0
+    bs = base64.b64decode(data[1])
+    gas_used = int.from_bytes(bs, "little")
     return_value = b''
-    for i, s in enumerate(data):
-        bs = base64.b64decode(s)
-        if i == 0:
-            exit_status = int.from_bytes(bs, "little")
-            exit_status = 0x1 if exit_status < 0xd0 else 0x0
-        elif i == 1:
-            gas_used = int.from_bytes(bs, "little")
-        elif i == 2:
-            return_value = bs
+    if len(data) > 2:
+        return_value = base64.b64decode(data[2])
     return NeonReturn(exit_status, gas_used, return_value)
 
 
