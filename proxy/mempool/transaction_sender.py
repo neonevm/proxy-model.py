@@ -284,7 +284,7 @@ class SimpleNeonTxSender(SolTxListSender):
 
 
 @logged_group("neon.MemPool")
-class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
+class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     NAME = 'CallFromRawEthereumTX'
     IS_SIMPLE = True
 
@@ -494,7 +494,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
 
 @logged_group("neon.MemPool")
-class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
+class HolderNeonTxStrategy(IterativeNeonTxStrategy):
     NAME = 'ExecuteTrxFromAccountDataIterativeOrContinue'
 
     def __init__(self, *args, **kwargs):
@@ -536,7 +536,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
 
 
 @logged_group("neon.MemPool")
-class NoChainIdNeonTxStrategy(HolderNeonTxStrategy, abc.ABC):
+class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
     NAME = 'ExecuteTrxFromAccountDataIterativeOrContinueNoChainId'
 
     def __init__(self, *args, **kwargs):
