@@ -54,7 +54,6 @@ def decode_neon_event(data: Iterable[str]) -> NeonEvent:
 def process_logs(logs: List[str], logger) -> List[NeonLogIx]:
     '''Reads log messages from a transaction receipt. Parses each line to rebuild sequence of Neon instructions. Extracts return and events information from these lines.'''
     program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
-    program_success = re.compile(r'^Program (\w+) success')
     program_failed = re.compile(r'^Program (\w+) failed')
     program_data = re.compile(r'^Program data: (.+)$')
     tx_list: List[NeonLogIx] = []
@@ -65,9 +64,6 @@ def process_logs(logs: List[str], logger) -> List[NeonLogIx]:
             program_id = m.group(1)
             if program_id == EVM_LOADER_ID:
                 tx_list.append(NeonLogIx())
-        m = program_success.match(line)
-        if m:
-            program_id = m.group(1) # do nothing
         m = program_failed.match(line)
         if m:
             program_id = m.group(1)
