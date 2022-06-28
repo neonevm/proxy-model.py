@@ -97,18 +97,15 @@ class MemPool:
 
             if mp_tx_result.code == MPResultCode.BlockedAccount:
                 self._on_blocked_accounts_result(mp_request, mp_tx_result)
-            elif mp_tx_result.code == MPResultCode.NoLiquidity:
-                self._executor.on_no_liquidity(resource_id)
-                await self.enqueue_mp_request(mp_request)
             elif mp_tx_result.code == MPResultCode.Unspecified:
-                self._executor.release_resource(resource_id)
                 self._drop_request_away(mp_request)
             elif mp_tx_result.code == MPResultCode.Done:
                 self._on_request_done(mp_request)
-                self._executor.release_resource(resource_id)
+
         except Exception as err:
             self.error(f"Exception during the result processing: {err}", extra=log_ctx)
         finally:
+            self._executor.release_resource(resource_id)
             await self._kick_tx_schedule()
 
     def _on_blocked_accounts_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
