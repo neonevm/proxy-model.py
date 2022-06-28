@@ -5,6 +5,7 @@
 import re
 import base64
 from typing import Any, Dict, Iterable, List
+from logged_groups import logged_group
 from .environment_data import EVM_LOADER_ID
 from .utils import NeonTxResultInfo
 from .data import NeonReturn, NeonEvent, NeonLogIx
@@ -49,7 +50,8 @@ def decode_neon_event(data: Iterable[str]) -> NeonEvent:
     return NeonEvent(address, count_topics, t, log_data)
 
 
-def process_logs(logs: List[str]) -> List[NeonLogIx]:
+@logged_group("neon.Decoder")
+def process_logs(logs: List[str], logger) -> List[NeonLogIx]:
     '''Reads log messages from a transaction receipt. Parses each line to rebuild sequence of Neon instructions. Extracts return and events information from these lines.'''
     program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
     program_success = re.compile(r'^Program (\w+) success')
@@ -81,7 +83,8 @@ def process_logs(logs: List[str]) -> List[NeonLogIx]:
             elif mnemonic.startswith("LOG"):
                 tx_list[-1].neon_events.append(decode_neon_event(data[1:]))
             else:
-                assert False, f'Wrong mnemonic {mnemonic}'
+                logger.error(f'Wrong mnemonic {mnemonic}')
+                raise Exception('Wrong mnemonic %s' % mnemonic)
 
     return tx_list
 
