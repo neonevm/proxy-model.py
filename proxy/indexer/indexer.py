@@ -720,8 +720,6 @@ class OnEventIxDecoder(DummyIxDecoder):
             'data': '0x' + data.hex(),
             'transactionIndex': hex(self.ix.sign.idx),
             'transactionHash': self.ix.neon_obj.neon_tx.sign,
-            # 'blockNumber': block_number, # set when transaction found
-            # 'blockHash': block_hash # set when transaction found
         }
 
         self.ix.neon_obj.neon_res.append_record(rec)

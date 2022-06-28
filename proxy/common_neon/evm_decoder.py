@@ -119,8 +119,6 @@ def decode(info: NeonTxResultInfo, neon_sign: str, tx: Dict[Any, Any], ix_idx=-1
                 'transactionIndex': hex(info.idx),
                 'logIndex': hex(log_idx),
                 'transactionHash': neon_sign,
-                # 'blockNumber': block_number, # set when transaction found
-                # 'blockHash': block_hash # set when transaction found
             }
             info.logs.append(rec)
 

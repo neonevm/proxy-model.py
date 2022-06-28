@@ -122,8 +122,6 @@ class NeonTxResultInfo:
             'transactionIndex': hex(tx_idx),
             'logIndex': hex(log_idx),
             'transactionHash': neon_sign,
-            # 'blockNumber': block_number, # set when transaction found
-            # 'blockHash': block_hash # set when transaction found
         }
         self.logs.append(rec)
 
