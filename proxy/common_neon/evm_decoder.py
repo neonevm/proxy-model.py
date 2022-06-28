@@ -10,7 +10,7 @@ from .utils import NeonTxResultInfo
 from .data import NeonReturn, NeonEvent, NeonLogIx
 
 
-def unpack_return(data: Iterable[str]) -> NeonReturn:
+def decode_neon_tx_return(data: Iterable[str]) -> NeonReturn:
     '''Unpacks base64-encoded return data'''
     exit_status = 0
     gas_used = 0
@@ -77,7 +77,7 @@ def process_logs(logs: List[str]) -> List[NeonLogIx]:
             data = re.findall("\S+", tail)
             mnemonic = base64.b64decode(data[0]).decode('utf-8')
             if mnemonic == "RETURN":
-                tx_list[-1].neon_return = unpack_return(data[1:])
+                tx_list[-1].neon_return = decode_neon_tx_return(data[1:])
             elif mnemonic.startswith("LOG"):
                 tx_list[-1].neon_events.append(decode_neon_event(data[1:]))
             else:
