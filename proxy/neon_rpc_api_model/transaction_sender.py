@@ -26,7 +26,7 @@ from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
 from ..common_neon.environment_data import RETRY_ON_FAIL
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.utils import get_holder_msg
-from ..common_neon.decoder import decode
+from ..common_neon.evm_decoder import decode
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 
 

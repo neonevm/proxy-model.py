@@ -1,5 +1,5 @@
-# File: proxy/common_neon/decoder.py
-# Module: decoder
+# File: proxy/common_neon/evm_decoder.py
+# Module: evm_decoder
 # Description: contains decoders from binary logs
 
 import re
