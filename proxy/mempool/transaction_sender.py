@@ -446,7 +446,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
 
 @logged_group("neon.MemPool")
-class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
+class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     NAME = 'PartialCallOrContinueFromRawEthereumTX'
     IS_SIMPLE = False
 

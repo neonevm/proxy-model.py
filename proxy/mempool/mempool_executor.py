@@ -57,8 +57,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         emulating_result = mp_tx_request.emulating_result
         emv_step_count = self._config.get_evm_count()
         tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=emv_step_count)
-        with OperatorResourceList(tx_sender) as resource:
-            tx_sender.set_resource(resource)
+        with OperatorResourceList(tx_sender):
             tx_sender.execute(neon_tx_cfg, emulating_result, skip_writing_holder)
 
     async def on_data_received(self, data: Any) -> Any:
