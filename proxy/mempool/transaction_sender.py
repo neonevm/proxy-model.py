@@ -61,10 +61,10 @@ class NeonTxSender:
         self._create_account_list = []
         self._eth_meta_dict: Dict[str, AccountMeta] = dict()
 
-    def execute(self, exec_cfg: NeonTxExecCfg, emulating_result: NeonEmulatingResult, skip_writing_holder) -> NeonTxResultInfo:
+    def execute(self, exec_cfg: NeonTxExecCfg, emulating_result: NeonEmulatingResult) -> NeonTxResultInfo:
         self._validate_pend_tx()
         self._prepare_execution(emulating_result)
-        return self._execute(exec_cfg, skip_writing_holder)
+        return self._execute(exec_cfg)
 
     def set_resource(self, resource: Optional[OperatorResourceInfo]):
         self.resource = resource
@@ -82,11 +82,11 @@ class NeonTxSender:
         self._pending_tx = NeonPendingTxInfo(neon_sign=self.neon_sign, operator=operator, slot=0)
         self._pend_tx_into_db(self.solana.get_recent_blockslot())
 
-    def _execute(self, exec_cfg: NeonTxExecCfg, skip_writing_holder):
+    def _execute(self, exec_cfg: NeonTxExecCfg):
 
         for Strategy in [SimpleNeonTxStrategy, IterativeNeonTxStrategy, HolderNeonTxStrategy, NoChainIdNeonTxStrategy]:
             try:
-                strategy = Strategy(exec_cfg, self, skip_writing_holder)
+                strategy = Strategy(exec_cfg, self)
                 if not strategy.is_valid:
                     self.debug(f'Skip strategy {Strategy.NAME}: {strategy.error}')
                     continue
@@ -210,14 +210,13 @@ class NeonTxSender:
 class BaseNeonTxStrategy(metaclass=abc.ABCMeta):
     NAME = 'UNKNOWN STRATEGY'
 
-    def __init__(self, exec_cfg: NeonTxExecCfg, neon_tx_sender: NeonTxSender, skip_writing_holder = False):
+    def __init__(self, exec_cfg: NeonTxExecCfg, neon_tx_sender: NeonTxSender):
         self._neon_tx_exec_cfg = exec_cfg
         self.is_valid = False
         self.error = None
         self.s = neon_tx_sender
         self.steps = self.s.steps
         self.is_valid = self._validate()
-        self._skip_writing_holder = skip_writing_holder
 
     @abc.abstractmethod
     def execute(self) -> (NeonTxResultInfo, [str]):
@@ -512,10 +511,6 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
 
     def _build_preparation_tx_list(self) -> [TransactionWithComputeBudget]:
         tx_list = super()._build_preparation_tx_list()
-
-        if self._skip_writing_holder:
-            return tx_list
-
         return self.write_holder_account(tx_list)
 
     def write_holder_account(self, tx_list):

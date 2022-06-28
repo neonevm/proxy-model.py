@@ -39,10 +39,10 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._solana = SolanaInteractor(self._config.get_solana_url())
         self._db = MemDB(self._solana)
 
-    def execute_neon_tx(self, mp_tx_request: MPTxRequest, skip_writing_holder):
+    def execute_neon_tx(self, mp_tx_request: MPTxRequest):
         with logging_context(req_id=mp_tx_request.req_id, exectr=self._id):
             try:
-                self.execute_neon_tx_impl(mp_tx_request, skip_writing_holder)
+                self.execute_neon_tx_impl(mp_tx_request)
             except BlockedAccountsError as err:
                 self.warning(f"Blocked accounts: {err.blocked_accounts}, send BlockedAccount result back to the MemPool")
                 return MPTxResult(MPResultCode.BlockedAccount, err.blocked_accounts)
@@ -51,17 +51,17 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
-    def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest, skip_writing_holder):
+    def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
         neon_tx = mp_tx_request.neon_tx
         neon_tx_cfg = mp_tx_request.neon_tx_exec_cfg
         emulating_result = mp_tx_request.emulating_result
         emv_step_count = self._config.get_evm_count()
         tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=emv_step_count)
         with OperatorResourceList(tx_sender):
-            tx_sender.execute(neon_tx_cfg, emulating_result, skip_writing_holder)
+            tx_sender.execute(neon_tx_cfg, emulating_result)
 
     async def on_data_received(self, data: Any) -> Any:
-        return self.execute_neon_tx(data, skip_writing_holder=False)
+        return self.execute_neon_tx(data)
 
     def run(self) -> None:
         self._config = Config()
