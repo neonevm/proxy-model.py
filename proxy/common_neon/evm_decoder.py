@@ -5,15 +5,9 @@
 import re
 import base64
 from typing import Any, Dict, Iterable, List
-from dataclasses import dataclass, field
 from .environment_data import EVM_LOADER_ID
 from .utils import NeonTxResultInfo
-
-@dataclass
-class ReturnDTO:
-    exit_status: int = 0
-    gas_used: int = 0
-    return_value: bytes = None
+from .data import ReturnDTO, EventDTO, LogIxDTO
 
 
 def unpack_return(data: Iterable[str]) -> ReturnDTO:
@@ -31,14 +25,6 @@ def unpack_return(data: Iterable[str]) -> ReturnDTO:
         elif i == 2:
             return_value = bs
     return ReturnDTO(exit_status, gas_used, return_value)
-
-
-@dataclass
-class EventDTO:
-    address: bytes = None
-    count_topics: int = 0
-    topics: List[bytes] = None
-    log_data: bytes = None
 
 
 def unpack_event_log(data: Iterable[str]) -> EventDTO:
@@ -61,15 +47,6 @@ def unpack_event_log(data: Iterable[str]) -> EventDTO:
         else:
             log_data = bs
     return EventDTO(address, count_topics, t, log_data)
-
-
-@dataclass
-class LogIxDTO:
-    return_dto: ReturnDTO = None
-    event_dtos: List[EventDTO] = field(default_factory=list)
-
-    def empty(self) -> bool:
-        return self.return_dto is None
 
 
 def process_logs(logs: List[str]) -> List[LogIxDTO]:
