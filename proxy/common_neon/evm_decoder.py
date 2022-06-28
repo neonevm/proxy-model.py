@@ -27,7 +27,7 @@ def unpack_return(data: Iterable[str]) -> ReturnDTO:
     return ReturnDTO(exit_status, gas_used, return_value)
 
 
-def unpack_event_log(data: Iterable[str]) -> EventDTO:
+def decode_neon_event(data: Iterable[str]) -> EventDTO:
     '''Unpacks base64-encoded event data'''
     address = b''
     count_topics = 0
@@ -79,7 +79,7 @@ def process_logs(logs: List[str]) -> List[LogIxDTO]:
             if mnemonic == "RETURN":
                 tx_list[-1].return_dto = unpack_return(data[1:])
             elif mnemonic.startswith("LOG"):
-                tx_list[-1].event_dtos.append(unpack_event_log(data[1:]))
+                tx_list[-1].event_dtos.append(decode_neon_event(data[1:]))
             else:
                 assert False, f'Wrong mnemonic {mnemonic}'
 
