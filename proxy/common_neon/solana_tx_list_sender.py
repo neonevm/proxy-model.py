@@ -59,7 +59,7 @@ class SolTxListSender:
 
     def send(self, signer: SolanaAccount) -> SolTxListSender:
         solana = self._s.solana
-        waiter = self._s.waiter # is that often None?
+        waiter = self._s.waiter
         skip = self._skip_preflight
         commitment = self._preflight_commitment
 
