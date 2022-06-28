@@ -20,14 +20,14 @@ class NeonTxStatData:
 
 
 @dataclass
-class ReturnDTO:
+class NeonReturn:
     exit_status: int = 0
     gas_used: int = 0
     return_value: bytes = None
 
 
 @dataclass
-class EventDTO:
+class NeonEvent:
     address: bytes = None
     count_topics: int = 0
     topics: List[bytes] = None
@@ -35,9 +35,9 @@ class EventDTO:
 
 
 @dataclass
-class LogIxDTO:
-    return_dto: ReturnDTO = None
-    event_dtos: List[EventDTO] = field(default_factory=list)
+class NeonLogIx:
+    neon_return: NeonReturn = None
+    neon_events: List[NeonEvent] = field(default_factory=list)
 
     def empty(self) -> bool:
-        return self.return_dto is None
+        return self.neon_return is None

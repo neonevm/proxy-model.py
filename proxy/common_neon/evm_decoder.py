@@ -7,10 +7,10 @@ import base64
 from typing import Any, Dict, Iterable, List
 from .environment_data import EVM_LOADER_ID
 from .utils import NeonTxResultInfo
-from .data import ReturnDTO, EventDTO, LogIxDTO
+from .data import NeonReturn, NeonEvent, NeonLogIx
 
 
-def unpack_return(data: Iterable[str]) -> ReturnDTO:
+def unpack_return(data: Iterable[str]) -> NeonReturn:
     '''Unpacks base64-encoded return data'''
     exit_status = 0
     gas_used = 0
@@ -24,10 +24,10 @@ def unpack_return(data: Iterable[str]) -> ReturnDTO:
             gas_used = int.from_bytes(bs, "little")
         elif i == 2:
             return_value = bs
-    return ReturnDTO(exit_status, gas_used, return_value)
+    return NeonReturn(exit_status, gas_used, return_value)
 
 
-def decode_neon_event(data: Iterable[str]) -> EventDTO:
+def decode_neon_event(data: Iterable[str]) -> NeonEvent:
     '''Unpacks base64-encoded event data'''
     address = b''
     count_topics = 0
@@ -46,23 +46,23 @@ def decode_neon_event(data: Iterable[str]) -> EventDTO:
                 log_data = bs
         else:
             log_data = bs
-    return EventDTO(address, count_topics, t, log_data)
+    return NeonEvent(address, count_topics, t, log_data)
 
 
-def process_logs(logs: List[str]) -> List[LogIxDTO]:
+def process_logs(logs: List[str]) -> List[NeonLogIx]:
     '''Reads log messages from a transaction receipt. Parses each line to rebuild sequence of Neon instructions. Extracts return and events information from these lines.'''
     program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
     program_success = re.compile(r'^Program (\w+) success')
     program_failed = re.compile(r'^Program (\w+) failed')
     program_data = re.compile(r'^Program data: (.+)$')
-    tx_list: List[LogIxDTO] = []
+    tx_list: List[NeonLogIx] = []
 
     for line in logs:
         m = program_invoke.match(line)
         if m:
             program_id = m.group(1)
             if program_id == EVM_LOADER_ID:
-                tx_list.append(LogIxDTO())
+                tx_list.append(NeonLogIx())
         m = program_success.match(line)
         if m:
             program_id = m.group(1) # do nothing
@@ -77,9 +77,9 @@ def process_logs(logs: List[str]) -> List[LogIxDTO]:
             data = re.findall("\S+", tail)
             mnemonic = base64.b64decode(data[0]).decode('utf-8')
             if mnemonic == "RETURN":
-                tx_list[-1].return_dto = unpack_return(data[1:])
+                tx_list[-1].neon_return = unpack_return(data[1:])
             elif mnemonic.startswith("LOG"):
-                tx_list[-1].event_dtos.append(decode_neon_event(data[1:]))
+                tx_list[-1].neon_events.append(decode_neon_event(data[1:]))
             else:
                 assert False, f'Wrong mnemonic {mnemonic}'
 
@@ -96,18 +96,18 @@ def decode(info: NeonTxResultInfo, neon_sign: str, tx: Dict[Any, Any], ix_idx=-1
     if ix_idx >= 0:
         log_ix = log[ix_idx]
 
-        if log_ix.return_dto is not None:
+        if log_ix.neon_return is not None:
             if info.slot != -1:
                 info.warning(f'NeonTxResultInfo already loaded')
-            info.gas_used = hex(log_ix.return_dto.gas_used)
-            info.status = hex(log_ix.return_dto.exit_status)
-            info.return_value = log_ix.return_dto.return_value.hex()
+            info.gas_used = hex(log_ix.neon_return.gas_used)
+            info.status = hex(log_ix.neon_return.exit_status)
+            info.return_value = log_ix.neon_return.return_value.hex()
             info.sol_sign = tx['transaction']['signatures'][0]
             info.slot = tx['slot']
             info.idx = ix_idx
 
         log_idx = len(info.logs)
-        for e in log_ix.event_dtos:
+        for e in log_ix.neon_events:
             topics = []
             for i in range(e.count_topics):
                 topics.append('0x' + e.topics[i].hex())
