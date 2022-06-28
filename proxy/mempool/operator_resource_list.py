@@ -73,12 +73,13 @@ class OperatorResourceList:
             return
         self.info(f"Init resource list")
 
+        idx = 0
         signer_list: List[SolanaAccount] = get_solana_accounts()
-        for idx, rid in enumerate(range(PERM_ACCOUNT_LIMIT)):
+        for rid in range(PERM_ACCOUNT_LIMIT):
             for signer in signer_list:
-                self.debug(f"Init operator_resource_info for signer: {signer}, idx: {idx}, rid: {rid}")
                 info = OperatorResourceInfo(signer=signer, rid=rid, idx=idx)
                 self._resource_list.append(info)
+                idx += 1
 
         with self._resource_list_len.get_lock():
             if self._resource_list_len.value != 0:
