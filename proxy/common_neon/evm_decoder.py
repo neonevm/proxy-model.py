@@ -72,8 +72,8 @@ def process_logs(logs: List[str], logger) -> List[NeonLogIx]:
             elif mnemonic.startswith("LOG"):
                 tx_list[-1].neon_events.append(decode_neon_event(data[1:]))
             else:
-                logger.error(f'Wrong mnemonic {mnemonic}')
-                raise Exception('Wrong mnemonic %s' % mnemonic)
+                logger.error(f'Failed to decode log instructions, unexpected mnemonic: {mnemonic}, instruction line: {line}')
+                raise Exception('Failed to decode log instructions, unexpected mnemonic: %s, instruction line: %s' % (mnemonic, line))
 
     return tx_list
 
