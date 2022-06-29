@@ -44,7 +44,7 @@ def decode_neon_event(data: List[str], logger) -> NeonEvent:
 
 
 @logged_group("neon.Decoder")
-def process_logs(logs: List[str], logger) -> List[NeonLogIx]:
+def decode_neon_log_instructions(logs: List[str], logger) -> List[NeonLogIx]:
     '''Reads log messages from a transaction receipt. Parses each line to rebuild sequence of Neon instructions. Extracts return and events information from these lines.'''
     program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
     program_failed = re.compile(r'^Program (\w+) failed')
@@ -80,7 +80,7 @@ def process_logs(logs: List[str], logger) -> List[NeonLogIx]:
 
 def decode_neon_tx_result(info: NeonTxResultInfo, neon_sign: str, tx: Dict[Any, Any], ix_idx=-1) -> NeonTxResultInfo:
     '''Extracts Neon transaction result information'''
-    log = process_logs(tx['meta']['logMessages'])
+    log = decode_neon_log_instructions(tx['meta']['logMessages'])
 
     if ix_idx < 0:
         ix_idx = 0
