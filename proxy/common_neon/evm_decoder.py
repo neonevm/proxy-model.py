@@ -52,19 +52,19 @@ def decode_neon_log_instructions(logs: List[str], logger) -> List[NeonLogIx]:
     tx_list: List[NeonLogIx] = []
 
     for line in logs:
-        m = program_invoke.match(line)
-        if m:
-            program_id = m.group(1)
+        match = program_invoke.match(line)
+        if match:
+            program_id = match.group(1)
             if program_id == EVM_LOADER_ID:
                 tx_list.append(NeonLogIx())
-        m = program_failed.match(line)
-        if m:
-            program_id = m.group(1)
+        match = program_failed.match(line)
+        if match:
+            program_id = match.group(1)
             if program_id == EVM_LOADER_ID:
                 tx_list.pop(-1)  # remove failed invocation
-        m = program_data.match(line)
-        if m:
-            tail = m.group(1)
+        match = program_data.match(line)
+        if match:
+            tail = match.group(1)
             data = re.findall("\S+", tail)
             mnemonic = base64.b64decode(data[0]).decode('utf-8')
             if mnemonic == "RETURN":
