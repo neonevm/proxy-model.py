@@ -430,7 +430,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
         # Accounts are blocked, so try to lock them
         if len(self._blocked_account_list):
-            raise BlockedAccountsError(self._blocked_account_list)
+            raise BlockedAccountsError()
 
         # Compute budged is exceeded, so decrease EVM steps per iteration
         if len(self._budget_exceeded_list):

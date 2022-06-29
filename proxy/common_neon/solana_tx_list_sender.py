@@ -15,9 +15,8 @@ from .environment_data import SKIP_PREFLIGHT, RETRY_ON_FAIL
 
 
 class BlockedAccountsError(Exception):
-    def __init__(self, blocked_accounts: List[str]):
+    def __init__(self):
         super().__init__(self)
-        self.blocked_accounts: List[str] = blocked_accounts
 
 
 @logged_group("neon.Proxy")
@@ -123,7 +122,7 @@ class SolTxListSender:
             raise SolTxError(self._budget_exceeded_receipt)
 
         if len(self._blocked_account_list):
-            raise BlockedAccountsError(self._blocked_account_list)
+            raise BlockedAccountsError()
 
         # force changing of recent_blockhash if Solana doesn't accept the current one
         if len(self._bad_block_list):

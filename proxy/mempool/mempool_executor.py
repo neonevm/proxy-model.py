@@ -43,11 +43,11 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         with logging_context(req_id=mp_tx_request.req_id, exectr=self._id):
             try:
                 self.execute_neon_tx_impl(mp_tx_request)
-            except BlockedAccountsError as err:
-                self.warning(f"Blocked accounts: {err.blocked_accounts}, send BlockedAccount result back to the MemPool")
-                return MPTxResult(MPResultCode.BlockedAccount, err.blocked_accounts)
+            except BlockedAccountsError:
+                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got blocked accounts result")
+                return MPTxResult(MPResultCode.BlockedAccount, None)
             except Exception as err:
-                self.error(f"Failed to execute neon_tx: {err}")
+                self.error(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got error: {err}")
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
@@ -55,8 +55,8 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         neon_tx = mp_tx_request.neon_tx
         neon_tx_cfg = mp_tx_request.neon_tx_exec_cfg
         emulating_result = mp_tx_request.emulating_result
-        emv_step_count = self._config.get_evm_count()
-        tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=emv_step_count)
+        evm_steps_limit = self._config.get_evm_steps_limit()
+        tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=evm_steps_limit)
         with OperatorResourceList(tx_sender):
             tx_sender.execute(neon_tx_cfg, emulating_result)
 
