@@ -18,12 +18,17 @@ class SolTxMetaCollector(ABC):
     def __init__(self, solana: SolanaInteractor, commitment: str):
         self._solana = solana
         self._commitment = commitment
+        self._is_finalized = (commitment == FINALIZED)
         self._tx_meta_dict: Dict[str, Dict[str, Any]] = {}
         self._thread_pool = ThreadPool(INDEXER_PARALLEL_REQUEST_COUNT)
 
     @property
     def commitment(self) -> str:
         return self._commitment
+
+    @property
+    def is_finalized(self) -> bool:
+        return self._is_finalized
 
     @property
     @abstractmethod
@@ -91,6 +96,7 @@ class SolTxMetaCollector(ABC):
 class FinalizedSolTxMetaCollector(SolTxMetaCollector):
     def __init__(self, stop_slot: int, solana: SolanaInteractor):
         super().__init__(solana, commitment=FINALIZED)
+        self.debug(f'Finalized commitment: {self._commitment}')
         self._sol_signs_db = SolSignsDB()
         self._prev_start_slot = 0
         self._stop_slot = stop_slot
@@ -162,6 +168,7 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
 class ConfirmedSolTxMetaCollector(SolTxMetaCollector):
     def __init__(self, solana: SolanaInteractor):
         super().__init__(solana, commitment=CONFIRMED)
+        self.debug(f'Confirmed commitment: {self._commitment}')
         self._prev_start_slot = 0
         self._last_slot = 0
 

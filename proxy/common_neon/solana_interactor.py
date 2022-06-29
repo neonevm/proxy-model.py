@@ -19,8 +19,7 @@ from typing import Dict, Union, Any, List, NamedTuple, Optional, Tuple, cast
 from base58 import b58decode, b58encode
 
 from .utils import SolanaBlockInfo
-from .environment_data import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, RETRY_ON_FAIL, FUZZING_BLOCKHASH, \
-                              CONFIRM_TIMEOUT, FINALIZED
+from .environment_data import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, RETRY_ON_FAIL, FUZZING_BLOCKHASH, CONFIRM_TIMEOUT
 
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
 from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG
@@ -460,9 +459,10 @@ class SolanaInteractor:
 
         return SolanaBlockInfo(
             slot=slot,
-            is_finalized=(commitment == FINALIZED),
+            is_finalized=False,
             hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
-            time=net_block['blockTime']
+            time=net_block['blockTime'],
+            parent_block_slot=net_block['parentSlot']
         )
 
     def get_block_info_list(self, block_slot_list: [int], commitment='confirmed') -> List[SolanaBlockInfo]:
@@ -486,15 +486,16 @@ class SolanaInteractor:
             if (not response) or ('result' not in response):
                 block = SolanaBlockInfo(
                     slot=slot,
-                    is_finalized=(commitment == FINALIZED),
+                    is_finalized=False,
                 )
             else:
                 net_block = response['result']
                 block = SolanaBlockInfo(
                     slot=slot,
-                    is_finalized=(commitment == FINALIZED),
+                    is_finalized=False,
                     hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
-                    time=net_block['blockTime']
+                    time=net_block['blockTime'],
+                    parent_block_slot=net_block['parentSlot']
                 )
             block_list.append(block)
         return block_list

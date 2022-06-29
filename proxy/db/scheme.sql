@@ -29,7 +29,7 @@
         block_slot BIGINT,
         block_hash CHAR(66),
         block_time BIGINT,
-        parent_block_hash CHAR(66),
+        parent_block_slot BIGINT,
         is_finalized BOOL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS solana_blocks_slot ON solana_blocks(block_slot);
