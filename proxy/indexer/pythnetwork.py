@@ -29,7 +29,7 @@ def read_dict(data):
         key, value, pos = read_keyvalue(pos, data)
         if len(key) == 0 or len(value) == 0:
             break
-        result[key.decode_neon_tx_result('utf-8')] = value.decode_neon_tx_result('utf-8')
+        result[key.decode('utf-8')] = value.decode('utf-8')
     return result
 
 
