@@ -17,7 +17,7 @@ from ..indexer.canceller import Canceller
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_receipt_parser import SolReceiptParser
-from ..common_neon.evm_decoder import decode
+from ..common_neon.evm_decoder import decode_neon_tx_result
 from ..common_neon.environment_data import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
 
@@ -667,7 +667,7 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         tx = NeonTxResult('')
         tx.neon_tx = neon_tx
 
-        if decode(tx.neon_res, tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
+        if decode_neon_tx_result(tx.neon_res, tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
@@ -756,7 +756,7 @@ class PartialCallIxDecoder(DummyIxDecoder):
         tx = self._getadd_tx(storage_account, blocked_accounts, neon_tx)
         self.ix.sign.set_steps(step_count)
 
-        if decode(tx.neon_res, tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
+        if decode_neon_tx_result(tx.neon_res, tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
@@ -798,7 +798,7 @@ class ContinueIxDecoder(DummyIxDecoder):
 
         self.ix.sign.set_steps(step_count)
 
-        if decode(tx.neon_res, tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
+        if decode_neon_tx_result(tx.neon_res, tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)
@@ -900,7 +900,7 @@ class ExecuteOrContinueIxParser(DummyIxDecoder):
 
         self.ix.sign.set_steps(step_count)
 
-        if decode(tx.neon_res, tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
+        if decode_neon_tx_result(tx.neon_res, tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx).is_valid():
             return self._decoding_done(tx, 'found Neon results')
 
         return self._decode_tx(tx)

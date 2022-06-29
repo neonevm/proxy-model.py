@@ -78,7 +78,7 @@ def process_logs(logs: List[str], logger) -> List[NeonLogIx]:
     return tx_list
 
 
-def decode(info: NeonTxResultInfo, neon_sign: str, tx: Dict[Any, Any], ix_idx=-1) -> NeonTxResultInfo:
+def decode_neon_tx_result(info: NeonTxResultInfo, neon_sign: str, tx: Dict[Any, Any], ix_idx=-1) -> NeonTxResultInfo:
     '''Extracts Neon transaction result information'''
     log = process_logs(tx['meta']['logMessages'])
 
