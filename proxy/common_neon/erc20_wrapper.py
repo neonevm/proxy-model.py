@@ -89,7 +89,7 @@ class ERC20Wrapper:
         with open('/opt/contracts/erc20_for_spl.sol', 'r') as file:
             source = file.read()
         compiled_wrapper = compile_source(source)
-        wrapper_interface = compiled_wrapper["<stdin>:NeonERC20Wrapper"]
+        wrapper_interface = compiled_wrapper["<stdin>:ERC20ForSpl"]
         self.wrapper = wrapper_interface
 
         erc20 = self.proxy.eth.contract(abi=self.wrapper['abi'], bytecode=wrapper_interface['bin'])
