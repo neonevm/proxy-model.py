@@ -6,12 +6,12 @@ from logged_groups import logged_group
 
 from .environment_data import EVM_LOADER_ID
 from .utils import NeonTxResultInfo
-from .data import NeonReturn, NeonEvent, NeonLogIx
+from .data import NeonTxReturn, NeonEvent, NeonLogIx
 
 
 @logged_group("neon.Decoder")
-def decode_neon_tx_return(data: List[str], logger) -> NeonReturn:
-    '''Unpacks base64-encoded return data'''
+def decode_neon_tx_return(data: List[str], logger) -> NeonTxReturn:
+    """Unpacks base64-encoded return data"""
     if len(data) < 2:
         logger.error('Failed to decode return data')
         return None
@@ -23,12 +23,12 @@ def decode_neon_tx_return(data: List[str], logger) -> NeonReturn:
     return_value = b''
     if len(data) > 2:
         return_value = base64.b64decode(data[2])
-    return NeonReturn(exit_status, gas_used, return_value)
+    return NeonTxReturn(exit_status, gas_used, return_value)
 
 
 @logged_group("neon.Decoder")
 def decode_neon_event(data: List[str], *, logger) -> NeonEvent:
-    '''Unpacks base64-encoded event data'''
+    """Unpacks base64-encoded event data"""
     if len(data) < 3:
         logger.error('Failed to decode events data: less then 3 elements in {data}')
         return None
@@ -49,7 +49,7 @@ def decode_neon_event(data: List[str], *, logger) -> NeonEvent:
 
 @logged_group("neon.Decoder")
 def decode_neon_log_instructions(logs: List[str], logger) -> List[NeonLogIx]:
-    '''Reads log messages from a transaction receipt. Parses each line to rebuild sequence of Neon instructions. Extracts return and events information from these lines.'''
+    """Reads log messages from a transaction receipt. Parses each line to rebuild sequence of Neon instructions. Extracts return and events information from these lines."""
     program_invoke = re.compile(r'^Program (\w+) invoke \[(\d+)\]')
     program_failed = re.compile(r'^Program (\w+) failed')
     program_data = re.compile(r'^Program data: (.+)$')
@@ -83,7 +83,7 @@ def decode_neon_log_instructions(logs: List[str], logger) -> List[NeonLogIx]:
 
 
 def decode_neon_tx_result(info: NeonTxResultInfo, neon_sign: str, tx: Dict[Any, Any], ix_idx=-1) -> NeonTxResultInfo:
-    '''Extracts Neon transaction result information'''
+    """Extracts Neon transaction result information"""
     log = decode_neon_log_instructions(tx['meta']['logMessages'])
 
     if ix_idx < 0:

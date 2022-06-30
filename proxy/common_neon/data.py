@@ -15,7 +15,7 @@ class NeonTxStatData:
 
 
 @dataclass
-class NeonReturn:
+class NeonTxReturn:
     exit_status: int = 0
     gas_used: int = 0
     return_value: bytes = b''
@@ -31,5 +31,5 @@ class NeonEvent:
 
 @dataclass
 class NeonLogIx:
-    neon_return: NeonReturn = field(default_factory=NeonReturn)
+    neon_return: NeonTxReturn = field(default_factory=NeonTxReturn)
     neon_events: List[NeonEvent] = field(default_factory=list)
