@@ -25,7 +25,7 @@ class NeonTxReturn:
 class NeonEvent:
     address: bytes = b''
     count_topics: int = 0
-    topics: List[bytes] = []
+    topics: List[bytes] = field(default_factory=list)
     log_data: bytes = b''
 
 
