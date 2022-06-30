@@ -36,8 +36,5 @@ class NeonEvent:
 
 @dataclass
 class NeonLogIx:
-    neon_return: NeonReturn = None
+    neon_return: NeonReturn = field(default_factory=NeonReturn)
     neon_events: List[NeonEvent] = field(default_factory=list)
-
-    def empty(self) -> bool:
-        return self.neon_return is None
