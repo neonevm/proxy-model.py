@@ -788,10 +788,10 @@ class Indexer(IndexerBase):
     def process_functions(self):
         start_time = time.time()
 
-        start_block_slot = self._finalized_sol_tx_collector.last_block_slot
+        start_block_slot = self._finalized_sol_tx_collector.last_block_slot + 1
         finalized_neon_block = self._neon_block_dict.finalized_neon_block
         if finalized_neon_block is not None:
-            start_block_slot = finalized_neon_block.block_slot
+            start_block_slot = finalized_neon_block.block_slot + 1
 
         sol_block_range = SolBlockRange(self._finalized_sol_tx_collector, start_block_slot, finalized_neon_block)
         self._run_sol_tx_collector(sol_block_range)
@@ -806,11 +806,11 @@ class Indexer(IndexerBase):
             sol_block_range = sol_block_range.clone(self._confirmed_sol_tx_collector)
             self._run_sol_tx_collector(sol_block_range)
 
-        sol_tx_meta = SolTxMetaInfo(sol_block_range.stop_block_slot, '-END-OF-BLOCK-RANGE-', {})
-        self._complete_neon_block(sol_block_range, sol_tx_meta)
-
-        if has_confirmed_blocks and sol_block_range.has_neon_block():
-            self._cancel_old_neon_txs(sol_block_range.neon_block)
+        if sol_block_range.neon_block_cnt > 0:
+            sol_tx_meta = SolTxMetaInfo(sol_block_range.stop_block_slot, '-END-OF-BLOCK-RANGE-', {})
+            self._complete_neon_block(sol_block_range, sol_tx_meta)
+            if has_confirmed_blocks:
+                self._cancel_old_neon_txs(sol_block_range.neon_block)
 
         self._print_stat(start_time, start_block_slot, sol_block_range.stop_block_slot)
 

@@ -28,7 +28,7 @@ class NeonTxsDB(BaseDB):
             elif column == 'logs':
                 neon_tx_res.logs = self._decode_list(value_list[idx])
             elif column == 'block_slot':
-                neon_tx.slot = value_list[idx]
+                neon_tx_res.slot = value_list[idx]
             elif hasattr(neon_tx, column):
                 setattr(neon_tx, column, value_list[idx])
             elif hasattr(neon_tx_res, column):

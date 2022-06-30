@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, cast
+from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, NamedTuple, cast
 
 import re
 import base58
@@ -10,6 +10,11 @@ from logged_groups import logged_group
 
 from ..common_neon.utils import str_fmt_object
 from ..common_neon.environment_data import EVM_LOADER_ID
+
+
+class SolTxSignSlotInfo(NamedTuple):
+    sol_sign: str
+    block_slot: int
 
 
 class SolTxMetaInfo:
@@ -26,9 +31,8 @@ class SolTxMetaInfo:
         return ':'.join([str(s) for s in self.ident])
 
     @staticmethod
-    def from_response(sol_sign: str, response: Dict[str, Any]) -> SolTxMetaInfo:
-        block_slot = response['slot']
-        return SolTxMetaInfo(block_slot=block_slot, sol_sign=sol_sign, tx=response)
+    def from_response(sign_slot: SolTxSignSlotInfo, response: Dict[str, Any]) -> SolTxMetaInfo:
+        return SolTxMetaInfo(block_slot=sign_slot.block_slot, sol_sign=sign_slot.sol_sign, tx=response)
 
     @property
     def sol_sign(self) -> str:

@@ -81,11 +81,11 @@ class BaseDB:
         self._conn.close()
 
     @staticmethod
-    def _decode_list(v: Optional[str]) -> List[Any]:
+    def _decode_list(v: Optional[bytes]) -> List[Any]:
         return [] if not v else decode(v)
 
     @staticmethod
-    def _encode_list(v: List[Any]) -> str:
+    def _encode_list(v: List[Any]) -> bytes:
         return None if (not v) or (len(v) == 0) else encode(v)
 
     def _insert_batch(self, cursor: BaseDB.Cursor, value_list_list: List[List[Any]]) -> None:
