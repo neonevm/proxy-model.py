@@ -43,7 +43,10 @@ def decode_neon_event(data: List[str], logger) -> NeonEvent:
     for i in range(count_topics):
         t.append(base64.b64decode(data[2 + i]))
     logger.debug(f'data: {data}')
-    log_data = base64.b64decode(data[2 + count_topics])
+    log_data = b''
+    log_data_index = 2 + count_topics
+    if log_data_index < len(data)
+        log_data = base64.b64decode(data[log_data_index])
     return NeonEvent(address, count_topics, t, log_data)
 
 
