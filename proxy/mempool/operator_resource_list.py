@@ -121,7 +121,8 @@ class OperatorResourceList:
 
     def get_active_resource(self) -> OperatorResourceInfo:
         assert self._resource is None, "Reentering the active resource"
-        
+
+        self._init_resource_list()
         check_time = self._recheck_bad_resource_list()
 
         timeout = 0.01

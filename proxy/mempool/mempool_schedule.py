@@ -88,12 +88,13 @@ class MPSenderTxPool:
         self.debug(f"Remove mp_tx_request: {mp_tx_request.log_str}")
         nonce = mp_tx_request.nonce
         if self._processing_tx is not None and self._processing_tx.nonce == nonce:
+            self.debug(f"Reset processing_tx: {self._processing_tx.log_str}")
             self._processing_tx = None
         index = bisect.bisect_left(self._txs, mp_tx_request)
         if self._txs[index].nonce != nonce:
             self.error(f"Failed to drop reqeust away for: {self.sender_address}, not request with nonce: {nonce}")
             return
-        self._txs = self._txs[index:]
+        self._txs = [] if index == 0 else self._txs[index - 1:]
         self.debug(f"Removed mp_tx_request from sender: {self.sender_address} - {mp_tx_request.log_str}")
 
     def reschedule_tx(self, nonce):
