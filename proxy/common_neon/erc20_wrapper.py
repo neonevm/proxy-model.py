@@ -19,31 +19,34 @@ install_solc(version='0.7.6')
 from solcx import compile_source
 
 # Standard interface of ERC20 contract to generate ABI for wrapper
-ERC20_INTERFACE_SOURCE = '''
+ERC20FORSPL_INTERFACE_SOURCE = '''
 pragma solidity >=0.7.0;
 
-interface IERC20 {
-    function decimals() external view returns (uint8);
-    function totalSupply() external view returns (uint256);
-    function balanceOf(address who) external view returns (uint256);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function transfer(address to, uint256 value) external returns (bool);
-    function approve(address spender, uint256 value) external returns (bool);
-    function transferFrom(address from, address to, uint256 value) external returns (bool);
+contract IERC20ForSpl {
 
-    function mint(address to, uint256 amount) external;
-    function burn(uint256 amount) external returns (bool);
-    function burnFrom(address from, uint256 amount) external returns (bool);
+    event Transfer(address indexed from, address indexed to, uint256 amount);
+    event Approval(address indexed owner, address indexed spender, uint256 amount);
 
+    event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 amount);
+    event TransferSolana(address indexed from, bytes32 indexed to, uint64 amount);
+
+    function name() public view returns (string memory);
+    function symbol() public view returns (string memory);
+    function tokenMint() public view returns (bytes32);
+    function decimals() public view returns (uint8);
+    function totalSupply() public view returns (uint256);
+    function balanceOf(address who) public view returns (uint256);
+    function allowance(address owner, address spender) public view returns (uint256);
+    function approve(address spender, uint256 amount) public returns (bool);
+    function transfer(address to, uint256 amount) public returns (bool);
+    function transferFrom(address from, address to, uint256 amount) public returns (bool);
+    function burn(uint256 amount) public returns (bool);
+    function burnFrom(address from, uint256 amount) public returns (bool);
+    function approveSolana(bytes32 spender, uint64 amount) public returns (bool);
+    function transferSolana(bytes32 to, uint64 amount) public returns (bool);
     function claim(bytes32 from, uint64 amount) external returns (bool);
-
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-
-
-    function approveSolana(bytes32 spender, uint64 value) external returns (bool);
-    event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 value);
 }
+
 '''
 
 @logged_group("neon.Proxy")
@@ -79,11 +82,11 @@ class ERC20Wrapper:
         return PublicKey.find_program_address([b"\1", neon_account_addressbytes], self.evm_loader_id)[0]
 
     def deploy_wrapper(self):
-        compiled_interface = compile_source(ERC20_INTERFACE_SOURCE)
+        compiled_interface = compile_source(ERC20FORSPL_INTERFACE_SOURCE)
         interface_id, interface = compiled_interface.popitem()
         self.interface = interface
 
-        with open('/opt/contracts/erc20_wrapper.sol', 'r') as file:
+        with open('/opt/contracts/erc20_for_spl.sol', 'r') as file:
             source = file.read()
         compiled_wrapper = compile_source(source)
         wrapper_interface = compiled_wrapper["<stdin>:NeonERC20Wrapper"]
