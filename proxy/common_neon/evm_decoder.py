@@ -29,7 +29,7 @@ def decode_neon_tx_return(data: List[str], logger) -> NeonReturn:
 
 
 @logged_group("neon.Decoder")
-def decode_neon_event(data: List[str], logger) -> NeonEvent:
+def decode_neon_event(data: List[str], *, logger) -> NeonEvent:
     '''Unpacks base64-encoded event data'''
     if len(data) < 3:
         logger.error('Failed to decode events data: less then 3 elements in {data}')
