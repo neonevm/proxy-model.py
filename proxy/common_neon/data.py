@@ -1,8 +1,3 @@
-# File: proxy/common_neon/data.py
-# Module: data
-# Description: contains simple structs.
-
-
 from dataclasses import dataclass, field
 from typing import List
 
