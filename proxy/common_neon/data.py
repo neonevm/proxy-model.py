@@ -23,15 +23,15 @@ class NeonTxStatData:
 class NeonReturn:
     exit_status: int = 0
     gas_used: int = 0
-    return_value: bytes = None
+    return_value: bytes = b''
 
 
 @dataclass
 class NeonEvent:
-    address: bytes = None
+    address: bytes = b''
     count_topics: int = 0
-    topics: List[bytes] = None
-    log_data: bytes = None
+    topics: List[bytes] = []
+    log_data: bytes = b''
 
 
 @dataclass
