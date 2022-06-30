@@ -110,7 +110,7 @@
     );
     CREATE INDEX IF NOT EXISTS neon_transactions_sol_sign_block ON neon_transactions(sol_sign, block_slot);
     CREATE UNIQUE INDEX IF NOT EXISTS neon_transactions_neon_sign_block ON neon_transactions(neon_sign, block_slot);
-    CREATE INDEX IF NOT EXISTS neon_transactions_block_slot ON neon_transactions(block_slot);
+    CREATE INDEX IF NOT EXISTS neon_transactions_block_slot_tx_idx ON neon_transactions(block_slot, tx_idx);
 
     CREATE TABLE IF NOT EXISTS solana_transaction_costs (
         sol_sign CHAR(88),

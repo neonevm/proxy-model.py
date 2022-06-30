@@ -597,8 +597,8 @@ class Indexer(IndexerBase):
     def __init__(self, solana_url, indexer_status: IIndexerStatus):
         solana = SolanaInteractor(solana_url)
         self._db = IndexerDB()
-        last_known_slot = self._db.get_min_receipt_slot()
-        super().__init__(solana, last_known_slot)
+        last_known_block_slot = self._db.get_min_receipt_block_slot()
+        super().__init__(solana, last_known_block_slot)
         self._canceller = Canceller(solana)
         self._blocked_storage_dict: Dict[str, Tuple[int, List[Tuple[bool, str]]]] = {}
         self._counted_logger = MetricsToLogger()

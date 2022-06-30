@@ -5,7 +5,7 @@ import math
 import time
 
 from logged_groups import logged_group
-from typing import Dict, Optional, Any
+from typing import Dict, Optional
 
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
@@ -20,19 +20,20 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.eth_proto import Trx as EthTx
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
+from ..common_neon.utils import NeonTxResultInfo
 from ..common_neon.errors import EthereumError
 from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
 from ..common_neon.environment_data import RETRY_ON_FAIL
 from ..common_neon.elf_params import ElfParams
-from ..memdb.memdb import MemDB, NeonPendingTxInfo
+from ..memdb.pending_tx_db import NeonPendingTxInfo, MemPendingTxsDB
 from ..common_neon.utils import get_holder_msg
+from ..indexer.indexer_db import IndexerDB
 
 
 @logged_group("neon.Proxy")
 class NeonTxSender:
-    def __init__(self, db: MemDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
-        self._db = db
+    def __init__(self, db: IndexerDB, solana: SolanaInteractor, eth_tx: EthTx, steps: int):
+        self._db = MemPendingTxsDB(db)
         self.eth_tx = eth_tx
         self.neon_sign = '0x' + eth_tx.hash_signed().hex()
         self.steps = steps
@@ -92,8 +93,7 @@ class NeonTxSender:
                     continue
 
                 self.debug(f'Use strategy {Strategy.NAME}')
-                neon_res, sign_list = strategy.execute()
-                self._submit_tx_into_db(neon_res, sign_list)
+                neon_res, _ = strategy.execute()
                 return neon_res
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
@@ -117,11 +117,6 @@ class NeonTxSender:
             self.debug(f'Update pending transaction: diff {slot - self._pending_tx.slot}, set {slot}')
             self._pending_tx.slot = slot
             self._db.pend_transaction(self._pending_tx)
-
-    def _submit_tx_into_db(self, neon_res: NeonTxResultInfo, sign_list: [str]):
-        neon_tx = NeonTxInfo()
-        neon_tx.init_from_eth_tx(self.eth_tx)
-        self._db.submit_transaction(neon_tx, neon_res, sign_list)
 
     def _prepare_execution(self, emulating_result: NeonEmulatingResult):
         # Parse information from the emulator output
