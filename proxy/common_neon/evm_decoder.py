@@ -31,14 +31,18 @@ def decode_neon_tx_return(data: List[str], logger) -> NeonReturn:
 @logged_group("neon.Decoder")
 def decode_neon_event(data: List[str], logger) -> NeonEvent:
     '''Unpacks base64-encoded event data'''
+    logger.debug(f'len(data): {len(data)}')
     if len(data) < 3:
         logger.error('Failed to decode events data')
         return None
+    logger.debug(f'address: {data[0]}')
     address = base64.b64decode(data[0])
     count_topics = int.from_bytes(base64.b64decode(data[1]), 'little')
+    logger.debug(f'count_topics: {count_topics}')
     t = []
     for i in range(count_topics):
         t.append(base64.b64decode(data[2 + i]))
+    logger.debug(f'data: {data}')
     log_data = base64.b64decode(data[2 + count_topics])
     return NeonEvent(address, count_topics, t, log_data)
 
