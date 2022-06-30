@@ -1,10 +1,7 @@
-from typing import Optional, NamedTuple
+from typing import Optional
+
+from ..common_neon.solana_neon_tx_receipt import SolTxSignSlotInfo
 from ..indexer.base_db import BaseDB
-
-
-class SolTxSignSlotInfo(NamedTuple):
-    sol_sign: str
-    block_slot: int
 
 
 class SolSignsDB(BaseDB):

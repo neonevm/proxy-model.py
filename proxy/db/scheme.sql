@@ -49,7 +49,7 @@
         topic CHAR(66),
         log_data TEXT,
 
-        topic_list TEXT
+        topic_list BYTEA
     );
     CREATE UNIQUE INDEX IF NOT EXISTS neon_transaction_logs_block_tx_log ON neon_transaction_logs(block_slot, tx_hash, tx_log_idx);
     CREATE INDEX IF NOT EXISTS neon_transaction_logs_block_hash ON neon_transaction_logs(block_hash);
