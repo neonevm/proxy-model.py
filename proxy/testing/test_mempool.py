@@ -337,3 +337,8 @@ class TestMPSenderTxPool(unittest.TestCase):
             self.assertEqual(1, len(logs.records))
             self.assertEqual(f"Failed to drop last request away: {tx.log_str} - processing", logs.records[0].msg)
 
+    def test_drop_request_away(self):
+       tx = self._pool.acquire_tx()
+       self.assertTrue(self._pool.is_processing())
+       self._pool.drop_request_away(tx)
+       self.assertEqual(self._pool.len(), 0)
