@@ -75,9 +75,9 @@ class Test_eth_event_log_limit(unittest.TestCase):
         )
 
     def commit_transactions(self):
-        #self.commit_event_trx(self, 1000, 41)
-        #self.commit_event_trx(self, 2000, 42)
-        self.commit_event_trx(self, 3000, 43)
+        self.commit_event_trx(self, 1000, 41)
+        self.commit_event_trx(self, 2000, 42)
+        self.commit_event_trx(self, 2000, 43)
         pass
 
     def commit_event_trx(self, event_size: int, char: int) -> None:
@@ -98,11 +98,11 @@ class Test_eth_event_log_limit(unittest.TestCase):
     def test_get_logs_by_blockHash(self):
         print("\ntest_get_logs_by_blockHash")
         receipts = proxy.eth.get_logs({'blockHash': self.block_hashes[0]})
-       # print('receipts[0]: ', receipts)
-       # receipts = proxy.eth.get_logs({'blockHash': self.block_hashes[1]})
-       # print('receipts[1]: ', receipts)
-       # receipts = proxy.eth.get_logs({'blockHash': self.block_hashes[2]})
-       # print('receipts[2]: ', receipts)
+        print('receipts[0]: ', receipts)
+        receipts = proxy.eth.get_logs({'blockHash': self.block_hashes[1]})
+        print('receipts[1]: ', receipts)
+        receipts = proxy.eth.get_logs({'blockHash': self.block_hashes[2]})
+        print('receipts[2]: ', receipts)
         pass
 
 if __name__ == '__main__':
