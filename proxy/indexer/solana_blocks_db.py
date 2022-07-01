@@ -1,4 +1,4 @@
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Iterator
 
 from ..indexer.base_db import BaseDB, DBQuery
 from ..common_neon.utils import SolanaBlockInfo
@@ -30,25 +30,21 @@ class SolBlocksDB(BaseDB):
         q = DBQuery(key_list=[('block_hash', block_hash)], order_list=[])
         return self._block_from_value(None, self._fetchone(q))
 
-    def set_block(self, cursor: BaseDB.Cursor, block: SolanaBlockInfo, is_finalized: bool) -> None:
-        cursor.execute(
-            f'''
-              INSERT INTO {self._table_name}
-                ({','.join(self._column_list)})
-              VALUES
-                ({', '.join(['%s' for _ in range(len(self._column_list))])})
-              ON CONFLICT DO NOTHING;
-            ''',
-            (block.slot, block.hash, block.time, block.parent_block_slot, is_finalized)
-        )
+    def set_block_list(self, cursor: BaseDB.Cursor, iter_block: Iterator[SolanaBlockInfo], is_finalized: bool) -> None:
+        value_list_list: List[List[Any]] = []
+        for block in iter_block:
+            value_list_list.append([block.slot, block.hash, block.time, block.parent_block_slot, is_finalized])
 
-    def finalize_block(self, cursor: BaseDB.Cursor, block: SolanaBlockInfo, is_finalized: bool):
+        self._insert_batch(cursor, value_list_list)
+
+    def finalize_block_list(self, cursor: BaseDB.Cursor, iter_block: Iterator[SolanaBlockInfo]):
+        value_list = [block.slot for block in iter_block]
         cursor.execute(
             f'''
                 UPDATE {self._table_name} SET
-                   is_finalized = %s
+                   is_finalized = True
                 WHERE
-                   block_slot = %s
+                   block_slot IN ({','.join(["%s" for _ in value_list])})
             ''',
-            (is_finalized, block.slot)
+            value_list
         )

@@ -9,3 +9,4 @@ class NeonTxStatData:
         self.sol_spent = sol_spent
         self.neon_step_cnt = 0
         self.bpf_cycle_cnt = 0
+        self.sol_tx_cnt = 0

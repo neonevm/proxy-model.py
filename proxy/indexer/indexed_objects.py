@@ -4,7 +4,7 @@ import sha3
 import copy
 
 from enum import Enum
-from typing import Iterator, List, Optional, Dict, NamedTuple, Union, Set, cast
+from typing import Iterator, List, Optional, Dict, NamedTuple, Union, Set
 from logged_groups import logged_group
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolanaBlockInfo, str_fmt_object
@@ -31,6 +31,10 @@ class BaseNeonIndexedObjInfo:
         for tx_cost in self._sol_tx_cost_set:
             sol_spent += tx_cost.sol_spent
         return sol_spent
+
+    @property
+    def sol_tx_cnt(self) -> int:
+        return len(self._sol_tx_cost_set)
 
     def add_sol_neon_ix(self, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
         self._block_slot = max(self._block_slot, sol_neon_ix.block_slot)
@@ -204,9 +208,9 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
 class NeonIndexedBlockInfo:
     _SolIDInfo = Union[SolNeonIxReceiptInfo, SolTxMetaInfo]
 
-    def __init__(self, sol_block: SolanaBlockInfo, prev_block_slot: Optional[int] = None):
-        self._sol_block = sol_block
-        self._prev_block_slot = prev_block_slot
+    def __init__(self, history_block_list: List[SolanaBlockInfo]):
+        self._sol_block = history_block_list[-1]
+        self._history_block_list = history_block_list
         self._is_completed = False
 
         self._neon_holder_dict: Dict[str, NeonIndexedHolderInfo] = {}
@@ -222,31 +226,19 @@ class NeonIndexedBlockInfo:
     def __str__(self) -> str:
         return str_fmt_object(self)
 
-    def clone(self, sol_block: SolanaBlockInfo) -> NeonIndexedBlockInfo:
+    def clone(self, history_block_list: List[SolanaBlockInfo]) -> NeonIndexedBlockInfo:
+        sol_block = history_block_list[-1]
         assert sol_block.slot > self.block_slot
 
-        new_block = NeonIndexedBlockInfo(sol_block, self.block_slot)
-        new_block._prev_block_slot = self.block_slot
+        new_block = NeonIndexedBlockInfo(history_block_list)
         new_block._neon_holder_dict = copy.deepcopy(self._neon_holder_dict)
         new_block._neon_tx_dict = copy.deepcopy(self._neon_tx_dict)
         new_block._sol_neon_ix_dict = copy.deepcopy(self._sol_neon_ix_dict)
         return new_block
 
     @property
-    def sol_block(self) -> SolanaBlockInfo:
-        return self._sol_block
-
-    @property
     def block_slot(self) -> int:
         return self._sol_block.slot
-
-    def has_prev_block_slot(self) -> bool:
-        return self._prev_block_slot is not None
-
-    @property
-    def prev_block_slot(self) -> int:
-        assert self.has_prev_block_slot()
-        return cast(int, self._prev_block_slot)
 
     @property
     def block_hash(self) -> str:
@@ -261,7 +253,8 @@ class NeonIndexedBlockInfo:
         return self._is_completed
 
     def set_finalized(self, value: bool) -> None:
-        self._sol_block.is_finalized = value
+        for block in self._history_block_list:
+            block.is_finalized = value
 
     def _add_sol_neon_ix(self, indexed_obj: BaseNeonIndexedObjInfo, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
         d = self._sol_neon_ix_dict
@@ -364,6 +357,9 @@ class NeonIndexedBlockInfo:
 
     def add_neon_account(self, account: NeonAccountInfo, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
         pass
+
+    def iter_history_block(self) -> Iterator[SolanaBlockInfo]:
+        return iter(self._history_block_list)
 
     def iter_neon_tx(self) -> Iterator[NeonIndexedTxInfo]:
         return iter(self._neon_tx_dict.values())
@@ -496,11 +492,9 @@ class NeonIndexedBlockDict:
                        sol_tx_meta: SolTxMetaInfo) -> None:
         old_neon_block = self._neon_block_dict.get(neon_block.block_slot, None)
         if (old_neon_block is not None) and (old_neon_block.is_finalized == is_finalized):
-            self.debug(f'{sol_tx_meta} - ignore the parsed block {neon_block.block_slot, is_finalized}')
             return
-        else:
-            self._stat.add_stat(NeonIndexedBlockDict.Stat.from_block(neon_block))
 
+        self._stat.add_stat(NeonIndexedBlockDict.Stat.from_block(neon_block))
         neon_block.set_finalized(is_finalized)
         self._neon_block_dict[neon_block.block_slot] = neon_block
 
