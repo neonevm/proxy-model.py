@@ -19,6 +19,7 @@ from web3 import Web3
 import os
 import json
 import unittest
+import spl.token.instructions as SplTokenInstrutions
 
 from proxy.testing.testing_helpers import request_airdrop
 
@@ -109,30 +110,40 @@ class TestAirdropperIntegration(TestCase):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
         from_spl_token_acc = self.create_token_account(from_owner.public_key(), mint_amount)
-        to_neon_acc = self.create_eth_account().address
+        to_neon_acc = self.create_eth_account()
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
-        self.assertEqual(self.wrapper.get_balance(to_neon_acc), 0)
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), 0)
 
         TRANSFER_AMOUNT = 123456
         trx = TransactionWithComputeBudget()
-        trx.add(self.create_account_instruction(to_neon_acc, from_owner.public_key()))
-        trx.add(self.wrapper.create_neon_erc20_account_instruction(from_owner.public_key(), to_neon_acc))
-        trx.add(self.wrapper.create_input_liquidity_instruction(from_owner.public_key(),
-                                                                from_spl_token_acc,
-                                                                to_neon_acc,
-                                                                TRANSFER_AMOUNT))
+        trx.add(self.create_account_instruction(to_neon_acc.address, from_owner.public_key()))
+        trx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
+            program_id=self.token.program_id,
+            source=from_spl_token_acc,
+            delegate=self.wrapper.get_neon_account_address(to_neon_acc.address),
+            owner=from_owner,
+            amount=TRANSFER_AMOUNT,
+            signers=[],
+        )))
+        claim_instr = self.wrapper.create_claim_instruction(
+            owner = from_owner.public_key(),
+            from_acc=from_spl_token_acc, 
+            to_acc=to_neon_acc,
+            amount=TRANSFER_AMOUNT,
+        )
+        trx.add(claim_instr.make_noniterative_call_transaction(len(trx.instructions)))
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - TRANSFER_AMOUNT)
-        self.assertEqual(self.wrapper.get_balance(to_neon_acc), TRANSFER_AMOUNT)
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), TRANSFER_AMOUNT)
 
         wait_time = 0
         eth_balance = 0
         while wait_time < MAX_AIRDROP_WAIT_TIME:
-            eth_balance = proxy.eth.get_balance(to_neon_acc)
+            eth_balance = proxy.eth.get_balance(to_neon_acc.address)
             balance_ready = eth_balance > 0 and eth_balance < 10 * pow(10, 18)
             if balance_ready:
                 break
@@ -140,7 +151,7 @@ class TestAirdropperIntegration(TestCase):
             wait_time += 1
         print(f"Wait time for simple transaction (1 airdrop): {wait_time}")
 
-        eth_balance = proxy.eth.get_balance(to_neon_acc)
+        eth_balance = proxy.eth.get_balance(to_neon_acc.address)
         print("NEON balance is: ", eth_balance)
         self.assertTrue(eth_balance > 0 and eth_balance < 10 * pow(10, 18))  # 10 NEON is a max airdrop amount
 
