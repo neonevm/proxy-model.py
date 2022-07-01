@@ -27,7 +27,7 @@ from solcx import compile_source
 ERC20FORSPL_INTERFACE_SOURCE = '''
 pragma solidity >=0.7.0;
 
-contract IERC20ForSpl {
+interface IERC20ForSpl {
 
     event Transfer(address indexed from, address indexed to, uint256 amount);
     event Approval(address indexed owner, address indexed spender, uint256 amount);
@@ -35,20 +35,20 @@ contract IERC20ForSpl {
     event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 amount);
     event TransferSolana(address indexed from, bytes32 indexed to, uint64 amount);
 
-    function name() public view returns (string memory);
-    function symbol() public view returns (string memory);
-    function tokenMint() public view returns (bytes32);
-    function decimals() public view returns (uint8);
-    function totalSupply() public view returns (uint256);
-    function balanceOf(address who) public view returns (uint256);
-    function allowance(address owner, address spender) public view returns (uint256);
-    function approve(address spender, uint256 amount) public returns (bool);
-    function transfer(address to, uint256 amount) public returns (bool);
-    function transferFrom(address from, address to, uint256 amount) public returns (bool);
-    function burn(uint256 amount) public returns (bool);
-    function burnFrom(address from, uint256 amount) public returns (bool);
-    function approveSolana(bytes32 spender, uint64 amount) public returns (bool);
-    function transferSolana(bytes32 to, uint64 amount) public returns (bool);
+    function name() external  view returns (string memory);
+    function symbol() external view returns (string memory);
+    function tokenMint() external view returns (bytes32);
+    function decimals() external view returns (uint8);
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address who) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function burn(uint256 amount) external returns (bool);
+    function burnFrom(address from, uint256 amount) external returns (bool);
+    function approveSolana(bytes32 spender, uint64 amount) external returns (bool);
+    function transferSolana(bytes32 to, uint64 amount) external returns (bool);
     function claim(bytes32 from, uint64 amount) external returns (bool);
 }
 
@@ -131,11 +131,11 @@ class ERC20Wrapper:
         self.token._conn.send_transaction(tx, payer, opts=TxOpts(skip_preflight = True, skip_confirmation=False))
         return create_ix.keys[1].pubkey
 
-    def create_claim_instruction(self, from_acc: PublicKey, to_account: NeonAccount, amount: int):
+    def create_claim_instruction(self, owner: PublicKey, from_acc: PublicKey, to_acc: NeonAccount, amount: int):
         erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
-        nonce = self.proxy.eth.get_transaction_count(to_account.address)
+        nonce = self.proxy.eth.get_transaction_count(to_acc.address)
         claim_tx = erc20.functions.claim(bytes(from_acc), amount).buildTransaction({'nonce': nonce, 'gasPrice': 0})
-        claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, to_account.key)
+        claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, to_acc.key)
 
         eth_trx = Trx.fromString(bytearray.fromhex(claim_tx.rawTransaction.hex()[2:]))
         emulating_result = call_trx_emulated(eth_trx)
@@ -154,11 +154,9 @@ class ERC20Wrapper:
 
         eth_accounts = list(eth_accounts.values())
 
-
-        neon = NeonInstruction(self.solana_account.public_key())
-        neon.init_operator_ether(EthereumAddress(to_account.address))
+        neon = NeonInstruction(owner)
+        neon.init_operator_ether(EthereumAddress(to_acc.address))
         neon.init_eth_trx(eth_trx, eth_accounts)
-
         return neon
 
     def create_neon_erc20_account_instruction(self, payer: PublicKey, eth_address: str):
