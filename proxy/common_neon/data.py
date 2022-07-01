@@ -18,18 +18,18 @@ class NeonTxStatData:
 class NeonTxReturn:
     exit_status: int = 0
     gas_used: int = 0
-    return_value: bytes = b''
+    return_value: bytes = None
 
 
 @dataclass
 class NeonEvent:
-    address: bytes = b''
+    address: bytes = None
     count_topics: int = 0
-    topics: List[bytes] = field(default_factory=list)
-    log_data: bytes = b''
+    topics: List[bytes] = None
+    log_data: bytes = None
 
 
 @dataclass
 class NeonLogIx:
-    neon_return: NeonTxReturn = field(default_factory=NeonTxReturn)
+    neon_return: NeonTxReturn = None
     neon_events: List[NeonEvent] = field(default_factory=list)
