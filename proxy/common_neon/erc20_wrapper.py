@@ -156,8 +156,10 @@ class ERC20Wrapper:
 
 
         neon = NeonInstruction(self.solana_account.public_key())
-        neon.init_operator_ether(EthereumAddress(admin.address))
+        neon.init_operator_ether(EthereumAddress(to_account.address))
         neon.init_eth_trx(eth_trx, eth_accounts)
+
+        return neon
 
     def create_neon_erc20_account_instruction(self, payer: PublicKey, eth_address: str):
         return TransactionInstruction(
