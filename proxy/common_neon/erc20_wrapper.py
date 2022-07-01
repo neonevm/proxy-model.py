@@ -14,6 +14,11 @@ from typing import Union, Dict
 import struct
 from logged_groups import logged_group
 from .compute_budget import TransactionWithComputeBudget
+from sha3 import keccak_256
+from proxy.common_neon.eth_proto import Trx
+from proxy.common_neon.emulator_interactor import call_trx_emulated
+from ..common_neon.neon_instruction import NeonInstruction
+from proxy.common_neon.address import EthereumAddress
 
 install_solc(version='0.7.6')
 from solcx import compile_source
@@ -126,6 +131,34 @@ class ERC20Wrapper:
         self.token._conn.send_transaction(tx, payer, opts=TxOpts(skip_preflight = True, skip_confirmation=False))
         return create_ix.keys[1].pubkey
 
+    def create_claim_instruction(self, from_acc: PublicKey, to_account: NeonAccount, amount: int):
+        erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
+        nonce = self.proxy.eth.get_transaction_count(to_account.address)
+        claim_tx = erc20.functions.claim(bytes(from_acc), amount).buildTransaction({'nonce': nonce, 'gasPrice': 0})
+        claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, to_account.key)
+
+        eth_trx = Trx.fromString(bytearray.fromhex(claim_tx.rawTransaction.hex()[2:]))
+        emulating_result = call_trx_emulated(eth_trx)
+
+        eth_accounts = dict()
+        for account in emulating_result['accounts']:
+            key = account['account']
+            eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
+            if account['contract']:
+                key = account['contract']
+                eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
+
+        for account in emulating_result['solana_accounts']:
+            key = account['pubkey']
+            eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
+
+        eth_accounts = list(eth_accounts.values())
+
+
+        neon = NeonInstruction(self.solana_account.public_key())
+        neon.init_operator_ether(EthereumAddress(admin.address))
+        neon.init_eth_trx(eth_trx, eth_accounts)
+
     def create_neon_erc20_account_instruction(self, payer: PublicKey, eth_address: str):
         return TransactionInstruction(
             program_id=self.evm_loader_id,
@@ -143,6 +176,11 @@ class ERC20Wrapper:
         )
 
     def create_input_liquidity_instruction(self, payer: PublicKey, from_address: PublicKey, to_address: str, amount: int):
+        k = keccak_256()
+        k.update('claim(bytes32,uint64)'.encode('utf-8'))
+        claim_id = k.digest()[:4]
+        data = claim_id + bytes(from_address) + 
+
         return TransactionInstruction(
             program_id=TOKEN_PROGRAM_ID,
             data=b'\3' + struct.pack('<Q', amount),
