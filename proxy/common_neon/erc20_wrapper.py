@@ -178,11 +178,6 @@ class ERC20Wrapper:
         )
 
     def create_input_liquidity_instruction(self, payer: PublicKey, from_address: PublicKey, to_address: str, amount: int):
-        k = keccak_256()
-        k.update('claim(bytes32,uint64)'.encode('utf-8'))
-        claim_id = k.digest()[:4]
-        data = claim_id + bytes(from_address) + 
-
         return TransactionInstruction(
             program_id=TOKEN_PROGRAM_ID,
             data=b'\3' + struct.pack('<Q', amount),
