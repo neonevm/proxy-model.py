@@ -55,7 +55,6 @@ class NeonTxSender:
 
         self.create_account_tx = TransactionWithComputeBudget()
         self.account_txs_name = ''
-        self._resize_contract_list = []
         self._create_account_list = []
         self._eth_meta_dict: Dict[str, AccountMeta] = dict()
 
@@ -163,32 +162,27 @@ class NeonTxSender:
             self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
 
     def _build_account_stage_list(self):
-        all_stages = self._create_account_list + self._resize_contract_list
-        if not len(all_stages):
+        if not len(self._create_account_list):
             return
 
-        size_list = list(set([s.size for s in all_stages]))
+        size_list = list(set([s.size for s in self._create_account_list]))
         balance_list = self.solana.get_multiple_rent_exempt_balances_for_size(size_list)
         balance_map = {size: balance for size, balance in zip(size_list, balance_list)}
         name_dict = {}
-        for s in all_stages:
+        for s in self._create_account_list:
             s.balance = balance_map[s.size]
             s.build()
             name_dict.setdefault(s.NAME, 0)
             name_dict[s.NAME] += 1
-
-        for s in self._create_account_list:
             self.create_account_tx.add(s.tx)
         self.account_txs_name = ' + '.join([f'{name}({cnt})' for name, cnt in name_dict.items()])
 
     def build_account_tx_list(self, skip_create_accounts=False) -> [TransactionWithComputeBudget]:
-        tx_list = [s.tx for s in self._resize_contract_list]
         if (not skip_create_accounts) and len(self._create_account_list):
-            tx_list.append(self.create_account_tx)
-        return tx_list
+            return [self.create_account_tx]
+        return []
 
     def done_account_tx_list(self, skip_create_accounts=False):
-        self._resize_contract_list.clear()
         if not skip_create_accounts:
             self._create_account_list.clear()
             self.create_account_tx.instructions.clear()
