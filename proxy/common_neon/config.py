@@ -13,6 +13,10 @@ class IConfig(ABC):
     def get_evm_steps_limit(self) -> int:
         """Gets the evm steps limitation, that is used to check steps gotten over emulating"""
 
+    @abstractmethod
+    def get_mempool_capacity(self) -> int:
+        """Gets the capacity of the MemPool queue, to constrain the transactions count in there"""
+
 
 class Config(IConfig):
 
@@ -22,5 +26,9 @@ class Config(IConfig):
     def get_evm_steps_limit(self) -> int:
         return int(os.environ.get("EVM_STEP_COUNT", 750))
 
+    def get_mempool_capacity(self) -> int:
+        return int(os.environ.get("MEMPOOL_CAPACITY", 4096))
+
     def __str__(self):
-        return f"SOLANA_URL: {self.get_solana_url()}, EVM_STEP_LIMIT: {self.get_evm_steps_limit()}"
+        return f"SOLANA_URL: {self.get_solana_url()}, EVM_STEP_LIMIT: {self.get_evm_steps_limit()}, " \
+               f"MP_CAPACITY: {self.get_mempool_capacity()}"

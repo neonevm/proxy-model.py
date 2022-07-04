@@ -79,7 +79,7 @@ class MPSenderTxPool:
             self.error("Failed to drop last request from empty sender tx pool")
             return False
         if self._processing_tx is self._txs[-1]:
-            self.warning(f"Failed to drop last request away: {self._processing_tx.log_str} - processing")
+            self.debug(f"Skip removing transaction: {self._processing_tx.log_str} - processing")
             return False
         self.debug(f"Remove last mp_tx_request from sender: {self.sender_address} - {self._txs[-1].log_str}")
         self._txs = self._txs[:-1]

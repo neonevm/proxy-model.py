@@ -92,7 +92,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self._executor = MockMPExecutor()
-        self._mempool = MemPool(self._executor)
+        self._mempool = MemPool(self._executor, capacity=4096)
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available", return_value=True)
