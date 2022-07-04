@@ -260,21 +260,38 @@ class TestMPSchedule(unittest.TestCase):
         mp_schedule_capacity = 3
         schedule = MPTxSchedule(mp_schedule_capacity)
         acc = [create_account() for i in range(3)]
-        req_data = [dict(req_id="000", nonce=0, gasPrice=30000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
-                    dict(req_id="001", nonce=0, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
-                    dict(req_id="002", nonce=1, gasPrice=30000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[2]),
-                    dict(req_id="003", nonce=1, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[1]),
+        req_data = [dict(req_id="000", nonce=0, gasPrice=60000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+                    dict(req_id="001", nonce=1, gasPrice=60000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+                    dict(req_id="002", nonce=1, gasPrice=40000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
+                    dict(req_id="003", nonce=1, gasPrice=70000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]),
                     dict(req_id="004", nonce=2, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
-                    dict(req_id="005", nonce=0, gasPrice=50000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]),
-                    dict(req_id="006", nonce=1, gasPrice=50000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]),
+                    dict(req_id="005", nonce=2, gasPrice=50000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]),
+                    dict(req_id="006", nonce=3, gasPrice=50000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1])
                     ]
         self.requests = [get_transfer_mp_request(**req) for req in req_data]
-        for request in self.requests:
+        for request in self.requests[0:3]:
             schedule.add_mp_tx_request(request)
-        self.assertEqual(2, len(schedule._sender_tx_pools))
+
+        self.assertIs(schedule.acquire_tx_for_execution(), self.requests[0])
+        self.assertIs(schedule.acquire_tx_for_execution(), self.requests[2])
+        self.assertIs(schedule.acquire_tx_for_execution(), None)
+        for request in self.requests[3:]:
+            schedule.add_mp_tx_request(request)
+        self.assertEqual(acc[2].address.lower(), schedule._sender_tx_pools[0].sender_address)
+        self.assertEqual(acc[0].address.lower(), schedule._sender_tx_pools[1].sender_address)
+        self.assertEqual(acc[1].address.lower(), schedule._sender_tx_pools[2].sender_address)
+        self.assertEqual(acc[1].address.lower(), schedule._sender_tx_pools[2].sender_address)
+        self.assertIs(self.requests[3], schedule._sender_tx_pools[0]._txs[0])
+        self.assertIs(self.requests[0], schedule._sender_tx_pools[1]._txs[0])
+        self.assertIs(self.requests[2], schedule._sender_tx_pools[2]._txs[0])
+
+        self.assertEqual(3, schedule.get_mp_tx_count())
+        self.assertEqual(3, len(schedule._sender_tx_pools))
         self.assertEqual(1, schedule.get_pending_trx_count(acc[0].address.lower()))
-        self.assertEqual(0, schedule.get_pending_trx_count(acc[1].address.lower()))
-        self.assertEqual(2, schedule.get_pending_trx_count(acc[2].address.lower()))
+        self.assertEqual(1, schedule.get_pending_trx_count(acc[1].address.lower()))
+        self.assertEqual(1, schedule.get_pending_trx_count(acc[2].address.lower()))
+        self.assertEqual(3, len(schedule._sender_tx_pools))
+        self.assertIs(self.requests[3], schedule._sender_tx_pools[0]._txs[0])
 
     def test_capacity_oversized(self):
         """Checks if mp_schedule doesn't get oversized with a quite big set of mp_tx_requests"""
@@ -336,6 +353,7 @@ class TestMPSenderTxPool(unittest.TestCase):
                 self._pool.drop_last_request()
             self.assertEqual(1, len(logs.records))
             self.assertEqual(f"Failed to drop last request away: {tx.log_str} - processing", logs.records[0].msg)
+            self.assertEqual(1, self._pool.len())
 
     def test_drop_request_away(self):
        tx = self._pool.acquire_tx()
