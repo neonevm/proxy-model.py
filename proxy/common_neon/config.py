@@ -15,7 +15,7 @@ class IConfig(ABC):
 
     @abstractmethod
     def get_mempool_capacity(self) -> int:
-        """Gets the capacity of the MemPool queue, to constrain the transactions count in there"""
+        """Gets the capacity of the MemPool schedule to constrain the transactions count in there"""
 
 
 class Config(IConfig):
