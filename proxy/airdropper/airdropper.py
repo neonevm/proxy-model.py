@@ -14,6 +14,11 @@ from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
 from ..indexer.sql_dict import SQLDict
 
+EVM_LOADER_CREATE_ACC           = 0x18
+SPL_TOKEN_APPROVE               = 0x04
+EVM_LOADER_CALL_FROM_RAW_TRX    = 0x05
+SPL_TOKEN_INIT_ACC_2            = 0x10
+SPL_TOKEN_TRANSFER              = 0x03
 
 ACCOUNT_CREATION_PRICE_SOL = Decimal('0.00472692')
 AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
@@ -197,6 +202,12 @@ class Airdropper(IndexerBase):
 
             return [instruction for instruction in inner_insturctions if predicate(instruction)]
 
+        
+        def isRequiredInstruction(instr, req_program_id, req_tag_id):
+            return account_keys[instr['programIdIndex']] == req_program_id \
+                and base58.b58decode(instr['data'])[0] == req_tag_id
+
+
         account_keys = trx["transaction"]["message"]["accountKeys"]
 
         # Finding instructions specific for airdrop.
@@ -207,16 +218,13 @@ class Airdropper(IndexerBase):
         #   1. Create token account (token.init_v2)
         #   2. Transfer tokens (token.transfer)
         # First: select all instructions that can form such chains
-        predicate = lambda instr: account_keys[instr['programIdIndex']] == EVM_LOADER_ID \
-                                  and base58.b58decode(instr['data'])[0] == 0x18
+        predicate = lambda instr: isRequiredInstruction(instr, EVM_LOADER_ID, EVM_LOADER_CREATE_ACC)
         create_acc_list = find_instructions(trx, predicate)
 
-        predicate = lambda  instr: account_keys[instr['programIdIndex']] == 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' \
-                                   and base58.b58decode(instr['data'])[0] == 0x04
+        predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SPL_TOKEN_APPROVE)
         approve_list = find_instructions(trx, predicate)
 
-        predicate = lambda  instr: account_keys[instr['programIdIndex']] == EVM_LOADER_ID \
-                                   and base58.b58decode(instr['data'])[0] == 0x05
+        predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', EVM_LOADER_CALL_FROM_RAW_TRX)
         call_list = find_instructions(trx, predicate)
 
         # Second: Find exact chains of instructions in sets created previously
@@ -228,12 +236,10 @@ class Airdropper(IndexerBase):
                     if not self.check_create_approve_call_instr(account_keys, create_acc, approve, call):
                         continue
 
-                    predicate = lambda  instr: account_keys[instr['programIdIndex']] == 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' \
-                                   and base58.b58decode(instr['data'])[0] == 0x10
+                    predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SPL_TOKEN_INIT_ACC_2)
                     init_token2_list = find_inner_instructions(trx, call_idx, predicate)
 
-                    predicate = lambda  instr: account_keys[instr['programIdIndex']] == 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' \
-                                   and base58.b58decode(instr['data'])[0] == 0x03
+                    predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SPL_TOKEN_TRANSFER)
                     token_transfer_list = find_inner_instructions(trx, call_idx, predicate)
 
                     if len(init_token2_list) > 0 and len(token_transfer_list) > 0:
