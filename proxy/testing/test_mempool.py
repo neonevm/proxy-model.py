@@ -348,11 +348,11 @@ class TestMPSenderTxPool(unittest.TestCase):
         """Checks if transaction pool doesn't drop the reqeust with the highest nonce if it's in process"""
         tx = self._pool.acquire_tx()
         self.assertIs(tx, self._requests[2])
-        with self.assertLogs("neon.MemPool", logging.WARNING) as logs:
+        with self.assertLogs("neon.MemPool", logging.DEBUG) as logs:
             for i in range(0, 5):
                 self._pool.drop_last_request()
-            self.assertEqual(1, len(logs.records))
-            self.assertEqual(f"Failed to drop last request away: {tx.log_str} - processing", logs.records[0].msg)
+            self.assertEqual(5, len(logs.records))
+            self.assertEqual(f"Skip removing transaction: {tx.log_str} - processing", logs.records[4].msg)
             self.assertEqual(1, self._pool.len())
 
     def test_drop_request_away(self):
