@@ -15,7 +15,7 @@ class MemPool:
     RESCHEDULE_TIMEOUT_SEC = 0.4
 
     def __init__(self, executor: IMPExecutor, capacity: int):
-        self.debug(f"Init mempool schedule with capacity: {capacity}")
+        self.info(f"Init mempool schedule with capacity: {capacity}")
         self._tx_schedule = MPTxSchedule(capacity)
         self._schedule_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
