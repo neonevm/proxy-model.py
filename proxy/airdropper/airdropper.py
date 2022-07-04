@@ -160,7 +160,7 @@ class Airdropper(IndexerBase):
             return False
 
         # CreateERC20TokenAccount instruction must use ERC20-wrapper from whitelist
-        if not self.is_allowed_wrapper_contract(erc20):
+        if not self.is_allowed_wrapper_contract("0x" + erc20.hex()):
             self.debug(f"{erc20.hex()} Is not whitelisted ERC20 contract")
             return False
 
