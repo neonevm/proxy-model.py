@@ -76,7 +76,7 @@ class MPSenderTxPool:
 
     def drop_last_request(self) -> bool:
         if self.is_empty():
-            self.erorr("Failed to drop last request from empty sender tx pool")
+            self.error("Failed to drop last request from empty sender tx pool")
             return False
         if self._processing_tx is self._txs[-1]:
             self.warning(f"Failed to drop last request away: {self._processing_tx.log_str} - processing")
