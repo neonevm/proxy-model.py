@@ -84,18 +84,27 @@ class NeonCreateAccountTxStage(NeonTxStage):
 
     def __init__(self, sender, account_desc):
         NeonTxStage.__init__(self, sender)
-        self._address = account_desc['address']
-        self.size = 95
+        self._address = account_desc["address"]
+        self._code_size = account_desc['code_size']
+        self.size = NeonCreateAccountTxStage._calc_account_data_size(self._code_size)
         self.balance = 0
 
-    def _create_account(self):
-        assert self.balance > 0
-        return self.s.builder.make_create_eth_account_instruction(self._address)
+    @staticmethod
+    def _calc_valids_size(code_size: int):
+        return (code_size + 7) >> 3
+
+    @staticmethod
+    def _calc_account_data_size(code_size: int):
+        # TODO: Calculate using CLI?
+        size = 68
+        if code_size > 0:
+            size += 4 + code_size + NeonCreateAccountTxStage._calc_valids_size(code_size) + 32 * 64
+        return size
 
     def build(self):
         assert self._is_empty()
-        self.debug(f'Create user account {self._address}')
-        self.tx.add(self._create_account())
+        self.debug(f'Create account {self._address}: (code_size {self._code_size}, expected data size: {self.size})')
+        self.tx.add(self.s.builder.make_create_eth_account_instruction(self._address))
 
 
 @logged_group("neon.Proxy")
@@ -122,58 +131,3 @@ class NeonCreateERC20TxStage(NeonTxStage, abc.ABC):
                    f'mint: {self._token_account["mint"]}')
 
         self.tx.add(self._create_erc20_account())
-
-
-@logged_group("neon.Proxy")
-class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
-    NAME = 'createNeonContract'
-
-    def __init__(self, sender, account_desc):
-        NeonCreateAccountWithSeedStage.__init__(self, sender)
-        self._account_desc = account_desc
-        self._address = account_desc["address"]
-        self._seed_base = ACCOUNT_SEED_VERSION + bytes.fromhex(self._address[2:])
-        self._init_sol_account()
-        self._account_desc['contract'] = self.sol_account
-        self.size = account_desc['code_size'] + CONTRACT_EXTRA_SPACE
-
-    def _create_account(self):
-        assert self.sol_account
-        return self.s.builder.make_create_eth_account_instruction(self._address, self.sol_account)
-
-    def build(self):
-        assert self._is_empty()
-
-        self.debug(f'Create contact {self._address}: {self.sol_account} (size {self.size})')
-
-        self.tx.add(self._create_account_with_seed())
-        self.tx.add(self._create_account())
-
-
-@logged_group("neon.Proxy")
-class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
-    NAME = 'resizeNeonContract'
-
-    def __init__(self, sender, account_desc):
-        NeonCreateAccountWithSeedStage.__init__(self, sender)
-        self._account_desc = account_desc
-        self._seed_base = ACCOUNT_SEED_VERSION + os.urandom(20)
-        self._init_sol_account()
-        # Replace the old code account with the new code account
-        self._old_sol_account = account_desc['contract']
-        account_desc['contract'] = self.sol_account
-        self.size = account_desc['code_size'] + CONTRACT_EXTRA_SPACE
-
-    def _resize_account(self):
-        account = self._account_desc['account']
-        return self.s.builder.make_resize_instruction(account, self._old_sol_account, self.sol_account, self._seed)
-
-    def build(self):
-        assert self._is_empty()
-
-        self.debug(f'Resize contact {self._account_desc["address"]}: ' +
-                   f'{self._old_sol_account} (size {self._account_desc["code_size_current"]}) -> ' +
-                   f'{self.sol_account} (size {self.size})')
-
-        self.tx.add(self._create_account_with_seed())
-        self.tx.add(self._resize_account())

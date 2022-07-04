@@ -130,7 +130,7 @@ class NeonInstruction:
             data=create_account_with_seed_layout(self.operator_account, seed_str, lamports, space)
         )
 
-    def make_create_eth_account_instruction(self, eth_address: EthereumAddress, code_acc=None) -> TransactionInstruction:
+    def make_create_eth_account_instruction(self, eth_address: EthereumAddress) -> TransactionInstruction:
         if isinstance(eth_address, str):
             eth_address = EthereumAddress(eth_address)
         pda_account, nonce = ether2program(eth_address)
@@ -138,15 +138,6 @@ class NeonInstruction:
 
         base = self.operator_account
         data = create_account_layout(bytes(eth_address), nonce)
-        if code_acc is None:
-            return TransactionInstruction(
-                program_id=EVM_LOADER_ID,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey(pda_account), is_signer=False, is_writable=True),
-                ])
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=data,
@@ -154,7 +145,6 @@ class NeonInstruction:
                 AccountMeta(pubkey=base, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(pda_account), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
             ])
 
     def make_erc20token_account_instruction(self, token_info) -> TransactionInstruction:

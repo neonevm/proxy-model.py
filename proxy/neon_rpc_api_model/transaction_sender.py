@@ -10,8 +10,7 @@ from typing import Dict, Optional, Any
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 
-from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage, \
-                            NeonResizeContractTxStage
+from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateERC20TxStage
 
 from .operator_resource_list import OperatorResourceInfo
 from ..common_neon.compute_budget import TransactionWithComputeBudget
@@ -53,7 +52,6 @@ class NeonTxSender:
         self.to_address = eth_tx.toAddress.hex()
         if self.to_address:
             self.to_address = '0x' + self.to_address
-
 
         self.create_account_tx = TransactionWithComputeBudget()
         self.account_txs_name = ''
@@ -148,19 +146,11 @@ class NeonTxSender:
 
     def _parse_accounts_list(self, emulated_result_accounts):
         for account_desc in emulated_result_accounts:
-            if account_desc['new']:
-                if account_desc['code_size']:
-                    stage = NeonCreateContractTxStage(self, account_desc)
-                    self._create_account_list.append(stage)
-                elif account_desc['writable']:
-                    stage = NeonCreateAccountTxStage(self, account_desc)
-                    self._create_account_list.append(stage)
-            elif account_desc['code_size'] and (account_desc['code_size_current'] < account_desc['code_size']):
-                self._resize_contract_list.append(NeonResizeContractTxStage(self, account_desc))
+            if account_desc['new'] and (account_desc['code_size'] or account_desc['writable']):
+                stage = NeonCreateAccountTxStage(self, account_desc)
+                self._create_account_list.append(stage)
 
             self._add_meta(account_desc['account'], True)
-            if account_desc['contract']:
-                self._add_meta(account_desc['contract'], account_desc['writable'])
 
     def _parse_token_list(self, emulated_result_token_accounts):
         for token_account in emulated_result_token_accounts:
