@@ -41,7 +41,6 @@ class solana_cli(CliBase):
 def get_solana_accounts(*, logger) -> [SolanaAccount]:
     def read_sol_account(name) -> Optional[SolanaAccount]:
         if not os.path.isfile(name):
-            logger.error(f"Failed to read sol_account: {name}, that is not a file")
             return None
         logger.debug(f"Open a sol_account file: {name}")
         with open(name.strip(), mode='r') as d:
