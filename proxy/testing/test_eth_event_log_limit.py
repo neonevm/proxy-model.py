@@ -77,7 +77,7 @@ class Test_eth_event_log_limit(unittest.TestCase):
     def commit_transactions(self):
         self.commit_event_trx(self, 1000, 41)
         self.commit_event_trx(self, 2000, 42)
-        self.commit_event_trx(self, 2000, 43)
+        self.commit_event_trx(self, 3000, 43)
         pass
 
     def commit_event_trx(self, event_size: int, char: int) -> None:
