@@ -74,8 +74,7 @@ class MPResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
-    NoLiquidity = 3,
-    Unspecified = 4,
+    Unspecified = 3,
     Dummy = -1
 
 

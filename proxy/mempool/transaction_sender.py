@@ -16,7 +16,7 @@ from ..mempool.neon_tx_stages import NeonCreateAccountTxStage, NeonCreateERC20Tx
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.neon_instruction import NeonInstruction as NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.solana_tx_list_sender import SolTxListSender
+from ..common_neon.solana_tx_list_sender import BlockedAccountsError, SolTxListSender
 from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
@@ -39,7 +39,6 @@ class NeonTxSender:
         self.steps = steps
         self.waiter = self
         self.solana = solana
-        self._resource_list = None
         self.resource = None
         self.signer = None
         self.operator_key = None
@@ -96,6 +95,8 @@ class NeonTxSender:
                 neon_res, sign_list = strategy.execute()
                 self._submit_tx_into_db(neon_res, sign_list)
                 return neon_res
+            except BlockedAccountsError:
+                raise
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
                     raise
@@ -117,11 +118,11 @@ class NeonTxSender:
         if self._pending_tx and ((slot - self._pending_tx.slot) > 10):
             self.debug(f'Update pending transaction: diff {slot - self._pending_tx.slot}, set {slot}')
             self._pending_tx.slot = slot
-            self._db.pend_transaction(self._pending_tx)
 
     def _submit_tx_into_db(self, neon_res: NeonTxResultInfo, sign_list: [str]):
         neon_tx = NeonTxInfo()
         neon_tx.init_from_eth_tx(self.eth_tx)
+        self._db.pend_transaction(self._pending_tx)
         self._db.submit_transaction(neon_tx, neon_res, sign_list)
 
     def _prepare_execution(self, emulating_result: NeonEmulatingResult):
@@ -283,7 +284,7 @@ class SimpleNeonTxSender(SolTxListSender):
 
 
 @logged_group("neon.MemPool")
-class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
+class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     NAME = 'CallFromRawEthereumTX'
     IS_SIMPLE = True
 
@@ -429,7 +430,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
         # Accounts are blocked, so try to lock them
         if len(self._blocked_account_list):
-            return self._try_lock_accounts()
+            raise BlockedAccountsError()
 
         # Compute budged is exceeded, so decrease EVM steps per iteration
         if len(self._budget_exceeded_list):
@@ -444,7 +445,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
 
 @logged_group("neon.MemPool")
-class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
+class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     NAME = 'PartialCallOrContinueFromRawEthereumTX'
     IS_SIMPLE = False
 
@@ -493,7 +494,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
 
 
 @logged_group("neon.MemPool")
-class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
+class HolderNeonTxStrategy(IterativeNeonTxStrategy):
     NAME = 'ExecuteTrxFromAccountDataIterativeOrContinue'
 
     def __init__(self, *args, **kwargs):
@@ -510,7 +511,9 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
 
     def _build_preparation_tx_list(self) -> [TransactionWithComputeBudget]:
         tx_list = super()._build_preparation_tx_list()
+        return self.write_holder_account(tx_list)
 
+    def write_holder_account(self, tx_list):
         # write eth transaction to the holder account
         msg = get_holder_msg(self.s.eth_tx)
 
@@ -533,7 +536,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy, abc.ABC):
 
 
 @logged_group("neon.MemPool")
-class NoChainIdNeonTxStrategy(HolderNeonTxStrategy, abc.ABC):
+class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
     NAME = 'ExecuteTrxFromAccountDataIterativeOrContinueNoChainId'
 
     def __init__(self, *args, **kwargs):

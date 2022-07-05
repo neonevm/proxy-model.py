@@ -4,7 +4,7 @@ from solana.account import Account as SolanaAccount
 import time
 
 from logged_groups import logged_group
-from typing import Optional
+from typing import Optional, List
 from solana.transaction import Transaction
 from base58 import b58encode
 
@@ -12,6 +12,11 @@ from .solana_receipt_parser import SolReceiptParser, SolTxError
 from .errors import EthereumError
 
 from .environment_data import SKIP_PREFLIGHT, RETRY_ON_FAIL
+
+
+class BlockedAccountsError(Exception):
+    def __init__(self):
+        super().__init__(self)
 
 
 @logged_group("neon.Proxy")
@@ -117,7 +122,7 @@ class SolTxListSender:
             raise SolTxError(self._budget_exceeded_receipt)
 
         if len(self._blocked_account_list):
-            time.sleep(0.4)  # one block time
+            raise BlockedAccountsError()
 
         # force changing of recent_blockhash if Solana doesn't accept the current one
         if len(self._bad_block_list):

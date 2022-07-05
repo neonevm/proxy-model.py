@@ -30,7 +30,7 @@ class NeonTxStage(metaclass=abc.ABCMeta):
 
 
 @logged_group("neon.MemPool")
-class NeonCancelTxStage(NeonTxStage, abc.ABC):
+class NeonCancelTxStage(NeonTxStage):
     NAME = 'cancelWithNonce'
 
     def __init__(self, sender, account: PublicKey):
@@ -55,7 +55,7 @@ class NeonCancelTxStage(NeonTxStage, abc.ABC):
         self.tx.add(self._cancel_ix())
 
 
-class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
+class NeonCreateAccountWithSeedStage(NeonTxStage):
     def __init__(self, sender):
         NeonTxStage.__init__(self, sender)
         self._seed = bytes()
@@ -99,7 +99,7 @@ class NeonCreateAccountTxStage(NeonTxStage):
 
 
 @logged_group("neon.MemPool")
-class NeonCreateERC20TxStage(NeonTxStage, abc.ABC):
+class NeonCreateERC20TxStage(NeonTxStage):
     NAME = 'createERC20Account'
 
     def __init__(self, sender, token_account):
@@ -125,7 +125,7 @@ class NeonCreateERC20TxStage(NeonTxStage, abc.ABC):
 
 
 @logged_group("neon.MemPool")
-class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage, abc.ABC):
+class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage):
     NAME = 'createNeonContract'
 
     def __init__(self, sender, account_desc):

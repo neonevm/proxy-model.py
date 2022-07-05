@@ -4,6 +4,7 @@ import socket
 
 from logged_groups import logged_group, logging_context
 
+from ..common_neon.solana_tx_list_sender import BlockedAccountsError
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
 from ..common_neon.utils import PipePickableDataSrv, IPickableDataServerUser, Any
@@ -12,7 +13,7 @@ from ..memdb.memdb import MemDB
 
 from .transaction_sender import NeonTxSender
 from .operator_resource_list import OperatorResourceList
-from .mempool_api import MPRequest, MPTxResult, MPResultCode
+from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
 
 @logged_group("neon.MemPool")
@@ -38,21 +39,24 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._solana = SolanaInteractor(self._config.get_solana_url())
         self._db = MemDB(self._solana)
 
-    def execute_neon_tx(self, mempool_request: MPRequest):
-        with logging_context(req_id=mempool_request.req_id, exectr=self._id):
+    def execute_neon_tx(self, mp_tx_request: MPTxRequest):
+        with logging_context(req_id=mp_tx_request.req_id, exectr=self._id):
             try:
-                self.execute_neon_tx_impl(mempool_request)
+                self.execute_neon_tx_impl(mp_tx_request)
+            except BlockedAccountsError:
+                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got blocked accounts result")
+                return MPTxResult(MPResultCode.BlockedAccount, None)
             except Exception as err:
-                self.error(f"Failed to execute neon_tx: {err}")
+                self.error(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got error: {err}")
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
-    def execute_neon_tx_impl(self, mempool_tx_cfg: MPRequest):
-        neon_tx = mempool_tx_cfg.neon_tx
-        neon_tx_cfg = mempool_tx_cfg.neon_tx_exec_cfg
-        emulating_result = mempool_tx_cfg.emulating_result
-        emv_step_count = self._config.get_evm_count()
-        tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=emv_step_count)
+    def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
+        neon_tx = mp_tx_request.neon_tx
+        neon_tx_cfg = mp_tx_request.neon_tx_exec_cfg
+        emulating_result = mp_tx_request.emulating_result
+        evm_steps_limit = self._config.get_evm_steps_limit()
+        tx_sender = NeonTxSender(self._db, self._solana, neon_tx, steps=evm_steps_limit)
         with OperatorResourceList(tx_sender):
             tx_sender.execute(neon_tx_cfg, emulating_result)
 

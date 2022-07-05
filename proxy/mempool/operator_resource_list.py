@@ -1,7 +1,5 @@
 # from __future__ import annotations
-# from __future__ import annotations
 
-import abc
 import ctypes
 import math
 import multiprocessing as mp
@@ -72,6 +70,7 @@ class OperatorResourceList:
     def _init_resource_list(self):
         if len(self._resource_list):
             return
+        self.info(f"Init resource list")
 
         idx = 0
         signer_list: List[SolanaAccount] = get_solana_accounts()
@@ -121,8 +120,7 @@ class OperatorResourceList:
         return now
 
     def get_active_resource(self) -> OperatorResourceInfo:
-        if self._resource:
-            return self._resource
+        assert self._resource is None, "Reentering the active resource"
 
         self._init_resource_list()
         check_time = self._recheck_bad_resource_list()
@@ -136,6 +134,7 @@ class OperatorResourceList:
 
             with self._resource_list_len.get_lock():
                 if self._resource_list_len.value == 0:
+                    self.error(f"Failed to get active resource: resource list is empty")
                     raise RuntimeError('Operator has NO resources!')
                 elif len(self._free_resource_list) == 0:
                     continue
@@ -283,7 +282,7 @@ class OperatorResourceList:
 
 
 @logged_group("neon.MemPool")
-class NeonCreatePermAccount(NeonCreateAccountWithSeedStage, abc.ABC):
+class NeonCreatePermAccount(NeonCreateAccountWithSeedStage):
     NAME = 'createPermAccount'
 
     def __init__(self, sender, seed_base: bytes, size: int):
