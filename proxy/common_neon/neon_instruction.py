@@ -34,10 +34,11 @@ def create_account_with_seed_layout(base, seed, lamports, space):
     )
 
 
-def create_account_layout(ether, nonce):
-    return bytes.fromhex("18")+CREATE_ACCOUNT_LAYOUT.build(dict(
+def create_account_layout(ether: bytes, nonce: int, code_size: int = 0):
+    return bytes.fromhex("1E") + CREATE_ACCOUNT_LAYOUT.build(dict(
         ether=ether,
-        nonce=nonce
+        nonce=nonce,
+        code_size=code_size
     ))
 
 
@@ -161,22 +162,6 @@ class NeonInstruction:
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
             ]
-        )
-
-    def make_resize_instruction(self, account, code_account_old, code_account_new, seed) -> TransactionInstruction:
-        return TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=bytearray.fromhex("11") + bytes(seed),  # 17- ResizeStorageAccount
-            keys=[
-                AccountMeta(pubkey=PublicKey(account), is_signer=False, is_writable=True),
-                (
-                    AccountMeta(pubkey=code_account_old, is_signer=False, is_writable=True)
-                    if code_account_old else
-                    AccountMeta(pubkey=PublicKey("11111111111111111111111111111111"), is_signer=False, is_writable=False)
-                ),
-                AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False)
-            ],
         )
 
     def make_write_instruction(self, offset: int, data: bytes) -> TransactionInstruction:

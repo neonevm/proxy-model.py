@@ -1,35 +1,33 @@
 import base64
 import json
+import math
 import os
 import subprocess
 import time
-from enum import Enum
 from hashlib import sha256
 from typing import NamedTuple, Tuple, Union
 
-import base58
 import rlp
 from base58 import b58encode
-from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
+from construct import Bytes, Int8ul, Struct as cStruct, Int32ul
 from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
 from solana.account import Account
 from solana.publickey import PublicKey
-from solana.rpc import types
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
+from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
-import base58
-import math
+
+from proxy.common_neon.neon_instruction import create_account_layout
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
     "ether" / Bytes(20),
-    "nonce" / Int8ul
+    "nonce" / Int8ul,
+    "code_size" / Int32ul
 )
 
 system = "11111111111111111111111111111111"
@@ -373,7 +371,8 @@ class EvmLoader:
 
     def ether2program(self, ether):
         if isinstance(ether, str):
-            if ether.startswith('0x'): ether = ether[2:]
+            if ether.startswith('0x'):
+                ether = ether[2:]
         else:
             ether = ether.hex()
         output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, ether))
@@ -399,9 +398,10 @@ class EvmLoader:
         else:
             return program[0], ether, code[0]
 
-    def createEtherAccountTrx(self, ether: Union[str, bytes], code_acc=None) -> Tuple[Transaction, str]:
+    def createEtherAccountTrx(self, ether: Union[str, bytes], code_size: int = 0) -> Tuple[Transaction, str]:
         if isinstance(ether, str):
-            if ether.startswith('0x'): ether = ether[2:]
+            if ether.startswith('0x'):
+                ether = ether[2:]
         else:
             ether = ether.hex()
 
@@ -409,28 +409,17 @@ class EvmLoader:
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
 
         base = self.acc.get_acc().public_key()
-        data = bytes.fromhex('18') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=bytes.fromhex(ether), nonce=nonce))
+        data = create_account_layout(bytes.fromhex(ether), nonce, code_size)
         trx = TransactionWithComputeBudget()
-        if code_acc is None:
-            trx.add(TransactionInstruction(
-                program_id=self.loader_id,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                ]))
-        else:
-            trx.add(TransactionInstruction(
-                program_id=self.loader_id,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
-                ]))
-        return (trx, sol)
+        trx.add(TransactionInstruction(
+            program_id=self.loader_id,
+            data=data,
+            keys=[
+                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+            ]))
+        return trx, sol
 
 
 def getBalance(account):
