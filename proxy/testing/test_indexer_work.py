@@ -106,17 +106,16 @@ class CancelTest(unittest.TestCase):
 
         cls.reId_eth = cls.storage_contract.address.lower()
         print ('contract_eth', cls.reId_eth)
-        (cls.reId, cls.re_code) = cls.get_accounts(cls, cls.reId_eth)
+        (cls.reId, _) = cls.loader.ether2program(cls.reId_eth)
         print ('contract', cls.reId)
-        print ('contract_code', cls.re_code)
 
         # Create ethereum account for user account
         cls.caller_ether = EthereumAddress.from_private_key(bytes(eth_account.key))
-        (cls.caller, _) = cls.get_accounts(cls, cls.caller_ether)
+        (cls.caller, _) = cls.loader.ether2program(str(cls.caller_ether))
         cls.caller_ether_invoked = EthereumAddress.from_private_key(bytes(eth_account_invoked.key))
-        (cls.caller_invoked, _) = cls.get_accounts(cls, cls.caller_ether_invoked)
+        (cls.caller_invoked, _) = cls.loader.ether2program(str(cls.caller_ether_invoked))
         cls.caller_ether_getter = EthereumAddress.from_private_key(bytes(eth_account_getter.key))
-        (cls.caller_getter, _) = cls.get_accounts(cls, cls.caller_ether_getter)
+        (cls.caller_getter, _) = cls.loader.ether2program(str(cls.caller_ether_getter))
         print (f'caller_ether: {cls.caller_ether} {cls.caller}')
         print (f'caller_ether_invoked: {cls.caller_ether_invoked} {cls.caller_invoked}')
         print (f'caller_ether_getter: {cls.caller_ether_getter} {cls.caller_getter}')
@@ -134,16 +133,6 @@ class CancelTest(unittest.TestCase):
         cls.create_hanged_transaction(cls)
         cls.create_invoked_transaction(cls)
         cls.create_invoked_transaction_combined(cls)
-
-    def get_accounts(self, ether):
-        (sol_address, _) = self.loader.ether2program(str(ether))
-        info = client.get_account_info(sol_address, commitment=Confirmed)['result']['value']
-        data = base64.b64decode(info['data'][0])
-        acc_info = ACCOUNT_INFO_LAYOUT.parse(data)
-
-        code_address = PublicKey(acc_info.code_account)
-
-        return (sol_address, code_address)
 
     def deploy_contract(self):
         compiled_sol = compile_source(TEST_EVENT_SOURCE_196)
@@ -319,7 +308,6 @@ class CancelTest(unittest.TestCase):
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
 
                 AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
             ])
 

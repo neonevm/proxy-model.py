@@ -8,7 +8,6 @@ from ..common_neon.utils import str_fmt_object
 class NeonAccountInfo:
     neon_address: Optional[str] = None
     pda_address: str = None
-    code_address: Optional[str] = None
     slot: int = 0
     code: Optional[str] = None
     sol_sign: Optional[str] = None
@@ -29,9 +28,9 @@ class NeonAccountDB(BaseDB):
             return
         with self._conn.cursor() as cursor:
             cursor.execute(f'''
-                INSERT INTO neon_accounts (neon_address, pda_address, code_address, slot,  code, sol_sign)
+                INSERT INTO neon_accounts (neon_address, pda_address, slot, code, sol_sign)
                 VALUES(%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (pda_address, code_address) DO UPDATE
+                ON CONFLICT (pda_address) DO UPDATE
                 SET
                     slot=EXCLUDED.slot
                 ;
@@ -56,16 +55,15 @@ class NeonAccountDB(BaseDB):
         return NeonAccountInfo(
             neon_address=value[0],
             pda_address=value[1],
-            code_address=value[2],
-            slot=value[3],
-            code=value[4],
-            sol_sign=value[5]
+            slot=value[2],
+            code=value[3],
+            sol_sign=value[4]
         )
 
     def get_account_info_by_pda_address(self, pda_address) -> NeonAccountInfo:
         return self._acc_from_value(
             self._fetchone(DBQuery(
-                column_list=['neon_address', 'pda_address', 'code_address', 'slot', 'code', 'sol_sign'],
+                column_list=['neon_address', 'pda_address', 'slot', 'code', 'sol_sign'],
                 key_list=[('pda_address', pda_address)],
                 order_list=['slot desc']
             ))

@@ -585,12 +585,8 @@ class CreateAccountIxDecoder(DummyIxDecoder):
 
         neon_account = "0x" + self.ix.ix_data[8+8+4:][:20].hex()
         pda_account = self.ix.get_account(1)
-        code_account = self.ix.get_account(3)
-        if code_account == str(SYS_PROGRAM_ID) or code_account == '':
-            code_account = None
 
-        account_info = NeonAccountInfo(neon_account, pda_account, code_account,
-                                       self.ix.sign.slot, None, self.ix.sign.sign)
+        account_info = NeonAccountInfo(neon_account, pda_account, self.ix.sign.slot, None, self.ix.sign.sign)
         self.debug(f"{account_info}")
         self.state.add_account_to_db(account_info)
         return True
@@ -598,7 +594,7 @@ class CreateAccountIxDecoder(DummyIxDecoder):
 
 class CreateAccount2IxDecoder(DummyIxDecoder):
     def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'CreateAccount2', state)
+        DummyIxDecoder.__init__(self, 'CreateAccountV2', state)
 
     def execute(self) -> bool:
         self._decoding_start()
@@ -611,32 +607,30 @@ class CreateAccount2IxDecoder(DummyIxDecoder):
 
         neon_account = "0x" + self.ix.ix_data[1:][:20].hex()
         pda_account = self.ix.get_account(2)
-        code_account = self.ix.get_account(3)
-        if code_account == '':
-            code_account = None
 
-        account_info = NeonAccountInfo(neon_account, pda_account, code_account,
-                                       self.ix.sign.slot, None, self.ix.sign.sign)
+        account_info = NeonAccountInfo(neon_account, pda_account, self.ix.sign.slot, None, self.ix.sign.sign)
         self.debug(f"{account_info}")
         self.state.add_account_to_db(account_info)
         return True
 
 
-class ResizeStorageAccountIxDecoder(DummyIxDecoder):
+class CreateAccount3IxDecoder(DummyIxDecoder):
     def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'ResizeStorageAccount', state)
+        DummyIxDecoder.__init__(self, 'CreateAccountV3', state)
 
     def execute(self) -> bool:
         self._decoding_start()
 
         if SolReceiptParser(self.ix.tx).check_if_error():
-            return self._decoding_skip("Ignore failed resize account")
+            return self._decoding_skip("Ignore failed create account")
 
-        pda_account = self.ix.get_account(0)
-        code_account = self.ix.get_account(2)
+        if len(self.ix.ix_data) < 21:
+            return self._decoding_skip(f'not enough data to get the Neon account {len(self.ix.ix_data)}')
 
-        account_info = NeonAccountInfo(None, pda_account, code_account,
-                                       self.ix.sign.slot, None, self.ix.sign.sign)
+        neon_account = "0x" + self.ix.ix_data[1:][:20].hex()
+        pda_account = self.ix.get_account(2)
+
+        account_info = NeonAccountInfo(neon_account, pda_account, self.ix.sign.slot, None, self.ix.sign.sign)
         self.debug(f"{account_info}")
         self.state.add_account_to_db(account_info)
         return True
@@ -794,9 +788,9 @@ class ContinueIxDecoder(DummyIxDecoder):
         return self._decode_tx(tx)
 
 
-class ContinueV02IxDecoder(ContinueIxDecoder):
+class ContinueV03IxDecoder(ContinueIxDecoder):
     def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'ContinueV02', state)
+        DummyIxDecoder.__init__(self, 'ContinueV03', state)
         self._blocked_accounts_start = 6
 
 
@@ -948,17 +942,17 @@ class Indexer(IndexerBase):
             0x0d: PartialCallOrContinueIxDecoder(self.state),
             0x0e: ExecuteOrContinueIxParser(self.state),
             0x0f: DummyIxDecoder('ERC20CreateTokenAccount', self.state),
-            0x11: ResizeStorageAccountIxDecoder(self.state),
             0x12: WriteWithHolderIxDecoder(self.state),
             0x13: PartialCallV02IxDecoder(self.state),
-            0x14: ContinueV02IxDecoder(self.state),
+            0x14: ContinueV03IxDecoder(self.state),
             0x15: CancelV02IxDecoder(self.state),
             0x16: ExecuteTrxFromAccountV02IxDecoder(self.state),
             0x17: DummyIxDecoder('UpdateValidsTable', self.state),
             0x18: CreateAccount2IxDecoder(self.state),
             0x19: DummyIxDecoder('Deposit', self.state),
             0x1a: DummyIxDecoder('MigrateAccount', self.state),
-            0x1b: ExecuteOrContinueNoChainIdIxParser(self.state)
+            0x1b: ExecuteOrContinueNoChainIdIxParser(self.state),
+            0x1e: CreateAccount3IxDecoder(self.state),
         }
         self.def_decoder = DummyIxDecoder('Unknown', self.state)
 

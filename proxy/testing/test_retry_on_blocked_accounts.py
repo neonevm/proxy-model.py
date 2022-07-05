@@ -37,8 +37,7 @@ proxy = Web3(Web3.HTTPProvider(proxy_url))
 eth_account = proxy.eth.account.create(SEED)
 proxy.eth.default_account = eth_account.address
 
-ACCOUNT_SEED_VERSION=b'\1'
-
+ACCOUNT_SEED_VERSION = b'\1'
 
 TEST_RETRY_BLOCKED_365 = '''
 // SPDX-License-Identifier: MIT
@@ -60,9 +59,9 @@ def send_routine(acc_seed, contractAddress, abi, loop, return_dict, padding_stri
     print("Send parallel transaction from {}".format(acc_seed))
     print(datetime.datetime.now().time())
     storage_contract = proxy.eth.contract(
-            address=contractAddress,
-            abi=abi
-        )
+        address=contractAddress,
+        abi=abi
+    )
     new_eth_account = proxy.eth.account.create(acc_seed)
     request_airdrop(new_eth_account.address)
     right_nonce = proxy.eth.get_transaction_count(new_eth_account.address)
@@ -96,17 +95,16 @@ class BlockedTest(unittest.TestCase):
         print(cls.storage_contract.address)
 
         cls.reId_eth = cls.storage_contract.address.lower()
-        print ('contract_eth', cls.reId_eth)
-        (cls.reId, cls.reId_token, cls.re_code) = cls.get_accounts(cls, cls.reId_eth)
-        print ('contract', cls.reId)
-        print ('contract_code', cls.re_code)
+        print('contract_eth', cls.reId_eth)
+        (cls.reId, cls.reId_token) = cls.get_accounts(cls, cls.reId_eth)
+        print('contract', cls.reId)
 
         proxy.eth.default_account
         # Create ethereum account for user account
         cls.caller_ether = proxy.eth.default_account.lower()
-        (cls.caller, cls.caller_token, _) = cls.get_accounts(cls, cls.caller_ether)
-        print ('caller_ether', cls.caller_ether)
-        print ('caller', cls.caller)
+        (cls.caller, cls.caller_token) = cls.get_accounts(cls, cls.caller_ether)
+        print('caller_ether', cls.caller_ether)
+        print('caller', cls.caller)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
@@ -120,14 +118,9 @@ class BlockedTest(unittest.TestCase):
 
     def get_accounts(self, ether):
         (sol_address, _) = self.loader.ether2program(ether)
-        info = client.get_account_info(sol_address, commitment=Confirmed)['result']['value']
-        data = base64.b64decode(info['data'][0])
-        acc_info = ACCOUNT_INFO_LAYOUT.parse(data)
-
-        code_address = PublicKey(acc_info.code_account)
         alternate_token = get_associated_token_address(PublicKey(sol_address), ElfParams().neon_token_mint)
 
-        return (sol_address, alternate_token, code_address)
+        return sol_address, alternate_token
 
     def deploy_contract(self):
         compiled_sol = compile_source(TEST_RETRY_BLOCKED_365)
@@ -159,7 +152,8 @@ class BlockedTest(unittest.TestCase):
     def create_blocked_transaction(self):
         print("\ncreate_blocked_transaction")
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        trx_store = self.storage_contract.functions.add_some(1, 30, "").buildTransaction({'nonce': right_nonce, 'gasPrice': MINIMAL_GAS_PRICE})
+        trx_store = self.storage_contract.functions.add_some(1, 30, "").buildTransaction(
+            {'nonce': right_nonce, 'gasPrice': MINIMAL_GAS_PRICE})
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_store_signed.rawTransaction.hex())
@@ -194,11 +188,11 @@ class BlockedTest(unittest.TestCase):
 
         return (trx_raw.hex(), eth_signature, from_address)
 
-
     def sol_instr_partial_call_or_continue(self, storage_account, step_count, evm_instruction):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0D") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+            data=bytearray.fromhex("0D") + self.collateral_pool_index_buf + step_count.to_bytes(8,
+                                                                                                byteorder='little') + evm_instruction,
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
@@ -216,15 +210,12 @@ class BlockedTest(unittest.TestCase):
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
 
                 AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
             ])
 
-
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
-                AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
-
+            AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
     def make_combined_transaction(self, storage, steps, msg, instruction):
         print("make_combined_transaction")
@@ -234,14 +225,15 @@ class BlockedTest(unittest.TestCase):
         print(trx.__dict__)
         return trx
 
-
     def create_storage_account(self, seed):
-        storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(EVM_LOADER))).digest())
+        storage = PublicKey(
+            sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(EVM_LOADER))).digest())
         print("Storage", storage)
 
         if getBalance(storage) == 0:
             trx = TransactionWithComputeBudget()
-            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(EVM_LOADER)))
+            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10 ** 9, 128 * 1024,
+                                          PublicKey(EVM_LOADER)))
             send_transaction(client, trx, self.acc)
 
         return storage
@@ -252,8 +244,9 @@ class BlockedTest(unittest.TestCase):
         caller_seed = "long"
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
-        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 50, return_dict,
-        """
+        p2 = multiprocessing.Process(target=send_routine,
+                                     args=(caller_seed, self.contractAddress, self.abi, 50, return_dict,
+                                           """
         1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
         1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
         1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
@@ -277,13 +270,13 @@ class BlockedTest(unittest.TestCase):
         caller_seed = "short"
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
-        p2 = multiprocessing.Process(target=send_routine, args=(caller_seed, self.contractAddress, self.abi, 10, return_dict, ""))
+        p2 = multiprocessing.Process(target=send_routine,
+                                     args=(caller_seed, self.contractAddress, self.abi, 10, return_dict, ""))
         p2.start()
         self.finish_blocker_transaction()
         p2.join()
         print('return_dict:', return_dict)
         self.assertEqual(return_dict[caller_seed]['status'], 1)
-
 
 
 if __name__ == '__main__':

@@ -367,7 +367,7 @@ class EvmLoader:
         seed = b58encode(ACCOUNT_SEED_VERSION + bytes.fromhex(ether)).decode('utf8')
         acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
         print('ether2program: {} {} => {}'.format(ether, 255, acc))
-        return (acc, 255)
+        return acc, 255
 
     def ether2program(self, ether):
         if isinstance(ether, str):
@@ -387,8 +387,7 @@ class EvmLoader:
         trx_count = getTransactionCount(client, caller)
         ether = keccak_256(rlp.encode((caller_ether, trx_count))).digest()[-20:]
 
-        program = self.ether2program(ether)
-        code = self.ether2seed(ether)
+        (program, _) = self.ether2program(ether)
         info = client.get_account_info(program[0])
         if info['result']['value'] is None:
             res = self.deploy(location)
@@ -396,7 +395,7 @@ class EvmLoader:
         elif info['result']['value']['owner'] != self.loader_id:
             raise Exception("Invalid owner for account {}".format(program))
         else:
-            return program[0], ether, code[0]
+            return program, ether
 
     def createEtherAccountTrx(self, ether: Union[str, bytes], code_size: int = 0) -> Tuple[Transaction, str]:
         if isinstance(ether, str):
@@ -432,21 +431,20 @@ ACCOUNT_INFO_LAYOUT = cStruct(
     "nonce" / Int8ul,
     "trx_count" / Bytes(8),
     "balance" / Bytes(32),
-    "code_account" / Bytes(32),
     "is_rw_blocked" / Int8ul,
     "ro_blocked_cnt" / Int8ul,
+    "generation" / Int32ul,
 )
 
 
 class AccountInfo(NamedTuple):
     ether: eth_keys.PublicKey
     trx_count: int
-    code_account: PublicKey
 
     @staticmethod
     def frombytes(data: bytes):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
+        return AccountInfo(cont.ether, cont.trx_count)
 
 
 def getAccountData(client: Client, account: Union[str, PublicKey], expected_length: int) -> bytes:

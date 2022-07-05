@@ -138,7 +138,7 @@ class NeonTxValidator:
         if not self._neon_account_info:
             return
 
-        if self._neon_account_info.code_account:
+        if self._neon_account_info.code_size > 0:
             raise EthereumError("sender not an eoa")
 
     def _prevalidate_sender_balance(self):
