@@ -199,7 +199,7 @@ class MPTxSchedule:
             return False
         sender.drop_request_away(mp_tx_request)
         if sender.len() == 0:
-            self.sender_tx_pools.pop(i)
+            self._sender_tx_pools.pop(i)
         return True
 
     def reschedule_tx(self, sender_address: str, nonce: int):
