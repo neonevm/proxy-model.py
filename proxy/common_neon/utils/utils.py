@@ -125,11 +125,6 @@ class NeonTxResultInfo:
             rec['blockHash'] = block.hash
             rec['blockNumber'] = hex(block.slot)
 
-    def _print_logs(self, logs: List[str]):
-        for line in logs:
-            if (line.find("invoke") != -1) or (line.find("success") != -1) or (line.find("failed") != -1) or (line.find("Program data") != -1):
-                self.debug(f">>>> {line}")
-
     def canceled(self, tx: Dict[Any, Any]):
         self._set_defaults()
         self.sol_sign = tx['transaction']['signatures'][0]
