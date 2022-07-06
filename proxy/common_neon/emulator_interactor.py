@@ -1,4 +1,3 @@
-import os
 import json
 import subprocess
 from logged_groups import logged_group
