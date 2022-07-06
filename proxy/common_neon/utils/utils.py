@@ -235,7 +235,7 @@ class NeonTxFullInfo:
 
 
 def get_from_dict(src: Dict, *path) -> Any:
-    '''Provides smart getting values from python dictionary'''
+    """Provides smart getting values from python dictionary"""
     val = src
     for key in path:
         if not isinstance(val, dict):
