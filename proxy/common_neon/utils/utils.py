@@ -15,7 +15,6 @@ from ..environment_data import EVM_LOADER_ID, LOG_FULL_OBJECT_INFO
 from ..eth_proto import Trx as EthTx
 
 
-
 def str_fmt_object(obj) -> str:
     def lookup(obj) -> Optional[Dict]:
         if not hasattr(obj, '__dict__'):
