@@ -494,9 +494,7 @@ class NeonRpcApiWorker:
             self._stat_tx_success()
             req_id = LogMng.get_logging_context().get("req_id")
 
-            self._mempool_client.send_raw_transaction(req_id=req_id,
-                                                      signature=eth_signature,
-                                                      neon_tx=trx)
+            self._mempool_client.send_raw_transaction(req_id=req_id, signature=eth_signature, neon_tx=trx)
             return eth_signature
 
         except PendingTxError:
