@@ -49,7 +49,8 @@ class Config(IConfig):
         return solana_url if solana_url is not None else self.get_solana_url()
 
     def __str__(self):
-        return f"\n        SOLANA_URL: {self.get_solana_url()}, \n" \
+        return f"\n" \
+               f"        SOLANA_URL: {self.get_solana_url()}, \n" \
                f"        PP_SOLANA_URL: {self.get_pyth_solana_url()}\n" \
                f"        PYTH_MAPPING_ACCOUNT: {self.get_pyth_mapping_account()}\n" \
                f"        EVM_STEP_LIMIT: {self.get_evm_steps_limit()}, \n" \
