@@ -489,16 +489,14 @@ class NeonRpcApiWorker:
 
         self._stat_tx_begin()
         try:
-            neon_tx_cfg, emulating_result = self.precheck(trx)
+            self.precheck(trx)
 
             self._stat_tx_success()
             req_id = LogMng.get_logging_context().get("req_id")
 
             self._mempool_client.send_raw_transaction(req_id=req_id,
                                                       signature=eth_signature,
-                                                      neon_tx=trx,
-                                                      neon_tx_exec_cfg=neon_tx_cfg,
-                                                      emulating_result=emulating_result)
+                                                      neon_tx=trx)
             return eth_signature
 
         except PendingTxError:
@@ -514,10 +512,10 @@ class NeonRpcApiWorker:
             self._stat_tx_failed()
             raise
 
-    def precheck(self, neon_trx: EthTrx) -> Tuple[NeonTxExecCfg, NeonEmulatingResult]:
+    def precheck(self, neon_trx: EthTrx):
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
         neon_validator = NeonTxValidator(self._solana, neon_trx, min_gas_price)
-        return neon_validator.precheck()
+        neon_validator.precheck()
 
     def _stat_tx_begin(self):
         self._stat_exporter.stat_commit_tx_begin()

@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Tuple
 from logged_groups import logged_group
 
 from .eth_proto import Trx as EthTx
@@ -58,17 +57,11 @@ class NeonTxValidator:
             return False
         return (self._tx.gasPrice < self._min_gas_price) or (self._tx.gasLimit < self._estimated_gas)
 
-    def precheck(self) -> Tuple[NeonTxExecCfg, NeonEmulatingResult]:
+    def precheck(self):
         try:
             self._prevalidate_tx()
             emulating_result: NeonEmulatingResult = call_trx_emulated(self._tx)
             self.prevalidate_emulator(emulating_result)
-
-            is_underpriced_tx_without_chainid = self.is_underpriced_tx_without_chainid()
-            neon_tx_exec_cfg = NeonTxExecCfg(steps_executed=emulating_result["steps_executed"],
-                                             is_underpriced_tx_without_chainid=is_underpriced_tx_without_chainid)
-            return neon_tx_exec_cfg, emulating_result
-
         except Exception as e:
             self.extract_ethereum_error(e)
             raise

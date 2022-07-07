@@ -4,7 +4,7 @@ import socket
 
 from logged_groups import logged_group, logging_context
 
-from ..common_neon.data import NeonEmulatingResult
+from ..common_neon.data import NeonEmulatingResult, NeonTxExecCfg
 from ..common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.solana_tx_list_sender import BlockedAccountsError
@@ -69,18 +69,20 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             return MPTxResult(MPResultCode.Done, None)
 
     def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
-        evm_steps_limit = self._config.get_evm_steps_limit()
         neon_tx = mp_tx_request.neon_tx
-        tx_sender = NeonTxSender(self._mem_db, self._solana_interactor, neon_tx, steps=evm_steps_limit)
-        emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
-        self._prevalidate(neon_tx, emulating_result)
-        with OperatorResourceList(tx_sender):
-            tx_sender.execute(mp_tx_request.neon_tx_exec_cfg, emulating_result)
-
-    def _prevalidate(self, neon_tx: NeonTx, emulating_result: NeonEmulatingResult):
         min_gas_price = self._gas_price_calculator.get_min_gas_price()
         validator = NeonTxValidator(self._solana_interactor, neon_tx, min_gas_price)
+
+        emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
         validator.prevalidate_emulator(emulating_result)
+
+        neon_tx_cfg = NeonTxExecCfg(steps_executed=emulating_result["steps_executed"],
+                                    is_underpriced_tx_without_chainid=validator.is_underpriced_tx_without_chainid())
+
+        evm_steps_limit = self._config.get_evm_steps_limit()
+        tx_sender = NeonTxSender(self._mem_db, self._solana_interactor, neon_tx, steps=evm_steps_limit)
+        with OperatorResourceList(tx_sender):
+            tx_sender.execute(neon_tx_cfg, emulating_result)
 
     async def on_data_received(self, data: Any) -> Any:
         return self.execute_neon_tx(data)
