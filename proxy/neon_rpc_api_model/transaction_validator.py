@@ -188,11 +188,11 @@ class NeonTxValidator:
     @staticmethod
     def _prevalidate_account_sizes(emulator_json: dict):
         for account_desc in emulator_json['accounts']:
-            if ('code_size' not in account_desc) or ('address' not in account_desc):
+            if ('size' not in account_desc) or ('address' not in account_desc):
                 continue
-            if (not account_desc['code_size']) or (not account_desc['address']):
+            if (not account_desc['size']) or (not account_desc['address']):
                 continue
-            if account_desc['code_size'] > ((9 * 1024 + 512) * 1024):
+            if account_desc['size'] > ((9 * 1024 + 512) * 1024):
                 raise EthereumError(f"contract {account_desc['address']} " +
                                     f"requests a size increase to more than 9.5Mb")
 

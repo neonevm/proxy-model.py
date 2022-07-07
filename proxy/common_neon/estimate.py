@@ -5,7 +5,7 @@ from proxy.common_neon.emulator_interactor import call_emulated
 from ..common_neon.utils import get_holder_msg
 from ..common_neon.elf_params import ElfParams
 
-from .environment_data import CONTRACT_EXTRA_SPACE, EXTRA_GAS
+from .environment_data import EXTRA_GAS
 from .eth_proto import Trx as EthTrx
 from .solana_interactor import SolanaInteractor
 from .layouts import ACCOUNT_INFO_LAYOUT
@@ -43,20 +43,18 @@ class GasEstimate:
         # Some accounts may not exist at the emulation time
         # Calculate gas for them separately
         accounts_size = [
-            a["code_size"] + CONTRACT_EXTRA_SPACE
+            a["size"]
             for a in self.emulator_json.get("accounts", [])
-            if (not a["code_size_current"]) and a["code_size"]
+            if (not a["size_current"]) and a["size"]
         ]
 
         if not accounts_size:
             return cost
 
-        accounts_size.append(ACCOUNT_INFO_LAYOUT.sizeof())
         balances = self._solana.get_multiple_rent_exempt_balances_for_size(accounts_size)
         self.debug(f'sizes: {accounts_size}, balances: {balances}')
 
-        for balance in balances[:-1]:
-            cost += balances[-1]
+        for balance in balances:
             cost += balance
 
         return cost

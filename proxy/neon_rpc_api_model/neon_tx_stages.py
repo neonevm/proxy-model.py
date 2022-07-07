@@ -10,8 +10,6 @@ from solana.transaction import AccountMeta
 
 from ..common_neon.address import accountWithSeed
 from ..common_neon.compute_budget import TransactionWithComputeBudget
-from ..common_neon.constants import ACCOUNT_SEED_VERSION
-from ..common_neon.environment_data import CONTRACT_EXTRA_SPACE
 
 
 class NeonTxStage(metaclass=abc.ABCMeta):
@@ -85,25 +83,12 @@ class NeonCreateAccountTxStage(NeonTxStage):
     def __init__(self, sender, account_desc):
         NeonTxStage.__init__(self, sender)
         self._address = account_desc["address"]
-        self._code_size = account_desc['code_size']
-        self.size = NeonCreateAccountTxStage._calc_account_data_size(self._code_size)
+        self.size = account_desc['size']
         self.balance = 0
-
-    @staticmethod
-    def _calc_valids_size(code_size: int):
-        return (code_size + 7) >> 3
-
-    @staticmethod
-    def _calc_account_data_size(code_size: int):
-        # TODO: Calculate using CLI?
-        size = 68
-        if code_size > 0:
-            size += 4 + code_size + NeonCreateAccountTxStage._calc_valids_size(code_size) + 32 * 64
-        return size
 
     def build(self):
         assert self._is_empty()
-        self.debug(f'Create account {self._address}: (code_size {self._code_size}, expected data size: {self.size})')
+        self.debug(f'Create account {self._address}: (size {self.size})')
         self.tx.add(self.s.builder.make_create_eth_account_instruction(self._address))
 
 

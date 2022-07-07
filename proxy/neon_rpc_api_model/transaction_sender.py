@@ -145,7 +145,7 @@ class NeonTxSender:
 
     def _parse_accounts_list(self, emulated_result_accounts):
         for account_desc in emulated_result_accounts:
-            if account_desc['new'] and (account_desc['code_size'] or account_desc['writable']):
+            if account_desc['new'] and (account_desc['size'] or account_desc['writable']):
                 stage = NeonCreateAccountTxStage(self, account_desc)
                 self._create_account_list.append(stage)
 
