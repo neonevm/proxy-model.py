@@ -33,7 +33,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._event_loop: asyncio.BaseEventLoop
         self._solana_interactor: SolanaInteractor = None
         self._gas_price_calculator: GasPriceCalculator = None
-        self._db: MemDB
+        self._mem_db: MemDB
         self._pickable_data_srv = None
         mp.Process.__init__(self)
 
@@ -43,7 +43,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         asyncio.set_event_loop(self._event_loop)
         self._pickable_data_srv = PipePickableDataSrv(user=self, srv_sock=self._srv_sock)
         self._solana_interactor = SolanaInteractor(self._config.get_solana_url())
-        self._db = MemDB(self._solana_interactor)
+        self._mem_db = MemDB(self._solana_interactor)
 
         self._init_gas_price_calculator()
 
@@ -71,7 +71,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
     def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
         evm_steps_limit = self._config.get_evm_steps_limit()
         neon_tx = mp_tx_request.neon_tx
-        tx_sender = NeonTxSender(self._db, self._solana_interactor, neon_tx, steps=evm_steps_limit)
+        tx_sender = NeonTxSender(self._mem_db, self._solana_interactor, neon_tx, steps=evm_steps_limit)
         emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
         self._prevalidate(neon_tx, emulating_result)
         with OperatorResourceList(tx_sender):
