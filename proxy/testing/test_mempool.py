@@ -41,9 +41,7 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int,
     )
     signature = signed_tx_data.hash.hex()
     neon_tx = NeonTx.fromString(bytearray(signed_tx_data.rawTransaction))
-    tx_cfg = NeonTxExecCfg(is_underpriced_tx_without_chainid=False, steps_executed=100)
-    mp_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=tx_cfg,
-                                emulating_result=dict())
+    mp_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx)
     return mp_tx_request
 
 
