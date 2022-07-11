@@ -21,13 +21,13 @@ from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
-from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, EVM_STEP_COUNT, USE_EARLIEST_BLOCK_IF_0_PASSED, \
+from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED, \
                                            PYTH_MAPPING_ACCOUNT
+from ..common_neon.transaction_validator import NeonTxValidator
 from ..memdb.memdb import MemDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..mempool import MemPoolClient, MP_SERVICE_HOST, MP_SERVICE_PORT
 
-from .transaction_validator import NeonTxValidator
 
 NEON_PROXY_PKG_VERSION = '0.7.21-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
@@ -489,16 +489,12 @@ class NeonRpcApiWorker:
 
         self._stat_tx_begin()
         try:
-            neon_tx_cfg, emulating_result = self.precheck(trx)
+            self.precheck(trx)
 
             self._stat_tx_success()
             req_id = LogMng.get_logging_context().get("req_id")
 
-            self._mempool_client.send_raw_transaction(req_id=req_id,
-                                                      signature=eth_signature,
-                                                      neon_tx=trx,
-                                                      neon_tx_exec_cfg=neon_tx_cfg,
-                                                      emulating_result=emulating_result)
+            self._mempool_client.send_raw_transaction(req_id=req_id, signature=eth_signature, neon_tx=trx)
             return eth_signature
 
         except PendingTxError:
@@ -514,10 +510,10 @@ class NeonRpcApiWorker:
             self._stat_tx_failed()
             raise
 
-    def precheck(self, neon_trx: EthTrx) -> Tuple[NeonTxExecCfg, NeonEmulatingResult]:
+    def precheck(self, neon_trx: EthTrx):
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
         neon_validator = NeonTxValidator(self._solana, neon_trx, min_gas_price)
-        return neon_validator.precheck()
+        neon_validator.precheck()
 
     def _stat_tx_begin(self):
         self._stat_exporter.stat_commit_tx_begin()
