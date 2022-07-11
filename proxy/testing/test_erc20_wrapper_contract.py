@@ -7,7 +7,6 @@ import os
 import json
 from solana.rpc.commitment import Confirmed, Recent
 from solana.rpc.types import TxOpts
-from web3 import Web3
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
 import spl.token.instructions as SplTokenInstrutions
@@ -15,17 +14,13 @@ from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 from solana.rpc.types import TokenAccountOpts
-from solana.transaction import Transaction, AccountMeta
-from proxy.common_neon.address import EthereumAddress
-from proxy.common_neon.emulator_interactor import call_trx_emulated
 
-from proxy.common_neon.eth_proto import Trx
 
 from ..testing.testing_helpers import request_airdrop
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.erc20_wrapper import ERC20Wrapper
-from ..common_neon.neon_instruction import NeonInstruction
 from ..common_neon.compute_budget import TransactionWithComputeBudget
+from ..common_neon.web3 import NeonWeb3 as Web3
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
@@ -110,36 +105,13 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
             signers=[],
         )))
 
-
-        erc20 = proxy.eth.contract(address=self.wrapper.neon_contract_address, abi=self.wrapper.wrapper['abi'])
-        nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        claim_tx = erc20.functions.claim(bytes(token_account), amount).buildTransaction({'nonce': nonce, 'gasPrice': 0})
-        claim_tx = proxy.eth.account.sign_transaction(claim_tx, admin.key)
-
-        eth_trx = Trx.fromString(bytearray.fromhex(claim_tx.rawTransaction.hex()[2:]))
-        emulating_result = call_trx_emulated(eth_trx)
-
-        eth_accounts = dict()
-        for account in emulating_result['accounts']:
-            key = account['account']
-            eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
-            if account['contract']:
-                key = account['contract']
-                eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
-
-        for account in emulating_result['solana_accounts']:
-            key = account['pubkey']
-            eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
-
-        eth_accounts = list(eth_accounts.values())
-
-
-        neon = NeonInstruction(self.solana_account.public_key())
-        neon.init_operator_ether(EthereumAddress(admin.address))
-        neon.init_eth_trx(eth_trx, eth_accounts)
-
-
-        tx.add(neon.make_noniterative_call_transaction(len(tx.instructions)))
+        claim_instr = self.wrapper.create_claim_instruction(
+            owner = self.solana_account.public_key(),
+            from_acc=token_account, 
+            to_acc=admin,
+            amount=amount,
+        )
+        tx.add(claim_instr.make_noniterative_call_transaction(len(tx.instructions)))
 
         self.solana_client.send_transaction(tx, self.solana_account, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
 
