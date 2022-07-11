@@ -80,7 +80,7 @@ class Test_eth_event_log_limit(unittest.TestCase):
         self.commit_event_trx(self, 2000, 42)
         from proxy.common_neon.environment_data import MAX_EVM_STEPS_TO_EXECUTE
         std_max_evm_steps_to_execute = MAX_EVM_STEPS_TO_EXECUTE
-        MAX_EVM_STEPS_TO_EXECUTE = '300000'
+        MAX_EVM_STEPS_TO_EXECUTE = 300000
         self.commit_event_trx(self, 3000, 43)
         MAX_EVM_STEPS_TO_EXECUTE = std_max_evm_steps_to_execute
         pass
