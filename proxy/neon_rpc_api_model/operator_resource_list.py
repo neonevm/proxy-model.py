@@ -17,7 +17,8 @@ from solana.publickey import PublicKey
 
 from ..common_neon.address import EthereumAddress, ether2program, accountWithSeed
 from ..common_neon.compute_budget import TransactionWithComputeBudget
-from ..common_neon.constants import STORAGE_SIZE, ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG
+from ..common_neon.constants import STORAGE_SIZE, ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG, \
+    NEON_ACCOUNT_BASE_SIZE
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.environment_data import EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL, \
@@ -225,7 +226,7 @@ class OperatorResourceList:
             self.debug(f"Use existing ether account {str(solana_address)} for resource {opkey}:{rid}")
             return ether_address
 
-        stage = NeonCreateAccountTxStage(self._s, {"address": ether_address})
+        stage = NeonCreateAccountTxStage(self._s, {"address": ether_address, "size": NEON_ACCOUNT_BASE_SIZE})
         stage.balance = self._solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0]
         stage.build()
 
