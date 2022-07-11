@@ -1,5 +1,4 @@
 from solcx import install_solc
-from web3 import Web3
 from spl.token.client import Token
 from spl.token.constants import TOKEN_PROGRAM_ID
 from eth_account.signers.local import LocalAccount as NeonAccount
@@ -16,8 +15,8 @@ from logged_groups import logged_group
 from .compute_budget import TransactionWithComputeBudget
 from sha3 import keccak_256
 from proxy.common_neon.eth_proto import Trx
-from proxy.common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.neon_instruction import NeonInstruction
+from ..common_neon.web3 import NeonWeb3
 from proxy.common_neon.address import EthereumAddress
 
 install_solc(version='0.7.6')
@@ -56,7 +55,7 @@ interface IERC20ForSpl {
 
 @logged_group("neon.Proxy")
 class ERC20Wrapper:
-    proxy: Web3
+    proxy: NeonWeb3
     name: str
     symbol: str
     token: Token
@@ -68,7 +67,7 @@ class ERC20Wrapper:
     interface: Dict
     wrapper: Dict
 
-    def __init__(self, proxy: Web3,
+    def __init__(self, proxy: NeonWeb3,
                  name: str, symbol: str,
                  token: Token,
                  admin: NeonAccount,
@@ -137,8 +136,8 @@ class ERC20Wrapper:
         claim_tx = erc20.functions.claim(bytes(from_acc), amount).buildTransaction({'nonce': nonce, 'gasPrice': 0})
         claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, to_acc.key)
 
-        eth_trx = Trx.fromString(bytearray.fromhex(claim_tx.rawTransaction.hex()[2:]))
-        emulating_result = call_trx_emulated(eth_trx)
+        eth_trx = bytearray.fromhex(claim_tx.rawTransaction.hex()[2:])
+        emulating_result = self.proxy.neon.emulate(eth_trx)
 
         eth_accounts = dict()
         for account in emulating_result['accounts']:
@@ -156,7 +155,7 @@ class ERC20Wrapper:
 
         neon = NeonInstruction(owner)
         neon.init_operator_ether(EthereumAddress(to_acc.address))
-        neon.init_eth_trx(eth_trx, eth_accounts)
+        neon.init_eth_trx(Trx.fromString(eth_trx), eth_accounts)
         return neon
 
     def create_neon_erc20_account_instruction(self, payer: PublicKey, eth_address: str):

@@ -7,7 +7,6 @@ import os
 import json
 from solana.rpc.commitment import Confirmed, Recent
 from solana.rpc.types import TxOpts
-from web3 import Web3
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
 import spl.token.instructions as SplTokenInstrutions
@@ -15,17 +14,13 @@ from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 from solana.rpc.types import TokenAccountOpts
-from solana.transaction import Transaction, AccountMeta
-from proxy.common_neon.address import EthereumAddress
-from proxy.common_neon.emulator_interactor import call_trx_emulated
 
-from proxy.common_neon.eth_proto import Trx
 
 from ..testing.testing_helpers import request_airdrop
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.erc20_wrapper import ERC20Wrapper
-from ..common_neon.neon_instruction import NeonInstruction
 from ..common_neon.compute_budget import TransactionWithComputeBudget
+from ..common_neon.web3 import NeonWeb3 as Web3
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")

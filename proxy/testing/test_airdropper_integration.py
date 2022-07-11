@@ -2,11 +2,10 @@ from unittest import TestCase
 from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from spl.token.client import Token as SplToken
-from spl.token.instructions import get_associated_token_address
 from ..common_neon.environment_data import SOLANA_URL, EVM_LOADER_ID
+from ..common_neon.web3 import NeonWeb3
 from solana.system_program import SYS_PROGRAM_ID
-from solana.sysvar import SYSVAR_RENT_PUBKEY
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.rpc.commitment import Confirmed
 from solana.publickey import PublicKey
 from solana.rpc.types import TxOpts
@@ -29,7 +28,7 @@ PROXY_URL = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 FAUCET_RPC_PORT = 3333
 NAME = 'TestToken'
 SYMBOL = 'TST'
-proxy = Web3(Web3.HTTPProvider(PROXY_URL))
+proxy = NeonWeb3(Web3.HTTPProvider(PROXY_URL))
 admin = proxy.eth.account.create('neonlabsorg/proxy-model.py/issues/344/admin20')
 proxy.eth.default_account = admin.address
 request_airdrop(admin.address)
