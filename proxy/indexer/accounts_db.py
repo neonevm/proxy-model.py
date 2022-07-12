@@ -29,7 +29,7 @@ class NeonAccountDB(BaseDB):
         with self._conn.cursor() as cursor:
             cursor.execute(f'''
                 INSERT INTO neon_accounts (neon_address, pda_address, slot, code, sol_sign)
-                VALUES(%s, %s, %s, %s, %s, %s)
+                VALUES(%s, %s, %s, %s, %s)
                 ON CONFLICT (pda_address) DO UPDATE
                 SET
                     slot=EXCLUDED.slot
