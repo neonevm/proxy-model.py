@@ -166,7 +166,7 @@ class Test_eth_getLogs(unittest.TestCase):
         receipts = proxy.eth.get_logs({'fromBlock': self.block_numbers[2]})
         receipts = list(filter(lambda r: r['address'] == self.storage_contract.address, receipts))
         print('receipts: ', receipts)
-        self.assertEqual(len(receipts), 5)
+        self.assertEqual(len(receipts), 4)
 
     def test_get_logs_complex_request(self):
         print("\ntest_get_logs_complex_request")
