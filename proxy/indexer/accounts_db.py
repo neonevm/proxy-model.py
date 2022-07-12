@@ -30,7 +30,7 @@ class NeonAccountDB(BaseDB):
             cursor.execute(f'''
                 INSERT INTO neon_accounts (neon_address, pda_address, slot, code, sol_sign)
                 VALUES(%s, %s, %s, %s, %s)
-                ON CONFLICT (pda_address) DO UPDATE
+                ON CONFLICT (pda_address, code_address) DO UPDATE
                 SET
                     slot=EXCLUDED.slot
                 ;
