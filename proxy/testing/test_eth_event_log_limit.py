@@ -50,12 +50,9 @@ class Test_eth_event_log_limit(unittest.TestCase):
         print(cls.block_numbers)
         print(cls.topics)
 
-        cls.saved = environment_data.MAX_EVM_STEPS_TO_EXECUTE
-        environment_data.MAX_EVM_STEPS_TO_EXECUTE = 300000
-
     @classmethod
     def tearDownClass(cls) -> None:
-        environment_data.MAX_EVM_STEPS_TO_EXECUTE = cls.saved
+        pass
 
     def deploy_contract(self):
         compiled_sol = compile_source(TEST_EVENT_SOURCE_812)
