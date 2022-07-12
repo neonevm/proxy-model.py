@@ -614,26 +614,9 @@ class CreateAccount2IxDecoder(DummyIxDecoder):
         return True
 
 
-class CreateAccount3IxDecoder(DummyIxDecoder):
+class CreateAccount3IxDecoder(CreateAccount2IxDecoder):
     def __init__(self, state: ReceiptsParserState):
         DummyIxDecoder.__init__(self, 'CreateAccountV3', state)
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        if SolReceiptParser(self.ix.tx).check_if_error():
-            return self._decoding_skip("Ignore failed create account")
-
-        if len(self.ix.ix_data) < 21:
-            return self._decoding_skip(f'not enough data to get the Neon account {len(self.ix.ix_data)}')
-
-        neon_account = "0x" + self.ix.ix_data[1:][:20].hex()
-        pda_account = self.ix.get_account(2)
-
-        account_info = NeonAccountInfo(neon_account, pda_account, self.ix.sign.slot, None, self.ix.sign.sign)
-        self.debug(f"{account_info}")
-        self.state.add_account_to_db(account_info)
-        return True
 
 
 class CallFromRawIxDecoder(DummyIxDecoder):
