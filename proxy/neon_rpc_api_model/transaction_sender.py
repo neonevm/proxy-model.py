@@ -14,6 +14,7 @@ from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateERC20TxStage
 
 from .operator_resource_list import OperatorResourceInfo
 from ..common_neon.compute_budget import TransactionWithComputeBudget
+from ..common_neon.constants import NEON_ACCOUNT_BASE_SIZE
 from ..common_neon.neon_instruction import NeonInstruction as NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_tx_list_sender import SolTxListSender
@@ -145,7 +146,7 @@ class NeonTxSender:
 
     def _parse_accounts_list(self, emulated_result_accounts):
         for account_desc in emulated_result_accounts:
-            if account_desc['new'] and (account_desc['size'] or account_desc['writable']):
+            if account_desc['new'] and ((account_desc['size'] > NEON_ACCOUNT_BASE_SIZE) or account_desc['writable']):
                 stage = NeonCreateAccountTxStage(self, account_desc)
                 self._create_account_list.append(stage)
 
