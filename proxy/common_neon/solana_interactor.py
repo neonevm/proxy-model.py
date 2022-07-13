@@ -24,7 +24,7 @@ from .utils import SolanaBlockInfo
 from .environment_data import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, RETRY_ON_FAIL, FUZZING_BLOCKHASH, \
                               CONFIRM_TIMEOUT, FINALIZED
 
-from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
+from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
 from ..common_neon.constants import ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.utils import get_from_dict
@@ -54,14 +54,9 @@ class NeonAccountInfo(NamedTuple):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
 
         base_size = ACCOUNT_INFO_LAYOUT.sizeof()
-        code_size = 0
         code = None
-        code_size_size = 4
-        if len(data) >= base_size + code_size_size:
-            code_info = CODE_ACCOUNT_INFO_LAYOUT.parse(data[base_size:][:code_size_size])
-            code_size = code_info.code_size
-            if code_size > 0:
-                code = '0x' + data[base_size + code_size_size:][:code_size].hex()
+        if cont.code_size > 0 and len(data) >= base_size:
+            code = '0x' + data[base_size:][:cont.code_size].hex()
 
         return NeonAccountInfo(
             pda_address=pda_address,
@@ -72,7 +67,7 @@ class NeonAccountInfo(NamedTuple):
             is_rw_blocked=(cont.is_rw_blocked != 0),
             ro_blocked_cnt=cont.ro_blocked_cnt,
             generation=cont.generation,
-            code_size=code_size,
+            code_size=cont.code_size,
             code=code,
         )
 

@@ -8,7 +8,6 @@ from ..common_neon.elf_params import ElfParams
 from .environment_data import EXTRA_GAS
 from .eth_proto import Trx as EthTrx
 from .solana_interactor import SolanaInteractor
-from .layouts import ACCOUNT_INFO_LAYOUT
 
 
 

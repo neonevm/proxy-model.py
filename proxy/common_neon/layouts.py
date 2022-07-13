@@ -27,9 +27,6 @@ ACCOUNT_INFO_LAYOUT = Struct(
     "is_rw_blocked" / Int8ul,
     "ro_blocked_cnt" / Int8ul,
     "generation" / Int32ul,
-)
-
-CODE_ACCOUNT_INFO_LAYOUT = Struct(
     "code_size" / Int32ul,
 )
 
