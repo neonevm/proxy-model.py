@@ -22,7 +22,7 @@ class IndexerBase:
         - NUMBER - first start from the number, then continue from last parsed slot
         """
         last_known_slot = 0 if not isinstance(last_known_slot, int) else last_known_slot
-        latest_slot = self._solana.get_slot(FINALIZED)
+        latest_slot = self._solana.get_block_slot(FINALIZED)
         start_int_slot = 0
         name = f'{name} slot'
 
@@ -62,7 +62,7 @@ class IndexerBase:
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
                 self.warning('Exception on transactions processing. ' +
                              f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     def process_functions(self) -> None:
         pass

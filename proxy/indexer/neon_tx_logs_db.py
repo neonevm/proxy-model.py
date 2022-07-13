@@ -7,13 +7,14 @@ from ..indexer.indexed_objects import NeonIndexedTxInfo
 class NeonTxLogsDB(BaseDB):
     def __init__(self):
         super().__init__('neon_transaction_logs')
-        self._column_list = ['block_slot', 'tx_idx', 'tx_log_idx', 'log_idx',
-                            'address', 'log_data', 'block_hash', 'tx_hash', 'topic', 'topic_list']
+        self._column_list = [
+            'block_slot', 'tx_idx', 'tx_log_idx', 'log_idx',
+            'address', 'log_data', 'tx_hash', 'topic', 'topic_list'
+        ]
 
         self._column2field_dict = {
             'address': 'address',
             'log_data': 'data',
-            'block_hash': 'blockHash',
             'block_slot': 'blockNumber',
             'tx_hash': 'transactionHash',
             'tx_idx': 'transactionIndex',
@@ -63,6 +64,7 @@ class NeonTxLogsDB(BaseDB):
                 if key in self._hex_field_dict:
                     value = hex(value)
                 log[key] = value
+        log['blockHash'] = value_list[-1]
         return log
 
     def get_logs(self, from_block: Optional[int],
@@ -70,41 +72,47 @@ class NeonTxLogsDB(BaseDB):
                  address_list: List[str],
                  topic_list: List[str],
                  block_hash: Optional[str]) -> List[Dict[str, Any]]:
-        query_list: List[str] = []
+        query_list: List[str] = ['1 = 1']
         param_list: List[Any] = []
 
         if from_block is not None:
-            query_list.append('block_slot >= %s')
+            query_list.append('a.block_slot >= %s')
             param_list.append(from_block)
 
         if to_block is not None:
-            query_list.append('block_slot <= %s')
+            query_list.append('a.block_slot <= %s')
             param_list.append(to_block)
 
         if block_hash is not None:
             block_hash = block_hash.lower()
-            query_list.append('block_hash = %s')
+            query_list.append('b.block_hash = %s')
             param_list.append(block_hash)
 
         if len(topic_list) > 0:
             query_placeholder = ', '.join(['%s' for _ in range(len(topic_list))])
-            topics_query = f'topic IN ({query_placeholder})'
+            topics_query = f'a.topic IN ({query_placeholder})'
 
             query_list.append(topics_query)
             param_list += topic_list
 
         if len(address_list) > 0:
             query_placeholder = ', '.join(['%s' for _ in range(len(address_list))])
-            address_query = f'address IN ({query_placeholder})'
+            address_query = f'a.address IN ({query_placeholder})'
 
             query_list.append(address_query)
             param_list += address_list
 
-        query_string = f'SELECT {",".join(self._column_list)} FROM {self._table_name} WHERE 1=1'
-        for query in query_list:
-            query_string += ' AND ' + query
-
-        query_string += ' ORDER BY block_slot desc LIMIT 1000'
+        query_string = f'''
+            SELECT {",".join(['a.' + c for c in self._column_list])},
+                   b.block_hash
+              FROM {self._table_name} AS a
+        INNER JOIN {self._blocks_table_name} AS b
+                ON b.block_slot = a.block_slot
+               AND b.is_active = True
+             WHERE {' AND '.join(query_list)}
+          ORDER BY a.block_slot DESC
+             LIMIT 1000
+         '''
 
         with self._conn.cursor() as cursor:
             cursor.execute(query_string, tuple(param_list))
@@ -119,3 +127,13 @@ class NeonTxLogsDB(BaseDB):
             unique_log_set.add(ident)
             log_list.append(self._log_from_value(value_list))
         return log_list
+
+    def finalize_block_list(self, cursor: BaseDB.Cursor, base_block_slot: int, block_slot_list: List[int]) -> None:
+        cursor.execute(f'''
+            DELETE FROM {self._table_name}
+                  WHERE block_slot > %s
+                    AND block_slot < %s
+                    AND block_slot NOT IN ({','.join(["%s" for _ in block_slot_list])})
+            ''',
+            [base_block_slot, block_slot_list[-1]] + block_slot_list
+        )

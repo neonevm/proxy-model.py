@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import sha3
+import hashlib
 import copy
 
 from enum import Enum
-from typing import Iterator, List, Optional, Dict, NamedTuple, Union, Set
+from typing import Iterator, List, Optional, Dict, NamedTuple, Union, Set, Deque
 from logged_groups import logged_group
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolanaBlockInfo, str_fmt_object
@@ -131,7 +131,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
             self._blocked_account_list = list(iter_blocked_account)
 
             key_data = ':'.join([storage_account] + self._blocked_account_list)
-            self._value = sha3.sha3_512(key_data.encode('utf-8')).digest().hex()
+            self._value = hashlib.sha1(key_data.encode('utf-8')).digest().hex()
 
         @staticmethod
         def from_ix(sol_neon_ix: SolNeonIxReceiptInfo) -> NeonIndexedTxInfo.Key:
@@ -208,9 +208,9 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
 class NeonIndexedBlockInfo:
     _SolIDInfo = Union[SolNeonIxReceiptInfo, SolTxMetaInfo]
 
-    def __init__(self, history_block_list: List[SolanaBlockInfo]):
-        self._sol_block = history_block_list[-1]
-        self._history_block_list = history_block_list
+    def __init__(self, history_block_deque: Deque[SolanaBlockInfo]):
+        self._sol_block = history_block_deque[-1]
+        self._history_block_deque = history_block_deque
         self._is_completed = False
 
         self._neon_holder_dict: Dict[str, NeonIndexedHolderInfo] = {}
@@ -226,11 +226,11 @@ class NeonIndexedBlockInfo:
     def __str__(self) -> str:
         return str_fmt_object(self)
 
-    def clone(self, history_block_list: List[SolanaBlockInfo]) -> NeonIndexedBlockInfo:
-        sol_block = history_block_list[-1]
+    def clone(self, history_block_deque: Deque[SolanaBlockInfo]) -> NeonIndexedBlockInfo:
+        sol_block = history_block_deque[-1]
         assert sol_block.slot > self.block_slot
 
-        new_block = NeonIndexedBlockInfo(history_block_list)
+        new_block = NeonIndexedBlockInfo(history_block_deque)
         new_block._neon_holder_dict = copy.deepcopy(self._neon_holder_dict)
         new_block._neon_tx_dict = copy.deepcopy(self._neon_tx_dict)
         new_block._sol_neon_ix_dict = copy.deepcopy(self._sol_neon_ix_dict)
@@ -253,8 +253,16 @@ class NeonIndexedBlockInfo:
         return self._is_completed
 
     def set_finalized(self, value: bool) -> None:
-        for block in self._history_block_list:
+        for block in self._history_block_deque:
             block.is_finalized = value
+
+    def finalize_history_list(self, finalized_block_slot: int) -> int:
+        removed_block_cnt = 0
+        while len(self._history_block_deque) and (finalized_block_slot >= self._history_block_deque[0].slot):
+            self._history_block_deque.popleft()
+            removed_block_cnt += 1
+        assert len(self._history_block_deque)
+        return removed_block_cnt
 
     def _add_sol_neon_ix(self, indexed_obj: BaseNeonIndexedObjInfo, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
         d = self._sol_neon_ix_dict
@@ -359,7 +367,11 @@ class NeonIndexedBlockInfo:
         pass
 
     def iter_history_block(self) -> Iterator[SolanaBlockInfo]:
-        return iter(self._history_block_list)
+        return iter(self._history_block_deque)
+
+    @property
+    def history_block_cnt(self):
+        return len(self._history_block_deque)
 
     def iter_neon_tx(self) -> Iterator[NeonIndexedTxInfo]:
         return iter(self._neon_tx_dict.values())
@@ -410,22 +422,27 @@ class NeonIndexedBlockInfo:
 @logged_group("neon.Indexer")
 class NeonIndexedBlockDict:
     class Stat:
-        def __init__(self, neon_holder_cnt: int, neon_tx_cnt: int,  sol_neon_ix_cnt: int):
+        def __init__(self, neon_holder_cnt: int, neon_tx_cnt: int,  history_block_cnt: int, sol_neon_ix_cnt: int):
             self._neon_block_cnt = 1
             self._neon_holder_cnt = neon_holder_cnt
             self._neon_tx_cnt = neon_tx_cnt
+            self._history_block_cnt = history_block_cnt
             self._sol_neon_ix_cnt = sol_neon_ix_cnt
             self._min_block_slot = 0
 
+        def __str__(self) -> str:
+            return str_fmt_object(self)
+
         @staticmethod
         def init_empty() -> NeonIndexedBlockDict.Stat:
-            return NeonIndexedBlockDict.Stat(0, 0, 0)
+            return NeonIndexedBlockDict.Stat(0, 0, 0, 0)
 
         @staticmethod
         def from_block(neon_block: NeonIndexedBlockInfo) -> NeonIndexedBlockInfo.Stat:
             return NeonIndexedBlockDict.Stat(
                 neon_holder_cnt=neon_block.neon_holder_cnt,
                 neon_tx_cnt=neon_block.neon_tx_cnt,
+                history_block_cnt=neon_block.history_block_cnt,
                 sol_neon_ix_cnt=neon_block.sol_neon_ix_cnt
             )
 
@@ -452,16 +469,21 @@ class NeonIndexedBlockDict:
         def set_min_block_slot(self, block_slot: int) -> None:
             self._min_block_slot = block_slot
 
+        def dec_history_block_cnt(self, removed_block_cnt: int) -> None:
+            self._history_block_cnt -= removed_block_cnt
+
         def add_stat(self, src: NeonIndexedBlockDict.Stat) -> None:
             self._neon_block_cnt += src._neon_block_cnt
             self._neon_holder_cnt += src._neon_holder_cnt
-            self._neon_tx_cnt += src._neon_holder_cnt
+            self._neon_tx_cnt += src._neon_tx_cnt
+            self._history_block_cnt += src._history_block_cnt
             self._sol_neon_ix_cnt += src._sol_neon_ix_cnt
 
         def del_stat(self, src: NeonIndexedBlockDict.Stat) -> None:
             self._neon_block_cnt -= src._neon_block_cnt
             self._neon_holder_cnt -= src._neon_holder_cnt
-            self._neon_tx_cnt -= src._neon_holder_cnt
+            self._neon_tx_cnt -= src._neon_tx_cnt
+            self._history_block_cnt -= src._history_block_cnt
             self._sol_neon_ix_cnt -= src._sol_neon_ix_cnt
 
     def __init__(self):
@@ -478,7 +500,12 @@ class NeonIndexedBlockDict:
         return self._stat
 
     def get_neon_block(self, block_slot: int) -> Optional[NeonIndexedBlockInfo]:
-        return self._neon_block_dict.get(block_slot)
+        neon_block = self._neon_block_dict.get(block_slot, None)
+        # Lazy cleaning of finalized history
+        if (neon_block is not None) and (self._finalized_neon_block is not None):
+            removed_block_cnt = neon_block.finalize_history_list(self._finalized_neon_block.block_slot)
+            self._stat.dec_history_block_cnt(removed_block_cnt)
+        return neon_block
 
     @staticmethod
     def _find_min_block_slot(neon_block: NeonIndexedBlockInfo) -> int:
@@ -487,27 +514,26 @@ class NeonIndexedBlockDict:
             min_block_slot = min(min_block_slot, ix.block_slot)
         return min_block_slot
 
-    def add_neon_block(self, neon_block: NeonIndexedBlockInfo,
-                       is_finalized: bool,
-                       sol_tx_meta: SolTxMetaInfo) -> None:
-        old_neon_block = self._neon_block_dict.get(neon_block.block_slot, None)
-        if (old_neon_block is not None) and (old_neon_block.is_finalized == is_finalized):
+    def add_neon_block(self, neon_block: NeonIndexedBlockInfo, _: SolTxMetaInfo) -> None:
+        if neon_block.block_slot in self._neon_block_dict:
             return
 
-        self._stat.add_stat(NeonIndexedBlockDict.Stat.from_block(neon_block))
-        neon_block.set_finalized(is_finalized)
+        stat = NeonIndexedBlockDict.Stat.from_block(neon_block)
+        self._stat.add_stat(stat)
         self._neon_block_dict[neon_block.block_slot] = neon_block
+        # self.debug(f'{sol_tx_meta} add block {neon_block.block_slot}: {stat}')
 
-        if not neon_block.is_finalized:
-            return
-        elif self._finalized_neon_block is not None:
-            self._del_neon_block(self._finalized_neon_block, sol_tx_meta)
+    def finalize_neon_block(self, neon_block: NeonIndexedBlockInfo, _: SolTxMetaInfo) -> None:
+        assert neon_block.block_slot in self._neon_block_dict
 
+        if self._finalized_neon_block is not None:
+            for block_slot in range(self._finalized_neon_block.block_slot, neon_block.block_slot):
+                old_neon_block = self._neon_block_dict.pop(block_slot, None)
+                if old_neon_block is not None:
+                    stat = NeonIndexedBlockDict.Stat.from_block(old_neon_block)
+                    self._stat.del_stat(stat)
+                    # self.debug(f'{sol_tx_meta} del block {old_neon_block.block_slot}: {stat}')
+
+        # self.debug(f'{sol_tx_meta} finalize block {neon_block.block_slot}')
         self._finalized_neon_block = neon_block
         self._stat.set_min_block_slot(self._find_min_block_slot(neon_block))
-
-    def _del_neon_block(self, neon_block: NeonIndexedBlockInfo, sol_tx_meta: SolTxMetaInfo) -> None:
-        if not self._neon_block_dict.pop(neon_block.block_slot, None):
-            self.warning(f'{sol_tx_meta} - attempt to remove the not-existent {neon_block}')
-        else:
-            self._stat.del_stat(NeonIndexedBlockDict.Stat.from_block(neon_block))

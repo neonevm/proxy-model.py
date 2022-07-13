@@ -257,7 +257,7 @@ class SolanaInteractor:
 
         return self._send_rpc_request("getSignaturesForAddress", EVM_LOADER_ID, opts)
 
-    def get_slot(self, commitment='confirmed') -> int:
+    def get_block_slot(self, commitment='confirmed') -> int:
         opts = {
             'commitment': commitment
         }

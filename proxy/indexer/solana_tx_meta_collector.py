@@ -13,13 +13,48 @@ from ..common_neon.environment_data import FINALIZED, CONFIRMED
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSignSlotInfo
 
 
+class SolHistoryNotFound(RuntimeError):
+    def __init__(self, error: str):
+        super().__init__(error)
+
+
+@logged_group("neon.Indexer")
+class SolTxMetaDict:
+    def __init__(self):
+        self._tx_meta_dict: Dict[SolTxSignSlotInfo, SolTxMetaInfo] = {}
+
+    def has_sign(self, sign_slot: SolTxSignSlotInfo) -> bool:
+        return sign_slot in self._tx_meta_dict
+
+    def add(self, sign_slot: SolTxSignSlotInfo, tx_meta: Dict[str, Any]) -> None:
+        if tx_meta is None:
+            raise SolHistoryNotFound(f'Solana receipt {sign_slot} not found')
+
+        block_slot = tx_meta['slot']
+        if block_slot != sign_slot.block_slot:
+            raise SolHistoryNotFound(f'Solana receipt {sign_slot} on another history branch: {block_slot}')
+        self._tx_meta_dict[sign_slot] = SolTxMetaInfo.from_response(sign_slot, tx_meta)
+
+    def get(self, sign_slot: SolTxSignSlotInfo) -> Optional[SolTxMetaInfo]:
+        tx_meta = self._tx_meta_dict.get(sign_slot, None)
+        if tx_meta is None:
+            raise SolHistoryNotFound(f'no Solana receipt for the signature: {sign_slot}')
+        return tx_meta
+
+    def pop(self, sign_slot: SolTxSignSlotInfo) -> Optional[SolTxMetaInfo]:
+        return self._tx_meta_dict.pop(sign_slot, None)
+
+    def keys(self) -> List[SolTxSignSlotInfo]:
+        return list(self._tx_meta_dict.keys())
+
+
 @logged_group("neon.Indexer")
 class SolTxMetaCollector(ABC):
-    def __init__(self, solana: SolanaInteractor, commitment: str, is_finalized: bool):
+    def __init__(self, tx_meta_dict: SolTxMetaDict, solana: SolanaInteractor, commitment: str, is_finalized: bool):
         self._solana = solana
         self._commitment = commitment
         self._is_finalized = is_finalized
-        self._tx_meta_dict: Dict[SolTxSignSlotInfo, Dict[str, Any]] = {}
+        self._tx_meta_dict = tx_meta_dict
         self._thread_pool = ThreadPool(INDEXER_PARALLEL_REQUEST_COUNT)
 
     @property
@@ -29,11 +64,6 @@ class SolTxMetaCollector(ABC):
     @property
     def is_finalized(self) -> bool:
         return self._is_finalized
-
-    @property
-    @abstractmethod
-    def last_block_slot(self) -> int:
-        pass
 
     @abstractmethod
     def iter_tx_meta(self, start_slot: int, stop_slot: int) -> Iterator[SolTxMetaInfo]:
@@ -45,9 +75,7 @@ class SolTxMetaCollector(ABC):
         grouped_sign_slot_list = [sign_slot_list[i:(i + group_len)] for i in range(0, flat_len, group_len)]
         self._gather_tx_meta_dict(grouped_sign_slot_list)
         for sign_slot in reversed(sign_slot_list):
-            response = self._tx_meta_dict.get(sign_slot)
-            if response:
-                yield SolTxMetaInfo.from_response(sign_slot, response)
+            yield self._tx_meta_dict.get(sign_slot)
 
     def _gather_tx_meta_dict(self, grouped_sign_slot_list: List[List[SolTxSignSlotInfo]]) -> None:
         if len(grouped_sign_slot_list) > 1:
@@ -56,17 +84,13 @@ class SolTxMetaCollector(ABC):
             self._request_tx_meta_list(grouped_sign_slot_list[0])
 
     def _request_tx_meta_list(self, sign_slot_list: List[SolTxSignSlotInfo]) -> None:
-        sign_list = [sign_slot.sol_sign for sign_slot in sign_slot_list if sign_slot not in self._tx_meta_dict]
+        sign_list = [sign_slot.sol_sign for sign_slot in sign_slot_list if not self._tx_meta_dict.has_sign(sign_slot)]
         if not len(sign_list):
             return
 
         meta_list = self._solana.get_multiple_receipts(sign_list, commitment=self._commitment)
-        for sign_slot, tx in zip(sign_slot_list, meta_list):
-            if tx is not None:
-                self._tx_meta_dict[sign_slot] = tx
-                self.debug(f'tx {sign_slot.block_slot}:{sign_slot.sol_sign} is found')
-            else:
-                self.debug(f'tx {sign_slot.block_slot}:{sign_slot.sol_sign} is NOT found')
+        for sign_slot, tx_meta in zip(sign_slot_list, meta_list):
+            self._tx_meta_dict.add(sign_slot, tx_meta)
 
     def _iter_sign_slot(self, start_sign: Optional[str], start_slot: int, stop_slot: int) -> Iterator[SolTxSignSlotInfo]:
         response_list_len = 1
@@ -90,15 +114,15 @@ class SolTxMetaCollector(ABC):
         response = self._solana.get_signatures_for_address(start_sign, limit, self._commitment)
         error = response.get('error')
         if error:
-            self.warning(f'Fail to get solana signatures: {error}')
+            self.warning(f'fail to get solana signatures: {error}')
 
         return response.get('result', [])
 
 
 @logged_group("neon.Indexer")
 class FinalizedSolTxMetaCollector(SolTxMetaCollector):
-    def __init__(self, stop_slot: int, solana: SolanaInteractor):
-        super().__init__(solana, commitment=FINALIZED, is_finalized=True)
+    def __init__(self, tx_meta_dict: SolTxMetaDict, solana: SolanaInteractor, stop_slot: int):
+        super().__init__(tx_meta_dict, solana, commitment=FINALIZED, is_finalized=True)
         self.debug(f'Finalized commitment: {self._commitment}')
         self._signs_db = SolSignsDB()
         self._stop_slot = stop_slot
@@ -115,7 +139,6 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
 
         for info in self._iter_sign_slot(None, start_slot, stop_slot):
             self._save_checkpoint(info)
-        self._reset_checkpoint_cache()
 
     def _save_checkpoint(self, info: SolTxSignSlotInfo, cnt: int = 1) -> None:
         self._sign_cnt += cnt
@@ -124,7 +147,7 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
         elif self._last_info is None:
             self._last_info = info
         elif self._last_info.block_slot != info.block_slot:
-            self.debug(f'Save checkpoint: {info.block_slot, info.sol_sign}')
+            self.debug(f'save checkpoint: {info}: {self._sign_cnt}')
             self._signs_db.add_sign(info)
             self._reset_checkpoint_cache()
 
@@ -152,39 +175,27 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
     def iter_tx_meta(self, start_slot: int, stop_slot: int) -> Iterator[SolTxMetaInfo]:
         assert start_slot >= stop_slot
 
-        if self._stop_slot > stop_slot:
-            self._reset_checkpoint_cache()
-            self._stop_slot = stop_slot
-
-        is_long_list = (start_slot - self._stop_slot) > 3
+        is_long_list = (start_slot - stop_slot) > 10
         if is_long_list:
             self._build_checkpoint_list(start_slot)
 
         for sign_slot_list in self._iter_sign_slot_list(start_slot, is_long_list):
-            self._tx_meta_dict.clear()
-            for meta in self._iter_tx_meta(sign_slot_list):
-                yield meta
+            for tx_meta in self._iter_tx_meta(sign_slot_list):
+                yield tx_meta
+
+        for sign_slot in self._tx_meta_dict.keys():
+            if sign_slot.block_slot < start_slot:
+                self._tx_meta_dict.pop(sign_slot)
 
 
 @logged_group("neon.Indexer")
 class ConfirmedSolTxMetaCollector(SolTxMetaCollector):
-    def __init__(self, solana: SolanaInteractor):
-        super().__init__(solana, commitment=CONFIRMED, is_finalized=False)
+    def __init__(self, tx_meta_dict: SolTxMetaDict, solana: SolanaInteractor):
+        super().__init__(tx_meta_dict, solana, commitment=CONFIRMED, is_finalized=False)
         self.debug(f'Confirmed commitment: {self._commitment}')
-        self._last_slot = 0
-
-    @property
-    def last_block_slot(self) -> int:
-        return self._last_slot
 
     def iter_tx_meta(self, start_slot: int, stop_slot: int) -> Iterator[SolTxMetaInfo]:
         assert start_slot >= stop_slot
 
-        for sign_slot in list(self._tx_meta_dict.keys()):
-            if (sign_slot.block_slot > start_slot) or (sign_slot.block_slot < stop_slot):
-                del self._tx_meta_dict[sign_slot]
-
         sign_slot_list = list(self._iter_sign_slot(None, start_slot, stop_slot))
-        for meta in self._iter_tx_meta(sign_slot_list):
-            self._last_slot = meta.block_slot
-            yield meta
+        return self._iter_tx_meta(sign_slot_list)

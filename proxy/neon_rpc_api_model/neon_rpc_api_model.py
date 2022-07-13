@@ -293,7 +293,7 @@ class NeonRpcApiModel:
             "gasUsed": hex(gas_used),
             "hash": block.hash,
             "number": hex(block.slot),
-            "parentHash": block.parent_hash,
+            "parentHash": block.parent_block_hash,
             "timestamp": hex(block.time),
             "transactions": sign_list,
         }
