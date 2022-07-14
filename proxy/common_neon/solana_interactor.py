@@ -17,12 +17,11 @@ from solana.rpc.types import RPCResponse
 from solana.transaction import Transaction
 from itertools import zip_longest
 from logged_groups import logged_group
-from typing import Dict, Union, Any, List, NamedTuple, cast
+from typing import Dict, Union, Any, List, NamedTuple, Tuple, cast
 from base58 import b58decode, b58encode
 
 from .utils import SolanaBlockInfo
-from .environment_data import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, RETRY_ON_FAIL, FUZZING_BLOCKHASH, \
-                              CONFIRM_TIMEOUT, FINALIZED
+from .environment_data import EVM_LOADER_ID, RETRY_ON_FAIL, FUZZING_BLOCKHASH, FINALIZED
 
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
 from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG
@@ -106,7 +105,7 @@ class StorageAccountInfo(NamedTuple):
     gas_used_and_paid: int
     number_of_payments: int
     sign: bytes
-    account_list: [str]
+    account_list: List[Tuple[bool, str]]
 
     @staticmethod
     def frombytes(data) -> StorageAccountInfo:
@@ -290,7 +289,7 @@ class SolanaInteractor:
 
         account_tag = data[0]
         lamports = info['lamports']
-        owner = info['owner']
+        owner = PublicKey(info['owner'])
 
         return AccountInfo(account_tag, lamports, owner, data)
 
@@ -322,8 +321,10 @@ class SolanaInteractor:
                     account_info_list.append(None)
                 else:
                     data = base64.b64decode(info['data'][0])
-                    account = AccountInfo(tag=data[0], lamports=info['lamports'], owner=info['owner'], data=data)
-                    account_info_list.append(account)
+                    lamports = info['lamports']
+                    owner = PublicKey(info['owner'])
+                    account_info = AccountInfo(tag=data[0], lamports=lamports, owner=owner, data=data)
+                    account_info_list.append(account_info)
         return account_info_list
 
     def get_sol_balance(self, account, commitment='confirmed') -> int:
@@ -419,7 +420,7 @@ class SolanaInteractor:
             if info is None or len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof() or info.tag != NEON_ACCOUNT_TAG:
                 accounts_list.append(None)
                 continue
-            accounts_list.append(NeonAccountInfo.frombytes(PublicKey(account_sol), info.data))
+            accounts_list.append(NeonAccountInfo.frombytes(account_sol, info.data))
         return accounts_list
 
     def get_storage_account_info(self, storage_account: PublicKey) -> Optional[StorageAccountInfo]:
@@ -564,8 +565,8 @@ class SolanaInteractor:
             request_list[idx] = (base64_tx, tx_opts)
         return request_list
 
-    def _send_multiple_transactions(self, signer: SolanaAccount, tx_list: [Transaction],
-                                    skip_preflight: bool, preflight_commitment: str) -> [str]:
+    def send_multiple_transactions(self, signer: SolanaAccount, tx_list: List[Transaction],
+                                   skip_preflight: bool, preflight_commitment: str) -> List[SendResult]:
         opts = {
             "skipPreflight": skip_preflight,
             "encoding": "base64",
@@ -616,69 +617,29 @@ class SolanaInteractor:
             result_list.append(SendResult(result=result, error=error))
         return result_list
 
-    def send_multiple_transactions(self, signer: SolanaAccount, tx_list: [], waiter,
-                                   skip_preflight: bool, preflight_commitment: str) -> [{}]:
-        send_result_list = self._send_multiple_transactions(signer, tx_list, skip_preflight, preflight_commitment)
-        # Filter good transactions and wait the confirmations for them
-        sign_list = [s.result for s in send_result_list if s.result]
-        self._confirm_multiple_transactions(sign_list, waiter)
-        # Get receipts for good transactions
-        confirmed_list = self.get_multiple_receipts(sign_list)
-        # Mix errors with receipts for good transactions
-        receipt_list = []
-        for s in send_result_list:
-            if s.error:
-                receipt_list.append(s.error)
-            else:
-                receipt_list.append(confirmed_list.pop(0))
-
-        return receipt_list
-
-    def _get_confirmed_slot_for_transactions(self, sign_list: [str]) -> (int, bool):
+    def get_confirmed_slot_for_multiple_transactions(self, sign_list: List[str]) -> Tuple[int, bool]:
         opts = {
             "searchTransactionHistory": False
         }
 
-        slot = 0
+        block_slot = 0
         while len(sign_list):
             (part_sign_list, sign_list) = (sign_list[:100], sign_list[100:])
             response = self._send_rpc_request("getSignatureStatuses", part_sign_list, opts)
 
             result = response.get('result', None)
             if not result:
-                return slot, False
+                return block_slot, False
 
-            slot = result['context']['slot']
+            block_slot = result['context']['slot']
 
             for status in result['value']:
                 if not status:
-                    return slot, False
+                    return block_slot, False
                 if status['confirmationStatus'] == 'processed':
-                    return slot, False
+                    return block_slot, False
 
-        return slot, (slot != 0)
-
-    def _confirm_multiple_transactions(self, sign_list: [str], waiter=None):
-        """Confirm a transaction."""
-        if not len(sign_list):
-            self.debug('No confirmations, because transaction list is empty')
-            return
-
-        elapsed_time = 0
-        while elapsed_time < CONFIRM_TIMEOUT:
-            if elapsed_time > 0:
-                time.sleep(CONFIRMATION_CHECK_DELAY)
-            elapsed_time += CONFIRMATION_CHECK_DELAY
-
-            slot, is_confirmed = self._get_confirmed_slot_for_transactions(sign_list)
-            if waiter:
-                waiter.on_wait_confirm(elapsed_time, slot)
-
-            if is_confirmed:
-                self.debug(f'Got confirmed status for transactions: {sign_list}')
-                return
-
-        self.warning(f'No confirmed status for transactions: {sign_list}')
+        return block_slot, (block_slot != 0)
 
     def get_multiple_receipts(self, sign_list: [str], commitment='confirmed') -> List[Optional[Dict]]:
         if not len(sign_list):

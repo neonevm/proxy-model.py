@@ -4,21 +4,22 @@ from solana.account import Account as SolanaAccount
 import time
 
 from logged_groups import logged_group
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from solana.transaction import Transaction
 from base58 import b58encode
 
 from .solana_receipt_parser import SolReceiptParser, SolTxError
+from .solana_interactor import SolanaInteractor
 from .errors import EthereumError
 
-from .environment_data import SKIP_PREFLIGHT, RETRY_ON_FAIL
+from .environment_data import SKIP_PREFLIGHT, CONFIRMATION_CHECK_DELAY, RETRY_ON_FAIL, CONFIRM_TIMEOUT
 
 
 @logged_group("neon.Proxy")
 class SolTxListSender:
-    def __init__(self, sender, tx_list: [Transaction], name: str,
+    def __init__(self, solana: SolanaInteractor, tx_list: List[Transaction], name: str,
                  skip_preflight=SKIP_PREFLIGHT, preflight_commitment='confirmed'):
-        self._s = sender
+        self._solana = solana
         self._name = name
         self._skip_preflight = skip_preflight
         self._preflight_commitment = preflight_commitment
@@ -27,14 +28,15 @@ class SolTxListSender:
         self._retry_idx = 0
         self._slots_behind = 0
         self._tx_list = tx_list
-        self.success_sign_list = []
-        self._node_behind_list = []
-        self._bad_block_list = []
-        self._blocked_account_list = []
-        self._pending_list = []
-        self._budget_exceeded_list = []
-        self._budget_exceeded_receipt: Optional[dict] = None
-        self._unknown_error_list = []
+        self.success_sign_list: List[str] = []
+        self._node_behind_list: List[Transaction] = []
+        self._bad_block_list: List[Transaction] = []
+        self._blocked_account_list: List[Transaction] = []
+        self._pending_list: List[Transaction] = []
+        self._budget_exceeded_list: List[Transaction] = []
+        self._budget_exceeded_receipt: Optional[Dict[str, Any]] = None
+        self._unknown_error_list: List[Transaction] = []
+        self._unknown_error_receipt: Optional[Dict[str, Any]] = None
 
         self._all_tx_list = [self._node_behind_list,
                              self._bad_block_list,
@@ -47,23 +49,19 @@ class SolTxListSender:
         for lst in self._all_tx_list:
             lst.clear()
         self._budget_exceeded_receipt = None
+        self._unknown_error_receipt = None
 
-    def _get_full_list(self):
+    def _get_full_tx_list(self):
         return [tx for lst in self._all_tx_list for tx in lst]
 
     def send(self, signer: SolanaAccount) -> SolTxListSender:
-        solana = self._s.solana
-        waiter = self._s.waiter
-        skip = self._skip_preflight
-        commitment = self._preflight_commitment
-
         self.debug(f'start transactions sending: {self._name}')
 
         while (self._retry_idx < RETRY_ON_FAIL) and (len(self._tx_list)):
             self._retry_idx += 1
             self._slots_behind = 0
 
-            receipt_list = solana.send_multiple_transactions(signer, self._tx_list, waiter, skip, commitment)
+            receipt_list = self._send_tx_list(signer)
 
             success_sign_list = []
             for receipt, tx in zip(receipt_list, self._tx_list):
@@ -80,7 +78,8 @@ class SolTxListSender:
                     self._budget_exceeded_list.append(tx)
                     self._budget_exceeded_receipt = receipt
                 elif receipt_parser.check_if_error():
-                    self._unknown_error_list.append(receipt)
+                    self._unknown_error_list.append(tx)
+                    self._unknown_error_receipt = receipt
                 else:
                     success_sign_list.append(b58encode(tx.signature()).decode("utf-8"))
                     self._retry_idx = 0
@@ -109,7 +108,7 @@ class SolTxListSender:
 
     def _on_post_send(self):
         if len(self._unknown_error_list):
-            raise SolTxError(self._unknown_error_list[0])
+            raise SolTxError(self._unknown_error_receipt)
         elif len(self._node_behind_list):
             self.warning(f'Node is behind by {self._slots_behind} slots')
             time.sleep(1)
@@ -124,17 +123,17 @@ class SolTxListSender:
             self._blockhash = None
 
         # resend not-accepted transactions
-        self._move_txlist()
+        self._move_tx_list()
 
     def _set_tx_blockhash(self, tx):
         """Try to keep the branch of block history"""
         tx.recent_blockhash = self._blockhash
         tx.signatures.clear()
 
-    def _move_txlist(self):
-        full_list = self._get_full_list()
+    def _move_tx_list(self):
+        full_tx_list = self._get_full_tx_list()
         self.clear()
-        for tx in full_list:
+        for tx in full_tx_list:
             self._set_tx_blockhash(tx)
             self._tx_list.append(tx)
         if len(self._tx_list):
@@ -145,3 +144,47 @@ class SolTxListSender:
             raise SolTxError(self._budget_exceeded_receipt)
         SolReceiptParser.raise_budget_exceeded()
 
+    def _send_tx_list(self, signer: SolanaAccount) -> List[Dict[str, Any]]:
+        skip = self._skip_preflight
+        commitment = self._preflight_commitment
+
+        send_result_list = self._solana.send_multiple_transactions(signer, self._tx_list, skip, commitment)
+        # Filter good transactions and wait the confirmations for them
+        sign_list = [s.result for s in send_result_list if s.result]
+        self._confirm_tx_list(sign_list)
+
+        # Get receipts for good transactions
+        confirmed_list = self._solana.get_multiple_receipts(sign_list)
+        # Mix errors with receipts for good transactions
+        receipt_list = []
+        for s in send_result_list:
+            if s.error:
+                receipt_list.append(s.error)
+            else:
+                receipt_list.append(confirmed_list.pop(0))
+
+        return receipt_list
+
+    def _confirm_tx_list(self, sign_list: List[str]=None) -> None:
+        """Confirm a transaction."""
+        if not len(sign_list):
+            self.debug('No confirmations, because transaction list is empty')
+            return
+
+        elapsed_time = 0
+        while elapsed_time < CONFIRM_TIMEOUT:
+            if elapsed_time > 0:
+                time.sleep(CONFIRMATION_CHECK_DELAY)
+            elapsed_time += CONFIRMATION_CHECK_DELAY
+
+            block_slot, is_confirmed = self._solana.get_confirmed_slot_for_multiple_transactions(sign_list)
+            self._on_wait_confirm(elapsed_time, block_slot, is_confirmed)
+
+            if is_confirmed:
+                self.debug(f'Got confirmed status for transactions: {sign_list}')
+                return
+
+        self.warning(f'No confirmed status for transactions: {sign_list}')
+
+    def _on_wait_confirm(self, elapsed_time: int, block_slot: int, is_confirmed: bool) -> None:
+        pass

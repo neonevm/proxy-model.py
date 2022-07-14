@@ -3,7 +3,7 @@ import traceback
 from logged_groups import logged_group
 from solana.transaction import AccountMeta
 
-from ..common_neon.neon_instruction import NeonInstruction
+from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.compute_budget import TransactionWithComputeBudget
@@ -18,7 +18,7 @@ class Canceller:
         self.solana = solana
         self.waiter = None
         self._operator = self.signer.public_key()
-        self.builder = NeonInstruction(self._operator)
+        self.builder = NeonIxBuilder(self._operator)
 
     def unlock_accounts(self, blocked_storages):
         tx_list = []
@@ -43,7 +43,7 @@ class Canceller:
         self.debug(f"Send Cancel: {len(tx_list)}")
 
         try:
-            SolTxListSender(self, tx_list, f'CancelWithNonce({len(tx_list)})').send(self.signer)
+            SolTxListSender(self.solana, tx_list, f'CancelWithNonce({len(tx_list)})').send(self.signer)
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
             self.warning('Exception on submitting transaction. ' +

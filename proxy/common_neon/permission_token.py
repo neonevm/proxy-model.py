@@ -34,11 +34,11 @@ class PermissionToken:
         txn = TransactionWithComputeBudget()
         create_txn = spl_token.create_associated_token_account(
             payer=signer.public_key(),
-            owner=PublicKey(ether2program(ether_addr)[0]),
+            owner=ether2program(ether_addr)[0],
             mint=self.token_mint
         )
         txn.add(create_txn)
-        SolTxListSender(self, [txn], 'CreateAssociatedTokenAccount(1)', skip_preflight=True).send(signer)
+        SolTxListSender(self.solana, [txn], 'CreateAssociatedTokenAccount(1)', skip_preflight=True).send(signer)
         return token_account
 
     def mint_to(self, amount: int, ether_addr: Union[str, EthereumAddress], mint_authority_file: str, signer: SolanaAccount):
