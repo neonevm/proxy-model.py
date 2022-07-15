@@ -16,6 +16,7 @@ from ..common_neon.environment_data import CONTRACT_EXTRA_SPACE
 from ..common_neon.neon_instruction import NeonIxBuilder
 
 
+@logged_group("neon.Proxy")
 class NeonTxStage(abc.ABC):
     NAME = 'UNKNOWN'
 
@@ -74,7 +75,6 @@ class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
         return self._builder.create_account_with_seed_instruction(self.sol_account, self._seed, self.balance, self.size)
 
 
-@logged_group("neon.Proxy")
 class NeonCreateAccountTxStage(NeonTxStage):
     NAME = 'createNeonAccount'
 
@@ -93,8 +93,7 @@ class NeonCreateAccountTxStage(NeonTxStage):
         self.tx.add(self._create_account())
 
 
-@logged_group("neon.Proxy")
-class NeonCreateERC20TxStage(NeonTxStage, abc.ABC):
+class NeonCreateERC20TxStage(NeonTxStage):
     NAME = 'createERC20Account'
 
     def __init__(self, builder: NeonIxBuilder, token_account_desc: Dict[str, Any]):
@@ -109,16 +108,17 @@ class NeonCreateERC20TxStage(NeonTxStage, abc.ABC):
     def build(self) -> None:
         assert self._is_empty()
 
-        self.debug(f'Create ERC20 token account: ' +
-                   f'key {self._token_account_desc["key"]}, ' +
-                   f'owner: {self._token_account_desc["owner"]}, ' +
-                   f'contact: {self._token_account_desc["contract"]}, ' +
-                   f'mint: {self._token_account_desc["mint"]}')
+        self.debug(
+            f'Create ERC20 token account: ' +
+            f'key {self._token_account_desc["key"]}, ' +
+            f'owner: {self._token_account_desc["owner"]}, ' +
+            f'contact: {self._token_account_desc["contract"]}, ' +
+            f'mint: {self._token_account_desc["mint"]}'
+        )
 
         self.tx.add(self._create_erc20_account())
 
 
-@logged_group("neon.Proxy")
 class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage):
     NAME = 'createNeonContract'
 
@@ -144,7 +144,6 @@ class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage):
         self.tx.add(self._create_account())
 
 
-@logged_group("neon.Proxy")
 class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage):
     NAME = 'resizeNeonContract'
 
@@ -166,9 +165,11 @@ class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage):
     def build(self) -> None:
         assert self._is_empty()
 
-        self.debug(f'Resize contact {self._account_desc["address"]}: ' +
-                   f'{self._old_sol_account} (size {self._account_desc["code_size_current"]}) -> ' +
-                   f'{self.sol_account} (size {self.size})')
+        self.debug(
+            f'Resize contact {self._account_desc["address"]}: ' +
+            f'{self._old_sol_account} (size {self._account_desc["code_size_current"]}) -> ' +
+            f'{self.sol_account} (size {self.size})'
+        )
 
         self.tx.add(self._create_account_with_seed())
         self.tx.add(self._resize_account())

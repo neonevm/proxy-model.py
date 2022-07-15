@@ -8,6 +8,7 @@ from solana.publickey import PublicKey
 from solana.system_program import SYS_PROGRAM_ID
 from solana.sysvar import SYSVAR_RENT_PUBKEY
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+from solana.utils import shortvec_encoding as shortvec
 from spl.token.constants import TOKEN_PROGRAM_ID
 from logged_groups import logged_group
 
@@ -19,6 +20,7 @@ from .layouts import CREATE_ACCOUNT_LAYOUT
 from .eth_proto import Trx as EthTx
 from .environment_data import EVM_LOADER_ID
 from .utils import get_holder_msg
+from .solana_lookup_table import ADDRESS_LOOKUP_TABLE_ID
 
 
 def create_account_with_seed_layout(base, seed, lamports, space):
@@ -108,7 +110,7 @@ class NeonIxBuilder:
     def init_eth_accounts(self, eth_accounts: List[AccountMeta]):
         self.eth_accounts = eth_accounts
 
-    def init_iterative(self, storage: PublicKey, holder: PublicKey, perm_accs_id: int):
+    def init_iterative(self, storage: PublicKey, holder: Optional[PublicKey], perm_accs_id: int):
         self.storage = storage
         self.holder = holder
         self.perm_accs_id = perm_accs_id
@@ -307,3 +309,60 @@ class NeonIxBuilder:
                                                                                steps: int,
                                                                                index: int) -> TransactionInstruction:
         return self._make_partial_call_or_continue_from_account_data('1B', steps, index)
+
+    def make_create_lookup_table_instruction(self, table_account: PublicKey,
+                                             recent_block_slot: int,
+                                             seed: int) -> TransactionInstruction:
+        data = b"00"
+        data += recent_block_slot.to_bytes(8, byteorder='little')
+        data += seed.to_bytes(1, byteorder='little')
+        return TransactionInstruction(
+            program_id=ADDRESS_LOOKUP_TABLE_ID,
+            data=data,
+            keys=[
+                AccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),  # signer
+                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),   # payer
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+            ]
+        )
+
+    def make_extend_lookup_table_instruction(self, table_account: PublicKey,
+                                             account_list: List[PublicKey]) -> TransactionInstruction:
+        data = b"02"
+        data += shortvec.encode_length(len(account_list))
+        data += b"".join([bytes(pubkey) for pubkey in self.account_list])
+
+        return TransactionInstruction(
+            program_id=ADDRESS_LOOKUP_TABLE_ID,
+            data=data,
+            keys=[
+                AccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),  # signer
+                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),   # payer
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+            ]
+        )
+
+    def make_deactivate_lookup_table_instruction(self, table_account: PublicKey) -> TransactionInstruction:
+        data = b"03"
+        return TransactionInstruction(
+            program_id=ADDRESS_LOOKUP_TABLE_ID,
+            data=data,
+            keys=[
+                AccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),  # signer
+            ]
+        )
+
+    def make_close_lookup_table_instruction(self, table_account: PublicKey) -> TransactionInstruction:
+        data = b"04"
+        return TransactionInstruction(
+            program_id=ADDRESS_LOOKUP_TABLE_ID,
+            data=data,
+            keys=[
+                AccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),  # signer
+                AccountMeta(pubkey=self.operator_account, is_signer=False, is_writable=True),  # refund
+            ]
+        )

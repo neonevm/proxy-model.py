@@ -43,7 +43,7 @@ class Canceller:
         self.debug(f"Send Cancel: {len(tx_list)}")
 
         try:
-            SolTxListSender(self.solana, tx_list, f'CancelWithNonce({len(tx_list)})').send(self.signer)
+            SolTxListSender(self.solana, self.signer).send(f'CancelWithNonce({len(tx_list)})', tx_list)
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
             self.warning('Exception on submitting transaction. ' +

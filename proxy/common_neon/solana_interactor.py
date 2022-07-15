@@ -24,6 +24,7 @@ from .utils import SolanaBlockInfo
 from .environment_data import EVM_LOADER_ID, RETRY_ON_FAIL, FUZZING_BLOCKHASH, FINALIZED
 
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
+from ..common_neon.layouts import LOOKUP_TABLE_LAYOUT
 from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.utils import get_from_dict
@@ -137,6 +138,35 @@ class StorageAccountInfo(NamedTuple):
             number_of_payments=storage.number_of_payments,
             sign=storage.sign,
             account_list=account_list
+        )
+
+
+class LookupTableAccountInfo(NamedTuple):
+    deactivation_slot: int
+    last_extended_slot: int
+    last_extended_slot_start_index: int
+    authority: Optional[PublicKey]
+    account_list: List[PublicKey]
+
+    @staticmethod
+    def frombytes(data: bytes) -> LookupTableAccountInfo:
+        lookup = LOOKUP_TABLE_LAYOUT.parse(data)
+
+        account_list = []
+        offset = LOOKUP_TABLE_LAYOUT.sizeof()
+        for _ in range(lookup.account_list_len):
+            some_pubkey = PublicKey(data[offset:offset + 32])
+            offset += 32
+            account_list.append(some_pubkey)
+
+        authority = PublicKey(lookup.authority) if lookup.has_authority else None
+
+        return LookupTableAccountInfo(
+            deactivation_slot=lookup.deactivation_slot,
+            last_extended_slot=lookup.last_extended_slot,
+            last_extended_slot_start_index=lookup.last_extended_slot_start_index,
+            authority=authority,
+            account_list=lookup.account_list
         )
 
 
@@ -259,13 +289,13 @@ class SolanaInteractor:
 
         return self._send_rpc_request("getSignaturesForAddress", EVM_LOADER_ID, opts)
 
-    def get_slot(self, commitment='confirmed') -> RPCResponse:
+    def get_slot(self, commitment) -> RPCResponse:
         opts = {
             'commitment': commitment
         }
         return self._send_rpc_request('getSlot', opts)
 
-    def get_account_info(self, pubkey: PublicKey, length=256, commitment='confirmed') -> Optional[AccountInfo]:
+    def get_account_info(self, pubkey: PublicKey, length=256, commitment='processed') -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
@@ -293,7 +323,8 @@ class SolanaInteractor:
 
         return AccountInfo(account_tag, lamports, owner, data)
 
-    def get_account_info_list(self, src_account_list: List[PublicKey], length=256, commitment='confirmed') -> List[AccountInfo]:
+    def get_account_info_list(self, src_account_list: List[PublicKey], length=256,
+                              commitment='processed') -> List[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
@@ -327,13 +358,13 @@ class SolanaInteractor:
                     account_info_list.append(account_info)
         return account_info_list
 
-    def get_sol_balance(self, account, commitment='confirmed') -> int:
+    def get_sol_balance(self, account, commitment='processed') -> int:
         opts = {
             "commitment": commitment
         }
         return self._send_rpc_request('getBalance', str(account), opts)['result']['value']
 
-    def get_sol_balance_list(self, accounts_list: List[Union[str, PublicKey]], commitment='confirmed') -> List[int]:
+    def get_sol_balance_list(self, accounts_list: List[Union[str, PublicKey]], commitment='processed') -> List[int]:
         opts = {
             'commitment': commitment
         }
@@ -350,7 +381,7 @@ class SolanaInteractor:
 
         return balances_list
 
-    def get_token_account_balance(self, pubkey: Union[str, PublicKey], commitment='confirmed') -> int:
+    def get_token_account_balance(self, pubkey: Union[str, PublicKey], commitment='processed') -> int:
         opts = {
             "commitment": commitment
         }
@@ -360,7 +391,8 @@ class SolanaInteractor:
             return 0
         return int(result['value']['amount'])
 
-    def get_token_account_balance_list(self, pubkey_list: [Union[str, PublicKey]], commitment: object = 'confirmed') -> [int]:
+    def get_token_account_balance_list(self, pubkey_list: List[Union[str, PublicKey]],
+                                       commitment: object = 'processed') -> List[int]:
         opts = {
             "commitment": commitment
         }
@@ -389,7 +421,7 @@ class SolanaInteractor:
         elif len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
             raise RuntimeError(f"Wrong data length for account data {account_sol}: " +
                                f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return NeonAccountInfo.frombytes(PublicKey(account_sol), info.data)
+        return NeonAccountInfo.frombytes(account_sol, info.data)
 
     def get_neon_code_info(self, account: Union[str, EthereumAddress, NeonAccountInfo, PublicKey, None]) -> Optional[NeonCodeInfo]:
         if isinstance(account, str) or isinstance(account, EthereumAddress):
@@ -431,11 +463,20 @@ class SolanaInteractor:
             self.debug(f'Storage account {str(storage_account)} has tag {info.tag}')
             return None
         elif len(info.data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for storage data {storage_account}: " +
+            raise RuntimeError(f"Wrong data length for storage data {str(storage_account)}: " +
                                f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
         return StorageAccountInfo.frombytes(info.data)
 
-    def get_multiple_rent_exempt_balances_for_size(self, size_list: [int], commitment='confirmed') -> [int]:
+    def get_lookup_table_info(self, lookup_account: PublicKey) -> Optional[LookupTableAccountInfo]:
+        info = self.get_account_info(lookup_account, length=0)
+        if info is None:
+            return None
+        elif len(info.data) < LOOKUP_TABLE_LAYOUT.sizeof():
+            raise RuntimeError(f"Wrong data length for lookup table data {str(lookup_account)}: " +
+                               f"{len(info.data)} < {LOOKUP_TABLE_LAYOUT.sizeof()}")
+        return LookupTableAccountInfo.frombytes(info.data)
+
+    def get_multiple_rent_exempt_balances_for_size(self, size_list: List[int], commitment='confirmed') -> List[int]:
         opts = {
             "commitment": commitment
         }
@@ -443,7 +484,7 @@ class SolanaInteractor:
         response_list = self._send_rpc_batch_request("getMinimumBalanceForRentExemption", request_list)
         return [r['result'] for r in response_list]
 
-    def get_block_slot_list(self, last_block_slot, limit: int, commitment='confirmed') -> [int]:
+    def get_block_slot_list(self, last_block_slot: int, limit: int, commitment='confirmed') -> [int]:
         opts = {
             "commitment": commitment,
             "enconding": "json",
@@ -472,7 +513,7 @@ class SolanaInteractor:
             signs=net_block['signatures']
         )
 
-    def get_block_info_list(self, block_slot_list: [int], commitment='confirmed') -> [SolanaBlockInfo]:
+    def get_block_info_list(self, block_slot_list: List[int], commitment='confirmed') -> List[SolanaBlockInfo]:
         block_list = []
         if not len(block_slot_list):
             return block_list
@@ -530,7 +571,9 @@ class SolanaInteractor:
         blockhash = blockhash_resp["result"]["value"]["blockhash"]
         return Blockhash(blockhash)
 
-    def _fuzzing_transactions(self, signer: SolanaAccount, tx_list, tx_opts, request_list):
+    def _fuzzing_transactions(self, signer: SolanaAccount,
+                              tx_list: List[Transaction], tx_opts: Dict[str, str],
+                              request_list: List[Tuple[str, Dict[str, str]]]) -> List[Tuple[str, Dict[str, str]]]:
         """
         Make each second transaction a bad one.
         This is used to test a transaction sending on a live cluster (testnet/devnet).
@@ -641,7 +684,7 @@ class SolanaInteractor:
 
         return block_slot, (block_slot != 0)
 
-    def get_multiple_receipts(self, sign_list: [str], commitment='confirmed') -> List[Optional[Dict]]:
+    def get_multiple_receipts(self, sign_list: List[str], commitment='confirmed') -> List[Optional[Dict]]:
         if not len(sign_list):
             return []
         opts = {"encoding": "json", "commitment": commitment}

@@ -22,7 +22,7 @@ from ..common_neon.environment_data import MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPE
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.neon_instruction import NeonIxBuilder
 
-from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateAccountWithSeedStage
+from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateAccountWithSeedStage
 
 
 class OperatorResourceInfo:
@@ -211,7 +211,7 @@ class OperatorResourceList:
         stage.build()
 
         self.debug(f"Create new ether account {str(solana_address)} for resource {resource}")
-        SolTxListSender(self._solana, [stage.tx], NeonCreateAccountTxStage.NAME).send(resource.signer)
+        SolTxListSender(self._solana, resource.signer).send(NeonCreateAccountTxStage.NAME, [stage.tx])
 
         return ether_address
 
@@ -248,7 +248,7 @@ class OperatorResourceList:
                 raise RuntimeError(f"not empty, not finalized: {str(stage.sol_account)}")
 
         if len(tx_name_list):
-            SolTxListSender(self._solana, [tx], ' + '.join(tx_name_list)).send(resource.signer)
+            SolTxListSender(self._solana, resource.signer).send(' + '.join(tx_name_list), [tx])
         else:
             self.debug(f"Use existing accounts for resource {resource}")
         return account_list
@@ -257,7 +257,6 @@ class OperatorResourceList:
         self._free_resource_list.append(resource.idx)
 
 
-@logged_group("neon.Proxy")
 class NeonCreatePermAccount(NeonCreateAccountWithSeedStage):
     NAME = 'createPermAccount'
 
@@ -281,11 +280,12 @@ class NeonCreatePermAccount(NeonCreateAccountWithSeedStage):
 
 
 @logged_group("neon.Proxy")
-class NeonCancelTxStage(NeonTxStage):
+class NeonCancelTxStage:
     NAME = 'cancelWithNonce'
 
     def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder, storage_account: PublicKey):
-        super().__init__(builder)
+        self._builder = builder
+        self.tx = TransactionWithComputeBudget()
         self._account = storage_account
         self._storage = solana.get_storage_account_info(storage_account)
 
@@ -299,6 +299,9 @@ class NeonCancelTxStage(NeonTxStage):
             nonce=self._storage.nonce,
             cancel_keys=key_list
         )
+
+    def _is_empty(self) -> bool:
+        return not len(self.tx.signatures)
 
     def build(self):
         assert self._is_empty()
