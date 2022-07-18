@@ -27,7 +27,7 @@ from ..common_neon.errors import EthereumError
 from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.solana_lookup_table import LookupTableInfo
+from ..common_neon.solana_lookup_table import LookupTableInfo, LookupTableError
 from ..common_neon.solana_versioned_transaction import V0Transaction
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 
@@ -607,11 +607,11 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
 
     def build_tx(self, idx=0) -> Transaction:
         legacy_tx = self._build_legacy_tx(idx)
-        return V0Transaction(address_table_lookups=self._lookup).add(legacy_tx)
+        return V0Transaction(address_table_lookups=[self._lookup]).add(legacy_tx)
 
     def build_cancel_tx(self) -> Transaction:
         legacy_tx = self._build_legacy_cancel_tx()
-        return V0Transaction(address_table_lookups=self._lookup).add(legacy_tx)
+        return V0Transaction(address_table_lookups=[self._lookup]).add(legacy_tx)
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
         tx_list_name, tx_list = super()._build_prep_tx_list()
@@ -630,7 +630,7 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
         sign_list = super()._execute_prep_tx_list(waiter=waiter)
 
         tx_account_cnt = 25
-        account_list = [PublicKey(key) for key in self._lookup.get_account_list()]
+        account_list = self._lookup.get_account_list()
         tx_list: List[Transaction] = []
         while len(account_list):
             account_list_part, account_list = account_list[:tx_account_cnt], account_list[tx_account_cnt:]
@@ -645,8 +645,12 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
         sign_list += tx_sender.success_sign_list
 
         lookup_info = self._solana.get_lookup_table_info(self._lookup.table_account)
+        if lookup_info is None:
+            raise LookupTableError(f'Cannot read lookup table {str(self._lookup.table_account)}')
+
         # accounts can be reordered during execution
         self._lookup.update_from_account(lookup_info)
+        time.sleep(0.5)
         return sign_list
 
 

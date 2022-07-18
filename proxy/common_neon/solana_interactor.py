@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import base58
 import base64
 import time
@@ -25,7 +27,7 @@ from .environment_data import EVM_LOADER_ID, RETRY_ON_FAIL, FUZZING_BLOCKHASH, F
 
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
 from ..common_neon.layouts import LOOKUP_TABLE_LAYOUT
-from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG
+from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG, LOOKUP_ACCOUNT_TAG
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.utils import get_from_dict
 
@@ -52,7 +54,7 @@ class NeonAccountInfo(NamedTuple):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
 
         code_account = None
-        if cont.code_account != [0] * 32:
+        if cont.code_account != [0] * PublicKey.LENGTH:
             code_account = PublicKey(cont.code_account)
 
         return NeonAccountInfo(
@@ -118,8 +120,8 @@ class StorageAccountInfo(NamedTuple):
             writable = (data[offset] > 0)
             offset += 1
 
-            some_pubkey = PublicKey(data[offset:offset + 32])
-            offset += 32
+            some_pubkey = PublicKey(data[offset:offset + PublicKey.LENGTH])
+            offset += PublicKey.LENGTH
 
             account_list.append((writable, str(some_pubkey)))
 
@@ -142,6 +144,8 @@ class StorageAccountInfo(NamedTuple):
 
 
 class LookupTableAccountInfo(NamedTuple):
+    type: int
+    table_account: PublicKey
     deactivation_slot: int
     last_extended_slot: int
     last_extended_slot_start_index: int
@@ -149,19 +153,27 @@ class LookupTableAccountInfo(NamedTuple):
     account_list: List[PublicKey]
 
     @staticmethod
-    def frombytes(data: bytes) -> LookupTableAccountInfo:
+    def frombytes(table_account: PublicKey, data: bytes) -> Optional[LookupTableAccountInfo]:
         lookup = LOOKUP_TABLE_LAYOUT.parse(data)
+        if lookup.type != LOOKUP_ACCOUNT_TAG:
+            return None
+
+        offset = LOOKUP_TABLE_LAYOUT.sizeof()
+        if (len(data) - offset) % PublicKey.LENGTH:
+            return None
 
         account_list = []
-        offset = LOOKUP_TABLE_LAYOUT.sizeof()
-        for _ in range(lookup.account_list_len):
-            some_pubkey = PublicKey(data[offset:offset + 32])
-            offset += 32
+        account_list_len = math.ceil((len(data) - offset) / PublicKey.LENGTH)
+        for _ in range(account_list_len):
+            some_pubkey = PublicKey(data[offset:offset + PublicKey.LENGTH])
+            offset += PublicKey.LENGTH
             account_list.append(some_pubkey)
 
         authority = PublicKey(lookup.authority) if lookup.has_authority else None
 
         return LookupTableAccountInfo(
+            type=lookup.type,
+            table_account=table_account,
             deactivation_slot=lookup.deactivation_slot,
             last_extended_slot=lookup.last_extended_slot,
             last_extended_slot_start_index=lookup.last_extended_slot_start_index,
@@ -467,14 +479,14 @@ class SolanaInteractor:
                                f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
         return StorageAccountInfo.frombytes(info.data)
 
-    def get_lookup_table_info(self, lookup_account: PublicKey) -> Optional[LookupTableAccountInfo]:
-        info = self.get_account_info(lookup_account, length=0)
+    def get_lookup_table_info(self, table_account: PublicKey) -> Optional[LookupTableAccountInfo]:
+        info = self.get_account_info(table_account, length=0)
         if info is None:
             return None
         elif len(info.data) < LOOKUP_TABLE_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for lookup table data {str(lookup_account)}: " +
+            raise RuntimeError(f"Wrong data length for lookup table data {str(table_account)}: " +
                                f"{len(info.data)} < {LOOKUP_TABLE_LAYOUT.sizeof()}")
-        return LookupTableAccountInfo.frombytes(info.data)
+        return LookupTableAccountInfo.frombytes(table_account, info.data)
 
     def get_multiple_rent_exempt_balances_for_size(self, size_list: List[int], commitment='confirmed') -> List[int]:
         opts = {

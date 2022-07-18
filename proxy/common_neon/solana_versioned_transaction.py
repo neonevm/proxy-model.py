@@ -12,9 +12,17 @@ class V0Transaction(Transaction):
 
     def __init__(self, *args, address_table_lookups: Optional[List[LookupTableInfo]] = None) -> None:
         super().__init__(*args)
-        self.address_table_lookups = address_table_lookups if address_table_lookups else []
+        self.address_table_lookups: List[LookupTableInfo] = address_table_lookups if address_table_lookups else []
 
     def compile_message(self) -> V0Message:
+        if not isinstance(self.address_table_lookups, list):
+            raise LookupTableError('Address table lookups is not a list')
+        if len(self.address_table_lookups) == 0:
+            raise LookupTableError('No address lookup tables')
+        for lookup in self.address_table_lookups:
+            if not isinstance(lookup, LookupTableInfo):
+                raise LookupTableError(f'Bad type {type(lookup)} for address lookup table')
+
         old_msg = super().compile_message()
 
         key_list_len = len(old_msg.account_keys)
@@ -23,16 +31,26 @@ class V0Transaction(Transaction):
         tx_idx_dict: Dict[int, int] = {}
         full_idx_dict: Dict[int, int] = {}
 
+        # Validate that first account table has transaction account list and others don't have it
+        for i, lookup in enumerate(self.address_table_lookups):
+            if i == 0 and lookup.get_tx_account_list_len() == 0:
+                raise LookupTableError('First lookup table does not have transaction account list')
+            elif i != 0 and lookup.get_tx_account_list_len() != 0:
+                raise LookupTableError(f'The lookup table {i} has transaction account list')
+
+        tx_account_list_len = self.address_table_lookups[0].get_tx_account_list_len()
+
         # Build maps for old-index <-> new-index
         for old_idx, key in enumerate(old_msg.account_keys):
-            base_idx = 0
+            base_idx = tx_account_list_len
             is_tx_key = False
             new_idx: Optional[int] = None
             for lookup in self.address_table_lookups:
                 new_idx = lookup.get_account_idx(key)
                 if new_idx is not None:
-                    new_idx += base_idx
                     is_tx_key = lookup.is_tx_account(key)
+                    if not is_tx_key:
+                        new_idx += base_idx
                     break
                 else:
                     base_idx += lookup.get_account_list_len()
@@ -83,13 +101,14 @@ class V0Transaction(Transaction):
             )
 
         # Build lookups list
-        old_account_key_dict = {key: idx for idx, key in enumerate(old_msg.account_keys)}
+        old_account_key_dict = {str(key): idx for idx, key in enumerate(old_msg.account_keys)}
         lookup_list: List[MessageAddressTableLookup] = []
         for lookup in self.address_table_lookups:
             writable_idx_list: List[int] = []
             readonly_idx_list: List[int] = []
-            for key, idx in lookup.get_account_idx_list():
-                old_idx = old_account_key_dict.get(key, None)
+            ll = lookup.get_account_idx_list()
+            for key, idx in ll:
+                old_idx = old_account_key_dict.get(str(key), None)
                 if old_idx is None:
                     continue
                 if old_idx >= start_readonly_idx:
@@ -97,7 +116,7 @@ class V0Transaction(Transaction):
                 else:
                     writable_idx_list.append(idx)
 
-            if len(writable_idx_list) == 0 and len(readonly_idx_list):
+            if len(writable_idx_list) == 0 and len(readonly_idx_list) == 0:
                 raise LookupTableError(f'Include not-used lookup table {str(lookup.table_account)}')
 
             lookup_list.append(

@@ -74,11 +74,8 @@ class V0Message(Message):
         )
 
     def serialize(self) -> bytes:
-        self.header.num_required_signatures |= 0b_1000_0000  # set the highest bit
-        try:
-            message_buffer = bytearray(super().serialize())
-        finally:
-            self.header.num_required_signatures &= 0b_0111_1111  # reset the highest bit
+        message_buffer = bytearray.fromhex("80")
+        message_buffer.extend(super().serialize())
         message_buffer.extend(shortvec.encode_length(len(self.address_table_lookups)))
         for lookup in self.address_table_lookups:
             message_buffer.extend(self.__encode_address_table_lookup(lookup))

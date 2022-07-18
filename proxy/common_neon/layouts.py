@@ -44,11 +44,11 @@ CREATE_ACCOUNT_LAYOUT = Struct(
 
 
 LOOKUP_TABLE_LAYOUT = Struct(
+    "type" / Int32ul,
     "deactivation_slot" / Int64ul,
     "last_extended_slot" / Int64ul,
     "last_extended_slot_start_index" / Int8ul,
     "has_authority" / Int8ul,
     "authority" / Bytes(32),
-    "padding" / Int16ul,
-    "account_list_len" / Int32ul
+    "padding" / Int16ul
 )

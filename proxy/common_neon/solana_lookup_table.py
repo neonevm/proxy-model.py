@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from solana.transaction import Transaction
 from solana.publickey import PublicKey
@@ -11,8 +11,8 @@ ADDRESS_LOOKUP_TABLE_ID: PublicKey = PublicKey('AddressLookupTab1e11111111111111
 
 
 class LookupTableError(RuntimeError):
-    def __init__(self, *args, **kwargs) -> None:
-        RuntimeError.__init__(self, *args, **kwargs)
+    def __init__(self, *args) -> None:
+        RuntimeError.__init__(self, *args)
 
 
 class LookupTableInfo:
@@ -47,25 +47,30 @@ class LookupTableInfo:
     def nonce(self) -> int:
         return self._nonce
 
-    def get_account_list(self) -> List[str]:
-        return list(self._lookup_account_dict.keys())
+    def get_account_list(self) -> List[PublicKey]:
+        return [PublicKey(key) for key in self._lookup_account_dict.keys()]
 
-    def get_account_idx_list(self) -> List[Tuple[str, int]]:
-        return [(key, idx) for key, idx in self._lookup_account_dict.items()]
+    def get_account_idx_list(self) -> List[Tuple[PublicKey, int]]:
+        return [(PublicKey(key), idx) for key, idx in self._lookup_account_dict.items()]
 
     def get_account_list_len(self) -> int:
         return len(self._lookup_account_dict)
 
-    def get_account_idx(self, key: str) -> Optional[int]:
-        idx = self._tx_account_dict.get(key, None) or self._lookup_account_dict.get(key, None)
+    def get_tx_account_list_len(self) -> int:
+        return len(self._tx_account_dict)
+
+    def get_account_idx(self, key: Union[str, PublicKey]) -> Optional[int]:
+        key = str(key)
+        idx = self._tx_account_dict.get(key, None)
         if idx is None:
-            return idx
+            idx = self._lookup_account_dict.get(key, None)
+
         if idx == self.UNKNOWN_IDX:
             return None
         return idx
 
-    def is_tx_account(self, key: str) -> bool:
-        return key in self._tx_account_dict
+    def is_tx_account(self, key: Union[str, PublicKey]) -> bool:
+        return str(key) in self._tx_account_dict
 
     def init_from_legacy_transaction(self, tx: Transaction) -> None:
         assert not len(self._tx_account_dict)
@@ -86,10 +91,14 @@ class LookupTableInfo:
         }
 
         # programs should be included into the transaction
-        for i in [ix.program_id_index for ix in msg.instructions]:
-            tx_account_dict[str(msg.account_keys[i])] = len(tx_account_dict)
+        new_idx = msg.header.num_required_signatures
+        for old_idx in [ix.program_id_index for ix in msg.instructions]:
+            key = str(msg.account_keys[old_idx])
+            if key not in tx_account_dict:
+                tx_account_dict[key] = new_idx
+                new_idx += 1
 
-        lookup_account_dict: Dict[str, int] = {}
+        lookup_account_dict: Dict[str, Optional[int]] = {}
         for account in msg.account_keys[msg.header.num_required_signatures:]:
             key = str(account)
             if (key not in tx_account_dict) and (key not in lookup_account_dict):
@@ -108,19 +117,17 @@ class LookupTableInfo:
         self._lookup_account_dict = lookup_account_dict
 
     def update_from_account(self, lookup_info: LookupTableAccountInfo) -> None:
-        table_str = str(self._table_account)
-
         lookup_dict: Dict[str, int] = {
             str(account): i
             for i, account in enumerate(lookup_info.account_list)
         }
         if len(lookup_dict) != len(lookup_info.account_list):
-            raise LookupTableError(f'Lookup table {table_str} has duplicates')
+            raise LookupTableError(f'Lookup table {str(self._table_account)} has duplicates')
 
-        for key, idx in self._lookup_account_dict.values():
+        for key, idx in self._lookup_account_dict.items():
             if idx != self.UNKNOWN_IDX:
-                raise LookupTableError(f'Account {key} already has index {idx} in the lookup table {table_str}')
+                raise LookupTableError(f'Account {key} has index {idx} in the lookup table {str(self._table_account)}')
             if key not in lookup_dict:
-                raise LookupTableError(f'Account {key} is not found in the lookup table {table_str}')
+                raise LookupTableError(f'Account {key} is not found in the lookup table {str(self._table_account)}')
 
         self._lookup_account_dict.update(lookup_dict)
