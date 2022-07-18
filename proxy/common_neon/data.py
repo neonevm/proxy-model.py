@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 
 class NeonTxStatData:
@@ -18,18 +18,18 @@ class NeonTxStatData:
 class NeonTxReturn:
     exit_status: int = 0
     gas_used: int = 0
-    return_value: bytes = None
+    return_value: Optional[bytes] = None
 
 
 @dataclass
 class NeonEvent:
-    address: bytes = None
+    address: Optional[bytes] = None
     count_topics: int = 0
-    topics: List[bytes] = None
-    log_data: bytes = None
+    topics: Optional[List[bytes]] = None
+    log_data: Optional[bytes] = None
 
 
 @dataclass
 class NeonLogIx:
-    neon_return: NeonTxReturn = None
+    neon_return: Optional[NeonTxReturn] = None
     neon_events: List[NeonEvent] = field(default_factory=list)
