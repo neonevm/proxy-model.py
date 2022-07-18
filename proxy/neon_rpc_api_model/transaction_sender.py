@@ -163,6 +163,10 @@ class NeonTxSendCtx:
 class BaseNeonTxStrategy(abc.ABC):
     NAME = 'UNKNOWN STRATEGY'
 
+    # Predefined blockhash is used only to check transaction size or other tasks,
+    #   a transaction with this blockhash won't be send to network
+    _FAKE_BLOCKHASH = Blockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+
     def __init__(self, precheck_result: NeonTxPrecheckResult, ctx: NeonTxSendCtx):
         self._precheck_result = precheck_result
         self._error_msg: Optional[str] = None
@@ -247,9 +251,7 @@ class BaseNeonTxStrategy(abc.ABC):
 
     def _validate_txsize(self) -> bool:
         tx = self.build_tx()
-
-        # Predefined blockhash is used only to check transaction size, this transaction won't be send to network
-        tx.recent_blockhash = Blockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+        tx.recent_blockhash = self._FAKE_BLOCKHASH
         tx.sign(self._signer)
         try:
             tx.serialize()
@@ -564,8 +566,8 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
     NAME = 'BigExecuteTrxFromAccountDataIterativeOrContinue'
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         self._lookup: Optional[LookupTableInfo] = None
+        super().__init__(*args, **kwargs)
 
     def _validate(self) -> bool:
         return (
@@ -574,10 +576,22 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
             self._validate_txsize()
         )
 
-    def _build_lookup_table(self) -> bool:
-        legacy_tx = super().build_tx()
+    def _build_legacy_tx(self, idx=0) -> Transaction:
+        tx = super().build_tx(idx)
+        tx.recent_blockhash = self._FAKE_BLOCKHASH
+        tx.fee_payer = self._signer.public_key()
+        return tx
 
-        recent_block_slot = self._solana.get_recent_blockslot()
+    def _build_legacy_cancel_tx(self) -> Transaction:
+        tx = super().build_cancel_tx()
+        tx.recent_blockhash = self._FAKE_BLOCKHASH
+        tx.fee_payer = self._signer.public_key()
+        return tx
+
+    def _build_lookup_table(self) -> bool:
+        legacy_tx = self._build_legacy_tx()
+
+        recent_block_slot = self._solana.get_recent_blockslot("finalized")
         account, nonce = LookupTableInfo.derive_lookup_table_address(self._signer.public_key(), recent_block_slot)
         lookup = LookupTableInfo(account, recent_block_slot, nonce)
         try:
@@ -592,15 +606,15 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
         return True
 
     def build_tx(self, idx=0) -> Transaction:
-        legacy_tx = super().build_tx(idx)
+        legacy_tx = self._build_legacy_tx(idx)
         return V0Transaction(address_table_lookups=self._lookup).add(legacy_tx)
 
     def build_cancel_tx(self) -> Transaction:
-        legacy_tx = super().build_cancel_tx()
+        legacy_tx = self._build_legacy_cancel_tx()
         return V0Transaction(address_table_lookups=self._lookup).add(legacy_tx)
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        tx_list_name, tx_list = super().build_preparation_tx_list()
+        tx_list_name, tx_list = super()._build_prep_tx_list()
         tx = Transaction().add(
             self._builder.make_create_lookup_table_instruction(
                 self._lookup.table_account,
@@ -616,7 +630,7 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
         sign_list = super()._execute_prep_tx_list(waiter=waiter)
 
         tx_account_cnt = 25
-        account_list = self._lookup.get_account_list()
+        account_list = [PublicKey(key) for key in self._lookup.get_account_list()]
         tx_list: List[Transaction] = []
         while len(account_list):
             account_list_part, account_list = account_list[:tx_account_cnt], account_list[tx_account_cnt:]
@@ -660,7 +674,7 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
 class NeonTxSendStrategySelector(IConfirmWaiter):
     STRATEGY_LIST = [
         SimpleNeonTxStrategy,
-        IterativeNeonTxStrategy, HolderNeonTxStrategy,
+        IterativeNeonTxStrategy, HolderNeonTxStrategy, BigHolderNeonTxStrategy,
         NoChainIdNeonTxStrategy
     ]
 
@@ -696,7 +710,7 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
                 if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
                     raise
 
-        self.error(f'No strategy to execute the Neon transaction: {self._eth_tx}')
+        self.error(f'No strategy to execute the Neon transaction: {self._ctx.eth_tx}')
         raise EthereumError(message="transaction is too big for execution")
 
     def on_wait_confirm(self, _: int, block_slot: int, __: bool) -> None:

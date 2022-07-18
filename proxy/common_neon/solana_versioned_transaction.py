@@ -46,8 +46,10 @@ class V0Transaction(Transaction):
                 tx_idx_dict[new_idx] = old_idx
 
         if len(tx_idx_dict) > LookupTableInfo.MAX_TX_ACCOUNT_CNT:
-            raise LookupTableError('Too big number of transactions account keys with lookup tables: ' +
-                                   f'{len(tx_idx_dict)} > {LookupTableInfo.MAX_TX_ACCOUNT_CNT}')
+            raise LookupTableError(
+                'Too big number of transactions account keys with lookup tables: ' +
+                f'{len(tx_idx_dict)} > {LookupTableInfo.MAX_TX_ACCOUNT_CNT}'
+            )
 
         # Build static transaction's account list
         num_readonly_unsigned_accounts = 0

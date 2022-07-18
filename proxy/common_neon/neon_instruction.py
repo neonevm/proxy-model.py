@@ -313,9 +313,9 @@ class NeonIxBuilder:
     def make_create_lookup_table_instruction(self, table_account: PublicKey,
                                              recent_block_slot: int,
                                              seed: int) -> TransactionInstruction:
-        data = b"00"
-        data += recent_block_slot.to_bytes(8, byteorder='little')
-        data += seed.to_bytes(1, byteorder='little')
+        data = int(0).to_bytes(4, byteorder="little")
+        data += recent_block_slot.to_bytes(8, byteorder="little")
+        data += seed.to_bytes(1, byteorder="little")
         return TransactionInstruction(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,
@@ -329,9 +329,9 @@ class NeonIxBuilder:
 
     def make_extend_lookup_table_instruction(self, table_account: PublicKey,
                                              account_list: List[PublicKey]) -> TransactionInstruction:
-        data = b"02"
-        data += shortvec.encode_length(len(account_list))
-        data += b"".join([bytes(pubkey) for pubkey in self.account_list])
+        data = int(2).to_bytes(4, byteorder="little")
+        data += len(account_list).to_bytes(8, byteorder="little")
+        data += b"".join([bytes(pubkey) for pubkey in account_list])
 
         return TransactionInstruction(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
@@ -345,7 +345,7 @@ class NeonIxBuilder:
         )
 
     def make_deactivate_lookup_table_instruction(self, table_account: PublicKey) -> TransactionInstruction:
-        data = b"03"
+        data = int(3).to_bytes(4, byteorder="little")
         return TransactionInstruction(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,
@@ -356,7 +356,7 @@ class NeonIxBuilder:
         )
 
     def make_close_lookup_table_instruction(self, table_account: PublicKey) -> TransactionInstruction:
-        data = b"04"
+        data = int(4).to_bytes(4, byteorder="little")
         return TransactionInstruction(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,

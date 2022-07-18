@@ -50,5 +50,5 @@ LOOKUP_TABLE_LAYOUT = Struct(
     "has_authority" / Int8ul,
     "authority" / Bytes(32),
     "padding" / Int16ul,
-    "account_len" / Int32ul
+    "account_list_len" / Int32ul
 )

@@ -166,7 +166,7 @@ class LookupTableAccountInfo(NamedTuple):
             last_extended_slot=lookup.last_extended_slot,
             last_extended_slot_start_index=lookup.last_extended_slot_start_index,
             authority=authority,
-            account_list=lookup.account_list
+            account_list=account_list
         )
 
 

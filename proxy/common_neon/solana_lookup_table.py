@@ -72,8 +72,12 @@ class LookupTableInfo:
         assert not len(self._lookup_account_dict)
 
         msg = tx.compile_message()
-        assert msg.header.num_required_signatures <= self.MAX_REQUIRED_SIGN_CNT
-        assert len(msg.account_keys) < self.MAX_ACCOUNT_CNT
+        if msg.header.num_required_signatures > self.MAX_REQUIRED_SIGN_CNT:
+            raise LookupTableError(
+                f'Too big number of signed accounts for lookup table: {msg.header.num_required_signatures}'
+            )
+        if len(msg.account_keys) > self.MAX_ACCOUNT_CNT:
+            raise LookupTableError(f'Too big number of accounts for lookup table: {len(msg.account_keys)}')
 
         # required accounts should be included into the transaction
         tx_account_dict: Dict[str, int] = {
@@ -88,14 +92,17 @@ class LookupTableInfo:
         lookup_account_dict: Dict[str, int] = {}
         for account in msg.account_keys[msg.header.num_required_signatures:]:
             key = str(account)
-            if (key not in tx_account_dict) or (key not in lookup_account_dict):
+            if (key not in tx_account_dict) and (key not in lookup_account_dict):
                 lookup_account_dict[key] = self.UNKNOWN_IDX
 
-        assert len(lookup_account_dict) + len(tx_account_dict) == len(msg.account_keys)
+        if len(lookup_account_dict) + len(tx_account_dict) != len(msg.account_keys):
+            raise LookupTableError('Found duplicates in the transaction account list')
 
         if len(tx_account_dict) > self.MAX_TX_ACCOUNT_CNT:
-            raise LookupTableError('Too big number of transactions account keys: ' +
-                                   f'{len(tx_account_dict)} > {self.MAX_TX_ACCOUNT_CNT}')
+            raise LookupTableError(
+                'Too big number of transactions account keys: ' +
+                f'{len(tx_account_dict)} > {self.MAX_TX_ACCOUNT_CNT}'
+            )
 
         self._tx_account_dict = tx_account_dict
         self._lookup_account_dict = lookup_account_dict
