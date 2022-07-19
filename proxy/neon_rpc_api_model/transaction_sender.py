@@ -27,8 +27,9 @@ from ..common_neon.errors import EthereumError
 from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.solana_lookup_table import LookupTableInfo, LookupTableError
-from ..common_neon.solana_versioned_transaction import V0Transaction
+from ..common_neon.solana_account_lookup_table import AccountLookupTableInfo
+from ..common_neon.solana_v0_transaction_builder import V0TransactionError
+from ..common_neon.solana_v0_transaction import V0Transaction
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 
 
@@ -124,7 +125,7 @@ class AccountTxList:
 class NeonTxSendCtx:
     def __init__(self, solana: SolanaInteractor, resource: OperatorResourceInfo, eth_tx: EthTx):
         self._eth_tx = eth_tx
-        self._neon_sign = '0x' + eth_tx.hash_signed().hex()
+        self._neon_sig = '0x' + eth_tx.hash_signed().hex()
         self._solana = solana
         self._resource = resource
         self._builder = NeonIxBuilder(resource.public_key)
@@ -135,8 +136,8 @@ class NeonTxSendCtx:
         self._builder.init_iterative(self._resource.storage, self._resource.holder, self._resource.rid)
 
     @property
-    def neon_sign(self) -> str:
-        return self._neon_sign
+    def neon_sig(self) -> str:
+        return self._neon_sig
 
     @property
     def eth_tx(self) -> EthTx:
@@ -191,8 +192,8 @@ class BaseNeonTxStrategy(abc.ABC):
         return self._ctx.resource.signer
 
     @property
-    def neon_sign(self) -> str:
-        return self._ctx.neon_sign
+    def neon_sig(self) -> str:
+        return self._ctx.neon_sig
 
     def is_valid(self) -> bool:
         return self._is_valid
@@ -219,7 +220,7 @@ class BaseNeonTxStrategy(abc.ABC):
             return []
         tx_sender = SolTxListSender(self._solana, self._signer)
         tx_sender.send(tx_list_name, tx_list, waiter=waiter)
-        return tx_sender.success_sign_list
+        return tx_sender.success_sig_list
 
     def _build_tx_list(self, cnt: int) -> Tuple[str, List[Transaction]]:
         tx_list = [self.build_tx(i) for i in range(cnt)]
@@ -279,7 +280,7 @@ class SimpleNeonTxSender(SolTxListSender):
 
     def _on_success_send(self, tx: Transaction, receipt: {}) -> None:
         if not self.neon_res.is_valid():
-            self.neon_res.decode(self._strategy.neon_sign, receipt).is_valid()
+            self.neon_res.decode(self._strategy.neon_sig, receipt).is_valid()
         super()._on_success_send(tx, receipt)
 
     def _on_post_send(self) -> None:
@@ -327,16 +328,16 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         return self._account_tx_list.name, self._account_tx_list.get_tx_list()
 
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
-        sign_list = super()._execute_prep_tx_list(waiter)
+        sig_list = super()._execute_prep_tx_list(waiter)
         self._account_tx_list.done_tx_list()
-        return sign_list
+        return sig_list
 
     def _execute_tx_list(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
         tx_sender = SimpleNeonTxSender(self, self._solana, self._signer)
         tx_sender.send(self.NAME, [self.build_tx()], waiter=waiter)
         if not tx_sender.neon_res.is_valid():
             raise tx_sender.raise_budget_exceeded()
-        return tx_sender.neon_res, tx_sender.success_sign_list
+        return tx_sender.neon_res, tx_sender.success_sig_list
 
 
 class IterativeNeonTxSender(SimpleNeonTxSender):
@@ -407,14 +408,14 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
             self._unknown_error_list.clear()
             self._unknown_error_receipt = None
-            if len(self.success_sign_list):
+            if len(self.success_sig_list):
                 return self._cancel()
             self._raise_error()
 
         # There is no more retries to send transactions
         if self._retry_idx >= RETRY_ON_FAIL:
             self._set_postponed_exception(EthereumError(message='No more retries to complete transaction!'))
-            if (not self._is_canceled) and len(self.success_sign_list):
+            if (not self._is_canceled) and len(self.success_sig_list):
                 return self._cancel()
             self._raise_error()
 
@@ -496,9 +497,9 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return self._account_tx_list.name, self._account_tx_list.get_tx_list()
 
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
-        sign_list = super()._execute_prep_tx_list(waiter)
+        sig_list = super()._execute_prep_tx_list(waiter)
         self._account_tx_list.done_tx_list()
-        return sign_list
+        return sig_list
 
     def _calc_iter_cnt(self) -> int:
         emulated_evm_step_cnt = self._precheck_result.emulating_result["steps_executed"]
@@ -516,7 +517,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         tx_list_name, tx_list = self._build_tx_list(iter_cnt)
         tx_sender = IterativeNeonTxSender(self, self._solana, self._signer)
         tx_sender.send(tx_list_name, tx_list, waiter=waiter)
-        return tx_sender.neon_res, tx_sender.success_sign_list
+        return tx_sender.neon_res, tx_sender.success_sig_list
 
 
 class HolderNeonTxStrategy(IterativeNeonTxStrategy):
@@ -566,7 +567,7 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
     NAME = 'BigExecuteTrxFromAccountDataIterativeOrContinue'
 
     def __init__(self, *args, **kwargs):
-        self._lookup: Optional[LookupTableInfo] = None
+        self._lookup: Optional[AccountLookupTableInfo] = None
         super().__init__(*args, **kwargs)
 
     def _validate(self) -> bool:
@@ -592,11 +593,12 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
         legacy_tx = self._build_legacy_tx()
 
         recent_block_slot = self._solana.get_recent_blockslot("finalized")
-        account, nonce = LookupTableInfo.derive_lookup_table_address(self._signer.public_key(), recent_block_slot)
-        lookup = LookupTableInfo(account, recent_block_slot, nonce)
+        signer_key = self._signer.public_key()
+        account, nonce = AccountLookupTableInfo.derive_lookup_table_address(signer_key, recent_block_slot)
+        lookup = AccountLookupTableInfo(account, recent_block_slot, nonce)
         try:
-            lookup.init_from_legacy_transaction(legacy_tx)
-            if lookup.get_account_list_len() == 0:
+            lookup.init_from_legacy_tx(legacy_tx)
+            if lookup.account_key_list_len == 0:
                 self._error_msg = 'No accounts for lookup table'
                 return False
             self._lookup = lookup
@@ -613,45 +615,53 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
         legacy_tx = self._build_legacy_cancel_tx()
         return V0Transaction(address_table_lookups=[self._lookup]).add(legacy_tx)
 
-    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
+    def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
         tx_list_name, tx_list = super()._build_prep_tx_list()
-        tx = Transaction().add(
+
+        # Tx to create an Account Lookup Table
+        create_alt_tx = Transaction().add(
             self._builder.make_create_lookup_table_instruction(
                 self._lookup.table_account,
                 self._lookup.recent_block_slot,
                 self._lookup.nonce
             )
         )
-        tx_list.append(tx)
-        tx_list_name = ' + '.join([tx_list_name, 'CreateLookupTable(1)'])
-        return tx_list_name, tx_list
 
-    def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
-        sign_list = super()._execute_prep_tx_list(waiter=waiter)
+        tx_account_cnt = 30
+        account_list = self._lookup.account_key_list
 
-        tx_account_cnt = 25
-        account_list = self._lookup.get_account_list()
-        tx_list: List[Transaction] = []
+        # List of tx to extend the Account Lookup Table
+        extend_alt_tx_list: List[Transaction] = []
         while len(account_list):
             account_list_part, account_list = account_list[:tx_account_cnt], account_list[tx_account_cnt:]
             tx = Transaction().add(
                 self._builder.make_extend_lookup_table_instruction(self._lookup.table_account, account_list_part)
             )
-            tx_list.append(tx)
+            extend_alt_tx_list.append(tx)
 
-        tx_list_name = f'ExtendLookupTable({len(tx_list)})'
+        # If list of accounts is small, including of first extend-tx into create-tx will give less time of tx execution
+        create_alt_tx.add(extend_alt_tx_list[0])
+        tx_list_name = ' + '.join([tx_list_name, 'CreateLookupTable(1)', 'ExtendLookupTable(1)'])
+        tx_list.append(create_alt_tx)
         tx_sender = SolTxListSender(self._solana, self._signer)
         tx_sender.send(tx_list_name, tx_list, waiter=waiter)
-        sign_list += tx_sender.success_sign_list
+        sig_list = tx_sender.success_sig_list
 
-        lookup_info = self._solana.get_lookup_table_info(self._lookup.table_account)
+        extend_alt_tx_list = extend_alt_tx_list[1:]
+        if len(extend_alt_tx_list):
+            tx_list_name = f'ExtendLookupTable({len(extend_alt_tx_list)})'
+            tx_sender.send(tx_list_name, extend_alt_tx_list, waiter=waiter)
+            sig_list += tx_sender.success_sig_list
+
+        # Accounts in Account Lookup Table can be reordered
+        lookup_info = self._solana.get_account_lookup_table_info(self._lookup.table_account)
         if lookup_info is None:
-            raise LookupTableError(f'Cannot read lookup table {str(self._lookup.table_account)}')
-
-        # accounts can be reordered during execution
+            raise V0TransactionError(f'Cannot read lookup table {str(self._lookup.table_account)}')
         self._lookup.update_from_account(lookup_info)
-        time.sleep(0.5)
-        return sign_list
+
+        # Sleep for 1 block, because Account Lookup Table can't be used in the same slot with extending of it
+        time.sleep(0.4)
+        return sig_list
 
 
 class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
@@ -695,7 +705,7 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
         return self._execute(precheck_result)
 
     def _validate_pend_tx(self) -> None:
-        self._pending_tx = NeonPendingTxInfo(neon_sign=self._ctx.neon_sign, operator=self._operator, slot=0)
+        self._pending_tx = NeonPendingTxInfo(neon_sign=self._ctx.neon_sig, operator=self._operator, slot=0)
         self._pend_tx_into_db(self._ctx.solana.get_recent_blockslot())
 
     def _execute(self, precheck_result: NeonTxPrecheckResult) -> NeonTxResultInfo:
@@ -707,8 +717,8 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
                     continue
 
                 self.debug(f'Use strategy {Strategy.NAME}')
-                neon_res, sign_list = strategy.execute(waiter=self)
-                self._submit_tx_into_db(neon_res, sign_list)
+                neon_res, sig_list = strategy.execute(waiter=self)
+                self._submit_tx_into_db(neon_res, sig_list)
                 return neon_res
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
@@ -733,7 +743,7 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
             self._pending_tx.slot = block_slot
             self._db.pend_transaction(self._pending_tx)
 
-    def _submit_tx_into_db(self, neon_res: NeonTxResultInfo, sign_list: List[str]):
+    def _submit_tx_into_db(self, neon_res: NeonTxResultInfo, sig_list: List[str]):
         neon_tx = NeonTxInfo()
         neon_tx.init_from_eth_tx(self._ctx.eth_tx)
-        self._db.submit_transaction(neon_tx, neon_res, sign_list)
+        self._db.submit_transaction(neon_tx, neon_res, sig_list)

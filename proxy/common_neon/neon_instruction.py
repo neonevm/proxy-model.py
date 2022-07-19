@@ -20,7 +20,7 @@ from .layouts import CREATE_ACCOUNT_LAYOUT
 from .eth_proto import Trx as EthTx
 from .environment_data import EVM_LOADER_ID
 from .utils import get_holder_msg
-from .solana_lookup_table import ADDRESS_LOOKUP_TABLE_ID
+from .solana_account_lookup_table import ADDRESS_LOOKUP_TABLE_ID
 
 
 def create_account_with_seed_layout(base, seed, lamports, space):

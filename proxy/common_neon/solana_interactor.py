@@ -26,7 +26,7 @@ from .utils import SolanaBlockInfo
 from .environment_data import EVM_LOADER_ID, RETRY_ON_FAIL, FUZZING_BLOCKHASH, FINALIZED
 
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
-from ..common_neon.layouts import LOOKUP_TABLE_LAYOUT
+from ..common_neon.layouts import ACCOUNT_LOOKUP_TABLE_LAYOUT
 from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG, LOOKUP_ACCOUNT_TAG
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.utils import get_from_dict
@@ -143,42 +143,42 @@ class StorageAccountInfo(NamedTuple):
         )
 
 
-class LookupTableAccountInfo(NamedTuple):
+class AccountLookupTableAccountInfo(NamedTuple):
     type: int
     table_account: PublicKey
     deactivation_slot: int
     last_extended_slot: int
     last_extended_slot_start_index: int
     authority: Optional[PublicKey]
-    account_list: List[PublicKey]
+    account_key_list: List[PublicKey]
 
     @staticmethod
-    def frombytes(table_account: PublicKey, data: bytes) -> Optional[LookupTableAccountInfo]:
-        lookup = LOOKUP_TABLE_LAYOUT.parse(data)
+    def frombytes(table_account: PublicKey, data: bytes) -> Optional[AccountLookupTableAccountInfo]:
+        lookup = ACCOUNT_LOOKUP_TABLE_LAYOUT.parse(data)
         if lookup.type != LOOKUP_ACCOUNT_TAG:
             return None
 
-        offset = LOOKUP_TABLE_LAYOUT.sizeof()
+        offset = ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof()
         if (len(data) - offset) % PublicKey.LENGTH:
             return None
 
-        account_list = []
-        account_list_len = math.ceil((len(data) - offset) / PublicKey.LENGTH)
-        for _ in range(account_list_len):
+        account_key_list = []
+        account_key_list_len = math.ceil((len(data) - offset) / PublicKey.LENGTH)
+        for _ in range(account_key_list_len):
             some_pubkey = PublicKey(data[offset:offset + PublicKey.LENGTH])
             offset += PublicKey.LENGTH
-            account_list.append(some_pubkey)
+            account_key_list.append(some_pubkey)
 
         authority = PublicKey(lookup.authority) if lookup.has_authority else None
 
-        return LookupTableAccountInfo(
+        return AccountLookupTableAccountInfo(
             type=lookup.type,
             table_account=table_account,
             deactivation_slot=lookup.deactivation_slot,
             last_extended_slot=lookup.last_extended_slot,
             last_extended_slot_start_index=lookup.last_extended_slot_start_index,
             authority=authority,
-            account_list=account_list
+            account_key_list=account_key_list
         )
 
 
@@ -479,14 +479,14 @@ class SolanaInteractor:
                                f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
         return StorageAccountInfo.frombytes(info.data)
 
-    def get_lookup_table_info(self, table_account: PublicKey) -> Optional[LookupTableAccountInfo]:
+    def get_account_lookup_table_info(self, table_account: PublicKey) -> Optional[AccountLookupTableAccountInfo]:
         info = self.get_account_info(table_account, length=0)
         if info is None:
             return None
-        elif len(info.data) < LOOKUP_TABLE_LAYOUT.sizeof():
+        elif len(info.data) < ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof():
             raise RuntimeError(f"Wrong data length for lookup table data {str(table_account)}: " +
-                               f"{len(info.data)} < {LOOKUP_TABLE_LAYOUT.sizeof()}")
-        return LookupTableAccountInfo.frombytes(table_account, info.data)
+                               f"{len(info.data)} < {ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof()}")
+        return AccountLookupTableAccountInfo.frombytes(table_account, info.data)
 
     def get_multiple_rent_exempt_balances_for_size(self, size_list: List[int], commitment='confirmed') -> List[int]:
         opts = {

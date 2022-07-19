@@ -43,7 +43,7 @@ CREATE_ACCOUNT_LAYOUT = Struct(
 )
 
 
-LOOKUP_TABLE_LAYOUT = Struct(
+ACCOUNT_LOOKUP_TABLE_LAYOUT = Struct(
     "type" / Int32ul,
     "deactivation_slot" / Int64ul,
     "last_extended_slot" / Int64ul,

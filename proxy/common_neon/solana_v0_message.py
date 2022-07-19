@@ -36,12 +36,14 @@ class V0MessageArgs(NamedTuple):
 
 class V0Message(Message):
     def __init__(self, args: V0MessageArgs) -> None:
-        super().__init__(MessageArgs(
-            header=args.header,
-            account_keys=args.account_keys,
-            recent_blockhash=args.recent_blockhash,
-            instructions=args.instructions
-        ))
+        super().__init__(
+            MessageArgs(
+                header=args.header,
+                account_keys=args.account_keys,
+                recent_blockhash=args.recent_blockhash,
+                instructions=args.instructions
+            )
+        )
         self.address_table_lookups = [
             MessageAddressTableLookup(
                 account_key=PublicKey(lookup.account_key),
@@ -54,8 +56,7 @@ class V0Message(Message):
     @staticmethod
     def __encode_address_table_lookup(lookup: MessageAddressTableLookup) -> bytes:
         MessageAddressTableLookupFormat = NamedTuple(
-            "MessageAddressTableLookupFormat",
-            [
+            "MessageAddressTableLookupFormat", [
                 ("account_key", bytes),
                 ("writable_indexes_length", bytes),
                 ("writable_indexes", bytes),
@@ -83,4 +84,4 @@ class V0Message(Message):
 
     @staticmethod
     def deserialize(raw_message: bytes) -> Union[Message, V0Message]:
-        raise NotImplementedError("deserialize of versioned message is not implemented!")
+        raise NotImplementedError("deserialize of v0 message is not implemented!")

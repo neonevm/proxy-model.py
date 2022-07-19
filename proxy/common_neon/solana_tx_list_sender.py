@@ -35,7 +35,7 @@ class SolTxListSender:
         self._blockhash = None
         self._retry_idx = 0
         self._slots_behind = 0
-        self.success_sign_list: List[str] = []
+        self.success_sig_list: List[str] = []
         self._tx_list: List[Transaction] = []
         self._node_behind_list: List[Transaction] = []
         self._bad_block_list: List[Transaction] = []
@@ -78,7 +78,7 @@ class SolTxListSender:
 
             receipt_list = self._send_tx_list(skip_preflight, preflight_commitment, waiter)
 
-            success_sign_list = []
+            success_sig_list = []
             for receipt, tx in zip(receipt_list, self._tx_list):
                 receipt_parser = SolReceiptParser(receipt)
                 slots_behind = receipt_parser.get_slots_behind()
@@ -96,14 +96,14 @@ class SolTxListSender:
                     self._unknown_error_list.append(tx)
                     self._unknown_error_receipt = receipt
                 else:
-                    success_sign_list.append(b58encode(tx.signature()).decode("utf-8"))
+                    success_sig_list.append(b58encode(tx.signature()).decode("utf-8"))
                     self._retry_idx = 0
                     self._on_success_send(tx, receipt)
 
             self.debug(
                 f'retry {self._retry_idx}, ' +
                 f'total receipts {len(receipt_list)}, ' +
-                f'success receipts {len(self.success_sign_list)}(+{len(success_sign_list)}), ' +
+                f'success receipts {len(self.success_sig_list)}(+{len(success_sig_list)}), ' +
                 f'node behind {len(self._node_behind_list)}, '
                 f'bad blocks {len(self._bad_block_list)}, ' +
                 f'blocked accounts {len(self._blocked_account_list)}, ' +
@@ -111,7 +111,7 @@ class SolTxListSender:
                 f'unknown error: {len(self._unknown_error_list)}'
             )
 
-            self.success_sign_list += success_sign_list
+            self.success_sig_list += success_sig_list
             self._on_post_send()
 
         if len(self._tx_list):
@@ -168,11 +168,11 @@ class SolTxListSender:
             self._signer, self._tx_list, skip_preflight, preflight_commitment
         )
         # Filter good transactions and wait the confirmations for them
-        sign_list = [s.result for s in send_result_list if s.result]
-        self._confirm_tx_list(sign_list, waiter)
+        sig_list = [s.result for s in send_result_list if s.result]
+        self._confirm_tx_list(sig_list, waiter)
 
         # Get receipts for good transactions
-        confirmed_list = self._solana.get_multiple_receipts(sign_list)
+        confirmed_list = self._solana.get_multiple_receipts(sig_list)
         # Mix errors with receipts for good transactions
         receipt_list = []
         for s in send_result_list:
@@ -183,9 +183,9 @@ class SolTxListSender:
 
         return receipt_list
 
-    def _confirm_tx_list(self, sign_list: List[str], waiter: Optional[IConfirmWaiter]) -> None:
+    def _confirm_tx_list(self, sig_list: List[str], waiter: Optional[IConfirmWaiter]) -> None:
         """Confirm a transaction."""
-        if not len(sign_list):
+        if not len(sig_list):
             self.debug('No confirmations, because transaction list is empty')
             return
 
@@ -195,12 +195,12 @@ class SolTxListSender:
                 time.sleep(CONFIRMATION_CHECK_DELAY)
             elapsed_time += CONFIRMATION_CHECK_DELAY
 
-            block_slot, is_confirmed = self._solana.get_confirmed_slot_for_multiple_transactions(sign_list)
+            block_slot, is_confirmed = self._solana.get_confirmed_slot_for_multiple_transactions(sig_list)
             if waiter is not None:
                 waiter.on_wait_confirm(elapsed_time, block_slot, is_confirmed)
 
             if is_confirmed:
-                self.debug(f'Got confirmed status for transactions: {sign_list}')
+                self.debug(f'Got confirmed status for transactions: {sig_list}')
                 return
 
-        self.warning(f'No confirmed status for transactions: {sign_list}')
+        self.warning(f'No confirmed status for transactions: {sig_list}')
