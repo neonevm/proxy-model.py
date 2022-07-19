@@ -15,7 +15,7 @@ class SolBlocksDB(BaseDB):
 
     @staticmethod
     def _generate_fake_block_hash(block_slot: int) -> str:
-        if block_slot <= 0:
+        if block_slot < 0:
             return '0x' + '0' * 64
 
         hex_num = hex(block_slot)[2:]
