@@ -540,7 +540,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
 
     def _calc_iter_cnt(self) -> int:
         emulated_evm_step_cnt = self._precheck_result.emulating_result["steps_executed"]
-        return math.ceil(emulated_evm_step_cnt / self._iter_evm_step_cnt)
+        return math.ceil(emulated_evm_step_cnt / self._iter_evm_step_cnt) + 1
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
         tx_list_name, tx_list = super()._build_prep_tx_list()

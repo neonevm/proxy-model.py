@@ -31,6 +31,7 @@ class SolanaIxInfo:
         self.tx = tx
         self._is_valid = isinstance(tx, dict)
         self._msg = self.tx['transaction']['message'] if self._is_valid else None
+        self._meta = self.tx['meta'] if self._is_valid else None
         self._set_defaults()
 
     def __str__(self):
@@ -83,7 +84,7 @@ class SolanaIxInfo:
                 evm_ix_idx += 1
                 yield evm_ix_idx
 
-            for inner_tx in self.tx['meta']['innerInstructions']:
+            for inner_tx in self._meta['innerInstructions']:
                 if inner_tx['index'] == ix_idx:
                     for self.ix in inner_tx['instructions']:
                         if self._get_neon_instruction():
@@ -100,18 +101,27 @@ class SolanaIxInfo:
     def get_account(self, idx: int) -> str:
         assert self._is_valid
 
-        msg_keys = self._msg['accountKeys']
+        all_keys = self._get_msg_account_key_list()
         ix_accounts = self.ix['accounts']
         if len(ix_accounts) > idx:
-            return msg_keys[ix_accounts[idx]]
+            return all_keys[ix_accounts[idx]]
         return ''
+
+    def _get_msg_account_key_list(self) -> List[str]:
+        assert self._is_valid
+
+        all_keys = self._msg['accountKeys']
+        lookup_keys = self._meta.get('loadedAddresses', None)
+        if lookup_keys is not None:
+            all_keys += lookup_keys['writable'] + lookup_keys['readonly']
+        return all_keys
 
     def get_account_list(self, start: int) -> List[str]:
         assert self._is_valid
 
-        msg_keys = self._msg['accountKeys']
+        all_keys = self._get_msg_account_key_list()
         ix_accounts = self.ix['accounts']
-        return [msg_keys[idx] for idx in ix_accounts[start:]]
+        return [all_keys[idx] for idx in ix_accounts[start:]]
 
 
 class BaseEvmObject:

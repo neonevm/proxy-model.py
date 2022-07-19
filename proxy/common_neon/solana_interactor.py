@@ -699,7 +699,11 @@ class SolanaInteractor:
     def get_multiple_receipts(self, sign_list: List[str], commitment='confirmed') -> List[Optional[Dict]]:
         if not len(sign_list):
             return []
-        opts = {"encoding": "json", "commitment": commitment}
+        opts = {
+            "encoding": "json",
+            "commitment": commitment,
+            "maxSupportedTransactionVersion": 0
+        }
         request_list = [(sign, opts) for sign in sign_list]
         response_list = self._send_rpc_batch_request("getTransaction", request_list)
         return [r.get('result') for r in response_list]
