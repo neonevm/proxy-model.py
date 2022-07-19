@@ -45,7 +45,7 @@ class SolBlocksDB(BaseDB):
 
     def _block_from_value(self, block_slot: Optional[int], value_list: Optional[List[Any]]) -> SolanaBlockInfo:
         if not value_list:
-            if not block_slot:
+            if block_slot is None:
                 return SolanaBlockInfo(slot=0)
             return SolanaBlockInfo(
                 slot=block_slot,
