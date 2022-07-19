@@ -5,7 +5,7 @@ from typing import List, Tuple, Set
 from solana.transaction import Transaction
 from solana.publickey import PublicKey
 
-from ..common_neon.solana_v0_transaction_builder import V0TransactionBuilder, V0TransactionError
+from ..common_neon.solana_account_lookup_table_builder import AccountLookupTableBuilder, AccountLookupTableError
 from ..common_neon.solana_interactor import AccountLookupTableAccountInfo
 
 
@@ -51,7 +51,7 @@ class AccountLookupTableInfo:
         assert not len(self._acct_key_list)
 
         msg = tx.compile_message()
-        builder = V0TransactionBuilder(msg)
+        builder = AccountLookupTableBuilder(msg)
 
         alt_acct_set = builder.build_alt_account_key_set()
         self._acct_key_set = alt_acct_set
@@ -61,10 +61,10 @@ class AccountLookupTableInfo:
         alt_acct_set: Set[str] = set([str(key) for key in alt_info.account_key_list])
 
         if len(alt_acct_set) != len(alt_info.account_key_list):
-            raise V0TransactionError(f'The lookup table {str(self._table_acct)} has duplicates')
+            raise AccountLookupTableError(f'The lookup table {str(self._table_acct)} has duplicates')
 
         if str(self._table_acct) != str(alt_info.table_account):
-            raise V0TransactionError(
+            raise AccountLookupTableError(
                 'Trying to update account list from another lookup table: ' +
                 f'{str(self._table_acct)} != {str(alt_info.table_account)}'
             )
@@ -75,14 +75,14 @@ class AccountLookupTableInfo:
 
         # Validate the content of account lists
         if len(self._acct_key_list) != len(alt_info.account_key_list):
-            raise V0TransactionError(
+            raise AccountLookupTableError(
                 f'The account list from the lookup table {str(self._table_acct)} has another length than expected: ' +
                 f'{len(self._acct_key_list)} != {len(alt_info.account_key_list)}'
             )
 
         for key in alt_info.account_key_list:
             if str(key) not in self._acct_key_set:
-                raise V0TransactionError(f'The unknown key {str(key)} in the lookup table {str(self._table_acct)}')
+                raise AccountLookupTableError(f'The unknown key {str(key)} in the lookup table {str(self._table_acct)}')
 
     def update_from_account(self, alt_info: AccountLookupTableAccountInfo) -> None:
         self._validate_alt_info(alt_info)

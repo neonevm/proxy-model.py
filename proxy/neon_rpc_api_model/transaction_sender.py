@@ -28,7 +28,7 @@ from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.solana_account_lookup_table import AccountLookupTableInfo
-from ..common_neon.solana_v0_transaction_builder import V0TransactionError
+from ..common_neon.solana_account_lookup_table_builder import AccountLookupTableError
 from ..common_neon.solana_v0_transaction import V0Transaction
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 
@@ -656,7 +656,7 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
         # Accounts in Account Lookup Table can be reordered
         lookup_info = self._solana.get_account_lookup_table_info(self._lookup.table_account)
         if lookup_info is None:
-            raise V0TransactionError(f'Cannot read lookup table {str(self._lookup.table_account)}')
+            raise AccountLookupTableError(f'Cannot read lookup table {str(self._lookup.table_account)}')
         self._lookup.update_from_account(lookup_info)
 
         # Sleep for 1 block, because Account Lookup Table can't be used in the same slot with extending of it

@@ -4,7 +4,7 @@ from solana.transaction import Transaction
 from solana.message import MessageHeader, CompiledInstruction
 
 from ..common_neon.solana_v0_message import V0Message, V0MessageArgs, MessageAddressTableLookup
-from ..common_neon.solana_v0_transaction_builder import V0TransactionBuilder, V0TransactionError
+from ..common_neon.solana_account_lookup_table_builder import AccountLookupTableBuilder, AccountLookupTableError
 from ..common_neon.solana_account_lookup_table import AccountLookupTableInfo
 
 
@@ -15,19 +15,19 @@ class V0Transaction(Transaction):
         super().__init__(*args)
 
         if not isinstance(address_table_lookups, list):
-            raise V0TransactionError('Address table lookups should be a list')
+            raise AccountLookupTableError('Address table lookups should be a list')
         elif len(address_table_lookups) == 0:
-            raise V0TransactionError('No address lookup tables')
+            raise AccountLookupTableError('No address lookup tables')
 
         for lookup in address_table_lookups:
             if not isinstance(lookup, AccountLookupTableInfo):
-                raise V0TransactionError(f'Bad type {type(lookup)} for address lookup table')
+                raise AccountLookupTableError(f'Bad type {type(lookup)} for address lookup table')
 
         self.address_table_lookups: List[AccountLookupTableInfo] = address_table_lookups
 
     def compile_message(self) -> V0Message:
         legacy_msg = super().compile_message()
-        builder = V0TransactionBuilder(legacy_msg)
+        builder = AccountLookupTableBuilder(legacy_msg)
 
         tx_key_list = builder.tx_account_key_list
         rw_key_set = builder.build_rw_account_key_set()
@@ -73,7 +73,7 @@ class V0Transaction(Transaction):
             )
 
         if not len(lookup_list):
-            raise V0TransactionError(f'No account lookups to include into V0Transaction')
+            raise AccountLookupTableError(f'No account lookups to include into V0Transaction')
 
         for key in rw_key_list:
             key_new_idx_dict[key] = len(key_new_idx_dict)
@@ -86,30 +86,31 @@ class V0Transaction(Transaction):
             key = str(key)
             new_idx = key_new_idx_dict.get(key, None)
             if new_idx is None:
-                raise V0TransactionError(f'Account {key} does not exist in lookup accounts')
+                raise AccountLookupTableError(f'Account {key} does not exist in lookup accounts')
             old_new_idx_dict[old_idx] = new_idx
 
         # Update compiled instructions with new indexes
         ix_list: List[CompiledInstruction] = []
         for old_ix in legacy_msg.instructions:
             # Get the new index for the program
-            ix_prg_idx = old_new_idx_dict.get(old_ix.program_id_index, None)
-            if ix_prg_idx is None:
-                raise V0TransactionError(f'Program with idx {old_ix.program_id_index} does not exist in account list')
+            old_prog_idx = old_ix.program_id_index
+            new_prog_idx = old_new_idx_dict.get(old_prog_idx, None)
+            if new_prog_idx is None:
+                raise AccountLookupTableError(f'Program with idx {old_prog_idx} does not exist in account list')
 
             # Get new indexes for instruction accounts
-            ix_account_list: List[int] = []
+            new_ix_account_list: List[int] = []
             for old_idx in old_ix.accounts:
                 new_idx = old_new_idx_dict.get(old_idx, None)
                 if new_idx is None:
-                    raise V0TransactionError(f'Account with idx {old_idx} does not exist in account list')
-                ix_account_list.append(new_idx)
+                    raise AccountLookupTableError(f'Account with idx {old_idx} does not exist in account list')
+                new_ix_account_list.append(new_idx)
 
             ix_list.append(
                 CompiledInstruction(
-                    program_id_index=ix_prg_idx,
+                    program_id_index=new_prog_idx,
                     data=old_ix.data,
-                    accounts=ix_account_list
+                    accounts=new_ix_account_list
                 )
             )
 

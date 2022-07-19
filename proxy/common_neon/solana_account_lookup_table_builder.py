@@ -4,12 +4,12 @@ from solana.message import Message
 from solana.publickey import PublicKey
 
 
-class V0TransactionError(RuntimeError):
+class AccountLookupTableError(RuntimeError):
     def __init__(self, *args) -> None:
         RuntimeError.__init__(self, *args)
 
 
-class V0TransactionBuilder:
+class AccountLookupTableBuilder:
     MAX_REQUIRED_SIG_CNT = 19
     MAX_TX_ACCOUNT_CNT = 27
     MAX_ACCOUNT_CNT = 255
@@ -36,11 +36,12 @@ class V0TransactionBuilder:
 
     def _validate_legacy_msg(self) -> None:
         if self._msg.header.num_required_signatures > self.MAX_REQUIRED_SIG_CNT:
-            raise V0TransactionError(
+            raise AccountLookupTableError(
                 f'Too big number {self._msg.header.num_required_signatures} of signed accounts for a V0Transaction'
             )
         elif len(self._msg.account_keys) > self.MAX_ACCOUNT_CNT:
-            raise V0TransactionError(f'Too big number {len(self._msg.account_keys)} of accounts for a V0Transaction')
+            raise AccountLookupTableError(
+                f'Too big number {len(self._msg.account_keys)} of accounts for a V0Transaction')
 
     def _build_tx_acct_key_set(self) -> Tuple[Set[str], int]:
         acct_key_list = self._msg.account_keys
@@ -54,11 +55,11 @@ class V0TransactionBuilder:
         # the result set of accounts in the static part of a transaction
         tx_acct_key_set = set(required_key_list + prog_key_list)
         if not len(tx_acct_key_set):
-            raise V0TransactionError('Zero number of static transaction accounts')
+            raise AccountLookupTableError('Zero number of static transaction accounts')
         elif len(tx_acct_key_set) != len(required_key_list) + len(prog_key_list):
-            raise V0TransactionError(f'V0 transaction uses signature from a program {len(tx_acct_key_set)} != {len(required_key_list)} + {len(prog_key_list)}')
+            raise AccountLookupTableError('Transaction uses signature from a program?')
         elif len(tx_acct_key_set) > self.MAX_TX_ACCOUNT_CNT:
-            raise V0TransactionError(
+            raise AccountLookupTableError(
                 'Too big number of transactions account keys: ' +
                 f'{len(tx_acct_key_set)} > {self.MAX_TX_ACCOUNT_CNT}'
             )
@@ -79,7 +80,7 @@ class V0TransactionBuilder:
         alt_acct_key_set = set([str(key) for key in acct_key_list if str(key) not in self._tx_acct_key_set])
 
         if len(alt_acct_key_set) + len(self._tx_acct_key_set) != len(self._msg.account_keys):
-            raise V0TransactionError('Found duplicates in the transaction account list')
+            raise AccountLookupTableError('Found duplicates in the transaction account list')
 
         return alt_acct_key_set
 
