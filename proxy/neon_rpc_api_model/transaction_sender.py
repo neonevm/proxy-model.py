@@ -458,6 +458,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     IS_SIMPLE = False
 
     def __init__(self, *args, **kwargs):
+        self._compute_unit_cnt: Optional[int] = None
         super().__init__(*args, **kwargs)
 
     def _validate(self) -> bool:
@@ -489,6 +490,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         if evm_step_cnt > 170:
             evm_step_cnt -= 150
         else:
+            self._compute_unit_cnt = 1_300_000
             evm_step_cnt = 10
         self._iter_evm_step_cnt = evm_step_cnt
         total_iteration_cnt = math.ceil(total_evm_step_cnt / evm_step_cnt)
@@ -501,7 +503,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return [self.build_tx(idx) for idx in range(total_iteration_cnt)]
 
     def build_tx(self, idx=0) -> Transaction:
-        tx = TransactionWithComputeBudget()
+        tx = TransactionWithComputeBudget(compute_units=self._compute_unit_cnt)
         # generate unique tx
         evm_step_cnt = self._iter_evm_step_cnt + idx
         tx.add(self._builder.make_partial_call_or_continue_transaction(evm_step_cnt, len(tx.instructions)))
@@ -540,7 +542,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
 
     def build_tx(self, idx=0) -> Transaction:
         evm_step_cnt = self._iter_evm_step_cnt
-        return TransactionWithComputeBudget().add(
+        return TransactionWithComputeBudget(compute_units=self._compute_unit_cnt).add(
             self._builder.make_partial_call_or_continue_from_account_data_instruction(evm_step_cnt, idx)
         )
 
@@ -633,8 +635,8 @@ class BaseNoChainIdNeonStrategy:
         return precheck_res.is_underpriced_tx_without_chainid
 
     @staticmethod
-    def build_tx(builder: NeonIxBuilder, evm_step_cnt: int, idx: int) -> Transaction:
-        return TransactionWithComputeBudget().add(
+    def build_tx(builder: NeonIxBuilder, compute_unit_cnt: Optional[int], evm_step_cnt: int, idx: int) -> Transaction:
+        return TransactionWithComputeBudget(compute_units=compute_unit_cnt).add(
             builder.make_partial_call_or_continue_from_account_data_no_chainid_instruction(evm_step_cnt, idx)
         )
 
@@ -653,7 +655,7 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
         return self._validate_tx_size()
 
     def build_tx(self, idx=0) -> Transaction:
-        return BaseNoChainIdNeonStrategy.build_tx(self._builder, self._iter_evm_step_cnt, idx)
+        return BaseNoChainIdNeonStrategy.build_tx(self._builder, self._compute_unit_cnt, self._iter_evm_step_cnt, idx)
 
 
 class AltNoChainIdNeonTxStrategy(AltHolderNeonTxStrategy):
@@ -670,7 +672,7 @@ class AltNoChainIdNeonTxStrategy(AltHolderNeonTxStrategy):
         return self._validate_tx_size()
 
     def _build_legacy_tx(self, idx=0) -> Transaction:
-        return BaseNoChainIdNeonStrategy.build_tx(self._builder, self._iter_evm_step_cnt, idx)
+        return BaseNoChainIdNeonStrategy.build_tx(self._builder, self._compute_unit_cnt, self._iter_evm_step_cnt, idx)
 
 
 @logged_group("neon.Proxy")
