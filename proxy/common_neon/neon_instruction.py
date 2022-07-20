@@ -8,7 +8,6 @@ from solana.publickey import PublicKey
 from solana.system_program import SYS_PROGRAM_ID
 from solana.sysvar import SYSVAR_RENT_PUBKEY
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.utils import shortvec_encoding as shortvec
 from spl.token.constants import TOKEN_PROGRAM_ID
 from logged_groups import logged_group
 

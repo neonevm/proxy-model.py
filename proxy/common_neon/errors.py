@@ -19,6 +19,6 @@ class PendingTxError(Exception):
     pass
 
 
-class AccountLookupTableError(RuntimeError):
+class AddressLookupTableError(RuntimeError):
     def __init__(self, *args) -> None:
         RuntimeError.__init__(self, *args)

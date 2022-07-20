@@ -145,7 +145,7 @@ class StorageAccountInfo(NamedTuple):
         )
 
 
-class AccountLookupTableAccountInfo(NamedTuple):
+class AddressLookupTableAccountInfo(NamedTuple):
     type: int
     table_account: PublicKey
     deactivation_slot: int
@@ -155,7 +155,7 @@ class AccountLookupTableAccountInfo(NamedTuple):
     account_key_list: List[PublicKey]
 
     @staticmethod
-    def frombytes(table_account: PublicKey, data: bytes) -> Optional[AccountLookupTableAccountInfo]:
+    def frombytes(table_account: PublicKey, data: bytes) -> Optional[AddressLookupTableAccountInfo]:
         lookup = ACCOUNT_LOOKUP_TABLE_LAYOUT.parse(data)
         if lookup.type != LOOKUP_ACCOUNT_TAG:
             return None
@@ -173,7 +173,7 @@ class AccountLookupTableAccountInfo(NamedTuple):
 
         authority = PublicKey(lookup.authority) if lookup.has_authority else None
 
-        return AccountLookupTableAccountInfo(
+        return AddressLookupTableAccountInfo(
             type=lookup.type,
             table_account=table_account,
             deactivation_slot=lookup.deactivation_slot,
@@ -481,14 +481,14 @@ class SolanaInteractor:
                                f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
         return StorageAccountInfo.frombytes(storage_account, info.data)
 
-    def get_account_lookup_table_info(self, table_account: PublicKey) -> Optional[AccountLookupTableAccountInfo]:
+    def get_account_lookup_table_info(self, table_account: PublicKey) -> Optional[AddressLookupTableAccountInfo]:
         info = self.get_account_info(table_account, length=0)
         if info is None:
             return None
         elif len(info.data) < ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof():
             raise RuntimeError(f"Wrong data length for lookup table data {str(table_account)}: " +
                                f"{len(info.data)} < {ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof()}")
-        return AccountLookupTableAccountInfo.frombytes(table_account, info.data)
+        return AddressLookupTableAccountInfo.frombytes(table_account, info.data)
 
     def get_multiple_rent_exempt_balances_for_size(self, size_list: List[int], commitment='confirmed') -> List[int]:
         opts = {
@@ -584,6 +584,13 @@ class SolanaInteractor:
             raise RuntimeError("failed to get recent blockhash")
         blockhash = blockhash_resp["result"]["value"]["blockhash"]
         return Blockhash(blockhash)
+
+    def get_block_height(self, commitment='confirmed') -> int:
+        opts = {
+            'commitment': commitment
+        }
+        blockheight_resp = self._send_rpc_request('getBlockHeight', opts)
+        return blockheight_resp['result']
 
     def _fuzzing_transactions(self, signer: SolanaAccount,
                               tx_list: List[Transaction], tx_opts: Dict[str, str],

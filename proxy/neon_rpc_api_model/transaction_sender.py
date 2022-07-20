@@ -27,14 +27,17 @@ from ..common_neon.errors import EthereumError
 from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.solana_alt import AccountLookupTableInfo
-from ..common_neon.solana_alt_builder import AccountLookupTableTxBuilder, AccountLookupTableTxList
+
+from ..common_neon.solana_alt import AddressLookupTableInfo
+from ..common_neon.solana_alt_builder import AddressLookupTableTxBuilder, AddressLookupTableTxList
+from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from ..common_neon.solana_v0_transaction import V0Transaction
+
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 
 
 @logged_group("neon.Proxy")
-class AccountTxList:
+class AccountTxListBuilder:
     def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder):
         self._solana = solana
         self._builder = builder
@@ -117,7 +120,7 @@ class AccountTxList:
         tx_list = [s.tx for s in (self._resize_contract_list + self._create_account_list)]
         return tx_list
 
-    def done_tx_list(self) -> None:
+    def clear_tx_list(self) -> None:
         self._resize_contract_list.clear()
         self._create_account_list.clear()
 
@@ -129,11 +132,13 @@ class NeonTxSendCtx:
         self._solana = solana
         self._resource = resource
         self._builder = NeonIxBuilder(resource.public_key)
-        self._account_tx_list = AccountTxList(solana, self._builder)
+        self._account_tx_list_builder = AccountTxListBuilder(solana, self._builder)
 
         self._builder.init_operator_ether(self._resource.ether)
         self._builder.init_eth_tx(self._eth_tx)
         self._builder.init_iterative(self._resource.storage, self._resource.holder, self._resource.rid)
+
+        self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
 
     @property
     def neon_sig(self) -> str:
@@ -156,8 +161,12 @@ class NeonTxSendCtx:
         return self._solana
 
     @property
-    def account_tx_list(self) -> AccountTxList:
-        return self._account_tx_list
+    def account_tx_list_builder(self) -> AccountTxListBuilder:
+        return self._account_tx_list_builder
+
+    @property
+    def alt_close_queue(self) -> AddressLookupTableCloseQueue:
+        return self._alt_close_queue
 
 
 @logged_group("neon.Proxy")
@@ -172,8 +181,12 @@ class BaseNeonTxStrategy(abc.ABC):
         self._is_valid = self._validate()
 
     @property
-    def _account_tx_list(self) -> AccountTxList:
-        return self._ctx.account_tx_list
+    def _account_tx_list_builder(self) -> AccountTxListBuilder:
+        return self._ctx.account_tx_list_builder
+
+    @property
+    def _alt_close_queue(self) -> AddressLookupTableCloseQueue:
+        return self._ctx.alt_close_queue
 
     @property
     def _builder(self) -> NeonIxBuilder:
@@ -206,16 +219,25 @@ class BaseNeonTxStrategy(abc.ABC):
     def build_cancel_tx(self) -> Transaction:
         return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
 
-    @abc.abstractmethod
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        return f'prep_{self.NAME}(0)', []
+        tx_list_name = self._account_tx_list_builder.name
+        tx_list = self._account_tx_list_builder.get_tx_list()
+
+        alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
+        if len(alt_tx_list):
+            tx_list.extend(alt_tx_list)
+            tx_list_name = ' + '.join([tx_list_name, f'CloseLookupTable({len(alt_tx_list)})'])
+
+        return tx_list_name, tx_list
 
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
         tx_list_name, tx_list = self._build_prep_tx_list()
         if not len(tx_list):
             return []
+
         tx_sender = SolTxListSender(self._solana, self._signer)
         tx_sender.send(tx_list_name, tx_list, waiter=waiter)
+        self._account_tx_list_builder.clear_tx_list()
         return tx_sender.success_sig_list
 
     def _build_tx_list(self, cnt: int) -> Tuple[str, List[Transaction]]:
@@ -247,7 +269,7 @@ class BaseNeonTxStrategy(abc.ABC):
         return True
 
     def _validate_tx_size(self) -> bool:
-        tx = self.build_tx()
+        tx = self.build_tx(1)
         # Predefined blockhash is used only to check transaction size, the transaction won't be sent to network
         tx.recent_blockhash = Blockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
         tx.sign(self._signer)
@@ -320,14 +342,6 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         tx = TransactionWithComputeBudget()
         tx.add(self._builder.make_noniterative_call_transaction(len(tx.instructions)))
         return tx
-
-    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        return self._account_tx_list.name, self._account_tx_list.get_tx_list()
-
-    def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
-        sig_list = super()._execute_prep_tx_list(waiter)
-        self._account_tx_list.done_tx_list()
-        return sig_list
 
     def _execute_tx_list(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
         tx_sender = SimpleNeonTxSender(self, self._solana, self._signer)
@@ -493,14 +507,6 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         tx.add(self._builder.make_partial_call_or_continue_transaction(evm_step_cnt, len(tx.instructions)))
         return tx
 
-    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        return self._account_tx_list.name, self._account_tx_list.get_tx_list()
-
-    def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
-        sig_list = super()._execute_prep_tx_list(waiter)
-        self._account_tx_list.done_tx_list()
-        return sig_list
-
     def _calc_iter_cnt(self) -> int:
         emulated_evm_step_cnt = self._precheck_res.emulating_result["steps_executed"]
         iter_cnt = math.ceil(emulated_evm_step_cnt / self._iter_evm_step_cnt)
@@ -567,9 +573,9 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
     NAME = 'AltExecuteTrxFromAccountDataIterativeOrContinue'
 
     def __init__(self, *args, **kwargs):
-        self._alt_builder: Optional[AccountLookupTableTxBuilder] = None
-        self._alt_info: Optional[AccountLookupTableInfo] = None
-        self._alt_tx_list: Optional[AccountLookupTableTxList] = None
+        self._alt_builder: Optional[AddressLookupTableTxBuilder] = None
+        self._alt_info: Optional[AddressLookupTableInfo] = None
+        self._alt_tx_list: Optional[AddressLookupTableTxList] = None
         super().__init__(*args, **kwargs)
 
     def _validate(self) -> bool:
@@ -588,8 +594,9 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
     def _build_alt_info(self) -> bool:
         legacy_tx = self._build_legacy_tx()
         try:
-            self._alt_builder = AccountLookupTableTxBuilder(self._solana, self._builder, self._signer)
-            self._alt_info = self._alt_builder.build_alt_info(legacy_tx)
+            alt_builder = AddressLookupTableTxBuilder(self._solana, self._builder, self._signer, self._alt_close_queue)
+            self._alt_builder = alt_builder
+            self._alt_info = alt_builder.build_alt_info(legacy_tx)
         except Exception as e:
             self._error_msg = str(e)
             return False
@@ -616,7 +623,7 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
         try:
             return super().execute(waiter)
         finally:
-            if len(self._alt_tx_list):
+            if (self._alt_tx_list is not None) and (len(self._alt_tx_list) > 0):
                 self._alt_builder.done_alt_list(self._alt_tx_list)
 
 
@@ -683,7 +690,7 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
 
     def execute(self, precheck_result: NeonTxPrecheckResult) -> NeonTxResultInfo:
         self._validate_pend_tx()
-        self._ctx.account_tx_list.build_tx(precheck_result.emulating_result)
+        self._ctx.account_tx_list_builder.build_tx(precheck_result.emulating_result)
         return self._execute(precheck_result)
 
     def _validate_pend_tx(self) -> None:

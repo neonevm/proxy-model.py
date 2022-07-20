@@ -9,8 +9,9 @@ from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.solana_interactor import SolanaInteractor, StorageAccountInfo
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.solana_v0_transaction import V0Transaction
-from ..common_neon.solana_alt import AccountLookupTableInfo
-from ..common_neon.solana_alt_builder import AccountLookupTableTxBuilder, AccountLookupTableTxList
+from ..common_neon.solana_alt import AddressLookupTableInfo
+from ..common_neon.solana_alt_builder import AddressLookupTableTxBuilder, AddressLookupTableTxList
+from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 
 
 class CancelTxExecutor:
@@ -18,10 +19,11 @@ class CancelTxExecutor:
         self._builder = NeonIxBuilder(signer.public_key())
         self._solana = solana
         self._signer = signer
-        self._alt_builder = AccountLookupTableTxBuilder(solana, self._builder, signer)
 
-        self._alt_tx_list = AccountLookupTableTxList()
-        self._alt_info_list: List[AccountLookupTableInfo] = []
+        self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
+        self._alt_builder = AddressLookupTableTxBuilder(solana, self._builder, signer, self._alt_close_queue)
+        self._alt_tx_list = AddressLookupTableTxList()
+        self._alt_info_list: List[AddressLookupTableInfo] = []
         self._cancel_tx_list: List[Transaction] = []
 
     def add_blocked_storage_account(self, storage_info: StorageAccountInfo) -> None:
@@ -67,8 +69,17 @@ class CancelTxExecutor:
             # Update lookups from Solana
             self._alt_builder.update_alt_info_list(self._alt_info_list)
 
+        tx_list_name = f'Cancel({len(self._cancel_tx_list)})'
+        tx_list = self._cancel_tx_list
+
+        # Close old Address Lookup Tables
+        alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
+        if len(alt_tx_list):
+            tx_list_name = ' + '.join([tx_list_name, f'CloseLookupTable({len(alt_tx_list)})'])
+            tx_list.extend(alt_tx_list)
+
         tx_sender = SolTxListSender(self._solana, self._signer)
-        tx_sender.send(f'Cancel({len(self._cancel_tx_list)})', self._cancel_tx_list)
+        tx_sender.send(tx_list_name, tx_list)
         sig_list += tx_sender.success_sig_list
 
         if len(self._alt_tx_list):

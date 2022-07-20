@@ -3,10 +3,10 @@ from typing import Set, List, Tuple
 from solana.message import Message
 from solana.publickey import PublicKey
 
-from ..common_neon.errors import AccountLookupTableError
+from ..common_neon.errors import AddressLookupTableError
 
 
-class AccountLookupTableListFilter:
+class AddressLookupTableListFilter:
     MAX_REQUIRED_SIG_CNT = 19
     MAX_TX_ACCOUNT_CNT = 27
     MAX_ACCOUNT_CNT = 255
@@ -33,11 +33,11 @@ class AccountLookupTableListFilter:
 
     def _validate_legacy_msg(self) -> None:
         if self._msg.header.num_required_signatures > self.MAX_REQUIRED_SIG_CNT:
-            raise AccountLookupTableError(
+            raise AddressLookupTableError(
                 f'Too big number {self._msg.header.num_required_signatures} of signed accounts for a V0Transaction'
             )
         elif len(self._msg.account_keys) > self.MAX_ACCOUNT_CNT:
-            raise AccountLookupTableError(
+            raise AddressLookupTableError(
                 f'Too big number {len(self._msg.account_keys)} of accounts for a V0Transaction'
             )
 
@@ -53,11 +53,11 @@ class AccountLookupTableListFilter:
         # the result set of accounts in the static part of a transaction
         tx_acct_key_set = set(required_key_list + prog_key_list)
         if not len(tx_acct_key_set):
-            raise AccountLookupTableError('Zero number of static transaction accounts')
+            raise AddressLookupTableError('Zero number of static transaction accounts')
         elif len(tx_acct_key_set) != len(required_key_list) + len(prog_key_list):
-            raise AccountLookupTableError('Transaction uses signature from a program?')
+            raise AddressLookupTableError('Transaction uses signature from a program?')
         elif len(tx_acct_key_set) > self.MAX_TX_ACCOUNT_CNT:
-            raise AccountLookupTableError(
+            raise AddressLookupTableError(
                 'Too big number of transactions account keys: ' +
                 f'{len(tx_acct_key_set)} > {self.MAX_TX_ACCOUNT_CNT}'
             )
@@ -78,7 +78,7 @@ class AccountLookupTableListFilter:
         alt_acct_key_set = set([str(key) for key in acct_key_list if str(key) not in self._tx_acct_key_set])
 
         if len(alt_acct_key_set) + len(self._tx_acct_key_set) != len(self._msg.account_keys):
-            raise AccountLookupTableError('Found duplicates in the transaction account list')
+            raise AddressLookupTableError('Found duplicates in the transaction account list')
 
         return alt_acct_key_set
 
