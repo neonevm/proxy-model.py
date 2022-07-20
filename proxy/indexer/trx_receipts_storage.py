@@ -1,6 +1,6 @@
-from proxy.environment import INDEXER_RECEIPTS_COUNT_LIMIT
-from proxy.indexer.pg_common import encode, decode
-from proxy.indexer.base_db import BaseDB
+from ..common_neon.environment_data import INDEXER_RECEIPTS_COUNT_LIMIT
+from ..indexer.pg_common import encode, decode
+from ..indexer.base_db import BaseDB
 
 
 class TxReceiptsStorage(BaseDB):
