@@ -164,8 +164,8 @@ class NeonTxSendCtx:
 class BaseNeonTxStrategy(abc.ABC):
     NAME = 'UNKNOWN STRATEGY'
 
-    def __init__(self, precheck_result: NeonTxPrecheckResult, ctx: NeonTxSendCtx):
-        self._precheck_result = precheck_result
+    def __init__(self, precheck_res: NeonTxPrecheckResult, ctx: NeonTxSendCtx):
+        self._precheck_res = precheck_res
         self._error_msg: Optional[str] = None
         self._ctx = ctx
         self._iter_evm_step_cnt = EVM_STEP_COUNT
@@ -261,8 +261,8 @@ class BaseNeonTxStrategy(abc.ABC):
             self._error_msg = str(err)
             raise
 
-    def _validate_tx_without_chainid(self) -> bool:
-        if not self._precheck_result.is_underpriced_tx_without_chainid:
+    def _validate_tx_wo_chainid(self) -> bool:
+        if not self._precheck_res.is_underpriced_tx_without_chainid:
             return True
 
         self._error_msg = "Underpriced transaction without chain-id"
@@ -302,12 +302,12 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         return (
             self._validate_evm_step_cnt() and
             self._validate_notdeploy_tx() and
-            self._validate_tx_without_chainid() and
+            self._validate_tx_wo_chainid() and
             self._validate_tx_size()
         )
 
     def _validate_evm_step_cnt(self) -> bool:
-        emulated_evm_step_cnt = self._precheck_result.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._precheck_res.emulating_result["steps_executed"]
         if emulated_evm_step_cnt > self._iter_evm_step_cnt:
             self._error_msg = 'Too big number of EVM steps'
             return False
@@ -451,12 +451,12 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
             self._validate_notdeploy_tx() and
             self._validate_tx_size() and
             self._validate_evm_step_cnt() and
-            self._validate_tx_without_chainid()
+            self._validate_tx_wo_chainid()
         )
 
     def _validate_evm_step_cnt(self):
         # Only the instruction with a holder account allows to pass a unique number to make the transaction unique
-        emulated_evm_step_cnt = self._precheck_result.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._precheck_res.emulating_result["steps_executed"]
         max_evm_step_cnt = self._iter_evm_step_cnt * 25
         if emulated_evm_step_cnt > max_evm_step_cnt:
             self._error_msg = 'Big number of EVM steps'
@@ -502,7 +502,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return sig_list
 
     def _calc_iter_cnt(self) -> int:
-        emulated_evm_step_cnt = self._precheck_result.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._precheck_res.emulating_result["steps_executed"]
         iter_cnt = math.ceil(emulated_evm_step_cnt / self._iter_evm_step_cnt)
         iter_cnt = math.ceil(emulated_evm_step_cnt / (self._iter_evm_step_cnt - iter_cnt))
         if emulated_evm_step_cnt > 200:
@@ -510,7 +510,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return iter_cnt
 
     def _execute_tx_list(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
-        emulated_evm_step_cnt = self._precheck_result.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._precheck_res.emulating_result["steps_executed"]
         iter_cnt = self._calc_iter_cnt()
         self.debug(f'Total iterations {iter_cnt} for {emulated_evm_step_cnt} ({self._iter_evm_step_cnt}) EVM steps')
 
@@ -529,7 +529,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
     def _validate(self) -> bool:
         return (
             self._validate_tx_size() and
-            self._validate_tx_without_chainid()
+            self._validate_tx_wo_chainid()
         )
 
     def build_tx(self, idx=0) -> Transaction:
@@ -539,7 +539,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         )
 
     def _calc_iter_cnt(self) -> int:
-        emulated_evm_step_cnt = self._precheck_result.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._precheck_res.emulating_result["steps_executed"]
         return math.ceil(emulated_evm_step_cnt / self._iter_evm_step_cnt) + 1
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
@@ -563,8 +563,8 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         return tx_list_name, tx_list
 
 
-class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
-    NAME = 'BigExecuteTrxFromAccountDataIterativeOrContinue'
+class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
+    NAME = 'AltExecuteTrxFromAccountDataIterativeOrContinue'
 
     def __init__(self, *args, **kwargs):
         self._alt_builder: Optional[AccountLookupTableTxBuilder] = None
@@ -574,7 +574,7 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
 
     def _validate(self) -> bool:
         return (
-            self._validate_tx_without_chainid() and
+            self._validate_tx_wo_chainid() and
             self._build_alt_info() and
             self._validate_tx_size()
         )
@@ -620,6 +620,18 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
                 self._alt_builder.done_alt_list(self._alt_tx_list)
 
 
+class BaseNoChainIdNeonStrategy:
+    @staticmethod
+    def validate(precheck_res: NeonTxPrecheckResult) -> bool:
+        return precheck_res.is_underpriced_tx_without_chainid
+
+    @staticmethod
+    def build_tx(builder: NeonIxBuilder, evm_step_cnt: int, idx: int) -> Transaction:
+        return TransactionWithComputeBudget().add(
+            builder.make_partial_call_or_continue_from_account_data_no_chainid_instruction(evm_step_cnt, idx)
+        )
+
+
 class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
     NAME = 'ExecuteTrxFromAccountDataIterativeOrContinueNoChainId'
 
@@ -627,25 +639,39 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
         super().__init__(*args, **kwargs)
 
     def _validate(self) -> bool:
-        if not self._precheck_result.is_underpriced_tx_without_chainid:
+        if not BaseNoChainIdNeonStrategy.validate(self._precheck_res):
             self._error_msg = 'Normal transaction'
             return False
 
         return self._validate_tx_size()
 
     def build_tx(self, idx=0) -> Transaction:
-        evm_step_cnt = self._iter_evm_step_cnt
-        return TransactionWithComputeBudget().add(
-            self._builder.make_partial_call_or_continue_from_account_data_no_chainid_instruction(evm_step_cnt, idx)
-        )
+        return BaseNoChainIdNeonStrategy.build_tx(self._builder, self._iter_evm_step_cnt, idx)
+
+
+class AltNoChainIdNeonTxStrategy(AltHolderNeonTxStrategy):
+    NAME = 'AltExecuteTrxFromAccountDataIterativeOrContinueNoChainId'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _validate(self) -> bool:
+        if not BaseNoChainIdNeonStrategy.validate(self._precheck_res):
+            self._error_msg = 'Normal transaction'
+            return False
+
+        return self._validate_tx_size()
+
+    def _build_legacy_tx(self, idx=0) -> Transaction:
+        return BaseNoChainIdNeonStrategy.build_tx(self._builder, self._iter_evm_step_cnt, idx)
 
 
 @logged_group("neon.Proxy")
 class NeonTxSendStrategySelector(IConfirmWaiter):
     STRATEGY_LIST = [
         SimpleNeonTxStrategy,
-        IterativeNeonTxStrategy, HolderNeonTxStrategy, BigHolderNeonTxStrategy,
-        NoChainIdNeonTxStrategy
+        IterativeNeonTxStrategy, HolderNeonTxStrategy, AltHolderNeonTxStrategy,
+        NoChainIdNeonTxStrategy, AltNoChainIdNeonTxStrategy
     ]
 
     def __init__(self, db: MemDB, solana: SolanaInteractor, resource: OperatorResourceInfo, eth_tx: EthTx):
