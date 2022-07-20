@@ -28,6 +28,8 @@ class IConfirmWaiter(abc.ABC):
 
 @logged_group("neon.Proxy")
 class SolTxListSender:
+    ONE_BLOCK_TIME = 0.4
+
     def __init__(self, solana: SolanaInteractor, signer: SolanaAccount):
         self._solana = solana
         self._signer = signer
@@ -39,6 +41,7 @@ class SolTxListSender:
         self._tx_list: List[Transaction] = []
         self._node_behind_list: List[Transaction] = []
         self._bad_block_list: List[Transaction] = []
+        self._alt_invalid_index_list: List[Transaction] = []
         self._blocked_account_list: List[Transaction] = []
         self._pending_list: List[Transaction] = []
         self._budget_exceeded_list: List[Transaction] = []
@@ -49,6 +52,7 @@ class SolTxListSender:
         self._all_tx_list = [
             self._node_behind_list,
             self._bad_block_list,
+            self._alt_invalid_index_list,
             self._blocked_account_list,
             self._budget_exceeded_list,
             self._pending_list
@@ -85,6 +89,8 @@ class SolTxListSender:
                 if slots_behind:
                     self._slots_behind = slots_behind
                     self._node_behind_list.append(tx)
+                elif receipt_parser.check_if_alt_uses_invalid_index():
+                    self._alt_invalid_index_list.append(tx)
                 elif receipt_parser.check_if_blockhash_notfound():
                     self._bad_block_list.append(tx)
                 elif receipt_parser.check_if_accounts_blocked():
@@ -104,8 +110,9 @@ class SolTxListSender:
                 f'retry {self._retry_idx}, ' +
                 f'total receipts {len(receipt_list)}, ' +
                 f'success receipts {len(self.success_sig_list)}(+{len(success_sig_list)}), ' +
-                f'node behind {len(self._node_behind_list)}, '
+                f'node behind {len(self._node_behind_list)}, ' +
                 f'bad blocks {len(self._bad_block_list)}, ' +
+                f'alt invalid idx {len(self._alt_invalid_index_list)}, ' +
                 f'blocked accounts {len(self._blocked_account_list)}, ' +
                 f'budget exceeded {len(self._budget_exceeded_list)}, ' +
                 f'unknown error: {len(self._unknown_error_list)}'
@@ -132,8 +139,10 @@ class SolTxListSender:
         elif len(self._budget_exceeded_list):
             raise SolTxError(self._budget_exceeded_receipt)
 
-        if len(self._blocked_account_list):
-            time.sleep(0.4)  # one block time
+        if len(self._alt_invalid_index_list):
+            time.sleep(self.ONE_BLOCK_TIME)
+        elif len(self._blocked_account_list):
+            time.sleep(self.ONE_BLOCK_TIME)  # one block time
 
         # force changing of recent_blockhash if Solana doesn't accept the current one
         if len(self._bad_block_list):

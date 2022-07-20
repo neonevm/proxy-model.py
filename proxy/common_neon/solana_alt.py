@@ -4,8 +4,10 @@ from typing import List, Tuple, Set
 
 from solana.transaction import Transaction
 from solana.publickey import PublicKey
+from solana.blockhash import Blockhash
 
-from ..common_neon.solana_account_lookup_table_builder import AccountLookupTableBuilder, AccountLookupTableError
+from ..common_neon.errors import AccountLookupTableError
+from ..common_neon.solana_alt_list_filter import AccountLookupTableListFilter
 from ..common_neon.solana_interactor import AccountLookupTableAccountInfo
 
 
@@ -50,23 +52,29 @@ class AccountLookupTableInfo:
     def init_from_legacy_tx(self, tx: Transaction) -> None:
         assert not len(self._acct_key_list)
 
+        # Predefined blockhash is used only to compile legacy tx, the transaction won't be sent to network
+        tx.recent_blockhash = Blockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+        # Predefined public key is used only to compile legacy tx, the transaction won't be sent to network
+        tx.fee_payer = PublicKey('AdtXr9yGAsTokY75WernsmQdcBPu2LE2Bsh8Nx3ApbbR')
         msg = tx.compile_message()
-        builder = AccountLookupTableBuilder(msg)
+        alt_filter = AccountLookupTableListFilter(msg)
 
-        alt_acct_set = builder.build_alt_account_key_set()
+        alt_acct_set = alt_filter.filter_alt_account_key_set()
         self._acct_key_set = alt_acct_set
         self._acct_key_list = [PublicKey(key) for key in alt_acct_set]
+        if not self.account_key_list_len:
+            raise AccountLookupTableError(f'No accounts for the lookup table {str(self._table_acct)}')
 
-    def _validate_alt_info(self, alt_info: AccountLookupTableAccountInfo) -> None:
-        alt_acct_set: Set[str] = set([str(key) for key in alt_info.account_key_list])
+    def _validate_alt_info(self, alt_acct_info: AccountLookupTableAccountInfo) -> None:
+        alt_acct_set: Set[str] = set([str(key) for key in alt_acct_info.account_key_list])
 
-        if len(alt_acct_set) != len(alt_info.account_key_list):
+        if len(alt_acct_set) != len(alt_acct_info.account_key_list):
             raise AccountLookupTableError(f'The lookup table {str(self._table_acct)} has duplicates')
 
-        if str(self._table_acct) != str(alt_info.table_account):
+        if str(self._table_acct) != str(alt_acct_info.table_account):
             raise AccountLookupTableError(
                 'Trying to update account list from another lookup table: ' +
-                f'{str(self._table_acct)} != {str(alt_info.table_account)}'
+                f'{str(self._table_acct)} != {str(alt_acct_info.table_account)}'
             )
 
         if not len(self._acct_key_list):
@@ -74,16 +82,16 @@ class AccountLookupTableInfo:
             return
 
         # Validate the content of account lists
-        if len(self._acct_key_list) != len(alt_info.account_key_list):
+        if len(self._acct_key_list) != len(alt_acct_info.account_key_list):
             raise AccountLookupTableError(
                 f'The account list from the lookup table {str(self._table_acct)} has another length than expected: ' +
-                f'{len(self._acct_key_list)} != {len(alt_info.account_key_list)}'
+                f'{len(self._acct_key_list)} != {len(alt_acct_info.account_key_list)}'
             )
 
-        for key in alt_info.account_key_list:
+        for key in alt_acct_info.account_key_list:
             if str(key) not in self._acct_key_set:
                 raise AccountLookupTableError(f'The unknown key {str(key)} in the lookup table {str(self._table_acct)}')
 
-    def update_from_account(self, alt_info: AccountLookupTableAccountInfo) -> None:
-        self._validate_alt_info(alt_info)
-        self._acct_key_list = alt_info.account_key_list
+    def update_from_account(self, alt_account_info: AccountLookupTableAccountInfo) -> None:
+        self._validate_alt_info(alt_account_info)
+        self._acct_key_list = alt_account_info.account_key_list

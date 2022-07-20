@@ -27,8 +27,8 @@ from ..common_neon.errors import EthereumError
 from ..common_neon.types import NeonTxPrecheckResult, NeonEmulatingResult
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.solana_account_lookup_table import AccountLookupTableInfo
-from ..common_neon.solana_account_lookup_table_builder import AccountLookupTableError
+from ..common_neon.solana_alt import AccountLookupTableInfo
+from ..common_neon.solana_alt_builder import AccountLookupTableTxBuilder, AccountLookupTableTxList
 from ..common_neon.solana_v0_transaction import V0Transaction
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 
@@ -164,10 +164,6 @@ class NeonTxSendCtx:
 class BaseNeonTxStrategy(abc.ABC):
     NAME = 'UNKNOWN STRATEGY'
 
-    # Predefined blockhash is used only to check transaction size or other tasks,
-    #   a transaction with this blockhash won't be send to network
-    _FAKE_BLOCKHASH = Blockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
-
     def __init__(self, precheck_result: NeonTxPrecheckResult, ctx: NeonTxSendCtx):
         self._precheck_result = precheck_result
         self._error_msg: Optional[str] = None
@@ -250,9 +246,10 @@ class BaseNeonTxStrategy(abc.ABC):
             return False
         return True
 
-    def _validate_txsize(self) -> bool:
+    def _validate_tx_size(self) -> bool:
         tx = self.build_tx()
-        tx.recent_blockhash = self._FAKE_BLOCKHASH
+        # Predefined blockhash is used only to check transaction size, the transaction won't be sent to network
+        tx.recent_blockhash = Blockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
         tx.sign(self._signer)
         try:
             tx.serialize()
@@ -264,7 +261,7 @@ class BaseNeonTxStrategy(abc.ABC):
             self._error_msg = str(err)
             raise
 
-    def _validate_gas_limit(self) -> bool:
+    def _validate_tx_without_chainid(self) -> bool:
         if not self._precheck_result.is_underpriced_tx_without_chainid:
             return True
 
@@ -305,8 +302,8 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         return (
             self._validate_evm_step_cnt() and
             self._validate_notdeploy_tx() and
-            self._validate_gas_limit() and
-            self._validate_txsize()
+            self._validate_tx_without_chainid() and
+            self._validate_tx_size()
         )
 
     def _validate_evm_step_cnt(self) -> bool:
@@ -347,7 +344,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         self._postponed_exception: Optional[Exception] = None
 
     def _try_lock_accounts(self) -> None:
-        time.sleep(0.4)  # one block time
+        time.sleep(self.ONE_BLOCK_TIME)  # one block time
 
         # send one transaction to get lock, and only after that send all others
         tx = self._blocked_account_list.pop()
@@ -423,8 +420,11 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         if len(self._bad_block_list):
             self._blockhash = None
 
+        # Address Lookup Tables can't be used in the same block with extending of it
+        if len(self._alt_invalid_index_list):
+            time.sleep(self.ONE_BLOCK_TIME)
         # Accounts are blocked, so try to lock them
-        if len(self._blocked_account_list):
+        elif len(self._blocked_account_list):
             return self._try_lock_accounts()
 
         # Compute budged is exceeded, so decrease EVM steps per iteration
@@ -449,9 +449,9 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     def _validate(self) -> bool:
         return (
             self._validate_notdeploy_tx() and
-            self._validate_txsize() and
+            self._validate_tx_size() and
             self._validate_evm_step_cnt() and
-            self._validate_gas_limit()
+            self._validate_tx_without_chainid()
         )
 
     def _validate_evm_step_cnt(self):
@@ -528,8 +528,8 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
 
     def _validate(self) -> bool:
         return (
-            self._validate_txsize() and
-            self._validate_gas_limit()
+            self._validate_tx_size() and
+            self._validate_tx_without_chainid()
         )
 
     def build_tx(self, idx=0) -> Transaction:
@@ -567,41 +567,29 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
     NAME = 'BigExecuteTrxFromAccountDataIterativeOrContinue'
 
     def __init__(self, *args, **kwargs):
-        self._lookup: Optional[AccountLookupTableInfo] = None
+        self._alt_builder: Optional[AccountLookupTableTxBuilder] = None
+        self._alt_info: Optional[AccountLookupTableInfo] = None
+        self._alt_tx_list: Optional[AccountLookupTableTxList] = None
         super().__init__(*args, **kwargs)
 
     def _validate(self) -> bool:
         return (
-            self._validate_gas_limit() and
-            self._build_lookup_table() and
-            self._validate_txsize()
+            self._validate_tx_without_chainid() and
+            self._build_alt_info() and
+            self._validate_tx_size()
         )
 
     def _build_legacy_tx(self, idx=0) -> Transaction:
-        tx = super().build_tx(idx)
-        tx.recent_blockhash = self._FAKE_BLOCKHASH
-        tx.fee_payer = self._signer.public_key()
-        return tx
+        return super().build_tx(idx)
 
     def _build_legacy_cancel_tx(self) -> Transaction:
-        tx = super().build_cancel_tx()
-        tx.recent_blockhash = self._FAKE_BLOCKHASH
-        tx.fee_payer = self._signer.public_key()
-        return tx
+        return super().build_cancel_tx()
 
-    def _build_lookup_table(self) -> bool:
+    def _build_alt_info(self) -> bool:
         legacy_tx = self._build_legacy_tx()
-
-        recent_block_slot = self._solana.get_recent_blockslot("finalized")
-        signer_key = self._signer.public_key()
-        account, nonce = AccountLookupTableInfo.derive_lookup_table_address(signer_key, recent_block_slot)
-        lookup = AccountLookupTableInfo(account, recent_block_slot, nonce)
         try:
-            lookup.init_from_legacy_tx(legacy_tx)
-            if lookup.account_key_list_len == 0:
-                self._error_msg = 'No accounts for lookup table'
-                return False
-            self._lookup = lookup
+            self._alt_builder = AccountLookupTableTxBuilder(self._solana, self._builder, self._signer)
+            self._alt_info = self._alt_builder.build_alt_info(legacy_tx)
         except Exception as e:
             self._error_msg = str(e)
             return False
@@ -609,59 +597,27 @@ class BigHolderNeonTxStrategy(HolderNeonTxStrategy):
 
     def build_tx(self, idx=0) -> Transaction:
         legacy_tx = self._build_legacy_tx(idx)
-        return V0Transaction(address_table_lookups=[self._lookup]).add(legacy_tx)
+        return V0Transaction(address_table_lookups=[self._alt_info]).add(legacy_tx)
 
     def build_cancel_tx(self) -> Transaction:
         legacy_tx = self._build_legacy_cancel_tx()
-        return V0Transaction(address_table_lookups=[self._lookup]).add(legacy_tx)
+        return V0Transaction(address_table_lookups=[self._alt_info]).add(legacy_tx)
 
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
         tx_list_name, tx_list = super()._build_prep_tx_list()
 
-        # Tx to create an Account Lookup Table
-        create_alt_tx = Transaction().add(
-            self._builder.make_create_lookup_table_instruction(
-                self._lookup.table_account,
-                self._lookup.recent_block_slot,
-                self._lookup.nonce
-            )
-        )
+        self._alt_tx_list = self._alt_builder.build_alt_tx_list(self._alt_info)
+        sig_list = self._alt_builder.prep_alt_list(self._alt_tx_list, tx_list_name, tx_list, waiter)
+        self._alt_builder.update_alt_info_list([self._alt_info])
 
-        tx_account_cnt = 30
-        account_list = self._lookup.account_key_list
-
-        # List of tx to extend the Account Lookup Table
-        extend_alt_tx_list: List[Transaction] = []
-        while len(account_list):
-            account_list_part, account_list = account_list[:tx_account_cnt], account_list[tx_account_cnt:]
-            tx = Transaction().add(
-                self._builder.make_extend_lookup_table_instruction(self._lookup.table_account, account_list_part)
-            )
-            extend_alt_tx_list.append(tx)
-
-        # If list of accounts is small, including of first extend-tx into create-tx will give less time of tx execution
-        create_alt_tx.add(extend_alt_tx_list[0])
-        tx_list_name = ' + '.join([tx_list_name, 'CreateLookupTable(1)', 'ExtendLookupTable(1)'])
-        tx_list.append(create_alt_tx)
-        tx_sender = SolTxListSender(self._solana, self._signer)
-        tx_sender.send(tx_list_name, tx_list, waiter=waiter)
-        sig_list = tx_sender.success_sig_list
-
-        extend_alt_tx_list = extend_alt_tx_list[1:]
-        if len(extend_alt_tx_list):
-            tx_list_name = f'ExtendLookupTable({len(extend_alt_tx_list)})'
-            tx_sender.send(tx_list_name, extend_alt_tx_list, waiter=waiter)
-            sig_list += tx_sender.success_sig_list
-
-        # Accounts in Account Lookup Table can be reordered
-        lookup_info = self._solana.get_account_lookup_table_info(self._lookup.table_account)
-        if lookup_info is None:
-            raise AccountLookupTableError(f'Cannot read lookup table {str(self._lookup.table_account)}')
-        self._lookup.update_from_account(lookup_info)
-
-        # Sleep for 1 block, because Account Lookup Table can't be used in the same slot with extending of it
-        time.sleep(0.4)
         return sig_list
+
+    def execute(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
+        try:
+            return super().execute(waiter)
+        finally:
+            if len(self._alt_tx_list):
+                self._alt_builder.done_alt_list(self._alt_tx_list)
 
 
 class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
@@ -675,7 +631,7 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
             self._error_msg = 'Normal transaction'
             return False
 
-        return self._validate_txsize()
+        return self._validate_tx_size()
 
     def build_tx(self, idx=0) -> Transaction:
         evm_step_cnt = self._iter_evm_step_cnt

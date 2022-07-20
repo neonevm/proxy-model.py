@@ -14,12 +14,13 @@ from ..indexer.accounts_db import NeonAccountInfo
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff, CostInfo
-from ..indexer.canceller import Canceller
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_receipt_parser import SolReceiptParser
+from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 
+from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.environment_data import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
 
@@ -935,8 +936,7 @@ class Indexer(IndexerBase):
         IndexerBase.__init__(self, solana, last_known_slot)
         self.indexed_slot = self.last_slot
         self.min_used_slot = 0
-        self.canceller = Canceller(solana)
-        self.blocked_storages = {}
+        self._cancel_tx_executor = CancelTxExecutor(solana, get_solana_accounts()[0])
         self.block_indexer = BlocksIndexer(db=self.db, solana=solana)
         self.counted_logger = MetricsToLogBuff()
         self._user = indexer_user
@@ -975,8 +975,8 @@ class Indexer(IndexerBase):
     def process_functions(self):
         self.block_indexer.gather_blocks()
         self.process_receipts()
-        self.canceller.unlock_accounts(self.blocked_storages)
-        self.blocked_storages = {}
+        self._cancel_tx_executor.execute_tx_list()
+        self._cancel_tx_executor.clear()
 
     def process_receipts(self):
         start_time = time.time()
@@ -1075,7 +1075,7 @@ class Indexer(IndexerBase):
                 return False
 
         self.debug(f'Neon tx is blocked: storage {tx.storage_account}, {tx.neon_tx}, {storage.account_list}')
-        self.blocked_storages[tx.storage_account] = (tx.neon_tx, storage.account_list)
+        self._cancel_tx_executor.add_blocked_storage_account(storage)
         tx.canceled = True
         return True
 

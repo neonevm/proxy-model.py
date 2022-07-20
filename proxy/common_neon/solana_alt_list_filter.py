@@ -3,13 +3,10 @@ from typing import Set, List, Tuple
 from solana.message import Message
 from solana.publickey import PublicKey
 
-
-class AccountLookupTableError(RuntimeError):
-    def __init__(self, *args) -> None:
-        RuntimeError.__init__(self, *args)
+from ..common_neon.errors import AccountLookupTableError
 
 
-class AccountLookupTableBuilder:
+class AccountLookupTableListFilter:
     MAX_REQUIRED_SIG_CNT = 19
     MAX_TX_ACCOUNT_CNT = 27
     MAX_ACCOUNT_CNT = 255
@@ -17,10 +14,10 @@ class AccountLookupTableBuilder:
     def __init__(self, legacy_msg: Message) -> None:
         self._msg = legacy_msg
         self._validate_legacy_msg()
-        tx_key_set, tx_unsigned_key_cnt = self._build_tx_acct_key_set()
+        tx_key_set, tx_unsigned_key_cnt = self._filter_tx_acct_key_set()
         self._tx_acct_key_set: Set[str] = tx_key_set
         self._tx_unsigned_acct_key_cnt = tx_unsigned_key_cnt
-        self._tx_acct_key_list: List[PublicKey] = self._build_tx_acct_key_list()
+        self._tx_acct_key_list: List[PublicKey] = self._filter_tx_acct_key_list()
 
     @property
     def tx_unsigned_account_key_cnt(self):
@@ -41,9 +38,10 @@ class AccountLookupTableBuilder:
             )
         elif len(self._msg.account_keys) > self.MAX_ACCOUNT_CNT:
             raise AccountLookupTableError(
-                f'Too big number {len(self._msg.account_keys)} of accounts for a V0Transaction')
+                f'Too big number {len(self._msg.account_keys)} of accounts for a V0Transaction'
+            )
 
-    def _build_tx_acct_key_set(self) -> Tuple[Set[str], int]:
+    def _filter_tx_acct_key_set(self) -> Tuple[Set[str], int]:
         acct_key_list = self._msg.account_keys
 
         # required accounts should be included into the transaction
@@ -66,13 +64,13 @@ class AccountLookupTableBuilder:
 
         return tx_acct_key_set, len(prog_key_list)
 
-    def _build_tx_acct_key_list(self) -> List[PublicKey]:
+    def _filter_tx_acct_key_list(self) -> List[PublicKey]:
         assert len(self._tx_acct_key_set)
 
         # Returns the list in the order from the tx, because keys is are already ordered in the tx
         return [key for key in self._msg.account_keys if str(key) in self._tx_acct_key_set]
 
-    def build_alt_account_key_set(self) -> Set[str]:
+    def filter_alt_account_key_set(self) -> Set[str]:
         assert len(self._tx_acct_key_set)
 
         # All other accounts can be included into a lookup table
@@ -88,7 +86,7 @@ class AccountLookupTableBuilder:
         key_list_len = len(self._msg.account_keys)
         return key_list_len - self._msg.header.num_readonly_unsigned_accounts
 
-    def build_ro_account_key_set(self) -> Set[str]:
+    def filter_ro_account_key_set(self) -> Set[str]:
         assert len(self._tx_acct_key_set)
 
         start_ro_idx = self._get_start_ro_key_idx()
@@ -96,7 +94,7 @@ class AccountLookupTableBuilder:
         ro_acct_key_set = set([str(key) for key in ro_acct_key_list if str(key) not in self._tx_acct_key_set])
         return ro_acct_key_set
 
-    def build_rw_account_key_set(self) -> Set[str]:
+    def filter_rw_account_key_set(self) -> Set[str]:
         assert len(self._tx_acct_key_set)
 
         start_ro_idx = self._get_start_ro_key_idx()

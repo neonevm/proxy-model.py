@@ -54,7 +54,7 @@ class V0Message(Message):
         ]
 
     @staticmethod
-    def __encode_address_table_lookup(lookup: MessageAddressTableLookup) -> bytes:
+    def __encode_address_table_lookup(alt_msg_info: MessageAddressTableLookup) -> bytes:
         MessageAddressTableLookupFormat = NamedTuple(
             "MessageAddressTableLookupFormat", [
                 ("account_key", bytes),
@@ -66,11 +66,11 @@ class V0Message(Message):
         )
         return b"".join(
             MessageAddressTableLookupFormat(
-                account_key=bytes(lookup.account_key),
-                writable_indexes_length=shortvec.encode_length(len(lookup.writable_indexes)),
-                writable_indexes=b"".join([helpers.to_uint8_bytes(idx) for idx in lookup.writable_indexes]),
-                readonly_indexes_length=shortvec.encode_length(len(lookup.readonly_indexes)),
-                readonly_indexes=b"".join([helpers.to_uint8_bytes(idx) for idx in lookup.readonly_indexes]),
+                account_key=bytes(alt_msg_info.account_key),
+                writable_indexes_length=shortvec.encode_length(len(alt_msg_info.writable_indexes)),
+                writable_indexes=b"".join([helpers.to_uint8_bytes(idx) for idx in alt_msg_info.writable_indexes]),
+                readonly_indexes_length=shortvec.encode_length(len(alt_msg_info.readonly_indexes)),
+                readonly_indexes=b"".join([helpers.to_uint8_bytes(idx) for idx in alt_msg_info.readonly_indexes]),
             )
         )
 
@@ -78,8 +78,8 @@ class V0Message(Message):
         message_buffer = bytearray.fromhex("80")
         message_buffer.extend(super().serialize())
         message_buffer.extend(shortvec.encode_length(len(self.address_table_lookups)))
-        for lookup in self.address_table_lookups:
-            message_buffer.extend(self.__encode_address_table_lookup(lookup))
+        for alt_msg_info in self.address_table_lookups:
+            message_buffer.extend(self.__encode_address_table_lookup(alt_msg_info))
         return bytes(message_buffer)
 
     @staticmethod

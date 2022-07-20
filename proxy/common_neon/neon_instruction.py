@@ -20,7 +20,7 @@ from .layouts import CREATE_ACCOUNT_LAYOUT
 from .eth_proto import Trx as EthTx
 from .environment_data import EVM_LOADER_ID
 from .utils import get_holder_msg
-from .solana_account_lookup_table import ADDRESS_LOOKUP_TABLE_ID
+from ..common_neon.solana_alt import ADDRESS_LOOKUP_TABLE_ID
 
 
 def create_account_with_seed_layout(base, seed, lamports, space):
@@ -236,23 +236,22 @@ class NeonIxBuilder:
         trx.add(self.make_05_call_instruction())
         return trx
 
-    def make_cancel_instruction(self, storage=None, nonce=None, cancel_keys=None) -> TransactionInstruction:
-        if cancel_keys:
-            append_keys = cancel_keys
-        else:
-            append_keys = self.eth_accounts
+    def make_cancel_instruction(self, storage_account: Optional[PublicKey] = None,
+                                nonce: Optional[int] = None,
+                                cancel_key_list: Optional[List[AccountMeta]] = None) -> TransactionInstruction:
+        append_key_list: List[AccountMeta] = self.eth_accounts if cancel_key_list is None else cancel_key_list
         if nonce is None:
             nonce = self.eth_tx.nonce
-        if storage is None:
-            storage = self.storage
+        if storage_account is None:
+            storage_account = self.storage
         return TransactionInstruction(
-            program_id = EVM_LOADER_ID,
-            data = bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
+            program_id=EVM_LOADER_ID,
+            data=bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
             keys=[
-                AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=INCINERATOR_PUBKEY, is_signer=False, is_writable=True),
-            ] + append_keys
+            ] + append_key_list
         )
 
     def make_partial_call_or_continue_instruction(self, steps: int) -> TransactionInstruction:

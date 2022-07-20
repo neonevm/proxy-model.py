@@ -3,9 +3,10 @@ from typing import List, Dict
 from solana.transaction import Transaction
 from solana.message import MessageHeader, CompiledInstruction
 
+from ..common_neon.errors import AccountLookupTableError
 from ..common_neon.solana_v0_message import V0Message, V0MessageArgs, MessageAddressTableLookup
-from ..common_neon.solana_account_lookup_table_builder import AccountLookupTableBuilder, AccountLookupTableError
-from ..common_neon.solana_account_lookup_table import AccountLookupTableInfo
+from ..common_neon.solana_alt_list_filter import AccountLookupTableListFilter
+from ..common_neon.solana_alt import AccountLookupTableInfo
 
 
 class V0Transaction(Transaction):
@@ -19,19 +20,19 @@ class V0Transaction(Transaction):
         elif len(address_table_lookups) == 0:
             raise AccountLookupTableError('No address lookup tables')
 
-        for lookup in address_table_lookups:
-            if not isinstance(lookup, AccountLookupTableInfo):
-                raise AccountLookupTableError(f'Bad type {type(lookup)} for address lookup table')
+        for alt_info in address_table_lookups:
+            if not isinstance(alt_info, AccountLookupTableInfo):
+                raise AccountLookupTableError(f'Bad type {type(alt_info)} for address lookup table')
 
         self.address_table_lookups: List[AccountLookupTableInfo] = address_table_lookups
 
     def compile_message(self) -> V0Message:
         legacy_msg = super().compile_message()
-        builder = AccountLookupTableBuilder(legacy_msg)
+        alt_filter = AccountLookupTableListFilter(legacy_msg)
 
-        tx_key_list = builder.tx_account_key_list
-        rw_key_set = builder.build_rw_account_key_set()
-        ro_key_set = builder.build_ro_account_key_set()
+        tx_key_list = alt_filter.tx_account_key_list
+        rw_key_set = alt_filter.filter_rw_account_key_set()
+        ro_key_set = alt_filter.filter_ro_account_key_set()
 
         # Account indexes must index into the list of addresses
         # constructed from the concatenation of three key lists:
@@ -46,11 +47,11 @@ class V0Transaction(Transaction):
         ro_key_list: List[str] = []
 
         # Build the lookup list in the V0 transaction
-        lookup_list: List[MessageAddressTableLookup] = []
-        for lookup in self.address_table_lookups:
+        alt_msg_list: List[MessageAddressTableLookup] = []
+        for alt_info in self.address_table_lookups:
             rw_idx_list: List[int] = []
             ro_idx_list: List[int] = []
-            for idx, key in enumerate(lookup.account_key_list):
+            for idx, key in enumerate(alt_info.account_key_list):
                 key = str(key)
                 if key in rw_key_set:
                     rw_idx_list.append(idx)
@@ -64,15 +65,15 @@ class V0Transaction(Transaction):
             if len(rw_idx_list) == len(ro_idx_list) == 0:
                 continue
 
-            lookup_list.append(
+            alt_msg_list.append(
                 MessageAddressTableLookup(
-                    account_key=lookup.table_account,
+                    account_key=alt_info.table_account,
                     writable_indexes=rw_idx_list,
                     readonly_indexes=ro_idx_list,
                 )
             )
 
-        if not len(lookup_list):
+        if not len(alt_msg_list):
             raise AccountLookupTableError(f'No account lookups to include into V0Transaction')
 
         for key in rw_key_list:
@@ -90,7 +91,7 @@ class V0Transaction(Transaction):
             old_new_idx_dict[old_idx] = new_idx
 
         # Update compiled instructions with new indexes
-        ix_list: List[CompiledInstruction] = []
+        new_ix_list: List[CompiledInstruction] = []
         for old_ix in legacy_msg.instructions:
             # Get the new index for the program
             old_prog_idx = old_ix.program_id_index
@@ -99,18 +100,18 @@ class V0Transaction(Transaction):
                 raise AccountLookupTableError(f'Program with idx {old_prog_idx} does not exist in account list')
 
             # Get new indexes for instruction accounts
-            new_ix_account_list: List[int] = []
+            new_ix_acct_list: List[int] = []
             for old_idx in old_ix.accounts:
                 new_idx = old_new_idx_dict.get(old_idx, None)
                 if new_idx is None:
                     raise AccountLookupTableError(f'Account with idx {old_idx} does not exist in account list')
-                new_ix_account_list.append(new_idx)
+                new_ix_acct_list.append(new_idx)
 
-            ix_list.append(
+            new_ix_list.append(
                 CompiledInstruction(
                     program_id_index=new_prog_idx,
                     data=old_ix.data,
-                    accounts=new_ix_account_list
+                    accounts=new_ix_acct_list
                 )
             )
 
@@ -119,11 +120,11 @@ class V0Transaction(Transaction):
                 header=MessageHeader(
                     num_required_signatures=legacy_msg.header.num_required_signatures,
                     num_readonly_signed_accounts=legacy_msg.header.num_readonly_signed_accounts,
-                    num_readonly_unsigned_accounts=builder.tx_unsigned_account_key_cnt,
+                    num_readonly_unsigned_accounts=alt_filter.tx_unsigned_account_key_cnt,
                 ),
                 account_keys=[str(key) for key in tx_key_list],
-                instructions=ix_list,
+                instructions=new_ix_list,
                 recent_blockhash=legacy_msg.recent_blockhash,
-                address_table_lookups=lookup_list
+                address_table_lookups=alt_msg_list
             )
         )

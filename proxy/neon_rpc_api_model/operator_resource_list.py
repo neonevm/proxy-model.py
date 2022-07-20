@@ -9,7 +9,6 @@ from typing import Optional, List
 import sha3
 from logged_groups import logged_group
 from solana.account import Account as SolanaAccount
-from solana.transaction import AccountMeta
 from solana.publickey import PublicKey
 
 from ..common_neon.address import EthereumAddress, ether2program, accountWithSeed
@@ -19,6 +18,7 @@ from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.environment_data import EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
 from ..common_neon.environment_data import MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_ERR
+from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.neon_instruction import NeonIxBuilder
 
@@ -239,11 +239,7 @@ class OperatorResourceList:
                 continue
 
             if account.tag == ACTIVE_STORAGE_TAG:
-                self.debug(f"Cancel transaction in {str(stage.sol_account)} for resource {resource}")
-                cancel_stage = NeonCancelTxStage(self._solana, builder, stage.sol_account)
-                cancel_stage.build()
-                tx_name_list.add(cancel_stage.NAME)
-                tx.add(cancel_stage.tx)
+                self._unlock_storage_account(resource, stage.sol_account)
             elif account.tag not in (FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG):
                 raise RuntimeError(f"not empty, not finalized: {str(stage.sol_account)}")
 
@@ -252,6 +248,13 @@ class OperatorResourceList:
         else:
             self.debug(f"Use existing accounts for resource {resource}")
         return account_list
+
+    def _unlock_storage_account(self, resource: OperatorResourceInfo, storage_account: PublicKey) -> None:
+        self.debug(f"Cancel transaction in {str(storage_account)} for resource {resource}")
+        storage_info = self._solana.get_storage_account_info(storage_account)
+        cancel_tx_executor = CancelTxExecutor(self._solana, resource.signer)
+        cancel_tx_executor.add_blocked_storage_account(storage_info)
+        cancel_tx_executor.execute_tx_list()
 
     def free_resource_info(self, resource: OperatorResourceInfo) -> None:
         self._free_resource_list.append(resource.idx)
@@ -277,35 +280,3 @@ class NeonCreatePermAccount(NeonCreateAccountWithSeedStage):
 
         self.debug(f'Create perm account {self.sol_account}')
         self.tx.add(self._create_account_with_seed())
-
-
-@logged_group("neon.Proxy")
-class NeonCancelTxStage:
-    NAME = 'cancelWithNonce'
-
-    def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder, storage_account: PublicKey):
-        self._builder = builder
-        self.tx = TransactionWithComputeBudget()
-        self._account = storage_account
-        self._storage = solana.get_storage_account_info(storage_account)
-
-    def _cancel_ix(self):
-        key_list = []
-        for is_writable, account in self._storage.account_list:
-            key_list.append(AccountMeta(pubkey=PublicKey(account), is_signer=False, is_writable=is_writable))
-
-        return self._builder.make_cancel_instruction(
-            storage=self._account,
-            nonce=self._storage.nonce,
-            cancel_keys=key_list
-        )
-
-    def _is_empty(self) -> bool:
-        return not len(self.tx.signatures)
-
-    def build(self):
-        assert self._is_empty()
-        assert self._storage is not None
-
-        self.debug(f'Cancel transaction in storage account {str(self._account)}')
-        self.tx.add(self._cancel_ix())

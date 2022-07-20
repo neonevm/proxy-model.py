@@ -95,6 +95,7 @@ class NeonCodeInfo(NamedTuple):
 
 
 class StorageAccountInfo(NamedTuple):
+    storage_account: PublicKey
     tag: int
     caller: str
     nonce: int
@@ -111,7 +112,7 @@ class StorageAccountInfo(NamedTuple):
     account_list: List[Tuple[bool, str]]
 
     @staticmethod
-    def frombytes(data) -> StorageAccountInfo:
+    def frombytes(storage_account: PublicKey, data: bytes) -> StorageAccountInfo:
         storage = STORAGE_ACCOUNT_INFO_LAYOUT.parse(data)
 
         account_list = []
@@ -126,6 +127,7 @@ class StorageAccountInfo(NamedTuple):
             account_list.append((writable, str(some_pubkey)))
 
         return StorageAccountInfo(
+            storage_account=storage_account,
             tag=storage.tag,
             caller=storage.caller.hex(),
             nonce=storage.nonce,
@@ -477,7 +479,7 @@ class SolanaInteractor:
         elif len(info.data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
             raise RuntimeError(f"Wrong data length for storage data {str(storage_account)}: " +
                                f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return StorageAccountInfo.frombytes(info.data)
+        return StorageAccountInfo.frombytes(storage_account, info.data)
 
     def get_account_lookup_table_info(self, table_account: PublicKey) -> Optional[AccountLookupTableAccountInfo]:
         info = self.get_account_info(table_account, length=0)
