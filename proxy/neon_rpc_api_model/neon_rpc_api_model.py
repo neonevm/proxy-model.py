@@ -26,6 +26,7 @@ from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 
 from ..indexer.indexer_db import IndexerDB
+from ..memdb.pending_tx_db import MemPendingTxsDB
 
 from .transaction_sender import NeonTxSender
 from .operator_resource_list import OperatorResourceList
@@ -51,6 +52,7 @@ class NeonRpcApiModel:
     def __init__(self):
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = IndexerDB()
+        self._pending_db = MemPendingTxsDB(self._db)
         self._stat_exporter: Optional[StatisticsExporter] = None
 
         if PP_SOLANA_URL == SOLANA_URL:
@@ -426,15 +428,16 @@ class NeonRpcApiModel:
         return self._get_transaction_receipt(tx)
 
     @staticmethod
-    def _get_transaction(tx) -> dict:
+    def _get_transaction(tx, pending=False) -> dict:
         t = tx.neon_tx
-        r = tx.neon_res
+        if not pending:
+            r = tx.neon_res
 
         result = {
-            "blockHash": r.block_hash,
-            "blockNumber": hex(r.slot),
+            "blockHash": r.block_hash if not pending else None,
+            "blockNumber": hex(r.slot) if not pending else None,
             "hash": t.sign,
-            "transactionIndex": hex(t.tx_idx),
+            "transactionIndex": hex(t.tx_idx) if not pending else None,
             "type": "0x0",
             "from": t.addr,
             "nonce":  t.nonce,
@@ -452,12 +455,16 @@ class NeonRpcApiModel:
 
     def eth_getTransactionByHash(self, neon_tx_sign: str) -> Optional[dict]:
         neon_sign = self._normalize_tx_id(neon_tx_sign)
+        pending = False
 
         tx = self._db.get_tx_by_neon_sign(neon_sign)
         if tx is None:
-            self.debug("Not found receipt")
-            return None
-        return self._get_transaction(tx)
+            tx = self._pending_db.get_tx_by_neon_sign(neon_sign)
+            if tx is None:
+                self.debug("Not found receipt")
+                return None
+            pending = True
+        return self._get_transaction(tx, pending)
 
     def eth_getCode(self, account: str, tag) -> str:
         self._validate_block_tag(tag)

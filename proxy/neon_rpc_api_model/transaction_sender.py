@@ -80,7 +80,7 @@ class NeonTxSender:
 
     def _validate_pend_tx(self):
         operator = f'{str(self.resource.public_key())}:{self.resource.rid}'
-        self._pending_tx = NeonPendingTxInfo(neon_sign=self.neon_sign, operator=operator, slot=0)
+        self._pending_tx = NeonPendingTxInfo(neon_tx=self.eth_tx, neon_sign=self.neon_sign, operator=operator, slot=0)
         self._pend_tx_into_db(self.solana.get_recent_blockslot())
 
     def _execute(self, precheck_result: NeonTxPrecheckResult):
