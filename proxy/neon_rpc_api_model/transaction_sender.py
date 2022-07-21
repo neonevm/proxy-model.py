@@ -351,7 +351,7 @@ class SimpleNeonTxSender(SolTxListSender):
 
     def _on_success_send(self, tx: Transaction, receipt: {}) -> None:
         if not self.neon_res.is_valid():
-            decode_neon_tx_result(self.neon_res, self._strategy.neon_sign, receipt).is_valid()
+            decode_neon_tx_result(self.neon_res, self._strategy.neon_sig, receipt).is_valid()
         super()._on_success_send(tx, receipt)
 
     def _on_post_send(self) -> None:
