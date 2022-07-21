@@ -7,6 +7,7 @@ from logged_groups import logged_group, logging_context
 
 from ..common_neon.data import NeonEmulatingResult, NeonTxPrecheckResult
 from ..common_neon.emulator_interactor import call_trx_emulated
+from ..common_neon.errors import PendingTxError
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.solana_tx_list_sender import BlockedAccountsError
 from ..common_neon.solana_interactor import SolanaInteractor
@@ -63,6 +64,9 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             except BlockedAccountsError:
                 self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got blocked accounts result")
                 return MPTxResult(MPResultCode.BlockedAccount, None)
+            except PendingTxError:
+                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got pending tx error")
+                return MPTxResult(MPResultCode.PendingTxError, None)
             except Exception as err:
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
                 self.error(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got error: {err}: {err_tb}")

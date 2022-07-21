@@ -97,6 +97,8 @@ class MemPool:
 
             if mp_tx_result.code == MPResultCode.BlockedAccount:
                 self._on_blocked_accounts_result(mp_request, mp_tx_result)
+            elif mp_tx_result.code == MPResultCode.PendingTxError:
+                self._on_pending_tx_error_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.Unspecified:
                 self._drop_request_away(mp_request)
             elif mp_tx_result.code == MPResultCode.Done:
@@ -113,9 +115,15 @@ class MemPool:
                    f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
+    def _on_pending_tx_error_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
+        self.debug(f"For tx: {mp_tx_request.log_str} - got pending tx error status: {mp_tx_result.data}. "
+                   f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
+        asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
+
     async def _reschedule_tx(self, tx_request: MPTxRequest):
         await asyncio.sleep(self.RESCHEDULE_TIMEOUT_SEC)
         self._tx_schedule.reschedule_tx(tx_request.sender_address, tx_request.nonce)
+        await self._kick_tx_schedule()
 
     def _on_request_done(self, tx_request: MPTxRequest):
         sender = tx_request.sender_address

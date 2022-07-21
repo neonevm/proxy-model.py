@@ -73,7 +73,8 @@ class MPResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
-    Unspecified = 3,
+    PendingTxError = 3,
+    Unspecified = 4,
     Dummy = -1
 
 
