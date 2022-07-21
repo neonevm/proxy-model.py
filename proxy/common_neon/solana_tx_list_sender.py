@@ -146,6 +146,7 @@ class SolTxListSender:
 
         if len(self._alt_invalid_index_list):
             time.sleep(self.ONE_BLOCK_TIME)
+            # raise AltInvalidIndexList()
         elif len(self._blocked_account_list):
             raise BlockedAccountsError()
 

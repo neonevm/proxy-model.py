@@ -17,9 +17,7 @@ from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import SolanaBlockInfo
-
-from ..common_neon.data import NeonTxPrecheckResult, NeonTxExecCfg, NeonEmulatingResult
-from ..common_neon.gas_price_calculator import GasPriceCalculator
+from ..common_neon.data import NeonTxPrecheckResult, NeonEmulatingResult
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
 from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED, \

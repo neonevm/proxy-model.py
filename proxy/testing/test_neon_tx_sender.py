@@ -34,9 +34,10 @@ class TestNeonTxSender(unittest.TestCase):
         self._resource_list._min_operator_balance_to_err.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000]
 
         with self.assertLogs('neon.MemPool', level='ERROR') as logs:
-            with self._resource_list:
-                print('logs.output:', str(logs.output))
-                self.assertRegex(str(logs.output), 'ERROR:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
+            resource = self._resource_list.get_available_resource_info()
+            print('logs.output:', str(logs.output))
+            self.assertRegex(str(logs.output), 'ERROR:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
+            self._resource_list.free_resource_info(resource)
 
     # @unittest.skip("a.i.")
     def test_02_validate_warning_when_little_sols(self):
@@ -50,9 +51,10 @@ class TestNeonTxSender(unittest.TestCase):
         self._resource_list._min_operator_balance_to_err.side_effect = [1_049_049_000, 1_000_000_000]
 
         with self.assertLogs('neon.MemPool', level='WARNING') as logs:
-            with self._resource_list:
-                print('logs.output:', str(logs.output))
-                self.assertRegex(str(logs.output), 'WARNING:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
+            resource = self._resource_list.get_available_resource_info()
+            print('logs.output:', str(logs.output))
+            self.assertRegex(str(logs.output), 'WARNING:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
+            self._resource_list.free_resource_info(resource)
 
     # @unittest.skip("a.i.")
     def test_03_validate_execution_when_not_enough_sols_for_all_operator_accounts(self):
@@ -69,8 +71,7 @@ class TestNeonTxSender(unittest.TestCase):
 
         with self.assertLogs('neon.MemPool', level='ERROR') as logs:
             with self.assertRaises(RuntimeError, msg='Operator has NO resources!'):
-                with self._resource_list:
-                    pass
+                self._resource_list.get_available_resource_info()
 
             print('logs.output:', str(logs.output))
             self.assertRegex(str(logs.output), 'ERROR:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
