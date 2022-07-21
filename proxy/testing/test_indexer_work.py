@@ -211,8 +211,8 @@ class CancelTest(unittest.TestCase):
         tx = TransactionWithComputeBudget()
         builder = NeonIxBuilder(self.acc.public_key())
         builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_tx(eth_tx)
-        builder.init_eth_accounts(eth_meta_list)
+        builder.init_eth_tx(eth_tx, eth_meta_list)
+        #builder.init_eth_accounts(eth_meta_list)
         noniterative_transaction = builder.make_noniterative_call_transaction(len(tx.instructions))
 
         # noniterative_transaction.instructions[-1].program_id = proxy_program
@@ -260,8 +260,8 @@ class CancelTest(unittest.TestCase):
         tx = TransactionWithComputeBudget()
         builder = NeonIxBuilder(self.acc.public_key())
         builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_tx(eth_tx)
-        builder.init_eth_accounts(eth_meta_list)
+        builder.init_eth_tx(eth_tx, eth_meta_list)
+        #builder.init_eth_accounts(eth_meta_list)
         builder.init_iterative(storage_for_invoked, None, None)
         # builder.make_partial_call_or_continue_transaction(250, len(tx.instructions))
 
