@@ -10,14 +10,15 @@ from logged_groups import logged_group, LogMng
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
-from ..common_neon.emulator_interactor import call_emulated
+from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
 from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import SolanaBlockInfo
-from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
+
+from ..common_neon.data import NeonTxPrecheckResult, NeonTxExecCfg, NeonEmulatingResult
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
@@ -29,7 +30,7 @@ from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..mempool import MemPoolClient, MP_SERVICE_HOST, MP_SERVICE_PORT
 
 
-NEON_PROXY_PKG_VERSION = '0.7.21-dev'
+NEON_PROXY_PKG_VERSION = '0.9.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -215,8 +216,8 @@ class NeonRpcApiWorker:
                 return hex(0)
 
             return hex(neon_account_info.balance)
-        except (Exception,) as err:
-            self.debug(f"eth_getBalance: Can't get account info: {err}")
+        except (Exception,):
+            # self.debug(f"eth_getBalance: Can't get account info: {err}")
             return hex(0)
 
     def eth_getLogs(self, obj):
@@ -694,3 +695,11 @@ class NeonRpcApiWorker:
     def neon_getSolanaTransactionByNeonTransaction(self, NeonTxId: str) -> Union[str, list]:
         neon_sign = self._normalize_tx_id(NeonTxId)
         return self._db.get_sol_sign_list_by_neon_sign(neon_sign)
+
+    def neon_emulate(self, raw_signed_trx):
+        """Executes emulator with given transaction
+        """
+        self.debug(f"Call neon_emulate: {raw_signed_trx}")
+        eth_trx = EthTrx.fromString(bytearray.fromhex(raw_signed_trx))
+        emulation_result = call_trx_emulated(eth_trx)
+        return emulation_result
