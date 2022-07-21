@@ -313,14 +313,14 @@ class CancelTest(unittest.TestCase):
         call1_tx = Trx.fromString(bytearray.fromhex(call1_signed.rawTransaction.hex()[2:]))
         builder = NeonIxBuilder(self.acc.public_key())
         builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_trx(call1_tx, account_list)
+        builder.init_eth_tx(call1_tx, account_list)
         noniterative1 = builder.make_noniterative_call_transaction(len(tx.instructions))
         tx.add(noniterative1)
 
         call2_tx = Trx.fromString(bytearray.fromhex(call2_signed.rawTransaction.hex()[2:]))
         builder = NeonIxBuilder(self.acc.public_key())
         builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_trx(call2_tx, account_list)
+        builder.init_eth_tx(call2_tx, account_list)
         noniterative2 = builder.make_noniterative_call_transaction(len(tx.instructions))
         tx.add(noniterative2)
 
