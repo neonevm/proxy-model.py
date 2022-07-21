@@ -125,6 +125,29 @@ class NeonTxResultInfo:
             rec['blockHash'] = block.hash
             rec['blockNumber'] = hex(block.slot)
 
+    def decode(self, neon_sig: str, tx: {}, ix_idx=-1) -> NeonTxResultInfo:
+        self._set_defaults()
+        meta = tx['meta']
+        meta_ixs = meta['innerInstructions']
+        msg = tx['transaction']['message']
+
+        accounts = msg['accountKeys']
+        lookup_accounts = meta.get('loadedAddresses', None)
+        if lookup_accounts is not None:
+            accounts += lookup_accounts['writable'] + lookup_accounts['readonly']
+
+        for inner_ix in meta_ixs:
+            ix_idx = inner_ix['index']
+            for event in inner_ix['instructions']:
+                if accounts[event['programIdIndex']] == EVM_LOADER_ID:
+                    log = base58.b58decode(event['data'])
+                    evm_ix = int(log[0])
+                    if evm_ix == 7:
+                        self._decode_event(neon_sig, log, ix_idx)
+                    elif evm_ix == 6:
+                        self._decode_return(log, ix_idx, tx)
+        return self
+
     def canceled(self, tx: Dict[Any, Any]):
         self._set_defaults()
         self.sol_sign = tx['transaction']['signatures'][0]
