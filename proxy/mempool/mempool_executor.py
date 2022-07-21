@@ -1,6 +1,7 @@
 import asyncio
 import multiprocessing as mp
 import socket
+import traceback
 
 from logged_groups import logged_group, logging_context
 
@@ -63,7 +64,8 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
                 self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got blocked accounts result")
                 return MPTxResult(MPResultCode.BlockedAccount, None)
             except Exception as err:
-                self.error(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got error: {err}")
+                err_tb = "".join(traceback.format_tb(err.__traceback__))
+                self.error(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got error: {err}: {err_tb}")
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 

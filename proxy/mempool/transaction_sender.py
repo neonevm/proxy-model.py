@@ -719,6 +719,8 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
                 neon_res, sig_list = strategy.execute(waiter=self)
                 self._submit_tx_into_db(neon_res, sig_list)
                 return neon_res
+            except BlockedAccountsError:
+                raise
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
                     raise
