@@ -4,12 +4,9 @@ import unittest
 import logged_groups
 from unittest.mock import Mock
 
-from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..memdb.memdb import MemDB
 
 from ..mempool.operator_resource_list import OperatorResourceList
-from ..mempool.transaction_sender import NeonTxSender
 
 
 @logged_groups.logged_group("neon.TestCases")
