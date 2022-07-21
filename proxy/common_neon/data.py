@@ -22,3 +22,20 @@ class NeonTxStatData:
 
     def add_instruction(self, sol_tx_hash: str, sol_spent: int, steps: int, bpf: int) -> None:
         self.instructions.append((sol_tx_hash, sol_spent, steps, bpf))
+
+
+class Result:
+    def __init__(self, reason: str = None):
+        self._reason = reason
+
+    def __bool__(self) -> bool:
+        return self._reason is None
+
+    def __str__(self) -> str:
+        return self._reason if self._reason is not None else ""
+
+
+@dataclass
+class NeonTxPrecheckResult:
+    is_underpriced_tx_without_chainid: bool
+    emulating_result: NeonEmulatingResult

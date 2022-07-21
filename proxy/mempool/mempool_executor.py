@@ -4,7 +4,7 @@ import socket
 
 from logged_groups import logged_group, logging_context
 
-from ..common_neon.data import NeonEmulatingResult, NeonTxExecCfg
+from ..common_neon.data import NeonEmulatingResult, NeonTxPrecheckResult
 from ..common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.solana_tx_list_sender import BlockedAccountsError
@@ -13,10 +13,9 @@ from ..common_neon.config import IConfig
 from ..common_neon.utils import PipePickableDataSrv, IPickableDataServerUser, Any
 from ..common_neon.config import Config
 from ..common_neon.transaction_validator import NeonTxValidator
-from ..common_neon.eth_proto import Trx as NeonTx
 from ..memdb.memdb import MemDB
 
-from .transaction_sender import NeonTxSender
+from .transaction_sender import NeonTxSendStrategySelector
 from .operator_resource_list import OperatorResourceList
 from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
@@ -76,13 +75,12 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
         validator.prevalidate_emulator(emulating_result)
 
-        neon_tx_cfg = NeonTxExecCfg(steps_executed=emulating_result["steps_executed"],
-                                    is_underpriced_tx_without_chainid=validator.is_underpriced_tx_without_chainid())
 
-        evm_steps_limit = self._config.get_evm_steps_limit()
-        tx_sender = NeonTxSender(self._mem_db, self._solana_interactor, neon_tx, steps=evm_steps_limit)
-        with OperatorResourceList(tx_sender):
-            tx_sender.execute(neon_tx_cfg, emulating_result)
+        with OperatorResourceList(self._solana_interactor) as resource:
+            tx_sender = NeonTxSendStrategySelector(self._mem_db, self._solana_interactor, resource, neon_tx)
+            precheck_result = NeonTxPrecheckResult(emulating_result=emulating_result,
+                                                   is_underpriced_tx_without_chainid=validator.is_underpriced_tx_without_chainid())
+            tx_sender.execute(precheck_result)
 
     async def on_data_received(self, data: Any) -> Any:
         return self.execute_neon_tx(data)
