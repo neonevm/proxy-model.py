@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from asyncio import Task
 
 from ..common_neon.eth_proto import Trx as NeonTx
-from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
+from ..common_neon.data import NeonEmulatingResult
 
 
 class IMPExecutor(ABC):

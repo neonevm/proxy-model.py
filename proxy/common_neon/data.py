@@ -1,5 +1,6 @@
+from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 
 class NeonTxStatData:
@@ -50,3 +51,6 @@ class Result:
 class NeonTxPrecheckResult:
     is_underpriced_tx_without_chainid: bool
     emulating_result: NeonEmulatingResult
+
+
+NeonEmulatingResult = Dict[str, Any]

@@ -13,7 +13,7 @@ from .emulator_interactor import call_trx_emulated
 from .elf_params import ElfParams
 from .environment_data import ACCOUNT_PERMISSION_UPDATE_INT, ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
 
-from .data import NeonTxExecCfg, NeonEmulatingResult
+from .data import NeonEmulatingResult
 
 
 @logged_group("neon.Proxy")
