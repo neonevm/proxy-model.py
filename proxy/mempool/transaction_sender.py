@@ -33,13 +33,14 @@ from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from ..common_neon.solana_v0_transaction import V0Transaction
 
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
-from ..common_neon.utils import get_holder_msg
+
 
 from .operator_resource_list import OperatorResourceInfo
 
 
 @logged_group("neon.MemPool")
 class AccountTxListBuilder:
+
     def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder):
         self._solana = solana
         self._builder = builder
@@ -140,8 +141,6 @@ class NeonTxSendCtx:
         self._builder.init_eth_tx(self._eth_tx)
         self._builder.init_iterative(self._resource.storage, self._resource.holder, self._resource.rid)
 
-        self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
-
     @property
     def neon_sig(self) -> str:
         return self._neon_sig
@@ -166,9 +165,9 @@ class NeonTxSendCtx:
     def account_tx_list_builder(self) -> AccountTxListBuilder:
         return self._account_tx_list_builder
 
-    @property
-    def alt_close_queue(self) -> AddressLookupTableCloseQueue:
-        return self._alt_close_queue
+    # @property
+    # def alt_close_queue(self) -> AddressLookupTableCloseQueue:
+    #     return self._alt_close_queue
 
 
 @logged_group("neon.MemPool")
@@ -185,10 +184,6 @@ class BaseNeonTxStrategy(abc.ABC):
     @property
     def _account_tx_list_builder(self) -> AccountTxListBuilder:
         return self._ctx.account_tx_list_builder
-
-    @property
-    def _alt_close_queue(self) -> AddressLookupTableCloseQueue:
-        return self._ctx.alt_close_queue
 
     @property
     def _builder(self) -> NeonIxBuilder:
@@ -223,14 +218,14 @@ class BaseNeonTxStrategy(abc.ABC):
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
         tx_list_name = self._account_tx_list_builder.name
-        tx_list = self._account_tx_list_builder.get_tx_list()
+        acc_tx_list = self._account_tx_list_builder.get_tx_list()
 
-        alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
-        if len(alt_tx_list):
-            tx_list.extend(alt_tx_list)
-            tx_list_name = ' + '.join([tx_list_name, f'CloseLookupTable({len(alt_tx_list)})'])
+        # alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
+        # if len(alt_tx_list):
+        #     acc_tx_list.extend(alt_tx_list)
+        #     tx_list_name = ' + '.join([tx_list_name, f'CloseLookupTable({len(alt_tx_list)})'])
 
-        return tx_list_name, tx_list
+        return tx_list_name, acc_tx_list
 
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
         tx_list_name, tx_list = self._build_prep_tx_list()
@@ -325,12 +320,10 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         super().__init__(*args, **kwargs)
 
     def _validate(self) -> bool:
-        return (
-            self._validate_evm_step_cnt() and
-            self._validate_notdeploy_tx() and
-            self._validate_tx_wo_chainid() and
-            self._validate_tx_size()
-        )
+        return self._validate_evm_step_cnt() and \
+               self._validate_notdeploy_tx() and \
+               self._validate_tx_wo_chainid() and \
+               self._validate_tx_size()
 
     def _validate_evm_step_cnt(self) -> bool:
         emulated_evm_step_cnt = self._precheck_res.emulating_result["steps_executed"]
@@ -391,7 +384,6 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         if self._is_canceled:
-            # Transaction with cancel is confirmed
             self.neon_res.canceled(receipt)
         else:
             super()._on_success_send(tx, receipt)
@@ -585,6 +577,7 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
         self._alt_builder: Optional[AddressLookupTableTxBuilder] = None
         self._alt_info: Optional[AddressLookupTableInfo] = None
         self._alt_tx_list: Optional[AddressLookupTableTxList] = None
+        self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
         super().__init__(*args, **kwargs)
 
     def _validate(self) -> bool:
@@ -593,6 +586,16 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
             self._build_alt_info() and
             self._validate_tx_size()
         )
+
+    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
+        tx_list_name, tx_list = super()._build_prep_tx_list()
+
+        alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
+        if len(alt_tx_list):
+            tx_list.extend(alt_tx_list)
+            tx_list_name = ' + '.join([tx_list_name, f'CloseLookupTable({len(alt_tx_list)})'])
+
+        return tx_list_name, tx_list
 
     def _build_legacy_tx(self, idx=0) -> Transaction:
         return super().build_tx(idx)
