@@ -101,6 +101,7 @@ class SolTxListSender:
                 elif receipt_parser.check_if_error():
                     self._unknown_error_list.append(tx)
                     self._unknown_error_receipt = receipt
+                    self.debug(f'unknown_error_receipt: {self._unknown_error_receipt}')
                 else:
                     success_sig_list.append(b58encode(tx.signature()).decode("utf-8"))
                     self._retry_idx = 0
