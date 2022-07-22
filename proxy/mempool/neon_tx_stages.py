@@ -16,7 +16,7 @@ from ..common_neon.environment_data import CONTRACT_EXTRA_SPACE
 from ..common_neon.neon_instruction import NeonIxBuilder
 
 
-@logged_group("neon.MemPool")
+@logged_group("neon.Proxy")
 class NeonTxStage(abc.ABC):
     NAME = 'UNKNOWN'
 
@@ -75,7 +75,6 @@ class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
         return self._builder.create_account_with_seed_instruction(self.sol_account, self._seed, self.balance, self.size)
 
 
-@logged_group("neon.MemPool")
 class NeonCreateAccountTxStage(NeonTxStage):
     NAME = 'createNeonAccount'
 
@@ -94,7 +93,6 @@ class NeonCreateAccountTxStage(NeonTxStage):
         self.tx.add(self._create_account())
 
 
-@logged_group("neon.MemPool")
 class NeonCreateERC20TxStage(NeonTxStage):
     NAME = 'createERC20Account'
 
@@ -121,7 +119,6 @@ class NeonCreateERC20TxStage(NeonTxStage):
         self.tx.add(self._create_erc20_account())
 
 
-@logged_group("neon.MemPool")
 class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage):
     NAME = 'createNeonContract'
 
@@ -147,7 +144,6 @@ class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage):
         self.tx.add(self._create_account())
 
 
-@logged_group("neon.MemPool")
 class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage):
     NAME = 'resizeNeonContract'
 

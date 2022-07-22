@@ -4,6 +4,7 @@ import unittest
 import logged_groups
 from unittest.mock import Mock
 
+from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.solana_interactor import SolanaInteractor
 
 from ..mempool.operator_resource_list import OperatorResourceList
