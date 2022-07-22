@@ -16,7 +16,7 @@ from ..common_neon.environment_data import CONTRACT_EXTRA_SPACE
 from ..common_neon.neon_instruction import NeonIxBuilder
 
 
-@logged_group("neon.MemPool")
+@logged_group("neon.Proxy")
 class NeonTxStage(abc.ABC):
     NAME = 'UNKNOWN'
 

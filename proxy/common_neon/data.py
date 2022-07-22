@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 
 @dataclass
@@ -39,3 +39,24 @@ class Result:
 class NeonTxPrecheckResult:
     is_underpriced_tx_without_chainid: bool
     emulating_result: NeonEmulatingResult
+
+
+@dataclass
+class NeonTxReturn:
+    exit_status: int = 0
+    gas_used: int = 0
+    return_value: Optional[bytes] = None
+
+
+@dataclass
+class NeonEvent:
+    address: Optional[bytes] = None
+    count_topics: int = 0
+    topics: Optional[List[bytes]] = None
+    log_data: Optional[bytes] = None
+
+
+@dataclass
+class NeonLogIx:
+    neon_return: Optional[NeonTxReturn] = None
+    neon_events: List[NeonEvent] = field(default_factory=list)

@@ -26,6 +26,8 @@ from ..common_neon.errors import EthereumError
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult, NeonTxPrecheckResult
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
+from ..common_neon.utils import get_holder_msg
+from ..common_neon.evm_decoder import decode_neon_tx_result
 
 from ..common_neon.solana_alt import AddressLookupTableInfo
 from ..common_neon.solana_alt_builder import AddressLookupTableTxBuilder, AddressLookupTableTxList
@@ -302,7 +304,7 @@ class SimpleNeonTxSender(SolTxListSender):
 
     def _on_success_send(self, tx: Transaction, receipt: {}) -> None:
         if not self.neon_res.is_valid():
-            self.neon_res.decode(self._strategy.neon_sig, receipt).is_valid()
+            decode_neon_tx_result(self.neon_res, self._strategy.neon_sig, receipt).is_valid()
         super()._on_success_send(tx, receipt)
 
     def _on_post_send(self) -> None:
