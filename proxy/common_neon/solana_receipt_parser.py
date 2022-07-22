@@ -39,6 +39,7 @@ class SolReceiptParser:
     COMPUTATION_BUDGET_EXCEEDED = 'ComputationalBudgetExceeded'
     PROGRAM_FAILED_TO_COMPLETE = 'ProgramFailedToComplete'
     PROGRAM_EXCEED_INSTRUCTIONS = 'Program failed to complete: exceeded maximum number of instructions allowed'
+    LOG_TRUNCATED = 'Log truncated'
     READ_ONLY_BLOCKED = "trying to execute transaction on ro locked account"
     READ_WRITE_BLOCKED = "trying to execute transaction on rw locked account"
     ALT_INVALID_INDEX = 'invalid transaction: Transaction address table lookup uses an invalid index'
@@ -188,6 +189,8 @@ class SolReceiptParser:
             log_list = self.get_log_list()
             for log in log_list:
                 if log.startswith(self.PROGRAM_EXCEED_INSTRUCTIONS):
+                    return True
+                if log.startswith(self.LOG_TRUNCATED):
                     return True
         return False
 
