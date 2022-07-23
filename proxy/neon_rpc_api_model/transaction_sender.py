@@ -565,7 +565,7 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
         self._alt_builder: Optional[AddressLookupTableTxBuilder] = None
         self._alt_info: Optional[AddressLookupTableInfo] = None
         self._alt_tx_list: Optional[AddressLookupTableTxList] = None
-        self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
+        self._alt_close_queue = AddressLookupTableCloseQueue(self._ctx._solana)
         super().__init__(*args, **kwargs)
 
     def _validate(self) -> bool:
