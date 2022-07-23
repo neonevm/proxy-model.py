@@ -479,13 +479,13 @@ class NeonRpcApiModel:
 
         self._stat_tx_begin()
         try:
-            neon_tx_precheck_result = self.precheck(trx)
+            neon_tx_exec_cfg = self.precheck(trx)
 
             resource_list = OperatorResourceList(self._solana)
             resource = OperatorResourceList(self._solana).get_available_resource_info()
             try:
                 tx_sender = NeonTxSendStrategySelector(self._db, self._solana, resource, trx)
-                tx_sender.execute(neon_tx_precheck_result)
+                tx_sender.execute(neon_tx_exec_cfg)
             finally:
                 resource_list.free_resource_info(resource)
 

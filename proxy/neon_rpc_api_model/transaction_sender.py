@@ -24,7 +24,7 @@ from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
 from ..common_neon.errors import EthereumError
-from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
+from ..common_neon.data import NeonTxExecCfg, NeonAccountsData
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.evm_decoder import decode_neon_tx_result
@@ -47,11 +47,11 @@ class AccountTxListBuilder:
         self._create_account_list: List[NeonTxStage] = []
         self._eth_meta_dict: Dict[str, SolanaAccountMeta] = dict()
 
-    def build_tx(self, emulating_result: NeonEmulatingResult) -> None:
+    def build_tx(self, accounts_data: NeonAccountsData) -> None:
         # Parse information from the emulator output
-        self._parse_accounts_list(emulating_result['accounts'])
-        self._parse_token_list(emulating_result['token_accounts'])
-        self._parse_solana_list(emulating_result['solana_accounts'])
+        self._parse_accounts_list(accounts_data['accounts'])
+        self._parse_token_list(accounts_data['token_accounts'])
+        self._parse_solana_list(accounts_data['solana_accounts'])
 
         eth_meta_list = list(self._eth_meta_dict.values())
         self.debug('metas: ' + ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in eth_meta_list]))
@@ -330,7 +330,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         )
 
     def _validate_evm_step_cnt(self) -> bool:
-        emulated_evm_step_cnt = self._neon_tx_exec_cfg.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._neon_tx_exec_cfg.steps_executed
         if emulated_evm_step_cnt > self._iter_evm_step_cnt:
             self._error_msg = 'Too big number of EVM steps'
             return False
@@ -472,7 +472,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
     def _validate_evm_step_cnt(self):
         # Only the instruction with a holder account allows to pass a unique number to make the transaction unique
-        emulated_evm_step_cnt = self._neon_tx_exec_cfg.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._neon_tx_exec_cfg.steps_executed
         max_evm_step_cnt = self._iter_evm_step_cnt * 25
         if emulated_evm_step_cnt > max_evm_step_cnt:
             self._error_msg = 'Big number of EVM steps'
@@ -511,7 +511,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return tx
 
     def _calc_iter_cnt(self) -> int:
-        emulated_evm_step_cnt = self._neon_tx_exec_cfg.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._neon_tx_exec_cfg.steps_executed
         iter_cnt = math.ceil(emulated_evm_step_cnt / self._iter_evm_step_cnt)
         iter_cnt = math.ceil(emulated_evm_step_cnt / (self._iter_evm_step_cnt - iter_cnt))
         if emulated_evm_step_cnt > 200:
@@ -519,7 +519,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return iter_cnt
 
     def _execute_tx_list(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
-        emulated_evm_step_cnt = self._neon_tx_exec_cfg.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._neon_tx_exec_cfg.steps_executed
         iter_cnt = self._calc_iter_cnt()
         self.debug(f'Total iterations {iter_cnt} for {emulated_evm_step_cnt} ({self._iter_evm_step_cnt}) EVM steps')
 
@@ -548,7 +548,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         )
 
     def _calc_iter_cnt(self) -> int:
-        emulated_evm_step_cnt = self._neon_tx_exec_cfg.emulating_result["steps_executed"]
+        emulated_evm_step_cnt = self._neon_tx_exec_cfg.steps_executed
         return math.ceil(emulated_evm_step_cnt / self._iter_evm_step_cnt) + 1
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
@@ -693,7 +693,7 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
 
     def execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
         self._validate_pend_tx()
-        self._ctx.account_tx_list_builder.build_tx(neon_tx_exec_cfg.emulating_result)
+        self._ctx.account_tx_list_builder.build_tx(neon_tx_exec_cfg.accounts_data)
         return self._execute(neon_tx_exec_cfg)
 
     def _validate_pend_tx(self) -> None:

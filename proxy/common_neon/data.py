@@ -40,7 +40,9 @@ class NeonLogIx:
 @dataclass
 class NeonTxExecCfg:
     is_underpriced_tx_wo_chainid: bool
-    emulating_result: NeonEmulatingResult
+    steps_executed: int
+    accounts_data: Dict[str, Any]
 
 
 NeonEmulatingResult = Dict[str, Any]
+NeonAccountsData = Dict[str, Any]

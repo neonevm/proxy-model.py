@@ -65,7 +65,10 @@ class NeonTxValidator:
             self._prevalidate_emulator(emulating_result)
 
             is_underpriced_tx_wo_chainid = self.is_underpriced_tx_without_chainid()
-            neon_tx_exec_cfg = NeonTxExecCfg(emulating_result=emulating_result,
+            steps_executed = emulating_result["steps_executed"]
+            accounts_data = {k: emulating_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
+            neon_tx_exec_cfg = NeonTxExecCfg(steps_executed=steps_executed,
+                                             accounts_data=accounts_data,
                                              is_underpriced_tx_wo_chainid=is_underpriced_tx_wo_chainid)
             return neon_tx_exec_cfg
 
