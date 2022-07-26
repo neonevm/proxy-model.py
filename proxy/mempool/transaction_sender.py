@@ -546,6 +546,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
     def execute(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
         assert self.is_valid()
         self._execute_writting_holder(waiter)
+        self.debug("Holder account has been written, reemulating")
         self._neon_tx_exec_cfg = self._user.reemulate_and_get_tx_exec_cfg(self._ctx.eth_tx)
         self._execute_prep_tx_list(waiter)
         return self._execute_tx_list(waiter)
