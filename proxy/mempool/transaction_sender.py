@@ -34,7 +34,7 @@ from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from ..common_neon.solana_v0_transaction import V0Transaction
 
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
-from ..common_neon.utils import get_holder_msg
+from ..common_neon.eth_proto import NeonTx
 
 from .operator_resource_list import OperatorResourceInfo
 
@@ -177,7 +177,8 @@ class NeonTxSendCtx:
 class BaseNeonTxStrategy(abc.ABC):
     NAME = 'UNKNOWN STRATEGY'
 
-    def __init__(self, neon_tx_exec_cfg: NeonTxExecCfg, ctx: NeonTxSendCtx):
+    def __init__(self, user: IStrategyUser, neon_tx_exec_cfg: NeonTxExecCfg, ctx: NeonTxSendCtx):
+        self._user: IStrategyUser = user
         self._neon_tx_exec_cfg = neon_tx_exec_cfg
         self._error_msg: Optional[str] = None
         self._ctx = ctx
@@ -545,6 +546,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
     def execute(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
         assert self.is_valid()
         self._execute_writting_holder(waiter)
+        self._neon_tx_exec_cfg = self._user.reemulate_and_get_tx_exec_cfg(self._ctx.eth_tx)
         self._execute_prep_tx_list(waiter)
         return self._execute_tx_list(waiter)
 
@@ -705,20 +707,39 @@ class AltNoChainIdNeonTxStrategy(AltHolderNeonTxStrategy):
         return BaseNoChainIdNeonStrategy.build_tx(self._builder, self._compute_unit_cnt, self._iter_evm_step_cnt, idx)
 
 
+class IStrategySelectorUser(abc.ABC):
+
+    @abc.abstractmethod
+    def reemulate_and_get_tx_exec_cfg(self, neon_tx: NeonTx) -> NeonTxExecCfg:
+        assert False, "Not implemented"
+
+
+class IStrategyUser(abc.ABC):
+
+    @abc.abstractmethod
+    def reemulate_and_get_tx_exec_cfg(self, neon_tx: NeonTx) -> NeonTxExecCfg:
+        assert False, "Not implemented"
+
+
 @logged_group("neon.Proxy")
-class NeonTxSendStrategySelector(IConfirmWaiter):
+class NeonTxSendStrategySelector(IConfirmWaiter, IStrategyUser):
     STRATEGY_LIST = [
         SimpleNeonTxStrategy,
         IterativeNeonTxStrategy, HolderNeonTxStrategy, AltHolderNeonTxStrategy,
         NoChainIdNeonTxStrategy, AltNoChainIdNeonTxStrategy
     ]
 
-    def __init__(self, db: MemDB, solana: SolanaInteractor, resource: OperatorResourceInfo, eth_tx: EthTx):
+    def __init__(self, user: IStrategySelectorUser, db: MemDB, solana: SolanaInteractor, resource: OperatorResourceInfo, eth_tx: EthTx):
         super().__init__()
+        self._user = user
         self._db = db
         self._ctx = NeonTxSendCtx(solana, resource, eth_tx)
         self._operator = f'{str(self._ctx.resource)}'
         self._pending_tx: Optional[NeonPendingTxInfo] = None
+
+    # IStrategyUser
+    def reemulate_and_get_tx_exec_cfg(self, neon_tx: NeonTx) -> NeonTxExecCfg:
+        return self._user.reemulate_and_get_tx_exec_cfg(neon_tx)
 
     def execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
         self._validate_pend_tx()
@@ -732,7 +753,7 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
     def _execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
         for Strategy in self.STRATEGY_LIST:
             try:
-                strategy = Strategy(neon_tx_exec_cfg, self._ctx)
+                strategy = Strategy(self, neon_tx_exec_cfg, self._ctx)
                 if not strategy.is_valid():
                     self.debug(f'Skip strategy {Strategy.NAME}: {strategy.error_msg}')
                     continue

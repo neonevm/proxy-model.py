@@ -16,14 +16,15 @@ from ..common_neon.utils import PipePickableDataSrv, IPickableDataServerUser, An
 from ..common_neon.config import Config
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..memdb.memdb import MemDB
+from ..common_neon.eth_proto import Trx as NeonTx
 
-from .transaction_sender import NeonTxSendStrategySelector
+from .transaction_sender import NeonTxSendStrategySelector, IStrategySelectorUser
 from .operator_resource_list import OperatorResourceList
 from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
 
 @logged_group("neon.MemPool")
-class MPExecutor(mp.Process, IPickableDataServerUser):
+class MPExecutor(mp.Process, IPickableDataServerUser, IStrategySelectorUser):
 
     def __init__(self, executor_id: int, srv_sock: socket.socket, config: IConfig):
         self.info(f"Initialize mempool_executor: {executor_id}")
@@ -75,23 +76,27 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
     def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
         neon_tx = mp_tx_request.neon_tx
+        neon_tx_exec_cfg = self.emulate_and_get_tx_exec_cfg(neon_tx)
+        with OperatorResourceList(self._solana_interactor) as resource:
+            tx_sender = NeonTxSendStrategySelector(self, self._mem_db, self._solana_interactor, resource, neon_tx)
+            tx_sender.execute(neon_tx_exec_cfg)
+
+    def reemulate_and_get_tx_exec_cfg(self, neon_tx: NeonTx) -> NeonTxExecCfg:
+        return self.emulate_and_get_tx_exec_cfg(neon_tx)
+
+    def emulate_and_get_tx_exec_cfg(self, neon_tx: NeonTx) -> NeonTxExecCfg:
+        emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
         min_gas_price = self._gas_price_calculator.get_min_gas_price()
         validator = NeonTxValidator(self._solana_interactor, neon_tx, min_gas_price)
-
-        emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
         validator.prevalidate_emulator(emulating_result)
 
-        with OperatorResourceList(self._solana_interactor) as resource:
-            tx_sender = NeonTxSendStrategySelector(self._mem_db, self._solana_interactor, resource, neon_tx)
-
-            is_underpriced_tx_wo_chainid = validator.is_underpriced_tx_without_chainid()
-            steps_executed = emulating_result["steps_executed"]
-            accounts_data = {k: emulating_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
-            neon_tx_exec_cfg = NeonTxExecCfg(steps_executed=steps_executed,
-                                             accounts_data=accounts_data,
-                                             is_underpriced_tx_wo_chainid=is_underpriced_tx_wo_chainid)
-
-            tx_sender.execute(neon_tx_exec_cfg)
+        is_underpriced_tx_wo_chainid = validator.is_underpriced_tx_without_chainid()
+        steps_executed = emulating_result["steps_executed"]
+        accounts_data = {k: emulating_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
+        neon_tx_exec_cfg = NeonTxExecCfg(steps_executed=steps_executed,
+                                         accounts_data=accounts_data,
+                                         is_underpriced_tx_wo_chainid=is_underpriced_tx_wo_chainid)
+        return neon_tx_exec_cfg
 
     async def on_data_received(self, data: Any) -> Any:
         return self.execute_neon_tx(data)

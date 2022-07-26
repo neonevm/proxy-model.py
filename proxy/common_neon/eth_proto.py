@@ -144,3 +144,6 @@ class Trx(rlp.Serializable):
             return None
         contract_addr = rlp.encode((self._sender(), self.nonce))
         return keccak_256(contract_addr).digest()[-20:].hex()
+
+
+NeonTx = Trx
