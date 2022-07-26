@@ -46,7 +46,8 @@ class SolReceiptParser:
     BLOCKHASH_NOTFOUND = 'BlockhashNotFound'
     NUMSLOTS_BEHIND = 'numSlotsBehind'
 
-    NONCE_RE = re.compile('Program log: [a-z/.]+:\d+ : Invalid Ethereum transaction nonce: acc (\d+), trx (\d+)')
+    CREATE_ACCOUNT_RE = re.compile(r'Create Account: account Address { address: (\w+), base: Some\((\w+)\) } already in use')
+    NONCE_RE = re.compile(r'Program log: [a-z/.]+:\d+ : Invalid Ethereum transaction nonce: acc (\d+), trx (\d+)')
 
     def __init__(self, receipt: Union[dict, Exception, str]):
         if isinstance(receipt, SolTxError):
@@ -192,6 +193,19 @@ class SolReceiptParser:
                     return True
                 if log.startswith(self.LOG_TRUNCATED):
                     return True
+        return False
+
+    def check_if_account_already_exists(self) -> bool:
+        log_list = self.get_log_list()
+
+        if not len(log_list):
+            self.error(f"Can't get logs from receipt: {json.dumps(self._receipt, sort_keys=True)}")
+            return False
+
+        for log in log_list:
+            m = self.CREATE_ACCOUNT_RE.search(log)
+            if m is not None:
+                return True
         return False
 
     def check_if_accounts_blocked(self) -> bool:
