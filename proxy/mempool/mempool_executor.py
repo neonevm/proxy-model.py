@@ -5,7 +5,7 @@ import traceback
 
 from logged_groups import logged_group, logging_context
 
-from ..common_neon.data import NeonEmulatingResult, NeonTxPrecheckResult
+from ..common_neon.data import NeonEmulatingResult, NeonTxExecCfg
 from ..common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.errors import PendingTxError
 from ..common_neon.gas_price_calculator import GasPriceCalculator
