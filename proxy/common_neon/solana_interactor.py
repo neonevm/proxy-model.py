@@ -309,7 +309,7 @@ class SolanaInteractor:
         }
         return self._send_rpc_request('getSlot', opts)
 
-    def get_account_info(self, pubkey: PublicKey, length=256, commitment='processed') -> Optional[AccountInfo]:
+    def get_account_info(self, pubkey: PublicKey, length=256, commitment='confirmed') -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
@@ -338,7 +338,7 @@ class SolanaInteractor:
         return AccountInfo(account_tag, lamports, owner, data)
 
     def get_account_info_list(self, src_account_list: List[PublicKey], length=256,
-                              commitment='processed') -> List[AccountInfo]:
+                              commitment='confirmed') -> List[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
@@ -395,7 +395,7 @@ class SolanaInteractor:
 
         return balances_list
 
-    def get_token_account_balance(self, pubkey: Union[str, PublicKey], commitment='processed') -> int:
+    def get_token_account_balance(self, pubkey: Union[str, PublicKey], commitment='confirmed') -> int:
         opts = {
             "commitment": commitment
         }
@@ -406,7 +406,7 @@ class SolanaInteractor:
         return int(result['value']['amount'])
 
     def get_token_account_balance_list(self, pubkey_list: List[Union[str, PublicKey]],
-                                       commitment: object = 'processed') -> List[int]:
+                                       commitment: object = 'confirmed') -> List[int]:
         opts = {
             "commitment": commitment
         }
@@ -575,7 +575,7 @@ class SolanaInteractor:
             raise RuntimeError("failed to get latest blockhash")
         return blockhash_resp['result']['context']['slot']
 
-    def get_recent_blockhash(self, commitment='confirmed') -> Blockhash:
+    def get_recent_blockhash(self, commitment=FINALIZED) -> Blockhash:
         opts = {
             'commitment': commitment
         }
