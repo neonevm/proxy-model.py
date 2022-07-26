@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 
@@ -36,21 +37,12 @@ class NeonLogIx:
     neon_events: List[NeonEvent] = field(default_factory=list)
 
 
-class Result:
-    def __init__(self, reason: str = None):
-        self._reason = reason
-
-    def __bool__(self) -> bool:
-        return self._reason is None
-
-    def __str__(self) -> str:
-        return self._reason if self._reason is not None else ""
-
-
 @dataclass
-class NeonTxPrecheckResult:
-    is_underpriced_tx_without_chainid: bool
-    emulating_result: NeonEmulatingResult
+class NeonTxExecCfg:
+    is_underpriced_tx_wo_chainid: bool
+    steps_executed: int
+    accounts_data: NeonAccountsData
 
 
 NeonEmulatingResult = Dict[str, Any]
+NeonAccountsData = Dict[str, Any]

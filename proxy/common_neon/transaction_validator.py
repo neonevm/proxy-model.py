@@ -175,7 +175,9 @@ class NeonTxValidator:
             if (not account_desc['code_size']) or (not account_desc['address']):
                 continue
             if account_desc['code_size'] > ((9 * 1024 + 512) * 1024):
-                raise EthereumError(f"contract {account_desc['address']} requests a size increase to more than 9.5Mb")
+                raise EthereumError(f"contract {account_desc['address']} " +
+                                    f"requests a size increase to more than 9.5Mb")
+
 
     def _raise_nonce_error(self, account_tx_count: int, tx_nonce: int):
         if self.MAX_U64 in (account_tx_count, tx_nonce):

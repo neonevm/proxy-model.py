@@ -17,7 +17,6 @@ from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import SolanaBlockInfo
-
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
@@ -497,10 +496,6 @@ class NeonRpcApiWorker:
             self._mempool_client.send_raw_transaction(req_id=req_id, signature=eth_signature, neon_tx=trx)
             return eth_signature
 
-        except EthereumError as err:
-            self.error(f'Failed to process eth_sendRawTransaction, EthereumError: {err}')
-            self._stat_tx_failed()
-            raise
         except Exception as err:
             self.error(f"Failed to process eth_sendRawTransaction, Error: {err}")
             self._stat_tx_failed()
