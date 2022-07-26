@@ -535,6 +535,17 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def execute(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
+        assert self.is_valid()
+        self._execute_writting_holder(waiter)
+        self._execute_prep_tx_list(waiter)
+        return self._execute_tx_list(waiter)
+
+    def _execute_writting_holder(self, waiter: IConfirmWaiter):
+        tx_list_name, tx_list = self.get_holder_tx_list()
+        tx_sender = SolTxListSender(self._solana, self._signer)
+        tx_sender.send(tx_list_name, tx_list, waiter=waiter)
+
     def _validate(self) -> bool:
         return (
             self._validate_tx_size() and
@@ -551,10 +562,8 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         emulated_evm_step_cnt = self._precheck_res.emulating_result["steps_executed"]
         return math.ceil(emulated_evm_step_cnt / self._iter_evm_step_cnt) + 1
 
-    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        tx_list_name, tx_list = super()._build_prep_tx_list()
-
-        # write eth transaction to the holder account
+    def get_holder_tx_list(self) -> Tuple[str, List[Transaction]]:
+        tx_list = []
         cnt = 0
         holder_msg_offset = 0
         holder_msg = copy.copy(self._builder.holder_msg)
@@ -567,8 +576,10 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
             tx_list.append(tx)
             holder_msg_offset += len(holder_msg_part)
             cnt += 1
+        return f'WriteWithHolder({cnt})', tx_list
 
-        tx_list_name = ' + '.join([tx_list_name, f'WriteWithHolder({cnt})'])
+    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
+        tx_list_name, tx_list = super()._build_prep_tx_list()
         return tx_list_name, tx_list
 
 
