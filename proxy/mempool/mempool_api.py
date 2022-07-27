@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 from abc import ABC, abstractmethod
 from asyncio import Task
 
 from ..common_neon.eth_proto import Trx as NeonTx
-from ..common_neon.data import NeonEmulatingResult
+from ..common_neon.data import NeonTxExecCfg
 
 
 class IMPExecutor(ABC):
@@ -47,7 +47,7 @@ class MPTxRequest(MPRequest):
     nonce: int = field(compare=True, default=None)
     signature: str = field(compare=False, default=None)
     neon_tx: NeonTx = field(compare=False, default=None)
-    emulating_result: NeonEmulatingResult = field(compare=False, default=None)
+    neon_tx_exec_cfg: Optional[NeonTxExecCfg] = field(compare=False, default_factory=NeonTxExecCfg)
     sender_address: str = field(compare=False, default=None)
     gas_price: int = field(compare=False, default=None)
 
