@@ -107,7 +107,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
 
         claim_instr = self.wrapper.create_claim_instruction(
             owner = self.solana_account.public_key(),
-            from_acc=token_account, 
+            from_acc=token_account,
             to_acc=admin,
             amount=amount,
         )

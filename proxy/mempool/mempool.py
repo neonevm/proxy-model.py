@@ -3,8 +3,7 @@ from typing import List, Tuple
 
 from logged_groups import logged_group
 
-from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest,\
-                         MPPendingTxCountReq
+from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest, MPPendingTxCountReq
 from .mempool_schedule import MPTxSchedule
 
 
@@ -25,6 +24,8 @@ class MemPool:
         self._executor = executor
 
     async def enqueue_mp_request(self, mp_request: MPRequest):
+        req_id = mp_request.req_id
+        self.debug(f"Got mp_request, req_id: {req_id}", extra={"context": {"req_id": mp_request.req_id}})
         if mp_request.type == MPRequestType.SendTransaction:
             tx_request: MPTxRequest = mp_request
             return await self._schedule_mp_tx_request(tx_request)

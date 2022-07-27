@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import List, Tuple, Set
 
+import logged_groups
 from solana.transaction import Transaction
 from solana.message import Message
 from solana.publickey import PublicKey
@@ -15,6 +16,7 @@ from ..common_neon.solana_interactor import AddressLookupTableAccountInfo
 ADDRESS_LOOKUP_TABLE_ID: PublicKey = PublicKey('AddressLookupTab1e1111111111111111111111111')
 
 
+@logged_groups.logged_group("neon.MemPool")
 class AddressLookupTableInfo:
     def __init__(self, table_account: PublicKey, recent_block_slot: int, nonce: int):
         self._table_acct = table_account
@@ -77,10 +79,8 @@ class AddressLookupTableInfo:
             raise AddressLookupTableError(f'The lookup table {str(self._table_acct)} has duplicates')
 
         if str(self._table_acct) != str(alt_acct_info.table_account):
-            raise AddressLookupTableError(
-                'Trying to update account list from another lookup table: ' +
-                f'{str(self._table_acct)} != {str(alt_acct_info.table_account)}'
-            )
+            raise AddressLookupTableError('Trying to update account list from another lookup table: ' +
+                                          f'{str(self._table_acct)} != {str(alt_acct_info.table_account)}')
 
         if not len(self._acct_key_list):
             # Init from the scratch
@@ -100,3 +100,4 @@ class AddressLookupTableInfo:
     def update_from_account(self, alt_account_info: AddressLookupTableAccountInfo) -> None:
         self._validate_alt_info(alt_account_info)
         self._acct_key_list = alt_account_info.account_key_list
+        self.debug(f"Update from account: {self._acct_key_list},\n\n\n{self._acct_key_set}")

@@ -1,11 +1,15 @@
+import time
 import unittest
 import os
 import json
-
+from typing import List
 import eth_utils
+from logged_groups import logged_group
 from web3 import Web3
-from .testing_helpers import request_airdrop
 from solcx import compile_source
+from web3.types import TxReceipt
+
+from .testing_helpers import create_account, create_signer_account, request_airdrop, SolidityContractDeployer, test_timeout
 
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
@@ -81,7 +85,7 @@ contract test_185 {
 }
 '''
 
-
+@logged_group("neon.TestCases")
 class Test_eth_sendRawTransaction(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -547,6 +551,77 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             print('message:', response['message'])
             message = 'insufficient funds for transfer'
             self.assertEqual(response['message'][:len(message)], message)
+
+
+@logged_group("neon.TestCases")
+class TestDistributorContract(unittest.TestCase):
+
+    WAITING_RECEIPTS_TIMEOUT_SEC = 7
+    WAITING_SINGLE_RECEIPT_TIMEOUT_SEC = 3
+
+    def setUp(self) -> None:
+        signer = create_signer_account()
+        self.contract, self.web3 = self.deploy_distributor_contract(signer)
+
+    def test_processing_24_trx_simulaneously(self):
+
+        signer = create_signer_account()
+        wallets = self.generate_wallets()
+        self._set_and_check_distributor_addresses(wallets, signer, self.contract, self.web3, 0)
+
+    def test_distribute_tx_affects_24_accounts(self):
+        contract, web3 = self.contract, self.web3
+        signer = create_signer_account()
+
+        wallets = self.generate_wallets()
+
+        self._set_and_check_distributor_addresses(wallets, signer, contract, web3, 0.7)
+
+        distribute_value_fn = contract.functions.distribute_value()
+        nonce = web3.eth.get_transaction_count(signer.address)
+        tx_built = distribute_value_fn.buildTransaction({"nonce": nonce})
+        tx_built["value"] = 12
+        distribute_fn_msg = signer.sign_transaction(tx_built)
+        self.debug(f"Send `distribute_value_fn()` tx with nonce: {nonce}, ")
+        tx_hash = web3.eth.send_raw_transaction(distribute_fn_msg.rawTransaction)
+        with test_timeout(2):
+            self.debug(f"Wait for `distribute_value_fn` receipt by hash: {tx_hash.hex()}")
+            tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+    def _set_and_check_distributor_addresses(self, wallets, signer, contract, web3, inter_tx_timeout=0):
+        tx_hashes: List[TxReceipt] = []
+        for name, account in wallets.items():
+            set_address_fn = contract.functions.set_address(name, bytes.fromhex(account.address[2:]))
+            nonce = web3.eth.get_transaction_count(signer.address, "pending")
+            set_address_fn_tx_built = set_address_fn.buildTransaction({"nonce": nonce})
+            self.debug(f"Send `set_address_fn(\"{name}\", {account.address[2:]}` tx with nonce: {nonce}, ")
+            set_address_msg = signer.sign_transaction(set_address_fn_tx_built)
+            tx_hash = web3.eth.send_raw_transaction(set_address_msg.rawTransaction)
+            tx_hashes.append(tx_hash)
+        #     time.sleep(inter_tx_timeout)
+        #
+        # for tx_hash in tx_hashes:
+            with test_timeout(self.WAITING_SINGLE_RECEIPT_TIMEOUT_SEC):
+                self.debug(f"Wait for `set_address_fn` receipt by hash: {tx_hash.hex()}")
+                tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+                self.assertIsNotNone(tx_hash)
+                self.assertEqual(tx_receipt.status, 1)
+
+    @staticmethod
+    def generate_wallets():
+        names = ["falaleev",
+                  "rozhkov", "lygin", "loboda", "trepalin", "borisenko", "begisheva", "taktasheva",
+                  "seleznev", "kondratiev", "suharev", "yurchenko", "miroshnichenko"
+                 ]#, "gurieva", "goldshtein",
+                 # "suvorova", "medvedev", "kurkovich", "zaznobin", "garshina", "titushkina", "zee", "frane", "julius"]
+        wallets = {name: create_account() for name in names}
+        return wallets
+
+    def deploy_distributor_contract(self, signer):
+        deployer = SolidityContractDeployer()
+        web3 = deployer.web3
+        contract = deployer.from_file("./proxy/testing/solidity_contracts/NeonDistributor.sol", signer)
+        return contract, web3
 
 
 if __name__ == '__main__':

@@ -648,6 +648,8 @@ class SolanaInteractor:
                 tx.signatures.clear()
             if not tx.signatures:
                 tx.sign(signer)
+            # msg = tx.serialize_message()
+            # self.debug(f"About to send msg: {len(msg)}")
             base64_tx = base64.b64encode(tx.serialize()).decode('utf-8')
             request_list.append((base64_tx, opts))
 

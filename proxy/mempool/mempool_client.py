@@ -5,7 +5,8 @@ from logged_groups import logged_group
 
 from .mempool_api import MPTxRequest, MPPendingTxCountReq
 
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.utils import AddrPickableDataClient
 
 
@@ -61,8 +62,8 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def send_raw_transaction(self, req_id: int, signature: str, neon_tx: NeonTx):
-        mempool_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx)
+    def send_raw_transaction(self, req_id: int, signature: str, neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg):
+        mempool_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg)
         return self._pickable_data_client.send_data(mempool_tx_request)
 
     @_guard_conn
