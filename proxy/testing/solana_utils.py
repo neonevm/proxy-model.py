@@ -397,7 +397,7 @@ class EvmLoader:
         else:
             return program, ether
 
-    def createEtherAccountTrx(self, ether: Union[str, bytes], code_size: int = 0) -> Tuple[Transaction, str]:
+    def createEtherAccountTrx(self, ether: Union[str, bytes]) -> Tuple[Transaction, str]:
         if isinstance(ether, str):
             if ether.startswith('0x'):
                 ether = ether[2:]
@@ -408,7 +408,7 @@ class EvmLoader:
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
 
         base = self.acc.get_acc().public_key()
-        data = create_account_layout(bytes.fromhex(ether), nonce, code_size)
+        data = create_account_layout(bytes.fromhex(ether), nonce)
         trx = TransactionWithComputeBudget()
         trx.add(TransactionInstruction(
             program_id=self.loader_id,

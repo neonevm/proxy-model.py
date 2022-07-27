@@ -34,11 +34,10 @@ def create_account_with_seed_layout(base, seed, lamports, space):
     )
 
 
-def create_account_layout(ether: bytes, nonce: int, code_size: int = 0):
-    return bytes.fromhex("1E") + CREATE_ACCOUNT_LAYOUT.build(dict(
+def create_account_layout(ether: bytes, nonce: int):
+    return bytes.fromhex("18") + CREATE_ACCOUNT_LAYOUT.build(dict(
         ether=ether,
         nonce=nonce,
-        code_size=code_size
     ))
 
 
