@@ -70,7 +70,7 @@ class SolTxListSender:
         return [tx for lst in self._all_tx_list for tx in lst]
 
     def send(self, name: str, tx_list: List[Transaction],
-             skip_preflight=SKIP_PREFLIGHT, preflight_commitment='confirmed',
+             skip_preflight=SKIP_PREFLIGHT, preflight_commitment='processed',
              waiter: Optional[IConfirmWaiter] = None) -> SolTxListSender:
         self.debug(f'start transactions sending: {name.strip(" +")}')
 
