@@ -223,7 +223,6 @@ class BaseNeonTxStrategy(abc.ABC):
     def build_cancel_tx(self) -> Transaction:
         return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
 
-    @abc.abstractmethod
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
         tx_list_name = self._account_tx_list_builder.name
         tx_list = self._account_tx_list_builder.get_tx_list()
