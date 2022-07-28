@@ -6,7 +6,7 @@ from logged_groups import logged_group
 from .mempool_api import MPTxRequest, MPPendingTxCountReq
 
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.utils import AddrPickableDataClient
 
 

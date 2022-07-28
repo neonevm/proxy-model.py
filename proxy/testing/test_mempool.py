@@ -14,11 +14,9 @@ from unittest.mock import patch, MagicMock, call
 
 
 from ..mempool.mempool import MemPool, IMPExecutor
-from ..mempool.mempool_api import MPRequest, MPTxRequest
+from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxResult, MPResultCode
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
-from ..common_neon.eth_proto import Trx as NeonTx
-
-from ..mempool.mempool_api import MPTxResult, MPResultCode
+from ..common_neon.eth_proto import NeonTx
 
 
 def create_account() -> Account:

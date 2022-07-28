@@ -15,7 +15,7 @@ from ..common_neon.config import IConfig
 from ..common_neon.utils import PipePickableDataSrv, IPickableDataServerUser, Any
 from ..common_neon.config import Config
 from ..memdb.memdb import MemDB
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 
 from .transaction_sender import NeonTxSendStrategySelector, IStrategySelectorUser
 from .operator_resource_list import OperatorResourceList
