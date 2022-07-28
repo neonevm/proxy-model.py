@@ -41,7 +41,6 @@ from .operator_resource_list import OperatorResourceInfo
 
 @logged_group("neon.MemPool")
 class AccountTxListBuilder:
-
     def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder):
         self._solana = solana
         self._builder = builder
@@ -224,16 +223,17 @@ class BaseNeonTxStrategy(abc.ABC):
     def build_cancel_tx(self) -> Transaction:
         return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
 
+    @abc.abstractmethod
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
         tx_list_name = self._account_tx_list_builder.name
-        acc_tx_list = self._account_tx_list_builder.get_tx_list()
+        tx_list = self._account_tx_list_builder.get_tx_list()
 
         alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
         if len(alt_tx_list):
-            acc_tx_list.extend(alt_tx_list)
+            tx_list.extend(alt_tx_list)
             tx_list_name = ' + '.join([tx_list_name, f'CloseLookupTable({len(alt_tx_list)})'])
 
-        return tx_list_name, acc_tx_list
+        return tx_list_name, tx_list
 
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
         tx_list_name, tx_list = self._build_prep_tx_list()
@@ -395,6 +395,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
     def _on_success_send(self, tx: Transaction, receipt: {}):
         if self._is_canceled:
+            # Transaction with cancel is confirmed
             self.neon_res.canceled(receipt)
         else:
             super()._on_success_send(tx, receipt)
@@ -547,7 +548,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
     def execute(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
         assert self.is_valid()
         self._execute_writting_holder(waiter)
-        self.debug("Holder account has been written, reemulating")
+        self.debug(f"Transaction saved in holder account, updating accounts")
         self._user.update_tx_accounts_data(self._ctx.eth_tx, self._neon_tx_exec_cfg.accounts_data)
         self._execute_prep_tx_list(waiter)
         return self._execute_tx_list(waiter)
@@ -609,16 +610,6 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
             self._build_alt_info() and
             self._validate_tx_size()
         )
-
-    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        tx_list_name, tx_list = super()._build_prep_tx_list()
-
-        alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
-        if len(alt_tx_list):
-            tx_list.extend(alt_tx_list)
-            tx_list_name = ' + '.join([tx_list_name, f'CloseLookupTable({len(alt_tx_list)})'])
-
-        return tx_list_name, tx_list
 
     def _build_legacy_tx(self, idx=0) -> Transaction:
         return super().build_tx(idx)
@@ -751,7 +742,7 @@ class NeonTxSendStrategySelector(IConfirmWaiter, IStrategyUser):
 
     def execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
         self._validate_pend_tx()
-        self._ctx.account_tx_list_builder.build_tx(neon_tx_exec_cfg.accounts_data) # TODO: move it from here
+        self._ctx.account_tx_list_builder.build_tx(neon_tx_exec_cfg.accounts_data)
         return self._execute(neon_tx_exec_cfg)
 
     def _validate_pend_tx(self) -> None:
