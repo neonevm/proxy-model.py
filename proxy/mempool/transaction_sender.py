@@ -135,8 +135,6 @@ class NeonTxSendCtx:
         self._solana = solana
         self._resource = resource
         self._builder = NeonIxBuilder(resource.public_key)
-        self._account_tx_list_builder = AccountTxListBuilder(solana, self._builder)
-
         self._builder.init_operator_ether(self._resource.ether)
         self._builder.init_eth_tx(self._eth_tx)
         self._builder.init_iterative(self._resource.storage, self._resource.holder, self._resource.rid)
@@ -156,16 +154,8 @@ class NeonTxSendCtx:
         return self._resource
 
     @property
-    def builder(self) -> NeonIxBuilder:
-        return self._builder
-
-    @property
     def solana(self) -> SolanaInteractor:
         return self._solana
-
-    @property
-    def account_tx_list_builder(self) -> AccountTxListBuilder:
-        return self._account_tx_list_builder
 
     @property
     def alt_close_queue(self) -> AddressLookupTableCloseQueue:
@@ -176,17 +166,15 @@ class NeonTxSendCtx:
 class BaseNeonTxStrategy(abc.ABC):
     NAME = 'UNKNOWN STRATEGY'
 
-    def __init__(self, user: IStrategyUser, neon_tx_exec_cfg: NeonTxExecCfg, ctx: NeonTxSendCtx):
-        self._user: IStrategyUser = user
+    def __init__(self, user: INeonTxStrategyUser, neon_tx_exec_cfg: NeonTxExecCfg, ctx: NeonTxSendCtx):
+        self._user: INeonTxStrategyUser = user
         self._neon_tx_exec_cfg = neon_tx_exec_cfg
         self._error_msg: Optional[str] = None
         self._ctx = ctx
         self._iter_evm_step_cnt = EVM_STEP_COUNT
         self._is_valid = self._validate()
 
-    @property
-    def _account_tx_list_builder(self) -> AccountTxListBuilder:
-        return self._ctx.account_tx_list_builder
+        self._account_tx_list_builder = AccountTxListBuilder(ctx.solana, self._builder)
 
     @property
     def _alt_close_queue(self) -> AddressLookupTableCloseQueue:
@@ -194,7 +182,7 @@ class BaseNeonTxStrategy(abc.ABC):
 
     @property
     def _builder(self) -> NeonIxBuilder:
-        return self._ctx.builder
+        return self._ctx._builder
 
     @property
     def _solana(self) -> SolanaInteractor:
@@ -224,7 +212,7 @@ class BaseNeonTxStrategy(abc.ABC):
         return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        self._ctx.account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.accounts_data)
+        self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.accounts_data)
         tx_list_name = self._account_tx_list_builder.name
         tx_list = self._account_tx_list_builder.get_tx_list()
 
@@ -703,7 +691,7 @@ class IStrategySelectorUser(abc.ABC):
         assert False, "Not implemented"
 
 
-class IStrategyUser(abc.ABC):
+class INeonTxStrategyUser(abc.ABC):
 
     @abc.abstractmethod
     def update_tx_accounts_data(self, neon_tx: NeonTx, accounts_data: NeonAccountsData):
@@ -711,7 +699,7 @@ class IStrategyUser(abc.ABC):
 
 
 @logged_group("neon.Proxy")
-class NeonTxSendStrategySelector(IConfirmWaiter, IStrategyUser):
+class NeonTxSendStrategySelector(IConfirmWaiter, INeonTxStrategyUser):
     STRATEGY_LIST = [
         SimpleNeonTxStrategy,
         IterativeNeonTxStrategy, HolderNeonTxStrategy, AltHolderNeonTxStrategy,
