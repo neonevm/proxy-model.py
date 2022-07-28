@@ -224,6 +224,7 @@ class BaseNeonTxStrategy(abc.ABC):
         return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
+        self._ctx.account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.accounts_data)
         tx_list_name = self._account_tx_list_builder.name
         tx_list = self._account_tx_list_builder.get_tx_list()
 
@@ -737,7 +738,6 @@ class NeonTxSendStrategySelector(IConfirmWaiter, IStrategyUser):
 
     def execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
         self._validate_pend_tx()
-        self._ctx.account_tx_list_builder.build_tx(neon_tx_exec_cfg.accounts_data)
         return self._execute(neon_tx_exec_cfg)
 
     def _validate_pend_tx(self) -> None:
