@@ -590,10 +590,6 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
             cnt += 1
         return f'WriteWithHolder({cnt})', tx_list
 
-    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        tx_list_name, tx_list = super()._build_prep_tx_list()
-        return tx_list_name, tx_list
-
 
 class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
     NAME = 'AltExecuteTrxFromAccountDataIterativeOrContinue'
