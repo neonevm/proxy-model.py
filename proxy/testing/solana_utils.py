@@ -14,7 +14,6 @@ from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
 from solana.account import Account
-from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
@@ -344,7 +343,7 @@ class EvmLoader:
 
         trx = TransactionWithComputeBudget()
         self.createAirdropNeonTokensInstructions(trx, user_ether_address, amount)
-        result = send_transaction(client, trx, Keypair.from_secret_key(operator.secret_key()))
+        result = send_transaction(client, trx, Account(operator.secret_key()))
         print("Airdrop transaction: ", result)
 
     def deploy(self, contract_path, config=None):
