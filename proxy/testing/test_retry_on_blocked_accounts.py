@@ -108,7 +108,7 @@ class BlockedTest(unittest.TestCase):
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
-            _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.loader.airdropNeonTokens(cls.caller_ether, 0)
             print("Done\n")
         # cls.token.transfer(NEON_TOKEN_MINT, 2000, cls.caller_token)
 

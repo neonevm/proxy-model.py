@@ -14,21 +14,17 @@ from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
 from solana.account import Account
+from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
+from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 
 from proxy.common_neon.neon_instruction import create_account_layout
-
-CREATE_ACCOUNT_LAYOUT = cStruct(
-    "ether" / Bytes(20),
-    "nonce" / Int8ul,
-    "code_size" / Int32ul
-)
 
 system = "11111111111111111111111111111111"
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
@@ -305,7 +301,7 @@ class EvmLoader:
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
 
-    def airdropNeonTokens(self, user_ether_address: Union[str, bytes], amount: int) -> None:
+    def createAirdropNeonTokensInstructions(self, trx: Transaction, user_ether_address: Union[str, bytes], amount: int):
         operator = self.acc.get_acc()
 
         (neon_evm_authority, _) = PublicKey.find_program_address([b"Deposit"], PublicKey(self.loader_id))
@@ -313,38 +309,47 @@ class EvmLoader:
         source_token_account = get_associated_token_address(operator.public_key(), ETH_TOKEN_MINT_ID)
         (user_solana_address, _) = self.ether2program(user_ether_address)
 
-        pool_account_exists = client.get_account_info(pool_token_account, commitment="processed")["result"][
-                                  "value"] is not None
-        print("Pool Account Exists: ", pool_account_exists)
+        if amount > 0:
+            pool_account_exists = client.get_account_info(
+                pool_token_account, commitment="processed"
+            )["result"]["value"] is not None
+            print("Pool Account Exists: ", pool_account_exists)
 
-        trx = TransactionWithComputeBudget()
-        if not pool_account_exists:
-            trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, ETH_TOKEN_MINT_ID))
+            if not pool_account_exists:
+                trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, ETH_TOKEN_MINT_ID))
 
-        trx.add(approve(ApproveParams(
-            program_id=TOKEN_PROGRAM_ID,
-            source=source_token_account,
-            delegate=neon_evm_authority,
-            owner=operator.public_key(),
-            amount=amount * (10 ** 9),
-        )))
+            trx.add(approve(ApproveParams(
+                program_id=TOKEN_PROGRAM_ID,
+                source=source_token_account,
+                delegate=neon_evm_authority,
+                owner=operator.public_key(),
+                amount=amount * (10 ** 9),
+            )))
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
-            data=bytes.fromhex("19"),
+            data=bytes.fromhex("1e") + self.ether2bytes(user_ether_address),
             keys=[
                 AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=user_solana_address, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=PublicKey(user_solana_address), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=neon_evm_authority, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=operator.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
             ]
         ))
-        result = send_transaction(client, trx, operator)
+
+    def airdropNeonTokens(self, user_ether_address: Union[str, bytes], amount: int) -> None:
+        operator = self.acc.get_acc()
+
+        trx = TransactionWithComputeBudget()
+        self.createAirdropNeonTokensInstructions(trx, user_ether_address, amount)
+        result = send_transaction(client, trx, Keypair.from_secret_key(operator.secret_key()))
         print("Airdrop transaction: ", result)
 
     def deploy(self, contract_path, config=None):
         print('deploy contract')
-        if config == None:
+        if config is None:
             output = neon_cli().call("deploy --evm_loader {} {}".format(self.loader_id, contract_path))
         else:
             output = neon_cli().call("deploy --evm_loader {} --config {} {}".format(self.loader_id, config,
@@ -353,29 +358,31 @@ class EvmLoader:
         result = json.loads(output.splitlines()[-1])
         return result
 
-    def createEtherAccount(self, ether):
-        (trx, sol) = self.createEtherAccountTrx(ether)
-        result = send_transaction(client, trx, self.acc.get_acc())
-        print('result:', result)
-        return sol
-
-    def ether2seed(self, ether):
-        if isinstance(ether, str):
-            if ether.startswith('0x'): ether = ether[2:]
-        else:
-            ether = ether.hex()
-        seed = b58encode(ACCOUNT_SEED_VERSION + bytes.fromhex(ether)).decode('utf8')
-        acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
-        print('ether2program: {} {} => {}'.format(ether, 255, acc))
-        return acc, 255
-
-    def ether2program(self, ether):
+    @staticmethod
+    def ether2hex(ether: Union[str, bytes]):
         if isinstance(ether, str):
             if ether.startswith('0x'):
-                ether = ether[2:]
-        else:
-            ether = ether.hex()
-        output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, ether))
+                return ether[2:]
+            return ether
+        return ether.hex()
+
+    @staticmethod
+    def ether2bytes(ether: Union[str, bytes]):
+        if isinstance(ether, str):
+            if ether.startswith('0x'):
+                return bytes.fromhex(ether[2:])
+            return bytes.fromhex(ether)
+        return ether
+
+    def ether2seed(self, ether: Union[str, bytes]):
+        seed = b58encode(ACCOUNT_SEED_VERSION + self.ether2bytes(ether)).decode('utf8')
+        acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
+        print('ether2program: {} {} => {}'.format(self.ether2hex(ether), 255, acc))
+        return acc, 255
+
+    def ether2program(self, ether: Union[str, bytes]):
+        output = neon_cli().call(
+            "create-program-address --evm_loader {} {}".format(self.loader_id, self.ether2hex(ether)))
         items = output.rstrip().split(' ')
         return items[0], int(items[1])
 
@@ -396,29 +403,6 @@ class EvmLoader:
             raise Exception("Invalid owner for account {}".format(program))
         else:
             return program, ether
-
-    def createEtherAccountTrx(self, ether: Union[str, bytes]) -> Tuple[Transaction, str]:
-        if isinstance(ether, str):
-            if ether.startswith('0x'):
-                ether = ether[2:]
-        else:
-            ether = ether.hex()
-
-        (sol, nonce) = self.ether2program(ether)
-        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
-
-        base = self.acc.get_acc().public_key()
-        data = create_account_layout(bytes.fromhex(ether), nonce)
-        trx = TransactionWithComputeBudget()
-        trx.add(TransactionInstruction(
-            program_id=self.loader_id,
-            data=data,
-            keys=[
-                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-            ]))
-        return trx, sol
 
 
 def getBalance(account):
