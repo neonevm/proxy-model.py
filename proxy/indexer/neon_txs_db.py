@@ -79,3 +79,11 @@ class NeonTxsDB(BaseDB):
             return []
 
         return [self._tx_from_value(v) for v in value_list if v is not None]
+
+    def get_tx_by_block_slot_tx_idx(self, block_slot: int, tx_idx: int) -> Optional[NeonTxReceiptInfo]:
+        return self._tx_from_value(
+            self._fetchone(DBQuery(
+                key_list=[('block_slot', block_slot), ('tx_idx', tx_idx)],
+                order_list=[],
+            ))
+        )

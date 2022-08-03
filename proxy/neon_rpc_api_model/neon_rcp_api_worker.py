@@ -10,7 +10,7 @@ from logged_groups import logged_group, LogMng
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
-from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
+from ..common_neon.emulator_interactor import call_emulated
 from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import Trx as EthTrx
@@ -23,7 +23,7 @@ from ..common_neon.environment_utils import neon_cli
 from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED, \
                                            PYTH_MAPPING_ACCOUNT
 from ..common_neon.transaction_validator import NeonTxValidator, NeonTxExecCfg
-from ..memdb.memdb import MemDB
+from ..indexer.indexer_db import IndexerDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..mempool import MemPoolClient, MP_SERVICE_HOST, MP_SERVICE_PORT
 
@@ -47,7 +47,7 @@ class NeonRpcApiWorker:
 
     def __init__(self):
         self._solana = SolanaInteractor(SOLANA_URL)
-        self._db = MemDB(self._solana)
+        self._db = IndexerDB()
         self._stat_exporter: Optional[StatisticsExporter] = None
         self._mempool_client = MemPoolClient(MP_SERVICE_HOST, MP_SERVICE_PORT)
 
@@ -258,7 +258,7 @@ class NeonRpcApiWorker:
         if skip_transaction:
             tx_list = []
         else:
-            tx_list = self._db.get_tx_list_by_block_slot(block.is_finalized, block.slot)
+            tx_list = self._db.get_tx_list_by_block_slot(block.slot)
 
         for tx in tx_list:
             gas_used += int(tx.neon_res.gas_used, 16)
@@ -424,8 +424,8 @@ class NeonRpcApiWorker:
 
         return result
 
-    def eth_getTransactionReceipt(self, NeonTxId: str) -> Optional[dict]:
-        neon_sign = self._normalize_tx_id(NeonTxId)
+    def eth_getTransactionReceipt(self, neon_tx_sign: str) -> Optional[dict]:
+        neon_sign = self._normalize_tx_id(neon_tx_sign)
 
         tx = self._db.get_tx_by_neon_sign(neon_sign)
         if not tx:
@@ -458,8 +458,8 @@ class NeonRpcApiWorker:
 
         return result
 
-    def eth_getTransactionByHash(self, NeonTxId: str) -> Optional[dict]:
-        neon_sign = self._normalize_tx_id(NeonTxId)
+    def eth_getTransactionByHash(self, neon_tx_sign: str) -> Optional[dict]:
+        neon_sign = self._normalize_tx_id(neon_tx_sign)
 
         tx = self._db.get_tx_by_neon_sign(neon_sign)
         if tx is None:
@@ -531,11 +531,7 @@ class NeonRpcApiWorker:
                 self.debug(f"Not found block by slot {block.slot}")
                 return None
 
-        tx_list = self._db.get_tx_list_by_block_slot(block.is_finalized, block.slot)
-        if tx_idx >= len(tx_list):
-            return None
-
-        return self._get_transaction(tx_list[tx_idx])
+        return self._db.get_tx_by_block_slot_tx_idx(block.slot, tx_idx)
 
     def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[dict]:
         block = self._process_block_tag(tag)
@@ -561,7 +557,7 @@ class NeonRpcApiWorker:
                 self.debug(f"Not found block by slot {block.slot}")
                 return hex(0)
 
-        tx_list = self._db.get_tx_list_by_block_slot(block.is_finalized, block.slot)
+        tx_list = self._db.get_tx_list_by_block_slot(block.slot)
         return hex(len(tx_list))
 
     def eth_getBlockTransactionCountByNumber(self, tag: str) -> str:
@@ -569,7 +565,7 @@ class NeonRpcApiWorker:
         if block.is_empty():
             return hex(0)
 
-        tx_list = self._db.get_tx_list_by_block_slot(block.is_finalized, block.slot)
+        tx_list = self._db.get_tx_list_by_block_slot(block.slot)
         return hex(len(tx_list))
 
     @staticmethod

@@ -22,7 +22,7 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_tx_list_sender import BlockedAccountsError, SolTxListSender, IConfirmWaiter
 from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.eth_proto import Trx as EthTx
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
+from ..common_neon.utils import NeonTxResultInfo
 from ..common_neon.errors import EthereumError
 from ..common_neon.data import NeonTxExecCfg, NeonAccountsData
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
@@ -35,7 +35,9 @@ from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from ..common_neon.solana_v0_transaction import V0Transaction
 from ..common_neon.eth_proto import Trx as NeonTx
 
-from ..memdb.memdb import MemDB, NeonPendingTxInfo
+from ..memdb.pending_tx_db import NeonPendingTxInfo, MemPendingTxsDB
+from ..common_neon.utils import get_holder_msg
+from ..indexer.indexer_db import IndexerDB
 
 
 def extend_named_tx_list(first: NamedTxList, second: NamedTxList) -> NamedTxList:

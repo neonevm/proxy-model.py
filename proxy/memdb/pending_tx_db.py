@@ -44,8 +44,8 @@ class MemPendingTxsDB:
         if self._pending_slot.value > tx.slot:
             self._pending_slot.value = tx.slot
 
-    def _rm_finalized_txs(self, before_slot: int):
-        if self._pending_slot.value > before_slot:
+    def _rm_finalized_txs(self, finalized_block_slot: int):
+        if self._pending_slot.value > finalized_block_slot:
             return
 
         rm_sign_list = []
@@ -53,7 +53,7 @@ class MemPendingTxsDB:
 
         # Filter tx by slot
         for sign, slot in self._pending_slot_by_hash.items():
-            if slot < before_slot:
+            if slot < finalized_block_slot:
                 rm_sign_list.append(sign)
             elif pending_slot > slot:
                 pending_slot = slot
@@ -65,18 +65,15 @@ class MemPendingTxsDB:
             del self._pending_tx_by_hash[sign]
             del self._pending_slot_by_hash[sign]
 
-    def is_exist(self, neon_sign: str, before_slot) -> bool:
-        with self._pending_slot.get_lock():
-            self._rm_finalized_txs(before_slot)
-            return neon_sign in self._pending_tx_by_hash
+    def pend_transaction(self, tx: NeonPendingTxInfo):
+        finalized_block_slot = self._db.get_finalized_block_slot()
 
-    def pend_transaction(self, tx: NeonPendingTxInfo, before_slot: int):
         executed_tx = self._db.get_tx_by_neon_sign(tx.neon_sign)
         if executed_tx:
             raise PendingTxError(f'Transaction {tx.neon_sign} is already executed')
 
         with self._pending_slot.get_lock():
-            self._rm_finalized_txs(before_slot)
+            self._rm_finalized_txs(finalized_block_slot)
 
             pended_data = self._pending_tx_by_hash.get(tx.neon_sign)
             if not pended_data:
