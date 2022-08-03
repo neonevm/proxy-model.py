@@ -8,7 +8,7 @@ class SolNeonTxsDB(BaseDB):
     def __init__(self):
         super().__init__('solana_neon_transactions')
         self._column_list = [
-            'sol_sign', 'block_slot', 'idx', 'inner_idx', 'neon_sign', 'neon_step_cnt',
+            'sol_sig', 'block_slot', 'idx', 'inner_idx', 'neon_sig', 'neon_step_cnt',
             'neon_income', 'heap_size', 'max_bpf_cycle_cnt', 'used_bpf_cycle_cnt'
         ]
 
@@ -21,23 +21,23 @@ class SolNeonTxsDB(BaseDB):
                 for idx, column in enumerate(self._column_list):
                     if hasattr(ix, column):
                         value_list.append(getattr(ix, column))
-                    elif column == 'neon_sign':
-                        value_list.append(tx.neon_tx.sign)
+                    elif column == 'neon_sig':
+                        value_list.append(tx.neon_tx.sig)
                     else:
                         raise RuntimeError(f'Wrong usage {self._table_name}: {idx} -> {column}!')
                 value_list_list.append(value_list)
 
         self._insert_batch(cursor, value_list_list)
 
-    def get_sol_sign_list_by_neon_sign(self, neon_sign: str) -> List[str]:
+    def get_sol_sig_list_by_neon_sig(self, neon_sig: str) -> List[str]:
         request = f'''
-            SELECT DISTINCT sol_sign
+            SELECT DISTINCT sol_sig
                        FROM {self._table_name} AS a
-                      WHERE neon_sign = %s
+                      WHERE neon_sig = %s
         '''
 
         with self._conn.cursor() as cursor:
-            cursor.execute(request, [neon_sign])
+            cursor.execute(request, [neon_sig])
             row_list = cursor.fetchall()
 
         if not row_list:

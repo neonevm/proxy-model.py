@@ -2,10 +2,7 @@ import os
 import time
 import traceback
 from logged_groups import logged_group
-from typing import List, Optional, Tuple
 
-from .trx_receipts_storage import TxReceiptsStorage
-from .utils import MetricsToLogBuff
 from ..common_neon.solana_interactor import SolanaInteractor
 
 from ..common_neon.environment_data import FINALIZED

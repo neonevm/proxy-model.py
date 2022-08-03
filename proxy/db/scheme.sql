@@ -58,12 +58,12 @@
     CREATE INDEX IF NOt EXISTS neon_transaction_logs_block_slot ON neon_transaction_logs(block_slot);
 
     CREATE TABLE IF NOT EXISTS solana_neon_transactions (
-        sol_sign CHAR(88),
+        sol_sig CHAR(88),
         block_slot BIGINT,
         idx INT,
         inner_idx INT,
 
-        neon_sign CHAR(66),
+        neon_sig CHAR(66),
 
         neon_step_cnt INT,
         neon_income INT,
@@ -73,15 +73,15 @@
         max_bpf_cycle_cnt INT,
         used_bpf_cycle_cnt INT
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS solana_neon_transactions_neon_sol_idx_inner ON solana_neon_transactions(sol_sign, block_slot, idx, inner_idx);
-    CREATE INDEX IF NOT EXISTS solana_neon_transactions_neon_sign ON solana_neon_transactions(neon_sign, block_slot);
+    CREATE UNIQUE INDEX IF NOT EXISTS solana_neon_transactions_neon_sol_idx_inner ON solana_neon_transactions(sol_sig, block_slot, idx, inner_idx);
+    CREATE INDEX IF NOT EXISTS solana_neon_transactions_neon_sig ON solana_neon_transactions(neon_sig, block_slot);
     CREATE INDEX IF NOT EXISTS solana_neon_transactions_neon_block ON solana_neon_transactions(block_slot);
 
     CREATE TABLE IF NOT EXISTS neon_transactions (
-        neon_sign CHAR(66),
+        neon_sig CHAR(66),
         from_addr CHAR(42),
 
-        sol_sign CHAR(88),
+        sol_sig CHAR(88),
         sol_ix_idx INT,
         sol_ix_inner_idx INT,
         block_slot BIGINT,
@@ -107,18 +107,18 @@
         calldata TEXT,
         logs BYTEA
     );
-    CREATE INDEX IF NOT EXISTS neon_transactions_sol_sign_block ON neon_transactions(sol_sign, block_slot);
-    CREATE UNIQUE INDEX IF NOT EXISTS neon_transactions_neon_sign_block ON neon_transactions(neon_sign, block_slot);
+    CREATE INDEX IF NOT EXISTS neon_transactions_sol_sig_block ON neon_transactions(sol_sig, block_slot);
+    CREATE UNIQUE INDEX IF NOT EXISTS neon_transactions_neon_sig_block ON neon_transactions(neon_sig, block_slot);
     CREATE INDEX IF NOT EXISTS neon_transactions_block_slot_tx_idx ON neon_transactions(block_slot, tx_idx);
 
     CREATE TABLE IF NOT EXISTS solana_transaction_costs (
-        sol_sign CHAR(88),
+        sol_sig CHAR(88),
         block_slot BIGINT,
 
         operator CHAR(50),
         sol_spent INT
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS solana_transaction_costs_sign ON solana_transaction_costs(sol_sign, block_slot);
+    CREATE UNIQUE INDEX IF NOT EXISTS solana_transaction_costs_sign ON solana_transaction_costs(sol_sig, block_slot);
     CREATE INDEX IF NOT EXISTS solana_transaction_costs_slot ON solana_transaction_costs(block_slot);
     CREATE INDEX IF NOT EXISTS solana_transaction_costs_operator ON solana_transaction_costs(operator, block_slot);
 

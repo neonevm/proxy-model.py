@@ -99,14 +99,14 @@ class StorageAccountInfo(NamedTuple):
     nonce: int
     gas_limit: int
     gas_price: int
-    slot: int
+    block_slot: int
     operator: PublicKey
     account_list_len: int
     executor_data_size: int
     evm_data_size: int
     gas_used_and_paid: int
     number_of_payments: int
-    sign: bytes
+    sig: bytes
     account_list: List[Tuple[bool, str]]
 
     @staticmethod
@@ -131,14 +131,14 @@ class StorageAccountInfo(NamedTuple):
             nonce=storage.nonce,
             gas_limit=int.from_bytes(storage.gas_limit, "little"),
             gas_price=int.from_bytes(storage.gas_price, "little"),
-            slot=storage.slot,
+            block_slot=storage.block_slot,
             operator=PublicKey(storage.operator),
             account_list_len=storage.account_list_len,
             executor_data_size=storage.executor_data_size,
             evm_data_size=storage.evm_data_size,
             gas_used_and_paid=int.from_bytes(storage.gas_used_and_paid, "little"),
             number_of_payments=storage.number_of_payments,
-            sign=storage.sign,
+            sig=storage.sig,
             account_list=account_list
         )
 
@@ -503,7 +503,7 @@ class SolanaInteractor:
         }
         return self._send_rpc_request("getBlocksWithLimit", last_block_slot, limit, opts)['result']
 
-    def get_block_info(self, slot: int, commitment='confirmed') -> SolanaBlockInfo:
+    def get_block_info(self, block_slot: int, commitment='confirmed') -> SolanaBlockInfo:
         opts = {
             "commitment": commitment,
             "encoding": "json",
@@ -511,15 +511,15 @@ class SolanaInteractor:
             "rewards": False
         }
 
-        response = self._send_rpc_request('getBlock', slot, opts)
+        response = self._send_rpc_request('getBlock', block_slot, opts)
         net_block = response.get('result', None)
         if not net_block:
-            return SolanaBlockInfo(slot=slot)
+            return SolanaBlockInfo(block_slot=block_slot)
 
         return SolanaBlockInfo(
-            slot=slot,
-            hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
-            time=net_block['blockTime'],
+            block_slot=block_slot,
+            block_hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
+            block_time=net_block['blockTime'],
             parent_block_slot=net_block['parentSlot']
         )
 
@@ -540,15 +540,15 @@ class SolanaInteractor:
             request_list.append((slot, opts))
 
         response_list = self._send_rpc_batch_request('getBlock', request_list)
-        for slot, response in zip(block_slot_list, response_list):
+        for block_slot, response in zip(block_slot_list, response_list):
             if (not response) or ('result' not in response):
-                block = SolanaBlockInfo(slot=slot)
+                block = SolanaBlockInfo(block_slot=block_slot)
             else:
                 net_block = response['result']
                 block = SolanaBlockInfo(
-                    slot=slot,
-                    hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
-                    time=net_block['blockTime'],
+                    block_slot=block_slot,
+                    block_hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
+                    block_time=net_block['blockTime'],
                     parent_block_slot=net_block['parentSlot']
                 )
             block_list.append(block)

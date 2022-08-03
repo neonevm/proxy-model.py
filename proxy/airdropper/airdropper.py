@@ -137,7 +137,7 @@ class Airdropper(IndexerBase):
         # Must use the same Ethereum account
         if account_keys[create_acc['accounts'][2]] != account_keys[approve['accounts'][1]]:
             return False
-        
+
         # Must use the same Operator account
         if account_keys[create_acc['accounts'][0]] != account_keys[approve['accounts'][2]]:
             return False
@@ -193,7 +193,7 @@ class Airdropper(IndexerBase):
     def process_trx_airdropper_mode(self, trx):
         if check_error(trx):
             return
-        
+
         self.debug(f"Processing transaction: {trx}")
         # helper function finding all instructions that satisfies predicate
         def find_instructions(instructions, predicate):
@@ -212,13 +212,16 @@ class Airdropper(IndexerBase):
 
             return [instruction for instruction in inner_insturctions if predicate(instruction)]
 
-        
+
         def isRequiredInstruction(instr, req_program_id, req_tag_id):
             return account_keys[instr['programIdIndex']] == req_program_id \
                 and base58.b58decode(instr['data'])[0] == req_tag_id
 
-
         account_keys = trx["transaction"]["message"]["accountKeys"]
+        lookup_keys = trx["meta"].get('loadedAddresses', None)
+        if lookup_keys is not None:
+            account_keys += lookup_keys['writable'] + lookup_keys['readonly']
+
         instructions = [(number, entry) for number, entry in enumerate(trx['transaction']['message']['instructions'])]
 
         # Finding instructions specific for airdrop.

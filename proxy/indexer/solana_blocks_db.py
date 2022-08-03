@@ -46,21 +46,20 @@ class SolBlocksDB(BaseDB):
     def _block_from_value(self, block_slot: Optional[int], value_list: Optional[List[Any]]) -> SolanaBlockInfo:
         if not value_list:
             if block_slot is None:
-                return SolanaBlockInfo(slot=0)
+                return SolanaBlockInfo(block_slot=0)
             return SolanaBlockInfo(
-                slot=block_slot,
-                hash=self._generate_fake_block_hash(block_slot),
-                time=self._generate_fake_block_time(block_slot),
+                block_slot=block_slot,
+                block_hash=self._generate_fake_block_hash(block_slot),
+                block_time=self._generate_fake_block_time(block_slot),
                 parent_block_hash=self._generate_fake_block_hash(block_slot-1),
-                is_fake=True
             )
 
         if block_slot is None:
             block_slot = value_list[0]
         return SolanaBlockInfo(
-            slot=block_slot,
-            hash=self._check_block_hash(block_slot, value_list[1]),
-            time=self._check_block_time(block_slot, value_list[2]),
+            block_slot=block_slot,
+            block_hash=self._check_block_hash(block_slot, value_list[1]),
+            block_time=self._check_block_time(block_slot, value_list[2]),
             is_finalized=value_list[4],
             parent_block_hash=self._check_block_hash(block_slot - 1, value_list[6])
         )
@@ -78,7 +77,7 @@ class SolBlocksDB(BaseDB):
 
     def get_block_by_slot(self, block_slot: int, latest_block_slot: int) -> SolanaBlockInfo:
         if block_slot > latest_block_slot:
-            return SolanaBlockInfo(slot=block_slot)
+            return SolanaBlockInfo(block_slot=block_slot)
 
         request = self._build_request() + '''
              WHERE a.block_slot = %s
@@ -92,7 +91,7 @@ class SolBlocksDB(BaseDB):
         fake_block_slot = self._get_fake_block_slot(block_hash)
         if fake_block_slot is not None:
             block = self.get_block_by_slot(fake_block_slot, latest_block_slot)
-            block.hash = block_hash  # it can be a request from an uncle history branch
+            block.set_block_hash(block_hash)  # it can be a request from an uncle history branch
             return block
 
         request = self._build_request() + '''
@@ -106,7 +105,8 @@ class SolBlocksDB(BaseDB):
         value_list_list: List[List[Any]] = []
         for block in iter_block:
             value_list_list.append([
-                block.slot, block.hash, block.time, block.parent_block_slot, block.is_finalized, block.is_finalized
+                block.block_slot, block.block_hash, block.block_time, block.parent_block_slot,
+                block.is_finalized, block.is_finalized
             ])
 
         self._insert_batch(cursor, value_list_list)

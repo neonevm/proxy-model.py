@@ -10,13 +10,13 @@ from logged_groups import logged_group, LogMng
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
-from ..common_neon.emulator_interactor import call_emulated
+from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
 from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import Trx as EthTrx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.utils import SolanaBlockInfo
+from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
@@ -130,11 +130,11 @@ class NeonRpcApiWorker:
             block = self._db.get_starting_block()
         elif isinstance(tag, str):
             try:
-                block = SolanaBlockInfo(slot=int(tag.strip(), 16))
+                block = SolanaBlockInfo(block_slot=int(tag.strip(), 16))
             except (Exception,):
                 raise InvalidParamError(message=f'failed to parse block tag: {tag}')
         elif isinstance(tag, int):
-            block = SolanaBlockInfo(slot=tag)
+            block = SolanaBlockInfo(block_slot=tag)
         else:
             raise InvalidParamError(message=f'failed to parse block tag: {tag}')
         return block
@@ -189,14 +189,14 @@ class NeonRpcApiWorker:
 
     def _get_full_block_by_number(self, tag) -> SolanaBlockInfo:
         block = self._process_block_tag(tag)
-        if block.slot is None:
+        if block.block_slot is None:
             self.debug(f"Not found block by number {tag}")
             return block
 
         if block.is_empty():
-            block = self._db.get_block_by_slot(block.slot)
+            block = self._db.get_block_by_slot(block.block_slot)
             if block.is_empty():
-                self.debug(f"Not found block by slot {block.slot}")
+                self.debug(f"Not found block by slot {block.block_slot}")
 
         return block
 
@@ -237,9 +237,9 @@ class NeonRpcApiWorker:
         block_hash = None
 
         if 'fromBlock' in obj and obj['fromBlock'] != '0':
-            from_block = self._process_block_tag(obj['fromBlock']).slot
+            from_block = self._process_block_tag(obj['fromBlock']).block_slot
         if 'toBlock' in obj and obj['toBlock'] not in ('latest', 'pending'):
-            to_block = self._process_block_tag(obj['toBlock']).slot
+            to_block = self._process_block_tag(obj['toBlock']).block_slot
         if 'address' in obj:
             addresses = to_list(obj['address'])
         if 'topics' in obj:
@@ -251,7 +251,7 @@ class NeonRpcApiWorker:
 
     def _get_block_by_slot(self, block: SolanaBlockInfo, full: bool, skip_transaction: bool) -> Optional[dict]:
         if block.is_empty():
-            block = self._db.get_block_by_slot(block.slot)
+            block = self._db.get_block_by_slot(block.block_slot)
             if block.is_empty():
                 return None
 
@@ -260,16 +260,16 @@ class NeonRpcApiWorker:
         if skip_transaction:
             tx_list = []
         else:
-            tx_list = self._db.get_tx_list_by_block_slot(block.slot)
+            tx_list = self._db.get_tx_list_by_block_slot(block.block_slot)
 
         for tx in tx_list:
-            gas_used += int(tx.neon_res.gas_used, 16)
+            gas_used += int(tx.neon_tx_res.gas_used, 16)
 
             if full:
                 receipt = self._get_transaction(tx)
                 sign_list.append(receipt)
             else:
-                sign_list.append(tx.neon_tx.sign)
+                sign_list.append(tx.neon_tx.sig)
 
         result = {
             "difficulty": '0x20000',
@@ -291,10 +291,10 @@ class NeonRpcApiWorker:
             "size": '0x' + '0' * 63 + '1',
 
             "gasUsed": hex(gas_used),
-            "hash": block.hash,
-            "number": hex(block.slot),
+            "hash": block.block_hash,
+            "number": hex(block.block_slot),
             "parentHash": block.parent_block_hash,
-            "timestamp": hex(block.time),
+            "timestamp": hex(block.block_time),
             "transactions": sign_list,
         }
         return result
@@ -326,7 +326,7 @@ class NeonRpcApiWorker:
             raise InvalidParamError(message=f'bad block hash {block_hash}')
 
         block = self._db.get_block_by_hash(block_hash)
-        if block.slot is None:
+        if block.block_slot is None:
             self.debug("Not found block by hash %s", block_hash)
 
         return block
@@ -337,7 +337,7 @@ class NeonRpcApiWorker:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block = self._get_block_by_hash(block_hash)
-        if block.slot is None:
+        if block.block_slot is None:
             return None
         ret = self._get_block_by_slot(block, full, False)
         return ret
@@ -348,7 +348,7 @@ class NeonRpcApiWorker:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block = self._process_block_tag(tag)
-        if block.slot is None:
+        if block.block_slot is None:
             self.debug(f"Not found block by number {tag}")
             return None
         ret = self._get_block_by_slot(block, full, tag in ('latest', 'pending'))
@@ -407,45 +407,43 @@ class NeonRpcApiWorker:
             return hex(0)
 
     @staticmethod
-    def _get_transaction_receipt(tx) -> dict:
+    def _get_transaction_receipt(tx: NeonTxReceiptInfo) -> dict:
         result = {
-            "transactionHash": tx.neon_tx.sign,
-            "transactionIndex": hex(tx.neon_tx.tx_idx),
+            "transactionHash": tx.neon_tx.sig,
+            "transactionIndex": hex(tx.neon_tx_res.tx_idx),
             "type": "0x0",
-            "blockHash": tx.neon_res.block_hash,
-            "blockNumber": hex(tx.neon_res.slot),
+            "blockHash": tx.neon_tx_res.block_hash,
+            "blockNumber": hex(tx.neon_tx_res.block_slot),
             "from": tx.neon_tx.addr,
             "to": tx.neon_tx.to_addr,
-            "gasUsed": tx.neon_res.gas_used,
-            "cumulativeGasUsed": tx.neon_res.gas_used,
+            "gasUsed": tx.neon_tx_res.gas_used,
+            "cumulativeGasUsed": tx.neon_tx_res.gas_used,
             "contractAddress": tx.neon_tx.contract,
-            "logs": tx.neon_res.logs,
-            "status": tx.neon_res.status,
+            "logs": tx.neon_tx_res.log_list,
+            "status": tx.neon_tx_res.status,
             "logsBloom": "0x"+'0'*512
         }
 
         return result
 
-    def eth_getTransactionReceipt(self, neon_tx_sign: str) -> Optional[dict]:
-        neon_sign = self._normalize_tx_id(neon_tx_sign)
+    def eth_getTransactionReceipt(self, neon_tx_sig: str) -> Optional[dict]:
+        neon_sig = self._normalize_tx_id(neon_tx_sig)
 
-        tx = self._db.get_tx_by_neon_sign(neon_sign)
+        tx = self._db.get_tx_by_neon_sig(neon_sig)
         if not tx:
             self.debug("Not found receipt")
             return None
         return self._get_transaction_receipt(tx)
 
     @staticmethod
-    def _get_transaction(tx, pending=False) -> dict:
+    def _get_transaction(tx: NeonTxReceiptInfo, pending=False) -> dict:
         t = tx.neon_tx
-        if not pending:
-            r = tx.neon_res
 
         result = {
-            "blockHash": r.block_hash if not pending else None,
-            "blockNumber": hex(r.slot) if not pending else None,
-            "hash": t.sign,
-            "transactionIndex": hex(t.tx_idx) if not pending else None,
+            "blockHash": tx.neon_tx_res.block_hash if not pending else None,
+            "blockNumber": hex(tx.neon_tx_res.block_slot) if not pending else None,
+            "hash": t.sig,
+            "transactionIndex": hex(tx.neon_tx_res.tx_idx) if not pending else None,
             "type": "0x0",
             "from": t.addr,
             "nonce":  t.nonce,
@@ -462,12 +460,12 @@ class NeonRpcApiWorker:
         return result
 
     def eth_getTransactionByHash(self, neon_tx_sign: str) -> Optional[dict]:
-        neon_sign = self._normalize_tx_id(neon_tx_sign)
+        neon_sig = self._normalize_tx_id(neon_tx_sign)
         pending = False
 
-        tx = self._db.get_tx_by_neon_sign(neon_sign)
+        tx = self._db.get_tx_by_neon_sig(neon_sig)
         if tx is None:
-            tx = self._pending_db.get_tx_by_neon_sign(neon_sign)
+            tx = self._pending_db.get_tx_by_neon_sig(neon_sig)
             if tx is None:
                 self.debug("Not found receipt")
                 return None
@@ -533,12 +531,12 @@ class NeonRpcApiWorker:
             raise EthereumError(message=f'invalid transaction index {tx_idx}')
 
         if block.is_empty():
-            block = self._db.get_block_by_slot(block.slot)
+            block = self._db.get_block_by_slot(block.block_slot)
             if block.is_empty():
-                self.debug(f"Not found block by slot {block.slot}")
+                self.debug(f"Not found block by slot {block.block_slot}")
                 return None
 
-        return self._db.get_tx_by_block_slot_tx_idx(block.slot, tx_idx)
+        return self._db.get_tx_by_block_slot_tx_idx(block.block_slot, tx_idx)
 
     def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[dict]:
         block = self._process_block_tag(tag)
@@ -556,15 +554,15 @@ class NeonRpcApiWorker:
 
     def eth_getBlockTransactionCountByHash(self, block_hash: str) -> str:
         block = self._get_block_by_hash(block_hash)
-        if block.slot is None:
+        if block.block_slot is None:
             return hex(0)
         if block.is_empty():
-            block = self._db.get_block_by_slot(block.slot)
+            block = self._db.get_block_by_slot(block.block_slot)
             if block.is_empty():
-                self.debug(f"Not found block by slot {block.slot}")
+                self.debug(f"Not found block by slot {block.block_slot}")
                 return hex(0)
 
-        tx_list = self._db.get_tx_list_by_block_slot(block.slot)
+        tx_list = self._db.get_tx_list_by_block_slot(block.block_slot)
         return hex(len(tx_list))
 
     def eth_getBlockTransactionCountByNumber(self, tag: str) -> str:
@@ -572,7 +570,7 @@ class NeonRpcApiWorker:
         if block.is_empty():
             return hex(0)
 
-        tx_list = self._db.get_tx_list_by_block_slot(block.slot)
+        tx_list = self._db.get_tx_list_by_block_slot(block.block_slot)
         return hex(len(tx_list))
 
     @staticmethod
@@ -688,8 +686,8 @@ class NeonRpcApiWorker:
         return False
 
     def neon_getSolanaTransactionByNeonTransaction(self, NeonTxId: str) -> Union[str, list]:
-        neon_sign = self._normalize_tx_id(NeonTxId)
-        return self._db.get_sol_sign_list_by_neon_sign(neon_sign)
+        neon_sig = self._normalize_tx_id(NeonTxId)
+        return self._db.get_sol_sig_list_by_neon_sig(neon_sig)
 
     def neon_emulate(self, raw_signed_trx):
         """Executes emulator with given transaction

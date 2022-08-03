@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Set
 
 from solana.transaction import Transaction, AccountMeta
 from solana.account import Account as SolanaAccount
@@ -25,13 +25,18 @@ class CancelTxExecutor:
         self._alt_tx_list = AddressLookupTableTxList()
         self._alt_info_list: List[AddressLookupTableInfo] = []
         self._cancel_tx_list: List[Transaction] = []
+        self._storage_account_set: Set[str] = set()
 
-    def add_blocked_storage_account(self, storage_info: StorageAccountInfo) -> None:
+    def add_blocked_storage_account(self, storage_info: StorageAccountInfo) -> bool:
+        if str(storage_info.storage_account) in self._storage_account_set:
+            return False
+
         if len(storage_info.account_list) >= self._alt_builder.TX_ACCOUNT_CNT:
             tx = self._build_alt_cancel_tx(storage_info)
         else:
             tx = self._build_cancel_tx(storage_info)
         self._cancel_tx_list.append(tx)
+        return True
 
     def _build_cancel_tx(self, storage_info: StorageAccountInfo) -> Transaction:
         key_list: List[AccountMeta] = []

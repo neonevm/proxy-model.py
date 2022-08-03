@@ -35,7 +35,7 @@ class IndexerDB:
             if k not in self._constants_db:
                 self._constants_db[k] = 0
 
-        self._starting_block = SolanaBlockInfo(slot=0)
+        self._starting_block = SolanaBlockInfo(block_slot=0)
         self._latest_block_slot = self.get_latest_block_slot()
         self._finalized_block_slot = self.get_finalized_block_slot()
         self._min_receipt_block_slot = self.get_min_receipt_block_slot()
@@ -54,14 +54,14 @@ class IndexerDB:
                 self._neon_tx_logs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
                 self._sol_tx_costs_db.set_cost_list(cursor, neon_block.iter_sol_tx_cost())
 
-        if self.get_starting_block().slot == 0:
+        if self.get_starting_block().block_slot == 0:
             self._constants_db['starting_block_slot'] = neon_block.block_slot
 
         if neon_block.is_finalized:
             self._set_finalized_block_slot(neon_block.block_slot)
 
     def _finalize_block(self, cursor: BaseDB.Cursor, neon_block: NeonIndexedBlockInfo) -> None:
-        block_slot_list = [block.slot for block in neon_block.iter_history_block()]
+        block_slot_list = [block.block_slot for block in neon_block.iter_history_block()]
         for db in self._db_list:
             db.finalize_block_list(cursor, self._finalized_block_slot, block_slot_list)
 
@@ -84,7 +84,7 @@ class IndexerDB:
         self._constants_db['latest_block_slot'] = block_slot
 
     def activate_block_list(self, iter_neon_block: Iterator[NeonIndexedBlockInfo]) -> None:
-        block_slot_list = [b.slot for n in iter_neon_block for b in n.iter_history_block() if not n.is_finalized]
+        block_slot_list = [b.block_slot for n in iter_neon_block for b in n.iter_history_block() if not n.is_finalized]
         if not len(block_slot_list):
             return
 
@@ -102,7 +102,7 @@ class IndexerDB:
     def get_latest_block(self) -> SolanaBlockInfo:
         block_slot = self.get_latest_block_slot()
         if block_slot == 0:
-            return SolanaBlockInfo(slot=0)
+            return SolanaBlockInfo(block_slot=0)
         return self.get_block_by_slot(block_slot)
 
     def get_latest_block_slot(self) -> int:
@@ -112,17 +112,17 @@ class IndexerDB:
         return self._constants_db['finalized_block_slot']
 
     def get_starting_block(self) -> SolanaBlockInfo:
-        if self._starting_block.slot != 0:
+        if self._starting_block.block_slot != 0:
             return self._starting_block
 
         block_slot = self._constants_db['starting_block_slot']
         if block_slot == 0:
-            return SolanaBlockInfo(slot=0)
+            return SolanaBlockInfo(block_slot=0)
         self._starting_block = self.get_block_by_slot(block_slot)
         return self._starting_block
 
     def get_starting_block_slot(self) -> int:
-        return self.get_starting_block().slot
+        return self.get_starting_block().block_slot
 
     def get_min_receipt_block_slot(self) -> int:
         return self._constants_db['min_receipt_block_slot']
@@ -140,11 +140,11 @@ class IndexerDB:
     def get_tx_list_by_block_slot(self, block_slot: int) -> List[NeonTxReceiptInfo]:
         return self._neon_txs_db.get_tx_list_by_block_slot(block_slot)
 
-    def get_tx_by_neon_sign(self, neon_sign: str) -> Optional[NeonTxReceiptInfo]:
-        return self._neon_txs_db.get_tx_by_neon_sign(neon_sign)
+    def get_tx_by_neon_sig(self, neon_sig: str) -> Optional[NeonTxReceiptInfo]:
+        return self._neon_txs_db.get_tx_by_neon_sig(neon_sig)
 
     def get_tx_by_block_slot_tx_idx(self, block_slot: int, tx_idx: int) -> Optional[NeonTxReceiptInfo]:
         return self._neon_txs_db.get_tx_by_block_slot_tx_idx(block_slot, tx_idx)
 
-    def get_sol_sign_list_by_neon_sign(self, neon_sign: str) -> List[str]:
-        return self._sol_neon_txs_db.get_sol_sign_list_by_neon_sign(neon_sign)
+    def get_sol_sig_list_by_neon_sig(self, neon_sig: str) -> List[str]:
+        return self._sol_neon_txs_db.get_sol_sig_list_by_neon_sig(neon_sig)

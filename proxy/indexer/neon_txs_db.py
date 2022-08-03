@@ -10,7 +10,7 @@ class NeonTxsDB(BaseDB):
     def __init__(self):
         super().__init__('neon_transactions')
         self._column_list = [
-            'neon_sign', 'from_addr', 'sol_sign', 'sol_ix_idx', 'sol_ix_inner_idx', 'block_slot',
+            'neon_sig', 'from_addr', 'sol_sig', 'sol_ix_idx', 'sol_ix_inner_idx', 'block_slot',
             'tx_idx', 'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value',
             'calldata', 'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs'
         ]
@@ -23,37 +23,37 @@ class NeonTxsDB(BaseDB):
         neon_tx_res = NeonTxResultInfo()
 
         for idx, column in enumerate(self._column_list):
-            if column == 'neon_sign':
-                neon_tx.sign = value_list[idx]
+            if column == 'neon_sig':
+                neon_tx._sig = value_list[idx]
             elif column == 'from_addr':
-                neon_tx.addr = value_list[idx]
+                neon_tx._addr = value_list[idx]
             elif column == 'logs':
-                neon_tx_res.logs = self._decode_list(value_list[idx])
+                neon_tx_res.log_list = self._decode_list(value_list[idx])
             elif column == 'block_slot':
-                neon_tx_res.slot = value_list[idx]
+                neon_tx_res._block_slot = value_list[idx]
             elif hasattr(neon_tx, column):
-                setattr(neon_tx, column, value_list[idx])
+                setattr(neon_tx, '_' + column, value_list[idx])
             elif hasattr(neon_tx_res, column):
-                setattr(neon_tx_res, column, value_list[idx])
+                setattr(neon_tx_res, '_' + column, value_list[idx])
             else:
                 pass
 
-        neon_tx_res.block_hash = value_list[-1]
-        return NeonTxReceiptInfo(neon_tx=neon_tx, neon_res=neon_tx_res)
+        neon_tx_res._block_hash = value_list[-1]
+        return NeonTxReceiptInfo(neon_tx=neon_tx, neon_tx_res=neon_tx_res)
 
     def set_tx_list(self, cursor: BaseDB.Cursor, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
         value_list_list: List[List[Any]] = []
         for tx in iter_neon_tx:
             value_list: List[Any] = []
             for idx, column in enumerate(self._column_list):
-                if column == 'neon_sign':
-                    value_list.append(tx.neon_tx.sign)
+                if column == 'neon_sig':
+                    value_list.append(tx.neon_tx.sig)
                 elif column == 'from_addr':
                     value_list.append(tx.neon_tx.addr)
                 elif column == 'logs':
-                    value_list.append(self._encode_list(tx.neon_tx_res.logs))
+                    value_list.append(self._encode_list(tx.neon_tx_res.log_list))
                 elif column == 'block_slot':
-                    value_list.append(tx.neon_tx_res.slot)
+                    value_list.append(tx.neon_tx_res.block_slot)
                 elif hasattr(tx.neon_tx, column):
                     value_list.append(getattr(tx.neon_tx, column))
                 elif hasattr(tx.neon_tx_res, column):
@@ -73,13 +73,13 @@ class NeonTxsDB(BaseDB):
                 ON b.block_slot = a.block_slot
         '''
 
-    def get_tx_by_neon_sign(self, neon_sign: str) -> Optional[NeonTxReceiptInfo]:
+    def get_tx_by_neon_sig(self, neon_sig: str) -> Optional[NeonTxReceiptInfo]:
         request = self._build_request() + '''
                AND b.is_active = True
-             WHERE a.neon_sign = %s
+             WHERE a.neon_sig = %s
         '''
         with self._conn.cursor() as cursor:
-            cursor.execute(request, (neon_sign,))
+            cursor.execute(request, (neon_sig,))
             return self._tx_from_value(cursor.fetchone())
 
     def get_tx_list_by_block_slot(self, block_slot: int) -> List[NeonTxReceiptInfo]:

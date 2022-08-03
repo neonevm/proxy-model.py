@@ -7,7 +7,7 @@ from ..indexer.base_db import BaseDB
 class SolTxCostsDB(BaseDB):
     def __init__(self):
         super().__init__('solana_transaction_costs')
-        self._column_list = ['sol_sign', 'block_slot', 'operator', 'sol_spent']
+        self._column_list = ['sol_sig', 'block_slot', 'operator', 'sol_spent']
 
     def set_cost_list(self, cursor: BaseDB.Cursor, iter_sol_tx_cost: Iterator[SolTxCostInfo]) -> None:
         value_list_list: List[List[Any]] = []

@@ -12,34 +12,34 @@ from ..common_neon.utils import str_fmt_object
 from ..common_neon.environment_data import EVM_LOADER_ID
 
 
-class SolTxSignSlotInfo(NamedTuple):
-    sol_sign: str
+class SolTxSigSlotInfo(NamedTuple):
+    sol_sig: str
     block_slot: int
 
     def __str__(self) -> str:
-        return f'{self.block_slot}:{self.sol_sign}'
+        return f'{self.block_slot}:{self.sol_sig}'
 
 
 class SolTxMetaInfo:
-    def __init__(self, block_slot: int, sol_sign: str, tx: Dict[str, Any]):
-        self._sol_sign = sol_sign
+    def __init__(self, block_slot: int, sol_sig: str, tx: Dict[str, Any]):
+        self._sol_sig = sol_sig
         self._block_slot = block_slot
         self._tx = tx
 
     @property
-    def ident(self) -> SolTxSignSlotInfo:
-        return SolTxSignSlotInfo(block_slot=self._block_slot, sol_sign=self._sol_sign)
+    def ident(self) -> SolTxSigSlotInfo:
+        return SolTxSigSlotInfo(block_slot=self._block_slot, sol_sig=self._sol_sig)
 
     def __str__(self) -> str:
         return str(self.ident)
 
     @staticmethod
-    def from_response(sign_slot: SolTxSignSlotInfo, response: Dict[str, Any]) -> SolTxMetaInfo:
-        return SolTxMetaInfo(block_slot=sign_slot.block_slot, sol_sign=sign_slot.sol_sign, tx=response)
+    def from_response(sign_slot: SolTxSigSlotInfo, response: Dict[str, Any]) -> SolTxMetaInfo:
+        return SolTxMetaInfo(block_slot=sign_slot.block_slot, sol_sig=sign_slot.sol_sig, tx=response)
 
     @property
-    def sol_sign(self) -> str:
-        return self._sol_sign
+    def sol_sig(self) -> str:
+        return self._sol_sig
 
     @property
     def block_slot(self) -> int:
@@ -246,10 +246,10 @@ class SolIxMetaInfo:
 
 class SolTxCostInfo:
     def __init__(self, tx_meta: SolTxMetaInfo):
-        self._sol_sign = tx_meta.sol_sign
+        self._sol_sig = tx_meta.sol_sig
         self._block_slot = tx_meta.block_slot
 
-        msg =  tx_meta.tx['transaction']['message']
+        msg = tx_meta.tx['transaction']['message']
         self._operator = msg['accountKeys'][0]
 
         meta = tx_meta.tx['meta']
@@ -259,11 +259,11 @@ class SolTxCostInfo:
         return str_fmt_object(self)
 
     def __hash__(self) -> int:
-        return hash(self._sol_sign)
+        return hash(self._sol_sig)
 
     @property
-    def sol_sign(self) -> str:
-        return self._sol_sign
+    def sol_sig(self) -> str:
+        return self._sol_sig
 
     @property
     def block_slot(self) -> int:
@@ -280,7 +280,7 @@ class SolTxCostInfo:
 
 @logged_group("neon.Parser")
 class SolNeonIxReceiptInfo:
-    _bpf_cycle_cnt_re = re.compile(f'^Program {EVM_LOADER_ID} consumed (\d+) of (\d+) compute units$')
+    _bpf_cycle_cnt_re = re.compile(f'^Program {EVM_LOADER_ID}' + r' consumed (\d+) of (\d+) compute units$')
     _heap_size_re = re.compile(r'^Program log: Total memory occupied: (\d+)$')
 
     def __init__(self, tx_meta: SolTxMetaInfo, ix_meta: SolIxMetaInfo, tx_cost: SolTxCostInfo):
@@ -289,8 +289,12 @@ class SolNeonIxReceiptInfo:
         self._tx_cost = tx_cost
 
         msg = tx_meta.tx['transaction']['message']
-        self._account_key_list = msg['accountKeys']
         self._account_list = ix_meta.ix['accounts']
+
+        self._account_key_list = msg['accountKeys']
+        lookup_key_list = tx_meta.tx['meta'].get('loadedAddresses', None)
+        if lookup_key_list is not None:
+            self._account_key_list += lookup_key_list['writable'] + lookup_key_list['readonly']
 
         self._program_ix: Optional[int] = None
         self._ix_data: Optional[bytes] = None
@@ -315,8 +319,8 @@ class SolNeonIxReceiptInfo:
         return self.ident == other.ident
 
     @property
-    def sol_sign(self) -> str:
-        return self._tx_meta.sol_sign
+    def sol_sig(self) -> str:
+        return self._tx_meta.sol_sig
 
     @property
     def block_slot(self) -> int:
@@ -378,7 +382,7 @@ class SolNeonIxReceiptInfo:
 
     @property
     def ident(self) -> Tuple[int, str, int, Optional[int]]:
-        return self._tx_meta.block_slot, self._tx_meta.sol_sign, self._ix_meta.idx, self._ix_meta.inner_idx
+        return self._tx_meta.block_slot, self._tx_meta.sol_sig, self._ix_meta.idx, self._ix_meta.inner_idx
 
     def _parse_log_list(self) -> None:
         for log_msg in self._ix_meta.iter_log():
@@ -445,12 +449,16 @@ class SolTxReceiptInfo:
 
         msg = tx_meta.tx['transaction']['message']
         self._ix_list = msg['instructions']
-        self._account_key_list = msg['accountKeys']
         self.operator = msg['accountKeys'][0]
 
         meta = tx_meta.tx['meta']
         self._inner_ix_list = meta['innerInstructions']
         self._log_msg_list = meta['logMessages']
+
+        self._account_key_list = msg['accountKeys']
+        lookup_key_list = meta.get('loadedAddresses', None)
+        if lookup_key_list is not None:
+            self._account_key_list += lookup_key_list['writable'] + lookup_key_list['readonly']
 
         self._sol_cost = SolTxCostInfo(tx_meta)
 
@@ -459,14 +467,14 @@ class SolTxReceiptInfo:
 
     @property
     def ident(self) -> Tuple[int, str]:
-        return self._tx_meta.block_slot, self._tx_meta.sol_sign
+        return self._tx_meta.block_slot, self._tx_meta.sol_sig
 
     def __str__(self) -> str:
         return ':'.join([str(s) for s in self.ident])
 
     @property
-    def sol_sign(self) -> str:
-        return self._tx_meta.sol_sign
+    def sol_sig(self) -> str:
+        return self._tx_meta.sol_sig
 
     @property
     def block_slot(self) -> int:

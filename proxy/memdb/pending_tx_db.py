@@ -7,17 +7,16 @@ from logged_groups import logged_group
 
 from ..indexer.indexer_db import IndexerDB
 from ..common_neon.errors import PendingTxError
-from ..common_neon.eth_proto import Trx
+from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils.utils import NeonTxInfo
 
 
 class NeonPendingTxInfo:
-    def __init__(self, neon_tx: Trx, neon_sign: str, operator: str, slot: int):
-        self.neon_tx = NeonTxInfo()
-        self.neon_tx.init_from_eth_tx(neon_tx)
-        self.neon_sign = neon_sign
+    def __init__(self, neon_tx: EthTx, neon_sig: str, operator: str, block_slot: int):
+        self.neon_tx = NeonTxInfo(tx=neon_tx)
+        self.neon_sig = neon_sig
         self.operator = operator
-        self.slot = slot
+        self.block_slot = block_slot
 
     def __getstate__(self):
         return self.__dict__
@@ -43,11 +42,11 @@ class MemPendingTxsDB:
 
     def _set_tx(self, tx: NeonPendingTxInfo):
         data = pickle.dumps(tx)
-        self._pending_tx_by_hash[tx.neon_sign] = data
-        self._pending_slot_by_hash[tx.neon_sign] = tx.slot
+        self._pending_tx_by_hash[tx.neon_sig] = data
+        self._pending_slot_by_hash[tx.neon_sig] = tx.block_slot
 
-        if self._pending_slot.value > tx.slot:
-            self._pending_slot.value = tx.slot
+        if self._pending_slot.value > tx.block_slot:
+            self._pending_slot.value = tx.block_slot
 
     def _rm_finalized_txs(self, finalized_block_slot: int):
         if self._pending_slot.value > finalized_block_slot:
@@ -73,14 +72,14 @@ class MemPendingTxsDB:
     def pend_transaction(self, tx: NeonPendingTxInfo):
         finalized_block_slot = self._db.get_finalized_block_slot()
 
-        executed_tx = self._db.get_tx_by_neon_sign(tx.neon_sign)
+        executed_tx = self._db.get_tx_by_neon_sig(tx.neon_sig)
         if executed_tx:
-            raise PendingTxError(f'Transaction {tx.neon_sign} is already executed')
+            raise PendingTxError(f'Transaction {tx.neon_sig} is already executed')
 
         with self._pending_slot.get_lock():
             self._rm_finalized_txs(finalized_block_slot)
 
-            pended_data = self._pending_tx_by_hash.get(tx.neon_sign)
+            pended_data = self._pending_tx_by_hash.get(tx.neon_sig)
             if not pended_data:
                 return self._set_tx(tx)
 
@@ -88,12 +87,12 @@ class MemPendingTxsDB:
             if pended_operator == tx.operator:
                 self._set_tx(tx)
             else:
-                raise PendingTxError(f'Transaction {tx.neon_sign} is locked ' +
+                raise PendingTxError(f'Transaction {tx.neon_sig} is locked ' +
                                      f'by other operator resource {pended_operator}')
 
-    def get_tx_by_neon_sign(self, neon_sign: str) -> Optional[NeonPendingTxInfo]:
+    def get_tx_by_neon_sig(self, neon_sig: str) -> Optional[NeonPendingTxInfo]:
         with self._pending_slot.get_lock():
-            encoded_data = self._pending_tx_by_hash.get(neon_sign)
+            encoded_data = self._pending_tx_by_hash.get(neon_sig)
             if not encoded_data:
                 return None
             return pickle.loads(encoded_data)

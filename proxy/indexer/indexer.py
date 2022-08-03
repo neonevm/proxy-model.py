@@ -23,8 +23,7 @@ from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_receipt_parser import SolReceiptParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo, SolTxReceiptInfo, SolNeonIxReceiptInfo
-from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxReceiptInfo, SolNeonIxReceiptInfo
-from ..common_neon.evm_decoder import decode_neon_tx_result
+from ..common_neon.evm_log_decoder import decode_neon_tx_result
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.environment_data import CANCEL_TIMEOUT
 
@@ -168,7 +167,7 @@ class SolNeonTxDecoderState:
                     self._neon_tx_key_list[-1] = None
 
                 self._sol_neon_ix_cnt += 1
-                yield  self._sol_neon_ix
+                yield self._sol_neon_ix
         finally:
             self._sol_tx = None
             self._sol_neon_ix = None
@@ -215,12 +214,12 @@ class DummyIxDecoder:
             self._decoding_skip(f'no holder account {holder_account}')
             return None
 
-        rlp_sign = holder.data[0:65]
+        rlp_sig = holder.data[0:65]
         rlp_len = int.from_bytes(holder.data[65:73], 'little')
         rlp_endpos = 73 + rlp_len
         rlp_data = holder.data[73:rlp_endpos]
 
-        neon_tx = NeonTxInfo(rlp_sign=rlp_sign, rlp_data=bytes(rlp_data))
+        neon_tx = NeonTxInfo(rlp_sig=rlp_sig, rlp_data=bytes(rlp_data))
         if neon_tx.error:
             self.warning(f'Neon tx rlp error: {neon_tx.error}')
             return None
@@ -277,7 +276,12 @@ class DummyIxDecoder:
 
     def _decode_tx(self, tx: NeonIndexedTxInfo, msg: str) -> bool:
         self._state.set_neon_tx(tx)
-        decode_neon_tx_result(tx.neon_tx_res, tx.neon_tx.sign, self.ix.tx, self.ix.evm_ix_idx)
+
+        if not tx.neon_tx_res.is_valid():
+            if decode_neon_tx_result(self._state.sol_neon_ix.iter_log(), tx.neon_tx.sig, tx.neon_tx_res):
+                ix = self._state.sol_neon_ix
+                tx.neon_tx_res.fill_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
+
         if tx.neon_tx_res.is_valid() and (tx.status != NeonIndexedTxInfo.Status.DONE):
             return self._decoding_done(tx, msg)
         return self._decoding_success(tx, msg)
@@ -349,7 +353,7 @@ class CreateAccountIxDecoder(DummyIxDecoder):
 
         account_info = NeonAccountInfo(
             neon_account, pda_account, code_account,
-            ix.block_slot, None, ix.sol_sign
+            ix.block_slot, None, ix.sol_sig
         )
 
         self.state.neon_block.add_neon_account(account_info, ix)
@@ -372,7 +376,7 @@ class CreateAccount2IxDecoder(DummyIxDecoder):
 
         account_info = NeonAccountInfo(
             neon_account, pda_account, code_account,
-            ix.block_slot, None, ix.sol_sign
+            ix.block_slot, None, ix.sol_sig
         )
         self.state.neon_block.add_neon_account(account_info, ix)
         return self._decoding_success(account_info, 'create account')
@@ -388,7 +392,7 @@ class ResizeStorageAccountIxDecoder(DummyIxDecoder):
 
         account_info = NeonAccountInfo(
             None, pda_account, code_account,
-            ix.block_slot, None, ix.sol_sign
+            ix.block_slot, None, ix.sol_sig
         )
         self.state.neon_block.add_neon_account(account_info, ix)
         return self._decoding_success(account_info, 'resize of account')
@@ -402,10 +406,10 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         if len(ix.ix_data) < 92:
             return self._decoding_skip('no enough data to get the Neon tx')
 
-        rlp_sign = ix.ix_data[25:90]
+        rlp_sig = ix.ix_data[25:90]
         rlp_data = ix.ix_data[90:]
 
-        neon_tx = NeonTxInfo(rlp_sign=rlp_sign, rlp_data=rlp_data)
+        neon_tx = NeonTxInfo(rlp_sig=rlp_sig, rlp_data=rlp_data)
         if neon_tx.error:
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
@@ -429,7 +433,8 @@ class OnResultIxDecoder(DummyIxDecoder):
         gas_used = hex(int.from_bytes(log[2:10], 'little'))
         return_value = log[10:].hex()
 
-        tx.neon_tx_res.set_result(ix, status, gas_used, return_value)
+        tx.neon_tx_res.fill_result(status=status, gas_used=gas_used, return_value=return_value)
+        tx.neon_tx_res.fill_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
         return self._decode_tx(tx, 'tx result')
 
 
@@ -445,21 +450,21 @@ class OnEventIxDecoder(DummyIxDecoder):
         log = ix.ix_data
 
         address = log[1:21]
-        count_topics = int().from_bytes(log[21:29], 'little')
-        topics = []
+        topic_cnt = int().from_bytes(log[21:29], 'little')
+        topic_list = []
         pos = 29
-        for _ in range(count_topics):
+        for _ in range(topic_cnt):
             topic_bin = log[pos:pos + 32]
-            topics.append('0x' + topic_bin.hex())
+            topic_list.append('0x' + topic_bin.hex())
             pos += 32
         data = log[pos:]
 
-        tx_log_idx = len(tx.neon_tx_res.logs)
+        tx_log_idx = len(tx.neon_tx_res.log_list)
         rec = {
             'address': '0x' + address.hex(),
-            'topics': topics,
+            'topics': topic_list,
             'data': '0x' + data.hex(),
-            'transactionHash': tx.neon_tx.sign,
+            'transactionHash': tx.neon_tx.sig,
             'transactionLogIndex': hex(tx_log_idx),
             # 'logIndex': hex(tx_log_idx), # set when transaction found
             # 'transactionIndex': hex(ix.idx), # set when transaction found
@@ -483,10 +488,10 @@ class PartialCallIxDecoder(DummyIxDecoder):
         if len(ix.ix_data) < 100:
             return self._decoding_skip('no enough data to get arguments')
 
-        rlp_sign = ix.ix_data[33:98]
+        rlp_sig = ix.ix_data[33:98]
         rlp_data = ix.ix_data[98:]
 
-        neon_tx = NeonTxInfo(rlp_sign=rlp_sign, rlp_data=rlp_data)
+        neon_tx = NeonTxInfo(rlp_sig=rlp_sig, rlp_data=rlp_data)
         if neon_tx.error:
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
@@ -497,8 +502,8 @@ class PartialCallIxDecoder(DummyIxDecoder):
 
         key = NeonIndexedTxInfo.Key(storage_account, iter_blocked_account)
         tx = block.get_neon_tx(key, ix)
-        if (tx is not None) and (tx.neon_tx.sign != neon_tx.sign):
-            self._decoding_fail(tx, f'Neon tx sign {neon_tx.sign} != {tx.neon_tx.sign}')
+        if (tx is not None) and (tx.neon_tx.sig != neon_tx.sig):
+            self._decoding_fail(tx, f'Neon tx sign {neon_tx.sig} != {tx.neon_tx.sig}')
             tx = None
 
         if tx is None:
@@ -601,7 +606,8 @@ class CancelIxDecoder(DummyIxDecoder):
             return self._decoding_skip(f'cannot find tx in the storage {storage_account}')
 
         # TODO: get used gas
-        tx.neon_tx_res.set_result(ix, status="0x0", gas_used='0x0', return_value=bytes())
+        tx.neon_tx_res.fill_result(status='0x0', gas_used='0x0', return_value='')
+        tx.neon_tx_res.fill_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
         return self._decode_tx(tx, 'cancel tx')
 
 
@@ -642,7 +648,7 @@ class Indexer(IndexerBase):
     def __init__(self, solana_url, indexer_stat_exporter: IIndexerStatExporter):
         solana = SolanaInteractor(solana_url)
         self._db = IndexerDB()
-        last_known_slot = self._db.get_min_receipt_slot()
+        last_known_slot = self._db.get_min_receipt_block_slot()
         super().__init__(solana, last_known_slot)
         self._cancel_tx_executor = CancelTxExecutor(solana, get_solana_accounts()[0])
         self._counted_logger = MetricsToLogger()
@@ -688,8 +694,8 @@ class Indexer(IndexerBase):
             if (tx.storage_account != '') and (abs(tx.block_slot - neon_block.block_slot) > CANCEL_TIMEOUT):
                 self._cancel_neon_tx(tx)
 
-        self._canceller.unlock_accounts(self._blocked_storage_dict)
-        self._blocked_storage_dict.clear()
+        self._cancel_tx_executor.execute_tx_list()
+        self._cancel_tx_executor.clear()
 
     def _cancel_neon_tx(self, tx: NeonIndexedTxInfo) -> bool:
         # We've already indexed the transaction
@@ -706,22 +712,26 @@ class Indexer(IndexerBase):
 
         storage = self._solana.get_storage_account_info(PublicKey(tx.storage_account))
         if not storage:
-            self.warning(f'storage {tx.storage_account} for neon tx {tx.neon_tx.sign} is empty')
+            self.warning(f'storage {tx.storage_account} for neon tx {tx.neon_tx.sig} is empty')
             return False
 
         if storage.caller != tx.neon_tx.addr[2:]:
-            self.warning(f'storage {tx.storage_account} for neon tx {tx.neon_tx.sign} has another caller: ' +
-                         f'{storage.caller} != {tx.neon_tx.addr[2:]}')
+            self.warning(
+                f'storage {tx.storage_account} for neon tx {tx.neon_tx.sig} has another caller: ' +
+                f'{storage.caller} != {tx.neon_tx.addr[2:]}'
+            )
             return False
 
         tx_nonce = int(tx.neon_tx.nonce[2:], 16)
         if storage.nonce != tx_nonce:
-            self.warning(f'storage {tx.storage_account} for neon tx {tx.neon_tx.sign} has another nonce: ' +
-                         f'{storage.nonce} != {tx_nonce}')
+            self.warning(
+                f'storage {tx.storage_account} for neon tx {tx.neon_tx.sig} has another nonce: ' +
+                f'{storage.nonce} != {tx_nonce}'
+            )
             return False
 
         if not len(storage.account_list):
-            self.warning(f'storage {tx.storage_account} for neon tx {tx.neon_tx.sign} has empty account list.')
+            self.warning(f'storage {tx.storage_account} for neon tx {tx.neon_tx.sig} has empty account list.')
             return False
 
         if len(storage.account_list) != tx.blocked_account_cnt:
@@ -730,17 +740,20 @@ class Indexer(IndexerBase):
 
         for (writable, account), (idx, tx_account) in zip(storage.account_list, enumerate(tx.iter_blocked_account())):
             if account != tx_account:
-                self.warning(f'neon tx {tx.neon_tx} has another list of accounts than storage: ' +
-                             f'{idx}: {account} != {tx_account}')
+                self.warning(
+                    f'neon tx {tx.neon_tx} has another list of accounts than storage: ' +
+                    f'{idx}: {account} != {tx_account}'
+                )
                 return False
 
-        if tx.storage_account in self._blocked_storage_dict:
-            self.warning(f'neon tx {tx.neon_tx} uses the storage account {tx.storage_account}' +
-                         'which is already in the list on unlock')
+        if not self._cancel_tx_executor.add_blocked_storage_account(storage):
+            self.warning(
+                f'neon tx {tx.neon_tx} uses the storage account {tx.storage_account}' +
+                'which is already in the list on unlock'
+            )
             return False
 
         self.debug(f'Neon tx is blocked: storage {tx.storage_account}, {tx.neon_tx}, {storage.account_list}')
-        self._cancel_tx_executor.add_blocked_storage_account(storage)
         tx.set_status(NeonIndexedTxInfo.Status.CANCELED)
         return True
 
@@ -789,7 +802,7 @@ class Indexer(IndexerBase):
         self._stat_exporter.on_solana_rpc_status(self._solana.is_healthy())
 
     def _submit_neon_tx_status(self, tx: NeonIndexedTxInfo) -> None:
-        neon_tx_hash = tx.neon_tx.sign
+        neon_tx_hash = tx.neon_tx.sig
         neon_income = int(tx.neon_tx_res.gas_used, 0) * int(tx.neon_tx.gas_price, 0)  # TODO: get gas usage from ixs
         if tx.holder_account != '':
             tx_type = 'holder'
@@ -815,12 +828,12 @@ class Indexer(IndexerBase):
         block_slot_list = [block_slot for block_slot in range(start_block_slot + 1, sol_tx_meta.block_slot + 1)]
         sol_block_list = self._solana.get_block_info_list(block_slot_list, state.commitment)
         result_sol_block_deque: Deque[SolanaBlockInfo] = deque()
-        for sol_block in  sol_block_list:
+        for sol_block in sol_block_list:
             if sol_block.parent_block_slot == start_block_slot:
                 result_sol_block_deque.append(sol_block)
-                start_block_slot = sol_block.slot
+                start_block_slot = sol_block.block_slot
 
-        if not len(result_sol_block_deque) or (result_sol_block_deque[-1].slot != sol_tx_meta.block_slot):
+        if not len(result_sol_block_deque) or (result_sol_block_deque[-1].block_slot != sol_tx_meta.block_slot):
             raise SolHistoryNotFound(f"can't get block history: {start_block_slot + 1} -> {sol_tx_meta.block_slot}")
         return result_sol_block_deque
 

@@ -27,7 +27,7 @@ class NeonTxLogsDB(BaseDB):
     def set_tx_list(self, cursor: BaseDB.Cursor, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
         value_list_list: List[List[Any]] = []
         for tx in iter_neon_tx:
-            for log in tx.neon_tx_res.logs:
+            for log in tx.neon_tx_res.log_list:
                 topic_list = self._encode_list(log['topics'])
                 for topic in log['topics']:
                     value_list: List[Any] = []

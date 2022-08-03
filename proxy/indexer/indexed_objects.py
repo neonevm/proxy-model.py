@@ -57,13 +57,13 @@ class NeonAccountInfo:
                  code_address: Optional[str],
                  block_slot: int,
                  code: Optional[str],
-                 sol_sign: Optional[str]):
+                 sol_sig: Optional[str]):
         self._neon_address = neon_address
         self._pda_address = pda_address
         self._code_address = code_address
         self._block_slot = block_slot
         self._code = code
-        self._sol_sign = sol_sign
+        self._sol_sig = sol_sig
 
     def __str__(self) -> str:
         return str_fmt_object(self)
@@ -189,7 +189,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
 
     @property
     def neon_tx_res(self) -> NeonTxResultInfo:
-        return self._neon_receipt.neon_res
+        return self._neon_receipt.neon_tx_res
 
     @property
     def status(self) -> NeonIndexedTxInfo.Status:
@@ -228,7 +228,7 @@ class NeonIndexedBlockInfo:
 
     def clone(self, history_block_deque: Deque[SolanaBlockInfo]) -> NeonIndexedBlockInfo:
         sol_block = history_block_deque[-1]
-        assert sol_block.slot > self.block_slot
+        assert sol_block.block_slot > self.block_slot
 
         new_block = NeonIndexedBlockInfo(history_block_deque)
         new_block._neon_holder_dict = copy.deepcopy(self._neon_holder_dict)
@@ -238,11 +238,11 @@ class NeonIndexedBlockInfo:
 
     @property
     def block_slot(self) -> int:
-        return self._sol_block.slot
+        return self._sol_block.block_slot
 
     @property
     def block_hash(self) -> str:
-        return self._sol_block.hash
+        return self._sol_block.block_hash
 
     @property
     def is_finalized(self) -> bool:
@@ -254,11 +254,11 @@ class NeonIndexedBlockInfo:
 
     def set_finalized(self, value: bool) -> None:
         for block in self._history_block_deque:
-            block.is_finalized = value
+            block.set_finalized(value)
 
     def finalize_history_list(self, finalized_block_slot: int) -> int:
         removed_block_cnt = 0
-        while len(self._history_block_deque) and (finalized_block_slot >= self._history_block_deque[0].slot):
+        while len(self._history_block_deque) and (finalized_block_slot >= self._history_block_deque[0].block_slot):
             self._history_block_deque.popleft()
             removed_block_cnt += 1
         assert len(self._history_block_deque)
@@ -349,17 +349,12 @@ class NeonIndexedBlockInfo:
             self.warning(f'{sol_neon_ix} - attempt to done the completed tx {tx}')
             return
 
-        tx.set_status(NeonIndexedTxInfo.Status.DONE)
-        tx.neon_tx_res.fill_block_info(self._sol_block)
-
         tx_idx = len(self._done_neon_tx_list)
-        tx.neon_tx.tx_idx = tx_idx
-        for log in tx.neon_tx_res.logs:
-            log['blockHash'] = self.block_hash
-            log['blockNumber'] = hex(self.block_slot)
-            log['transactionIndex'] = hex(tx_idx)
-            log['logIndex'] = hex(self._log_idx)
-            self._log_idx += 1
+
+        tx.set_status(NeonIndexedTxInfo.Status.DONE)
+        tx.neon_tx_res.fill_block_info(self._sol_block, tx_idx, self._log_idx)
+
+        self._log_idx += len(tx.neon_tx_res.log_list)
 
         self._done_neon_tx_list.append(tx)
 
