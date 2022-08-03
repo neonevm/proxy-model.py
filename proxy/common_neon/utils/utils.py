@@ -1,25 +1,24 @@
 from __future__ import annotations
+from typing import Dict, Any
 
-from typing import Dict, Any, Optional, List
 import json
 from enum import Enum
 
 from logged_groups import logged_group
 from eth_utils import big_endian_to_int
 
-from proxy.indexer.utils import SolanaIxSignInfo
-# TODO: move it out from here
-from ..environment_data import EVM_LOADER_ID, LOG_FULL_OBJECT_INFO
+from ..environment_data import LOG_FULL_OBJECT_INFO
 from ..eth_proto import Trx as EthTx
 
 
-def str_fmt_object(obj) -> str:
-    def lookup(obj) -> Optional[Dict]:
-        if not hasattr(obj, '__dict__'):
-            return None
+def str_fmt_object(obj: Any) -> str:
+    type_name = 'Type'
+    class_prefix = "<class '"
 
-        result = {}
-        for key, value in obj.__dict__.items():
+    def lookup(d: Dict[str, Any]) -> Dict[str, Any]:
+        result: Dict[str, Any] = {}
+        for key, value in d.items():
+            key = key.lstrip('_')
             if isinstance(value, Enum):
                 value = str(value)
                 idx = value.find('.')
@@ -33,7 +32,7 @@ def str_fmt_object(obj) -> str:
             elif isinstance(value, bool):
                 if value:
                     result[key] = value
-            elif isinstance(value, List):
+            elif isinstance(value, list) or isinstance(value, set):
                 if len(value) > 0:
                     result[f'len({key})'] = len(value)
             elif isinstance(value, str) or isinstance(value, bytes) or isinstance(value, bytearray):
@@ -44,24 +43,45 @@ def str_fmt_object(obj) -> str:
                 if len(value) > 130:
                     value = value[:130] + '...'
                 result[key] = value
+            elif hasattr(value, '__str__'):
+                value_str = str(value)
+                if value_str.startswith(f'<{type_name} ') and hasattr(value, '__dict__'):
+                    result[key] = lookup(value.__dict__)
+                else:
+                    result[key] = value_str
             else:
                 result[key] = value
         return result
 
     name = f'{type(obj)}'
     name = name[name.rfind('.') + 1:-2]
-    members = json.dumps(obj, skipkeys=True, default=lookup, sort_keys=True)
-    return f'{name}: {members}'
+    if name.startswith(class_prefix):
+        name = name[len(class_prefix):]
+
+    if hasattr(obj, '__dict__'):
+        members = json.dumps(lookup(obj.__dict__), skipkeys=True, sort_keys=True)
+    elif isinstance(obj, dict):
+        members = json.dumps(lookup(obj), skipkeys=True, sort_keys=True)
+    else:
+        members = None
+
+    return f'<{type_name} {name}>: {members}'
 
 
+# TODO: move to separate file
 class SolanaBlockInfo:
     def __init__(self, slot: int, hash=None, time=None, is_finalized=False, is_fake=False):
+        # TODO: rename to block_slot
         self.slot = slot
         self.is_finalized = is_finalized
         self.is_fake = is_fake
+        # TODO: rename to block_hash
         self.hash = hash
+        # TODO: rename to block_time
         self.time = time
+        # TODO: rename to block_parent_hash
         self.parent_hash = None
+        # TODO: remove
         self.signs = []
 
     def __str__(self) -> str:
@@ -80,6 +100,7 @@ class SolanaBlockInfo:
         return self.time is None
 
 
+# TODO: move to separate file
 @logged_group("neon.Parser")
 class NeonTxResultInfo:
     def __init__(self):
@@ -100,23 +121,24 @@ class NeonTxResultInfo:
         self.gas_used = '0x0'
         self.return_value = bytes()
         self.sol_sign = None
+        # TODO: rename to block_slot
         self.slot = -1
         self.block_hash = ''
-        self.idx = -1
+        self.sol_ix_idx = -1
+        self.sol_ix_inner_idx = None
 
     def append_record(self, rec):
-        log_idx = len(self.logs)
-        rec['transactionLogIndex'] = hex(log_idx)
-        rec['logIndex'] = hex(log_idx)
         self.logs.append(rec)
 
-    def set_result(self, sign: SolanaIxSignInfo, status, gas_used, return_value):
+    def set_result(self, sol_neon_ix, status, gas_used, return_value):
+        # TODO: add types of input parameters
         self.status = status
         self.gas_used = gas_used
         self.return_value = return_value
-        self.sol_sign = sign.sign
-        self.slot = sign.slot
-        self.idx = sign.idx
+        self.sol_sign = sol_neon_ix.sol_sign
+        self.slot = sol_neon_ix.block_slot
+        self.sol_ix_idx = sol_neon_ix.idx
+        self.sol_ix_inner_idx = sol_neon_ix.inner_idx
 
     def fill_block_info(self, block: SolanaBlockInfo):
         self.slot = block.slot
@@ -125,38 +147,16 @@ class NeonTxResultInfo:
             rec['blockHash'] = block.hash
             rec['blockNumber'] = hex(block.slot)
 
-    def decode(self, neon_sig: str, tx: {}, ix_idx=-1) -> NeonTxResultInfo:
+    def canceled(self, sol_sign: str, slot: int):
         self._set_defaults()
-        meta = tx['meta']
-        meta_ixs = meta['innerInstructions']
-        msg = tx['transaction']['message']
-
-        accounts = msg['accountKeys']
-        lookup_accounts = meta.get('loadedAddresses', None)
-        if lookup_accounts is not None:
-            accounts += lookup_accounts['writable'] + lookup_accounts['readonly']
-
-        for inner_ix in meta_ixs:
-            ix_idx = inner_ix['index']
-            for event in inner_ix['instructions']:
-                if accounts[event['programIdIndex']] == EVM_LOADER_ID:
-                    log = base58.b58decode(event['data'])
-                    evm_ix = int(log[0])
-                    if evm_ix == 7:
-                        self._decode_event(neon_sig, log, ix_idx)
-                    elif evm_ix == 6:
-                        self._decode_return(log, ix_idx, tx)
-        return self
-
-    def canceled(self, tx: Dict[Any, Any]):
-        self._set_defaults()
-        self.sol_sign = tx['transaction']['signatures'][0]
-        self.slot = tx['slot']
+        self.sol_sign = sol_sign
+        self.slot = slot
 
     def is_valid(self) -> bool:
         return self.slot != -1
 
 
+# TODO: move to separate file
 class NeonTxInfo:
     def __init__(self, rlp_sign=None, rlp_data=None):
         self.tx_idx = 0
@@ -236,11 +236,11 @@ class NeonTxInfo:
         return (self.addr is not None) and (not self.error)
 
 
-class NeonTxFullInfo:
-    def __init__(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, used_ixs=[]):
+# TODO: move to separate file
+class NeonTxReceiptInfo:
+    def __init__(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo):
         self.neon_tx = neon_tx
         self.neon_res = neon_res
-        self.used_ixs = used_ixs
 
     def __str__(self):
         return str_fmt_object(self)

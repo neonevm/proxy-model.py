@@ -14,8 +14,8 @@ from ..common_neon.environment_data import FINALIZED
 @logged_group("neon.Indexer")
 class IndexerBase:
     def __init__(self, solana: SolanaInteractor, last_slot: int):
-        self.solana = solana
-        self.last_slot = self._init_last_slot('receipt', last_slot)
+        self._solana = solana
+        self._last_slot = self._init_last_slot('receipt', last_slot)
 
     def _init_last_slot(self, name: str, last_known_slot: int) -> int:
         """
@@ -25,7 +25,7 @@ class IndexerBase:
         - NUMBER - first start from the number, then continue from last parsed slot
         """
         last_known_slot = 0 if not isinstance(last_known_slot, int) else last_known_slot
-        latest_slot = self.solana.get_slot(FINALIZED)
+        latest_slot = self._solana.get_slot(FINALIZED)
         start_int_slot = 0
         name = f'{name} slot'
 

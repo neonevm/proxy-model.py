@@ -5,7 +5,7 @@ import ctypes
 from typing import Optional, List
 from logged_groups import logged_group
 
-from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
+from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxReceiptInfo
 
 from ..indexer.indexer_db import IndexerDB
 
@@ -41,7 +41,7 @@ class MemTxsDB:
             del self._tx_by_neon_sign[neon_sign]
             del self._slot_by_neon_sign[neon_sign]
 
-    def get_tx_by_neon_sign(self, neon_sign: str, is_pended_tx: bool, before_slot: int) -> Optional[NeonTxFullInfo]:
+    def get_tx_by_neon_sign(self, neon_sign: str, is_pended_tx: bool, before_slot: int) -> Optional[NeonTxReceiptInfo]:
         if not is_pended_tx:
             return self._db.get_tx_by_neon_sign(neon_sign)
 
@@ -52,7 +52,7 @@ class MemTxsDB:
                 return pickle.loads(data)
         return None
 
-    def get_tx_list_by_neon_sign_list(self, neon_sign_list: List[str], before_slot: int) -> List[NeonTxFullInfo]:
+    def get_tx_list_by_neon_sign_list(self, neon_sign_list: List[str], before_slot: int) -> List[NeonTxReceiptInfo]:
         tx_list = []
         with self._tx_slot.get_lock():
             self._rm_finalized_txs(before_slot)
@@ -106,7 +106,7 @@ class MemTxsDB:
         return []
 
     def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, sign_list: List[str], before_slot: int):
-        tx = NeonTxFullInfo(neon_tx=neon_tx, neon_res=neon_res, used_ixs=sign_list)
+        tx = NeonTxReceiptInfo(neon_tx=neon_tx, neon_res=neon_res)
         data = pickle.dumps(tx)
 
         with self._tx_slot.get_lock():

@@ -279,13 +279,13 @@ class MemBlocksDB:
         if block_slot > self._first_block.slot:
             block = self._block_by_slot.get(block_slot, SolanaBlockInfo(slot=block_slot))
         else:
-            block = self.db.get_full_block_by_slot(block_slot)
+            block = self.db.get_block_by_slot(block_slot)
 
         if block.is_empty() and self._latest_block.slot > block_slot:
             block = self.generate_fake_block(block_slot=block_slot)
         return block
 
-    def get_full_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
+    def get_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
         block = self._get_block_by_slot(block_slot)
         return self._fill_block_parent_hash(block)
 

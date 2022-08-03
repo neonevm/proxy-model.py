@@ -3,36 +3,36 @@ from ..indexer.base_db import BaseDB
 
 
 class SolTxSignSlotInfo(NamedTuple):
-    sign: str
-    slot: int
+    sol_sign: str
+    block_slot: int
 
 
 class SolSignsDB(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self, 'solana_transaction_signatures')
+        super().__init__('solana_transaction_signatures')
 
     def add_sign(self, info: SolTxSignSlotInfo) -> None:
-        with self._conn.cursor() as cursor:
+        with self.cursor() as cursor:
             cursor.execute(f'''
                 INSERT INTO {self._table_name}
-                (slot, signature)
+                (block_slot, signature)
                 VALUES(%s, %s) ON CONFLICT DO NOTHING''',
-                (info.slot, info.sign))
+                (info.block_slot, info.sol_sign))
 
-    def get_next_sign(self, slot: int) -> Optional[SolTxSignSlotInfo]:
-        with self._conn.cursor() as cursor:
+    def get_next_sign(self, block_slot: int) -> Optional[SolTxSignSlotInfo]:
+        with self.cursor() as cursor:
             cursor.execute(f'''
-                SELECT slot, signature FROM {self._table_name}
-                WHERE slot > {slot} ORDER BY slot LIMIT 1''')
+                SELECT block_slot, signature FROM {self._table_name}
+                WHERE block_slot > {block_slot} ORDER BY block_slot LIMIT 1''')
             row = cursor.fetchone()
             if row is not None:
-                return SolTxSignSlotInfo(row[0], row[1])
+                return SolTxSignSlotInfo(sol_sign=row[0], block_slot=row[1])
             return None
 
     def get_max_sign(self) -> Optional[SolTxSignSlotInfo]:
-        with self._conn.cursor() as cursor:
-            cursor.execute(f'SELECT slot, signature FROM {self._table_name} ORDER BY slot DESC LIMIT 1')
+        with self.cursor() as cursor:
+            cursor.execute(f'SELECT signature, block_slot FROM {self._table_name} ORDER BY block_slot DESC LIMIT 1')
             row = cursor.fetchone()
             if row is not None:
-                return SolTxSignSlotInfo(row[0], row[1])
+                return SolTxSignSlotInfo(sol_sign=row[0], block_slot=row[1])
             return None
