@@ -136,12 +136,12 @@ class NeonIxBuilder:
             data=create_account_with_seed_layout(self.operator_account, seed_str, lamports, space)
         )
 
-    def create_refund_instruction(self, account, seed: bytes) -> TransactionInstruction:
+    def create_refund_instruction(self, refunded_account: PublicKey, seed: bytes) -> TransactionInstruction:
         seed_str = str(seed, 'utf8')
-        self.debug(f"createRefundTrx {self.operator_account} account({account}) seed({seed_str})")
+        self.debug(f"createRefundTrx {self.operator_account} refunded account({refunded_account}) seed({seed_str})")
         return TransactionInstruction(
             keys=[
-                AccountMeta(pubkey=account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=refunded_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
             ],
             program_id=EVM_LOADER_ID,

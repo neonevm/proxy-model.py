@@ -6,12 +6,11 @@ import traceback
 from datetime import datetime
 from typing import Optional, List
 
-import sha3
 from logged_groups import logged_group
 from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 
-from ..common_neon.address import EthereumAddress, ether2program, accountWithSeed
+from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListSender
@@ -22,7 +21,7 @@ from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.neon_instruction import NeonIxBuilder
 
-from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateAccountWithSeedStage
+from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreatePermAccount, NeonDeletePermAccountStage
 
 
 class OperatorResourceInfo:
@@ -216,29 +215,22 @@ class OperatorResourceList:
         return ether_address
 
     def _create_perm_accounts(self, builder: NeonIxBuilder, resource: OperatorResourceInfo, seed_list: List[bytes]):
-        tx = TransactionWithComputeBudget()
-        tx_name_list = set()
+        create_acc_tx = TransactionWithComputeBudget()
+        create_acc_tx_name_list = set()
+        refund_tx = TransactionWithComputeBudget()
+        refund_name_list = set()
 
         stage_list = [NeonCreatePermAccount(builder, seed, STORAGE_SIZE) for seed in seed_list]
         account_list = [s.sol_account for s in stage_list]
         info_list = self._solana.get_account_info_list(account_list)
         balance = self._solana.get_multiple_rent_exempt_balances_for_size([STORAGE_SIZE])[0]
         for idx, account, stage in zip(range(len(seed_list)), info_list, stage_list):
-            if not account or (account.lamports < balance and account.tag in (FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG)):
-                if account:
-                    refund_stage = NeonDeletePermAccountStage(builder, stage.get_seed())
-                    refund_stage.build()
-                    tx_refund = TransactionWithComputeBudget()
-                    tx_refund.add(refund_stage.tx)
-                    SolTxListSender(self._s, [tx_refund], refund_stage.NAME).send(self._resource.signer)
-                self.debug(f"Create new accounts for resource {resource}")
-                stage.set_balance(balance)
-                stage.build()
-                tx_name_list.add(stage.NAME)
-                tx.add(stage.tx)
+            if not account:
+                self._make_create_acc_tx(resource, create_acc_tx, create_acc_tx_name_list, balance, idx, stage)
                 continue
             elif account.lamports < balance:
-                raise RuntimeError(f"insufficient balance of {str(stage.sol_account)}")
+                self._make_refund_tx(builder, resource, refund_tx, refund_name_list, idx, stage)
+                self._make_create_acc_tx(resource, create_acc_tx, create_acc_tx_name_list, balance, idx, stage)
             elif account.owner != PublicKey(EVM_LOADER_ID):
                 raise RuntimeError(f"wrong owner for: {str(stage.sol_account)}")
             elif idx != 0:
@@ -249,11 +241,27 @@ class OperatorResourceList:
             elif account.tag not in (FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG):
                 raise RuntimeError(f"not empty, not finalized: {str(stage.sol_account)}")
 
-        if len(tx_name_list):
-            SolTxListSender(self._solana, resource.signer).send(' + '.join(tx_name_list), [tx])
+        if len(refund_name_list):
+            SolTxListSender(self._solana, resource.signer).send(' + '.join(refund_name_list), [refund_tx])
+        if len(create_acc_tx_name_list):
+            SolTxListSender(self._solana, resource.signer).send(' + '.join(create_acc_tx_name_list), [create_acc_tx])
         else:
             self.debug(f"Use existing accounts for resource {resource}")
         return account_list
+
+    def _make_refund_tx(self, builder, resource, refund_tx, refund_name_list, idx, stage):
+        self.debug(f"Add refund stage for: idx: {idx}, seed: {stage.get_seed()}, resource: {resource}")
+        refund_stage = NeonDeletePermAccountStage(builder, stage.get_seed())
+        refund_stage.build()
+        refund_name_list.add(stage.NAME)
+        refund_tx.add(refund_stage.tx)
+
+    def _make_create_acc_tx(self, resource, create_acc_tx, create_acc_tx_name_list, balance, idx, stage):
+        self.debug(f"Add create new accounts stage for: idx: {idx}, seed: {stage.get_seed()}, resource: {resource}")
+        stage.set_balance(balance)
+        stage.build()
+        create_acc_tx_name_list.add(stage.NAME)
+        create_acc_tx.add(stage.tx)
 
     def _unlock_storage_account(self, resource: OperatorResourceInfo, storage_account: PublicKey) -> None:
         self.debug(f"Cancel transaction in {str(storage_account)} for resource {resource}")
@@ -264,45 +272,3 @@ class OperatorResourceList:
 
     def free_resource_info(self, resource: OperatorResourceInfo) -> None:
         self._free_resource_list.append(resource.idx)
-
-
-class NeonCreatePermAccount(NeonCreateAccountWithSeedStage):
-    NAME = 'createPermAccount'
-
-    def __init__(self, builder: NeonIxBuilder, seed_base: bytes, size: int):
-        super().__init__(builder)
-        self._seed_base = seed_base
-        self._size = size
-        self._init_sol_account()
-
-    def _init_sol_account(self):
-        assert len(self._seed_base) > 0
-        seed = sha3.keccak_256(self._seed_base).hexdigest()[:32]
-        self._seed = bytes(seed, 'utf8')
-        self._sol_account = accountWithSeed(bytes(self._builder.operator_account), self._seed)
-
-    def get_seed(self):
-        return self._seed_base
-
-    def build(self):
-        assert self._is_empty()
-
-        self.debug(f'Create perm account {self.sol_account}')
-        self.tx.add(self._create_account_with_seed())
-
-
-@logged_group("neon.Proxy")
-class NeonDeletePermAccountStage(NeonCreatePermAccount):
-    NAME = 'refundPermAccount'
-
-    def __init__(self, builder: NeonIxBuilder, seed_base: bytes):
-        NeonCreatePermAccount.__init__(self, builder, seed_base, 0)
-
-    def _delete_account(self):
-        return self._builder.create_refund_instruction(self.sol_account, self._seed)
-
-    def build(self):
-        assert self._is_empty()
-
-        self.debug(f'Refund perm account {self.sol_account}')
-        self.tx.add(self._delete_account())
