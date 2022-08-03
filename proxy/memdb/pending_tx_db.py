@@ -1,15 +1,20 @@
 import multiprocessing as mp
 import ctypes
 import pickle
+from typing import Optional
 
 from logged_groups import logged_group
 
 from ..indexer.indexer_db import IndexerDB
 from ..common_neon.errors import PendingTxError
+from ..common_neon.eth_proto import Trx
+from ..common_neon.utils.utils import NeonTxInfo
 
 
 class NeonPendingTxInfo:
-    def __init__(self, neon_sign: str, operator: str, slot: int):
+    def __init__(self, neon_tx: Trx, neon_sign: str, operator: str, slot: int):
+        self.neon_tx = NeonTxInfo()
+        self.neon_tx.init_from_eth_tx(neon_tx)
         self.neon_sign = neon_sign
         self.operator = operator
         self.slot = slot
@@ -85,3 +90,10 @@ class MemPendingTxsDB:
             else:
                 raise PendingTxError(f'Transaction {tx.neon_sign} is locked ' +
                                      f'by other operator resource {pended_operator}')
+
+    def get_tx_by_neon_sign(self, neon_sign: str) -> Optional[NeonPendingTxInfo]:
+        with self._pending_slot.get_lock():
+            encoded_data = self._pending_tx_by_hash.get(neon_sign)
+            if not encoded_data:
+                return None
+            return pickle.loads(encoded_data)

@@ -763,7 +763,7 @@ class NeonTxSendStrategySelector(IConfirmWaiter, INeonTxStrategyUser):
         return self._execute(neon_tx_exec_cfg)
 
     def _validate_pend_tx(self) -> None:
-        self._pending_tx = NeonPendingTxInfo(neon_sign=self._ctx.neon_sig, operator=self._operator, slot=0)
+        self._pending_tx = NeonPendingTxInfo(neon_tx=self._ctx.eth_tx, neon_sign=self._ctx.neon_sig, operator=self._operator, slot=0)
         self._pend_tx_into_db(self._ctx.solana.get_recent_blockslot())
 
     def _execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
