@@ -32,7 +32,7 @@ class IndexerDB:
     def status(self) -> bool:
         return self._neon_tx_logs_db.is_connected()
 
-    def submit_block(self, neon_block: NeonIndexedBlockInfo) -> None:
+    def submit_block(self, neon_block: NeonIndexedBlockInfo, is_finalized: bool) -> None:
         if self.get_starting_block().slot > neon_block.block_slot:
             self._constants_db['starting_slot'] = neon_block.block_slot
             self._starting_block = neon_block.sol_block
@@ -42,11 +42,15 @@ class IndexerDB:
             self._latest_block_slot = neon_block.block_slot
 
         with self._sol_blocks_db.cursor() as cursor:
-            self._sol_blocks_db.set_block(cursor, neon_block.sol_block)
+            self._sol_blocks_db.set_block(cursor, neon_block.sol_block, is_finalized)
             self._neon_txs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
             self._sol_neon_txs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
             self._neon_tx_logs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
             self._sol_tx_costs_db.set_cost_list(cursor, neon_block.iter_sol_tx_cost())
+
+    def finalize_block(self, neon_block: NeonIndexedBlockInfo) -> None:
+        with self._sol_blocks_db.cursor() as cursor:
+            self._sol_blocks_db.finalize_block(cursor, neon_block.sol_block, True)
 
     def get_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
         return self._sol_blocks_db.get_block_by_slot(block_slot)

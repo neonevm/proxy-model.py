@@ -70,7 +70,7 @@ def str_fmt_object(obj: Any) -> str:
 
 # TODO: move to separate file
 class SolanaBlockInfo:
-    def __init__(self, slot: int, hash=None, time=None, is_finalized=False, is_fake=False):
+    def __init__(self, slot: int, hash=None, time=None, parent_block_slot=None, is_finalized=False, is_fake=False):
         # TODO: rename to block_slot
         self.slot = slot
         self.is_finalized = is_finalized
@@ -79,6 +79,7 @@ class SolanaBlockInfo:
         self.hash = hash
         # TODO: rename to block_time
         self.time = time
+        self.parent_block_slot = parent_block_slot
         # TODO: rename to block_parent_hash
         self.parent_hash = None
         # TODO: remove

@@ -56,13 +56,10 @@ class NeonTxLogsDB(BaseDB):
                 log['topics'] = self._decode_list(value_list[idx])
             else:
                 key = self._column2field_dict.get(column, None)
-                if key in log:
-                    value = value_list[idx]
-                    if key in self._hex_field_dict:
-                        value = '0x' + hex(value[2:])
-                    log[key] = value
-                else:
-                    raise RuntimeError(f'Wrong usage {self._table_name}: {idx} -> {column}!')
+                value = value_list[idx]
+                if key in self._hex_field_dict:
+                    value = '0x' + hex(value)
+                log[key] = value
         return log
 
     def get_logs(self, from_block: Optional[int],

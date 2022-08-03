@@ -518,9 +518,10 @@ class SolanaInteractor:
 
         return SolanaBlockInfo(
             slot=slot,
-            is_finalized=(commitment == FINALIZED),
+            is_finalized=False,
             hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
-            time=net_block['blockTime']
+            time=net_block['blockTime'],
+            parent_block_slot=net_block['parentSlot']
         )
 
     def get_block_info_list(self, block_slot_list: List[int], commitment='confirmed') -> List[SolanaBlockInfo]:
@@ -544,15 +545,16 @@ class SolanaInteractor:
             if (not response) or ('result' not in response):
                 block = SolanaBlockInfo(
                     slot=slot,
-                    is_finalized=(commitment == FINALIZED),
+                    is_finalized=False,
                 )
             else:
                 net_block = response['result']
                 block = SolanaBlockInfo(
                     slot=slot,
-                    is_finalized=(commitment == FINALIZED),
+                    is_finalized=False,
                     hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
-                    time=net_block['blockTime']
+                    time=net_block['blockTime'],
+                    parent_block_slot=net_block['parentSlot']
                 )
             block_list.append(block)
         return block_list
