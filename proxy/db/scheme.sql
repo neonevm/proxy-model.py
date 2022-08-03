@@ -30,15 +30,16 @@
         block_hash CHAR(66),
         block_time BIGINT,
         parent_block_slot BIGINT,
-        is_finalized BOOL
+        is_finalized BOOL,
+        is_active BOOL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS solana_blocks_slot ON solana_blocks(block_slot);
     CREATE INDEX IF NOT EXISTS solana_blocks_hash ON solana_blocks(block_hash);
+    CREATE INDEX IF NOT EXISTS solana_blocks_slot_active ON solana_blocks(block_slot, is_active);
 
 
     CREATE TABLE IF NOT EXISTS neon_transaction_logs (
         address CHAR(42),
-        block_hash CHAR(66),
         block_slot BIGINT,
 
         tx_hash CHAR(66),
@@ -52,7 +53,6 @@
         topic_list BYTEA
     );
     CREATE UNIQUE INDEX IF NOT EXISTS neon_transaction_logs_block_tx_log ON neon_transaction_logs(block_slot, tx_hash, tx_log_idx);
-    CREATE INDEX IF NOT EXISTS neon_transaction_logs_block_hash ON neon_transaction_logs(block_hash);
     CREATE INDEX IF NOT EXISTS neon_transaction_logs_address ON neon_transaction_logs(address);
     CREATE INDEX IF NOT EXISTS neon_transaction_logs_topic ON neon_transaction_logs(topic);
     CREATE INDEX IF NOt EXISTS neon_transaction_logs_block_slot ON neon_transaction_logs(block_slot);
@@ -86,7 +86,6 @@
         sol_ix_inner_idx INT,
         block_slot BIGINT,
         tx_idx INT,
-        block_hash CHAR(66),
 
         nonce TEXT,
         gas_price TEXT,
@@ -101,9 +100,9 @@
 
         return_value TEXT,
 
-        v TEXT,
-        r CHAR(66),
-        s CHAR(66),
+        v VARCHAR(66),
+        r VARCHAR(66),
+        s VARCHAR(66),
 
         calldata TEXT,
         logs BYTEA

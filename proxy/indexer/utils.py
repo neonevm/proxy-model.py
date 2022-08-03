@@ -23,9 +23,6 @@ class MetricsToLogger:
         self._counter = 0
         self._item_list_dict.clear()
 
-    def is_print_round(self) -> bool:
-        return (self._counter + 1) % INDEXER_LOG_SKIP_COUNT != 0
-
     def print(self, logger: Callable[[str], None],
               list_value_dict: Dict[str, Union[int, float]],
               latest_value_dict: Dict[str, int]):

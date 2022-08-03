@@ -68,7 +68,7 @@ class Test_Airdropper(unittest.TestCase):
 
     @classmethod
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_slot')
+    @patch.object(SolanaInteractor, 'get_block_slot')
     def setUpClass(cls, mock_get_slot, mock_dict_get) -> None:
         print("testing indexer in airdropper mode")
         cls.address = 'localhost'
@@ -251,7 +251,7 @@ class Test_Airdropper(unittest.TestCase):
             self.fail(f'Excpected not throws exception but it does: {err}')
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_slot')
+    @patch.object(SolanaInteractor, 'get_block_slot')
     def test_init_airdropper_slot_continue(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
@@ -262,7 +262,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_slot')
+    @patch.object(SolanaInteractor, 'get_block_slot')
     def test_init_airdropper_slot_continue_recent_slot_not_found(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [None]
@@ -273,7 +273,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_slot')
+    @patch.object(SolanaInteractor, 'get_block_slot')
     def test_init_airdropper_start_slot_parse_error(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
@@ -284,7 +284,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_slot')
+    @patch.object(SolanaInteractor, 'get_block_slot')
     def test_init_airdropper_slot_latest(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
@@ -295,7 +295,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_slot')
+    @patch.object(SolanaInteractor, 'get_block_slot')
     def test_init_airdropper_slot_number(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
@@ -306,7 +306,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_slot')
+    @patch.object(SolanaInteractor, 'get_block_slot')
     def test_init_airdropper_big_slot_number(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]

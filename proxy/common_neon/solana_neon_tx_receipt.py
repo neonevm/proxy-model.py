@@ -16,6 +16,9 @@ class SolTxSignSlotInfo(NamedTuple):
     sol_sign: str
     block_slot: int
 
+    def __str__(self) -> str:
+        return f'{self.block_slot}:{self.sol_sign}'
+
 
 class SolTxMetaInfo:
     def __init__(self, block_slot: int, sol_sign: str, tx: Dict[str, Any]):
@@ -24,11 +27,11 @@ class SolTxMetaInfo:
         self._tx = tx
 
     @property
-    def ident(self) -> Tuple[int, str]:
-        return self._block_slot, self._sol_sign
+    def ident(self) -> SolTxSignSlotInfo:
+        return SolTxSignSlotInfo(block_slot=self._block_slot, sol_sign=self._sol_sign)
 
     def __str__(self) -> str:
-        return ':'.join([str(s) for s in self.ident])
+        return str(self.ident)
 
     @staticmethod
     def from_response(sign_slot: SolTxSignSlotInfo, response: Dict[str, Any]) -> SolTxMetaInfo:
@@ -546,22 +549,18 @@ class SolTxReceiptInfo:
                 return inner_ix['instructions']
         return []
 
-    def iter_ix(self) -> Iterator[SolNeonIxReceiptInfo]:
+    def iter_sol_neon_ix(self) -> Iterator[SolNeonIxReceiptInfo]:
         for ix_idx, ix in enumerate(self._ix_list):
-            if not self._is_neon_program(ix):
-                continue
-            log_list = self._get_log_list(ix_idx)
-            if log_list is None:
-                continue
-            ix_meta = SolIxMetaInfo(ix=ix, idx=ix_idx, log_list=log_list)
-            yield SolNeonIxReceiptInfo(tx_meta=self._tx_meta, ix_meta=ix_meta, tx_cost=self._sol_cost)
+            if self._is_neon_program(ix):
+                log_list = self._get_log_list(ix_idx)
+                if log_list is not None:
+                    ix_meta = SolIxMetaInfo(ix=ix, idx=ix_idx, log_list=log_list)
+                    yield SolNeonIxReceiptInfo(tx_meta=self._tx_meta, ix_meta=ix_meta, tx_cost=self._sol_cost)
 
             inner_ix_list = self._get_inner_ix_list(ix_idx)
             for inner_idx, inner_ix in enumerate(inner_ix_list):
-                if not self._is_neon_program(inner_ix):
-                    continue
-                log_list = self._get_log_list(ix_idx, inner_idx)
-                if log_list is None:
-                    continue
-                ix_meta = SolIxMetaInfo(ix=inner_ix, idx=ix_idx, inner_idx=inner_idx, log_list=log_list)
-                yield SolNeonIxReceiptInfo(tx_meta=self._tx_meta, ix_meta=ix_meta, tx_cost=self._sol_cost)
+                if self._is_neon_program(inner_ix):
+                    log_list = self._get_log_list(ix_idx, inner_idx)
+                    if log_list is not None:
+                        ix_meta = SolIxMetaInfo(ix=inner_ix, idx=ix_idx, inner_idx=inner_idx, log_list=log_list)
+                        yield SolNeonIxReceiptInfo(tx_meta=self._tx_meta, ix_meta=ix_meta, tx_cost=self._sol_cost)

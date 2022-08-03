@@ -2,14 +2,15 @@ from solana.publickey import PublicKey
 import requests
 import base58
 import traceback
+import psycopg2.extensions
 from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
 
-from ..common_neon.environment_data import EVM_LOADER_ID, NEON_PRICE_USD, FINALIZED
+from ..common_neon.environment_data import EVM_LOADER_ID, NEON_PRICE_USD
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.indexer_base import IndexerBase
-from ..indexer.solana_tx_meta_collector import FinalizedSolTxMetaCollector
+from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
 from ..indexer.pythnetwork import PythNetworkClient
 from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
@@ -28,6 +29,7 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 class FailedAttempts(BaseDB):
     def __init__(self) -> None:
         super().__init__('failed_airdrop_attempts')
+        self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
     def airdrop_failed(self, eth_address, reason):
         with self._conn.cursor() as cur:
@@ -40,6 +42,7 @@ class FailedAttempts(BaseDB):
 class AirdropReadySet(BaseDB):
     def __init__(self):
         super().__init__('airdrop_ready')
+        self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):
         finished = int(datetime.now().timestamp())
@@ -73,7 +76,8 @@ class Airdropper(IndexerBase):
         super().__init__(solana, last_known_slot)
         self.latest_processed_slot = self._last_slot
         self.current_slot = 0
-        self._sol_tx_collector = FinalizedSolTxMetaCollector(self._last_slot, self._solana)
+        sol_tx_meta_dict = SolTxMetaDict()
+        self._sol_tx_collector = FinalizedSolTxMetaCollector(sol_tx_meta_dict, self._solana, self._last_slot)
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -343,8 +347,8 @@ class Airdropper(IndexerBase):
         self.process_scheduled_trxs()
 
     def process_receipts(self):
-        last_block_slot = self._solana.get_slot(FINALIZED)
-        for meta in self._sol_tx_collector.iter_tx_meta(self._sol_tx_collector.last_block_slot, last_block_slot):
+        last_block_slot = self._solana.get_block_slot(self._sol_tx_collector.commitment)
+        for meta in self._sol_tx_collector.iter_tx_meta(last_block_slot, self._sol_tx_collector.last_block_slot):
             self.current_slot = meta.block_slot
             if meta.tx['transaction']['message']['instructions'] is not None:
                 self.process_trx_airdropper_mode(meta.tx)

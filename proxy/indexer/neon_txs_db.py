@@ -3,17 +3,19 @@ from typing import Optional, List, Any, Iterator
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo
 
 from ..indexer.indexed_objects import NeonIndexedTxInfo
-from ..indexer.base_db import BaseDB, DBQuery
+from ..indexer.base_db import BaseDB
 
 
 class NeonTxsDB(BaseDB):
     def __init__(self):
         super().__init__('neon_transactions')
-        self._column_list = ['neon_sign', 'from_addr', 'sol_sign', 'sol_ix_idx', 'sol_ix_inner_idx', 'block_slot',
-                             'block_hash', 'tx_idx', 'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value',
-                             'calldata', 'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs']
+        self._column_list = [
+            'neon_sign', 'from_addr', 'sol_sign', 'sol_ix_idx', 'sol_ix_inner_idx', 'block_slot',
+            'tx_idx', 'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value',
+            'calldata', 'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs'
+        ]
 
-    def _tx_from_value(self, value_list: List[Any]) -> Optional[NeonTxReceiptInfo]:
+    def _tx_from_value(self, value_list: Optional[List[Any]]) -> Optional[NeonTxReceiptInfo]:
         if not value_list:
             return None
 
@@ -36,6 +38,7 @@ class NeonTxsDB(BaseDB):
             else:
                 pass
 
+        neon_tx_res.block_hash = value_list[-1]
         return NeonTxReceiptInfo(neon_tx=neon_tx, neon_res=neon_tx_res)
 
     def set_tx_list(self, cursor: BaseDB.Cursor, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
@@ -61,29 +64,53 @@ class NeonTxsDB(BaseDB):
 
         self._insert_batch(cursor, value_list_list)
 
-    def get_tx_by_neon_sign(self, neon_sign) -> Optional[NeonTxReceiptInfo]:
-        return self._tx_from_value(
-            self._fetchone(DBQuery(
-                key_list=[('neon_sign', neon_sign)],
-                order_list=[],
-            ))
-        )
+    def _build_request(self) -> str:
+        return f'''
+            SELECT {",".join(['a.' + c for c in self._column_list])},
+                   b.block_hash
+              FROM {self._table_name} AS a
+        INNER JOIN {self._blocks_table_name} AS b
+                ON b.block_slot = a.block_slot
+        '''
+
+    def get_tx_by_neon_sign(self, neon_sign: str) -> Optional[NeonTxReceiptInfo]:
+        request = self._build_request() + '''
+               AND b.is_active = True
+             WHERE a.neon_sign = %s
+        '''
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, (neon_sign,))
+            return self._tx_from_value(cursor.fetchone())
 
     def get_tx_list_by_block_slot(self, block_slot: int) -> List[NeonTxReceiptInfo]:
-        value_list = self._fetchall(DBQuery(
-            key_list=[('block_slot', block_slot)],
-            order_list=['tx_idx ASC'],
-        ))
+        request = self._build_request() + '''
+             WHERE a.block_slot = %s
+          ORDER BY a.tx_idx ASC
+        '''
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, (block_slot,))
+            row_list = cursor.fetchall()
 
-        if not value_list:
+        if not row_list:
             return []
 
-        return [self._tx_from_value(v) for v in value_list if v is not None]
+        return [self._tx_from_value(value_list) for value_list in row_list if value_list is not None]
 
     def get_tx_by_block_slot_tx_idx(self, block_slot: int, tx_idx: int) -> Optional[NeonTxReceiptInfo]:
-        return self._tx_from_value(
-            self._fetchone(DBQuery(
-                key_list=[('block_slot', block_slot), ('tx_idx', tx_idx)],
-                order_list=[],
-            ))
+        request = self._build_request() + '''
+             WHERE a.block_slot = %s
+               AND a.tx_idx = %s
+        '''
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, (block_slot, tx_idx))
+            return self._tx_from_value(cursor.fetchone())
+
+    def finalize_block_list(self, cursor: BaseDB.Cursor, base_block_slot: int, block_slot_list: List[int]) -> None:
+        cursor.execute(f'''
+            DELETE FROM {self._table_name}
+                  WHERE block_slot > %s
+                    AND block_slot < %s
+                    AND block_slot NOT IN ({','.join(["%s" for _ in block_slot_list])})
+            ''',
+            [base_block_slot, block_slot_list[-1]] + block_slot_list
         )
