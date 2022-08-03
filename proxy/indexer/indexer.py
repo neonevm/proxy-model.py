@@ -12,6 +12,7 @@ from ..indexer.i_inidexer_user import IIndexerUser
 from ..indexer.accounts_db import NeonAccountInfo
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
+from ..indexer.sol_tx_receipt_collector import FinalizedSolTxReceiptCollector
 from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff, CostInfo
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
@@ -20,12 +21,13 @@ from ..common_neon.solana_receipt_parser import SolReceiptParser
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.evm_decoder import decode_neon_tx_result
 from ..common_neon.environment_utils import get_solana_accounts
-from ..common_neon.environment_data import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
+from ..common_neon.environment_data import EVM_LOADER_ID, CONFIRMED, FINALIZED
+from ..common_neon.environment_data import CANCEL_TIMEOUT, SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
 
 
 @logged_group("neon.Indexer")
 class SolanaIxInfo:
-    def __init__(self, sign: str, slot: int, tx: Dict):
+    def __init__(self, sign: str, slot: int, tx: Optional[Dict]):
         self.sign = SolanaIxSignInfo(sign=sign, slot=slot, idx=-1)
         self.cost_info = CostInfo(sign, tx, EVM_LOADER_ID)
         self.tx = tx
@@ -926,38 +928,46 @@ class ExecuteOrContinueNoChainIdIxParser(ExecuteOrContinueIxParser):
 @logged_group("neon.Indexer")
 class BlocksIndexer:
     def __init__(self, db: IndexerDB, solana: SolanaInteractor):
-        self.db = db
-        self.solana = solana
-        self.counted_logger = MetricsToLogBuff()
+        self._db = db
+        self._solana = solana
+        self._counted_logger = MetricsToLogBuff()
+        self._commitment = FINALIZED
+        self._latest_block_slot = self._db.get_latest_block_slot()
 
-    def gather_blocks(self):
+    def _set_latest_block(self, slot: int) -> None:
+        self._latest_block_slot = slot
+        self._db.set_latest_block_slot(slot)
+
+    def get_latest_block_slot(self):
+        return self._latest_block_slot
+
+    def gather_blocks(self) -> None:
         start_time = time.time()
 
-        last_block_slot = self.db.get_latest_block_slot() + 1
-        start_block_slot = last_block_slot
+        start_block_slot = self._latest_block_slot
         block_list_len = 10000
         commitment = FINALIZED
 
         while block_list_len == 10000:
-            block_list = self.solana.get_block_slot_list(last_block_slot, block_list_len, commitment)
+            block_list = self._solana.get_block_slot_list(self._latest_block_slot + 1, block_list_len, self._commitment)
             block_list_len = len(block_list)
             # No more blocks
             if block_list_len == 0:
-                break
+                continue
 
-            block_info_list = self.solana.get_block_info_list(block_list, commitment)
-            last_block_slot = block_info_list[-1].slot
+            block_info_list = self._solana.get_block_info_list(block_list, self._commitment)
+            self._db.set_block_info_list(block_info_list)
 
-            self.db.set_block_info_list(block_info_list)
-            self.db.set_latest_block_slot(last_block_slot)
+            self._set_latest_block(block_info_list[-1].slot)
+
 
         gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.counted_logger.print(
+        self._counted_logger.print(
             self.debug,
             list_params={"gather_blocks_ms": gather_blocks_ms},
             latest_params={
                 "start_block_slot": start_block_slot,
-                "last_block_slot": last_block_slot
+                "latest_block_slot": self._latest_block_slot
             }
         )
 
@@ -966,16 +976,17 @@ class BlocksIndexer:
 class Indexer(IndexerBase):
     def __init__(self, solana_url, indexer_user: IIndexerUser):
         self.debug(f'Finalized commitment: {FINALIZED}')
+        self.debug(f'Confirmed commitment: {CONFIRMED}')
         solana = SolanaInteractor(solana_url)
         self.db = IndexerDB(solana)
         last_known_slot = self.db.get_min_receipt_slot()
-        IndexerBase.__init__(self, solana, last_known_slot)
-        self.indexed_slot = self.last_slot
+        super().__init__(solana, last_known_slot)
         self.min_used_slot = 0
         self._cancel_tx_executor = CancelTxExecutor(solana, get_solana_accounts()[0])
-        self.block_indexer = BlocksIndexer(db=self.db, solana=solana)
-        self.counted_logger = MetricsToLogBuff()
+        self._block_indexer = BlocksIndexer(db=self.db, solana=solana)
+        self._counted_logger = MetricsToLogBuff()
         self._user = indexer_user
+        self._sol_tx_collector = FinalizedSolTxReceiptCollector(self.last_slot, self.solana)
 
         self.state = ReceiptsParserState(db=self.db, solana=solana, indexer_user=indexer_user)
         self.ix_decoder_map = {
@@ -1009,62 +1020,58 @@ class Indexer(IndexerBase):
         self.def_decoder = DummyIxDecoder('Unknown', self.state)
 
     def process_functions(self):
-        self.block_indexer.gather_blocks()
-        IndexerBase.process_functions(self)
+        self._block_indexer.gather_blocks()
         self.process_receipts()
         self._cancel_tx_executor.execute_tx_list()
         self._cancel_tx_executor.clear()
 
     def process_receipts(self):
         start_time = time.time()
-        last_block_slot = self.db.get_latest_block_slot()
-        start_indexed_slot = self.indexed_slot
+        last_block_slot = self._block_indexer.get_latest_block_slot()
+        start_indexed_slot = self._sol_tx_collector.get_last_slot()
 
-        max_slot = 1
-        while max_slot > 0:
-            max_slot = 0
-            for slot, sign, tx in self.transaction_receipts.get_txs(self.indexed_slot, last_block_slot):
-                max_slot = max(max_slot, slot)
+        max_slot = 0
+        for receipt in self._sol_tx_collector.iter_tx_receipt(last_block_slot):
+            max_slot = receipt.slot
+            ix_info = SolanaIxInfo(sign=receipt.sign, slot=receipt.slot, tx=receipt.tx)
 
-                ix_info = SolanaIxInfo(sign=sign, slot=slot, tx=tx)
+            for _ in ix_info.iter_ixs():
+                req_id = ix_info.sign.get_req_id()
+                with logging_context(sol_tx=req_id):
+                    self.state.set_ix(ix_info)
+                    (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
 
-                for _ in ix_info.iter_ixs():
-                    req_id = ix_info.sign.get_req_id()
-                    with logging_context(sol_tx=req_id):
-                        self.state.set_ix(ix_info)
-                        (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
+            self.state.add_tx_cost(ix_info.cost_info)
 
-                self.state.add_tx_cost(ix_info.cost_info)
+        indexed_slot = self._sol_tx_collector.get_last_slot()
 
-            if max_slot > 0:
-                self.indexed_slot = max_slot + 1
-                self.min_used_slot = self.state.complete_done_objects(self.indexed_slot)
+        if max_slot > 0:
+            self.min_used_slot = self.state.complete_done_objects(indexed_slot)
 
-            self._process_status()
+        self._process_status()
 
         was_skipped_tx = False
         # cancel transactions with long inactive time
         for tx in self.state.iter_txs():
-            if tx.storage_account and (abs(tx.slot - self.indexed_slot) > CANCEL_TIMEOUT):
-                if (not self.unlock_accounts(tx)) and (abs(tx.slot - self.indexed_slot) > SKIP_CANCEL_TIMEOUT):
+            if tx.storage_account and (abs(tx.slot - indexed_slot) > CANCEL_TIMEOUT):
+                if (not self.unlock_accounts(tx)) and (abs(tx.slot - indexed_slot) > SKIP_CANCEL_TIMEOUT):
                     self.debug(f'skip to cancel {tx}')
-                    tx.neon_res.slot = self.indexed_slot
+                    tx.neon_res.slot = indexed_slot
                     self.state.done_tx(tx)
                     was_skipped_tx = True
 
         if was_skipped_tx:
-            self.min_used_slot = self.state.complete_done_objects(self.indexed_slot)
+            self.min_used_slot = self.state.complete_done_objects(indexed_slot)
 
         process_receipts_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.counted_logger.print(
+        self._counted_logger.print(
             self.debug,
             list_params={
                 "process receipts ms": process_receipts_ms,
-                "processed slots": self.indexed_slot - start_indexed_slot
+                "processed slots": indexed_slot - start_indexed_slot
             },
             latest_params={
-                "transaction receipts len": self.transaction_receipts.size(),
-                "indexed slot": self.indexed_slot,
+                "indexed slot": indexed_slot,
                 "min used slot": self.min_used_slot
             }
         )
