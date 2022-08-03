@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import dataclasses
 import os
+import secrets
+
 import requests
 import solcx
+from eth_account import Account
 from eth_account.account import LocalAccount
 from web3 import Web3, eth as web3_eth
 import eth_utils
@@ -57,3 +62,8 @@ def request_airdrop(address, amount: int = 10):
         print()
         print('Bad response:', r)
     assert(r.ok)
+
+
+def create_account() -> LocalAccount:
+    private_key = "0x" + secrets.token_hex(32)
+    return Account.from_key(private_key)

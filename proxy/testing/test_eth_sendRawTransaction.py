@@ -1,12 +1,16 @@
+import time
 import unittest
 import os
 import json
-
+from typing import List
 import eth_utils
+from logged_groups import logged_group
 from web3 import Web3
-from .testing_helpers import request_airdrop
 from solcx import compile_source
+from eth_account.account import LocalAccount as EthAccount
+from web3.types import TxReceipt
 
+from .testing_helpers import create_account, request_airdrop, SolidityContractDeployer, ContractCompiledInfo
 
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
@@ -81,7 +85,7 @@ contract test_185 {
 }
 '''
 
-
+@logged_group("neon.TestCases")
 class Test_eth_sendRawTransaction(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -547,6 +551,51 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             print('message:', response['message'])
             message = 'insufficient funds for transfer'
             self.assertEqual(response['message'][:len(message)], message)
+
+    def test_call_trx_affects_multiple_accounts(self):
+        names = ["falaleev", "rozhkov",    "lygin",    "loboda",    "trepalin",       "borisenko", "begisheva",  "taktasheva",
+                 "seleznev", "kondratiev", "suharev",  "yurchenko", "miroshnichenko", "gurieva",   "goldshtein", "suvorova",
+                 "medvedev", "kurkovich",  "zaznobin", "garshina",  "titushkina",     "zee",       "frane",      "julius"]
+
+        wallets = {name: create_account() for name in names}
+
+        contract_deployer = SolidityContractDeployer()
+        web3 = contract_deployer.web3
+
+        signer: EthAccount = create_account()
+        self.info(f'Requesting airdrop for signer: key: {signer.key.hex()}, address: {signer.address}')
+        request_airdrop(signer.address)
+
+        source: str
+        with open("./proxy/testing/solidity_contracts/NeonDistributor.sol") as distributor_sol:
+            source = distributor_sol.read()
+
+        contract: ContractCompiledInfo = contract_deployer.compile_and_deploy_contract(signer, source)
+        tx_hashes: List[TxReceipt] = []
+        for name, account in wallets.items():
+
+            set_address = contract.functions.set_address(name, bytes.fromhex(account.address[2:]))
+            nonce = web3.eth.get_transaction_count(signer.address)
+            tx_built = set_address.buildTransaction({"nonce": nonce})
+            msg = signer.sign_transaction(tx_built)
+            tx_hash = web3.eth.send_raw_transaction(msg.rawTransaction)
+            tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+            self.assertIsNotNone(tx_hash)
+            self.assertEqual(tx_receipt.status, 1)
+            tx_hashes.append(tx_hash)
+            address = contract.functions.get_address(name).call()
+            self.assertEqual(address, wallets[name].address)
+
+        distribute_value = contract.functions.distribute_value()
+        nonce = web3.eth.get_transaction_count(signer.address)
+        tx_built = distribute_value.buildTransaction({"nonce": nonce})
+        tx_built["value"] = 12
+        msg = signer.sign_transaction(tx_built)
+        tx_hash = web3.eth.send_raw_transaction(msg.rawTransaction)
+        tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+    def test_call_a_lot_of_trx_simultaniously(self):
+        pass
 
 
 if __name__ == '__main__':
