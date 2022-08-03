@@ -72,22 +72,15 @@ function wait-for-faucet {
 }
 wait-for-faucet
 
-function test_1 {
-    echo
-    echo "Run proxy tests..."
-    docker exec -e UNITTEST_TESTPATH=${UNITTEST_TESTPATH:=} proxy ./proxy/deploy-test.sh ${EXTRA_ARGS:-}
-}
-export -f test_1
-
-function test_2 {
+function run_uniswap_test {
     export FAUCET_URL=$(docker exec proxy bash -c 'echo "${FAUCET_URL}"')
     echo
+    echo "Run uniswap tests..."
     echo "FAUCET_URL ${FAUCET_URL}"
 
     declare UNISWAP_V2_CORE_IMAGE=neonlabsorg/uniswap-v2-core:${UNISWAP_V2_CORE_COMMIT}
     [ "${SKIP_DOCKER_PULL}" == "YES" ] || docker pull "${UNISWAP_V2_CORE_IMAGE}"
 
-    echo "Run uniswap tests..."
     docker run --rm --network=container:proxy \
         -e FAUCET_URL \
         --entrypoint ./deploy-test.sh \
@@ -95,15 +88,34 @@ function test_2 {
         $UNISWAP_V2_CORE_IMAGE \
         all
 }
-export -f test_2
+export -f run_uniswap_test
+
+function run_test {
+    declare TESTNAME="${1}"
+    if [ "${TESTNAME}" == "UNISWAP" ]; then
+        run_uniswap_test
+    else
+        docker exec -e SKIP_PREPARE_DEPLOY_TEST=YES -e TESTNAME=${TESTNAME} proxy ./proxy/deploy-test.sh ${EXTRA_ARGS:-}
+    fi
+}
+export -f run_test
+
+function get_test_list {
+    echo "UNISWAP"
+    if [[ -z "${UNITTEST_TESTNAME}" ]]; then
+        docker exec proxy find . -type f -name "test_*.py" -printf "%f\n"
+    else
+        echo ${UNITTEST_TESTNAME}
+    fi
+}
+export -f get_test_list
 
 echo
-echo "Run tests in parallel. Don't worry, the results will be visible on done..."
-docker cp proxy:/usr/bin/parallel ./parallel
-seq 2 | ./parallel --halt now,fail=1 --jobs 2 test_{}
+echo "Run tests in parallel. "
 
-# test_1
-# test_2
+docker cp proxy:/usr/bin/parallel ./parallel
+docker exec proxy ./proxy/prepare-deploy-test.sh ${EXTRA_ARGS:-}
+get_test_list | ./parallel --halt now,fail=1 run_test {}
 
 echo "Run tests return"
 exit 0
