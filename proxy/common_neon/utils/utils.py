@@ -82,8 +82,6 @@ class SolanaBlockInfo:
         self.parent_block_slot = parent_block_slot
         # TODO: rename to block_parent_hash
         self.parent_hash = None
-        # TODO: remove
-        self.signs = []
 
     def __str__(self) -> str:
         return str_fmt_object(self)
@@ -93,9 +91,6 @@ class SolanaBlockInfo:
 
     def __setstate__(self, src):
         self.__dict__ = src
-
-    def is_empty_fake(self) -> bool:
-        return self.is_fake and (len(self.signs) == 0)
 
     def is_empty(self) -> bool:
         return self.time is None

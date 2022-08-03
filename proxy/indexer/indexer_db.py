@@ -42,7 +42,7 @@ class IndexerDB:
             self._latest_block_slot = neon_block.block_slot
 
         with self._sol_blocks_db.cursor() as cursor:
-            self._sol_blocks_db.set_block(cursor, neon_block.sol_block, is_finalized)
+            self._sol_blocks_db.set_block_list(cursor, neon_block.iter_history_block(), is_finalized)
             self._neon_txs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
             self._sol_neon_txs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
             self._neon_tx_logs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
@@ -50,7 +50,7 @@ class IndexerDB:
 
     def finalize_block(self, neon_block: NeonIndexedBlockInfo) -> None:
         with self._sol_blocks_db.cursor() as cursor:
-            self._sol_blocks_db.finalize_block(cursor, neon_block.sol_block, True)
+            self._sol_blocks_db.finalize_block_list(cursor, neon_block.iter_history_block())
         self._constants_db['finalized_block_slot'] = neon_block.block_slot
 
     def get_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:

@@ -15,10 +15,10 @@ from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSignSlotInf
 
 @logged_group("neon.Indexer")
 class SolTxMetaCollector(ABC):
-    def __init__(self, solana: SolanaInteractor, commitment: str):
+    def __init__(self, solana: SolanaInteractor, commitment: str, is_finalized: bool):
         self._solana = solana
         self._commitment = commitment
-        self._is_finalized = (commitment == FINALIZED)
+        self._is_finalized = is_finalized
         self._tx_meta_dict: Dict[SolTxSignSlotInfo, Dict[str, Any]] = {}
         self._thread_pool = ThreadPool(INDEXER_PARALLEL_REQUEST_COUNT)
 
@@ -98,10 +98,9 @@ class SolTxMetaCollector(ABC):
 @logged_group("neon.Indexer")
 class FinalizedSolTxMetaCollector(SolTxMetaCollector):
     def __init__(self, stop_slot: int, solana: SolanaInteractor):
-        super().__init__(solana, commitment=FINALIZED)
+        super().__init__(solana, commitment=FINALIZED, is_finalized=True)
         self.debug(f'Finalized commitment: {self._commitment}')
         self._signs_db = SolSignsDB()
-        self._prev_start_slot = 0
         self._stop_slot = stop_slot
         self._sign_cnt = 0
         self._last_info: Optional[SolTxMetaInfo] = None
@@ -133,7 +132,7 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
         self._last_info = None
         self._sign_cnt = 0
 
-    def _iter_sign_slot_list(self, start_slot: int, is_long_list: bool) -> Iterator[List[str]]:
+    def _iter_sign_slot_list(self, start_slot: int, is_long_list: bool) -> Iterator[List[SolTxSignSlotInfo]]:
         start_sign: Optional[str] = ''
         next_info: Optional[SolTxSignSlotInfo] = None
         while start_sign is not None:
@@ -151,14 +150,11 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
             yield sign_slot_list
 
     def iter_tx_meta(self, start_slot: int, stop_slot: int) -> Iterator[SolTxMetaInfo]:
-        if (start_slot < stop_slot) or (start_slot <= self._prev_start_slot):
-            return
+        assert start_slot >= stop_slot
 
-        if self._stop_slot != stop_slot:
+        if self._stop_slot > stop_slot:
             self._reset_checkpoint_cache()
             self._stop_slot = stop_slot
-
-        self._prev_start_slot = start_slot
 
         is_long_list = (start_slot - self._stop_slot) > 3
         if is_long_list:
@@ -173,9 +169,8 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
 @logged_group("neon.Indexer")
 class ConfirmedSolTxMetaCollector(SolTxMetaCollector):
     def __init__(self, solana: SolanaInteractor):
-        super().__init__(solana, commitment=CONFIRMED)
+        super().__init__(solana, commitment=CONFIRMED, is_finalized=False)
         self.debug(f'Confirmed commitment: {self._commitment}')
-        self._prev_start_slot = 0
         self._last_slot = 0
 
     @property
@@ -183,9 +178,7 @@ class ConfirmedSolTxMetaCollector(SolTxMetaCollector):
         return self._last_slot
 
     def iter_tx_meta(self, start_slot: int, stop_slot: int) -> Iterator[SolTxMetaInfo]:
-        if (start_slot < stop_slot) or (start_slot == self._prev_start_slot):
-            return
-        self._prev_start_slot = start_slot
+        assert start_slot >= stop_slot
 
         for sign_slot in list(self._tx_meta_dict.keys()):
             if (sign_slot.block_slot > start_slot) or (sign_slot.block_slot < stop_slot):

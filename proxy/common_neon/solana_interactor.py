@@ -507,7 +507,7 @@ class SolanaInteractor:
         opts = {
             "commitment": commitment,
             "encoding": "json",
-            "transactionDetails": "signatures",
+            "transactionDetails": "none",
             "rewards": False
         }
 
@@ -518,7 +518,6 @@ class SolanaInteractor:
 
         return SolanaBlockInfo(
             slot=slot,
-            is_finalized=False,
             hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
             time=net_block['blockTime'],
             parent_block_slot=net_block['parentSlot']
@@ -543,15 +542,11 @@ class SolanaInteractor:
         response_list = self._send_rpc_batch_request('getBlock', request_list)
         for slot, response in zip(block_slot_list, response_list):
             if (not response) or ('result' not in response):
-                block = SolanaBlockInfo(
-                    slot=slot,
-                    is_finalized=False,
-                )
+                block = SolanaBlockInfo(slot=slot)
             else:
                 net_block = response['result']
                 block = SolanaBlockInfo(
                     slot=slot,
-                    is_finalized=False,
                     hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
                     time=net_block['blockTime'],
                     parent_block_slot=net_block['parentSlot']
