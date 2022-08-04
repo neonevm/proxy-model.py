@@ -143,9 +143,6 @@ class ERC20Wrapper:
         for account in emulating_result['accounts']:
             key = account['account']
             eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
-            if account['contract']:
-                key = account['contract']
-                eth_accounts[key] = AccountMeta(pubkey=PublicKey(key), is_signer=False, is_writable=True)
 
         for account in emulating_result['solana_accounts']:
             key = account['pubkey']
