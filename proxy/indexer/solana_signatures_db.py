@@ -26,8 +26,8 @@ class SolSignsDB(BaseDB):
     def get_next_sign(self, block_slot: int) -> Optional[SolTxSigSlotInfo]:
         with self._conn.cursor() as cursor:
             cursor.execute(f'''
-                SELECT block_slot,
-                       signature
+                SELECT signature,
+                       block_slot
                   FROM {self._table_name}
                  WHERE block_slot > {block_slot}
               ORDER BY block_slot
