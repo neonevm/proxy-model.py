@@ -8,12 +8,13 @@ from solana.sysvar import SYSVAR_RENT_PUBKEY
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import TOKEN_PROGRAM_ID
 from logged_groups import logged_group
+from spl.token.instructions import get_associated_token_address, create_associated_token_account, approve, ApproveParams
 
+from .solana_interactor import SolanaInteractor
 from ..common_neon.elf_params import ElfParams
 
 from .address import accountWithSeed, ether2program, EthereumAddress
 from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
-from .layouts import CREATE_ACCOUNT_LAYOUT
 from .environment_data import EVM_LOADER_ID
 
 obligatory_accounts = []
@@ -32,13 +33,6 @@ def create_account_with_seed_layout(base, seed, lamports, space):
             )
         )
     )
-
-
-def create_account_layout(ether: bytes, nonce: int):
-    return bytes.fromhex("18") + CREATE_ACCOUNT_LAYOUT.build(dict(
-        ether=ether,
-        nonce=nonce,
-    ))
 
 
 def write_holder_layout(nonce, offset, data):
@@ -130,23 +124,6 @@ class NeonInstruction:
             data=create_account_with_seed_layout(self.operator_account, seed_str, lamports, space)
         )
 
-    def make_create_eth_account_instruction(self, eth_address: EthereumAddress) -> TransactionInstruction:
-        if isinstance(eth_address, str):
-            eth_address = EthereumAddress(eth_address)
-        pda_account, nonce = ether2program(eth_address)
-        self.debug(f'Create eth account: {eth_address}, sol account: {pda_account}, nonce: {nonce}')
-
-        base = self.operator_account
-        data = create_account_layout(bytes(eth_address), nonce)
-        return TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=data,
-            keys=[
-                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(pda_account), is_signer=False, is_writable=True),
-            ])
-
     def make_erc20token_account_instruction(self, token_info) -> TransactionInstruction:
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
@@ -214,8 +191,8 @@ class NeonInstruction:
         if storage is None:
             storage = self.storage
         return TransactionInstruction(
-            program_id = EVM_LOADER_ID,
-            data = bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
+            program_id=EVM_LOADER_ID,
+            data=bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
             keys=[
                 AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
@@ -277,3 +254,44 @@ class NeonInstruction:
                                                                                steps: int,
                                                                                index: int) -> TransactionInstruction:
         return self._make_partial_call_or_continue_from_account_data('1B', steps, index)
+
+    def make_airdrop_neon_tokens_instructions(
+        self,
+        solana: SolanaInteractor,
+        user_ether_address: EthereumAddress,
+        amount: int,
+    ) -> [TransactionInstruction]:
+        instructions = []
+        mint = ElfParams().neon_token_mint
+        (neon_evm_authority, _) = PublicKey.find_program_address([b"Deposit"], PublicKey(EVM_LOADER_ID))
+        pool_token_account = get_associated_token_address(neon_evm_authority, mint)
+        source_token_account = get_associated_token_address(self.operator_account, mint)
+        (user_solana_address, _) = ether2program(user_ether_address)
+
+        if amount > 0:
+            if solana.get_sol_balance(pool_token_account, commitment="processed") is None:
+                instructions.append(create_associated_token_account(self.operator_account, neon_evm_authority, mint))
+
+            instructions.append(approve(ApproveParams(
+                program_id=TOKEN_PROGRAM_ID,
+                source=source_token_account,
+                delegate=neon_evm_authority,
+                owner=self.operator_account,
+                amount=amount * (10 ** 9),
+            )))
+        instructions.append(TransactionInstruction(
+            program_id=EVM_LOADER_ID,
+            data=bytes.fromhex("1e") + bytes(user_ether_address),
+            keys=[
+                AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=PublicKey(user_solana_address), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=neon_evm_authority, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+            ]
+        ))
+
+        return instructions
+

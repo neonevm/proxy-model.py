@@ -23,8 +23,6 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 
-from proxy.common_neon.neon_instruction import create_account_layout
-
 system = "11111111111111111111111111111111"
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"

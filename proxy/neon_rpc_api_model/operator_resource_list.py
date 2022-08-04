@@ -26,7 +26,7 @@ from ..common_neon.environment_data import EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, RE
 
 ## TODO: DIP corruption, get rid of back dependency
 # from .transaction_sender import NeonTxSender
-from .neon_tx_stages import NeonCancelTxStage, NeonCreateAccountTxStage, NeonCreateAccountWithSeedStage
+from .neon_tx_stages import NeonCancelTxStage, NeonAirdropTxStage, NeonCreateAccountWithSeedStage
 
 
 class OperatorResourceInfo:
@@ -177,7 +177,7 @@ class OperatorResourceList:
             self._validate_operator_balance()
 
             storage, holder = self._create_perm_accounts(seed_list)
-            ether = self._create_ether_account()
+            ether = self._init_ether_account()
             resource.ether = ether
             resource.storage = storage
             resource.holder = holder
@@ -214,7 +214,7 @@ class OperatorResourceList:
                          f'min_operator_balance_to_warn = {min_operator_balance_to_warn}; ' +
                          f'min_operator_balance_to_err = {min_operator_balance_to_err}; ')
 
-    def _create_ether_account(self) -> EthereumAddress:
+    def _init_ether_account(self) -> EthereumAddress:
         rid = self._resource.rid
         opkey = str(self._resource.public_key())
 
@@ -226,12 +226,11 @@ class OperatorResourceList:
             self.debug(f"Use existing ether account {str(solana_address)} for resource {opkey}:{rid}")
             return ether_address
 
-        stage = NeonCreateAccountTxStage(self._s, {"address": ether_address, "size": NEON_ACCOUNT_BASE_SIZE})
-        stage.balance = self._solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0]
+        stage = NeonAirdropTxStage(self._s, {"address": ether_address, "amount": 0})
         stage.build()
 
         self.debug(f"Create new ether account {str(solana_address)} for resource {opkey}:{rid}")
-        SolTxListSender(self._s, [stage.tx], NeonCreateAccountTxStage.NAME).send(self._resource.signer)
+        SolTxListSender(self._s, [stage.tx], NeonAirdropTxStage.NAME).send(self._resource.signer)
 
         return ether_address
 

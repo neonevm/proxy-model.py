@@ -10,6 +10,7 @@ from solana.transaction import AccountMeta
 
 from ..common_neon.address import accountWithSeed
 from ..common_neon.compute_budget import TransactionWithComputeBudget
+from ..common_neon.constants import NEON_ACCOUNT_BASE_SIZE
 
 
 class NeonTxStage(metaclass=abc.ABCMeta):
@@ -77,19 +78,21 @@ class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
 
 
 @logged_group("neon.Proxy")
-class NeonCreateAccountTxStage(NeonTxStage):
-    NAME = 'createNeonAccount'
+class NeonAirdropTxStage(NeonTxStage):
+    NAME = 'airdropNeon'
 
     def __init__(self, sender, account_desc):
         NeonTxStage.__init__(self, sender)
-        self._address = account_desc["address"]
-        self.size = account_desc['size']
-        self.balance = 0
+        self.address = account_desc["address"]
+        self.amount = account_desc["amount"]
+        self.balance = self.s.solana.get_multiple_rent_exempt_balances_for_size([NEON_ACCOUNT_BASE_SIZE])[0]
 
     def build(self):
         assert self._is_empty()
-        self.debug(f'Create account {self._address}: (size {self.size})')
-        self.tx.add(self.s.builder.make_create_eth_account_instruction(self._address))
+        self.debug(f'Airdrop {self.address}: (amount {self.amount})')
+        instructions = self.s.builder.make_airdrop_neon_tokens_instructions(self.s.solana, self.address, self.amount)
+        for instruction in instructions:
+            self.tx.add(instruction)
 
 
 @logged_group("neon.Proxy")

@@ -10,7 +10,7 @@ from typing import Dict, Optional, Any
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 
-from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateERC20TxStage
+from .neon_tx_stages import NeonAirdropTxStage, NeonCreateERC20TxStage
 
 from .operator_resource_list import OperatorResourceInfo
 from ..common_neon.compute_budget import TransactionWithComputeBudget
@@ -147,7 +147,7 @@ class NeonTxSender:
     def _parse_accounts_list(self, emulated_result_accounts):
         for account_desc in emulated_result_accounts:
             if account_desc['new'] and ((account_desc['size'] > NEON_ACCOUNT_BASE_SIZE) or account_desc['writable']):
-                stage = NeonCreateAccountTxStage(self, account_desc)
+                stage = NeonAirdropTxStage(self, account_desc)
                 self._create_account_list.append(stage)
 
             self._add_meta(account_desc['account'], True)
