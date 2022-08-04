@@ -4,24 +4,18 @@ import asyncio
 import logging
 from random import randint
 
-import secrets
-
 from web3 import Web3, Account
 from typing import Tuple, Any, List, Dict
 
 import unittest
 from unittest.mock import patch, MagicMock, call
 
-
 from ..mempool.mempool import MemPool, IMPExecutor
 from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxResult, MPResultCode
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 from ..common_neon.eth_proto import NeonTx
 
-
-def create_account() -> Account:
-    private_key = "0x" + secrets.token_hex(32)
-    return Account.from_key(private_key)
+from .testing_helpers import create_account
 
 
 def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int, from_acc: Account = None,
