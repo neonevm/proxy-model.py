@@ -39,6 +39,10 @@ from ..common_neon.eth_proto import NeonTx
 from .operator_resource_list import OperatorResourceInfo
 
 
+SolTxList = List[Transaction]
+NamedTxList = Tuple[str, SolTxList]
+
+
 @logged_group("neon.MemPool")
 class AccountTxListBuilder:
     def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder):
@@ -212,6 +216,9 @@ class BaseNeonTxStrategy(abc.ABC):
         return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
+
+        self._user.update_tx_accounts_data(self._ctx.eth_tx, self._neon_tx_exec_cfg.accounts_data)
+
         self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.accounts_data)
         tx_list_name = self._account_tx_list_builder.name
         tx_list = self._account_tx_list_builder.get_tx_list()
@@ -244,7 +251,6 @@ class BaseNeonTxStrategy(abc.ABC):
 
     def execute(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
         assert self.is_valid()
-        self._user.update_tx_accounts_data(self._ctx.eth_tx, self._neon_tx_exec_cfg.accounts_data)
         self._execute_prep_tx_list(waiter)
         return self._execute_tx_list(waiter)
 
@@ -267,6 +273,7 @@ class BaseNeonTxStrategy(abc.ABC):
         # Predefined blockhash is used only to check transaction size, the transaction won't be sent to network
         tx.recent_blockhash = Blockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
         tx.sign(self._signer)
+        self.debug(f"Validate tx size: {tx}")
         try:
             tx.serialize()
             return True
@@ -283,6 +290,17 @@ class BaseNeonTxStrategy(abc.ABC):
 
         self._error_msg = "Underpriced transaction without chain-id"
         return False
+
+
+def extend_tx_list(first: NamedTxList, second: NamedTxList) -> NamedTxList:
+    if len(first[1]) == 0:
+        return second
+    if len(second[1]) == 0:
+        return first
+    tx_list_name = ' + '.join([first[0], second[0]])
+    tx_list = first[1]
+    tx_list.extend(second[1])
+    return tx_list_name, tx_list
 
 
 @logged_group("neon.MemPool")
@@ -537,7 +555,6 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         assert self.is_valid()
         self._execute_writting_holder(waiter)
         self.debug(f"Transaction saved in holder account, updating accounts")
-        self._user.update_tx_accounts_data(self._ctx.eth_tx, self._neon_tx_exec_cfg.accounts_data)
         self._execute_prep_tx_list(waiter)
         return self._execute_tx_list(waiter)
 
@@ -591,7 +608,7 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
     def _validate(self) -> bool:
         return (
             self._validate_tx_wo_chainid() and
-            self._build_alt_info() and
+            self._init_alt_info() and
             self._validate_tx_size()
         )
 
@@ -601,12 +618,11 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
     def _build_legacy_cancel_tx(self) -> Transaction:
         return super().build_cancel_tx()
 
-    def _build_alt_info(self) -> bool:
+    def _init_alt_info(self) -> bool:
         legacy_tx = self._build_legacy_tx()
         try:
-            alt_builder = AddressLookupTableTxBuilder(self._solana, self._builder, self._signer, self._alt_close_queue)
-            self._alt_builder = alt_builder
-            self._alt_info = alt_builder.build_alt_info(legacy_tx)
+            self._alt_builder = AddressLookupTableTxBuilder(self._solana, self._builder, self._signer, self._alt_close_queue)
+            self._alt_info = self._alt_builder.build_alt_info(legacy_tx)
         except Exception as e:
             self._error_msg = str(e)
             return False
@@ -620,21 +636,47 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
         legacy_tx = self._build_legacy_cancel_tx()
         return V0Transaction(address_table_lookups=[self._alt_info]).add(legacy_tx)
 
-    def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
-        tx_list_name, tx_list = super()._build_prep_tx_list()
+    def _extend_tx_list_with_creating_alt(self, alt_tx_list: AddressLookupTableTxList,
+                                          tx_list_name: str = '',
+                                          tx_list: Optional[List[Transaction]] = None) -> NamedTxList:
+        cnt = len(alt_tx_list.create_alt_tx_list)
+        creating_tx_list_name = ' + '.join([f'CreateLookupTable({cnt})', f'ExtendLookupTable({cnt})'])
+        return extend_tx_list((tx_list_name, tx_list), (creating_tx_list_name, alt_tx_list.create_alt_tx_list))
 
-        self._alt_tx_list = self._alt_builder.build_alt_tx_list(self._alt_info)
-        sig_list = self._alt_builder.prep_alt_list(self._alt_tx_list, tx_list_name, tx_list, waiter)
-        self._alt_builder.update_alt_info_list([self._alt_info])
-
-        return sig_list
+    def _extend_tx_list_with_extending_alt(self, alt_tx_list: AddressLookupTableTxList, tx_list_name: str = '',
+                                           tx_list: Optional[List[Transaction]] = None) -> NamedTxList:
+        if tx_list is None:
+            tx_list: List[Transaction] = []
+        cnt = len(alt_tx_list.extend_alt_tx_list)
+        return extend_tx_list((tx_list_name, tx_list), (f'ExtendLookupTable({cnt})', alt_tx_list.extend_alt_tx_list))
 
     def execute(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
+        assert self.is_valid()
         try:
-            return super().execute(waiter)
+            self._alt_tx_list = self._alt_builder.build_alt_tx_list(self._alt_info)
+            self.debug(f"Alt create: {len(self._alt_tx_list.create_alt_tx_list)}, alt extend: {len(self._alt_tx_list.extend_alt_tx_list)}")
+
+            holder_named_tx_list = self.get_holder_tx_list()
+            create_alt_named_tx_list = self._extend_tx_list_with_creating_alt(self._alt_tx_list, *holder_named_tx_list)
+            self._execute_sol_tx_list(*create_alt_named_tx_list, waiter)
+            self._alt_builder.update_alt_info_list([self._alt_info])
+
+            extending_alt_tx_list = self._extend_tx_list_with_extending_alt(self._alt_tx_list)
+            create_account_tx_list = extend_tx_list(extending_alt_tx_list, super()._build_prep_tx_list())
+            self._execute_sol_tx_list(*create_account_tx_list)
+            self._account_tx_list_builder.clear_tx_list()
+
+            return self._execute_tx_list(waiter)
+
         finally:
             if (self._alt_tx_list is not None) and (len(self._alt_tx_list) > 0):
-                self._alt_builder.done_alt_list(self._alt_tx_list)
+                deactivate_tx_list = self._alt_builder.get_deactivate_alt_tx_list(self._alt_tx_list)
+                self._execute_sol_tx_list(*deactivate_tx_list)
+
+    def _execute_sol_tx_list(self, tx_list_name, tx_list, waiter: IConfirmWaiter = None) -> List[str]:
+        tx_sender = SolTxListSender(self._solana, self._signer)
+        tx_sender.send(tx_list_name, tx_list, waiter=waiter)
+        return tx_sender.success_sig_list
 
 
 class BaseNoChainIdNeonStrategy:

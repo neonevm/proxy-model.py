@@ -137,7 +137,6 @@ class MPTxSchedule:
         self.debug(f"Got collection for sender: {mp_tx_request.sender_address}, there are already txs: {sender_txs.len()}")
         sender_txs.add_tx(mp_tx_request)
         bisect.insort_left(self._sender_tx_pools, sender_txs)
-
         self._check_oversized_and_reduce()
 
     def get_mp_tx_count(self):

@@ -77,10 +77,8 @@ class AddressLookupTableInfo:
             raise AddressLookupTableError(f'The lookup table {str(self._table_acct)} has duplicates')
 
         if str(self._table_acct) != str(alt_acct_info.table_account):
-            raise AddressLookupTableError(
-                'Trying to update account list from another lookup table: ' +
-                f'{str(self._table_acct)} != {str(alt_acct_info.table_account)}'
-            )
+            raise AddressLookupTableError('Trying to update account list from another lookup table: ' +
+                                          f'{str(self._table_acct)} != {str(alt_acct_info.table_account)}')
 
         if not len(self._acct_key_list):
             # Init from the scratch

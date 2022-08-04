@@ -64,7 +64,7 @@ class CancelTxExecutor:
 
         # Prepare Address Lookup Tables
         if len(self._alt_tx_list):
-            sig_list += self._alt_builder.prep_alt_list(self._alt_tx_list)
+            sig_list += self._alt_builder.execute_creating_alt(self._alt_tx_list)
 
             # Update lookups from Solana
             self._alt_builder.update_alt_info_list(self._alt_info_list)
