@@ -146,10 +146,6 @@ class NeonTxSender:
 
     def _parse_accounts_list(self, emulated_result_accounts):
         for account_desc in emulated_result_accounts:
-            if account_desc['new'] and ((account_desc['size'] > NEON_ACCOUNT_BASE_SIZE) or account_desc['writable']):
-                stage = NeonAirdropTxStage(self, account_desc)
-                self._create_account_list.append(stage)
-
             self._add_meta(account_desc['account'], True)
 
     def _parse_token_list(self, emulated_result_token_accounts):
