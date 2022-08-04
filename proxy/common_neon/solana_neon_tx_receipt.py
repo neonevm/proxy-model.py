@@ -34,8 +34,8 @@ class SolTxMetaInfo:
         return str(self.ident)
 
     @staticmethod
-    def from_response(sign_slot: SolTxSigSlotInfo, response: Dict[str, Any]) -> SolTxMetaInfo:
-        return SolTxMetaInfo(block_slot=sign_slot.block_slot, sol_sig=sign_slot.sol_sig, tx=response)
+    def from_response(sig_slot: SolTxSigSlotInfo, response: Dict[str, Any]) -> SolTxMetaInfo:
+        return SolTxMetaInfo(block_slot=sig_slot.block_slot, sol_sig=sig_slot.sol_sig, tx=response)
 
     @property
     def sol_sig(self) -> str:
@@ -305,8 +305,6 @@ class SolNeonIxReceiptInfo:
         self._max_bpf_cycle_cnt = 0
         self._neon_step_cnt = 0
 
-        self._neon_income = 0  # TODO: get from events
-
         self._parse_log_list()
 
     def __str__(self) -> str:
@@ -375,10 +373,6 @@ class SolNeonIxReceiptInfo:
     def set_neon_step_cnt(self, value: int) -> None:
         assert self._neon_step_cnt == 0
         self._neon_step_cnt = value
-
-    @property
-    def neon_income(self) -> int:
-        return self._neon_income
 
     @property
     def ident(self) -> Tuple[int, str, int, Optional[int]]:

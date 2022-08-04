@@ -730,7 +730,7 @@ class Indexer(IndexerBase):
             )
             return False
 
-        if not len(storage.account_list):
+        if len(storage.account_list) == 0:
             self.warning(f'storage {tx.storage_account} for neon tx {tx.neon_tx.sig} has empty account list.')
             return False
 
@@ -757,6 +757,10 @@ class Indexer(IndexerBase):
         tx.set_status(NeonIndexedTxInfo.Status.CANCELED)
         return True
 
+    def _save_checkpoint(self) -> None:
+        cache_stat = self._neon_block_dict.stat
+        self._db.set_min_receipt_block_slot(cache_stat.min_block_slot)
+
     def _complete_neon_block(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> None:
         if not state.has_neon_block():
             return
@@ -781,6 +785,7 @@ class Indexer(IndexerBase):
             if is_finalized:
                 self._neon_block_dict.finalize_neon_block(neon_block, sol_tx_meta)
                 self._submit_block_status(neon_block)
+                self._save_checkpoint()
 
             self._submit_status()
         except (Exception,):
@@ -803,7 +808,7 @@ class Indexer(IndexerBase):
 
     def _submit_neon_tx_status(self, tx: NeonIndexedTxInfo) -> None:
         neon_tx_hash = tx.neon_tx.sig
-        neon_income = int(tx.neon_tx_res.gas_used, 0) * int(tx.neon_tx.gas_price, 0)  # TODO: get gas usage from ixs
+        neon_income = int(tx.neon_tx_res.gas_used, 0) * int(tx.neon_tx.gas_price, 0)
         if tx.holder_account != '':
             tx_type = 'holder'
         elif tx.storage_account != '':
@@ -822,18 +827,23 @@ class Indexer(IndexerBase):
 
     def _get_sol_block_deque(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> Deque[SolanaBlockInfo]:
         if not state.has_neon_block():
-            return deque([self._solana.get_block_info(sol_tx_meta.block_slot)])
+            sol_block = self._solana.get_block_info(sol_tx_meta.block_slot)
+            if sol_block.is_empty():
+                raise SolHistoryNotFound(f"can't get block: {sol_tx_meta.block_slot}")
+            return deque([sol_block])
 
         start_block_slot = state.block_slot
         block_slot_list = [block_slot for block_slot in range(start_block_slot + 1, sol_tx_meta.block_slot + 1)]
         sol_block_list = self._solana.get_block_info_list(block_slot_list, state.commitment)
         result_sol_block_deque: Deque[SolanaBlockInfo] = deque()
         for sol_block in sol_block_list:
-            if sol_block.parent_block_slot == start_block_slot:
+            if sol_block.is_empty():
+                pass
+            elif sol_block.parent_block_slot == start_block_slot:
                 result_sol_block_deque.append(sol_block)
                 start_block_slot = sol_block.block_slot
 
-        if not len(result_sol_block_deque) or (result_sol_block_deque[-1].block_slot != sol_tx_meta.block_slot):
+        if (len(result_sol_block_deque) == 0) or (result_sol_block_deque[-1].block_slot != sol_tx_meta.block_slot):
             raise SolHistoryNotFound(f"can't get block history: {start_block_slot + 1} -> {sol_tx_meta.block_slot}")
         return result_sol_block_deque
 
@@ -904,8 +914,12 @@ class Indexer(IndexerBase):
         if finalized_neon_block is not None:
             start_block_slot = finalized_neon_block.block_slot + 1
 
-        state = SolNeonTxDecoderState(self._finalized_sol_tx_collector, start_block_slot, finalized_neon_block)
-        self._run_sol_tx_collector(state)
+        try:
+            state = SolNeonTxDecoderState(self._finalized_sol_tx_collector, start_block_slot, finalized_neon_block)
+            self._run_sol_tx_collector(state)
+        except SolHistoryNotFound as err:
+            self.debug(f'skip parsing of confirmed history: {str(err)}')
+            return
 
         # If there were a lot of transactions in the finalized state,
         # the head of finalized blocks will go forward
@@ -932,7 +946,6 @@ class Indexer(IndexerBase):
 
     def _print_stat(self, state: SolNeonTxDecoderState) -> None:
         cache_stat = self._neon_block_dict.stat
-        self._db.set_min_receipt_block_slot(cache_stat.min_block_slot)
 
         with logging_context(ident='stat'):
             self._counted_logger.print(

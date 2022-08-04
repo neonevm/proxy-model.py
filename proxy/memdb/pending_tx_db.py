@@ -52,22 +52,22 @@ class MemPendingTxsDB:
         if self._pending_slot.value > finalized_block_slot:
             return
 
-        rm_sign_list = []
+        rm_sig_list = []
         pending_slot = self.BIG_SLOT
 
         # Filter tx by slot
-        for sign, slot in self._pending_slot_by_hash.items():
+        for sig, slot in self._pending_slot_by_hash.items():
             if slot < finalized_block_slot:
-                rm_sign_list.append(sign)
+                rm_sig_list.append(sig)
             elif pending_slot > slot:
                 pending_slot = slot
 
         self._pending_slot.value = pending_slot
 
         # Remove old txs
-        for sign in rm_sign_list:
-            del self._pending_tx_by_hash[sign]
-            del self._pending_slot_by_hash[sign]
+        for sig in rm_sig_list:
+            del self._pending_tx_by_hash[sig]
+            del self._pending_slot_by_hash[sig]
 
     def pend_transaction(self, tx: NeonPendingTxInfo):
         finalized_block_slot = self._db.get_finalized_block_slot()

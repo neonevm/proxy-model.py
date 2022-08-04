@@ -255,7 +255,7 @@ class NeonRpcApiWorker:
             if block.is_empty():
                 return None
 
-        sign_list = []
+        sig_list = []
         gas_used = 0
         if skip_transaction:
             tx_list = []
@@ -267,9 +267,9 @@ class NeonRpcApiWorker:
 
             if full:
                 receipt = self._get_transaction(tx)
-                sign_list.append(receipt)
+                sig_list.append(receipt)
             else:
-                sign_list.append(tx.neon_tx.sig)
+                sig_list.append(tx.neon_tx.sig)
 
         result = {
             "difficulty": '0x20000',
@@ -295,7 +295,7 @@ class NeonRpcApiWorker:
             "number": hex(block.block_slot),
             "parentHash": block.parent_block_hash,
             "timestamp": hex(block.block_time),
-            "transactions": sign_list,
+            "transactions": sig_list,
         }
         return result
 
@@ -459,8 +459,8 @@ class NeonRpcApiWorker:
 
         return result
 
-    def eth_getTransactionByHash(self, neon_tx_sign: str) -> Optional[dict]:
-        neon_sig = self._normalize_tx_id(neon_tx_sign)
+    def eth_getTransactionByHash(self, neon_tx_sig: str) -> Optional[dict]:
+        neon_sig = self._normalize_tx_id(neon_tx_sig)
         pending = False
 
         tx = self._db.get_tx_by_neon_sig(neon_sig)

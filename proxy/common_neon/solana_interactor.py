@@ -293,11 +293,13 @@ class SolanaInteractor:
         return status == 'ok'
 
     def get_signatures_for_address(self, before: Optional[str], limit: int, commitment='confirmed') -> []:
-        opts: Dict[str, Union[int, str]] = {}
+        opts: Dict[str, Union[int, str]] = {
+            "limit": limit,
+            "commitment": commitment
+        }
+
         if before:
             opts["before"] = before
-        opts["limit"] = limit
-        opts["commitment"] = commitment
 
         return self._send_rpc_request("getSignaturesForAddress", EVM_LOADER_ID, opts)
 
@@ -672,15 +674,15 @@ class SolanaInteractor:
             result_list.append(SendResult(result=result, error=error))
         return result_list
 
-    def get_confirmed_slot_for_multiple_transactions(self, sign_list: List[str]) -> Tuple[int, bool]:
+    def get_confirmed_slot_for_multiple_transactions(self, sig_list: List[str]) -> Tuple[int, bool]:
         opts = {
             "searchTransactionHistory": False
         }
 
         block_slot = 0
-        while len(sign_list):
-            (part_sign_list, sign_list) = (sign_list[:100], sign_list[100:])
-            response = self._send_rpc_request("getSignatureStatuses", part_sign_list, opts)
+        while len(sig_list):
+            (part_sig_list, sig_list) = (sig_list[:100], sig_list[100:])
+            response = self._send_rpc_request("getSignatureStatuses", part_sig_list, opts)
 
             result = response.get('result', None)
             if not result:
@@ -696,14 +698,14 @@ class SolanaInteractor:
 
         return block_slot, (block_slot != 0)
 
-    def get_multiple_receipts(self, sign_list: List[str], commitment='confirmed') -> List[Optional[Dict]]:
-        if not len(sign_list):
+    def get_multiple_receipts(self, sig_list: List[str], commitment='confirmed') -> List[Optional[Dict]]:
+        if not len(sig_list):
             return []
         opts = {
             "encoding": "json",
             "commitment": commitment,
             "maxSupportedTransactionVersion": 0
         }
-        request_list = [(sign, opts) for sign in sign_list]
+        request_list = [(sig, opts) for sig in sig_list]
         response_list = self._send_rpc_batch_request("getTransaction", request_list)
         return [r.get('result') for r in response_list]

@@ -69,7 +69,8 @@ class _ProgramData:
     re_data = re.compile(r'^Program data: (.+)$')
 
 
-def decode_neon_tx_result(log_iter: Iterator[str], neon_sig: str, neon_tx_res: NeonTxResultInfo) -> bool:
+@logged_group("neon.Decoder")
+def decode_neon_tx_result(log_iter: Iterator[str], neon_sig: str, neon_tx_res: NeonTxResultInfo, *, logger) -> bool:
     """Extracts Neon transaction result information"""
 
     data_cnt = 0
@@ -96,6 +97,7 @@ def decode_neon_tx_result(log_iter: Iterator[str], neon_sig: str, neon_tx_res: N
         return False
 
     if (len(neon_tx_res.log_list) > 0) and (not neon_tx_res.is_valid()):
-        raise RuntimeError(f'Neon Tx {neon_sig} has events without result')
+        logger.warning(f'Neon Tx {neon_sig} has events without result')
+        neon_tx_res.fill_result(gas_used='0x0', status='0x0', return_value='')
 
     return neon_tx_res.is_valid()
