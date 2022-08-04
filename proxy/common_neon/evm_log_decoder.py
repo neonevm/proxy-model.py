@@ -72,11 +72,13 @@ class _ProgramData:
 def decode_neon_tx_result(log_iter: Iterator[str], neon_sig: str, neon_tx_res: NeonTxResultInfo) -> bool:
     """Extracts Neon transaction result information"""
 
+    data_cnt = 0
     for line in log_iter:
         match = _ProgramData.re_data.match(line)
         if match is None:
             continue
 
+        data_cnt += 1
         tail: str = match.group(1)
         data_list = tail.split()
         mnemonic = base64.b64decode(data_list[0]).decode('utf-8')
@@ -89,6 +91,9 @@ def decode_neon_tx_result(log_iter: Iterator[str], neon_sig: str, neon_tx_res: N
                 f'Failed to decode log instructions for Neon Tx {neon_sig}, ' +
                 f'unexpected mnemonic: {mnemonic}, instruction line: {line}'
             )
+
+    if data_cnt == 0:
+        return False
 
     if (len(neon_tx_res.log_list) > 0) and (not neon_tx_res.is_valid()):
         raise RuntimeError(f'Neon Tx {neon_sig} has events without result')
