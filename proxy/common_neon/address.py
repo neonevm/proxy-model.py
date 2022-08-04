@@ -44,16 +44,13 @@ def accountWithSeed(base: bytes, seed: bytes) -> PublicKey:
 
 
 def ether2program(ether):
+    if isinstance(ether, EthereumAddress):
+        ether = bytes(ether)
+    elif isinstance(ether, str):
+        if ether[0:2] == '0x':
+            ether = ether[2:]
+        ether = bytes.fromhex(ether)
 
-    if isinstance(ether, str):
-        pass
-    elif isinstance(ether, EthereumAddress):
-        ether = str(ether)
-    else:
-        ether = ether.hex()
-
-    if ether[0:2] == '0x':
-        ether = ether[2:]
-    seed = [ACCOUNT_SEED_VERSION,  bytes.fromhex(ether)]
+    seed = [ACCOUNT_SEED_VERSION, ether]
     (pda, nonce) = PublicKey.find_program_address(seed, PublicKey(EVM_LOADER_ID))
     return str(pda), nonce
