@@ -575,7 +575,7 @@ class TestDistributorContract(unittest.TestCase):
 
         wallets = self.generate_wallets()
 
-        self._set_and_check_distributor_addresses(wallets, signer, contract, web3, 1)
+        self._set_and_check_distributor_addresses(wallets, signer, contract, web3, 0.7)
 
         distribute_value_fn = contract.functions.distribute_value()
         nonce = web3.eth.get_transaction_count(signer.address)
@@ -598,9 +598,9 @@ class TestDistributorContract(unittest.TestCase):
             set_address_msg = signer.sign_transaction(set_address_fn_tx_built)
             tx_hash = web3.eth.send_raw_transaction(set_address_msg.rawTransaction)
             tx_hashes.append(tx_hash)
-            time.sleep(inter_tx_timeout)
-
-        for tx_hash in tx_hashes:
+        #     time.sleep(inter_tx_timeout)
+        #
+        # for tx_hash in tx_hashes:
             with test_timeout(self.WAITING_SINGLE_RECEIPT_TIMEOUT_SEC):
                 self.debug(f"Wait for `set_address_fn` receipt by hash: {tx_hash.hex()}")
                 tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
@@ -609,9 +609,11 @@ class TestDistributorContract(unittest.TestCase):
 
     @staticmethod
     def generate_wallets():
-        names = ["falaleev", "rozhkov", "lygin", "loboda", "trepalin", "borisenko", "begisheva", "taktasheva",
-                 "seleznev", "kondratiev", "suharev", "yurchenko", "miroshnichenko", "gurieva", "goldshtein",
-                 "suvorova", "medvedev", "kurkovich", "zaznobin", "garshina", "titushkina", "zee", "frane", "julius"]
+        names = ["falaleev"
+                 # "rozhkov", "lygin", "loboda", "trepalin", "borisenko", "begisheva", "taktasheva",
+                 # "seleznev", "kondratiev", "suharev", "yurchenko", "miroshnichenko"
+                 ]#, "gurieva", "goldshtein",
+                 # "suvorova", "medvedev", "kurkovich", "zaznobin", "garshina", "titushkina", "zee", "frane", "julius"]
         wallets = {name: create_account() for name in names}
         return wallets
 
