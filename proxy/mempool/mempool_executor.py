@@ -78,11 +78,8 @@ class MPExecutor(mp.Process, IPickableDataServerUser, IStrategySelectorUser):
         neon_tx = mp_tx_request.neon_tx
         neon_tx_exec_cfg = mp_tx_request.neon_tx_exec_cfg
         with OperatorResourceList(self._solana_interactor) as resource:
-            strategy_selector = NeonTxSendStrategySelector(self, self._mem_db, self._solana_interactor, resource,
-                                                           neon_tx)
+            strategy_selector = NeonTxSendStrategySelector(self, self._mem_db, self._solana_interactor, resource, neon_tx)
             strategy_selector.execute(neon_tx_exec_cfg)
-
-        return neon_tx_exec_cfg
 
     def update_tx_accounts_data(self, neon_tx: NeonTx, accounts_data: NeonAccountsData):
         emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
