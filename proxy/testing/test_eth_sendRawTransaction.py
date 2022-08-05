@@ -562,19 +562,13 @@ class TestDistributorContract(unittest.TestCase):
         signer = create_signer_account()
         self.contract, self.web3 = self.deploy_distributor_contract(signer)
 
-    def test_processing_24_trx_simulaneously(self):
-
-        signer = create_signer_account()
-        wallets = self.generate_wallets()
-        self._set_and_check_distributor_addresses(wallets, signer, self.contract, self.web3, 0)
-
     def test_distribute_tx_affects_24_accounts(self):
         contract, web3 = self.contract, self.web3
         signer = create_signer_account()
 
         wallets = self.generate_wallets()
 
-        self._set_and_check_distributor_addresses(wallets, signer, contract, web3, 0.7)
+        self._set_and_check_distributor_addresses(wallets, signer, contract, web3)
 
         distribute_value_fn = contract.functions.distribute_value()
         nonce = web3.eth.get_transaction_count(signer.address)
@@ -588,7 +582,7 @@ class TestDistributorContract(unittest.TestCase):
             tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
             self.assertEqual(tx_receipt.status, 1)
 
-    def _set_and_check_distributor_addresses(self, wallets, signer, contract, web3, inter_tx_timeout=0):
+    def _set_and_check_distributor_addresses(self, wallets, signer, contract, web3):
         tx_hashes: List[TxReceipt] = []
         for name, account in wallets.items():
             set_address_fn = contract.functions.set_address(name, bytes.fromhex(account.address[2:]))
