@@ -38,6 +38,21 @@ from ..common_neon.eth_proto import Trx as NeonTx
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 
 
+def extend_tx_list(first: NamedTxList, second: NamedTxList) -> NamedTxList:
+    if len(first[1]) == 0:
+        return second
+    if len(second[1]) == 0:
+        return first
+    tx_list_name = ' + '.join([first[0], second[0]])
+    tx_list = first[1]
+    tx_list.extend(second[1])
+    return tx_list_name, tx_list
+
+
+SolTxList = List[Transaction]
+NamedTxList = Tuple[str, SolTxList]
+
+
 @logged_group("neon.MemPool")
 class AccountTxListBuilder:
     def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder):
@@ -294,6 +309,11 @@ class BaseNeonTxStrategy(abc.ABC):
 
         self._error_msg = "Underpriced transaction without chain-id"
         return False
+
+    def _send_sol_tx_list(self, tx_list_name, tx_list, waiter: IConfirmWaiter = None) -> List[str]:
+        tx_sender = SolTxListSender(self._solana, self._signer)
+        tx_sender.send(tx_list_name, tx_list, waiter=waiter)
+        return tx_sender.success_sig_list
 
 
 @logged_group("neon.MemPool")
@@ -560,10 +580,8 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         emulated_evm_step_cnt = self._neon_tx_exec_cfg.steps_executed
         return math.ceil(emulated_evm_step_cnt / self._iter_evm_step_cnt) + 1
 
-    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        tx_list_name, tx_list = super()._build_prep_tx_list()
-
-        # write eth transaction to the holder account
+    def get_holder_tx_list(self) -> Tuple[str, List[Transaction]]:
+        tx_list = []
         cnt = 0
         holder_msg_offset = 0
         holder_msg = copy.copy(self._builder.holder_msg)
@@ -576,9 +594,12 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
             tx_list.append(tx)
             holder_msg_offset += len(holder_msg_part)
             cnt += 1
+        return f'WriteWithHolder({cnt})', tx_list
 
-        tx_list_name = ' + '.join([tx_list_name, f'WriteWithHolder({cnt})'])
-        return tx_list_name, tx_list
+    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
+        accounts_named_tx_list = super()._build_prep_tx_list()
+        holder_named_tx_list = self.get_holder_tx_list()
+        return extend_tx_list(accounts_named_tx_list, holder_named_tx_list)
 
 
 class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
@@ -626,10 +647,34 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
         tx_list_name, tx_list = super()._build_prep_tx_list()
 
         self._alt_tx_list = self._alt_builder.build_alt_tx_list(self._alt_info)
-        sig_list = self._alt_builder.prep_alt_list(self._alt_tx_list, tx_list_name, tx_list, waiter)
+        sig_list = self.prep_alt_list(self._alt_tx_list, tx_list_name, tx_list, waiter)
         self._alt_builder.update_alt_info_list([self._alt_info])
 
         return sig_list
+
+    def prep_alt_list(self, alt_tx_list: AddressLookupTableTxList,
+                      tx_list_name: str = '', tx_list: Optional[List[Transaction]] = None,
+                      waiter: Optional[IConfirmWaiter] = None) -> List[str]:
+
+        create_alt_named_tx_list = self._get_create_alt_named_tx_list(alt_tx_list)
+        exteneded_create_alt_named_tx_list = extend_tx_list((tx_list_name, tx_list), create_alt_named_tx_list)
+
+        sig_list = self._send_sol_tx_list(*exteneded_create_alt_named_tx_list, waiter)
+
+        if len(alt_tx_list.extend_alt_tx_list):
+            extend_alt_named_tx_list = self._get_extend_alt_named_tx_list(alt_tx_list.extend_alt_tx_list)
+            sig_list += self._send_sol_tx_list(*extend_alt_named_tx_list, waiter)
+
+        return sig_list
+
+    def _get_create_alt_named_tx_list(self, alt_tx_list: AddressLookupTableTxList) -> NamedTxList:
+        cnt = len(alt_tx_list.create_alt_tx_list)
+        creating_tx_list_name = ' + '.join([f'CreateLookupTable({cnt})', f'ExtendLookupTable({cnt})'])
+        return creating_tx_list_name, alt_tx_list.create_alt_tx_list
+
+    def _get_extend_alt_named_tx_list(self, extend_alt_tx_list: Optional[List[Transaction]]) -> NamedTxList:
+        cnt = len(extend_alt_tx_list)
+        return f'ExtendLookupTable({cnt})', extend_alt_tx_list
 
     def execute(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
         try:
