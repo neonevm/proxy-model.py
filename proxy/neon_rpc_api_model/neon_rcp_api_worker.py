@@ -22,7 +22,7 @@ from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
 from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED, \
                                            PYTH_MAPPING_ACCOUNT
-from ..common_neon.transaction_validator import NeonTxValidator
+from ..common_neon.transaction_validator import NeonTxValidator, NeonTxExecCfg
 from ..memdb.memdb import MemDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..mempool import MemPoolClient, MP_SERVICE_HOST, MP_SERVICE_PORT
@@ -488,22 +488,14 @@ class NeonRpcApiWorker:
 
         self._stat_tx_begin()
         try:
-            self.precheck(trx)
+            neon_tx_exec_cfg = self.precheck(trx)
 
             self._stat_tx_success()
             req_id = LogMng.get_logging_context().get("req_id")
 
-            self._mempool_client.send_raw_transaction(req_id=req_id, signature=eth_signature, neon_tx=trx)
+            self._mempool_client.send_raw_transaction(req_id=req_id, signature=eth_signature, neon_tx=trx, neon_tx_exec_cfg=neon_tx_exec_cfg)
             return eth_signature
 
-        except PendingTxError:
-            self._stat_tx_failed()
-            self.error(f'Failed to process eth_sendRawTransaction, PendingTxError')
-            return eth_signature
-        except EthereumError as err:
-            self.error(f'Failed to process eth_sendRawTransaction, EthereumError: {err}')
-            self._stat_tx_failed()
-            raise
         except Exception as err:
             self.error(f"Failed to process eth_sendRawTransaction, Error: {err}")
             self._stat_tx_failed()
