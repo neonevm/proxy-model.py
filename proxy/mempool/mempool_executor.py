@@ -75,23 +75,18 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
     def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
         neon_tx = mp_tx_request.neon_tx
-        min_gas_price = self._gas_price_calculator.get_min_gas_price()
-        validator = NeonTxValidator(self._solana_interactor, neon_tx, min_gas_price)
-
-        emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
-        validator.prevalidate_emulator(emulating_result)
-
+        neon_tx_exec_cfg = mp_tx_request.neon_tx_exec_cfg
         with OperatorResourceList(self._solana_interactor) as resource:
-            tx_sender = NeonTxSendStrategySelector(self._mem_db, self._solana_interactor, resource, neon_tx)
+            strategy_selector = NeonTxSendStrategySelector(self, self._mem_db, self._solana_interactor, resource,
+                                                           neon_tx)
+            strategy_selector.execute(neon_tx_exec_cfg)
 
-            is_underpriced_tx_wo_chainid = validator.is_underpriced_tx_without_chainid()
-            steps_executed = emulating_result["steps_executed"]
-            accounts_data = {k: emulating_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
-            neon_tx_exec_cfg = NeonTxExecCfg(steps_executed=steps_executed,
-                                             accounts_data=accounts_data,
-                                             is_underpriced_tx_wo_chainid=is_underpriced_tx_wo_chainid)
+        return neon_tx_exec_cfg
 
-            tx_sender.execute(neon_tx_exec_cfg)
+    # def update_tx_accounts_data(self, neon_tx: NeonTx, accounts_data: NeonAccountsData):
+    #     emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
+    #     for k in ["accounts", "token_accounts", "solana_accounts"]:
+    #         accounts_data.update({k: emulating_result[k]})
 
     async def on_data_received(self, data: Any) -> Any:
         return self.execute_neon_tx(data)

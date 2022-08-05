@@ -33,6 +33,7 @@ from ..common_neon.solana_alt import AddressLookupTableInfo
 from ..common_neon.solana_alt_builder import AddressLookupTableTxBuilder, AddressLookupTableTxList
 from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from ..common_neon.solana_v0_transaction import V0Transaction
+from ..common_neon.eth_proto import Trx as NeonTx
 
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 
@@ -174,7 +175,8 @@ class NeonTxSendCtx:
 class BaseNeonTxStrategy(abc.ABC):
     NAME = 'UNKNOWN STRATEGY'
 
-    def __init__(self, neon_tx_exec_cfg: NeonTxExecCfg, ctx: NeonTxSendCtx):
+    def __init__(self, user: INeonTxStrategyUser, neon_tx_exec_cfg: NeonTxExecCfg, ctx: NeonTxSendCtx):
+        self._user: INeonTxStrategyUser = user
         self._neon_tx_exec_cfg = neon_tx_exec_cfg
         self._error_msg: Optional[str] = None
         self._ctx = ctx
@@ -682,20 +684,45 @@ class AltNoChainIdNeonTxStrategy(AltHolderNeonTxStrategy):
         return BaseNoChainIdNeonStrategy.build_tx(self._builder, self._compute_unit_cnt, self._iter_evm_step_cnt, idx)
 
 
+class IStrategySelectorUser(abc.ABC):
+
+    @abc.abstractmethod
+    def update_tx_accounts_data(self, neon_tx: NeonTx, accounts_data: NeonAccountsData):
+        assert False, "Not implemented"
+
+
+class INeonTxStrategyUser(abc.ABC):
+
+    @abc.abstractmethod
+    def update_tx_accounts_data(self, neon_tx: NeonTx, accounts_data: NeonAccountsData):
+        assert False, "Not implemented"
+
+
 @logged_group("neon.Proxy")
-class NeonTxSendStrategySelector(IConfirmWaiter):
+class NeonTxSendStrategySelector(IConfirmWaiter, INeonTxStrategyUser):
     STRATEGY_LIST = [
         SimpleNeonTxStrategy,
         IterativeNeonTxStrategy, HolderNeonTxStrategy, AltHolderNeonTxStrategy,
         NoChainIdNeonTxStrategy, AltNoChainIdNeonTxStrategy
     ]
 
-    def __init__(self, db: MemDB, solana: SolanaInteractor, resource: OperatorResourceInfo, eth_tx: EthTx):
+    def __init__(self, user: IStrategySelectorUser, db: MemDB, solana: SolanaInteractor, resource: OperatorResourceInfo, eth_tx: EthTx):
         super().__init__()
+        self._user = user
         self._db = db
         self._ctx = NeonTxSendCtx(solana, resource, eth_tx)
         self._operator = f'{str(self._ctx.resource)}'
         self._pending_tx: Optional[NeonPendingTxInfo] = None
+
+    # IStrategyUser ->
+    def update_tx_accounts_data(self, neon_tx: NeonTx, accounts_data: NeonAccountsData):
+        return self._user.update_tx_accounts_data(neon_tx, accounts_data)
+    # <- IStrategyUser
+
+    # IConfirmWaiter ->
+    def on_wait_confirm(self, _: int, block_slot: int, __: bool) -> None:
+        self._pend_tx_into_db(block_slot)
+    # <- IConfirmWaiter
 
     def execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
         self._validate_pend_tx()
@@ -709,7 +736,7 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
     def _execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
         for Strategy in self.STRATEGY_LIST:
             try:
-                strategy = Strategy(neon_tx_exec_cfg, self._ctx)
+                strategy = Strategy(self, neon_tx_exec_cfg, self._ctx)
                 if not strategy.is_valid():
                     self.debug(f'Skip strategy {Strategy.NAME}: {strategy.error_msg}')
                     continue
@@ -726,9 +753,6 @@ class NeonTxSendStrategySelector(IConfirmWaiter):
 
         self.error(f'No strategy to execute the Neon transaction: {self._ctx.eth_tx}')
         raise EthereumError(message="transaction is too big for execution")
-
-    def on_wait_confirm(self, _: int, block_slot: int, __: bool) -> None:
-        self._pend_tx_into_db(block_slot)
 
     def _pend_tx_into_db(self, block_slot: int):
         """
