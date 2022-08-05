@@ -563,7 +563,7 @@ class TestDistributorContract(unittest.TestCase):
         signer = create_signer_account()
         self.contract, self.web3 = self.deploy_distributor_contract(signer)
 
-    def test_distribute_tx_affects_24_accounts(self):
+    def test_distribute_tx_affects_multiple_accounts(self):
         contract, web3 = self.contract, self.web3
         signer = create_signer_account()
 
@@ -600,11 +600,7 @@ class TestDistributorContract(unittest.TestCase):
 
     @staticmethod
     def generate_wallets():
-        names = ["falaleev",
-                  "rozhkov", "lygin", "loboda", "trepalin", "borisenko", "begisheva", "taktasheva",
-                  "seleznev", "kondratiev", "suharev", "yurchenko", "miroshnichenko"
-                 ]#, "gurieva", "goldshtein",
-                 # "suvorova", "medvedev", "kurkovich", "zaznobin", "garshina", "titushkina", "zee", "frane", "julius"]
+        names = ["alice", "bob", "carol", "dave", "erine", "eve", "frank", "mallory", "pat", "peggy", "trudy", "vanna", "victor"]
         wallets = {name: create_account() for name in names}
         return wallets
 
