@@ -609,9 +609,9 @@ class TestDistributorContract(unittest.TestCase):
 
     @staticmethod
     def generate_wallets():
-        names = ["falaleev"
-                 # "rozhkov", "lygin", "loboda", "trepalin", "borisenko", "begisheva", "taktasheva",
-                 # "seleznev", "kondratiev", "suharev", "yurchenko", "miroshnichenko"
+        names = ["falaleev",
+                  "rozhkov", "lygin", "loboda", "trepalin", "borisenko", "begisheva", "taktasheva",
+                  "seleznev", "kondratiev", "suharev", "yurchenko", "miroshnichenko"
                  ]#, "gurieva", "goldshtein",
                  # "suvorova", "medvedev", "kurkovich", "zaznobin", "garshina", "titushkina", "zee", "frane", "julius"]
         wallets = {name: create_account() for name in names}

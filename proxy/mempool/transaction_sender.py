@@ -80,11 +80,15 @@ class AccountTxListBuilder:
 
     def _parse_accounts_list(self, emulated_result_account_list: List[Dict[str, Any]]) -> None:
         for account_desc in emulated_result_account_list:
+            self.debug(f"account desc: {account_desc}")
             if account_desc['new']:
+                self.debug("new")
                 if account_desc['code_size']:
+                    self.debug("code size")
                     stage = NeonCreateContractTxStage(self._builder, account_desc)
                     self._create_account_list.append(stage)
                 elif account_desc['writable']:
+                    self.debug("writable")
                     stage = NeonCreateAccountTxStage(self._builder, account_desc)
                     self._create_account_list.append(stage)
             elif account_desc['code_size'] and (account_desc['code_size_current'] < account_desc['code_size']):
@@ -93,6 +97,8 @@ class AccountTxListBuilder:
             self._add_meta(account_desc['account'], True)
             if account_desc['contract']:
                 self._add_meta(account_desc['contract'], account_desc['writable'])
+        self.debug(f"Create account stage list: {len(self._create_account_list)}")
+        self.debug(f"Resize account stage list: {len(self._resize_contract_list)}")
 
     def _parse_token_list(self, emulated_result_token_accounts: List[Dict[str, Any]]) -> None:
         for token_account in emulated_result_token_accounts:
@@ -106,6 +112,7 @@ class AccountTxListBuilder:
 
     def _build_account_stage_list(self) -> None:
         if not self.has_tx_list():
+            self.debug("No account to build account stage list")
             return
 
         all_stage_list = self._create_account_list + self._resize_contract_list
@@ -120,6 +127,7 @@ class AccountTxListBuilder:
             name_dict[s.NAME] += 1
 
         self._name = ' + '.join([f'{name}({cnt})' for name, cnt in name_dict.items()])
+        self.debug(f"Build account stage list name:  {self._name}")
 
     def has_tx_list(self) -> bool:
         return len(self._resize_contract_list) > 0 or len(self._create_account_list) > 0
@@ -220,7 +228,7 @@ class BaseNeonTxStrategy(abc.ABC):
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
 
         self._user.update_tx_accounts_data(self._ctx.eth_tx, self._neon_tx_exec_cfg.accounts_data)
-
+        self._account_tx_list_builder.clear_tx_list()
         self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.accounts_data)
         self.debug(f"Got updated accounts: {self._neon_tx_exec_cfg.accounts_data}")
         tx_list = self._account_tx_list_builder.get_tx_list()
@@ -654,9 +662,6 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
     def execute(self, waiter: IConfirmWaiter) -> Tuple[NeonTxResultInfo, List[str]]:
         assert self.is_valid()
         try:
-            create_account_named_tx_list = super()._build_prep_tx_list()
-            self.debug(f"Create accounts named tx list: {create_account_named_tx_list[0]}")
-            self._execute_sol_tx_list(*create_account_named_tx_list)
             holder_named_tx_list = self.get_holder_tx_list()
 
             self._alt_tx_list = self._alt_builder.build_alt_tx_list(self._alt_info)
@@ -669,9 +674,13 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
             extend_alt_named_tx_list = self._get_alt_extend_named_tx_list(self._alt_tx_list)
             self.debug(f"Extend alt named tx list: {extend_alt_named_tx_list[0]}")
             self._execute_sol_tx_list(*extend_alt_named_tx_list)
+            self.debug(f"Update alt infrom from account: {self._alt_info.table_account}")
             self._alt_builder.update_alt_info_list([self._alt_info])
 
-            self._account_tx_list_builder.clear_tx_list()
+            create_account_named_tx_list = super()._build_prep_tx_list()
+            self.debug(f"Create accounts named tx list: {create_account_named_tx_list[0]}")
+            self._execute_sol_tx_list(*create_account_named_tx_list)
+
             return self._execute_tx_list(waiter)
 
         except Exception as err:
