@@ -697,3 +697,17 @@ class NeonRpcApiModel:
         eth_trx = EthTrx.fromString(bytearray.fromhex(raw_signed_trx))
         emulation_result = call_trx_emulated(eth_trx)
         return emulation_result
+
+    def neon_getEvmParams(self, param_name):
+        """
+        Returns value of Neon-EVM parameter with given name
+        Or raises exception if name not found
+        """
+        self.debug(f"call neon_getEvmParams: {param_name}")
+        result = ElfParams().get_param(param_name)
+        if result is None:
+            raise InvalidParamError(f"Neon-EVM parameter {param_name} not found")
+
+        return result
+
+

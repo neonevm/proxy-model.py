@@ -73,6 +73,9 @@ class ElfParams:
     def denial_token_addr(self) -> str:
         return self.elf_params.get("NEON_PERMISSION_DENIAL_TOKEN", '')
 
+    def get_param(self, param_name: str) -> str:
+        return self.elf_params.get(param_name, None)
+
 
 @logged_group("neon.Proxy")
 def read_elf_params(out_dict, *, logger):

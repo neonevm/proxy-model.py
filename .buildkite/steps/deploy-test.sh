@@ -34,7 +34,7 @@ PROXY_IMAGE=neonlabsorg/proxy:${IMAGETAG:-$REVISION}
 UNISWAP_V2_CORE_IMAGE=neonlabsorg/uniswap-v2-core:stable
 # Refreshing uniswap-v2-core image is required to run .buildkite/steps/deploy-test.sh locally
 docker pull $UNISWAP_V2_CORE_IMAGE
-docker-compose -f proxy/docker-compose-test.yml pull
+#docker-compose -f proxy/docker-compose-test.yml pull
 
 function cleanup_docker {
     if docker logs proxy >proxy.log 2>&1; then
@@ -106,6 +106,7 @@ docker run --rm -ti --network=container:proxy \
      -e POSTGRES_USER=neon-proxy \
      -e POSTGRES_PASSWORD=neon-proxy-pass \
      -e POSTGRES_HOST=postgres \
+     -e TESTNAME=get_evm_params \
      --entrypoint ./proxy/deploy-test.sh \
      ${EXTRA_ARGS:-} \
      $PROXY_IMAGE
