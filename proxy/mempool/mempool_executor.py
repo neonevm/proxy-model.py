@@ -5,7 +5,7 @@ import traceback
 
 from logged_groups import logged_group, logging_context
 
-from ..common_neon.data import NeonEmulatingResult, NeonTxExecCfg, NeonAccountsData
+from ..common_neon.data import NeonEmulatingResult, NeonAccountsData
 from ..common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.errors import PendingTxError
 from ..common_neon.gas_price_calculator import GasPriceCalculator
@@ -14,7 +14,6 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
 from ..common_neon.utils import PipePickableDataSrv, IPickableDataServerUser, Any
 from ..common_neon.config import Config
-from ..common_neon.transaction_validator import NeonTxValidator
 from ..memdb.memdb import MemDB
 from ..common_neon.eth_proto import Trx as NeonTx
 
@@ -77,6 +76,9 @@ class MPExecutor(mp.Process, IPickableDataServerUser, IStrategySelectorUser):
     def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
         neon_tx = mp_tx_request.neon_tx
         neon_tx_exec_cfg = mp_tx_request.neon_tx_exec_cfg
+        if neon_tx_exec_cfg is None:
+            self.error("Failed to process mp_tx_request, neon_tx_exec_cfg is not set")
+            return
         with OperatorResourceList(self._solana_interactor) as resource:
             strategy_selector = NeonTxSendStrategySelector(self, self._mem_db, self._solana_interactor, resource, neon_tx)
             strategy_selector.execute(neon_tx_exec_cfg)

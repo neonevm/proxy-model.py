@@ -39,9 +39,9 @@ class NeonLogIx:
 
 @dataclass
 class NeonTxExecCfg:
-    is_underpriced_tx_wo_chainid: Optional[bool] = None
-    steps_executed: Optional[int] = None
-    accounts_data: Optional[NeonAccountsData] = None
+    is_underpriced_tx_wo_chainid: bool
+    steps_executed: int
+    accounts_data: NeonAccountsData
 
 
 NeonEmulatingResult = Dict[str, Any]

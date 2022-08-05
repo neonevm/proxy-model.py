@@ -556,8 +556,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
 @logged_group("neon.TestCases")
 class TestDistributorContract(unittest.TestCase):
 
-    WAITING_RECEIPTS_TIMEOUT_SEC = 7
-    WAITING_SINGLE_RECEIPT_TIMEOUT_SEC = 3
+    WAITING_RECEIPTS_TIMEOUT_SEC = 15
 
     def setUp(self) -> None:
         signer = create_signer_account()
@@ -587,6 +586,7 @@ class TestDistributorContract(unittest.TestCase):
         with test_timeout(4):
             self.debug(f"Wait for `distribute_value_fn` receipt by hash: {tx_hash.hex()}")
             tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+            self.assertEqual(tx_receipt.status, 1)
 
     def _set_and_check_distributor_addresses(self, wallets, signer, contract, web3, inter_tx_timeout=0):
         tx_hashes: List[TxReceipt] = []
@@ -598,13 +598,9 @@ class TestDistributorContract(unittest.TestCase):
             set_address_msg = signer.sign_transaction(set_address_fn_tx_built)
             tx_hash = web3.eth.send_raw_transaction(set_address_msg.rawTransaction)
             tx_hashes.append(tx_hash)
-        #     time.sleep(inter_tx_timeout)
-        #
-        # for tx_hash in tx_hashes:
             with test_timeout(self.WAITING_SINGLE_RECEIPT_TIMEOUT_SEC):
                 self.debug(f"Wait for `set_address_fn` receipt by hash: {tx_hash.hex()}")
                 tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
-                self.assertIsNotNone(tx_hash)
                 self.assertEqual(tx_receipt.status, 1)
 
     @staticmethod

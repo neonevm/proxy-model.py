@@ -47,7 +47,7 @@ class MPTxRequest(MPRequest):
     nonce: int = field(compare=True, default=None)
     signature: str = field(compare=False, default=None)
     neon_tx: NeonTx = field(compare=False, default=None)
-    neon_tx_exec_cfg: Optional[NeonTxExecCfg] = field(compare=False, default_factory=NeonTxExecCfg)
+    neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
     sender_address: str = field(compare=False, default=None)
     gas_price: int = field(compare=False, default=None)
 
