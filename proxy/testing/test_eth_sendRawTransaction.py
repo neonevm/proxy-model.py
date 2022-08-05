@@ -85,7 +85,7 @@ contract test_185 {
 }
 '''
 
-@logged_group("neon.TestCases")
+
 class Test_eth_sendRawTransaction(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
