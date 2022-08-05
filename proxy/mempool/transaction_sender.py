@@ -235,19 +235,23 @@ class BaseNeonTxStrategy(abc.ABC):
     def build_cancel_tx(self) -> Transaction:
         return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
 
-    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
+    def _build_prep_tx_list(self) -> NamedTxList:
+
+        create_accounts_named_tx_list = self._get_create_acounts_named_tx_list()
+
+        alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
+        if len(alt_tx_list):
+            return extend_tx_list(create_accounts_named_tx_list, (f'CloseLookupTable({len(alt_tx_list)})', alt_tx_list))
+
+        return create_accounts_named_tx_list
+
+    def _get_create_acounts_named_tx_list(self) -> NamedTxList:
         self._user.update_tx_accounts_data(self._ctx.eth_tx, self._neon_tx_exec_cfg.accounts_data)
         self._account_tx_list_builder.clear_tx_list()
         self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.accounts_data)
         self.debug(f"Got updated accounts: {self._neon_tx_exec_cfg.accounts_data}")
         tx_list = self._account_tx_list_builder.get_tx_list()
         tx_list_name = f"CreateAccount({len(tx_list)})"
-
-        alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
-        if len(alt_tx_list):
-            tx_list.extend(alt_tx_list)
-            tx_list_name = ' + '.join([tx_list_name, f'CloseLookupTable({len(alt_tx_list)})'])
-
         return tx_list_name, tx_list
 
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
@@ -655,9 +659,9 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
     def prep_alt_list(self, alt_tx_list: AddressLookupTableTxList,
                       tx_list_name: str = '', tx_list: Optional[List[Transaction]] = None,
                       waiter: Optional[IConfirmWaiter] = None) -> List[str]:
-
+        holder_create_accounts_named_tx_list = (tx_list_name, tx_list)
         create_alt_named_tx_list = self._get_create_alt_named_tx_list(alt_tx_list)
-        exteneded_create_alt_named_tx_list = extend_tx_list((tx_list_name, tx_list), create_alt_named_tx_list)
+        exteneded_create_alt_named_tx_list = extend_tx_list(holder_create_accounts_named_tx_list, create_alt_named_tx_list)
 
         sig_list = self._send_sol_tx_list(*exteneded_create_alt_named_tx_list, waiter)
 
