@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from logged_groups import logged_group
 from singleton_decorator import singleton
@@ -73,8 +73,8 @@ class ElfParams:
     def denial_token_addr(self) -> str:
         return self.elf_params.get("NEON_PERMISSION_DENIAL_TOKEN", '')
 
-    def get_param(self, param_name: str) -> str:
-        return self.elf_params.get(param_name, None)
+    def get_params(self) -> Dict[str: Any]:
+        return self.elf_params
 
 
 @logged_group("neon.Proxy")

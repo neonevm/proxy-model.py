@@ -3,7 +3,7 @@ import multiprocessing
 import traceback
 
 import eth_utils
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any
 
 import sha3
 from logged_groups import logged_group
@@ -698,16 +698,9 @@ class NeonRpcApiModel:
         emulation_result = call_trx_emulated(eth_trx)
         return emulation_result
 
-    def neon_getEvmParams(self, param_name):
+    def neon_getEvmParams(self)-> Dict[str, Any]:
         """
-        Returns value of Neon-EVM parameter with given name
-        Or raises exception if name not found
+        Returns map of Neon-EVM parameters
         """
-        self.debug(f"call neon_getEvmParams: {param_name}")
-        result = ElfParams().get_param(param_name)
-        if result is None:
-            raise InvalidParamError(f"Neon-EVM parameter {param_name} not found")
-
-        return result
-
-
+        self.debug(f"call neon_getEvmParams")
+        return ElfParams().get_params()
