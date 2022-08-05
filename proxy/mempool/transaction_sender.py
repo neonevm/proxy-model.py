@@ -149,7 +149,6 @@ class NeonTxSendCtx:
         self._solana = solana
         self._resource = resource
         self._builder = NeonIxBuilder(resource.public_key)
-        self._account_tx_list_builder = AccountTxListBuilder(solana, self._builder)
 
         self._builder.init_operator_ether(self._resource.ether)
         self._builder.init_eth_tx(self._eth_tx)
@@ -176,10 +175,6 @@ class NeonTxSendCtx:
     @property
     def solana(self) -> SolanaInteractor:
         return self._solana
-
-    @property
-    def account_tx_list_builder(self) -> AccountTxListBuilder:
-        return self._account_tx_list_builder
 
     @property
     def alt_close_queue(self) -> AddressLookupTableCloseQueue:
@@ -769,7 +764,6 @@ class NeonTxSendStrategySelector(IConfirmWaiter, INeonTxStrategyUser):
 
     def execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
         self._validate_pend_tx()
-        self._ctx.account_tx_list_builder.build_tx(neon_tx_exec_cfg.accounts_data)
         return self._execute(neon_tx_exec_cfg)
 
     def _validate_pend_tx(self) -> None:
