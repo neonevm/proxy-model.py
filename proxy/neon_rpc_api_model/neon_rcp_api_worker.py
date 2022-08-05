@@ -501,10 +501,10 @@ class NeonRpcApiWorker:
             self._stat_tx_failed()
             raise
 
-    def precheck(self, neon_trx: EthTrx):
+    def precheck(self, neon_trx: EthTrx) -> NeonTxExecCfg:
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
         neon_validator = NeonTxValidator(self._solana, neon_trx, min_gas_price)
-        neon_validator.precheck()
+        return neon_validator.precheck()
 
     def _stat_tx_begin(self):
         self._stat_exporter.stat_commit_tx_begin()
