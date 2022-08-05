@@ -182,10 +182,8 @@ class BaseNeonTxStrategy(abc.ABC):
         self._ctx = ctx
         self._iter_evm_step_cnt = EVM_STEP_COUNT
         self._is_valid = self._validate()
-
-    @property
-    def _account_tx_list_builder(self) -> AccountTxListBuilder:
-        return self._ctx.account_tx_list_builder
+        self._account_tx_list_builder = AccountTxListBuilder(ctx.solana, self._builder)
+        self._account_tx_list_builder.build_tx(neon_tx_exec_cfg.accounts_data)
 
     @property
     def _alt_close_queue(self) -> AddressLookupTableCloseQueue:
@@ -223,8 +221,12 @@ class BaseNeonTxStrategy(abc.ABC):
         return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
 
     def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
-        tx_list_name = self._account_tx_list_builder.name
+        self._user.update_tx_accounts_data(self._ctx.eth_tx, self._neon_tx_exec_cfg.accounts_data)
+        self._account_tx_list_builder.clear_tx_list()
+        self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.accounts_data)
+        self.debug(f"Got updated accounts: {self._neon_tx_exec_cfg.accounts_data}")
         tx_list = self._account_tx_list_builder.get_tx_list()
+        tx_list_name = f"CreateAccount({len(tx_list)})"
 
         alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
         if len(alt_tx_list):

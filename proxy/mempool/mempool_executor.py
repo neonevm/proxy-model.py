@@ -5,7 +5,7 @@ import traceback
 
 from logged_groups import logged_group, logging_context
 
-from ..common_neon.data import NeonEmulatingResult, NeonTxExecCfg
+from ..common_neon.data import NeonEmulatingResult, NeonTxExecCfg, NeonAccountsData
 from ..common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.errors import PendingTxError
 from ..common_neon.gas_price_calculator import GasPriceCalculator
@@ -16,14 +16,15 @@ from ..common_neon.utils import PipePickableDataSrv, IPickableDataServerUser, An
 from ..common_neon.config import Config
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..memdb.memdb import MemDB
+from ..common_neon.eth_proto import Trx as NeonTx
 
-from .transaction_sender import NeonTxSendStrategySelector
+from .transaction_sender import NeonTxSendStrategySelector, IStrategySelectorUser
 from .operator_resource_list import OperatorResourceList
 from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
 
 @logged_group("neon.MemPool")
-class MPExecutor(mp.Process, IPickableDataServerUser):
+class MPExecutor(mp.Process, IPickableDataServerUser, IStrategySelectorUser):
 
     def __init__(self, executor_id: int, srv_sock: socket.socket, config: IConfig):
         self.info(f"Initialize mempool_executor: {executor_id}")
@@ -83,10 +84,10 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
         return neon_tx_exec_cfg
 
-    # def update_tx_accounts_data(self, neon_tx: NeonTx, accounts_data: NeonAccountsData):
-    #     emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
-    #     for k in ["accounts", "token_accounts", "solana_accounts"]:
-    #         accounts_data.update({k: emulating_result[k]})
+    def update_tx_accounts_data(self, neon_tx: NeonTx, accounts_data: NeonAccountsData):
+        emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
+        for k in ["accounts", "token_accounts", "solana_accounts"]:
+            accounts_data.update({k: emulating_result[k]})
 
     async def on_data_received(self, data: Any) -> Any:
         return self.execute_neon_tx(data)
