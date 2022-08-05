@@ -38,7 +38,7 @@ from ..common_neon.eth_proto import Trx as NeonTx
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 
 
-def extend_tx_list(first: NamedTxList, second: NamedTxList) -> NamedTxList:
+def extend_named_tx_list(first: NamedTxList, second: NamedTxList) -> NamedTxList:
     if len(first[1]) == 0:
         return second
     if len(second[1]) == 0:
@@ -236,14 +236,15 @@ class BaseNeonTxStrategy(abc.ABC):
         return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
 
     def _build_prep_tx_list(self) -> NamedTxList:
-
         create_accounts_named_tx_list = self._get_create_acounts_named_tx_list()
+        close_alt_named_tx_list = self._get_close_alt_named_tx_list()
+        return extend_named_tx_list(create_accounts_named_tx_list, close_alt_named_tx_list)
 
-        alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
-        if len(alt_tx_list):
-            return extend_tx_list(create_accounts_named_tx_list, (f'CloseLookupTable({len(alt_tx_list)})', alt_tx_list))
-
-        return create_accounts_named_tx_list
+    def _get_close_alt_named_tx_list(self) -> NamedTxList:
+        close_alt_tx_list = self._alt_close_queue.pop_tx_list(self._signer.public_key())
+        if len(close_alt_tx_list):
+            return '', []
+        return f'CloseLookupTable({len(close_alt_tx_list)})', close_alt_tx_list
 
     def _get_create_acounts_named_tx_list(self) -> NamedTxList:
         self._user.update_tx_accounts_data(self._ctx.eth_tx, self._neon_tx_exec_cfg.accounts_data)
@@ -599,7 +600,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
     def _build_prep_tx_list(self) -> NamedTxList:
         accounts_named_tx_list = super()._build_prep_tx_list()
         holder_named_tx_list = self.get_holder_tx_list()
-        return extend_tx_list(accounts_named_tx_list, holder_named_tx_list)
+        return extend_named_tx_list(accounts_named_tx_list, holder_named_tx_list)
 
 
 class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
@@ -650,12 +651,12 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
         create_holder_named_tx_list = self.get_holder_tx_list()
         create_alt_named_tx_list = self._get_create_alt_named_tx_list(self._alt_tx_list)
 
-        named_tx_list = extend_tx_list(create_holder_named_tx_list, create_alt_named_tx_list)
+        named_tx_list = extend_named_tx_list(create_holder_named_tx_list, create_alt_named_tx_list)
         sig_list = self._send_sol_tx_list(*named_tx_list, waiter)
 
         create_accounts_named_tx_list = self._get_create_acounts_named_tx_list()
         extend_alt_named_tx_list = self._get_extend_alt_named_tx_list(self._alt_tx_list.extend_alt_tx_list)
-        named_tx_list = extend_tx_list(create_accounts_named_tx_list, extend_alt_named_tx_list)
+        named_tx_list = extend_named_tx_list(create_accounts_named_tx_list, extend_alt_named_tx_list)
         sig_list += self._send_sol_tx_list(*named_tx_list, waiter)
 
         self._alt_builder.update_alt_info_list([self._alt_info])
