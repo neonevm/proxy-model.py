@@ -255,14 +255,10 @@ class BaseNeonTxStrategy(abc.ABC):
         return tx_list_name, tx_list
 
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
-        tx_list_name, tx_list = self._build_prep_tx_list()
-        if not len(tx_list):
-            return []
-
-        tx_sender = SolTxListSender(self._solana, self._signer)
-        tx_sender.send(tx_list_name, tx_list, waiter=waiter)
+        prep_named_tx_list = self._build_prep_tx_list()
+        sig_list = self._send_sol_tx_list(*prep_named_tx_list)
         self._account_tx_list_builder.clear_tx_list()
-        return tx_sender.success_sig_list
+        return sig_list
 
     def _build_tx_list(self, cnt: int) -> Tuple[str, List[Transaction]]:
         tx_list = [self.build_tx(i) for i in range(cnt)]
@@ -600,7 +596,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
             cnt += 1
         return f'WriteWithHolder({cnt})', tx_list
 
-    def _build_prep_tx_list(self) -> Tuple[str, List[Transaction]]:
+    def _build_prep_tx_list(self) -> NamedTxList:
         accounts_named_tx_list = super()._build_prep_tx_list()
         holder_named_tx_list = self.get_holder_tx_list()
         return extend_tx_list(accounts_named_tx_list, holder_named_tx_list)
@@ -648,26 +644,21 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
         return V0Transaction(address_table_lookups=[self._alt_info]).add(legacy_tx)
 
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
-        tx_list_name, tx_list = super()._build_prep_tx_list()
 
         self._alt_tx_list = self._alt_builder.build_alt_tx_list(self._alt_info)
-        sig_list = self.prep_alt_list(self._alt_tx_list, tx_list_name, tx_list, waiter)
+
+        create_holder_named_tx_list = self.get_holder_tx_list()
+        create_alt_named_tx_list = self._get_create_alt_named_tx_list(self._alt_tx_list)
+
+        named_tx_list = extend_tx_list(create_holder_named_tx_list, create_alt_named_tx_list)
+        sig_list = self._send_sol_tx_list(*named_tx_list, waiter)
+
+        create_accounts_named_tx_list = self._get_create_acounts_named_tx_list()
+        extend_alt_named_tx_list = self._get_extend_alt_named_tx_list(self._alt_tx_list.extend_alt_tx_list)
+        named_tx_list = extend_tx_list(create_accounts_named_tx_list, extend_alt_named_tx_list)
+        sig_list += self._send_sol_tx_list(*named_tx_list, waiter)
+
         self._alt_builder.update_alt_info_list([self._alt_info])
-
-        return sig_list
-
-    def prep_alt_list(self, alt_tx_list: AddressLookupTableTxList,
-                      tx_list_name: str = '', tx_list: Optional[List[Transaction]] = None,
-                      waiter: Optional[IConfirmWaiter] = None) -> List[str]:
-        holder_create_accounts_named_tx_list = (tx_list_name, tx_list)
-        create_alt_named_tx_list = self._get_create_alt_named_tx_list(alt_tx_list)
-        exteneded_create_alt_named_tx_list = extend_tx_list(holder_create_accounts_named_tx_list, create_alt_named_tx_list)
-
-        sig_list = self._send_sol_tx_list(*exteneded_create_alt_named_tx_list, waiter)
-
-        if len(alt_tx_list.extend_alt_tx_list):
-            extend_alt_named_tx_list = self._get_extend_alt_named_tx_list(alt_tx_list.extend_alt_tx_list)
-            sig_list += self._send_sol_tx_list(*extend_alt_named_tx_list, waiter)
 
         return sig_list
 
