@@ -58,13 +58,13 @@ class AccountTxListBuilder:
     def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder):
         self._solana = solana
         self._builder = builder
-        self._name = ''
         self._resize_contract_list: List[NeonTxStage] = []
         self._create_account_list: List[NeonTxStage] = []
         self._eth_meta_dict: Dict[str, SolanaAccountMeta] = dict()
 
     def build_tx(self, accounts_data: NeonAccountsData) -> None:
         # Parse information from the emulator output
+        self.clear_tx_list()
         self._parse_accounts_list(accounts_data['accounts'])
         self._parse_token_list(accounts_data['token_accounts'])
         self._parse_solana_list(accounts_data['solana_accounts'])
@@ -75,10 +75,6 @@ class AccountTxListBuilder:
 
         # Build all instructions
         self._build_account_stage_list()
-
-    @property
-    def name(self) -> str:
-        return self._name
 
     def _add_meta(self, pubkey: PublicKey, is_writable: bool) -> None:
         key = str(pubkey)
@@ -243,7 +239,6 @@ class BaseNeonTxStrategy(abc.ABC):
 
     def _get_create_acounts_named_tx_list(self) -> NamedTxList:
         self._user.update_tx_accounts_data(self._ctx.eth_tx, self._neon_tx_exec_cfg.accounts_data)
-        self._account_tx_list_builder.clear_tx_list()
         self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.accounts_data)
         self.debug(f"Got updated accounts: {self._neon_tx_exec_cfg.accounts_data}")
         tx_list = self._account_tx_list_builder.get_tx_list()
@@ -253,7 +248,6 @@ class BaseNeonTxStrategy(abc.ABC):
     def _execute_prep_tx_list(self, waiter: IConfirmWaiter) -> List[str]:
         prep_named_tx_list = self._build_prep_tx_list()
         sig_list = self._send_sol_tx_list(*prep_named_tx_list)
-        self._account_tx_list_builder.clear_tx_list()
         return sig_list
 
     def _build_tx_list(self, cnt: int) -> Tuple[str, List[Transaction]]:
