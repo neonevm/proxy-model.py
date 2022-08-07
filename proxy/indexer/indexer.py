@@ -810,7 +810,7 @@ class Indexer(IndexerBase):
 
     def _submit_neon_tx_status(self, tx: NeonIndexedTxInfo) -> None:
         neon_tx_hash = tx.neon_tx.sig
-        neon_income = int(tx.neon_tx_res.gas_used, 0) * int(tx.neon_tx.gas_price, 0)
+        neon_income = int(tx.neon_tx_res.gas_used, 0) * int(tx.neon_tx.gas_price, 0)  # TODO: get gas usage from ixs
         if tx.holder_account != '':
             tx_type = 'holder'
         elif tx.storage_account != '':

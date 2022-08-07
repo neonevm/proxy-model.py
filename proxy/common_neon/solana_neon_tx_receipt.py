@@ -304,6 +304,7 @@ class SolNeonIxReceiptInfo:
         self._used_bpf_cycle_cnt = 0
         self._max_bpf_cycle_cnt = 0
         self._neon_step_cnt = 0
+        self._neon_income = 0
 
         self._parse_log_list()
 
@@ -370,6 +371,10 @@ class SolNeonIxReceiptInfo:
     def neon_step_cnt(self) -> int:
         return self._neon_step_cnt
 
+    @property
+    def neon_income(self) -> int:
+        return self._neon_income
+
     def set_neon_step_cnt(self, value: int) -> None:
         assert self._neon_step_cnt == 0
         self._neon_step_cnt = value
@@ -383,6 +388,8 @@ class SolNeonIxReceiptInfo:
             if self._get_bpf_cycle_cnt(log_msg):
                 continue
             elif self._get_heap_size(log_msg):
+                continue
+            elif self._get_neon_income(log_msg):
                 continue
 
     def _get_bpf_cycle_cnt(self, log_msg: str) -> bool:
@@ -401,6 +408,10 @@ class SolNeonIxReceiptInfo:
 
         self._heap_size = int(match[1])
         return True
+
+    def _get_neon_income(self, log_msg: str) -> bool:
+        # TODO: add parsing of NEON income
+        pass
 
     def _decode_ixdata(self) -> bool:
         try:

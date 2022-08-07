@@ -65,6 +65,7 @@
 
         neon_sig TEXT,
         neon_step_cnt INT,
+        neon_income BIGINT,
 
         heap_size INT,
 

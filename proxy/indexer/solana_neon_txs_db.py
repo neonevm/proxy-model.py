@@ -8,7 +8,7 @@ class SolNeonTxsDB(BaseDB):
     def __init__(self):
         super().__init__('solana_neon_transactions')
         self._column_list = [
-            'sol_sig', 'block_slot', 'idx', 'inner_idx', 'neon_sig', 'neon_step_cnt',
+            'sol_sig', 'block_slot', 'idx', 'inner_idx', 'neon_sig', 'neon_step_cnt', 'neon_income',
             'heap_size', 'max_bpf_cycle_cnt', 'used_bpf_cycle_cnt'
         ]
 
