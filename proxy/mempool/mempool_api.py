@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 from abc import ABC, abstractmethod
 from asyncio import Task
 
@@ -47,7 +47,7 @@ class MPTxRequest(MPRequest):
     nonce: int = field(compare=True, default=None)
     signature: str = field(compare=False, default=None)
     neon_tx: NeonTx = field(compare=False, default=None)
-    emulating_result: NeonEmulatingResult = field(compare=False, default=None)
+    neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
     sender_address: str = field(compare=False, default=None)
     gas_price: int = field(compare=False, default=None)
 
@@ -58,7 +58,6 @@ class MPTxRequest(MPRequest):
         self.type = MPRequestType.SendTransaction
         hash = "0x" + self.neon_tx.hash_signed().hex()
         self.log_str = f"MPTxRequest(hash={hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
-
 
 @dataclass
 class MPPendingTxCountReq(MPRequest):
