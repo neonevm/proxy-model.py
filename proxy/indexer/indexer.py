@@ -51,7 +51,7 @@ class SolNeonTxDecoderState:
         self._sol_neon_ix: Optional[SolNeonIxReceiptInfo] = None
         self._neon_tx_key_list: List[Optional[NeonIndexedTxInfo.Key]] = []
 
-        self._neon_block_list: List[Tuple[NeonIndexedBlockInfo, bool]] = []
+        self._neon_block_deque: Deque[Tuple[NeonIndexedBlockInfo, bool]] = deque([])
         if neon_block is not None:
             self.set_neon_block(neon_block)
 
@@ -64,8 +64,10 @@ class SolNeonTxDecoderState:
         self._stop_block_slot = block_slot
 
     def set_neon_block(self, neon_block: NeonIndexedBlockInfo) -> None:
+        if (len(self._neon_block_deque) > 0) and self._neon_block_deque[0][1]:
+            self._neon_block_deque.popleft()
         is_finalized = self._sol_tx_meta_collector.is_finalized
-        self._neon_block_list.append((neon_block, is_finalized))
+        self._neon_block_deque.append((neon_block, is_finalized))
 
     @property
     def process_time_ms(self) -> float:
@@ -85,7 +87,7 @@ class SolNeonTxDecoderState:
 
     @property
     def neon_block_cnt(self) -> int:
-        return len(self._neon_block_list)
+        return len(self._neon_block_deque)
 
     @property
     def sol_tx_meta_cnt(self) -> int:
@@ -101,12 +103,12 @@ class SolNeonTxDecoderState:
     @property
     def neon_block(self) -> NeonIndexedBlockInfo:
         assert self.has_neon_block()
-        return self._neon_block_list[-1][0]
+        return self._neon_block_deque[-1][0]
 
     @property
     def is_neon_block_finalized(self) -> bool:
         assert self.has_neon_block()
-        return self._neon_block_list[-1][1]
+        return self._neon_block_deque[-1][1]
 
     @property
     def block_slot(self) -> int:
@@ -174,7 +176,7 @@ class SolNeonTxDecoderState:
             self._neon_tx_key_list.clear()
 
     def iter_neon_block(self) -> Iterator[NeonIndexedBlockInfo]:
-        for neon_block, _ in self._neon_block_list:
+        for neon_block, _ in self._neon_block_deque:
             yield neon_block
 
 

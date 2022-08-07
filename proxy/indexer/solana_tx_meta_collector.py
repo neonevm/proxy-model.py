@@ -179,7 +179,8 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
             else:
                 self._stop_slot = next_info.block_slot + 1
 
-            self._save_checkpoint(sig_slot_list[0], sig_slot_list_len)
+            if not is_long_list:
+                self._save_checkpoint(sig_slot_list[0], sig_slot_list_len)
             yield sig_slot_list
 
     def _prune_tx_meta_dict(self) -> None:
