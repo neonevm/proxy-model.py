@@ -169,6 +169,9 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
             sig_slot_list = list(self._iter_sig_slot(start_sig, start_slot, self._stop_slot))
             sig_slot_list_len = len(sig_slot_list)
             if sig_slot_list_len == 0:
+                if next_info is not None:
+                    self._stop_slot = next_info.block_slot + 1
+                    continue
                 return
 
             if next_info is None:
@@ -178,6 +181,11 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
 
             self._save_checkpoint(sig_slot_list[0], sig_slot_list_len)
             yield sig_slot_list
+
+    def _prune_tx_meta_dict(self) -> None:
+        for sig_slot in list(self._tx_meta_dict.keys()):
+            if sig_slot.block_slot < self._stop_slot:
+                self._tx_meta_dict.pop(sig_slot)
 
     def iter_tx_meta(self, start_slot: int, stop_slot: int) -> Iterator[SolTxMetaInfo]:
         if start_slot < stop_slot:
@@ -190,11 +198,8 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
         self._stop_slot = stop_slot
         for sig_slot_list in self._iter_sig_slot_list(start_slot, is_long_list):
             for tx_meta in self._iter_tx_meta(sig_slot_list):
+                self._tx_meta_dict.pop(tx_meta.ident)
                 yield tx_meta
-
-        for sig_slot in self._tx_meta_dict.keys():
-            if sig_slot.block_slot < start_slot:
-                self._tx_meta_dict.pop(sig_slot)
 
 
 @logged_group("neon.Indexer")
