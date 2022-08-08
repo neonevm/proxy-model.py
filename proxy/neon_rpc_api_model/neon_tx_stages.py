@@ -10,7 +10,7 @@ from solana.transaction import AccountMeta
 
 from ..common_neon.address import accountWithSeed
 from ..common_neon.compute_budget import TransactionWithComputeBudget
-from ..common_neon.constants import NEON_ACCOUNT_BASE_SIZE
+from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 
 
 class NeonTxStage(metaclass=abc.ABCMeta):
@@ -84,7 +84,7 @@ class NeonCreateAccountTxStage(NeonTxStage):
     def __init__(self, sender, account_desc):
         NeonTxStage.__init__(self, sender)
         self._address = account_desc['address']
-        self.size = NEON_ACCOUNT_BASE_SIZE
+        self.size = ACCOUNT_INFO_LAYOUT.sizeof()
         self.balance = 0
 
     def _create_account(self):
