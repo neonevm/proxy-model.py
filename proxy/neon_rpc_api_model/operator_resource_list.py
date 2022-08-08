@@ -4,7 +4,7 @@ import multiprocessing as mp
 import time
 import traceback
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Set
 
 from logged_groups import logged_group
 from solana.account import Account as SolanaAccount
@@ -249,14 +249,30 @@ class OperatorResourceList:
             self.debug(f"Use existing accounts for resource {resource}")
         return account_list
 
-    def _make_refund_tx(self, builder, resource, refund_tx, refund_name_list, idx, stage):
+    def _make_refund_tx(
+            self,
+            builder: NeonIxBuilder,
+            resource: OperatorResourceInfo,
+            refund_tx: TransactionWithComputeBudget,
+            refund_name_list: Set[str],
+            idx: int,
+            stage: NeonCreatePermAccount
+        ):
         self.debug(f"Add refund stage for: idx: {idx}, seed: {stage.get_seed()}, resource: {resource}")
         refund_stage = NeonDeletePermAccountStage(builder, stage.get_seed())
         refund_stage.build()
         refund_name_list.add(stage.NAME)
         refund_tx.add(refund_stage.tx)
 
-    def _make_create_acc_tx(self, resource, create_acc_tx, create_acc_tx_name_list, balance, idx, stage):
+    def _make_create_acc_tx(
+            self,
+            resource: OperatorResourceInfo,
+            create_acc_tx: TransactionWithComputeBudget,
+            create_acc_tx_name_list: Set[str],
+            balance: int,
+            idx: int,
+            stage: NeonCreatePermAccount
+        ):
         self.debug(f"Add create new accounts stage for: idx: {idx}, seed: {stage.get_seed()}, resource: {resource}")
         stage.set_balance(balance)
         stage.build()
