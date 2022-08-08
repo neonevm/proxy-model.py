@@ -27,6 +27,7 @@ class Neon(Module):
         mungers=[],
     )
 
+
 class NeonWeb3(Web3):
     neon: Neon
 

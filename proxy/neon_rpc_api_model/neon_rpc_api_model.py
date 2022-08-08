@@ -699,8 +699,6 @@ class NeonRpcApiModel:
         return emulation_result
 
     def neon_getEvmParams(self)-> Dict[str, Any]:
-        """
-        Returns map of Neon-EVM parameters
-        """
+        """Returns map of Neon-EVM parameters"""
         self.debug(f"call neon_getEvmParams")
         return ElfParams().get_params()
