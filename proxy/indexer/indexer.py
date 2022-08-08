@@ -932,13 +932,33 @@ class BlocksIndexer:
 
     def gather_blocks(self):
         start_time = time.time()
-        slot = self.solana.get_slot(FINALIZED)['result']
-        self.db.set_latest_block(slot)
+
+        last_block_slot = self.db.get_latest_block_slot() + 1
+        start_block_slot = last_block_slot
+        block_list_len = 10000
+        commitment = FINALIZED
+
+        while block_list_len == 10000:
+            block_list = self.solana.get_block_slot_list(last_block_slot, block_list_len, commitment)
+            block_list_len = len(block_list)
+            # No more blocks
+            if block_list_len == 0:
+                break
+
+            block_info_list = self.solana.get_block_info_list(block_list, commitment)
+            last_block_slot = block_info_list[-1].slot
+
+            self.db.set_block_info_list(block_info_list)
+            self.db.set_latest_block_slot(last_block_slot)
+
         gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
         self.counted_logger.print(
             self.debug,
             list_params={"gather_blocks_ms": gather_blocks_ms},
-            latest_params={"last_block_slot": slot}
+            latest_params={
+                "start_block_slot": start_block_slot,
+                "last_block_slot": last_block_slot
+            }
         )
 
 

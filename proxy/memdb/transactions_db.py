@@ -2,7 +2,7 @@ import multiprocessing as mp
 import pickle
 import ctypes
 
-from typing import Optional
+from typing import Optional, List
 from logged_groups import logged_group
 
 from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
@@ -20,8 +20,6 @@ class MemTxsDB:
 
     _tx_by_neon_sign = _manager.dict()
     _slot_by_neon_sign = _manager.dict()
-    _tx_by_sol_sign = _manager.dict()
-    _slot_by_sol_sign = _manager.dict()
 
     def __init__(self, db: IndexerDB):
         self._db = db
@@ -39,27 +37,9 @@ class MemTxsDB:
                 tx_slot = slot
         self._tx_slot.value = tx_slot
 
-        rm_sol_sign_list = [sign for sign, slot in self._slot_by_sol_sign.items() if slot <= before_slot]
-
-        for neon_sign, sol_sign in zip(rm_neon_sign_list, rm_sol_sign_list):
+        for neon_sign in rm_neon_sign_list:
             del self._tx_by_neon_sign[neon_sign]
             del self._slot_by_neon_sign[neon_sign]
-
-            del self._tx_by_sol_sign[sol_sign]
-            del self._slot_by_sol_sign[sol_sign]
-
-    def get_tx_list_by_sol_sign(self, is_finalized, sol_sign_list: [str], before_slot: int) -> [NeonTxFullInfo]:
-        if is_finalized:
-            return self._db.get_tx_list_by_sol_sign(sol_sign_list)
-
-        tx_list = []
-        with self._tx_slot.get_lock():
-            self._rm_finalized_txs(before_slot)
-            for sol_sign in sol_sign_list:
-                data = self._tx_by_sol_sign.get(sol_sign)
-                if data:
-                    tx_list.append(pickle.loads(data))
-        return tx_list
 
     def get_tx_by_neon_sign(self, neon_sign: str, is_pended_tx: bool, before_slot: int) -> Optional[NeonTxFullInfo]:
         if not is_pended_tx:
@@ -71,6 +51,16 @@ class MemTxsDB:
             if data:
                 return pickle.loads(data)
         return None
+
+    def get_tx_list_by_neon_sign_list(self, neon_sign_list: List[str], before_slot: int) -> List[NeonTxFullInfo]:
+        tx_list = []
+        with self._tx_slot.get_lock():
+            self._rm_finalized_txs(before_slot)
+            for neon_sign in neon_sign_list:
+                data = self._tx_by_neon_sign.get(neon_sign)
+                if data:
+                    tx_list.append(pickle.loads(data))
+        return tx_list
 
     def get_logs(self, from_block, to_block, addresses, topics, block_hash):
         def _has_address(src_addresses, dst_address):
@@ -104,7 +94,7 @@ class MemTxsDB:
                     result_list.append(log)
         return indexed_logs + result_list
 
-    def get_sol_sign_list_by_neon_sign(self, neon_sign: str, is_pended_tx: bool, before_slot: int) -> [str]:
+    def get_sol_sign_list_by_neon_sign(self, neon_sign: str, is_pended_tx: bool, before_slot: int) -> List[str]:
         if not is_pended_tx:
             return self._db.get_sol_sign_list_by_neon_sign(neon_sign)
 
@@ -113,9 +103,9 @@ class MemTxsDB:
             data = self._tx_by_neon_sign.get(neon_sign)
             if data:
                 return pickle.loads(data).used_ixs
-        return None
+        return []
 
-    def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, sign_list: [str], before_slot: int):
+    def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, sign_list: List[str], before_slot: int):
         tx = NeonTxFullInfo(neon_tx=neon_tx, neon_res=neon_res, used_ixs=sign_list)
         data = pickle.dumps(tx)
 
@@ -124,9 +114,6 @@ class MemTxsDB:
 
             self._tx_by_neon_sign[tx.neon_tx.sign] = data
             self._slot_by_neon_sign[tx.neon_tx.sign] = tx.neon_res.slot
-
-            self._tx_by_sol_sign[tx.neon_res.sol_sign] = data
-            self._slot_by_sol_sign[tx.neon_res.sol_sign] = tx.neon_res.slot
 
             if self._tx_slot.value > tx.neon_res.slot:
                 self._tx_slot.value = tx.neon_res.slot

@@ -505,7 +505,7 @@ class SolanaInteractor:
         }
         return self._send_rpc_request("getBlocksWithLimit", last_block_slot, limit, opts)['result']
 
-    def get_block_info(self, slot: int, commitment='confirmed') -> [SolanaBlockInfo]:
+    def get_block_info(self, slot: int, commitment='confirmed') -> SolanaBlockInfo:
         opts = {
             "commitment": commitment,
             "encoding": "json",
@@ -521,10 +521,8 @@ class SolanaInteractor:
         return SolanaBlockInfo(
             slot=slot,
             is_finalized=(commitment == FINALIZED),
-            hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
-            parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
-            time=net_block['blockTime'],
-            signs=net_block['signatures']
+            hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
+            time=net_block['blockTime']
         )
 
     def get_block_info_list(self, block_slot_list: List[int], commitment='confirmed') -> List[SolanaBlockInfo]:
@@ -535,7 +533,7 @@ class SolanaInteractor:
         opts = {
             "commitment": commitment,
             "encoding": "json",
-            "transactionDetails": "signatures",
+            "transactionDetails": "none",
             "rewards": False
         }
 
@@ -555,10 +553,8 @@ class SolanaInteractor:
                 block = SolanaBlockInfo(
                     slot=slot,
                     is_finalized=(commitment == FINALIZED),
-                    hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
-                    parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
-                    time=net_block['blockTime'],
-                    signs=net_block['signatures']
+                    hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
+                    time=net_block['blockTime']
                 )
             block_list.append(block)
         return block_list

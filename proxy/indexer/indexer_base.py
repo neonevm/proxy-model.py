@@ -90,8 +90,9 @@ class IndexerBase:
     def process_functions(self):
         self.gather_unknown_transactions()
 
-    def gather_unknown_transactions(self):
-        start_time = time.time()
+    def get_tx_receipts(self, stop_slot=None):
+        signatures = self.gather_unknown_transactions()
+
         poll_txs = []
         tx_list = []
 
