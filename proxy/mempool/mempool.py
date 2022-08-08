@@ -3,6 +3,8 @@ from typing import List, Tuple
 
 from logged_groups import logged_group
 
+from .operator_resource_list import OperatorResourceManager
+
 from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest,\
                          MPPendingTxCountReq
 from .mempool_schedule import MPTxSchedule
@@ -17,10 +19,12 @@ class MemPool:
     def __init__(self, executor: IMPExecutor, capacity: int):
         self.info(f"Init mempool schedule with capacity: {capacity}")
         self._tx_schedule = MPTxSchedule(capacity)
+        self._resource_mng = OperatorResourceManager()
         self._schedule_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         self._process_tx_results_task = asyncio.get_event_loop().create_task(self.check_processing_tasks())
         self._process_tx_queue_task = asyncio.get_event_loop().create_task(self.process_tx_schedule())
+        self._check_resources_task = asyncio.get_event_loop().create_task(self.check_resources_schedule())
 
         self._executor = executor
 
@@ -52,9 +56,16 @@ class MemPool:
                 await self._schedule_cond.wait()
                 self.debug(f"Schedule processing  got awake, condition: {self._schedule_cond.__repr__()}")
                 while self._executor.is_available():
+                    operator_resource = self._resource_mng.get_resource()
+                    if operator_resource is None:
+                        break
+
                     mp_request: MPTxRequest = self._tx_schedule.acquire_tx_for_execution()
                     if mp_request is None:
+                        self._resource_mng.free_resource_info(operator_resource)
                         break
+
+                    mp_request.resource = operator_resource
 
                     try:
                         log_ctx = {"context": {"req_id": mp_request.req_id}}
@@ -96,12 +107,19 @@ class MemPool:
             log_fn(f"On mp tx result:  {mp_tx_result} - of: {mp_request.log_str}", extra=log_ctx)
 
             if mp_tx_result.code == MPResultCode.BlockedAccount:
+                self._free_resource(mp_request)
                 self._on_blocked_accounts_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.PendingTxError:
+                self._free_resource(mp_request)
                 self._on_pending_tx_error_result(mp_request, mp_tx_result)
+            elif mp_tx_result.code == MPResultCode.BadResourceError:
+                self._bad_resource(mp_request)
+                self._on_bad_resource_error_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.Unspecified:
+                self._free_resource(mp_request)
                 self._drop_request_away(mp_request)
             elif mp_tx_result.code == MPResultCode.Done:
+                self._free_resource(mp_request)
                 self._on_request_done(mp_request)
 
         except Exception as err:
@@ -117,6 +135,11 @@ class MemPool:
 
     def _on_pending_tx_error_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
         self.debug(f"For tx: {mp_tx_request.log_str} - got pending tx error status: {mp_tx_result.data}. "
+                   f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
+        asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
+
+    def _on_bad_resource_error_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
+        self.debug(f"For tx: {mp_tx_request.log_str} - got bad resource error status: {mp_tx_result.data}. "
                    f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
@@ -147,3 +170,16 @@ class MemPool:
 
     def on_resource_got_available(self, resource_id: int):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
+
+    def _free_resource(self, mp_tx_request: MPTxRequest):
+        self._resource_mng.free_resource_info(mp_tx_request.resource)
+        mp_tx_request.resource = None
+
+    def _bad_resource(self, mp_tx_request: MPTxRequest):
+        self._resource_mng.bad_resource_info(mp_tx_request.resource)
+        mp_tx_request.resource = None
+
+    async def check_resources_schedule(self):
+        while True:
+            self._resource_mng.recheck_bad_resource_list()
+            await asyncio.sleep(self._resource_mng.RECHECK_RESOURCE_LIST_INTERVAL)

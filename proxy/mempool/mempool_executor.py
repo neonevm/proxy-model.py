@@ -7,7 +7,7 @@ from logged_groups import logged_group, logging_context
 
 from ..common_neon.data import NeonEmulatingResult, NeonTxExecCfg
 from ..common_neon.emulator_interactor import call_trx_emulated
-from ..common_neon.errors import PendingTxError
+from ..common_neon.errors import BadResourceError, PendingTxError
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.solana_tx_list_sender import BlockedAccountsError
 from ..common_neon.solana_interactor import SolanaInteractor
@@ -18,7 +18,6 @@ from ..common_neon.transaction_validator import NeonTxValidator
 from ..memdb.memdb import MemDB
 
 from .transaction_sender import NeonTxSendStrategySelector
-from .operator_resource_list import OperatorResourceList
 from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
 
@@ -67,6 +66,9 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             except PendingTxError:
                 self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got pending tx error")
                 return MPTxResult(MPResultCode.PendingTxError, None)
+            except BadResourceError:
+                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got bad resource error")
+                return MPTxResult(MPResultCode.BadResourceError, None)
             except Exception as err:
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
                 self.error(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got error: {err}: {err_tb}")
@@ -75,23 +77,28 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
     def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
         neon_tx = mp_tx_request.neon_tx
+        resource = mp_tx_request.resource
+
+        if not mp_tx_request.resource.init_perm_accounts(self._solana_interactor):
+            self.debug(f"Got bad resource error")
+            raise BadResourceError()
+
         min_gas_price = self._gas_price_calculator.get_min_gas_price()
         validator = NeonTxValidator(self._solana_interactor, neon_tx, min_gas_price)
 
         emulating_result: NeonEmulatingResult = call_trx_emulated(neon_tx)
         validator.prevalidate_emulator(emulating_result)
 
-        with OperatorResourceList(self._solana_interactor) as resource:
-            tx_sender = NeonTxSendStrategySelector(self._mem_db, self._solana_interactor, resource, neon_tx)
+        tx_sender = NeonTxSendStrategySelector(self._mem_db, self._solana_interactor, resource, neon_tx)
 
-            is_underpriced_tx_wo_chainid = validator.is_underpriced_tx_without_chainid()
-            steps_executed = emulating_result["steps_executed"]
-            accounts_data = {k: emulating_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
-            neon_tx_exec_cfg = NeonTxExecCfg(steps_executed=steps_executed,
-                                             accounts_data=accounts_data,
-                                             is_underpriced_tx_wo_chainid=is_underpriced_tx_wo_chainid)
+        is_underpriced_tx_wo_chainid = validator.is_underpriced_tx_without_chainid()
+        steps_executed = emulating_result["steps_executed"]
+        accounts_data = {k: emulating_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
+        neon_tx_exec_cfg = NeonTxExecCfg(steps_executed=steps_executed,
+                                            accounts_data=accounts_data,
+                                            is_underpriced_tx_wo_chainid=is_underpriced_tx_wo_chainid)
 
-            tx_sender.execute(neon_tx_exec_cfg)
+        tx_sender.execute(neon_tx_exec_cfg)
 
     async def on_data_received(self, data: Any) -> Any:
         return self.execute_neon_tx(data)

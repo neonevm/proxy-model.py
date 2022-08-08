@@ -165,6 +165,12 @@ class MPTxSchedule:
         sender = self._pop_sender_txs(sender_address)
         return MPSenderTxPool(sender_address=sender_address) if sender is None else sender
 
+    def available_for_execution(self) -> bool:
+        for sender_txs in self._sender_tx_pools:
+            if not sender_txs.is_processing():
+                return True
+        return False
+
     def acquire_tx_for_execution(self) -> Optional[MPTxRequest]:
 
         if len(self._sender_tx_pools) == 0:

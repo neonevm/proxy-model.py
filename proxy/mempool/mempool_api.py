@@ -6,6 +6,8 @@ from typing import Any, Tuple
 from abc import ABC, abstractmethod
 from asyncio import Task
 
+from proxy.mempool.operator_resource_list import OperatorResourceInfo
+
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
 
@@ -50,6 +52,7 @@ class MPTxRequest(MPRequest):
     emulating_result: NeonEmulatingResult = field(compare=False, default=None)
     sender_address: str = field(compare=False, default=None)
     gas_price: int = field(compare=False, default=None)
+    resource: OperatorResourceInfo = field(compare=False, default=None)
 
     def __post_init__(self):
         self.gas_price = self.neon_tx.gasPrice
@@ -74,7 +77,8 @@ class MPResultCode(IntEnum):
     BlockedAccount = 1,
     SolanaUnavailable = 2,
     PendingTxError = 3,
-    Unspecified = 4,
+    BadResourceError = 4,
+    Unspecified = 5,
     Dummy = -1
 
 
