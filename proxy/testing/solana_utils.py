@@ -22,6 +22,9 @@ from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
+import math
+
+from proxy.common_neon.layouts import CREATE_ACCOUNT_LAYOUT
 
 system = "11111111111111111111111111111111"
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
@@ -322,6 +325,7 @@ class EvmLoader:
                 owner=operator.public_key(),
                 amount=amount * (10 ** 9),
             )))
+
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
             data=bytes.fromhex("1e") + self.ether2bytes(user_ether_address),
@@ -354,6 +358,12 @@ class EvmLoader:
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
         return result
+
+    def createEtherAccount(self, ether):
+        (trx, sol) = self.createEtherAccountTrx(ether)
+        result = send_transaction(client, trx, self.acc.get_acc())
+        print('result:', result)
+        return sol
 
     @staticmethod
     def ether2hex(ether: Union[str, bytes]):
@@ -401,6 +411,22 @@ class EvmLoader:
         else:
             return program, ether
 
+    def createEtherAccountTrx(self, ether: Union[str, bytes]) -> Tuple[Transaction, str]:
+        (sol, nonce) = self.ether2program(ether)
+        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
+
+        base = self.acc.get_acc().public_key()
+        data = bytes.fromhex('1f') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=self.ether2bytes(ether)))
+        trx = TransactionWithComputeBudget()
+        trx.add(TransactionInstruction(
+            program_id=self.loader_id,
+            data=data,
+            keys=[
+                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+            ]))
+        return (trx, sol)
 
 def getBalance(account):
     return client.get_balance(account, commitment=Confirmed)['result']['value']

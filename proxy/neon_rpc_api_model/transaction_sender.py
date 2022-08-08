@@ -5,16 +5,15 @@ import math
 import time
 
 from logged_groups import logged_group
-from typing import Dict, Optional, Any
+from typing import Dict, Optional
 
 from solana.transaction import AccountMeta, Transaction, PublicKey
 from solana.blockhash import Blockhash
 
-from .neon_tx_stages import NeonAirdropTxStage, NeonCreateERC20TxStage
+from .neon_tx_stages import NeonCreateERC20TxStage
 
 from .operator_resource_list import OperatorResourceInfo
 from ..common_neon.compute_budget import TransactionWithComputeBudget
-from ..common_neon.constants import NEON_ACCOUNT_BASE_SIZE
 from ..common_neon.neon_instruction import NeonInstruction as NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.solana_tx_list_sender import SolTxListSender

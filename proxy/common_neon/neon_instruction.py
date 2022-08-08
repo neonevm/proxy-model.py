@@ -10,6 +10,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from logged_groups import logged_group
 from spl.token.instructions import get_associated_token_address, create_associated_token_account, approve, ApproveParams
 
+from .layouts import CREATE_ACCOUNT_LAYOUT
 from .solana_interactor import SolanaInteractor
 from ..common_neon.elf_params import ElfParams
 
@@ -33,6 +34,10 @@ def create_account_with_seed_layout(base, seed, lamports, space):
             )
         )
     )
+
+
+def create_account_layout(ether):
+    return bytes.fromhex("1f") + CREATE_ACCOUNT_LAYOUT.build(dict(ether=ether))
 
 
 def write_holder_layout(nonce, offset, data):
@@ -123,6 +128,22 @@ class NeonInstruction:
             program_id=SYS_PROGRAM_ID,
             data=create_account_with_seed_layout(self.operator_account, seed_str, lamports, space)
         )
+
+    def make_create_eth_account_instruction(self, eth_address: EthereumAddress) -> TransactionInstruction:
+        if isinstance(eth_address, str):
+            eth_address = EthereumAddress(eth_address)
+        pda_account, nonce = ether2program(eth_address)
+        self.debug(f'Create eth account: {eth_address}, sol account: {pda_account}, nonce: {nonce}')
+
+        data = create_account_layout(bytes(eth_address))
+        return TransactionInstruction(
+            program_id=EVM_LOADER_ID,
+            data=data,
+            keys=[
+                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(pda_account), is_signer=False, is_writable=True),
+            ])
 
     def make_erc20token_account_instruction(self, token_info) -> TransactionInstruction:
         return TransactionInstruction(
@@ -279,6 +300,7 @@ class NeonInstruction:
                 owner=self.operator_account,
                 amount=amount * (10 ** 9),
             )))
+
         instructions.append(TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=bytes.fromhex("1e") + bytes(user_ether_address),
