@@ -51,12 +51,15 @@ class NeonAccountInfo(NamedTuple):
 
     @staticmethod
     def frombytes(pda_address: PublicKey, data: bytes) -> NeonAccountInfo:
+        print(f"begin parsing: {pda_address}, len(data) = {len(data)}")
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
 
         base_size = ACCOUNT_INFO_LAYOUT.sizeof()
         code = None
         if cont.code_size > 0 and len(data) >= base_size:
             code = '0x' + data[base_size:][:cont.code_size].hex()
+
+        print(f"address = {cont.ether.hex()}, base_size = {base_size}, cont.code_size = {cont.code_size}, len(data) = {len(data)}, code = {code}")
 
         return NeonAccountInfo(
             pda_address=pda_address,

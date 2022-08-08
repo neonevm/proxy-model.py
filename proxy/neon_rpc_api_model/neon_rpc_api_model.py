@@ -457,11 +457,13 @@ class NeonRpcApiModel:
         return self._get_transaction(tx)
 
     def eth_getCode(self, account: str, tag) -> str:
+        self.info(f"eth_getCode account: {account}")
         self._validate_block_tag(tag)
         account = self._normalize_account(account)
 
         try:
             account_info = self._solana.get_neon_account_info(account)
+            self.info(f"account_info: code_size = {account_info.code_size}")
             if (not account_info) or (not account_info.code):
                 return '0x'
             return account_info.code
