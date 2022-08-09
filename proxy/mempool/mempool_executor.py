@@ -18,7 +18,7 @@ from ..common_neon.transaction_validator import NeonTxValidator
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..memdb.memdb import MemDB
 
-from .transaction_sender import NeonTxSendStrategySelector
+from .transaction_sender import IStrategySelectorUser, NeonTxSendStrategySelector
 from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
 
