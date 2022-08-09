@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 from ..common_neon.solana_interactor import SolanaInteractor
 
-from ..mempool.operator_resource_list import OperatorResourceManager
+from ..mempool.operator_resource_mng import OperatorResourceManager
 
 
 @logged_groups.logged_group("neon.TestCases")

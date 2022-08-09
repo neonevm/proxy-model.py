@@ -36,7 +36,7 @@ from ..common_neon.solana_v0_transaction import V0Transaction
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
 from ..common_neon.utils import get_holder_msg
 
-from .operator_resource_list import OperatorResourceInfo
+from .operator_resource_mng import OperatorResourceInfo
 
 
 @logged_group("neon.MemPool")

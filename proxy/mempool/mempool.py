@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 from logged_groups import logged_group
 
-from .operator_resource_list import OperatorResourceManager
+from .operator_resource_mng import OperatorResourceManager
 
 from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest,\
                          MPPendingTxCountReq
