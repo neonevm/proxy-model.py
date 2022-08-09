@@ -12,9 +12,10 @@ from solana.transaction import AccountMeta as SolanaAccountMeta, Transaction, Pu
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
 
-from ..mempool.neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage
-from ..mempool.neon_tx_stages import NeonResizeContractTxStage
+from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage
+from .neon_tx_stages import NeonResizeContractTxStage
 
+from .operator_resource_mng import OperatorResourceInfo
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
@@ -23,7 +24,7 @@ from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.eth_proto import Trx as EthTx
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo
 from ..common_neon.errors import EthereumError
-from ..common_neon.data import NeonTxExecCfg, NeonAccountsData, NeonEmulatingResult
+from ..common_neon.data import NeonTxExecCfg, NeonAccountsData
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.evm_decoder import decode_neon_tx_result
@@ -35,9 +36,7 @@ from ..common_neon.solana_v0_transaction import V0Transaction
 from ..common_neon.eth_proto import Trx as NeonTx
 
 from ..memdb.memdb import MemDB, NeonPendingTxInfo
-from ..common_neon.utils import get_holder_msg
 
-from .operator_resource_mng import OperatorResourceInfo
 
 def extend_named_tx_list(first: NamedTxList, second: NamedTxList) -> NamedTxList:
     if len(first[1]) == 0:

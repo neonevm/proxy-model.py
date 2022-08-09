@@ -23,7 +23,7 @@ from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
 
 @logged_group("neon.MemPool")
-class MPExecutor(mp.Process, IPickableDataServerUser):
+class MPExecutor(mp.Process, IPickableDataServerUser, IStrategySelectorUser):
 
     def __init__(self, executor_id: int, srv_sock: socket.socket, config: IConfig):
         self.info(f"Initialize mempool_executor: {executor_id}")
