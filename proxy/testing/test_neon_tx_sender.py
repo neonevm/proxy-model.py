@@ -18,11 +18,10 @@ class TestNeonTxSender(unittest.TestCase):
     def setUp(self) -> None:
         self._resource_list = OperatorResourceManager()
         self._resource = self._resource_list.get_resource()
-        self._resource_list._min_operator_balance_to_warn = Mock()
-        self._resource_list._min_operator_balance_to_err = Mock()
-        self._resource_list._recheck_bad_resource_list = Mock()
+        self._resource._min_operator_balance_to_warn = Mock()
+        self._resource._min_operator_balance_to_err = Mock()
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_01_validate_execution_when_not_enough_sols(self):
         """
         If the balance value of one of the operator's accounts has become equal to
@@ -39,7 +38,7 @@ class TestNeonTxSender(unittest.TestCase):
             self.assertRegex(str(logs.output), 'ERROR:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
             # self._resource_list.free_resource_info(resource)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_02_validate_warning_when_little_sols(self):
         """
         If the balance value of one of the operator's accounts becomes equal to
@@ -55,7 +54,7 @@ class TestNeonTxSender(unittest.TestCase):
             self.assertRegex(str(logs.output), 'WARNING:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
             # self._resource_list.free_resource_info(resource)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_03_validate_execution_when_not_enough_sols_for_all_operator_accounts(self):
         """
         If the balance value of the all operator's accounts has become equal to
