@@ -3,10 +3,10 @@ import threading
 from typing import Callable
 from logged_groups import logged_group
 
-from .mempool_api import MPTxRequest, MPPendingTxCountReq
+from .mempool_api import MPTxRequest, MPPendingTxCountReq, MPPendingTxByHashReq
 
 from ..common_neon.eth_proto import Trx as NeonTx
-from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
+from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.utils import AddrPickableDataClient
 
 
@@ -62,12 +62,21 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def send_raw_transaction(self, req_id: int, signature: str, neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg):
-        mempool_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg)
+    def send_raw_transaction(self, req_id: str, signature: str, neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg):
+        mempool_tx_request = MPTxRequest(
+            req_id=req_id, signature=signature, neon_tx=neon_tx,
+            neon_tx_exec_cfg=neon_tx_exec_cfg
+        )
         return self._pickable_data_client.send_data(mempool_tx_request)
 
     @_guard_conn
     @_reconnecting
-    def get_pending_tx_count(self, req_id: int, sender: str):
+    def get_pending_tx_count(self, req_id: str, sender: str) -> int:
         mempool_pending_tx_count_req = MPPendingTxCountReq(req_id=req_id, sender=sender)
         return self._pickable_data_client.send_data(mempool_pending_tx_count_req)
+
+    @_guard_conn
+    @_reconnecting
+    def get_pending_tx_by_hash(self, req_id: str, tx_hash: str) -> NeonTx:
+        mempool_pending_tx_by_hash_req = MPPendingTxByHashReq(req_id=req_id, tx_hash=tx_hash)
+        return self._pickable_data_client.send_data(mempool_pending_tx_by_hash_req)

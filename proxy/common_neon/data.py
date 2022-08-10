@@ -18,10 +18,18 @@ class NeonTxStatData:
 
 @dataclass
 class NeonTxExecCfg:
-    is_underpriced_tx_wo_chainid: bool
-    steps_executed: int
-    accounts_data: NeonAccountsData
+    evm_step_cnt: int
+    account_dict: NeonAccountDict
+
+    @staticmethod
+    def from_emulated_result(emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
+        account_dict = {k: emulated_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
+        evm_step_cnt = emulated_result["steps_executed"]
+        return NeonTxExecCfg(
+            evm_step_cnt=evm_step_cnt,
+            account_dict=account_dict
+        )
 
 
-NeonEmulatingResult = Dict[str, Any]
-NeonAccountsData = Dict[str, Any]
+NeonEmulatedResult = Dict[str, Any]
+NeonAccountDict = Dict[str, Any]

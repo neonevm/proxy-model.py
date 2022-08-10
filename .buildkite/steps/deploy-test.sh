@@ -102,11 +102,7 @@ export -f run_test
 
 function get_test_list {
     echo "UNISWAP"
-    if [[ -z "${UNITTEST_TESTNAME}" ]]; then
-        docker exec proxy find . -type f -name "test_*.py" -printf "%f\n"
-    else
-        echo ${UNITTEST_TESTNAME}
-    fi
+    docker exec proxy find . -type f -name "test_*.py" -printf "%f\n"
 }
 export -f get_test_list
 
@@ -115,7 +111,11 @@ echo "Run tests in parallel. "
 
 docker cp proxy:/usr/bin/parallel ./parallel
 docker exec proxy ./proxy/prepare-deploy-test.sh ${EXTRA_ARGS:-}
-get_test_list | ./parallel --halt now,fail=1 run_test {}
+if [[ -z "${UNITTEST_TESTNAME:=}" ]]; then
+    get_test_list | ./parallel --halt now,fail=1 run_test {}
+else
+    run_test "test_${UNITTEST_TESTNAME}.py"
+fi
 
 echo "Run tests return"
 exit 0

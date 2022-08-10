@@ -3,7 +3,7 @@ import multiprocessing
 import traceback
 import eth_utils
 
-from typing import Optional, Union, Tuple
+from typing import Optional, Union
 
 import sha3
 from logged_groups import logged_group, LogMng
@@ -11,22 +11,21 @@ from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
 from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
-from ..common_neon.errors import EthereumError, InvalidParamError, PendingTxError
+from ..common_neon.errors import EthereumError, InvalidParamError
 from ..common_neon.estimate import GasEstimate
-from ..common_neon.eth_proto import Trx as EthTrx
+from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo
+from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
-from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED, \
-                                           PYTH_MAPPING_ACCOUNT
+from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED
+from ..common_neon.environment_data import PYTH_MAPPING_ACCOUNT
 from ..common_neon.transaction_validator import NeonTxValidator, NeonTxExecCfg
 from ..indexer.indexer_db import IndexerDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..mempool import MemPoolClient, MP_SERVICE_HOST, MP_SERVICE_PORT
-from ..memdb.pending_tx_db import MemPendingTxsDB
 
 
 NEON_PROXY_PKG_VERSION = '0.10.0-dev'
@@ -49,7 +48,6 @@ class NeonRpcApiWorker:
     def __init__(self):
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = IndexerDB()
-        self._pending_db = MemPendingTxsDB(self._db)
         self._stat_exporter: Optional[StatisticsExporter] = None
         self._mempool_client = MemPoolClient(MP_SERVICE_HOST, MP_SERVICE_PORT)
 
@@ -393,13 +391,13 @@ class NeonRpcApiWorker:
             self.debug(f"Get transaction count. Account: {account}, tag: {tag}")
             neon_account_info = self._solana.get_neon_account_info(account)
 
-            pending_trx_count = 0
+            pending_tx_count = 0
             if tag == "pending":
                 req_id = LogMng.get_logging_context().get("req_id")
-                pending_trx_count = self._mempool_client.get_pending_tx_count(req_id=req_id, sender=account)
-                self.debug(f"Pending tx count for: {account} - is: {pending_trx_count}")
+                pending_tx_count = self._mempool_client.get_pending_tx_count(req_id=req_id, sender=account)
+                self.debug(f"Pending tx count for: {account} - is: {pending_tx_count}")
 
-            trx_count = neon_account_info.trx_count + pending_trx_count
+            trx_count = neon_account_info.trx_count + pending_tx_count
 
             return hex(trx_count)
         except (Exception,):
@@ -436,14 +434,23 @@ class NeonRpcApiWorker:
         return self._get_transaction_receipt(tx)
 
     @staticmethod
-    def _get_transaction(tx: NeonTxReceiptInfo, pending=False) -> dict:
+    def _get_transaction(tx: NeonTxReceiptInfo) -> dict:
         t = tx.neon_tx
+        r = tx.neon_tx_res
+
+        block_number = None
+        if r.block_slot is not None:
+            block_number = hex(r.block_slot)
+
+        tx_idx = None
+        if r.tx_idx is not None:
+            tx_idx = hex(r.tx_idx)
 
         result = {
-            "blockHash": tx.neon_tx_res.block_hash if not pending else None,
-            "blockNumber": hex(tx.neon_tx_res.block_slot) if not pending else None,
+            "blockHash": r.block_hash,
+            "blockNumber": block_number,
             "hash": t.sig,
-            "transactionIndex": hex(tx.neon_tx_res.tx_idx) if not pending else None,
+            "transactionIndex": tx_idx,
             "type": "0x0",
             "from": t.addr,
             "nonce":  t.nonce,
@@ -461,16 +468,16 @@ class NeonRpcApiWorker:
 
     def eth_getTransactionByHash(self, neon_tx_sig: str) -> Optional[dict]:
         neon_sig = self._normalize_tx_id(neon_tx_sig)
-        pending = False
 
-        tx = self._db.get_tx_by_neon_sig(neon_sig)
-        if tx is None:
-            tx = self._pending_db.get_tx_by_neon_sig(neon_sig)
-            if tx is None:
+        neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_sig)
+        if neon_tx_receipt is None:
+            req_id = LogMng.get_logging_context().get("req_id")
+            neon_tx: NeonTx = self._mempool_client.get_pending_tx_by_hash(req_id, neon_sig)
+            if neon_tx is None:
                 self.debug("Not found receipt")
                 return None
-            pending = True
-        return self._get_transaction(tx, pending)
+            neon_tx_receipt = NeonTxReceiptInfo(NeonTxInfo(tx=neon_tx), NeonTxResultInfo())
+        return self._get_transaction(neon_tx_receipt)
 
     def eth_getCode(self, account: str, tag) -> str:
         self._validate_block_tag(tag)
@@ -484,33 +491,39 @@ class NeonRpcApiWorker:
         except (Exception,):
             return '0x'
 
-    def eth_sendRawTransaction(self, rawTrx: str) -> str:
+    def eth_sendRawTransaction(self, raw_tx: str) -> str:
         try:
-            trx = EthTrx.fromString(bytearray.fromhex(rawTrx[2:]))
+            tx = NeonTx.fromString(bytearray.fromhex(raw_tx[2:]))
         except (Exception,):
             raise InvalidParamError(message="wrong transaction format")
 
-        eth_signature = '0x' + trx.hash_signed().hex()
-        self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(trx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
+        eth_signature = '0x' + tx.hash_signed().hex()
+        self.debug(f"sendRawTransaction {eth_signature}: {json.dumps(tx.as_dict(), cls=JsonEncoder, sort_keys=True)}")
 
         self._stat_tx_begin()
         try:
-            neon_tx_exec_cfg = self.precheck(trx)
+            neon_tx_exec_cfg = self.precheck(tx)
 
             self._stat_tx_success()
             req_id = LogMng.get_logging_context().get("req_id")
 
-            self._mempool_client.send_raw_transaction(req_id=req_id, signature=eth_signature, neon_tx=trx, neon_tx_exec_cfg=neon_tx_exec_cfg)
+            self._mempool_client.send_raw_transaction(
+                req_id=req_id, signature=eth_signature, neon_tx=tx,
+                neon_tx_exec_cfg=neon_tx_exec_cfg
+            )
             return eth_signature
+
+        except EthereumError:
+            raise
 
         except Exception as err:
             self.error(f"Failed to process eth_sendRawTransaction, Error: {err}")
             self._stat_tx_failed()
             raise
 
-    def precheck(self, neon_trx: EthTrx) -> NeonTxExecCfg:
+    def precheck(self, neon_tx: NeonTx) -> NeonTxExecCfg:
         min_gas_price = self.gas_price_calculator.get_min_gas_price()
-        neon_validator = NeonTxValidator(self._solana, neon_trx, min_gas_price)
+        neon_validator = NeonTxValidator(self._solana, neon_tx, min_gas_price)
         return neon_validator.precheck()
 
     def _stat_tx_begin(self):
@@ -619,7 +632,7 @@ class NeonRpcApiWorker:
             raw_tx = signed_tx.rawTransaction.hex()
 
             tx['from'] = sender
-            tx['to'] = EthTrx.fromString(bytearray.fromhex(raw_tx[2:])).toAddress.hex()
+            tx['to'] = NeonTx.fromString(bytearray.fromhex(raw_tx[2:])).toAddress.hex()
             tx['hash'] = signed_tx.hash.hex()
             tx['r'] = hex(signed_tx.r)
             tx['s'] = hex(signed_tx.s)
@@ -689,12 +702,12 @@ class NeonRpcApiWorker:
         neon_sig = self._normalize_tx_id(NeonTxId)
         return self._db.get_sol_sig_list_by_neon_sig(neon_sig)
 
-    def neon_emulate(self, raw_signed_trx):
+    def neon_emulate(self, raw_signed_tx: str):
         """Executes emulator with given transaction
         """
-        self.debug(f"Call neon_emulate: {raw_signed_trx}")
-        eth_trx = EthTrx.fromString(bytearray.fromhex(raw_signed_trx))
-        emulation_result = call_trx_emulated(eth_trx)
+        self.debug(f"Call neon_emulate: {raw_signed_tx}")
+        neon_tx = NeonTx.fromString(bytearray.fromhex(raw_signed_tx))
+        emulation_result = call_trx_emulated(neon_tx)
         return emulation_result
 
     def neon_finalizedBlockNumber(self) -> str:

@@ -7,7 +7,7 @@ from eth_utils import big_endian_to_int
 import json
 
 from ..environment_data import LOG_FULL_OBJECT_INFO
-from ..eth_proto import Trx as EthTx
+from ..eth_proto import Trx as NeonTx
 
 
 def str_fmt_object(obj: Any) -> str:
@@ -136,7 +136,7 @@ class NeonTxResultInfo:
         self._sol_sig: Optional[str] = None
         self._tx_idx: Optional[int] = None
         self._block_slot: Optional[int] = None
-        self._block_hash = ''
+        self._block_hash: Optional[str] = None
         self._sol_ix_idx: Optional[int] = None
         self._sol_ix_inner_idx: Optional[int] = None
 
@@ -145,7 +145,7 @@ class NeonTxResultInfo:
         return self._block_slot
 
     @property
-    def block_hash(self) -> str:
+    def block_hash(self) -> Optional[str]:
         return self._block_hash
 
     @property
@@ -218,7 +218,7 @@ class NeonTxResultInfo:
 
 # TODO: move to separate file
 class NeonTxInfo:
-    def __init__(self, *, tx: Optional[EthTx] = None,
+    def __init__(self, *, tx: Optional[NeonTx] = None,
                  rlp_sig: Optional[bytes] = None, rlp_data: Optional[bytes] = None):
         self._addr: Optional[str] = None
         self._sig = ''
@@ -237,10 +237,10 @@ class NeonTxInfo:
         if isinstance(rlp_sig, bytes) and isinstance(rlp_data, bytes):
             assert tx is None
             self._decode(cast(bytes, rlp_sig), cast(bytes, rlp_data))
-        elif isinstance(tx, EthTx):
+        elif isinstance(tx, NeonTx):
             assert rlp_sig is None
             assert rlp_data is None
-            self._init_from_eth_tx(cast(EthTx, tx))
+            self._init_from_eth_tx(cast(NeonTx, tx))
 
     @property
     def addr(self) -> Optional[str]:
@@ -303,7 +303,7 @@ class NeonTxInfo:
     def __setstate__(self, src) -> None:
         self.__dict__ = src
 
-    def _init_from_eth_tx(self, tx: EthTx):
+    def _init_from_eth_tx(self, tx: NeonTx):
         self._v = hex(tx.v)
         self._r = hex(tx.r)
         self._s = hex(tx.s)
@@ -326,7 +326,7 @@ class NeonTxInfo:
 
     def _decode(self, rlp_sig: bytes, rlp_data: bytes) -> NeonTxInfo:
         try:
-            utx = EthTx.fromString(rlp_data)
+            utx = NeonTx.fromString(rlp_data)
 
             if utx.v == 0:
                 uv = int(rlp_sig[64]) + 27
@@ -335,7 +335,7 @@ class NeonTxInfo:
             ur = big_endian_to_int(rlp_sig[0:32])
             us = big_endian_to_int(rlp_sig[32:64])
 
-            tx = EthTx(utx.nonce, utx.gasPrice, utx.gasLimit, utx.toAddress, utx.value, utx.callData, uv, ur, us)
+            tx = NeonTx(utx.nonce, utx.gasPrice, utx.gasLimit, utx.toAddress, utx.value, utx.callData, uv, ur, us)
             self._init_from_eth_tx(tx)
         except Exception as e:
             self._error = e
@@ -381,6 +381,6 @@ def get_from_dict(src: Dict, *path) -> Any:
     return val
 
 
-def get_holder_msg(eth_trx: EthTx) -> bytes:
+def get_holder_msg(eth_trx: NeonTx) -> bytes:
     unsigned_msg = eth_trx.unsigned_msg()
     return eth_trx.signature() + len(unsigned_msg).to_bytes(8, byteorder="little") + unsigned_msg

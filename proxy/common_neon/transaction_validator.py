@@ -13,7 +13,7 @@ from .emulator_interactor import call_trx_emulated
 from .elf_params import ElfParams
 from .environment_data import ACCOUNT_PERMISSION_UPDATE_INT, ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
 
-from .data import NeonTxExecCfg, NeonEmulatingResult
+from .data import NeonTxExecCfg, NeonEmulatedResult
 
 
 @logged_group("neon.Proxy")
@@ -60,15 +60,10 @@ class NeonTxValidator:
     def precheck(self) -> NeonTxExecCfg:
         try:
             self._prevalidate_tx()
-            emulating_result: NeonEmulatingResult = call_trx_emulated(self._tx)
-            self.prevalidate_emulator(emulating_result)
+            emulated_result: NeonEmulatedResult = call_trx_emulated(self._tx)
+            self.prevalidate_emulator(emulated_result)
 
-            accounts_data = {k: emulating_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
-            is_underpriced_tx_wo_chainid = self.is_underpriced_tx_without_chainid()
-            steps_executed = emulating_result["steps_executed"]
-            neon_tx_exec_cfg = NeonTxExecCfg(steps_executed=steps_executed,
-                                             accounts_data=accounts_data,
-                                             is_underpriced_tx_wo_chainid=is_underpriced_tx_wo_chainid)
+            neon_tx_exec_cfg = NeonTxExecCfg.from_emulated_result(emulated_result)
             return neon_tx_exec_cfg
         except Exception as e:
             self.extract_ethereum_error(e)
@@ -185,7 +180,6 @@ class NeonTxValidator:
             if account_desc['code_size'] > ((9 * 1024 + 512) * 1024):
                 raise EthereumError(f"contract {account_desc['address']} " +
                                     f"requests a size increase to more than 9.5Mb")
-
 
     def _raise_nonce_error(self, account_tx_count: int, tx_nonce: int):
         if self.MAX_U64 in (account_tx_count, tx_nonce):
