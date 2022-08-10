@@ -93,21 +93,25 @@ class MPSenderTxPool:
             self._processing_tx = None
         index = bisect.bisect_left(self._txs, mp_tx_request)
         if self._txs[index].nonce != nonce:
-            self.error(f"Failed to drop reqeust away for: {self.sender_address}, not request with nonce: {nonce}")
+            self.error(f"Failed to drop request away for: {self.sender_address}, not request with nonce: {nonce}")
             return
         self._txs = [] if index == 0 else self._txs[index - 1:]
         self.debug(f"Removed mp_tx_request from sender: {self.sender_address} - {mp_tx_request.log_str}")
 
-    def reschedule_tx(self, nonce):
+    def reschedule_tx(self, mp_tx_request: MPTxRequest):
+        nonce = mp_tx_request.nonce
         if self._processing_tx is None:
             self.error(f"Failed to reschedule tx with nonce: {nonce}, processing tx is None")
             return
         if self._processing_tx.nonce != nonce:
             self.error(f"Failed to reschedule tx, processing tx has different nonce: {self._processing_tx.nonce} than: {nonce}")
             return
-
-        self.debug(f"Reset processing tx back to pending: {self.sender_address} - {self._txs[0].log_str}")
         self._processing_tx = None
+        index = bisect.bisect_left(self._txs, mp_tx_request)
+        if self._txs[index].nonce != nonce:
+            self.error(f"Failed to update request for: {self.sender_address}, not request with nonce: {nonce}")
+            return
+        self.debug(f"Reset processing tx back to pending: {self.sender_address} - {self._txs[index].log_str}")
 
 
 @logged_group("neon.MemPool")
@@ -202,9 +206,10 @@ class MPTxSchedule:
             self._sender_tx_pools.pop(i)
         return True
 
-    def reschedule_tx(self, sender_address: str, nonce: int):
+    def reschedule_tx(self, mp_tx_request: MPTxRequest):
+        sender_address = mp_tx_request.sender_address
         sender, _ = self._get_sender_txs(sender_address)
         if sender is None:
             self.error(f"Failed reschedule, no sender by sender_address: {sender_address}")
             return
-        sender.reschedule_tx(nonce)
+        sender.reschedule_tx(mp_tx_request)

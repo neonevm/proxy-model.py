@@ -145,7 +145,7 @@ class MemPool:
 
     async def _reschedule_tx(self, tx_request: MPTxRequest):
         await asyncio.sleep(self.RESCHEDULE_TIMEOUT_SEC)
-        self._tx_schedule.reschedule_tx(tx_request.sender_address, tx_request.nonce)
+        self._tx_schedule.reschedule_tx(tx_request)
         await self._kick_tx_schedule()
 
     def _on_request_done(self, tx_request: MPTxRequest):
@@ -154,14 +154,16 @@ class MemPool:
 
         count = self.get_pending_trx_count(sender)
         log_ctx = {"context": {"req_id": tx_request.req_id}}
-        self.debug(f"Reqeust done, pending tx count: {count}", extra=log_ctx)
+        self.debug(f"Request done, pending tx count: {count}", extra=log_ctx)
 
     def _drop_request_away(self, tx_request: MPTxRequest):
         if not self._tx_schedule.drop_request_away(tx_request):
             return
+        if tx_request.resource is not None:
+            self._free_resource(tx_request)
         count = self.get_pending_trx_count(tx_request.sender_address)
         log_ctx = {"context": {"req_id": tx_request.req_id}}
-        self.debug(f"Reqeust: {tx_request.log_str} - dropped away, pending tx count: {count}", extra=log_ctx)
+        self.debug(f"Request: {tx_request.log_str} - dropped away, pending tx count: {count}", extra=log_ctx)
 
     async def _kick_tx_schedule(self):
         async with self._schedule_cond:
