@@ -576,23 +576,32 @@ class TestDistributorContract(unittest.TestCase):
         tx_built = distribute_value_fn.buildTransaction({"nonce": nonce})
         tx_built["value"] = 12
         distribute_fn_msg = signer.sign_transaction(tx_built)
-        self.debug(f"Send `distribute_value_fn()` tx with nonce: {nonce}, ")
         tx_hash = web3.eth.send_raw_transaction(distribute_fn_msg.rawTransaction)
+        self.debug(f"Send `distribute_value_fn()` tx with nonce: {nonce}, tx_hash: {tx_hash}")
         with test_timeout(self.WAITING_DISTRIBUTE_RECEIPT_TIMEOUT_SEC):
             self.debug(f"Wait for `distribute_value_fn` receipt by hash: {tx_hash.hex()}")
             tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
             self.assertEqual(tx_receipt.status, 1)
 
     def _set_and_check_distributor_addresses(self, wallets, signer, contract, web3):
-        tx_hashes: List[TxReceipt] = []
+        nonce: int = 0
+        prebuilt_txs = []
+
         for name, account in wallets.items():
             set_address_fn = contract.functions.set_address(name, bytes.fromhex(account.address[2:]))
-            nonce = web3.eth.get_transaction_count(signer.address, "pending")
             set_address_fn_tx_built = set_address_fn.buildTransaction({"nonce": nonce})
-            self.debug(f"Send `set_address_fn(\"{name}\", {account.address[2:]}` tx with nonce: {nonce}, ")
             set_address_msg = signer.sign_transaction(set_address_fn_tx_built)
-            tx_hash = web3.eth.send_raw_transaction(set_address_msg.rawTransaction)
+            nonce = nonce + 1
+            prebuilt_txs.append((set_address_msg.rawTransaction, name, account))
+
+        tx_hashes: List[TxReceipt] = []
+        for prebuilt_tx in prebuilt_txs:
+            raw_tx, name, account = prebuilt_tx
+            tx_hash = web3.eth.send_raw_transaction(raw_tx)
+            self.debug(f"Send `set_address_fn(\"{name}\", {account.address[2:]}` tx with nonce: {nonce}, tx_hash: {tx_hash.hex()}")
             tx_hashes.append(tx_hash)
+
+        for tx_hash in tx_hashes:
             with test_timeout(self.WAITING_SET_ADDRESS_RECEIPT_TIMEOUT_SEC):
                 self.debug(f"Wait for `set_address_fn` receipt by hash: {tx_hash.hex()}")
                 tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
