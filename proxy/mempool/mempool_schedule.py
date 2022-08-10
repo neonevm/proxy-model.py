@@ -5,7 +5,7 @@ from logged_groups import logged_group
 
 from ..common_neon.eth_proto import Trx as NeonTx
 
-from .mempool_api import MPTxRequest
+from .mempool_api import MPTxRequest, MPSendTxResult
 
 
 @logged_group("neon.MemPool")
@@ -55,12 +55,13 @@ class MPSenderTxPool:
             return
         self._tx_dict.pop(tx)
 
-    def add_tx(self, mp_tx_request: MPTxRequest):
+    def add_tx(self, mp_tx_request: MPTxRequest) -> MPSendTxResult:
         index = bisect.bisect_left(self._tx_list, mp_tx_request)
+        last_nonce = self.last_nonce()
         if self._processing_tx is not None and mp_tx_request.nonce == self._processing_tx.nonce:
             tx = self._processing_tx
             self.warning(f"Failed to replace processing tx: {tx.log_str} with: {mp_tx_request.log_str}")
-            return
+            return MPSendTxResult(success=False, last_nonce=last_nonce)
 
         found_tx: Optional[MPTxRequest] = self._tx_list[index] if index < len(self._tx_list) else None
         if found_tx is not None and found_tx.nonce == mp_tx_request.nonce:
@@ -69,10 +70,16 @@ class MPSenderTxPool:
                 self._on_pop_tx(found_tx)
                 self._tx_list[index] = mp_tx_request
                 self._on_add_tx(mp_tx_request)
-            return
+                return MPSendTxResult(success=True, last_nonce=last_nonce)
+            return MPSendTxResult(success=False, last_nonce=last_nonce)
+
+        if (last_nonce != 0) and (mp_tx_request.nonce != last_nonce + 1):
+            return MPSendTxResult(success=False, last_nonce=last_nonce)
+
         self._tx_list.insert(index, mp_tx_request)
         self._on_add_tx(mp_tx_request)
         self.debug(f"New mp_tx_request: {mp_tx_request.log_str} - inserted at: {index}")
+        return MPSendTxResult(success=True, last_nonce=last_nonce)
 
     def get_tx(self):
         return None if self.is_empty() else self._tx_list[0]
@@ -85,6 +92,11 @@ class MPSenderTxPool:
 
     def len(self) -> int:
         return len(self._tx_list)
+
+    def last_nonce(self) -> int:
+        if self.len() == 0:
+            return 0
+        return self._tx_list[-1].nonce
 
     def first_tx_gas_price(self):
         tx = self.get_tx()
@@ -185,14 +197,15 @@ class MPTxSchedule:
             return sender, i
         return None, -1
 
-    def add_mp_tx_request(self, mp_tx_request: MPTxRequest):
+    def add_mp_tx_request(self, mp_tx_request: MPTxRequest) -> MPSendTxResult:
         self.debug(f"Add mp_tx_request: {mp_tx_request.log_str}")
         sender_txs = self._pop_sender_or_create(mp_tx_request.sender_address)
         self.debug(f"Got collection for sender: {mp_tx_request.sender_address}, there are already txs: {sender_txs.len()}")
-        sender_txs.add_tx(mp_tx_request)
+        result: MPSendTxResult = sender_txs.add_tx(mp_tx_request)
         bisect.insort_left(self._sender_tx_pools, sender_txs)
 
         self._check_oversized_and_reduce()
+        return result
 
     def get_mp_tx_count(self):
         count = 0
@@ -245,6 +258,10 @@ class MPTxSchedule:
     def get_pending_tx_count(self, sender_addr: str) -> int:
         sender, _ = self._get_sender_txs(sender_addr)
         return 0 if sender is None else sender.len()
+
+    def get_pending_tx_nonce(self, sender_addr: str) -> int:
+        sender, _ = self._get_sender_txs(sender_addr)
+        return 0 if sender is None else sender.last_nonce()
 
     def get_pending_tx_by_hash(self, tx_hash: str) -> Optional[NeonTx]:
         tx = self._tx_dict.get(tx_hash)

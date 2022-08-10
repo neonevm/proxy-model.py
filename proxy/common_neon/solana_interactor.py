@@ -52,7 +52,7 @@ class NeonAccountInfo(NamedTuple):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
 
         code_account = None
-        if cont.code_account != [0] * PublicKey.LENGTH:
+        if cont.code_account != bytes().rjust(PublicKey.LENGTH, b"\0"):
             code_account = PublicKey(cont.code_account)
 
         return NeonAccountInfo(
@@ -423,11 +423,11 @@ class SolanaInteractor:
 
         return balance_list
 
-    def get_neon_account_info(self, eth_account: Union[str, EthereumAddress]) -> Optional[NeonAccountInfo]:
+    def get_neon_account_info(self, eth_account: Union[str, EthereumAddress], commitment='processed') -> Optional[NeonAccountInfo]:
         if isinstance(eth_account, str):
             eth_account = EthereumAddress(eth_account)
         account_sol, nonce = ether2program(eth_account)
-        info = self.get_account_info(account_sol)
+        info = self.get_account_info(account_sol, commitment=commitment)
         if info is None:
             return None
         elif info.tag != NEON_ACCOUNT_TAG:

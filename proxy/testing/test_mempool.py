@@ -206,10 +206,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         req_count = from_acc_count * nonce_count
         acc = [create_account() for i in range(acc_count_max)]
         for acc_i in range(0, from_acc_count):
-            nonces = [i for i in range(0, nonce_count)]
-            while len(nonces) > 0:
-                index = randint(0, len(nonces) - 1)
-                nonce = nonces.pop(index)
+            for nonce in range(0, nonce_count):
                 request = get_transfer_mp_request(from_acc=acc[acc_i], to_acc=acc[randint(0, acc_count_max-1)],
                                                   req_id=str(acc_i) + " " + str(nonce), nonce=nonce,
                                                   gasPrice=randint(50000, 100000), gas=randint(4000, 10000))
@@ -293,12 +290,9 @@ class TestMPSchedule(unittest.TestCase):
         schedule = MPTxSchedule(mp_schedule_capacity)
         acc = [create_account() for i in range(acc_count_max)]
         for acc_i in range(0, from_acc_count):
-            nonces = [i for i in range(0, nonce_count)]
-            while len(nonces) > 0:
-                index = randint(0, len(nonces) - 1)
-                nonce = nonces.pop(index)
+            for nonce in range(0, nonce_count):
                 request = get_transfer_mp_request(from_acc=acc[acc_i], to_acc=acc[randint(0, acc_count_max-1)],
-                                                  req_id=str(acc_i) + " " + str(nonce), nonce=nonce_count - nonce - 1,
+                                                  req_id=str(acc_i) + " " + str(nonce), nonce=nonce,
                                                   gasPrice=randint(50000, 100000), gas=randint(4000, 10000))
                 schedule.add_mp_tx_request(request)
         self.assertEqual(mp_schedule_capacity, schedule.get_mp_tx_count())
@@ -318,10 +312,10 @@ class TestMPSenderTxPool(unittest.TestCase):
     def setUp(self) -> None:
         self._pool = MPSenderTxPool()
         acc = [create_account() for i in range(2)]
-        req_data = [dict(req_id="000", nonce=3, gasPrice=30000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+        req_data = [dict(req_id="000", nonce=0, gasPrice=30000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
                     dict(req_id="001", nonce=1, gasPrice=21000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
-                    dict(req_id="002", nonce=0, gasPrice=40000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
-                    dict(req_id="003", nonce=2, gasPrice=25000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+                    dict(req_id="002", nonce=2, gasPrice=40000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+                    dict(req_id="003", nonce=3, gasPrice=25000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
                     dict(req_id="004", nonce=4, gasPrice=25000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1])]
         self._requests = [get_transfer_mp_request(**req) for req in req_data]
         for request in self._requests:
@@ -331,13 +325,13 @@ class TestMPSenderTxPool(unittest.TestCase):
         """Checks if transaction pool drops the request with highest nonce properly"""
         self._pool.drop_last_request()
         self.assertEqual(self._pool.len(), 4)
-        self.assertEqual(self._pool.get_tx(), self._requests[2])
-        self.assertEqual(self._pool._tx_list[-1], self._requests[0])
+        self.assertEqual(self._pool.get_tx(), self._requests[0])
+        self.assertEqual(self._pool._tx_list[-1], self._requests[3])
 
     def test_drop_last_request_if_processing(self):
         """Checks if transaction pool doesn't drop the reqeust with the highest nonce if it's in process"""
         tx = self._pool.acquire_tx()
-        self.assertIs(tx, self._requests[2])
+        self.assertIs(tx, self._requests[0])
         with self.assertLogs("neon.MemPool", logging.DEBUG) as logs:
             for i in range(0, 5):
                 self._pool.drop_last_request()

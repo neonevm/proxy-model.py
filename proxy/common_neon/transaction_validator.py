@@ -21,12 +21,13 @@ class NeonTxValidator:
     MAX_U64 = pow(2, 64)
     MAX_U256 = pow(2, 256)
 
-    def __init__(self, solana: SolanaInteractor, tx: EthTx, min_gas_price: int):
+    def __init__(self, solana: SolanaInteractor, tx: EthTx, min_gas_price: int, account_tx_cnt: int):
         self._solana = solana
         self._tx = tx
 
         self._sender = '0x' + tx.sender()
         self._neon_account_info = self._solana.get_neon_account_info(EthereumAddress(self._sender))
+        self._account_tx_cnt = account_tx_cnt
 
         self._deployed_contract = tx.contract()
         if self._deployed_contract:
@@ -71,6 +72,8 @@ class NeonTxValidator:
 
     def _prevalidate_tx(self):
         self._prevalidate_whitelist()
+        self._prevalidate_tx_nonce()
+        self._prevalidate_sender_eoa()
         self._prevalidate_tx_gas()
         self._prevalidate_tx_chain_id()
         self._prevalidate_tx_size()
@@ -85,7 +88,7 @@ class NeonTxValidator:
         receipt_parser = SolReceiptParser(e)
         nonce_error = receipt_parser.get_nonce_error()
         if nonce_error:
-            self._raise_nonce_error(nonce_error[0], nonce_error[1])
+            self.raise_nonce_error(nonce_error[0], nonce_error[1])
 
     def _prevalidate_whitelist(self):
         w = AccountWhitelist(self._solana, ACCOUNT_PERMISSION_UPDATE_INT)
@@ -119,11 +122,19 @@ class NeonTxValidator:
         if len(self._tx.callData) > (128 * 1024 - 1024):
             raise EthereumError(message='transaction size is too big')
 
+    def _prevalidate_tx_nonce(self):
+        tx_nonce = int(self._tx.nonce)
+        if self.MAX_U64 not in (self._account_tx_cnt, tx_nonce):
+            if tx_nonce == self._account_tx_cnt:
+                return
+
+        self.raise_nonce_error(self._account_tx_cnt, tx_nonce)
+
     def _prevalidate_sender_eoa(self):
         if not self._neon_account_info:
             return
 
-        if self._neon_account_info.code_account:
+        if self._neon_account_info.code_account is not None:
             raise EthereumError("sender not an eoa")
 
     def _prevalidate_sender_balance(self):
@@ -181,7 +192,7 @@ class NeonTxValidator:
                 raise EthereumError(f"contract {account_desc['address']} " +
                                     f"requests a size increase to more than 9.5Mb")
 
-    def _raise_nonce_error(self, account_tx_count: int, tx_nonce: int):
+    def raise_nonce_error(self, account_tx_count: int, tx_nonce: int):
         if self.MAX_U64 in (account_tx_count, tx_nonce):
             message = 'nonce has max value'
         elif account_tx_count > tx_nonce:

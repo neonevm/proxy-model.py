@@ -3,7 +3,7 @@ import threading
 from typing import Callable
 from logged_groups import logged_group
 
-from .mempool_api import MPTxRequest, MPPendingTxCountReq, MPPendingTxByHashReq
+from .mempool_api import MPTxRequest, MPPendingTxNonceReq, MPPendingTxByHashReq, MPSendTxResult
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
@@ -62,7 +62,8 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def send_raw_transaction(self, req_id: str, signature: str, neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg):
+    def send_raw_transaction(self, req_id: str, signature: str, neon_tx: NeonTx,
+                             neon_tx_exec_cfg: NeonTxExecCfg) -> MPSendTxResult:
         mempool_tx_request = MPTxRequest(
             req_id=req_id, signature=signature, neon_tx=neon_tx,
             neon_tx_exec_cfg=neon_tx_exec_cfg
@@ -71,9 +72,9 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def get_pending_tx_count(self, req_id: str, sender: str) -> int:
-        mempool_pending_tx_count_req = MPPendingTxCountReq(req_id=req_id, sender=sender)
-        return self._pickable_data_client.send_data(mempool_pending_tx_count_req)
+    def get_pending_tx_nonce(self, req_id: str, sender: str) -> int:
+        mempool_pending_tx_nonce_req = MPPendingTxNonceReq(req_id=req_id, sender=sender)
+        return self._pickable_data_client.send_data(mempool_pending_tx_nonce_req)
 
     @_guard_conn
     @_reconnecting

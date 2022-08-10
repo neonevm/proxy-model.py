@@ -32,7 +32,7 @@ class IMPExecutor(ABC):
 
 class MPRequestType(IntEnum):
     SendTransaction = 0,
-    GetTxCount = 1,
+    GetLastTxNonce = 1,
     GetTxByHash = 2,
     Dummy = -1
 
@@ -61,12 +61,12 @@ class MPTxRequest(MPRequest):
         self.log_str = f"MPTxRequest(hash={tx_hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
 
 @dataclass
-class MPPendingTxCountReq(MPRequest):
+class MPPendingTxNonceReq(MPRequest):
 
     sender: str = None
 
     def __post_init__(self):
-        self.type = MPRequestType.GetTxCount
+        self.type = MPRequestType.GetLastTxNonce
 
 
 @dataclass
@@ -89,3 +89,9 @@ class MPResultCode(IntEnum):
 class MPTxResult:
     code: MPResultCode
     data: Any
+
+
+@dataclass
+class MPSendTxResult:
+    success: bool
+    last_nonce: int
