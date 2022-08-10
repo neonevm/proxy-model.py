@@ -26,7 +26,7 @@ from ..common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.address import EthereumAddress
 from ..common_neon.compute_budget import TransactionWithComputeBudget
-from ..common_neon.neon_instruction import NeonIxBuilder, make_keccak_instruction_data
+from ..common_neon.neon_instruction import EvmInstruction, NeonIxBuilder, make_keccak_instruction_data
 from ..common_neon.eth_proto import Trx
 
 from .testing_helpers import request_airdrop
@@ -346,7 +346,12 @@ class CancelTest(unittest.TestCase):
     def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("13") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+            data=(
+                EvmInstruction.PartialCallFromRawEthereumTXv02.value +
+                self.collateral_pool_index_buf +
+                step_count.to_bytes(8, byteorder='little') +
+                evm_instruction
+            ),
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
