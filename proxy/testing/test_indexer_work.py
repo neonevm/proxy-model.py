@@ -85,6 +85,8 @@ class CancelTest(unittest.TestCase):
     def setUpClass(cls):
         print("\ntest_indexer_work.py setUpClass")
 
+        cls.solana = SolanaClient(solana_url)
+
         request_airdrop(eth_account.address)
         request_airdrop(eth_account_invoked.address)
         request_airdrop(eth_account_getter.address)
@@ -126,10 +128,10 @@ class CancelTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
+        cls.create_two_calls_in_transaction(cls)
         cls.create_hanged_transaction(cls)
         cls.create_invoked_transaction(cls)
         cls.create_invoked_transaction_combined(cls)
-        cls.create_two_calls_in_transaction(cls)
 
     def get_accounts(self, ether):
         (sol_address, _) = self.loader.ether2program(str(ether))
@@ -143,7 +145,7 @@ class CancelTest(unittest.TestCase):
 
     def deploy_contract(self):
         compiled_sol = compile_source(TEST_EVENT_SOURCE_196)
-        contract_id, contract_interface = compiled_sol.popitem()
+        _, contract_interface = compiled_sol.popitem()
         storage = proxy.eth.contract(abi=contract_interface['abi'], bytecode=contract_interface['bin'])
         trx_deploy = proxy.eth.account.sign_transaction(dict(
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
@@ -175,7 +177,7 @@ class CancelTest(unittest.TestCase):
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_store_signed.rawTransaction.hex())
         instruction = from_addr + sign + msg
 
-        (trx_raw, self.tx_hash, from_address) = self.get_trx_receipts(self, msg, sign)
+        (_, self.tx_hash, from_address) = self.get_trx_receipts(self, msg, sign)
         print(self.tx_hash)
         print(from_address)
 
@@ -196,9 +198,9 @@ class CancelTest(unittest.TestCase):
             eth_account_invoked.key
         )
 
-        (from_addr, sign, msg) = make_instruction_data_from_tx(trx_transfer_signed.rawTransaction.hex())
+        (_, sign, msg) = make_instruction_data_from_tx(trx_transfer_signed.rawTransaction.hex())
 
-        (trx_raw, self.tx_hash_invoked, from_address) = self.get_trx_receipts(self, msg, sign)
+        (_, self.tx_hash_invoked, from_address) = self.get_trx_receipts(self, msg, sign)
         print(self.tx_hash_invoked)
         print(from_address)
 
@@ -227,7 +229,8 @@ class CancelTest(unittest.TestCase):
 
         print(tx.__dict__)
 
-        SolanaClient(solana_url).send_transaction(tx, self.acc, opts=TxOpts(skip_preflight=False, skip_confirmation=False))
+        opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
+        print(f"{self.solana.send_transaction(tx, self.acc, opts=opts)}")
 
     def create_invoked_transaction_combined(self):
         print("\ncreate_invoked_transaction_combined")
@@ -242,14 +245,13 @@ class CancelTest(unittest.TestCase):
             eth_account_invoked.key
         )
 
-        (from_addr, sign, msg) = make_instruction_data_from_tx(trx_transfer_signed.rawTransaction.hex())
+        (_, sign, msg) = make_instruction_data_from_tx(trx_transfer_signed.rawTransaction.hex())
 
-        (trx_raw, self.tx_hash_invoked_combined, from_address) = self.get_trx_receipts(self, msg, sign)
+        (_, self.tx_hash_invoked_combined, from_address) = self.get_trx_receipts(self, msg, sign)
         print(self.tx_hash_invoked_combined)
         print(from_address)
 
         storage_for_invoked = self.create_storage_account(self, sign[:8].hex())
-        time.sleep(10)
 
         eth_meta_list = [
             AccountMeta(pubkey=self.caller_getter, is_signer=False, is_writable=True),
@@ -279,9 +281,8 @@ class CancelTest(unittest.TestCase):
         tx.add(keccak_instruction)
         tx.add(iterative_transaction)
 
-        print(tx.__dict__)
-
-        SolanaClient(solana_url).send_transaction(tx, self.acc, opts=TxOpts(skip_preflight=False, skip_confirmation=False))
+        opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
+        print(f"{self.solana.send_transaction(tx, self.acc, opts=opts)}")
 
     def create_two_calls_in_transaction(self):
         print("\ncreate_two_calls_in_transaction")
@@ -296,16 +297,16 @@ class CancelTest(unittest.TestCase):
         tx = {'nonce': nonce1, 'gasPrice': MINIMAL_GAS_PRICE}
         call1_dict = self.storage_contract.functions.addReturn(1, 1).buildTransaction(tx)
         call1_signed = proxy.eth.account.sign_transaction(call1_dict, eth_account.key)
-        (from_addr, sign1, msg1) = make_instruction_data_from_tx(call1_signed.rawTransaction.hex())
-        (raw, self.tx_hash_call1, from_addr) = self.get_trx_receipts(self, msg1, sign1)
+        (_, sign1, msg1) = make_instruction_data_from_tx(call1_signed.rawTransaction.hex())
+        (_, self.tx_hash_call1, _) = self.get_trx_receipts(self, msg1, sign1)
         print('tx_hash_call1:', self.tx_hash_call1)
 
         nonce2 = nonce1 + 1
         tx = {'nonce': nonce2, 'gasPrice': MINIMAL_GAS_PRICE}
         call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).buildTransaction(tx)
         call2_signed = proxy.eth.account.sign_transaction(call2_dict, eth_account.key)
-        (from_addr, sign2, msg2) = make_instruction_data_from_tx(call2_signed.rawTransaction.hex())
-        (raw, self.tx_hash_call2, from_addr) = self.get_trx_receipts(self, msg2, sign2)
+        (_, sign2, msg2) = make_instruction_data_from_tx(call2_signed.rawTransaction.hex())
+        (_, self.tx_hash_call2, _) = self.get_trx_receipts(self, msg2, sign2)
         print('tx_hash_call2:', self.tx_hash_call2)
 
         tx = TransactionWithComputeBudget()
@@ -326,9 +327,8 @@ class CancelTest(unittest.TestCase):
         noniterative2 = builder.make_noniterative_call_transaction(len(tx.instructions))
         tx.add(noniterative2)
 
-        #print(tx.__dict__)
-        opts=TxOpts(skip_preflight=False, skip_confirmation=False, preflight_commitment=Confirmed)
-        SolanaClient(solana_url).send_transaction(tx, self.acc, opts=opts)
+        opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
+        print(f"{self.solana.send_transaction(tx, self.acc, opts=opts)}")
 
     def get_trx_receipts(self, unsigned_msg, signature):
         trx = rlp.decode(unsigned_msg, EthTrx)
@@ -378,8 +378,8 @@ class CancelTest(unittest.TestCase):
         trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_keccak(self, make_keccak_instruction_data(len(trx.instructions) + 1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(self, storage, steps, instruction))
-        print(trx.__dict__)
-        SolanaClient(solana_url).send_transaction(trx, self.acc, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
+        opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
+        print(f"{self.solana.send_transaction(trx, self.acc, opts=opts)}")
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -392,7 +392,8 @@ class CancelTest(unittest.TestCase):
         if getBalance(storage) == 0:
             trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(EVM_LOADER)))
-            SolanaClient(solana_url).send_transaction(trx, self.acc, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
+            opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
+            self.solana.send_transaction(trx, self.acc, opts=opts)
 
         return storage
 
