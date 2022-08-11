@@ -3,7 +3,7 @@ import multiprocessing
 import traceback
 import eth_utils
 
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, Dict, Any, List, Tuple
 
 import sha3
 from logged_groups import logged_group, LogMng
@@ -719,3 +719,8 @@ class NeonRpcApiWorker:
     def neon_finalizedBlockNumber(self) -> str:
         slot = self._db.get_finalized_block_slot()
         return hex(slot)
+
+    def neon_getEvmParams(self)-> Dict[str, Any]:
+        """Returns map of Neon-EVM parameters"""
+        self.debug(f"call neon_getEvmParams")
+        return ElfParams().get_params()
