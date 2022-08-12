@@ -226,8 +226,12 @@ class CancelTest(unittest.TestCase):
         )
 
         tx.add(noniterative_transaction)
+        blockhash_resp = self.solana.get_recent_blockhash()
+        tx.recent_blockhash = blockhash_resp["result"]["value"]["blockhash"]
+        tx.sign(self.acc)
 
         print(tx.__dict__)
+        print(f'invoke signature: {b58encode(tx.signature()).decode("utf-8")}')
 
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
         receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
