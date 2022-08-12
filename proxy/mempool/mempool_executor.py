@@ -18,6 +18,7 @@ from ..common_neon.transaction_validator import NeonTxValidator
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..memdb.memdb import MemDB
 
+from .operator_resource_list import ResourceInitializer
 from .transaction_sender import IStrategySelectorUser, NeonTxSendStrategySelector
 from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
@@ -81,7 +82,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser, IStrategySelectorUser):
         neon_tx_exec_cfg = mp_tx_request.neon_tx_exec_cfg
         resource = mp_tx_request.resource
 
-        if not mp_tx_request.resource.init_perm_accounts(self._solana_interactor):
+        if not ResourceInitializer(self._solana_interactor).init_resource(mp_tx_request.resource):
             self.debug(f"Got bad resource error")
             raise BadResourceError()
         if neon_tx_exec_cfg is None:

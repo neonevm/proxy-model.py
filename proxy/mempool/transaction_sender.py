@@ -15,7 +15,7 @@ from solana.account import Account as SolanaAccount
 from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage
 from .neon_tx_stages import NeonResizeContractTxStage
 
-from .operator_resource_mng import OperatorResourceInfo
+from .operator_resource_list import OperatorResourceInfo
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor

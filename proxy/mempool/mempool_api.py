@@ -6,7 +6,7 @@ from typing import Any, Tuple
 from abc import ABC, abstractmethod
 from asyncio import Task
 
-from .operator_resource_mng import OperatorResourceInfo
+from .operator_resource_list import OperatorResourceInfo
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult

@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 from logged_groups import logged_group
 
-from .operator_resource_mng import OperatorResourceManager
+from .operator_resource_list import OperatorResourceManager
 
 from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest,\
                          MPPendingTxCountReq
@@ -56,13 +56,13 @@ class MemPool:
                 await self._schedule_cond.wait()
                 self.debug(f"Schedule processing  got awake, condition: {self._schedule_cond.__repr__()}")
                 while self._executor.is_available():
-                    operator_resource = self._resource_mng.get_resource()
-                    if operator_resource is None:
-                        break
-
                     mp_request: MPTxRequest = self._tx_schedule.acquire_tx_for_execution()
                     if mp_request is None:
-                        self._resource_mng.free_resource_info(operator_resource)
+                        break
+
+                    operator_resource = self._resource_mng.get_resource(mp_request.signature)
+                    if operator_resource is None:
+                        asyncio.get_event_loop().create_task(self._reschedule_tx(mp_request))
                         break
 
                     mp_request.resource = operator_resource
@@ -107,7 +107,7 @@ class MemPool:
             log_fn(f"On mp tx result:  {mp_tx_result} - of: {mp_request.log_str}", extra=log_ctx)
 
             if mp_tx_result.code == MPResultCode.BlockedAccount:
-                self._free_resource(mp_request)
+                self._update_locked_resource(mp_request)
                 self._on_blocked_accounts_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.PendingTxError:
                 self._free_resource(mp_request)
@@ -171,12 +171,16 @@ class MemPool:
     def on_resource_got_available(self, resource_id: int):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
 
+    def _update_locked_resource(self, mp_tx_request: MPTxRequest):
+        self._resource_mng.update_allocated_resource(mp_tx_request.signature, mp_tx_request.resource)
+        mp_tx_request.resource = None
+
     def _free_resource(self, mp_tx_request: MPTxRequest):
-        self._resource_mng.free_resource_info(mp_tx_request.resource)
+        self._resource_mng.free_resource_info(mp_tx_request.signature, mp_tx_request.resource)
         mp_tx_request.resource = None
 
     def _bad_resource(self, mp_tx_request: MPTxRequest):
-        self._resource_mng.bad_resource_info(mp_tx_request.resource)
+        self._resource_mng.bad_resource_info(mp_tx_request.signature, mp_tx_request.resource)
         mp_tx_request.resource = None
 
     async def check_resources_schedule(self):
