@@ -24,32 +24,32 @@ from ..common_neon.solana_alt import ADDRESS_LOOKUP_TABLE_ID
 
 
 class EvmInstruction(Enum):
-    CreateAccount = (2).to_bytes(1, byteorder='big') # // deprecated
-    CallFromRawEthereumTX = (5).to_bytes(1, byteorder='big') # 0x05
-    OnReturn = (6).to_bytes(1, byteorder='big') # // deprecated
-    OnEvent = (7).to_bytes(1, byteorder='big') # // deprecated
-    PartialCallFromRawEthereumTX = (9).to_bytes(1, byteorder='big') # // deprecated
-    Continue = (10).to_bytes(1, byteorder='big') # // deprecated
-    ExecuteTrxFromAccountDataIterative = (11).to_bytes(1, byteorder='big') # // deprecated
-    Cancel = (12).to_bytes(1, byteorder='big') # // deprecated
-    PartialCallOrContinueFromRawEthereumTX = (13).to_bytes(1, byteorder='big') # 0x0D
-    ExecuteTrxFromAccountDataIterativeOrContinue = (14).to_bytes(1, byteorder='big') # 0x0E
-    ERC20CreateTokenAccount = (15).to_bytes(1, byteorder='big') # 0x0F
-    DeleteHolderOrStorageAccount = (16).to_bytes(1, byteorder='big') # 0x10
-    ResizeContractAccount = (17).to_bytes(1, byteorder='big') # 0x11
-    WriteHolder = (18).to_bytes(1, byteorder='big') # 0x12
-    PartialCallFromRawEthereumTXv02 = (19).to_bytes(1, byteorder='big') # 0x13
-    ContinueV02 = (20).to_bytes(1, byteorder='big') # 0x14
-    CancelWithNonce = (21).to_bytes(1, byteorder='big') # 0x15
-    ExecuteTrxFromAccountDataIterativeV02 = (22).to_bytes(1, byteorder='big') # 0x16
-    UpdateValidsTable = (23).to_bytes(1, byteorder='big') # 0x17
-    CreateAccountV02 = (24).to_bytes(1, byteorder='big') # 0x18
-    Deposit = (25).to_bytes(1, byteorder='big') # 0x19
-    MigrateAccount = (26).to_bytes(1, byteorder='big') # 0x1A
-    ExecuteTrxFromAccountDataIterativeOrContinueNoChainId = (27).to_bytes(1, byteorder='big') # 0x1B
-    WriteValueToDistributedStorage = (28).to_bytes(1, byteorder='big') # 0x1C
-    ConvertDataAccountFromV1ToV2 = (29).to_bytes(1, byteorder='big') # 0x1D
-    CollectTreasure = (30).to_bytes(1, byteorder='big') # 0x1E
+    CreateAccount = b'\x02' # 2 deprecated
+    CallFromRawEthereumTX = b'\x05' # 5
+    OnReturn = b'\x06' # 6 deprecated
+    OnEvent = b'\x07' # 7 deprecated
+    PartialCallFromRawEthereumTX = b'\x09' # 9 deprecated
+    Continue = b'\x0a' # 10 deprecated
+    ExecuteTrxFromAccountDataIterative = b'\x0b' # 11 deprecated
+    Cancel = b'\x0c' # 12 deprecated
+    PartialCallOrContinueFromRawEthereumTX = b'\x0d' # 13
+    ExecuteTrxFromAccountDataIterativeOrContinue = b'\x0e' # 14
+    ERC20CreateTokenAccount = b'\x0f' # 15
+    DeleteHolderOrStorageAccount = b'\x10' # 16
+    ResizeContractAccount = b'\x11' # 17
+    WriteHolder = b'\x12' # 18
+    PartialCallFromRawEthereumTXv02 = b'\x13' # 19
+    ContinueV02 = b'\x14' # 20
+    CancelWithNonce = b'\x15' # 21
+    ExecuteTrxFromAccountDataIterativeV02 = b'\x16' # 22
+    UpdateValidsTable = b'\x17' # 23
+    CreateAccountV02 = b'\x18' # 24
+    Deposit = b'\x19' # 25
+    MigrateAccount = b'\x1a' # 26
+    ExecuteTrxFromAccountDataIterativeOrContinueNoChainId = b'\x1b' # 27
+    WriteValueToDistributedStorage = b'\x1c' # 28
+    ConvertDataAccountFromV1ToV2 = b'\x1d' # 29
+    CollectTreasure = b'\x1e' # 30
 
 
 def create_account_with_seed_layout(base, seed, lamports, space):
