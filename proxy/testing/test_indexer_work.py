@@ -230,7 +230,8 @@ class CancelTest(unittest.TestCase):
         print(tx.__dict__)
 
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
-        print(f"{self.solana.send_transaction(tx, self.acc, opts=opts)}")
+        receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
+        self.print_if_err(self, receipt)
 
     def create_invoked_transaction_combined(self):
         print("\ncreate_invoked_transaction_combined")
@@ -282,7 +283,8 @@ class CancelTest(unittest.TestCase):
         tx.add(iterative_transaction)
 
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
-        print(f"{self.solana.send_transaction(tx, self.acc, opts=opts)}")
+        receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
+        self.print_if_err(self, receipt)
 
     def create_two_calls_in_transaction(self):
         print("\ncreate_two_calls_in_transaction")
@@ -328,7 +330,8 @@ class CancelTest(unittest.TestCase):
         tx.add(noniterative2)
 
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
-        print(f"{self.solana.send_transaction(tx, self.acc, opts=opts)}")
+        receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
+        self.print_if_err(self, receipt)
 
     def get_trx_receipts(self, unsigned_msg, signature):
         trx = rlp.decode(unsigned_msg, EthTrx)
@@ -375,11 +378,19 @@ class CancelTest(unittest.TestCase):
 
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
-        trx = TransactionWithComputeBudget()
-        trx.add(self.sol_instr_keccak(self, make_keccak_instruction_data(len(trx.instructions) + 1, len(msg), 13)))
-        trx.add(self.sol_instr_19_partial_call(self, storage, steps, instruction))
+        tx = TransactionWithComputeBudget()
+        tx.add(self.sol_instr_keccak(self, make_keccak_instruction_data(len(tx.instructions) + 1, len(msg), 13)))
+        tx.add(self.sol_instr_19_partial_call(self, storage, steps, instruction))
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
-        print(f"{self.solana.send_transaction(trx, self.acc, opts=opts)}")
+        receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
+        self.print_if_err(self, receipt)
+
+    def print_if_err(self, receipt):
+        if isinstance(receipt, dict) and \
+            receipt.get('result') and \
+            receipt['result'].get('meta') and \
+            receipt['result']['meta'].get('err'):
+            print(f"{receipt}")
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
