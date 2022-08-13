@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 from abc import ABC, abstractmethod
 from asyncio import Task
 
 from .operator_resource_list import OperatorResourceInfo
 
 from ..common_neon.eth_proto import Trx as NeonTx
-from ..common_neon.data import NeonTxExecCfg, NeonEmulatingResult
+from ..common_neon.data import NeonTxExecCfg
 
 
 class IMPExecutor(ABC):
 
     @abstractmethod
-    def submit_mp_request(self, mp_reqeust: MPRequest) -> Tuple[int, Task]:
+    def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, Task]:
         pass
 
     @abstractmethod
@@ -34,13 +34,14 @@ class IMPExecutor(ABC):
 
 class MPRequestType(IntEnum):
     SendTransaction = 0,
-    GetTrxCount = 1,
+    GetLastTxNonce = 1,
+    GetTxByHash = 2,
     Dummy = -1
 
 
 @dataclass(order=True)
 class MPRequest:
-    req_id: int = field(compare=False)
+    req_id: str = field(compare=False)
     type: MPRequestType = field(compare=False, default=MPRequestType.Dummy)
 
 
@@ -49,10 +50,10 @@ class MPTxRequest(MPRequest):
     nonce: int = field(compare=True, default=None)
     signature: str = field(compare=False, default=None)
     neon_tx: NeonTx = field(compare=False, default=None)
-    neon_tx_exec_cfg: NeonTxExecCfg = field(compare=False, default=None)
+    neon_tx_exec_cfg: Optional[NeonTxExecCfg] = field(compare=False, default=None)
     sender_address: str = field(compare=False, default=None)
     gas_price: int = field(compare=False, default=None)
-    resource: OperatorResourceInfo = field(compare=False, default=None)
+    resource: Optional[OperatorResourceInfo] = field(compare=False, default=None)
 
     def __post_init__(self):
         self.gas_price = self.neon_tx.gasPrice
@@ -64,12 +65,20 @@ class MPTxRequest(MPRequest):
 
 
 @dataclass
-class MPPendingTxCountReq(MPRequest):
+class MPPendingTxNonceReq(MPRequest):
 
     sender: str = None
 
     def __post_init__(self):
-        self.type = MPRequestType.GetTrxCount
+        self.type = MPRequestType.GetLastTxNonce
+
+
+@dataclass
+class MPPendingTxByHashReq(MPRequest):
+    tx_hash: str = None
+
+    def __post_init__(self):
+        self.type = MPRequestType.GetTxByHash
 
 
 class MPResultCode(IntEnum):
@@ -86,3 +95,9 @@ class MPResultCode(IntEnum):
 class MPTxResult:
     code: MPResultCode
     data: Any
+
+
+@dataclass
+class MPSendTxResult:
+    success: bool
+    last_nonce: int
