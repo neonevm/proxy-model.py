@@ -1,4 +1,3 @@
-import time
 import unittest
 import os
 import json
@@ -9,7 +8,7 @@ from web3 import Web3
 from solcx import compile_source
 from web3.types import TxReceipt
 
-from .testing_helpers import create_account, create_signer_account, request_airdrop, SolidityContractDeployer, test_timeout
+from .testing_helpers import create_account, create_signer_account, request_airdrop, SolidityContractDeployer
 
 
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
@@ -577,10 +576,10 @@ class TestDistributorContract(unittest.TestCase):
         distribute_fn_msg = signer.sign_transaction(tx_built)
         tx_hash = web3.eth.send_raw_transaction(distribute_fn_msg.rawTransaction)
         self.debug(f"Send `distribute_value_fn()` tx with nonce: {nonce}, tx_hash: {tx_hash}")
-        with test_timeout(self.WAITING_DISTRIBUTE_RECEIPT_TIMEOUT_SEC):
-            self.debug(f"Wait for `distribute_value_fn` receipt by hash: {tx_hash.hex()}")
-            tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
-            self.assertEqual(tx_receipt.status, 1)
+        self.debug(f"Wait for `distribute_value_fn` receipt by hash: {tx_hash.hex()}")
+        tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash,
+                                                           timeout=self.WAITING_DISTRIBUTE_RECEIPT_TIMEOUT_SEC)
+        self.assertEqual(tx_receipt.status, 1)
 
     def _set_and_check_distributor_addresses(self, wallets, signer, contract, web3):
         nonce: int = 0
@@ -601,10 +600,9 @@ class TestDistributorContract(unittest.TestCase):
             tx_hashes.append(tx_hash)
 
         for tx_hash in tx_hashes:
-            with test_timeout(self.WAITING_SET_ADDRESS_RECEIPT_TIMEOUT_SEC):
-                self.debug(f"Wait for `set_address_fn` receipt by hash: {tx_hash.hex()}")
-                tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
-                self.assertEqual(tx_receipt.status, 1)
+            tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash,
+                                                               timeout=self.WAITING_SET_ADDRESS_RECEIPT_TIMEOUT_SEC)
+            self.assertEqual(tx_receipt.status, 1)
 
     @staticmethod
     def generate_wallets():
