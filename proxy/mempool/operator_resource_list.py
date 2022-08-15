@@ -124,7 +124,7 @@ class ResourceInitializer:
                 f'min_operator_balance_to_err = {min_operator_balance_to_err}; '
             )
 
-    def _create_ether_account(self, builder: NeonIxBuilder, resource: OperatorResourceInfo) -> EthereumAddress:
+    def _create_ether_account(self, builder: NeonIxBuilder, resource: OperatorResourceInfo) -> List[NeonTxStage]:
         ether_address = EthereumAddress.from_private_key(resource.secret_key)
         solana_address = ether2program(ether_address)[0]
         resource.ether = ether_address

@@ -60,8 +60,8 @@ class MPTxRequest(MPRequest):
         self.nonce = self.neon_tx.nonce
         self.sender_address = "0x" + self.neon_tx.sender()
         self.type = MPRequestType.SendTransaction
-        hash = "0x" + self.neon_tx.hash_signed().hex()
-        self.log_str = f"MPTxRequest(hash={hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
+        tx_hash = self.signature
+        self.log_str = f"MPTxRequest(hash={tx_hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
 
 
 @dataclass
@@ -85,9 +85,8 @@ class MPResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
-    PendingTxError = 3,
-    BadResourceError = 4,
-    Unspecified = 5,
+    BadResourceError = 3,
+    Unspecified = 4,
     Dummy = -1
 
 
