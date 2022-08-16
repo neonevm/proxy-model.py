@@ -54,6 +54,9 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
     def execute_neon_tx(self, mp_tx_request: MPTxRequest):
         with logging_context(req_id=mp_tx_request.req_id, exectr=self._id):
             try:
+                if mp_tx_request.gas_price < self._gas_price_calculator.get_min_gas_price():
+                    self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got low gas price error")
+                    return MPTxResult(MPResultCode.LowGasPrice, None)
                 self.execute_neon_tx_impl(mp_tx_request)
             except BlockedAccountsError:
                 self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got blocked accounts result")
