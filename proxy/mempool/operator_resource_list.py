@@ -10,16 +10,16 @@ from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 
 from ..common_neon.address import EthereumAddress, ether2program
-from ..common_neon.constants import STORAGE_SIZE, ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG
+from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.environment_data import EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
-from ..common_neon.environment_data import MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_ERR
+from ..common_neon.environment_data import MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_ERR, STORAGE_SIZE
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.neon_instruction import NeonIxBuilder
 
-from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreatePermAccount, NeonTxStage
+from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreatePermAccountStage, NeonDeletePermAccountStage
 
 
 @logged_group("neon.MemPool")
@@ -39,7 +39,7 @@ class OperatorResourceInfo:
         aid = self.rid.to_bytes(math.ceil(self.rid.bit_length() / 8), 'big')
         self.seed_list = [prefix + aid for prefix in [b"storage", b"holder"]]
         builder = NeonIxBuilder(self.public_key)
-        stage_list = [NeonCreatePermAccount(builder, seed, STORAGE_SIZE) for seed in self.seed_list]
+        stage_list = [NeonCreatePermAccountStage(builder, seed, STORAGE_SIZE) for seed in self.seed_list]
         self.storage, self.holder = [s.sol_account for s in stage_list]
 
     def __str__(self) -> str:
@@ -88,11 +88,18 @@ class ResourceInitializer:
             self._validate_operator_balance(resource)
 
             builder = NeonIxBuilder(resource.public_key)
-            stage_list = self._create_perm_accounts(builder, resource)
+            stage_list, refund_list = self._create_perm_accounts(builder, resource)
             stage_list += self._create_ether_account(builder, resource)
 
             if len(stage_list) == 0:
                 return True
+
+            if len(refund_list):
+                refund_tx_list_info = SolTxListInfo(
+                    name_list=[s.NAME for s in refund_list],
+                    tx_list=[s.tx for s in refund_list]
+                )
+                SolTxListSender(self._solana, resource.signer).send(refund_tx_list_info)
 
             tx_list_info = SolTxListInfo(
                 name_list=[s.NAME for s in stage_list],
@@ -144,22 +151,24 @@ class ResourceInitializer:
 
     def _create_perm_accounts(self, builder: NeonIxBuilder, resource: OperatorResourceInfo):
         result_stage_list: List[NeonTxStage] = []
-        stage_list = [NeonCreatePermAccount(builder, seed, STORAGE_SIZE) for seed in resource.seed_list]
+        refund_stage_list: List[NeonTxStage] = []
+
+        stage_list = [NeonCreatePermAccountStage(builder, seed, STORAGE_SIZE) for seed in resource.seed_list]
         account_list = [s.sol_account for s in stage_list]
         info_list = self._solana.get_account_info_list(account_list)
         balance = self._solana.get_multiple_rent_exempt_balances_for_size([STORAGE_SIZE])[0]
         for idx, account, stage in zip(range(len(resource.seed_list)), info_list, stage_list):
             if not account:
-                self.debug(f"Create new accounts for resource {resource}")
-                stage.set_balance(balance)
-                stage.build()
-                result_stage_list.append(stage)
+                self._make_create_acc_tx(resource, result_stage_list, balance, idx, stage)
                 continue
             elif account.lamports < balance:
-                raise RuntimeError(f"insufficient balance of {str(stage.sol_account)}")
+                self._make_refund_tx(builder, resource, refund_stage_list, idx, stage)
+                self._make_create_acc_tx(resource, result_stage_list, balance, idx, stage)
+                continue
             elif account.owner != PublicKey(EVM_LOADER_ID):
                 raise RuntimeError(f"wrong owner for: {str(stage.sol_account)}")
             elif idx != 0:
+                # if not storage account
                 continue
 
             if account.tag == ACTIVE_STORAGE_TAG:
@@ -171,7 +180,33 @@ class ResourceInitializer:
             self.debug(f"Use existing accounts for resource {resource}")
         resource.storage = account_list[0]
         resource.holder = account_list[1]
-        return result_stage_list
+        return result_stage_list, refund_stage_list
+
+    def _make_refund_tx(
+            self,
+            builder: NeonIxBuilder,
+            resource: OperatorResourceInfo,
+            refund_stage_list: List[NeonTxStage],
+            idx: int,
+            stage: NeonCreatePermAccountStage
+        ):
+        self.debug(f"Add refund stage for: idx: {idx}, seed: {stage.get_seed()}, resource: {resource}")
+        refund_stage = NeonDeletePermAccountStage(builder, stage.get_seed())
+        refund_stage.build()
+        refund_stage_list.append(refund_stage)
+
+    def _make_create_acc_tx(
+            self,
+            resource: OperatorResourceInfo,
+            result_stage_list: List[NeonTxStage],
+            balance: int,
+            idx: int,
+            stage: NeonCreatePermAccountStage
+        ):
+        self.debug(f"Add create new accounts stage for: idx: {idx}, seed: {stage.get_seed()}, resource: {resource}")
+        stage.set_balance(balance)
+        stage.build()
+        result_stage_list.append(stage)
 
     def _unlock_storage_account(self, resource: OperatorResourceInfo, storage_account: PublicKey) -> None:
         self.debug(f"Cancel transaction in {str(storage_account)} for resource {resource}")
