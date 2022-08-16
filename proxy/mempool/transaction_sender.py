@@ -19,7 +19,7 @@ from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailable
+from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxReceiptInfo
@@ -801,7 +801,7 @@ class NeonTxSendStrategyExecutor:
                     return strategy.execute()
                 raise RuntimeError('fail to sync the emulation and the execution')
 
-            except (BlockedAccountsError, NodeBehindError, SolanaUnavailable):
+            except (BlockedAccountsError, NodeBehindError, SolanaUnavailableError):
                 raise
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
