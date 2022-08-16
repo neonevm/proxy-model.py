@@ -7,7 +7,7 @@ from logged_groups import logged_group, logging_context
 from typing import Optional
 
 from ..common_neon.gas_price_calculator import GasPriceCalculator
-from ..common_neon.solana_tx_list_sender import BlockedAccountsError
+from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
 from ..common_neon.utils import PipePickableDataSrv, IPickableDataServerUser, Any
@@ -58,6 +58,12 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             except BlockedAccountsError:
                 self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got blocked accounts result")
                 return MPTxResult(MPResultCode.BlockedAccount, None)
+            except NodeBehindError:
+                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got node behind error")
+                return MPTxResult(MPResultCode.SolanaUnavailable, None)
+            except SolanaUnavailableError:
+                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got solana unavailable error")
+                return MPTxResult(MPResultCode.SolanaUnavailable, None)
             except Exception as err:
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
                 self.error(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got error: {err}: {err_tb}")
