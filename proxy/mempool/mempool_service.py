@@ -37,7 +37,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         self._process.start()
 
     async def on_data_received(self, mp_request: MPRequest) -> Any:
-        if isinstance(mp_request, MPTxRequest):
+        if issubclass(type(mp_request), (MPRequest,)):
             return await self.process_mp_request(mp_request)
         elif isinstance(mp_request, MaintenanceRequest):
             return self.process_maintenance_request(mp_request)
