@@ -10,6 +10,8 @@ if [ "${SKIP_DOCKER_PULL}" != "YES" ]; then
     docker pull neonlabsorg/evm_loader:ci-proxy-caller-program
 fi
 
+git submodule update --init --recursive
+
 docker build -t neonlabsorg/proxy:${REVISION} \
     --build-arg NEON_EVM_COMMIT=${NEON_EVM_COMMIT} \
     --build-arg PROXY_REVISION=${REVISION} \
