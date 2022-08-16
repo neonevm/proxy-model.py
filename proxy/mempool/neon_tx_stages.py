@@ -176,7 +176,7 @@ class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage):
         self.tx.add(self._resize_account())
 
 
-class NeonCreatePermAccount(NeonCreateAccountWithSeedStage):
+class NeonCreatePermAccountStage(NeonCreateAccountWithSeedStage):
     NAME = 'createPermAccount'
 
     def __init__(self, builder: NeonIxBuilder, seed_base: bytes, size: int):
@@ -202,11 +202,11 @@ class NeonCreatePermAccount(NeonCreateAccountWithSeedStage):
 
 
 @logged_group("neon.Proxy")
-class NeonDeletePermAccountStage(NeonCreatePermAccount):
+class NeonDeletePermAccountStage(NeonCreatePermAccountStage):
     NAME = 'refundPermAccount'
 
     def __init__(self, builder: NeonIxBuilder, seed_base: bytes):
-        NeonCreatePermAccount.__init__(self, builder, seed_base, 0)
+        NeonCreatePermAccountStage.__init__(self, builder, seed_base, 0)
 
     def _delete_account(self):
         return self._builder.create_refund_instruction(self.sol_account, self._seed)

@@ -20,7 +20,7 @@ from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.neon_instruction import NeonIxBuilder
 
-from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreatePermAccount, NeonDeletePermAccountStage
+from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreatePermAccountStage, NeonDeletePermAccountStage
 
 
 class OperatorResourceInfo:
@@ -236,7 +236,7 @@ class OperatorResourceList:
         result_stage_list: List[NeonTxStage] = []
         refund_stage_list: List[NeonTxStage] = []
 
-        stage_list = [NeonCreatePermAccount(builder, seed, STORAGE_SIZE) for seed in seed_list]
+        stage_list = [NeonCreatePermAccountStage(builder, seed, STORAGE_SIZE) for seed in seed_list]
         account_list = [s.sol_account for s in stage_list]
         info_list = self._solana.get_account_info_list(account_list)
         balance = self._solana.get_multiple_rent_exempt_balances_for_size([STORAGE_SIZE])[0]
@@ -245,12 +245,13 @@ class OperatorResourceList:
                 self._make_create_acc_tx(resource, result_stage_list, balance, idx, stage)
                 continue
             elif account.lamports < balance:
-                self._make_refund_tx(builder ,resource, refund_stage_list, idx, stage)
+                self._make_refund_tx(builder, resource, refund_stage_list, idx, stage)
                 self._make_create_acc_tx(resource, result_stage_list, balance, idx, stage)
                 continue
             elif account.owner != PublicKey(EVM_LOADER_ID):
                 raise RuntimeError(f"wrong owner for: {str(stage.sol_account)}")
             elif idx != 0:
+                # if not storage account
                 continue
 
             if account.tag == ACTIVE_STORAGE_TAG:
@@ -270,7 +271,7 @@ class OperatorResourceList:
             resource: OperatorResourceInfo,
             refund_stage_list: List[NeonTxStage],
             idx: int,
-            stage: NeonCreatePermAccount
+            stage: NeonCreatePermAccountStage
         ):
         self.debug(f"Add refund stage for: idx: {idx}, seed: {stage.get_seed()}, resource: {resource}")
         refund_stage = NeonDeletePermAccountStage(builder, stage.get_seed())
@@ -283,7 +284,7 @@ class OperatorResourceList:
             result_stage_list: List[NeonTxStage],
             balance: int,
             idx: int,
-            stage: NeonCreatePermAccount
+            stage: NeonCreatePermAccountStage
         ):
         self.debug(f"Add create new accounts stage for: idx: {idx}, seed: {stage.get_seed()}, resource: {resource}")
         stage.set_balance(balance)
