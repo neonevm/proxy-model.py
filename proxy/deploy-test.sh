@@ -22,8 +22,7 @@ set ${TESTNAME:=*}
 export ETH_TOKEN_MINT=$NEON_TOKEN_MINT
 export TEST_PROGRAM=$(solana address -k /spl/bin/proxy_program-keypair.json)
 
-# python3 -m unittest discover -v -p "test_${TESTNAME}.py"
-find . -name "test_${TESTNAME}.py" -printf "%f\n" | sort | parallel --halt now,fail=1 --jobs 4 python3 -m unittest discover -v -p {}
+python3 -m unittest discover -v -p "test_${TESTNAME}.py"
 
 echo "Deploy test success"
 exit 0
