@@ -795,10 +795,8 @@ class NeonTxSendStrategyExecutor:
                         self.debug(f'Skip strategy {Strategy.NAME}: {strategy.validation_error_msg}')
                         continue
 
-                    # TODO: check timeout on emulate
-                    # if strategy.prep_after_emulate():
-                    #     continue
-                    strategy.prep_after_emulate()
+                    if strategy.prep_after_emulate():
+                        continue
                     return strategy.execute()
                 raise RuntimeError('fail to sync the emulation and the execution')
 
