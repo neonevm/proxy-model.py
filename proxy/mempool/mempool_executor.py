@@ -4,7 +4,8 @@ import socket
 import traceback
 
 from logged_groups import logged_group, logging_context
-from typing import Optional
+from typing import Optional, Any
+from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 
 from proxy.common_neon.errors import BadResourceError
 
@@ -12,7 +13,6 @@ from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.solana_tx_list_sender import BlockedAccountsError
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
-from ..common_neon.utils import PipePickableDataSrv, IPickableDataServerUser, Any
 from ..common_neon.config import Config
 
 from .transaction_sender import NeonTxSendStrategyExecutor

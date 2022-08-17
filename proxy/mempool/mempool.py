@@ -2,12 +2,13 @@ import asyncio
 from typing import List, Tuple, Optional, cast
 
 from logged_groups import logged_group
+from neon_py.data import Result
 
 from ..common_neon.eth_proto import Trx as NeonTx
 
 from .operator_resource_list import OperatorResourceManager
 
-from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest,\
+from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest, \
                          MPPendingTxNonceReq, MPPendingTxByHashReq, MPSendTxResult
 from .mempool_schedule import MPTxSchedule
 
@@ -25,23 +26,23 @@ class MemPool:
         self._schedule_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         self._process_tx_results_task = asyncio.get_event_loop().create_task(self.check_processing_tasks())
-        self._process_tx_queue_task = asyncio.get_event_loop().create_task(self.process_tx_schedule())
+        self._process_schedule_task = asyncio.get_event_loop().create_task(self.process_tx_schedule())
         self._check_resources_task = asyncio.get_event_loop().create_task(self.check_resources_schedule())
-
+        self._is_active: bool = True
         self._executor = executor
 
     async def enqueue_mp_request(self, mp_request: MPRequest):
         if mp_request.type == MPRequestType.SendTransaction:
             tx_request = cast(MPTxRequest, mp_request)
-            return await self._schedule_mp_tx_request(tx_request)
+            return await self.schedule_mp_tx_request(tx_request)
         elif mp_request.type == MPRequestType.GetLastTxNonce:
             pending_nonce_req = cast(MPPendingTxNonceReq, mp_request)
-            return self._get_pending_tx_nonce(pending_nonce_req.sender)
+            return self.get_pending_tx_nonce(pending_nonce_req.sender)
         elif mp_request.type == MPRequestType.GetTxByHash:
             pending_tx_by_hash_req = cast(MPPendingTxByHashReq, mp_request)
-            return self._get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
+            return self.get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
 
-    async def _schedule_mp_tx_request(self, mp_request: MPTxRequest) -> MPSendTxResult:
+    async def schedule_mp_tx_request(self, mp_request: MPTxRequest) -> MPSendTxResult:
         log_ctx = {"context": {"req_id": mp_request.req_id}}
         try:
             result: MPSendTxResult = self._tx_schedule.add_mp_tx_request(mp_request)
@@ -56,16 +57,17 @@ class MemPool:
     def get_pending_tx_count(self, sender_addr: str) -> int:
         return self._tx_schedule.get_pending_tx_count(sender_addr)
 
-    def _get_pending_tx_nonce(self, sender_addr: str) -> int:
+    def get_pending_tx_nonce(self, sender_addr: str) -> int:
         return self._tx_schedule.get_pending_tx_nonce(sender_addr)
 
-    def _get_pending_tx_by_hash(self, tx_hash: str) -> Optional[NeonTx]:
+    def get_pending_tx_by_hash(self, tx_hash: str) -> Optional[NeonTx]:
         return self._tx_schedule.get_pending_tx_by_hash(tx_hash)
 
     async def process_tx_schedule(self):
         while True:
             async with self._schedule_cond:
                 await self._schedule_cond.wait()
+                await self._schedule_cond.wait_for(self.is_active)
                 self.debug(f"Schedule processing  got awake, condition: {self._schedule_cond.__repr__()}")
                 while self._executor.is_available():
                     mp_request: MPTxRequest = self._tx_schedule.acquire_tx_for_execution()
@@ -195,3 +197,22 @@ class MemPool:
         while True:
             self._resource_mng.recheck_bad_resource_list()
             await asyncio.sleep(self._resource_mng.recheck_resource_list_interval())
+
+    def suspend_processing(self) -> Result:
+        if not self._is_active:
+            self.warning("No need to suspend mempool, already suspended")
+            return Result()
+        self._is_active = False
+        self.info("Transaction processing suspended")
+        return Result()
+
+    def resume_processing(self) -> Result:
+        if self._is_active:
+            self.warning("No need to resume mempool, not suspended")
+            return Result()
+        self._is_active = True
+        self.info("Transaction processing resumed")
+        return Result()
+
+    def is_active(self) -> bool:
+        return self._is_active
