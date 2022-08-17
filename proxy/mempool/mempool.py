@@ -130,6 +130,12 @@ class MemPool:
             elif mp_tx_result.code == MPResultCode.BadResourceError:
                 self._bad_resource(mp_request)
                 self._on_bad_resource_error_result(mp_request, mp_tx_result)
+            elif mp_tx_result.code == MPResultCode.SolanaUnavailable:
+                self._update_locked_resource(mp_request)
+                self._on_solana_unavailable_result(mp_request, mp_tx_result)
+            elif mp_tx_result.code == MPResultCode.LowGasPrice:
+                self._free_resource(mp_request)
+                self._on_low_gas_price_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.Unspecified:
                 self._free_resource(mp_request)
                 self._on_fail_tx(mp_request)
@@ -149,6 +155,16 @@ class MemPool:
 
     def _on_bad_resource_error_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
         self.debug(f"For tx: {mp_tx_request.log_str} - got bad resource error status: {mp_tx_result.data}. "
+                   f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
+        asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
+
+    def _on_solana_unavailable_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
+        self.debug(f"For tx: {mp_tx_request.log_str} - got solana unavailable status: {mp_tx_result.data}. "
+                   f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
+        asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
+
+    def _on_low_gas_price_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
+        self.debug(f"For tx: {mp_tx_request.log_str} - got low gas price status: {mp_tx_result.data}. "
                    f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 

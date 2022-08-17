@@ -21,4 +21,20 @@ class AddressLookupTableError(RuntimeError):
 
 
 class BadResourceError(Exception):
-    pass
+    def __int__(self):
+        super().__init__(self)
+
+
+class BlockedAccountsError(Exception):
+    def __init__(self):
+        super().__init__(self)
+
+
+class NodeBehindError(Exception):
+    def __int__(self):
+        super().__init__(self)
+
+
+class SolanaUnavailableError(Exception):
+    def __int__(self):
+        super().__init__(self)

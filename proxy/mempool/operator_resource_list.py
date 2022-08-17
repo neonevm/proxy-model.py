@@ -53,6 +53,7 @@ class OperatorResourceInfo:
     def secret_key(self) -> bytes:
         return self.signer.secret_key()
 
+
 @logged_group("neon.MemPool")
 class ResourceInitializer:
     def __init__(self, solana: SolanaInteractor):

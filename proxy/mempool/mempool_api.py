@@ -87,7 +87,8 @@ class MPResultCode(IntEnum):
     BlockedAccount = 1,
     SolanaUnavailable = 2,
     BadResourceError = 3,
-    Unspecified = 4,
+    LowGasPrice = 4,
+    Unspecified = 255,
     Dummy = -1
 
 
