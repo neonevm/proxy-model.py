@@ -14,7 +14,7 @@ from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
 from ..indexer.sql_dict import SQLDict
 
-EVM_LOADER_CREATE_ACC           = 0x18
+EVM_LOADER_CREATE_ACC           = 0x1f
 SPL_TOKEN_APPROVE               = 0x04
 EVM_LOADER_CALL_FROM_RAW_TRX    = 0x05
 SPL_TOKEN_INIT_ACC_2            = 0x10
@@ -130,7 +130,7 @@ class Airdropper(IndexerBase):
         # Must use the same Ethereum account
         if account_keys[create_acc['accounts'][2]] != account_keys[approve['accounts'][1]]:
             return False
-        
+
         # Must use the same Operator account
         if account_keys[create_acc['accounts'][0]] != account_keys[approve['accounts'][2]]:
             return False
@@ -186,7 +186,7 @@ class Airdropper(IndexerBase):
     def process_trx_airdropper_mode(self, trx):
         if check_error(trx):
             return
-        
+
         self.debug(f"Processing transaction: {trx}")
         # helper function finding all instructions that satisfies predicate
         def find_instructions(instructions, predicate):
@@ -205,7 +205,7 @@ class Airdropper(IndexerBase):
 
             return [instruction for instruction in inner_insturctions if predicate(instruction)]
 
-        
+
         def isRequiredInstruction(instr, req_program_id, req_tag_id):
             return account_keys[instr['programIdIndex']] == req_program_id \
                 and base58.b58decode(instr['data'])[0] == req_tag_id
