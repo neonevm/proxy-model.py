@@ -21,11 +21,11 @@ from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
 from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED
-from ..common_neon.environment_data import PYTH_MAPPING_ACCOUNT, RETRY_ON_FAIL
+from ..common_neon.environment_data import PYTH_MAPPING_ACCOUNT
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..indexer.indexer_db import IndexerDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
-from ..mempool import MemPoolClient, MP_SERVICE_HOST, MP_SERVICE_PORT, MPSendTxResult
+from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPSendTxResult
 
 
 NEON_PROXY_PKG_VERSION = '0.11.0'
@@ -49,7 +49,7 @@ class NeonRpcApiWorker:
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = IndexerDB()
         self._stat_exporter: Optional[StatisticsExporter] = None
-        self._mempool_client = MemPoolClient(MP_SERVICE_HOST, MP_SERVICE_PORT)
+        self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         if PP_SOLANA_URL == SOLANA_URL:
             self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
