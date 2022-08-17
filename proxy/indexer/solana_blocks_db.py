@@ -79,12 +79,31 @@ class SolBlocksDB(BaseDB):
         if block_slot > latest_block_slot:
             return SolanaBlockInfo(block_slot=block_slot)
 
-        request = self._build_request() + '''
-             WHERE a.block_slot = %s
-                OR b.block_slot = %s
-        '''
+        request = f'''
+                (SELECT {",".join(['a.' + c for c in self._column_list])},
+                        b.block_hash AS parent_block_hash
+                   FROM {self._table_name} AS a
+        LEFT OUTER JOIN {self._table_name} AS b
+                     ON b.block_slot = %s
+                    AND b.is_active = True
+                  WHERE a.block_slot = %s
+                    AND a.is_active = True
+                  LIMIT 1)
+
+         UNION DISTINCT
+
+                (SELECT {",".join(['a.' + c for c in self._column_list])},
+                        b.block_hash AS parent_block_hash
+                   FROM {self._table_name} AS b
+        LEFT OUTER JOIN {self._table_name} AS a
+                     ON a.block_slot = %s
+                    AND a.is_active = True
+                  WHERE b.block_slot = %s
+                    AND b.is_active = True
+                  LIMIT 1)
+                '''
         with self._conn.cursor() as cursor:
-            cursor.execute(request, (block_slot, block_slot - 1))
+            cursor.execute(request, (block_slot - 1, block_slot, block_slot, block_slot - 1))
             return self._block_from_value(block_slot, cursor.fetchone())
 
     def get_block_by_hash(self, block_hash: str, latest_block_slot: int) -> SolanaBlockInfo:
@@ -94,8 +113,16 @@ class SolBlocksDB(BaseDB):
             block.set_block_hash(block_hash)  # it can be a request from an uncle history branch
             return block
 
-        request = self._build_request() + '''
-             WHERE a.block_hash = %s
+        request = f'''
+                 SELECT {",".join(['a.' + c for c in self._column_list])},
+                        b.block_hash AS parent_block_hash
+
+                   FROM {self._table_name} AS a
+        FULL OUTER JOIN {self._blocks_table_name} AS b
+                     ON b.block_slot = a.block_slot - 1
+                    AND a.is_active = True
+                    AND b.is_active = True
+                  WHERE a.block_hash = %s
         '''
         with self._conn.cursor() as cursor:
             cursor.execute(request, (block_hash,))

@@ -50,6 +50,10 @@
         IF does_table_have_column('solana_neon_transactions', 'sol_sign') THEN
             DROP TABLE solana_neon_transactions;
         END IF;
+
+        IF does_table_have_column('solana_transaction_signatures', 'slot') THEN
+            DROP TABLE solana_transaction_signatures;
+        END IF;
     END $$;
 
     DROP TABLE IF EXISTS solana_neon_transactions_costs;
