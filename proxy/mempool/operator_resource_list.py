@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import math
 import traceback
 from datetime import datetime
@@ -9,12 +10,11 @@ from logged_groups import logged_group
 from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 
+from ..common_neon.config import IConfig
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
-from ..common_neon.environment_data import EVM_LOADER_ID, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
-from ..common_neon.environment_data import MIN_OPERATOR_BALANCE_TO_WARN, MIN_OPERATOR_BALANCE_TO_ERR, STORAGE_SIZE
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.neon_instruction import NeonIxBuilder
@@ -39,7 +39,7 @@ class OperatorResourceInfo:
         aid = self.rid.to_bytes(math.ceil(self.rid.bit_length() / 8), 'big')
         self.seed_list = [prefix + aid for prefix in [b"storage", b"holder"]]
         builder = NeonIxBuilder(self.public_key)
-        stage_list = [NeonCreatePermAccountStage(builder, seed, STORAGE_SIZE) for seed in self.seed_list]
+        stage_list = [NeonCreatePermAccountStage(builder, seed, 0) for seed in self.seed_list]
         self.storage, self.holder = [s.sol_account for s in stage_list]
 
     def __str__(self) -> str:
@@ -56,7 +56,8 @@ class OperatorResourceInfo:
 
 @logged_group("neon.MemPool")
 class ResourceInitializer:
-    def __init__(self, solana: SolanaInteractor):
+    def __init__(self, config: IConfig, solana: SolanaInteractor):
+        self._config = config
         self._solana = solana
 
     def init_resource(self, resource: OperatorResourceInfo):
@@ -66,18 +67,10 @@ class ResourceInitializer:
     def _get_current_time() -> int:
         return math.ceil(datetime.now().timestamp())
 
-    @staticmethod
-    def _min_operator_balance_to_err() -> int:
-        return MIN_OPERATOR_BALANCE_TO_ERR
-
-    @staticmethod
-    def _min_operator_balance_to_warn() -> int:
-        return MIN_OPERATOR_BALANCE_TO_WARN
-
     def _init_perm_accounts(self, resource: OperatorResourceInfo) -> bool:
         resource.fill_storage_holder()
 
-        check_time = self._get_current_time() + RECHECK_RESOURCE_LIST_INTERVAL
+        check_time = self._get_current_time() + self._config.get_recheck_resource_list_interval()
         resource_check_time = resource.check_time
 
         if resource_check_time and resource_check_time < check_time:
@@ -116,7 +109,7 @@ class ResourceInitializer:
     def _validate_operator_balance(self, resource: OperatorResourceInfo) -> None:
         # Validate operator's account has enough SOLs
         sol_balance = self._solana.get_sol_balance(resource.public_key)
-        min_operator_balance_to_err = self._min_operator_balance_to_err()
+        min_operator_balance_to_err = self._config.get_min_operator_balance_to_err()
         if sol_balance <= min_operator_balance_to_err:
             self.error(
                 f'Operator account {resource} has NOT enough SOLs; balance = {sol_balance}; ' +
@@ -124,7 +117,7 @@ class ResourceInitializer:
             )
             raise RuntimeError('Not enough SOLs')
 
-        min_operator_balance_to_warn = self._min_operator_balance_to_warn()
+        min_operator_balance_to_warn = self._config.get_min_operator_balance_to_warn()
         if sol_balance <= min_operator_balance_to_warn:
             self.warning(
                 f'Operator account {resource} SOLs are running out; balance = {sol_balance}; ' +
@@ -154,10 +147,10 @@ class ResourceInitializer:
         result_stage_list: List[NeonTxStage] = []
         refund_stage_list: List[NeonTxStage] = []
 
-        stage_list = [NeonCreatePermAccountStage(builder, seed, STORAGE_SIZE) for seed in resource.seed_list]
+        stage_list = [NeonCreatePermAccountStage(builder, seed, self._config.get_storage_size()) for seed in resource.seed_list]
         account_list = [s.sol_account for s in stage_list]
         info_list = self._solana.get_account_info_list(account_list)
-        balance = self._solana.get_multiple_rent_exempt_balances_for_size([STORAGE_SIZE])[0]
+        balance = self._solana.get_multiple_rent_exempt_balances_for_size([self._config.get_storage_size()])[0]
         for idx, account, stage in zip(range(len(resource.seed_list)), info_list, stage_list):
             if not account:
                 self._make_create_acc_tx(resource, result_stage_list, balance, idx, stage)
@@ -166,7 +159,7 @@ class ResourceInitializer:
                 self._make_refund_tx(builder, resource, refund_stage_list, idx, stage)
                 self._make_create_acc_tx(resource, result_stage_list, balance, idx, stage)
                 continue
-            elif account.owner != PublicKey(EVM_LOADER_ID):
+            elif account.owner != PublicKey(self._config.get_evm_loader_id()):
                 raise RuntimeError(f"wrong owner for: {str(stage.sol_account)}")
             elif idx != 0:
                 # if not storage account
@@ -219,19 +212,23 @@ class ResourceInitializer:
 
 @logged_group("neon.MemPool")
 class OperatorResourceManager:
-    _free_resource_list = list()
-    _bad_resource_list = list()
-    _resource_list: List[OperatorResourceInfo] = []
-    _allocated_resource: Dict[str, int] = dict()
-    _allocated_resource_access: Dict[str, int] = dict()
+    def __init__(self, config: IConfig):
+        self._free_resource_list: List[int] = list()
+        self._bad_resource_list: List[int] = list()
+        self._resource_list: List[OperatorResourceInfo] = []
+        self._allocated_resource: Dict[str, int] = dict()
+        self._allocated_resource_access: Dict[str, int] = dict()
+        self._config = config
 
-    def __init__(self):
         self._init_resource_list()
+
+    def start_periodical_checker(self):
+        self._check_resources_task = asyncio.get_event_loop().create_task(self._check_resources_schedule())
 
     def _init_resource_list(self):
         idx = 0
-        signer_list: List[SolanaAccount] = get_solana_accounts()
-        for rid in range(PERM_ACCOUNT_LIMIT):
+        signer_list: List[SolanaAccount] = self._get_solana_accounts()
+        for rid in range(self._config.get_perm_account_limit()):
             for signer in signer_list:
                 info = OperatorResourceInfo(signer=signer, rid=rid, idx=idx)
                 self._resource_list.append(info)
@@ -244,14 +241,14 @@ class OperatorResourceManager:
             raise RuntimeError('Operator has NO resources!')
 
     @staticmethod
-    def recheck_resource_list_interval() -> int:
-        return RECHECK_RESOURCE_LIST_INTERVAL
+    def _get_solana_accounts() -> List[SolanaAccount]:
+        return get_solana_accounts()
 
     @staticmethod
     def _get_current_time() -> int:
         return math.ceil(datetime.now().timestamp())
 
-    def recheck_bad_resource_list(self) -> int:
+    def _recheck_bad_resource_list(self) -> int:
         if not len(self._bad_resource_list):
             return
 
@@ -264,9 +261,10 @@ class OperatorResourceManager:
         current_time: int = self._get_current_time()
         resource: Optional[OperatorResourceInfo] = None
 
-        if self._allocated_resource.get(tx_hash) is not None:
-            idx = self._allocated_resource[tx_hash]
-            resource = self._resource_list[idx]
+        resource_idx = self._allocated_resource.get(tx_hash)
+        if resource_idx is not None:
+            resource = self._resource_list[resource_idx]
+            return resource
 
         if len(self._free_resource_list) > 0:
             idx = self._free_resource_list.pop(0)
@@ -275,7 +273,7 @@ class OperatorResourceManager:
             self._allocated_resource_access[tx_hash] = current_time
         else:
             for blocked_tx_hash, access_time in self._allocated_resource_access:
-                if current_time - access_time > self.RECHECK_RESOURCE_LIST_INTERVAL:
+                if current_time - access_time > self._config.get_recheck_resource_list_interval():
                     idx = self._allocated_resource[blocked_tx_hash]
                     resource = self._resource_list[idx]
                     del self._allocated_resource[blocked_tx_hash]
@@ -309,3 +307,14 @@ class OperatorResourceManager:
         del self._allocated_resource_access[tx_hash]
         self._resource_list[resource.idx].check_time = current_time
         self._free_resource_list.append(resource.idx)
+
+    def deallocate_resource(self, tx_hash: str, resource: OperatorResourceInfo) -> None:
+        del self._allocated_resource[tx_hash]
+        del self._allocated_resource_access[tx_hash]
+        self._free_resource_list.append(resource.idx)
+
+    async def _check_resources_schedule(self):
+        while True:
+            self._recheck_bad_resource_list()
+            await asyncio.sleep(self._config.get_recheck_resource_list_interval())
+

@@ -10,6 +10,8 @@ from typing import Tuple, Any, List, Dict
 import unittest
 from unittest.mock import patch, MagicMock, call
 
+from ..common_neon.config import Config
+
 from ..mempool.mempool import MemPool, IMPExecutor
 from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxResult, MPResultCode
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
@@ -81,7 +83,8 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self._executor = MockMPExecutor()
-        self._mempool = MemPool(self._executor, capacity=4096)
+        self._config = Config()
+        self._mempool = MemPool(self._executor, self._config)
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available", return_value=True)

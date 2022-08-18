@@ -4,6 +4,8 @@ import unittest
 import logged_groups
 from unittest.mock import Mock
 
+from ..common_neon.config import Config
+
 from ..common_neon.solana_interactor import SolanaInteractor
 
 from ..mempool.operator_resource_list import OperatorResourceManager, ResourceInitializer
@@ -16,11 +18,12 @@ class TestNeonTxSender(unittest.TestCase):
         cls.solana = SolanaInteractor(os.environ['SOLANA_URL'])
 
     def setUp(self) -> None:
-        self._resource_list = OperatorResourceManager()
+        self._config = Config()
+        self._resource_list = OperatorResourceManager(self._config)
         self._resource = self._resource_list.get_resource("")
-        self._resource_initializer = ResourceInitializer(self.solana)
-        self._resource_initializer._min_operator_balance_to_warn = Mock()
-        self._resource_initializer._min_operator_balance_to_err = Mock()
+        self._resource_initializer = ResourceInitializer(self._config, self.solana)
+        self._config.get_min_operator_balance_to_warn = Mock()
+        self._config.get_min_operator_balance_to_err = Mock()
 
     # @unittest.skip("a.i.")
     def test_01_validate_execution_when_not_enough_sols(self):
@@ -30,8 +33,8 @@ class TestNeonTxSender(unittest.TestCase):
         then an error is returned to the client who requested the execution of the transaction
         and an error is written to the log.
         """
-        self._resource_initializer._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2, 1_000_000_000 * 2]
-        self._resource_initializer._min_operator_balance_to_err.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000]
+        self._config.get_min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2, 1_000_000_000 * 2]
+        self._config.get_min_operator_balance_to_err.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000]
 
         with self.assertLogs('neon.MemPool', level='ERROR') as logs:
             self._resource_initializer.init_resource(self._resource)
@@ -45,8 +48,8 @@ class TestNeonTxSender(unittest.TestCase):
         the value of the variable MIN_OPERATOR_BALANCE_TO_WARN or less,
         then a warning is written to the log.:
         """
-        self._resource_initializer._min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000 * 2]
-        self._resource_initializer._min_operator_balance_to_err.side_effect = [1_049_049_000, 1_000_000_000]
+        self._config.get_min_operator_balance_to_warn.side_effect = [1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000 * 2]
+        self._config.get_min_operator_balance_to_err.side_effect = [1_049_049_000, 1_000_000_000]
 
         with self.assertLogs('neon.MemPool', level='WARNING') as logs:
             self._resource_initializer.init_resource(self._resource)
@@ -62,8 +65,8 @@ class TestNeonTxSender(unittest.TestCase):
         who requested the execution of the transaction
         and an error is written to the log.
         """
-        self._resource_initializer._min_operator_balance_to_warn.return_value = 1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2
-        self._resource_initializer._min_operator_balance_to_err.return_value = 1_049_000_000 * 1_000_000_000 * 1_000_000_000
+        self._config.get_min_operator_balance_to_warn.return_value = 1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2
+        self._config.get_min_operator_balance_to_err.return_value = 1_049_000_000 * 1_000_000_000 * 1_000_000_000
 
         with self.assertLogs('neon.MemPool', level='ERROR') as logs:
             self._resource_initializer.init_resource(self._resource)

@@ -87,6 +87,11 @@ class MPSenderTxPool:
     def get_tx(self):
         return None if self.is_empty() else self._tx_list[0]
 
+    def get_tx_good_for_processing(self):
+        if self.is_processing():
+            return None
+        return self.get_tx()
+
     def acquire_tx(self):
         if self.is_processing():
             return None
@@ -236,7 +241,6 @@ class MPTxSchedule:
         return MPSenderTxPool(sender_address, self._tx_dict) if sender is None else sender
 
     def acquire_tx_for_execution(self) -> Optional[MPTxRequest]:
-
         if len(self._sender_tx_pools) == 0:
             return None
 
@@ -248,6 +252,20 @@ class MPTxSchedule:
             break
 
         return tx
+
+    def get_tx_good_for_execution(self) -> Optional[str]:
+        if len(self._sender_tx_pools) == 0:
+            return None
+
+        tx_hash: Optional[str] = None
+        for sender_txs in self._sender_tx_pools:
+            tx = sender_txs.get_tx_good_for_processing()
+            if tx is None:
+                continue
+            tx_hash = tx.signature
+            break
+
+        return tx_hash
 
     def on_request_done(self, sender_addr: str, nonce: int):
         sender = self._pop_sender_txs(sender_addr)

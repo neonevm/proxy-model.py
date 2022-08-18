@@ -7,10 +7,9 @@ from logged_groups import logged_group, logging_context
 from typing import Optional, Any
 from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 
-from proxy.common_neon.errors import BadResourceError
-
 from ..common_neon.gas_price_calculator import GasPriceCalculator
-from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError
+from ..common_neon.errors import BadResourceError, BlockedAccountsError
+from ..common_neon.errors import NodeBehindError, SolanaUnavailableError
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
 from ..common_neon.config import Config
@@ -83,7 +82,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         neon_tx_exec_cfg = mp_tx_request.neon_tx_exec_cfg
         resource = mp_tx_request.resource
 
-        if not ResourceInitializer(self._solana_interactor).init_resource(mp_tx_request.resource):
+        if not ResourceInitializer(self._config, self._solana_interactor).init_resource(mp_tx_request.resource):
             self.debug(f"Got bad resource error")
             raise BadResourceError()
         if neon_tx_exec_cfg is None:
