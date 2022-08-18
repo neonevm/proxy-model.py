@@ -66,7 +66,7 @@ def send_routine(acc_seed, contractAddress, abi, loop, return_dict, padding_stri
         {
             "chainId": proxy.eth.chain_id,
             "gas": 987654321,
-            "gasPrice": 1000000001,
+            "gasPrice": proxy.eth.gas_price,
             "nonce": right_nonce,
         }
     )
@@ -133,7 +133,7 @@ class BlockedTest(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000002,
+            gasPrice=proxy.eth.gas_price,
             to='',
             value=0,
             data=storage.bytecode),
@@ -155,7 +155,10 @@ class BlockedTest(unittest.TestCase):
     def create_blocked_transaction(self):
         print("\ncreate_blocked_transaction")
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        trx_store = self.storage_contract.functions.add_some(1, 30, "").buildTransaction({'nonce': right_nonce, 'gasPrice': MINIMAL_GAS_PRICE})
+        trx_store = self.storage_contract.functions.add_some(1, 30, "").buildTransaction({
+            'nonce': right_nonce,
+            'gasPrice': proxy.eth.gas_price
+        })
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_store_signed.rawTransaction.hex())

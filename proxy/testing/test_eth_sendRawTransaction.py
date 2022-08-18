@@ -88,7 +88,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/147")
-        request_airdrop(eth_account.address, 100)
+        request_airdrop(eth_account.address, 300)
         print('eth_account.address:', eth_account.address)
         print('eth_account.key:', eth_account.key.hex())
         cls.deploy_storage_147_solidity_contract(cls)
@@ -102,7 +102,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=2000000000,
+            gasPrice=proxy.eth.gas_price,
             to='',
             value=0,
             data=storage.bytecode),
@@ -133,7 +133,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to='',
             value=0,
             data=test_185_solidity_contract.bytecode),
@@ -203,7 +203,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         trx_store = self.storage_contract.functions.store(148).buildTransaction({
             'nonce': right_nonce,
-            'gasPrice': 1000000000,
+            'gasPrice': proxy.eth.gas_price,
             'gas': 0})
         print('trx_store:', trx_store)
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
@@ -243,7 +243,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=eth_account_alice.address,
                 value=eth_utils.denoms.gwei),
                 eth_account.key
@@ -260,7 +260,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=eth_account_bob.address,
                 value=eth_utils.denoms.gwei),
                 eth_account.key
@@ -282,7 +282,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(eth_account_alice.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to=eth_account_bob.address,
             value=eth_utils.denoms.gwei),
             eth_account_alice.key
@@ -320,7 +320,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=eth_account_alice.address,
                 value=2 * eth_utils.denoms.gwei),
                 eth_account.key
@@ -337,7 +337,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=eth_account_bob.address,
                 value=2 * eth_utils.denoms.gwei),
                 eth_account.key
@@ -356,11 +356,12 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         one_and_a_half_gweis = 1_500_000_000
         print('one_and_a_half_gweis:', one_and_a_half_gweis)
 
+        gas_price = proxy.eth.gas_price
         trx_transfer = proxy.eth.account.sign_transaction(dict(
             nonce=proxy.eth.get_transaction_count(eth_account_alice.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to=eth_account_bob.address,
             value=one_and_a_half_gweis),
             eth_account_alice.key
@@ -372,7 +373,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_transfer_receipt = proxy.eth.wait_for_transaction_receipt(trx_transfer_hash)
         print('trx_transfer_receipt:', trx_transfer_receipt)
 
-        gas_cost = trx_transfer_receipt['gasUsed'] * 1000000000
+        gas_cost = trx_transfer_receipt['gasUsed'] * gas_price
         print('gas_cost:', gas_cost)
 
         alice_balance_after_transfer = proxy.eth.get_balance(eth_account_alice.address)
@@ -463,7 +464,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_store = self.storage_contract.functions.store(147).buildTransaction({
             'nonce': nonce,
             'gas': 987654321987654321,
-            'gasPrice': 1000000000})
+            'gasPrice': proxy.eth.gas_price})
         print('trx_store:', trx_store)
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
         print('trx_store_signed:', trx_store_signed)
@@ -496,7 +497,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_transfer = proxy.eth.account.sign_transaction(dict(
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to=eth_test_account.address,
             value=eth_utils.denoms.gwei),
             eth_account.key
@@ -528,7 +529,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 "nonce": proxy.eth.get_transaction_count(eth_account_alice.address),
                 "chainId": proxy.eth.chain_id,
                 "gas": 987654321,
-                "gasPrice": 1000000000,
+                "gasPrice": proxy.eth.gas_price,
                 "to": eth_account_bob.address,
                 "value": proxy.eth.get_balance(eth_account_alice.address) + 1,
             },
@@ -631,7 +632,7 @@ class TestNonce(unittest.TestCase):
                 nonce=nonce,
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=self.receiver.address,
                 value=1
             ),

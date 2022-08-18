@@ -88,7 +88,7 @@ class Test_read_only_accounts(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(admin.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to='',
             value=0,
             data=contract.bytecode),

@@ -72,6 +72,7 @@ function wait-for-faucet {
 }
 wait-for-faucet
 
+export UNISWAP_TESTNAME="test_UNISWAP.py"
 function run_uniswap_test {
     export FAUCET_URL=$(docker exec proxy bash -c 'echo "${FAUCET_URL}"')
     echo
@@ -92,7 +93,7 @@ export -f run_uniswap_test
 
 function run_test {
     declare TESTNAME="${1}"
-    if [ "${TESTNAME}" == "UNISWAP" ]; then
+    if [ "${TESTNAME}" == "${UNISWAP_TESTNAME}" ]; then
         run_uniswap_test
     else
         docker exec -e SKIP_PREPARE_DEPLOY_TEST=YES -e TESTNAME=${TESTNAME} proxy ./proxy/deploy-test.sh ${EXTRA_ARGS:-}
@@ -101,7 +102,7 @@ function run_test {
 export -f run_test
 
 function get_test_list {
-    echo "UNISWAP"
+    echo "${UNISWAP_TESTNAME}"
     docker exec proxy find . -type f -name "test_*.py" -printf "%f\n"
 }
 export -f get_test_list

@@ -1,112 +1,92 @@
-from datetime import datetime
 from decimal import Decimal
-import time
 import math
+
 from logged_groups import logged_group
-import multiprocessing as mp
-import ctypes
+from typing import Optional
+
+from solana.publickey import PublicKey
+
 from ..indexer.pythnetwork import PythNetworkClient
 from ..common_neon.solana_interactor import SolanaInteractor
-from .environment_data import MINIMAL_GAS_PRICE, OPERATOR_FEE, GAS_PRICE_SUGGESTED_PCT, NEON_PRICE_USD, \
-                              SOL_PRICE_UPDATE_INTERVAL, GET_SOL_PRICE_MAX_RETRIES, GET_SOL_PRICE_RETRY_INTERVAL
+from .environment_data import MINIMAL_GAS_PRICE, OPERATOR_FEE, GAS_PRICE_SUGGESTED_PCT, NEON_PRICE_USD
 
 
 @logged_group("neon.gas_price_calculator")
 class GasPriceCalculator:
-    _last_time = mp.Value(ctypes.c_ulonglong, 0)
-    _min_gas_price = mp.Value(ctypes.c_ulonglong, 0)
-    _suggested_gas_price = mp.Value(ctypes.c_ulonglong, 0)
+    _sol_price_symbol = 'Crypto.SOL/USD'
 
-    def __init__(self, solana: SolanaInteractor, pyth_mapping_acc) -> None:
-        self.solana = solana
-        self.mapping_account = pyth_mapping_acc
-        self.pyth_network_client = PythNetworkClient(self.solana)
-        self.recent_sol_price_update_time = None
-        self.min_gas_price = None
-        self.sol_price_usd = None
-
-    def reset(self):
-        self._last_time.value = 0
+    def __init__(self, solana: SolanaInteractor, pyth_mapping_acc: PublicKey) -> None:
+        self._mapping_account = pyth_mapping_acc
+        self._pyth_network_client = PythNetworkClient(solana)
+        self._sol_price_usd: Optional[Decimal] = None
+        self._min_gas_price: Optional[int] = None
+        self._suggested_gas_price: Optional[int] = None
 
     @staticmethod
-    def env_min_gas_price() -> int:
+    def _get_env_min_gas_price() -> Optional[int]:
         if MINIMAL_GAS_PRICE is not None:
             return MINIMAL_GAS_PRICE
+        return None
 
-    @staticmethod
-    def get_current_time() -> int:
-        return math.ceil(datetime.now().timestamp())
+    def is_valid(self) -> bool:
+        return (self._min_gas_price is not None) and (self._suggested_gas_price is not None)
 
-    def update_mapping(self):
-        if self.mapping_account is not None:
-            self.pyth_network_client.update_mapping(self.mapping_account)
+    def has_price(self) -> bool:
+        return self._pyth_network_client.has_price(self._sol_price_symbol)
+
+    def update_mapping(self) -> bool:
+        if self._mapping_account is None:
+            return False
+        self._pyth_network_client.update_mapping(self._mapping_account)
+        return self.has_price()
 
     def get_min_gas_price(self) -> int:
-        self.try_update_gas_price()
-        gas_price = self._min_gas_price.value
-        if not gas_price:
-            raise RuntimeError('Failed to estimate gas price. Try again later')
-        return gas_price
+        assert self.is_valid(), 'Failed to estimate gas price. Try again later'
+        return self._min_gas_price
 
     def get_suggested_gas_price(self) -> int:
-        self.try_update_gas_price()
-        gas_price = self._suggested_gas_price.value
-        if not gas_price:
-            raise RuntimeError('Failed to estimate gas price. Try again later')
-        return gas_price
+        assert self.is_valid(), 'Failed to estimate gas price. Try again later'
+        return self._suggested_gas_price
 
-    def try_update_gas_price(self):
-        def is_time_come(now, prev_time) -> bool:
-            time_diff = now - prev_time
-            return time_diff > SOL_PRICE_UPDATE_INTERVAL
+    def update_gas_price(self) -> bool:
+        min_gas_price = self._get_env_min_gas_price()
+        gas_price = self._get_gas_price_from_network()
+        if gas_price is None:
+            if (min_gas_price is not None) and (not self.is_valid()):
+                self._suggested_gas_price = min_gas_price
+                self._min_gas_price = min_gas_price
+            return False
 
-        now = self.get_current_time()
-        if not is_time_come(now, self._last_time.value):
-            return
+        self._suggested_gas_price = math.ceil(gas_price * (1 + GAS_PRICE_SUGGESTED_PCT + self.get_operator_fee()))
+        self._min_gas_price = math.ceil(gas_price * (1 + self.get_operator_fee()))
 
-        with self._last_time.get_lock():
-            if not is_time_come(now, self._last_time.value):
-                return
-            self._last_time.value = now
+        if min_gas_price is not None:
+            self._suggested_gas_price = max(self._suggested_gas_price, min_gas_price)
+            self._min_gas_price = max(self._min_gas_price, min_gas_price)
 
-        gas_price = self.env_min_gas_price()
-        if gas_price:
-            self._suggested_gas_price.value = gas_price
-            self._min_gas_price.value = gas_price
-            return
+        return True
 
-        gas_price = self._start_update_gas_price()
-        if not gas_price:
-            return
+    def _get_gas_price_from_network(self) -> Optional[int]:
+        try:
+            price = self._pyth_network_client.get_price(self._sol_price_symbol)
+            if price.get('status', 0) != 1:  # tradable
+                raise RuntimeError('Price status is not tradable')
+            self._sol_price_usd = Decimal(price['price'])
 
-        self._suggested_gas_price.value = math.ceil(gas_price * (1 + GAS_PRICE_SUGGESTED_PCT + OPERATOR_FEE))
-        self._min_gas_price.value = math.ceil(gas_price * (1 + OPERATOR_FEE))
-
-    def _start_update_gas_price(self) -> int:
-        for retry in range(GET_SOL_PRICE_MAX_RETRIES):
-            try:
-                price = self.pyth_network_client.get_price('Crypto.SOL/USD')
-                if price['status'] != 1:  # tradable
-                    raise RuntimeError('Price status is not tradable')
-                self.sol_price_usd = Decimal(price['price'])
-
-                return (self.sol_price_usd / NEON_PRICE_USD) * pow(Decimal(10), 9)
-            except Exception as err:
-                self.error(f'Failed to retrieve SOL price: {err}')
-                self.info(f'Will retry getting price after {GET_SOL_PRICE_RETRY_INTERVAL} seconds')
-                time.sleep(GET_SOL_PRICE_RETRY_INTERVAL)
-        with self._last_time.get_lock():
-            self._last_time.value = 0
-        self.error('Failed to estimate gas price. Try again later')
-        return 0
+            return (self._sol_price_usd / self.get_neon_price_usd()) * pow(Decimal(10), 9)
+        except Exception as err:
+            self.error(f'Failed to retrieve SOL price: {err}')
+            return None
 
     def get_sol_price_usd(self) -> Decimal:
-        if self.sol_price_usd:
-            return self.sol_price_usd
+        assert self.is_valid(), 'Failed to get SOL price. Try again later.'
         return Decimal(0)
 
-    def get_neon_price_usd(self) -> Decimal:
+    @staticmethod
+    def get_neon_price_usd() -> Decimal:
         return NEON_PRICE_USD
 
-    def get_operator_fee(self) -> Decimal:
+    @staticmethod
+    def get_operator_fee() -> Decimal:
+        assert (OPERATOR_FEE > 0) and (OPERATOR_FEE < 1)
         return OPERATOR_FEE

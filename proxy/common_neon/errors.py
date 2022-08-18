@@ -16,20 +16,16 @@ class InvalidParamError(EthereumError):
 
 
 class AddressLookupTableError(RuntimeError):
-    def __init__(self, *args) -> None:
-        RuntimeError.__init__(self, *args)
+    pass
 
 
 class BlockedAccountsError(Exception):
-    def __init__(self):
-        super().__init__(self)
+    pass
 
 
 class NodeBehindError(Exception):
-    def __int__(self):
-        super().__init__(self)
+    pass
 
 
 class SolanaUnavailableError(Exception):
-    def __int__(self):
-        super().__init__(self)
+    pass

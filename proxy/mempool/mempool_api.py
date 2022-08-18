@@ -34,6 +34,7 @@ class MPRequestType(IntEnum):
     SendTransaction = 0,
     GetLastTxNonce = 1,
     GetTxByHash = 2,
+    GetGasPrice = 3,
     Dummy = -1
 
 
@@ -79,11 +80,16 @@ class MPPendingTxByHashReq(MPRequest):
         self.type = MPRequestType.GetTxByHash
 
 
+@dataclass
+class MPGasPriceReq(MPRequest):
+    def __post_init__(self):
+        self.type = MPRequestType.GetGasPrice
+
+
 class MPResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
-    LowGasPrice = 4,
     Unspecified = 255,
     Dummy = -1
 
@@ -98,3 +104,9 @@ class MPTxResult:
 class MPSendTxResult:
     success: bool
     last_nonce: Optional[int]
+
+
+@dataclass
+class MPGasPriceResult:
+    suggested_gas_price: int
+    min_gas_price: int

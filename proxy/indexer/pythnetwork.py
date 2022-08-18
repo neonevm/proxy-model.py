@@ -4,7 +4,7 @@ from decimal import Decimal
 import struct
 import traceback
 from logged_groups import logged_group
-from typing import List, Union
+from typing import List, Union, Dict, Any, Optional
 
 from ..common_neon.solana_interactor import SolanaInteractor
 
@@ -33,7 +33,7 @@ def read_dict(data):
     return result
 
 
-def unpack(layout_descriptor, raw_data, field_name, index = 0):
+def unpack(layout_descriptor, raw_data, field_name, index=0):
     field = layout_descriptor.get(field_name, None)
     if field is None:
         raise Exception(f'Unknown field name: {field_name}')
@@ -41,9 +41,9 @@ def unpack(layout_descriptor, raw_data, field_name, index = 0):
     length = field['len']
     start_idx = field['pos'] + index * length
     stop_idx = start_idx + length
-    if field['format'] == 'acc': # special case for Solana account address
+    if field['format'] == 'acc':  # special case for Solana account address
         return PublicKey(raw_data[start_idx:stop_idx])
-    elif field['format'] == 'dict': # special case for attribute mapping
+    elif field['format'] == 'dict':  # special case for attribute mapping
         return read_dict(raw_data[start_idx:stop_idx])
     return struct.unpack(field['format'], raw_data[start_idx:stop_idx])[0]
 
@@ -62,29 +62,28 @@ class PythNetworkClient:
     }
 
     mapping_account_layout = {
-        'num_products': { 'pos': 16, 'len': 4, 'format': '<I' },
-        'next': {'pos': 24, 'len': 32, 'format': 'acc' },
-        'product': {'pos': 56, 'len': 32, 'format': 'acc' }
+        'num_products': {'pos': 16, 'len': 4, 'format': '<I'},
+        'next': {'pos': 24, 'len': 32, 'format': 'acc'},
+        'product': {'pos': 56, 'len': 32, 'format': 'acc'}
     }
 
-
     product_account_layout = {
-        'magic': { 'pos': 0, 'len': 4, 'format': '<I' },
-        'price_acc': { 'pos': 16, 'len': 32, 'format': 'acc' },
-        'attrs': { 'pos': 48, 'len': PROD_ATTR_SIZE, 'format': 'dict' }
+        'magic': {'pos': 0, 'len': 4, 'format': '<I'},
+        'price_acc': {'pos': 16, 'len': 32, 'format': 'acc'},
+        'attrs': {'pos': 48, 'len': PROD_ATTR_SIZE, 'format': 'dict'}
     }
 
     price_account_layout = {
-        'expo': { 'pos': 20, 'len': 4, 'format': '<i' },
-        'valid_slot': { 'pos': 40, 'len': 8, 'format': '<Q' },
-        'agg.price': { 'pos': 208, 'len': 8, 'format': '<q' },
-        'agg.conf': { 'pos': 216, 'len': 8, 'format': '<Q' },
-        'agg.status': { 'pos': 224, 'len': 4, 'format': '<I' },
+        'expo': {'pos': 20, 'len': 4, 'format': '<i'},
+        'valid_slot': {'pos': 40, 'len': 8, 'format': '<Q'},
+        'agg.price': {'pos': 208, 'len': 8, 'format': '<q'},
+        'agg.conf': {'pos': 216, 'len': 8, 'format': '<Q'},
+        'agg.status': {'pos': 224, 'len': 4, 'format': '<I'},
     }
 
     def __init__(self, solana: SolanaInteractor):
         self.solana = solana
-        self.price_accounts = {}
+        self.price_accounts: Dict[str, PublicKey] = {}
 
     def parse_pyth_account_data(self, acct_addr, acct_info_value):
         # it is possible when calling to getMultipleAccounts (if some accounts are absent in blockchain)
@@ -97,21 +96,19 @@ class PythNetworkClient:
             raise RuntimeError(f'Wrong magic {magic} in account {acct_addr}')
 
         version = unpack(self.base_account_layout, data, 'ver')
-        if not version in self.SUPPORTED_VERSIONS:
+        if version not in self.SUPPORTED_VERSIONS:
             raise RuntimeError(f'Pyth.Network version not supported: {version}')
 
         return data
-
 
     def read_pyth_acct_data(self, acc_addrs: Union[List[PublicKey], PublicKey]):
         """
         Method is possible to read one or more account data from blockchain
         Given PublicKey as argument, method will return account data as bytes or None in case if account not found
-            OR throw error otherwise (e. g. wrong account data format)
+            OR throw error otherwise (e.g. wrong account data format)
         Given list PublicKeys as argument, method will return mapping of account addresses to bytes or Nones (for not found accounts)
-            OR throw error otherwise  (e. g. wrong account data format)
+            OR throw error otherwise  (e.g. wrong account data format)
         """
-
 
         if isinstance(acc_addrs, PublicKey):
             acct_values = self.solana.get_account_info(acc_addrs, length=0)
@@ -128,8 +125,11 @@ class PythNetworkClient:
         if not isinstance(acct_values, list) or len(acct_values) != len(acc_addrs):
             raise RuntimeError(f'Wrong result.value field in response to getMultipleAccounts')
 
-        return { str(acct_addr): self.parse_pyth_account_data(acct_addr, acct_value) for acct_addr, acct_value in zip(acc_addrs, acct_values) }
-
+        return {
+            str(acct_addr):
+                self.parse_pyth_account_data(acct_addr, acct_value)
+                for acct_addr, acct_value in zip(acc_addrs, acct_values)
+        }
 
     def parse_mapping_account(self, acc_addr: PublicKey):
         products = []
@@ -141,13 +141,11 @@ class PythNetworkClient:
                 products.append(unpack(self.mapping_account_layout, data, 'product', i))
         return products
 
-
     def parse_prod_account(self, acc_data: bytes):
         return {
             'price_acc': unpack(self.product_account_layout, acc_data, 'price_acc'),
             'attrs': unpack(self.product_account_layout, acc_data, 'attrs')
         }
-
 
     def parse_price_account(self, acc_addr: PublicKey):
         data = self.read_pyth_acct_data(acc_addr)
@@ -160,7 +158,6 @@ class PythNetworkClient:
             'conf':         conf * multiply,
             'status':       unpack(self.price_account_layout, data, 'agg.status')
         }
-
 
     def update_mapping(self, mapping_acc: PublicKey):
         """
@@ -186,11 +183,16 @@ class PythNetworkClient:
                              f'{type(err)}, Error: {err}, Traceback: {err_tb}')
         self.info('Pyth.Network update finished.\n\n\n')
 
-
-    def get_price(self, symbol):
+    def get_price(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
         Return price data given product symbol.
         Throws exception if symbol is absent in preloaded product map
         or error occured when loading/parsing price account
         """
-        return self.parse_price_account(self.price_accounts[symbol])
+        price_account = self.price_accounts.get(symbol, None)
+        if price_account is None:
+            return None
+        return self.parse_price_account(price_account)
+
+    def has_price(self, symbol: str) -> bool:
+        return symbol in self.price_accounts

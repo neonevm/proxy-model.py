@@ -59,6 +59,8 @@ class MPExecutorMng(IMPExecutor):
         if mp_request.type == MPRequestType.SendTransaction:
             tx_hash = cast(MPTxRequest, mp_request).signature
             self.debug(f"Tx: {tx_hash} - scheduled on executor: {executor_id}")
+        elif mp_request.type == MPRequestType.GetGasPrice:
+            self.debug(f"Calculate gas price scheduled on executor: {executor_id}")
         task = asyncio.get_event_loop().create_task(executor.send_data_async(mp_request))
         return executor_id, task
 

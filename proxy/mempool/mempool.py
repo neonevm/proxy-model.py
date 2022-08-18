@@ -1,13 +1,16 @@
 import asyncio
-from typing import List, Tuple, Optional, cast
+import time
+import math
+import traceback
+from typing import List, Tuple, Optional, Any, cast
 
 from logged_groups import logged_group
 from neon_py.data import Result
 
 from ..common_neon.eth_proto import Trx as NeonTx
 
-from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest, \
-                         MPPendingTxNonceReq, MPPendingTxByHashReq, MPSendTxResult
+from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest
+from .mempool_api import MPPendingTxNonceReq, MPPendingTxByHashReq, MPSendTxResult, MPGasPriceReq, MPGasPriceResult
 from .mempool_schedule import MPTxSchedule
 
 
@@ -16,6 +19,7 @@ class MemPool:
 
     CHECK_TASK_TIMEOUT_SEC = 0.01
     RESCHEDULE_TIMEOUT_SEC = 0.4
+    REQUEST_GAS_PRICE_TIMEOUT_SEC = 4
 
     def __init__(self, executor: IMPExecutor, capacity: int):
         self.info(f"Init mempool schedule with capacity: {capacity}")
@@ -24,7 +28,10 @@ class MemPool:
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         self._process_tx_results_task = asyncio.get_event_loop().create_task(self.check_processing_tasks())
         self._process_schedule_task = asyncio.get_event_loop().create_task(self.process_tx_schedule())
+        self._process_gas_price_task = asyncio.get_event_loop().create_task(self.request_gas_price())
         self._is_active: bool = True
+        self._has_gas_price_request: bool = False
+        self._gas_price: Optional[MPGasPriceResult] = None
         self._executor = executor
 
     async def enqueue_mp_request(self, mp_request: MPRequest):
@@ -47,6 +54,7 @@ class MemPool:
             return result
         except Exception as err:
             self.error(f"Failed to schedule mp_tx_request: {mp_request.log_str}. Error: {err}", extra=log_ctx)
+            return MPSendTxResult(success=False, last_nonce=None)
         finally:
             await self._kick_tx_schedule()
 
@@ -59,27 +67,64 @@ class MemPool:
     def get_pending_tx_by_hash(self, tx_hash: str) -> Optional[NeonTx]:
         return self._tx_schedule.get_pending_tx_by_hash(tx_hash)
 
+    def get_gas_price(self) -> Optional[MPGasPriceResult]:
+        return self._gas_price
+
     async def process_tx_schedule(self):
         while True:
             async with self._schedule_cond:
                 await self._schedule_cond.wait()
+                await self._schedule_cond.wait_for(self.has_gas_price)
                 await self._schedule_cond.wait_for(self.is_active)
                 self.debug(f"Schedule processing  got awake, condition: {self._schedule_cond.__repr__()}")
                 while self._executor.is_available():
                     mp_request: MPTxRequest = self._tx_schedule.acquire_tx_for_execution()
                     if mp_request is None:
                         break
+                    if mp_request.gas_price < self._gas_price.min_gas_price:
+                        break
 
                     try:
                         log_ctx = {"context": {"req_id": mp_request.req_id}}
-                        self.debug(f"Got mp_tx_request from schedule: {mp_request.log_str}, left senders in schedule: {len(self._tx_schedule._sender_tx_pools)}", extra=log_ctx)
-                        self.submit_request_to_executor(mp_request)
+                        self.debug(
+                            f"Got mp_tx_request from schedule: {mp_request.log_str}, " +
+                            f"left senders in schedule: {self._tx_schedule.len()}", extra=log_ctx
+                        )
+                        self._submit_request_to_executor(mp_request)
                     except Exception as err:
-                        self.error(f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. Error: {err}")
+                        err_tb = "".join(traceback.format_tb(err.__traceback__))
+                        self.error(
+                            f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. " +
+                            f"Error: {err}. Traceback: {err_tb}"
+                        )
 
-    def submit_request_to_executor(self, mp_tx_request: MPRequest):
-        resource_id, task = self._executor.submit_mp_request(mp_tx_request)
-        self._processing_tasks.append((resource_id, task, mp_tx_request))
+    def _submit_gas_price_request(self) -> None:
+        if self._has_gas_price_request:
+            return
+        self._has_gas_price_request = True
+        now = math.ceil(time.time())
+        mp_req = MPGasPriceReq(req_id=str(now))
+        self._submit_request_to_executor(mp_req)
+
+    def process_mp_gas_price_result(self, mp_result: Any) -> None:
+        self._has_gas_price_request = False
+        if mp_result is None:
+            return
+
+        if isinstance(mp_result, MPGasPriceResult):
+            self._gas_price = cast(MPGasPriceResult, mp_result)
+        else:
+            self.error(f"Wrong type as result for gas price calculation: {mp_result}")
+
+    async def request_gas_price(self) -> None:
+        while True:
+            if self._executor.is_available():
+                self._submit_gas_price_request()
+            await asyncio.sleep(self.REQUEST_GAS_PRICE_TIMEOUT_SEC)
+
+    def _submit_request_to_executor(self, mp_request: MPRequest):
+        resource_id, task = self._executor.submit_mp_request(mp_request)
+        self._processing_tasks.append((resource_id, task, mp_request))
 
     async def check_processing_tasks(self):
         while True:
@@ -90,26 +135,42 @@ class MemPool:
                     not_finished_tasks.append((resource_id, task, mp_request))
                     continue
                 has_processed_result = True
-                exception = task.exception()
-                if exception is not None:
+                self._executor.release_resource(resource_id)
+                err = task.exception()
+                if err is not None:
+                    err_tb = "".join(traceback.format_tb(err.__traceback__))
                     log_ctx = {"context": {"req_id": mp_request.req_id}}
-                    self.error(f"Exception during processing request: {exception} - tx will be dropped away", extra=log_ctx)
-                    self._on_fail_tx(mp_request)
-                    self._executor.release_resource(resource_id)
+                    self.error(
+                        f"Exception during processing request {mp_request}. " +
+                        f"Error: {err}, Traceback: {err_tb}", extra=log_ctx
+                    )
+                    if mp_request.type == MPRequestType.SendTransaction:
+                        self.error(f"tx will be dropped away", extra=log_ctx)
+                        self._on_fail_tx(mp_request)
+                    elif mp_request.type == MPRequestType.GetGasPrice:
+                        self.process_mp_gas_price_result(None)
                     continue
 
-                mp_tx_result: MPTxResult = task.result()
-                assert isinstance(mp_tx_result, MPTxResult), f"Got unexpected result: {mp_tx_result}"
-                self._process_mp_result(resource_id, mp_tx_result, mp_request)
+                mp_result = task.result()
+                if mp_request.type == MPRequestType.SendTransaction:
+                    self._process_mp_tx_result(mp_result, mp_request)
+                elif mp_request.type == MPRequestType.GetGasPrice:
+                    self.process_mp_gas_price_result(mp_result)
+                else:
+                    assert False, f"Got unexpected request: {mp_request}: {mp_result}"
 
             self._processing_tasks = not_finished_tasks
             if has_processed_result:
                 await self._kick_tx_schedule()
-            await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
+            await asyncio.sleep(self.CHECK_TASK_TIMEOUT_SEC)
 
-    def _process_mp_result(self, resource_id: int, mp_tx_result: MPTxResult, mp_request: MPTxRequest):
+    def _process_mp_tx_result(self, mp_result: Any, mp_request: MPTxRequest):
         log_ctx = {"context": {"req_id": mp_request.req_id}}
         try:
+            if not isinstance(mp_result, MPTxResult):
+                raise RuntimeError(f'Wrong type as result of tx processing {mp_request}: {mp_result}')
+
+            mp_tx_result = cast(MPTxResult, mp_result)
             log_fn = self.warning if mp_tx_result.code != MPResultCode.Done else self.debug
             log_fn(f"On mp tx result:  {mp_tx_result} - of: {mp_request.log_str}", extra=log_ctx)
 
@@ -117,17 +178,12 @@ class MemPool:
                 self._on_blocked_accounts_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.SolanaUnavailable:
                 self._on_solana_unavailable_result(mp_request, mp_tx_result)
-            elif mp_tx_result.code == MPResultCode.LowGasPrice:
-                self._on_low_gas_price_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.Unspecified:
                 self._on_fail_tx(mp_request)
             elif mp_tx_result.code == MPResultCode.Done:
                 self._on_request_done(mp_request)
-
         except Exception as err:
             self.error(f"Exception during the result processing: {err}", extra=log_ctx)
-        finally:
-            self._executor.release_resource(resource_id)
 
     def _on_blocked_accounts_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
         self.debug(f"For tx: {mp_tx_request.log_str} - got blocked account transaction status: {mp_tx_result.data}. "
@@ -136,11 +192,6 @@ class MemPool:
 
     def _on_solana_unavailable_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
         self.debug(f"For tx: {mp_tx_request.log_str} - got solana unavailable status: {mp_tx_result.data}. "
-                   f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
-        asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
-
-    def _on_low_gas_price_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
-        self.debug(f"For tx: {mp_tx_request.log_str} - got low gas price status: {mp_tx_result.data}. "
                    f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
@@ -191,3 +242,6 @@ class MemPool:
 
     def is_active(self) -> bool:
         return self._is_active
+
+    def has_gas_price(self) -> bool:
+        return self._gas_price is not None

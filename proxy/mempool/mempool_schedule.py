@@ -186,6 +186,9 @@ class MPTxSchedule:
         self._sender_tx_pools: List[MPSenderTxPool] = []
         self._tx_dict = MPTxDict()
 
+    def len(self) -> int:
+        return len(self._sender_tx_pools)
+
     def _pop_sender_txs(self, sender_address: str) -> Optional[MPSenderTxPool]:
         for i, sender_tx_pool in enumerate(self._sender_tx_pools):
             if sender_tx_pool.sender_address != sender_address:

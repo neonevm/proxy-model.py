@@ -19,7 +19,7 @@ class IConfig(ABC):
         """Gets the capacity of the MemPool schedule to constrain the transactions count in there"""
 
     @abstractmethod
-    def get_pyth_mapping_account(self) -> Optional[str]:
+    def get_pyth_mapping_account(self) -> Optional[PublicKey]:
         """Gets pyth network account to retrieve gas price from there"""
 
     @abstractmethod
@@ -38,7 +38,7 @@ class Config(IConfig):
     def get_mempool_capacity(self) -> int:
         return int(os.environ.get("MEMPOOL_CAPACITY", 4096))
 
-    def get_pyth_mapping_account(self) -> Optional[str]:
+    def get_pyth_mapping_account(self) -> Optional[PublicKey]:
         pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT")
         if pyth_mapping_account is not None:
             pyth_mapping_account = PublicKey(pyth_mapping_account)

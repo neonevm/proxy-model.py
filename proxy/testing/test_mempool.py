@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch, MagicMock, call
 
 from ..mempool.mempool import MemPool, IMPExecutor
-from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxResult, MPResultCode
+from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxResult, MPResultCode, MPGasPriceResult, MPRequestType
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 from ..common_neon.eth_proto import Trx as NeonTx
 
@@ -82,6 +82,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self._executor = MockMPExecutor()
         self._mempool = MemPool(self._executor, capacity=4096)
+        self._mempool.process_mp_gas_price_result(MPGasPriceResult(suggested_gas_price=1, min_gas_price=1))
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available", return_value=True)
@@ -200,28 +201,32 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         """Checks if all mp_tx_requests are processed by the MemPool"""
         acc_count_max = 1_000
         from_acc_count = 10
-        sleep_sec = 2
+        sleep_sec = 5
         nonce_count = 100
-        req_count = from_acc_count * nonce_count
+        req_count = 0
         acc = [create_account() for i in range(acc_count_max)]
         for acc_i in range(0, from_acc_count):
             for nonce in range(0, nonce_count):
                 request = get_transfer_mp_request(from_acc=acc[acc_i], to_acc=acc[randint(0, acc_count_max-1)],
                                                   req_id=str(acc_i) + " " + str(nonce), nonce=nonce,
                                                   gasPrice=randint(50000, 100000), gas=randint(4000, 10000))
+                req_count += 1
                 await self._mempool.enqueue_mp_request(request)
         is_available_mock.return_value = True
+        call_count = 0
         self._mempool.on_resource_got_available(1)
         await asyncio.sleep(sleep_sec)
         for ac in acc[:from_acc_count]:
             acc_nonce = 0
-            for call in submit_mp_request_mock.call_args_list:
-                request = call.args[0]
+            for mp_call in submit_mp_request_mock.call_args_list:
+                request = mp_call.args[0]
+                if request.type != MPRequestType.SendTransaction:
+                    continue
                 if ac.address.lower() == request.sender_address:
                     self.assertEqual(request.nonce, acc_nonce)
                     acc_nonce += 1
-
-        self.assertEqual(submit_mp_request_mock.call_count, req_count)
+                    call_count += 1
+        self.assertEqual(call_count, req_count)
 
     async def _enqueue_requests(self, req_data: List[Dict[str, Any]]) -> List[MPTxRequest]:
         requests = [get_transfer_mp_request(**req) for req in req_data]

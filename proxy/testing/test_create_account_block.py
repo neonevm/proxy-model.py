@@ -57,7 +57,7 @@ class Test_createAccountBlock(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(eth_account.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to='',
             value=0,
             data=storage.bytecode),
@@ -72,7 +72,7 @@ class Test_createAccountBlock(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(eth_account.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to=bytes(target_account),
             value=value),
             eth_account.key

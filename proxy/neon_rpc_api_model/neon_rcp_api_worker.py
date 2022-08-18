@@ -2,8 +2,10 @@ import json
 import multiprocessing
 import traceback
 import eth_utils
+import time
+import math
 
-from typing import Optional, Union, Dict, Any, List, Tuple
+from typing import Optional, Union, Dict, Any, List, cast
 
 import sha3
 from logged_groups import logged_group, LogMng
@@ -17,15 +19,13 @@ from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
-from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
-from ..common_neon.environment_data import SOLANA_URL, PP_SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED
-from ..common_neon.environment_data import PYTH_MAPPING_ACCOUNT
+from ..common_neon.environment_data import SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..indexer.indexer_db import IndexerDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
-from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPSendTxResult
+from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPSendTxResult, MPGasPriceResult
 
 
 NEON_PROXY_PKG_VERSION = '0.11.0-dev'
@@ -51,12 +51,8 @@ class NeonRpcApiWorker:
         self._stat_exporter: Optional[StatisticsExporter] = None
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
-        if PP_SOLANA_URL == SOLANA_URL:
-            self.gas_price_calculator = GasPriceCalculator(self._solana, PYTH_MAPPING_ACCOUNT)
-        else:
-            self.gas_price_calculator = GasPriceCalculator(SolanaInteractor(PP_SOLANA_URL), PYTH_MAPPING_ACCOUNT)
-        self.gas_price_calculator.update_mapping()
-        self.gas_price_calculator.try_update_gas_price()
+        self._gas_price: Optional[MPGasPriceResult] = None
+        self._last_gas_price_time = 0
 
         with self.proxy_id_glob.get_lock():
             self.proxy_id = self.proxy_id_glob.value
@@ -68,6 +64,17 @@ class NeonRpcApiWorker:
 
     def set_stat_exporter(self, stat_exporter: StatisticsExporter):
         self._stat_exporter = stat_exporter
+
+    def _get_gas_price(self) -> MPGasPriceResult:
+        now = math.ceil(time.time())
+        if self._last_gas_price_time != now:
+            req_id = LogMng.get_logging_context().get("req_id")
+            gas_price = self._mempool_client.get_gas_price(req_id)
+            if gas_price is not None:
+                self._gas_price = gas_price
+        if self._gas_price is None:
+            raise EthereumError(message='Failed to estimate gas price. Try again later')
+        return cast(MPGasPriceResult, self._gas_price)
 
     @staticmethod
     def neon_proxy_version() -> str:
@@ -90,8 +97,7 @@ class NeonRpcApiWorker:
         return str(ElfParams().chain_id)
 
     def eth_gasPrice(self) -> str:
-        gas_price = self.gas_price_calculator.get_suggested_gas_price()
-        return hex(gas_price)
+        return hex(self._get_gas_price().suggested_gas_price)
 
     def eth_estimateGas(self, param: Dict[str, Any]) -> str:
         if not isinstance(param, dict):
@@ -509,7 +515,7 @@ class NeonRpcApiWorker:
 
         self._stat_tx_begin()
         try:
-            min_gas_price = self.gas_price_calculator.get_min_gas_price()
+            min_gas_price = self._get_gas_price().min_gas_price
             neon_tx_validator = NeonTxValidator(self._solana, neon_tx, min_gas_price)
             neon_tx_exec_cfg = neon_tx_validator.precheck()
 
@@ -737,7 +743,7 @@ class NeonRpcApiWorker:
         slot = self._db.get_finalized_block_slot()
         return hex(slot)
 
-    def neon_getEvmParams(self)-> Dict[str, Any]:
+    def neon_getEvmParams(self) -> Dict[str, Any]:
         """Returns map of Neon-EVM parameters"""
         self.debug(f"call neon_getEvmParams")
         return ElfParams().get_params()

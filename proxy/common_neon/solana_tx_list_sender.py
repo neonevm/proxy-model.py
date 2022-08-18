@@ -12,7 +12,7 @@ from solana.account import Account as SolanaAccount
 
 from .solana_receipt_parser import SolReceiptParser, SolTxError
 from .solana_interactor import SolanaInteractor
-from .errors import EthereumError
+from .errors import EthereumError, BlockedAccountsError, NodeBehindError
 
 from .environment_data import SKIP_PREFLIGHT, CONFIRMATION_CHECK_DELAY, RETRY_ON_FAIL, CONFIRM_TIMEOUT
 
