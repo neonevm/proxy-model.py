@@ -1,13 +1,17 @@
 import sys
 import atheris
 
+from random import choice
 from ..neon_rpc_api_model import NeonRpcApiWorker
 
+global tag
+tag = ["latest", "pending"]
 
-def TestEthgetBalance(data, data2):
+
+def TestEthgetBalance(data):
     try:
         model = NeonRpcApiWorker()
-        _ = model.eth_getBalance(account=data, tag=data2)
+        _ = model.eth_getBalance(account="0x" + data.hex(), tag=choice(tag))
     except RuntimeError:
         None
 
