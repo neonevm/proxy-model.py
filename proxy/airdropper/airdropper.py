@@ -188,23 +188,23 @@ class Airdropper(IndexerBase):
             return
 
         self.debug(f"Processing transaction: {trx}")
+
         # helper function finding all instructions that satisfies predicate
         def find_instructions(instructions, predicate):
             return [(number, instr) for number, instr in instructions if predicate(instr)]
 
         def find_inner_instructions(trx, instr_idx, predicate):
-            inner_insturctions = None
+            inner_instructions = None
             for entry in trx['meta']['innerInstructions']:
                 if entry['index'] == instr_idx:
-                    inner_insturctions = entry['instructions']
+                    inner_instructions = entry['instructions']
                     break
 
-            if inner_insturctions is None:
+            if inner_instructions is None:
                 self.debug(f'Inner instructions for instruction {instr_idx} not found')
                 return []
 
-            return [instruction for instruction in inner_insturctions if predicate(instruction)]
-
+            return [instruction for instruction in inner_instructions if predicate(instruction)]
 
         def isRequiredInstruction(instr, req_program_id, req_tag_id):
             return account_keys[instr['programIdIndex']] == req_program_id \
