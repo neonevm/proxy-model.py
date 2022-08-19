@@ -148,6 +148,7 @@ class CancelTest(unittest.TestCase):
             data=storage.bytecode),
             eth_account.key
         )
+        print('trx_deploy.data:', storage.bytecode.hex())
         trx_deploy_hash = proxy.eth.send_raw_transaction(trx_deploy.rawTransaction)
         print('trx_deploy_hash:', trx_deploy_hash.hex())
         trx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(trx_deploy_hash)
@@ -344,6 +345,8 @@ class CancelTest(unittest.TestCase):
     def test_02_get_code_from_indexer(self):
         print("\ntest_02_get_code_from_indexer")
         code = proxy.eth.get_code(self.storage_contract.address)
+        print("getCode result:", code.hex())
+        print("storage_contract.bytecode:", self.storage_contract.bytecode.hex())
         self.assertEqual(code, self.storage_contract.bytecode[-len(code):])
 
     def test_03_invoked_found(self):

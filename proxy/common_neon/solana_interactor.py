@@ -262,7 +262,7 @@ class SolanaInteractor:
             }
 
         result = self._send_rpc_request('getAccountInfo', str(pubkey), opts)
-        # self.debug(f"{json.dumps(result, sort_keys=True)}")
+        self.debug(f"{json.dumps(result, sort_keys=True)}")
 
         info = result['result']['value']
         if info is None:

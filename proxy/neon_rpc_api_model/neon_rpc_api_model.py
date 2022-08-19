@@ -463,9 +463,10 @@ class NeonRpcApiModel:
 
         try:
             account_info = self._solana.get_neon_account_info(account)
-            self.info(f"account_info: code_size = {account_info.code_size}")
             if (not account_info) or (not account_info.code):
                 return '0x'
+
+            self.info(f"account_info: code_size = {account_info.code_size}, code = {account_info.code}")
             return account_info.code
         except (Exception,):
             return '0x'
