@@ -592,9 +592,9 @@ class CreateAccountIxDecoder(DummyIxDecoder):
         return True
 
 
-class CreateAccount2IxDecoder(DummyIxDecoder):
+class CreateAccount3IxDecoder(DummyIxDecoder):
     def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'CreateAccountV2', state)
+        DummyIxDecoder.__init__(self, 'CreateAccountV3', state)
 
     def execute(self) -> bool:
         self._decoding_start()
@@ -602,7 +602,7 @@ class CreateAccount2IxDecoder(DummyIxDecoder):
         if SolReceiptParser(self.ix.tx).check_if_error():
             return self._decoding_skip("Ignore failed create account")
 
-        if len(self.ix.ix_data) < 21:
+        if len(self.ix.ix_data) < 20:
             return self._decoding_skip(f'not enough data to get the Neon account {len(self.ix.ix_data)}')
 
         neon_account = "0x" + self.ix.ix_data[1:][:20].hex()
@@ -612,11 +612,6 @@ class CreateAccount2IxDecoder(DummyIxDecoder):
         self.debug(f"{account_info}")
         self.state.add_account_to_db(account_info)
         return True
-
-
-class CreateAccount3IxDecoder(CreateAccount2IxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'CreateAccountV3', state)
 
 
 class CallFromRawIxDecoder(DummyIxDecoder):
@@ -934,7 +929,7 @@ class Indexer(IndexerBase):
             0x15: CancelV02IxDecoder(self.state),
             0x16: ExecuteTrxFromAccountV02IxDecoder(self.state),
             0x17: DummyIxDecoder('UpdateValidsTable', self.state),
-            0x18: CreateAccount2IxDecoder(self.state),
+            0x18: DummyIxDecoder('CreateAccountV02', self.state),
             0x19: DummyIxDecoder('DepositV02', self.state),
             0x1a: DummyIxDecoder('MigrateAccount', self.state),
             0x1b: ExecuteOrContinueNoChainIdIxParser(self.state),
