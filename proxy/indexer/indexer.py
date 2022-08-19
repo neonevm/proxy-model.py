@@ -909,6 +909,7 @@ class Indexer(IndexerBase):
         self._user = indexer_user
 
         self.state = ReceiptsParserState(db=self.db, solana=solana, indexer_user=indexer_user)
+        self.def_decoder = DummyIxDecoder('Unknown', self.state)
         self.ix_decoder_map = {
             0x00: WriteIxDecoder(self.state),
             0x01: DummyIxDecoder('Finalize', self.state),
@@ -925,6 +926,8 @@ class Indexer(IndexerBase):
             0x0d: PartialCallOrContinueIxDecoder(self.state),
             0x0e: ExecuteOrContinueIxParser(self.state),
             0x0f: DummyIxDecoder('ERC20CreateTokenAccount', self.state),
+            0x10: DummyIxDecoder('DeleteHolderOrStorageAccount', self.state),
+            0x11: DummyIxDecoder('ResizeContractAccount', self.state),
             0x12: WriteWithHolderIxDecoder(self.state),
             0x13: PartialCallV02IxDecoder(self.state),
             0x14: ContinueV03IxDecoder(self.state),
@@ -932,12 +935,14 @@ class Indexer(IndexerBase):
             0x16: ExecuteTrxFromAccountV02IxDecoder(self.state),
             0x17: DummyIxDecoder('UpdateValidsTable', self.state),
             0x18: CreateAccount2IxDecoder(self.state),
-            0x19: DummyIxDecoder('Deposit', self.state),
+            0x19: DummyIxDecoder('DepositV02', self.state),
             0x1a: DummyIxDecoder('MigrateAccount', self.state),
             0x1b: ExecuteOrContinueNoChainIdIxParser(self.state),
-            0x1e: CreateAccount3IxDecoder(self.state),
+            0x1c: DummyIxDecoder('Migrate02ContractFromV1ToV2WriteValueToDistributedStorage', self.state),
+            0x1d: DummyIxDecoder('Migrate02ContractFromV1ToV2ConvertDataAccount', self.state),
+            0x1e: DummyIxDecoder('DepositV03', self.state),
+            0x1f: CreateAccount3IxDecoder(self.state),
         }
-        self.def_decoder = DummyIxDecoder('Unknown', self.state)
 
     def process_functions(self):
         self.block_indexer.gather_blocks()
