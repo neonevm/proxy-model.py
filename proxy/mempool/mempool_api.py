@@ -43,6 +43,9 @@ class MPRequest:
     req_id: str = field(compare=False)
     type: MPRequestType = field(compare=False, default=MPRequestType.Dummy)
 
+    def __post_init__(self):
+        self.log_req_id = {"context": {"req_id": self.req_id}}
+
 
 @dataclass(eq=True, order=True)
 class MPTxRequest(MPRequest):
@@ -55,12 +58,11 @@ class MPTxRequest(MPRequest):
     gas_price: Optional[int] = field(compare=False, default=None)
 
     def __post_init__(self):
+        super().__post_init__()
         self.gas_price = self.neon_tx.gasPrice
         self.nonce = self.neon_tx.nonce
         self.sender_address = "0x" + self.neon_tx.sender()
         self.type = MPRequestType.SendTransaction
-        tx_hash = self.signature
-        self.log_str = f"MPTxRequest(hash={tx_hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
 
 
 @dataclass
@@ -69,6 +71,7 @@ class MPPendingTxNonceReq(MPRequest):
     sender: str = None
 
     def __post_init__(self):
+        super().__post_init__()
         self.type = MPRequestType.GetLastTxNonce
 
 
@@ -77,12 +80,14 @@ class MPPendingTxByHashReq(MPRequest):
     tx_hash: str = None
 
     def __post_init__(self):
+        super().__post_init__()
         self.type = MPRequestType.GetTxByHash
 
 
 @dataclass
 class MPGasPriceReq(MPRequest):
     def __post_init__(self):
+        super().__post_init__()
         self.type = MPRequestType.GetGasPrice
 
 

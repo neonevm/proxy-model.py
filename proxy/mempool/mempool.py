@@ -46,14 +46,15 @@ class MemPool:
             return self.get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
 
     async def schedule_mp_tx_request(self, mp_request: MPTxRequest) -> MPSendTxResult:
-        log_ctx = {"context": {"req_id": mp_request.req_id}}
         try:
             result: MPSendTxResult = self._tx_schedule.add_mp_tx_request(mp_request)
-            count = self.get_pending_tx_count(mp_request.sender_address)
-            self.debug(f"Got and scheduled mp_tx_request: {mp_request.log_str}, pending in pool: {count}", extra=log_ctx)
+            self.debug(f"Got and scheduled request", extra=mp_request.log_req_id)
             return result
         except Exception as err:
-            self.error(f"Failed to schedule mp_tx_request: {mp_request.log_str}. Error: {err}", extra=log_ctx)
+            err_tb = "".join(traceback.format_tb(err.__traceback__))
+            self.error(
+                f"Failed to schedule request. Error: {err}. Traceback: {err_tb}", extra=mp_request.log_req_id
+            )
             return MPSendTxResult(success=False, last_nonce=None)
         finally:
             await self._kick_tx_schedule()
@@ -76,7 +77,7 @@ class MemPool:
                 await self._schedule_cond.wait()
                 await self._schedule_cond.wait_for(self.has_gas_price)
                 await self._schedule_cond.wait_for(self.is_active)
-                self.debug(f"Schedule processing  got awake, condition: {self._schedule_cond.__repr__()}")
+                self.debug(f"Schedule processing got awake, condition: {self._schedule_cond.__repr__()}")
                 while self._executor.is_available():
                     mp_request: MPTxRequest = self._tx_schedule.acquire_tx_for_execution()
                     if mp_request is None:
@@ -85,17 +86,16 @@ class MemPool:
                         break
 
                     try:
-                        log_ctx = {"context": {"req_id": mp_request.req_id}}
                         self.debug(
-                            f"Got mp_tx_request from schedule: {mp_request.log_str}, " +
-                            f"left senders in schedule: {self._tx_schedule.len()}", extra=log_ctx
+                            f"Got mp_tx_request from schedule, left senders in schedule: {self._tx_schedule.len()}",
+                            extra=mp_request.log_req_id
                         )
                         self._submit_request_to_executor(mp_request)
                     except Exception as err:
                         err_tb = "".join(traceback.format_tb(err.__traceback__))
                         self.error(
-                            f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. " +
-                            f"Error: {err}. Traceback: {err_tb}"
+                            f"Failed enqueue to execute request. Error: {err}. Traceback: {err_tb}",
+                            extra=mp_request.log_req_id
                         )
 
     def _submit_gas_price_request(self) -> None:
@@ -106,7 +106,7 @@ class MemPool:
         mp_req = MPGasPriceReq(req_id=str(now))
         self._submit_request_to_executor(mp_req)
 
-    def process_mp_gas_price_result(self, mp_result: Any) -> None:
+    def process_mp_gas_price_result(self, mp_request: MPRequest, mp_result: Any) -> None:
         self._has_gas_price_request = False
         if mp_result is None:
             return
@@ -114,7 +114,7 @@ class MemPool:
         if isinstance(mp_result, MPGasPriceResult):
             self._gas_price = cast(MPGasPriceResult, mp_result)
         else:
-            self.error(f"Wrong type as result for gas price calculation: {mp_result}")
+            self.error(f"Wrong type as result for gas price calculation: {mp_result}", extra=mp_request.log_req_id)
 
     async def request_gas_price(self) -> None:
         while True:
@@ -139,25 +139,23 @@ class MemPool:
                 err = task.exception()
                 if err is not None:
                     err_tb = "".join(traceback.format_tb(err.__traceback__))
-                    log_ctx = {"context": {"req_id": mp_request.req_id}}
                     self.error(
-                        f"Exception during processing request {mp_request}. " +
-                        f"Error: {err}, Traceback: {err_tb}", extra=log_ctx
+                        f"Exception during processing request. Error: {err}, Traceback: {err_tb}",
+                        extra=mp_request.log_req_id
                     )
                     if mp_request.type == MPRequestType.SendTransaction:
-                        self.error(f"tx will be dropped away", extra=log_ctx)
                         self._on_fail_tx(mp_request)
                     elif mp_request.type == MPRequestType.GetGasPrice:
-                        self.process_mp_gas_price_result(None)
+                        self.process_mp_gas_price_result(mp_request, None)
                     continue
 
                 mp_result = task.result()
                 if mp_request.type == MPRequestType.SendTransaction:
                     self._process_mp_tx_result(mp_result, mp_request)
                 elif mp_request.type == MPRequestType.GetGasPrice:
-                    self.process_mp_gas_price_result(mp_result)
+                    self.process_mp_gas_price_result(mp_request, mp_result)
                 else:
-                    assert False, f"Got unexpected request: {mp_request}: {mp_result}"
+                    self.error(f"Got unexpected request: {mp_request}: {mp_result}", extra=mp_request.log_req_id)
 
             self._processing_tasks = not_finished_tasks
             if has_processed_result:
@@ -165,14 +163,17 @@ class MemPool:
             await asyncio.sleep(self.CHECK_TASK_TIMEOUT_SEC)
 
     def _process_mp_tx_result(self, mp_result: Any, mp_request: MPTxRequest):
-        log_ctx = {"context": {"req_id": mp_request.req_id}}
         try:
             if not isinstance(mp_result, MPTxResult):
-                raise RuntimeError(f'Wrong type as result of tx processing {mp_request}: {mp_result}')
+                self.error(
+                    f'Wrong type as result of tx processing {mp_request}: {mp_result}',
+                    extra=mp_request.log_req_id
+                )
+                return
 
             mp_tx_result = cast(MPTxResult, mp_result)
             log_fn = self.warning if mp_tx_result.code != MPResultCode.Done else self.debug
-            log_fn(f"On mp tx result:  {mp_tx_result} - of: {mp_request.log_str}", extra=log_ctx)
+            log_fn(f"Got mp tx result: {mp_tx_result}.", extra=mp_request.log_req_id)
 
             if mp_tx_result.code == MPResultCode.BlockedAccount:
                 self._on_blocked_accounts_result(mp_request, mp_tx_result)
@@ -181,40 +182,37 @@ class MemPool:
             elif mp_tx_result.code == MPResultCode.Unspecified:
                 self._on_fail_tx(mp_request)
             elif mp_tx_result.code == MPResultCode.Done:
-                self._on_request_done(mp_request)
+                self._on_done_tx(mp_request)
         except Exception as err:
-            self.error(f"Exception during the result processing: {err}", extra=log_ctx)
+            err_tb = "".join(traceback.format_tb(err.__traceback__))
+            self.error(
+                f"Exception during the result processing. Error: {err}. Traceback: {err_tb}",
+                extra=mp_request.log_req_id
+            )
 
     def _on_blocked_accounts_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
-        self.debug(f"For tx: {mp_tx_request.log_str} - got blocked account transaction status: {mp_tx_result.data}. "
-                   f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
+        self.debug(f"Got blocked account transaction status: {mp_tx_result.data}. ", extra=mp_tx_request.log_req_id)
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
     def _on_solana_unavailable_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
-        self.debug(f"For tx: {mp_tx_request.log_str} - got solana unavailable status: {mp_tx_result.data}. "
-                   f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
+        self.debug(f"Got solana unavailable status: {mp_tx_result.data}. ", extra=mp_tx_request.log_req_id)
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
     async def _reschedule_tx(self, tx_request: MPTxRequest):
+        self.debug(f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.", extra=tx_request.log_req_id)
         await asyncio.sleep(self.RESCHEDULE_TIMEOUT_SEC)
-        self._tx_schedule.reschedule_tx(tx_request.sender_address, tx_request.nonce)
+        self._tx_schedule.reschedule_tx(tx_request)
         await self._kick_tx_schedule()
 
-    def _on_request_done(self, tx_request: MPTxRequest):
-        sender = tx_request.sender_address
-        self._tx_schedule.on_request_done(sender, tx_request.nonce)
-
-        count = self.get_pending_tx_count(sender)
-        log_ctx = {"context": {"req_id": tx_request.req_id}}
-        self.debug(f"Reqeust done, pending tx count: {count}", extra=log_ctx)
+    def _on_done_tx(self, tx_request: MPTxRequest):
+        if not self._tx_schedule.done_tx(tx_request):
+            return
+        self.debug(f"Request is done", extra=tx_request.log_req_id)
 
     def _on_fail_tx(self, tx_request: MPTxRequest):
-        sender = tx_request.sender_address
-        if not self._tx_schedule.fail_tx(sender, tx_request.nonce):
+        if not self._tx_schedule.fail_tx(tx_request):
             return
-        count = self.get_pending_tx_count(tx_request.sender_address)
-        log_ctx = {"context": {"req_id": tx_request.req_id}}
-        self.debug(f"Reqeust: {tx_request.log_str} - dropped away, pending tx count: {count}", extra=log_ctx)
+        self.error(f"Request is dropped away", extra=tx_request.log_req_id)
 
     async def _kick_tx_schedule(self):
         async with self._schedule_cond:

@@ -11,7 +11,8 @@ import unittest
 from unittest.mock import patch, MagicMock, call
 
 from ..mempool.mempool import MemPool, IMPExecutor
-from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxResult, MPResultCode, MPGasPriceResult, MPRequestType
+from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxResult, MPResultCode
+from ..mempool.mempool_api import MPGasPriceReq, MPGasPriceResult, MPRequestType
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 from ..common_neon.eth_proto import Trx as NeonTx
 
@@ -82,7 +83,9 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self._executor = MockMPExecutor()
         self._mempool = MemPool(self._executor, capacity=4096)
-        self._mempool.process_mp_gas_price_result(MPGasPriceResult(suggested_gas_price=1, min_gas_price=1))
+        price_request = MPGasPriceReq(req_id='test')
+        price_result = MPGasPriceResult(suggested_gas_price=1, min_gas_price=1)
+        self._mempool.process_mp_gas_price_result(price_request, price_result)
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available", return_value=True)
@@ -267,21 +270,21 @@ class TestMPSchedule(unittest.TestCase):
         self.assertIs(schedule.acquire_tx_for_execution(), None)
         for request in self.requests[3:]:
             schedule.add_mp_tx_request(request)
-        self.assertEqual(acc[2].address.lower(), schedule._sender_tx_pools[0].sender_address)
-        self.assertEqual(acc[0].address.lower(), schedule._sender_tx_pools[1].sender_address)
-        self.assertEqual(acc[1].address.lower(), schedule._sender_tx_pools[2].sender_address)
-        self.assertEqual(acc[1].address.lower(), schedule._sender_tx_pools[2].sender_address)
-        self.assertIs(self.requests[3], schedule._sender_tx_pools[0]._tx_list[0])
-        self.assertIs(self.requests[0], schedule._sender_tx_pools[1]._tx_list[0])
-        self.assertIs(self.requests[2], schedule._sender_tx_pools[2]._tx_list[0])
+        self.assertEqual(acc[2].address.lower(), schedule._sender_tx_pool_list[0].sender_address)
+        self.assertEqual(acc[0].address.lower(), schedule._sender_tx_pool_list[1].sender_address)
+        self.assertEqual(acc[1].address.lower(), schedule._sender_tx_pool_list[2].sender_address)
+        self.assertEqual(acc[1].address.lower(), schedule._sender_tx_pool_list[2].sender_address)
+        self.assertIs(self.requests[3], schedule._sender_tx_pool_list[0]._tx_list[0])
+        self.assertIs(self.requests[0], schedule._sender_tx_pool_list[1]._tx_list[0])
+        self.assertIs(self.requests[2], schedule._sender_tx_pool_list[2]._tx_list[0])
 
         self.assertEqual(3, schedule.get_mp_tx_count())
-        self.assertEqual(3, len(schedule._sender_tx_pools))
+        self.assertEqual(3, len(schedule._sender_tx_pool_list))
         self.assertEqual(1, schedule.get_pending_tx_count(acc[0].address.lower()))
         self.assertEqual(1, schedule.get_pending_tx_count(acc[1].address.lower()))
         self.assertEqual(1, schedule.get_pending_tx_count(acc[2].address.lower()))
-        self.assertEqual(3, len(schedule._sender_tx_pools))
-        self.assertIs(self.requests[3], schedule._sender_tx_pools[0]._tx_list[0])
+        self.assertEqual(3, len(schedule._sender_tx_pool_list))
+        self.assertIs(self.requests[3], schedule._sender_tx_pool_list[0]._tx_list[0])
 
     def test_capacity_oversized(self):
         """Checks if mp_schedule doesn't get oversized with a quite big set of mp_tx_requests"""
@@ -339,11 +342,11 @@ class TestMPSenderTxPool(unittest.TestCase):
             for i in range(0, 5):
                 self._pool.drop_last_request()
             self.assertEqual(5, len(logs.records))
-            self.assertEqual(f"Skip removing transaction: {tx.log_str} - processing", logs.records[4].msg)
+            self.assertEqual(f"Skip removing transaction {tx.signature} - processing", logs.records[4].msg)
             self.assertEqual(1, self._pool.len())
 
     def test_fail_tx(self):
        tx = self._pool.acquire_tx()
        self.assertTrue(self._pool.is_processing())
-       self._pool.fail_tx(tx.nonce)
+       self._pool.fail_tx(tx)
        self.assertEqual(self._pool.len(), 0)

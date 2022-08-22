@@ -70,17 +70,17 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             try:
                 self.execute_neon_tx_impl(mp_tx_request)
             except BlockedAccountsError:
-                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got blocked accounts result")
+                self.debug(f"Failed to execute neon_tx, got blocked accounts result")
                 return MPTxResult(MPResultCode.BlockedAccount, None)
             except NodeBehindError:
-                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got node behind error")
+                self.debug(f"Failed to execute neon_tx, got node behind error")
                 return MPTxResult(MPResultCode.SolanaUnavailable, None)
             except SolanaUnavailableError:
-                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got solana unavailable error")
+                self.debug(f"Failed to execute neon_tx, got solana unavailable error")
                 return MPTxResult(MPResultCode.SolanaUnavailable, None)
             except Exception as err:
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.error(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got error: {err}: {err_tb}")
+                self.error(f"Failed to execute neon_tx, got error. Error: {err}. Traceback: {err_tb}")
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
