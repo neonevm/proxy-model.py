@@ -4,7 +4,7 @@ from typing import Callable, Optional
 from logged_groups import logged_group
 from neon_py.network import AddrPickableDataClient
 
-from .mempool_api import MPTxRequest, MPPendingTxNonceReq, MPPendingTxByHashReq, MPSendTxResult
+from .mempool_api import MPTxRequest, MPPendingTxNonceReq, MPPendingTxByHashReq, MPTxSendResult
 from .mempool_api import MPGasPriceResult, MPGasPriceReq
 
 from ..common_neon.eth_proto import Trx as NeonTx
@@ -63,11 +63,10 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def send_raw_transaction(self, req_id: str, signature: str, neon_tx: NeonTx, sender_tx_cnt: int,
-                             neon_tx_exec_cfg: NeonTxExecCfg) -> MPSendTxResult:
+    def send_raw_transaction(self, req_id: str, signature: str, neon_tx: NeonTx,
+                             neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxSendResult:
         mempool_tx_request = MPTxRequest(
-            req_id=req_id, signature=signature, neon_tx=neon_tx, sender_tx_cnt=sender_tx_cnt,
-            neon_tx_exec_cfg=neon_tx_exec_cfg
+            req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
         )
         return self._pickable_data_client.send_data(mempool_tx_request)
 

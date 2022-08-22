@@ -8,19 +8,19 @@ from typing import Optional, Any, cast
 from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 
 from ..common_neon.gas_price_calculator import GasPriceCalculator
-from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError
+from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError, NonceTooLowError
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
 from ..common_neon.config import Config
 
+from .transaction_sender_ctx import NeonTxSendCtx
 from .transaction_sender import NeonTxSendStrategyExecutor
 from .operator_resource_list import OperatorResourceList
-from .mempool_api import MPRequestType, MPRequest, MPTxRequest, MPTxResult, MPResultCode, MPGasPriceResult
+from .mempool_api import MPRequestType, MPRequest, MPTxRequest, MPTxExecResult, MPTxExecResultCode, MPGasPriceResult
 
 
 @logged_group("neon.MemPool")
 class MPExecutor(mp.Process, IPickableDataServerUser):
-
     def __init__(self, executor_id: int, srv_sock: socket.socket, config: IConfig):
         self.info(f"Initialize mempool_executor: {executor_id}")
         self._id = executor_id
@@ -71,18 +71,21 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
                 self.execute_neon_tx_impl(mp_tx_request)
             except BlockedAccountsError:
                 self.debug(f"Failed to execute neon_tx, got blocked accounts result")
-                return MPTxResult(MPResultCode.BlockedAccount, None)
+                return MPTxExecResult(MPTxExecResultCode.BlockedAccount, mp_tx_request.neon_tx_exec_cfg)
             except NodeBehindError:
                 self.debug(f"Failed to execute neon_tx, got node behind error")
-                return MPTxResult(MPResultCode.SolanaUnavailable, None)
+                return MPTxExecResult(MPTxExecResultCode.SolanaUnavailable, mp_tx_request.neon_tx_exec_cfg)
             except SolanaUnavailableError:
                 self.debug(f"Failed to execute neon_tx, got solana unavailable error")
-                return MPTxResult(MPResultCode.SolanaUnavailable, None)
+                return MPTxExecResult(MPTxExecResultCode.SolanaUnavailable, mp_tx_request.neon_tx_exec_cfg)
+            except NonceTooLowError:
+                self.debug(f"Failed to execute neon_tx, got nonce too low error")
+                return MPTxExecResult(MPTxExecResultCode.NonceTooLow, mp_tx_request.neon_tx_exec_cfg)
             except Exception as err:
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
                 self.error(f"Failed to execute neon_tx, got error. Error: {err}. Traceback: {err_tb}")
-                return MPTxResult(MPResultCode.Unspecified, None)
-            return MPTxResult(MPResultCode.Done, None)
+                return MPTxExecResult(MPTxExecResultCode.Unspecified, mp_tx_request.neon_tx_exec_cfg)
+            return MPTxExecResult(MPTxExecResultCode.Done, mp_tx_request.neon_tx_exec_cfg)
 
     def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
         neon_tx = mp_tx_request.neon_tx
@@ -93,10 +96,12 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
         resource_list = OperatorResourceList(self._solana_interactor)
         resource = resource_list.get_available_resource_info()
+        strategy_ctx = NeonTxSendCtx(self._solana_interactor, resource, neon_tx, neon_tx_exec_cfg)
+        strategy_executor = NeonTxSendStrategyExecutor(strategy_ctx)
         try:
-            strategy_executor = NeonTxSendStrategyExecutor(self._solana_interactor, resource, neon_tx)
-            strategy_executor.execute(neon_tx_exec_cfg)
+            strategy_executor.execute()
         finally:
+            mp_tx_request.neon_tx_exec_cfg = strategy_ctx.neon_tx_exec_cfg
             resource_list.free_resource_info(resource)
 
     async def on_data_received(self, data: Any) -> Any:

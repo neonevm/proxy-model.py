@@ -29,3 +29,7 @@ class NodeBehindError(Exception):
 
 class SolanaUnavailableError(Exception):
     pass
+
+
+class NonceTooLowError(Exception):
+    pass

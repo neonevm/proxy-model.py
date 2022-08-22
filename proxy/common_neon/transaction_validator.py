@@ -27,6 +27,7 @@ class NeonTxValidator:
 
         self._sender = '0x' + tx.sender()
         self._neon_account_info = self._solana.get_neon_account_info(EthereumAddress(self._sender))
+        self._state_tx_cnt = self._neon_account_info.tx_count if self._neon_account_info is not None else 0
 
         self._deployed_contract = tx.contract()
         if self._deployed_contract:
@@ -63,7 +64,7 @@ class NeonTxValidator:
             emulated_result: NeonEmulatedResult = call_trx_emulated(self._tx)
             self.prevalidate_emulator(emulated_result)
 
-            neon_tx_exec_cfg = NeonTxExecCfg.from_emulated_result(emulated_result)
+            neon_tx_exec_cfg = NeonTxExecCfg.from_emulated_result(self._state_tx_cnt, emulated_result)
             return neon_tx_exec_cfg
         except Exception as e:
             self.extract_ethereum_error(e)
@@ -71,6 +72,7 @@ class NeonTxValidator:
 
     def _prevalidate_tx(self):
         self._prevalidate_whitelist()
+        self._prevalidate_tx_nonce()
         self._prevalidate_sender_eoa()
         self._prevalidate_tx_gas()
         self._prevalidate_tx_chain_id()
@@ -120,13 +122,15 @@ class NeonTxValidator:
         if len(self._tx.callData) > (128 * 1024 - 1024):
             raise EthereumError(message='transaction size is too big')
 
-    def prevalidate_tx_nonce(self, sender_tx_cnt: int):
+    def _prevalidate_tx_nonce(self):
         tx_nonce = int(self._tx.nonce)
-        if self.MAX_U64 in (sender_tx_cnt, tx_nonce):
+        if self.MAX_U64 in (self._state_tx_cnt, tx_nonce):
             raise EthereumError(
                 code=-32002,
-                message=f'nonce has max value: address {self._sender}, tx: {tx_nonce} state: {sender_tx_cnt}'
+                message=f'nonce has max value: address {self._sender}, tx: {tx_nonce} state: {self._state_tx_cnt}'
             )
+        if self._state_tx_cnt > tx_nonce:
+            self.raise_nonce_error(self._state_tx_cnt, tx_nonce)
 
     def _prevalidate_sender_eoa(self):
         if not self._neon_account_info:
@@ -190,13 +194,13 @@ class NeonTxValidator:
                 raise EthereumError(f"contract {account_desc['address']} " +
                                     f"requests a size increase to more than 9.5Mb")
 
-    def raise_nonce_error(self, account_tx_count: int, tx_nonce: int):
-        if account_tx_count > tx_nonce:
+    def raise_nonce_error(self, state_tx_cnt: int, tx_nonce: int):
+        if state_tx_cnt > tx_nonce:
             message = 'nonce too low'
         else:
             message = 'nonce too high'
 
         raise EthereumError(
             code=-32002,
-            message=f'{message}: address {self._sender}, tx: {tx_nonce} state: {account_tx_count}'
+            message=f'{message}: address {self._sender}, tx: {tx_nonce} state: {state_tx_cnt}'
         )

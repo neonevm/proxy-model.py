@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch, MagicMock, call
 
 from ..mempool.mempool import MemPool, IMPExecutor
-from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxResult, MPResultCode
+from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxExecResult, MPTxExecResultCode
 from ..mempool.mempool_api import MPGasPriceReq, MPGasPriceResult, MPRequestType
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 from ..common_neon.eth_proto import Trx as NeonTx
@@ -33,7 +33,7 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int,
         from_acc.key)
     signature = signed_tx_data.hash.hex()
     neon_tx = NeonTx.fromString(bytearray(signed_tx_data.rawTransaction))
-    mp_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx, sender_tx_cnt=nonce)
+    mp_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx)
     return mp_tx_request
 
 
@@ -57,7 +57,7 @@ class MockTask:
 class MockMPExecutor(IMPExecutor):
 
     def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, MockTask]:
-        return 1, MockTask(MPTxResult(MPResultCode.Done, None))
+        return 1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))
 
     def is_available(self) -> bool:
         return False
@@ -98,7 +98,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         submit_mp_request_mock.assert_called_once()
         submit_mp_request_mock.assert_called_with(mp_tx_request)
 
-    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxResult(MPResultCode.Done, None))))
+    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))))
     @patch.object(MockMPExecutor, "is_available", return_value=False)
     async def test_single_sender_couple_txs(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         """Checks if an enqueued mp_tx_requests get in effect in the right order"""
@@ -115,7 +115,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
 
         submit_mp_request_mock.assert_has_calls([call(requests[0]), call(requests[1])])
 
-    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxResult(MPResultCode.Done, None))))
+    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))))
     @patch.object(MockMPExecutor, "is_available", return_value=False)
     async def test_2_senders_4_txs(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         """Checks if an enqueued mp_tx_request from different senders gets in effect in the right order"""
@@ -198,7 +198,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         acc_1_count = self._mempool.get_pending_tx_count(requests[3].sender_address)
         self.assertEqual(acc_1_count, 2)
 
-    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxResult(MPResultCode.Done, None))))
+    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))))
     @patch.object(MockMPExecutor, "is_available")
     async def test_over_9000_transfers(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         """Checks if all mp_tx_requests are processed by the MemPool"""
@@ -278,7 +278,7 @@ class TestMPSchedule(unittest.TestCase):
         self.assertIs(self.requests[0], schedule._sender_tx_pool_list[1]._tx_list[0])
         self.assertIs(self.requests[2], schedule._sender_tx_pool_list[2]._tx_list[0])
 
-        self.assertEqual(3, schedule.get_mp_tx_count())
+        self.assertEqual(3, schedule.get_tx_count())
         self.assertEqual(3, len(schedule._sender_tx_pool_list))
         self.assertEqual(1, schedule.get_pending_tx_count(acc[0].address.lower()))
         self.assertEqual(1, schedule.get_pending_tx_count(acc[1].address.lower()))
@@ -301,7 +301,7 @@ class TestMPSchedule(unittest.TestCase):
                                                   req_id=str(acc_i) + " " + str(nonce), nonce=nonce,
                                                   gasPrice=randint(50000, 100000), gas=randint(4000, 10000))
                 schedule.add_mp_tx_request(request)
-        self.assertEqual(mp_schedule_capacity, schedule.get_mp_tx_count())
+        self.assertEqual(mp_schedule_capacity, schedule.get_tx_count())
 
 
 class TestMPSenderTxPool(unittest.TestCase):

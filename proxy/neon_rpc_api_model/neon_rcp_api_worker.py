@@ -25,7 +25,7 @@ from ..common_neon.environment_data import SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_P
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..indexer.indexer_db import IndexerDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
-from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPSendTxResult, MPGasPriceResult
+from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
 
 
 NEON_PROXY_PKG_VERSION = '0.11.0-dev'
@@ -217,7 +217,8 @@ class NeonRpcApiWorker:
         account = self._normalize_account(account)
 
         try:
-            neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account))
+            commitment = 'processed' if  tag == 'pending' else 'confirmed'
+            neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account), commitment)
             if neon_account_info is None:
                 return hex(0)
 
@@ -521,30 +522,19 @@ class NeonRpcApiWorker:
 
             req_id = LogMng.get_logging_context().get("req_id")
 
-            sender_tx_cnt = 0
-            result: Optional[MPSendTxResult] = None
-            for i in range(2):
-                neon_account_info = self._solana.get_neon_account_info(neon_sender, commitment='processed')
-                sender_tx_cnt = neon_account_info.tx_count if neon_account_info is not None else 0
-                neon_tx_validator.prevalidate_tx_nonce(sender_tx_cnt)
-                if (result is not None) and (sender_tx_cnt != neon_tx.nonce):
-                    result.last_nonce = None
-                    break
+            result: MPTxSendResult = self._mempool_client.send_raw_transaction(
+                req_id=req_id, signature=neon_signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
+            )
 
-                result: MPSendTxResult = self._mempool_client.send_raw_transaction(
-                    req_id=req_id, signature=neon_signature, neon_tx=neon_tx, sender_tx_cnt=sender_tx_cnt,
-                    neon_tx_exec_cfg=neon_tx_exec_cfg
-                )
-                if result.success or (result.last_nonce != -1):
-                    break
-
-            if result.success:
+            if result.code == MPTxSendResultCode.Success:
                 self._stat_tx_success()
                 return neon_signature
-            else:
-                if result.last_nonce is not None:
-                    sender_tx_cnt = result.last_nonce + 1
-                neon_tx_validator.raise_nonce_error(sender_tx_cnt, neon_tx.nonce)
+            elif result.code == MPTxSendResultCode.Underprice:
+                pass
+            elif result.code == MPTxSendResultCode.AlreadyKnown:
+                pass
+            elif result.code == MPTxSendResultCode.NonceTooLow:
+                neon_tx_validator.raise_nonce_error(result.state_tx_cnt, neon_tx.nonce)
 
         except EthereumError:
             self._stat_tx_failed()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, Tuple, Optional
 from abc import ABC, abstractmethod
@@ -11,7 +11,6 @@ from ..common_neon.data import NeonTxExecCfg
 
 
 class IMPExecutor(ABC):
-
     @abstractmethod
     def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, Task]:
         pass
@@ -38,24 +37,22 @@ class MPRequestType(IntEnum):
     Dummy = -1
 
 
-@dataclass(order=True)
 class MPRequest:
-    req_id: str = field(compare=False)
-    type: MPRequestType = field(compare=False, default=MPRequestType.Dummy)
+    req_id: str
+    type: MPRequestType
 
     def __post_init__(self):
         self.log_req_id = {"context": {"req_id": self.req_id}}
 
 
-@dataclass(eq=True, order=True)
+@dataclass
 class MPTxRequest(MPRequest):
-    nonce: Optional[int] = field(compare=True, default=None)
-    signature: Optional[str] = field(compare=False, default=None)
-    neon_tx: Optional[NeonTx] = field(compare=False, default=None)
-    neon_tx_exec_cfg: Optional[NeonTxExecCfg] = field(compare=False, default=None)
-    sender_address: Optional[str] = field(compare=False, default=None)
-    sender_tx_cnt: Optional[int] = field(compare=False, default=None)
-    gas_price: Optional[int] = field(compare=False, default=None)
+    nonce: int
+    signature: str
+    neon_tx: NeonTx
+    neon_tx_exec_cfg: NeonTxExecCfg
+    sender_address: str
+    gas_price: int
 
     def __post_init__(self):
         super().__post_init__()
@@ -67,7 +64,6 @@ class MPTxRequest(MPRequest):
 
 @dataclass
 class MPPendingTxNonceReq(MPRequest):
-
     sender: str = None
 
     def __post_init__(self):
@@ -91,24 +87,33 @@ class MPGasPriceReq(MPRequest):
         self.type = MPRequestType.GetGasPrice
 
 
-class MPResultCode(IntEnum):
+class MPTxExecResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
+    NonceTooLow = 4,
     Unspecified = 255,
     Dummy = -1
 
 
 @dataclass
-class MPTxResult:
-    code: MPResultCode
+class MPTxExecResult:
+    code: MPTxExecResultCode
     data: Any
 
 
+class MPTxSendResultCode(IntEnum):
+    Success = 0
+    NonceTooLow = 1
+    Underprice = 2
+    AlreadyKnown = 3
+    Unspecified = 255
+
+
 @dataclass
-class MPSendTxResult:
-    success: bool
-    last_nonce: Optional[int]
+class MPTxSendResult:
+    code: MPTxSendResultCode
+    state_tx_cnt: Optional[int]
 
 
 @dataclass

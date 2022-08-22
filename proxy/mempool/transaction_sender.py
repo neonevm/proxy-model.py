@@ -8,185 +8,32 @@ import copy
 from logged_groups import logged_group
 from typing import Dict, Optional, List, Any, cast
 
-from solana.transaction import AccountMeta as SolanaAccountMeta, Transaction, PublicKey
+from solana.transaction import Transaction
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
-
-from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage
-from .neon_tx_stages import NeonResizeContractTxStage
 
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError
+from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError, NonceTooLowError
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxReceiptInfo
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.utils import NeonTxResultInfo
-from ..common_neon.data import NeonTxExecCfg, NeonAccountDict, NeonEmulatedResult
+from ..common_neon.data import NeonTxExecCfg, NeonEmulatedResult
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.evm_log_decoder import decode_neon_tx_result
+from ..common_neon.address import EthereumAddress
 
 from ..common_neon.solana_alt import AddressLookupTableInfo
 from ..common_neon.solana_alt_builder import AddressLookupTableTxBuilder, AddressLookupTableTxSet
 from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from ..common_neon.solana_v0_transaction import V0Transaction
 
-from .operator_resource_list import OperatorResourceInfo
-
-
-@logged_group("neon.MemPool")
-class AccountTxListBuilder:
-    def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder):
-        self._solana = solana
-        self._builder = builder
-        self._resize_contract_stage_list: List[NeonTxStage] = []
-        self._create_account_stage_list: List[NeonTxStage] = []
-        self._eth_meta_dict: Dict[str, SolanaAccountMeta] = dict()
-
-    def build_tx(self, emulated_account_dict: NeonAccountDict) -> None:
-        self._resize_contract_stage_list.clear()
-        self._create_account_stage_list.clear()
-        self._eth_meta_dict.clear()
-
-        # Parse information from the emulator output
-        self._parse_accounts_list(emulated_account_dict['accounts'])
-        self._parse_token_list(emulated_account_dict['token_accounts'])
-        self._parse_solana_list(emulated_account_dict['solana_accounts'])
-
-        eth_meta_list = list(self._eth_meta_dict.values())
-        self.debug('metas: ' + ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in eth_meta_list]))
-        self._builder.init_eth_accounts(eth_meta_list)
-
-        # Build all instructions
-        self._build_account_stage_list()
-
-    def _add_meta(self, pubkey: PublicKey, is_writable: bool) -> None:
-        key = str(pubkey)
-        if key in self._eth_meta_dict:
-            self._eth_meta_dict[key].is_writable |= is_writable
-        else:
-            self._eth_meta_dict[key] = SolanaAccountMeta(pubkey=pubkey, is_signer=False, is_writable=is_writable)
-
-    def _parse_accounts_list(self, emulated_result_account_list: List[Dict[str, Any]]) -> None:
-        for account_desc in emulated_result_account_list:
-            if account_desc['new']:
-                if account_desc['code_size']:
-                    stage = NeonCreateContractTxStage(self._builder, account_desc)
-                    self._create_account_stage_list.append(stage)
-                elif account_desc['writable']:
-                    stage = NeonCreateAccountTxStage(self._builder, account_desc)
-                    self._create_account_stage_list.append(stage)
-            elif account_desc['code_size'] and (account_desc['code_size_current'] < account_desc['code_size']):
-                self._resize_contract_stage_list.append(NeonResizeContractTxStage(self._builder, account_desc))
-
-            self._add_meta(account_desc['account'], True)
-            if account_desc['contract']:
-                self._add_meta(account_desc['contract'], account_desc['writable'])
-
-    def _parse_token_list(self, emulated_result_token_accounts: List[Dict[str, Any]]) -> None:
-        for token_account in emulated_result_token_accounts:
-            self._add_meta(token_account['key'], True)
-            if token_account['new']:
-                self._create_account_stage_list.append(NeonCreateERC20TxStage(self._builder, token_account))
-
-    def _parse_solana_list(self, emulated_result_solana_account_list: List[Dict[str, Any]]) -> None:
-        for account_desc in emulated_result_solana_account_list:
-            self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
-
-    def _build_account_stage_list(self) -> None:
-        if not self.has_tx_list():
-            return
-
-        all_stage_list = self._create_account_stage_list + self._resize_contract_stage_list
-        size_list = list(set([s.size for s in all_stage_list]))
-        balance_list = self._solana.get_multiple_rent_exempt_balances_for_size(size_list)
-        balance_map = {size: balance for size, balance in zip(size_list, balance_list)}
-        for s in all_stage_list:
-            s.set_balance(balance_map[s.size])
-            s.build()
-
-    def has_tx_list(self) -> bool:
-        return len(self._resize_contract_stage_list) > 0 or len(self._create_account_stage_list) > 0
-
-    def get_tx_list_info(self) -> SolTxListInfo:
-        all_stage_list = self._create_account_stage_list + self._resize_contract_stage_list
-
-        return SolTxListInfo(
-            name_list=[s.NAME for s in all_stage_list],
-            tx_list=[s.tx for s in all_stage_list]
-        )
-
-    def clear_tx_list(self) -> None:
-        self._resize_contract_stage_list.clear()
-        self._create_account_stage_list.clear()
-
-
-class NeonTxSendCtx:
-    def __init__(self, solana: SolanaInteractor, resource: OperatorResourceInfo, neon_tx: NeonTx):
-        self._neon_tx = neon_tx
-        self._neon_sig = '0x' + neon_tx.hash_signed().hex()
-        self._solana = solana
-        self._resource = resource
-        self._builder = NeonIxBuilder(resource.public_key)
-
-        self._account_tx_list_builder = AccountTxListBuilder(solana, self._builder)
-        self._emulated_evm_step_cnt = 0
-
-        self._builder.init_operator_ether(self._resource.ether)
-        self._builder.init_eth_tx(self._neon_tx)
-        self._builder.init_iterative(self._resource.storage, self._resource.holder, self._resource.rid)
-
-        self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
-
-        self._is_holder_completed = False
-
-    @property
-    def neon_sig(self) -> str:
-        return self._neon_sig
-
-    @property
-    def neon_tx(self) -> NeonTx:
-        return self._neon_tx
-
-    @property
-    def resource(self) -> OperatorResourceInfo:
-        return self._resource
-
-    @property
-    def builder(self) -> NeonIxBuilder:
-        return self._builder
-
-    @property
-    def solana(self) -> SolanaInteractor:
-        return self._solana
-
-    @property
-    def account_tx_list_builder(self) -> AccountTxListBuilder:
-        return self._account_tx_list_builder
-
-    @property
-    def alt_close_queue(self) -> AddressLookupTableCloseQueue:
-        return self._alt_close_queue
-
-    @property
-    def emulated_evm_step_cnt(self) -> int:
-        assert self._emulated_evm_step_cnt >= 0
-        return self._emulated_evm_step_cnt
-
-    def set_emulated_evm_step_cnt(self, value: int) -> None:
-        assert value >= 0
-        self._emulated_evm_step_cnt = value
-
-    @property
-    def is_holder_completed(self):
-        return self._is_holder_completed
-
-    def set_holder_completed(self, value=True) -> None:
-        self._is_holder_completed = value
+from .transaction_sender_ctx import AccountTxListBuilder, NeonTxSendCtx
 
 
 @logged_group("neon.MemPool")
@@ -534,7 +381,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         if evm_step_cnt > 170:
             evm_step_cnt -= 150
         else:
-            self._compute_unit_cnt = 1_350_000
+            self._compute_unit_cnt = 1_375_000
             evm_step_cnt = 10
         self._iter_evm_step_cnt = evm_step_cnt
         total_iteration_cnt = math.ceil(total_evm_step_cnt / evm_step_cnt)
@@ -762,23 +609,30 @@ class NeonTxSendStrategyExecutor:
         NoChainIdNeonTxStrategy, AltNoChainIdNeonTxStrategy
     ]
 
-    def __init__(self, solana: SolanaInteractor, resource: OperatorResourceInfo, neon_tx: NeonTx):
+    def __init__(self, ctx: NeonTxSendCtx):
         super().__init__()
-        self._ctx = NeonTxSendCtx(solana, resource, neon_tx)
+        self._ctx = ctx
         self._operator = f'{str(self._ctx.resource)}'
 
-    def execute(self, neon_tx_exec_cfg: NeonTxExecCfg) -> NeonTxResultInfo:
-        self._init_emulated_cfg(neon_tx_exec_cfg)
+    def execute(self) -> NeonTxResultInfo:
+        self._ctx.neon_tx_exec_cfg.set_state_tx_cnt(self._get_state_tx_cnt())
+        self._validate_nonce()
+        self._ctx.init()
         return self._execute()
 
-    def _init_emulated_cfg(self, neon_tx_exec_cfg: NeonTxExecCfg) -> None:
-        self._ctx.set_emulated_evm_step_cnt(neon_tx_exec_cfg.evm_step_cnt)
-        self._ctx.account_tx_list_builder.build_tx(neon_tx_exec_cfg.account_dict)
+    def _get_state_tx_cnt(self) -> int:
+        neon_account_info = self._ctx.solana.get_neon_account_info(EthereumAddress(self._ctx.sender))
+        return neon_account_info.tx_count if neon_account_info is not None else 0
 
     def _emulate_neon_tx(self) -> None:
         emulated_result: NeonEmulatedResult = call_trx_emulated(self._ctx.neon_tx)
-        neon_tx_exec_cfg = NeonTxExecCfg.from_emulated_result(emulated_result)
-        self._init_emulated_cfg(neon_tx_exec_cfg)
+        state_tx_cnt = self._get_state_tx_cnt()
+        self._ctx.neon_tx_exec_cfg.set_emulated_result(emulated_result).set_state_tx_cnt(state_tx_cnt)
+        self._ctx.init()
+
+    def _validate_nonce(self) -> None:
+        if self._ctx.state_tx_cnt > self._ctx.neon_tx.nonce:
+            raise NonceTooLowError()
 
     def _execute(self) -> NeonTxResultInfo:
         for Strategy in self.STRATEGY_LIST:
@@ -792,6 +646,7 @@ class NeonTxSendStrategyExecutor:
                 strategy.prep_before_emulate()
                 for i in range(RETRY_ON_FAIL):
                     self._emulate_neon_tx()
+
                     if not strategy.validate():
                         self.debug(f'Skip strategy {Strategy.NAME}: {strategy.validation_error_msg}')
                         continue
@@ -801,7 +656,7 @@ class NeonTxSendStrategyExecutor:
                     return strategy.execute()
                 raise RuntimeError('fail to sync the emulation and the execution')
 
-            except (BlockedAccountsError, NodeBehindError, SolanaUnavailableError):
+            except (BlockedAccountsError, NodeBehindError, SolanaUnavailableError, NonceTooLowError):
                 raise
             except Exception as e:
                 if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
