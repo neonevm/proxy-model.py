@@ -159,7 +159,7 @@ class ResourceInitializer:
                 self._make_refund_tx(builder, resource, refund_stage_list, idx, stage)
                 self._make_create_acc_tx(resource, result_stage_list, balance, idx, stage)
                 continue
-            elif account.owner != PublicKey(self._config.get_evm_loader_id()):
+            elif account.owner != self._config.get_evm_loader_id():
                 raise RuntimeError(f"wrong owner for: {str(stage.sol_account)}")
             elif idx != 0:
                 # if not storage account
