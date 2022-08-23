@@ -35,7 +35,7 @@ from ..common_neon.solana_alt_builder import AddressLookupTableTxBuilder, Addres
 from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from ..common_neon.solana_v0_transaction import V0Transaction
 
-from .operator_resource_list import OperatorResourceInfo
+from .operator_resource_mng import OperatorResourceInfo
 
 
 @logged_group("neon.MemPool")

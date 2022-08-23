@@ -8,18 +8,21 @@ from ..common_neon.config import Config
 
 from ..common_neon.solana_interactor import SolanaInteractor
 
-from ..mempool.operator_resource_list import OperatorResourceManager, ResourceInitializer
+from ..mempool.operator_resource_mng import OperatorResourceMng, ResourceInitializer, IOperatorResourceMngUser
 
 
 @logged_groups.logged_group("neon.TestCases")
-class TestNeonTxSender(unittest.TestCase):
+class TestNeonTxSender(unittest.TestCase, IOperatorResourceMngUser):
     @classmethod
     def setUpClass(cls) -> None:
         cls.solana = SolanaInteractor(os.environ['SOLANA_URL'])
 
+    def on_operator_resource_released(self):
+        pass
+
     def setUp(self) -> None:
         self._config = Config()
-        self._resource_list = OperatorResourceManager(self._config)
+        self._resource_list = OperatorResourceMng(self, self._config)
         self._resource = self._resource_list.get_resource("")
         self._resource_initializer = ResourceInitializer(self._config, self.solana)
         self._config.get_min_operator_balance_to_warn = Mock()

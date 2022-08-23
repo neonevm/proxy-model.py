@@ -3,6 +3,7 @@ import multiprocessing as mp
 import socket
 import traceback
 
+
 from logged_groups import logged_group, logging_context
 from typing import Optional, Any
 from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
@@ -15,7 +16,7 @@ from ..common_neon.config import IConfig
 from ..common_neon.config import Config
 
 from .transaction_sender import NeonTxSendStrategyExecutor
-from .operator_resource_list import ResourceInitializer
+from .operator_resource_mng import ResourceInitializer, OperatorResourceInfo
 from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
 
@@ -52,13 +53,13 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._gas_price_calculator.update_mapping()
         self._gas_price_calculator.try_update_gas_price()
 
-    def execute_neon_tx(self, mp_tx_request: MPTxRequest):
+    def execute_neon_tx(self, mp_tx_request: MPTxRequest, operator_resource_info: OperatorResourceInfo):
         with logging_context(req_id=mp_tx_request.req_id, exectr=self._id):
             try:
                 if mp_tx_request.gas_price < self._gas_price_calculator.get_min_gas_price():
                     self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got low gas price error")
                     return MPTxResult(MPResultCode.LowGasPrice, None)
-                self.execute_neon_tx_impl(mp_tx_request)
+                self.execute_neon_tx_impl(mp_tx_request, operator_resource_info)
             except BlockedAccountsError:
                 self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got blocked accounts result")
                 return MPTxResult(MPResultCode.BlockedAccount, None)
@@ -77,12 +78,12 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
-    def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
+    def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest, operator_resource: OperatorResourceInfo):
         neon_tx = mp_tx_request.neon_tx
         neon_tx_exec_cfg = mp_tx_request.neon_tx_exec_cfg
-        resource = mp_tx_request.resource
+        resource = operator_resource
 
-        if not ResourceInitializer(self._config, self._solana_interactor).init_resource(mp_tx_request.resource):
+        if not ResourceInitializer(self._config, self._solana_interactor).init_resource(resource):
             self.debug(f"Got bad resource error")
             raise BadResourceError()
         if neon_tx_exec_cfg is None:
@@ -93,7 +94,8 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         strategy_executor.execute(neon_tx_exec_cfg)
 
     async def on_data_received(self, data: Any) -> Any:
-        return self.execute_neon_tx(data)
+        mp_tx_request, operator_resource_info = data
+        return self.execute_neon_tx(mp_tx_request, operator_resource_info)
 
     def run(self) -> None:
         self._config = Config()

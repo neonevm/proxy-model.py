@@ -6,7 +6,7 @@ from typing import Any, Optional, Tuple
 from abc import ABC, abstractmethod
 from asyncio import Task
 
-from .operator_resource_list import OperatorResourceInfo
+from .operator_resource_mng import OperatorResourceInfo
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
@@ -15,7 +15,7 @@ from ..common_neon.data import NeonTxExecCfg
 class IMPExecutor(ABC):
 
     @abstractmethod
-    def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, Task]:
+    def submit_mp_request(self, mp_request: MPRequest, operator_resource_info: OperatorResourceInfo) -> Tuple[int, Task]:
         pass
 
     @abstractmethod
@@ -54,7 +54,6 @@ class MPTxRequest(MPRequest):
     sender_address: Optional[str] = field(compare=False, default=None)
     sender_tx_cnt: Optional[int] = field(compare=False, default=None)
     gas_price: Optional[int] = field(compare=False, default=None)
-    resource: Optional[OperatorResourceInfo] = field(compare=False, default=None)
 
     def __post_init__(self):
         self.gas_price = self.neon_tx.gasPrice

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import abc
 import asyncio
 import math
 import traceback
@@ -210,9 +211,18 @@ class ResourceInitializer:
         cancel_tx_executor.execute_tx_list()
 
 
+class IOperatorResourceMngUser(abc.ABC):
+
+    @abc.abstractmethod
+    def on_operator_resource_released(self):
+        pass
+
+
 @logged_group("neon.MemPool")
-class OperatorResourceManager:
-    def __init__(self, config: IConfig):
+class OperatorResourceMng:
+
+    def __init__(self, user: IOperatorResourceMngUser, config: IConfig):
+        self._user = user
         self._free_resource_list: List[int] = list()
         self._bad_resource_list: List[int] = list()
         self._resource_list: List[OperatorResourceInfo] = []
@@ -288,28 +298,45 @@ class OperatorResourceManager:
         )
         return resource
 
-    def update_allocated_resource(self, tx_hash: str, resource: OperatorResourceInfo) -> None:
+    def _tx_hash_based(method):
+        def wrapper(self, tx_hash: str):
+            resource_idx = self._allocated_resource.get(tx_hash)
+            if resource_idx is None:
+                self.error(f"Failed to process {method.__name__}, resource not found for tx_hash: {tx_hash}")
+                return
+            method(self, resource_idx, tx_hash)
+        return wrapper
+
+    @_tx_hash_based
+    def update_allocated_resource(self, resource_idx: int, tx_hash: str) -> None:
         current_time: int = self._get_current_time()
+        # TODO: the only one place to put current_time is enough
         self._allocated_resource_access[tx_hash] = current_time
-        self._resource_list[resource.idx].check_time = current_time
+        self._resource_list[resource_idx].check_time = current_time
 
-    def bad_resource_info(self, tx_hash: str, resource: OperatorResourceInfo) -> None:
+    @_tx_hash_based
+    def on_bad_resource_info(self, resource_idx: int, tx_hash: str) -> None:
         del self._allocated_resource[tx_hash]
         del self._allocated_resource_access[tx_hash]
-        self._resource_list[resource.idx].check_time = 0
-        self._bad_resource_list.append(resource.idx)
+        self._resource_list[resource_idx].check_time = 0
+        self._bad_resource_list.append(resource_idx)
 
-    def free_resource_info(self, tx_hash: str, resource: OperatorResourceInfo) -> None:
+    @_tx_hash_based
+    def release_resource_info(self, resource_idx: int, tx_hash: str) -> None:
         current_time: int = self._get_current_time()
         del self._allocated_resource[tx_hash]
         del self._allocated_resource_access[tx_hash]
-        self._resource_list[resource.idx].check_time = current_time
-        self._free_resource_list.append(resource.idx)
+        self._resource_list[resource_idx].check_time = current_time
+        self._free_resource_list.append(resource_idx)
+        self._user.on_operator_resource_released()
 
-    def deallocate_resource(self, tx_hash: str, resource: OperatorResourceInfo) -> None:
+    # TODO: check if it can be dropped from here
+    @_tx_hash_based
+    def deallocate_resource(self, resource_idx: int, tx_hash: str) -> None:
         del self._allocated_resource[tx_hash]
         del self._allocated_resource_access[tx_hash]
-        self._free_resource_list.append(resource.idx)
+        self._free_resource_list.append(resource_idx)
+        self._user.on_operator_resource_released()
 
     async def _check_resources_schedule(self):
         while True:

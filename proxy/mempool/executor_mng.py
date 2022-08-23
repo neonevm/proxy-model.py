@@ -7,6 +7,7 @@ from typing import List, Tuple, Deque, Set, cast
 
 from logged_groups import logged_group
 from neon_py.network import PipePickableDataClient
+from .operator_resource_mng import OperatorResourceInfo
 
 from ..common_neon.config import IConfig
 
@@ -54,12 +55,13 @@ class MPExecutorMng(IMPExecutor):
         for ex_info in self._executors:
             await ex_info.client.async_init()
 
-    def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, asyncio.Task]:
+    def submit_mp_request(self, mp_request: MPRequest, operator_resource_info: OperatorResourceInfo) -> Tuple[int, asyncio.Task]:
         executor_id, executor = self._get_executor()
         if mp_request.type == MPRequestType.SendTransaction:
             tx_hash = cast(MPTxRequest, mp_request).signature
             self.debug(f"Tx: {tx_hash} - scheduled on executor: {executor_id}")
-        task = asyncio.get_event_loop().create_task(executor.send_data_async(mp_request))
+        executor_msg = mp_request, operator_resource_info
+        task = asyncio.get_event_loop().create_task(executor.send_data_async(executor_msg))
         return executor_id, task
 
     def is_available(self) -> bool:
