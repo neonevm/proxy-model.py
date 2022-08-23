@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 from solana.publickey import PublicKey
-import os
 
 from .environment_data import EVM_LOADER_ID, EVM_STEP_COUNT, MEMPOOL_CAPACITY
 from .environment_data import MIN_OPERATOR_BALANCE_TO_ERR, MIN_OPERATOR_BALANCE_TO_WARN
@@ -99,4 +98,9 @@ class Config(IConfig):
                f"        PYTH_MAPPING_ACCOUNT: {self.get_pyth_mapping_account()}\n" \
                f"        EVM_STEP_LIMIT: {self.get_evm_steps_limit()}, \n" \
                f"        MP_CAPACITY: {self.get_mempool_capacity()}\n" \
+               f"        STORAGE_SIZE: {self.get_storage_size()}\n" \
+               f"        MIN_OPERATOR_BALANCE_TO_WARN: {self.get_min_operator_balance_to_warn()}\n" \
+               f"        MIN_OPERATOR_BALANCE_TO_ERR: {self.get_min_operator_balance_to_err()}\n" \
+               f"        PERM_ACCOUNT_LIMIT: {self.get_perm_account_limit()}\n" \
+               f"        RECHECK_RESOURCE_LIST_INTERVAL: {self.get_recheck_resource_list_interval()}\n" \
                f"        "
