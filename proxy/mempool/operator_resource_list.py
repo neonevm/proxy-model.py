@@ -34,14 +34,6 @@ class OperatorResourceInfo:
         self.holder: Optional[PublicKey] = None
         self.seed_list = None
 
-    def fill_storage_holder(self):
-        self.ether = EthereumAddress.from_private_key(self.secret_key)
-        aid = self.rid.to_bytes(math.ceil(self.rid.bit_length() / 8), 'big')
-        self.seed_list = [prefix + aid for prefix in [b"storage", b"holder"]]
-        builder = NeonIxBuilder(self.public_key)
-        stage_list = [NeonCreatePermAccountStage(builder, seed, 0) for seed in self.seed_list]
-        self.storage, self.holder = [s.sol_account for s in stage_list]
-
     def __str__(self) -> str:
         return f'{str(self.public_key)}:{self.rid}'
 
@@ -68,7 +60,7 @@ class ResourceInitializer:
         return math.ceil(datetime.now().timestamp())
 
     def _init_perm_accounts(self, resource: OperatorResourceInfo) -> bool:
-        resource.fill_storage_holder()
+        self._fill_storage_holder(resource)
 
         check_time = self._get_current_time() + self._config.get_recheck_resource_list_interval()
         resource_check_time = resource.check_time
@@ -105,6 +97,14 @@ class ResourceInitializer:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
             self.error(f"Fail to init accounts for resource {resource}, err({err}): {err_tb}")
             return False
+
+    def _fill_storage_holder(self, resource_info: OperatorResourceInfo):
+        resource_info.ether = EthereumAddress.from_private_key(resource_info.secret_key)
+        aid = resource_info.rid.to_bytes(math.ceil(resource_info.rid.bit_length() / 8), 'big')
+        resource_info.seed_list = [prefix + aid for prefix in [b"storage", b"holder"]]
+        builder = NeonIxBuilder(resource_info.public_key)
+        stage_list = [NeonCreatePermAccountStage(builder, seed, 0) for seed in resource_info.seed_list]
+        resource_info.storage, resource_info.holder = [s.sol_account for s in stage_list]
 
     def _validate_operator_balance(self, resource: OperatorResourceInfo) -> None:
         # Validate operator's account has enough SOLs
