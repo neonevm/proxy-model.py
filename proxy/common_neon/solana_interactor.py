@@ -249,7 +249,7 @@ class SolanaInteractor:
         }
         return self._send_rpc_request('getSlot', opts)
 
-    def get_account_info(self, pubkey: PublicKey, length=256, commitment='confirmed') -> Optional[AccountInfo]:
+    def get_account_info(self, pubkey: PublicKey, length=64 * 1024, commitment='confirmed') -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
@@ -277,7 +277,7 @@ class SolanaInteractor:
 
         return AccountInfo(account_tag, lamports, owner, data)
 
-    def get_account_info_list(self, src_account_list: List[PublicKey], length=256, commitment='confirmed') -> List[AccountInfo]:
+    def get_account_info_list(self, src_account_list: List[PublicKey], length=64 * 1024, commitment='confirmed') -> List[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
