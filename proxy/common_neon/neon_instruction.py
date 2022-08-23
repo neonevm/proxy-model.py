@@ -37,7 +37,7 @@ def create_account_with_seed_layout(base, seed, lamports, space):
 
 
 def create_account_layout(ether):
-    return bytes.fromhex("1f") + CREATE_ACCOUNT_LAYOUT.build(dict(ether=ether))
+    return bytes.fromhex("20") + CREATE_ACCOUNT_LAYOUT.build(dict(ether=ether))
 
 
 def write_holder_layout(nonce, offset, data):
@@ -303,7 +303,7 @@ class NeonInstruction:
 
         instructions.append(TransactionInstruction(
             program_id=EVM_LOADER_ID,
-            data=bytes.fromhex("1e") + bytes(user_ether_address),
+            data=bytes.fromhex("1f") + bytes(user_ether_address),
             keys=[
                 AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),

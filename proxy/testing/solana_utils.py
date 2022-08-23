@@ -328,7 +328,7 @@ class EvmLoader:
 
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
-            data=bytes.fromhex("1e") + self.ether2bytes(user_ether_address),
+            data=bytes.fromhex("1f") + self.ether2bytes(user_ether_address),
             keys=[
                 AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
@@ -416,7 +416,7 @@ class EvmLoader:
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
 
         base = self.acc.get_acc().public_key()
-        data = bytes.fromhex('1f') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=self.ether2bytes(ether)))
+        data = bytes.fromhex('20') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=self.ether2bytes(ether)))
         trx = TransactionWithComputeBudget()
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
