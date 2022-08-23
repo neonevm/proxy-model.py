@@ -2,25 +2,36 @@ import sys
 import atheris
 
 from random import choice
+from proxy.common_neon.config import Config
+
+from proxy.mempool.mempool_service import MPService
 from ..neon_rpc_api_model import NeonRpcApiWorker
+from ..common_neon.errors import InvalidParamError
 
 global tag
+global config
+global mempool_service
+global model
+
 tag = ["latest", "pending"]
+config = Config()
+mempool_service = MPService(config)
+mempool_service.start()
+model = NeonRpcApiWorker()
 
 
 def TestEthgetBalance(data):
     try:
-        model = NeonRpcApiWorker()
         _ = model.eth_getBalance(account="0x" + data.hex(), tag=choice(tag))
-    except RuntimeError:
+    except InvalidParamError:
         None
 
 
 def main():
+    print("Starting...")
     atheris.instrument_all()
     atheris.Setup(sys.argv, TestEthgetBalance)
     atheris.Fuzz()
 
 
-if __name__ == "__main__":
-    main()
+main()

@@ -49,7 +49,7 @@ class NeonRpcApiWorker:
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = IndexerDB()
         self._stat_exporter: Optional[StatisticsExporter] = None
-        self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
+        self._mempool_client = MemPoolClient(("127.0.0.1", 9091))
 
         self._gas_price: Optional[MPGasPriceResult] = None
         self._last_gas_price_time = 0
@@ -548,13 +548,16 @@ class NeonRpcApiWorker:
             raise
 
     def _stat_tx_begin(self):
-        self._stat_exporter.stat_commit_tx_begin()
+        if self._stat_exporter is not None:
+            self._stat_exporter.stat_commit_tx_begin()
 
     def _stat_tx_success(self):
-        self._stat_exporter.stat_commit_tx_end_success()
+        if self._stat_exporter is not None:
+            self._stat_exporter.stat_commit_tx_end_success()
 
     def _stat_tx_failed(self):
-        self._stat_exporter.stat_commit_tx_end_failed(None)
+        if self._stat_exporter is not None:
+            self._stat_exporter.stat_commit_tx_end_failed(None)
 
     def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: Union[str, int]) -> Optional[Dict[str, Any]]:
         try:
