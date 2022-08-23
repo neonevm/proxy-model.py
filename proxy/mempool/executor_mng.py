@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from typing import List, Tuple, Deque, Set, cast
 
-from logged_groups import logged_group
+from logged_groups import logged_group, logging_context
 from neon_py.network import PipePickableDataClient
 
 from ..common_neon.config import IConfig
@@ -55,12 +55,13 @@ class MPExecutorMng(IMPExecutor):
             await ex_info.client.async_init()
 
     def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
-        executor_id, executor = self._get_executor()
-        if mp_request.type == MPRequestType.SendTransaction:
-            tx_hash = cast(MPTxRequest, mp_request).signature
-            self.debug(f"Tx: {tx_hash} - scheduled on executor: {executor_id}")
-        elif mp_request.type == MPRequestType.GetGasPrice:
-            self.debug(f"Calculate gas price scheduled on executor: {executor_id}")
+        with logging_context(req_id=mp_request.req_id):
+            executor_id, executor = self._get_executor()
+            if mp_request.type == MPRequestType.SendTransaction:
+                tx_hash = cast(MPTxRequest, mp_request).signature
+                self.debug(f"Tx: {tx_hash} - scheduled on executor: {executor_id}")
+            elif mp_request.type == MPRequestType.GetGasPrice:
+                self.debug(f"Calculate gas price scheduled on executor: {executor_id}")
         task = asyncio.get_event_loop().create_task(executor.send_data_async(mp_request))
         return MPTask(resource_id=executor_id, aio_task=task, mp_request=mp_request)
 

@@ -12,7 +12,7 @@ from ..common_neon.config import IConfig
 from .mempool import MemPool
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 
-from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceReq, MPPendingTxByHashReq, MPGasPriceReq
+from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest
 
 
 @logged_group("neon.MemPool")
@@ -49,14 +49,14 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             tx_request = cast(MPTxRequest, mp_request)
             return await self._mempool.schedule_mp_tx_request(tx_request)
         elif mp_request.type == MPRequestType.GetLastTxNonce:
-            pending_nonce_req = cast(MPPendingTxNonceReq, mp_request)
+            pending_nonce_req = cast(MPPendingTxNonceRequest, mp_request)
             return self._mempool.get_pending_tx_nonce(pending_nonce_req.sender)
         elif mp_request.type == MPRequestType.GetTxByHash:
-            pending_tx_by_hash_req = cast(MPPendingTxByHashReq, mp_request)
+            pending_tx_by_hash_req = cast(MPPendingTxByHashRequest, mp_request)
             return self._mempool.get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
         elif mp_request.type == MPRequestType.GetGasPrice:
             return self._mempool.get_gas_price()
-        self.error(f"Failed to process mp_reqeust, unknown type: {mp_request.type}")
+        self.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
 
     def process_maintenance_request(self, request: MaintenanceRequest) -> Result:
         if request.command == MaintenanceCommand.SuspendMemPool:

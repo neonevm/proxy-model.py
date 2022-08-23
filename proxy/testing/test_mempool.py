@@ -5,14 +5,14 @@ import logging
 from random import randint
 
 from web3 import Web3, Account
-from typing import Tuple, Any, List, Dict
+from typing import Any, List, Dict
 
 import unittest
 from unittest.mock import patch, MagicMock, call
 
-from ..mempool.mempool import MemPool, IMPExecutor
+from ..mempool.mempool import MemPool, IMPExecutor, MPTask
 from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxExecResult, MPTxExecResultCode
-from ..mempool.mempool_api import MPGasPriceReq, MPGasPriceResult, MPRequestType
+from ..mempool.mempool_api import MPGasPriceRequest, MPGasPriceResult, MPRequestType
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 from ..common_neon.eth_proto import Trx as NeonTx
 
@@ -54,8 +54,8 @@ class MockTask:
 
 
 class MockMPExecutor(IMPExecutor):
-    def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, MockTask]:
-        return 1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))
+    def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
+        return MPTask(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None)), mp_request)
 
     def is_available(self) -> bool:
         return False
@@ -81,7 +81,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self._executor = MockMPExecutor()
         self._mempool = MemPool(self._executor, capacity=4096)
-        price_request = MPGasPriceReq(req_id='test')
+        price_request = MPGasPriceRequest(req_id='test')
         price_result = MPGasPriceResult(suggested_gas_price=1, min_gas_price=1)
         self._mempool.process_mp_gas_price_result(price_request, price_result)
 

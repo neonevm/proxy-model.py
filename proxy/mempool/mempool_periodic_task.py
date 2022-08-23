@@ -3,9 +3,9 @@ import time
 import math
 import traceback
 import abc
-from typing import Optional, Any, TypeVar, Generic, cast
+from typing import Optional, TypeVar, Generic
 
-from logged_groups import logged_group
+from logged_groups import logged_group, logging_context
 
 from .mempool_api import MPTask, IMPExecutor
 
@@ -31,9 +31,9 @@ class MPPeriodicTask(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.A
         now_msec = math.ceil(now * 1000 % 1000)
         return f'{self._name}-{now_sec}.{now_msec}'
 
-    def _error(self, text: str, err: BaseException, extra: Any) -> None:
+    def _error(self, text: str, err: BaseException) -> None:
         err_tb = "".join(traceback.format_tb(err.__traceback__))
-        self.error(f"{text}. Error: {err}, Traceback: {err_tb}", extra=extra)
+        self.error(f"{text}. Error: {err}, Traceback: {err_tb}")
 
     def _try_to_submit_request(self) -> None:
         if not self._executor.is_available():
@@ -41,18 +41,16 @@ class MPPeriodicTask(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.A
         try:
             self._submit_request()
         except Exception as err:
-            self._error(f'Error during submitting {self._name} to executor', err, extra=None)
+            self._error(f'Error during submitting {self._name} to executor', err)
 
     @abc.abstractmethod
     def _submit_request(self) -> None:
         pass
 
-    def _submit_request_to_executor(self, *args, **kwargs):
+    def _submit_request_to_executor(self, mp_request: MPPeriodicTaskRequest):
         assert self._task is None
-
-        mp_request = MPPeriodicTaskRequest(req_id=self._generate_req_id(), *args, **kwargs)
-        resource_id, aio_task = self._executor.submit_mp_request(mp_request)
-        self._task = MPTask(resource_id=resource_id, aio_task=aio_task, mp_request=mp_request)
+        with logging_context(req_id=mp_request.req_id):
+            self._task = self._executor.submit_mp_request(mp_request)
 
     @abc.abstractmethod
     def _process_result(self, mp_request: MPPeriodicTaskRequest, mp_result: MPPeriodicTaskResult) -> None:
@@ -69,25 +67,33 @@ class MPPeriodicTask(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.A
 
         task = self._task
         self._task = None
-        try:
-            self._executor.release_resource(task.resource_id)
-            mp_request = cast(MPPeriodicTaskRequest, task.mp_request)
+        with logging_context(req_id=task.mp_request.req_id):
+            try:
+                self._check_request_status_impl(task)
+            except Exception as err:
+                self._error(f'Error during processing {self._name} on mempool', err)
 
-            err = task.aio_task.exception()
-            if err is not None:
-                self._error(f'Error during processing {self._name} on executor', err, extra=mp_request.log_req_id)
-                self._process_error(mp_request)
-                return
+    def _check_request_status_impl(self, task: MPTask) -> None:
+        self._executor.release_resource(task.resource_id)
 
-            mp_result = cast(MPPeriodicTaskResult, task.aio_task.result())
-            self._process_result(mp_request, mp_result)
-        except Exception as err:
-            self._error(f'Error during processing {self._name} on mempool', err, extra=task.mp_request.log_req_id)
+        err = task.aio_task.exception()
+        if err is not None:
+            self._error(f'Error during processing {self._name} on executor', err)
+            self._process_error(task.mp_request)
+            return
+
+        mp_result = task.aio_task.result()
+        if mp_result is None:
+            self.error(f'Empty result from the executor')
+            self._process_error(task.mp_request)
+            return
+
+        self._process_result(task.mp_request, mp_result)
 
     async def _process_task_loop(self) -> None:
         self._try_to_submit_request()  # first request
         while True:
-            if self._processing_task is not None:
+            if self._task is not None:
                 await asyncio.sleep(self.CHECK_TASK_TIMEOUT_SEC)
                 self._check_request_status()
             else:

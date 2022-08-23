@@ -49,23 +49,19 @@ class MPRequestType(IntEnum):
 @dataclass
 class MPRequest:
     req_id: str
-    type: MPRequestType
-
-    def __post_init__(self):
-        self.log_req_id = {"context": {"req_id": self.req_id}}
+    type: MPRequestType = MPRequestType.Dummy
 
 
 @dataclass
 class MPTxRequest(MPRequest):
-    nonce: int
-    signature: str
-    neon_tx: NeonTx
-    neon_tx_exec_cfg: NeonTxExecCfg
-    sender_address: str
-    gas_price: int
+    nonce: int = 0
+    signature: str = None
+    neon_tx: Optional[NeonTx] = None
+    neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
+    sender_address: str = None
+    gas_price: int = 0
 
     def __post_init__(self):
-        super().__post_init__()
         self.gas_price = self.neon_tx.gasPrice
         self.nonce = self.neon_tx.nonce
         self.sender_address = "0x" + self.neon_tx.sender()
@@ -73,36 +69,32 @@ class MPTxRequest(MPRequest):
 
 
 @dataclass
-class MPPendingTxNonceReq(MPRequest):
+class MPPendingTxNonceRequest(MPRequest):
     sender: str = None
 
     def __post_init__(self):
-        super().__post_init__()
         self.type = MPRequestType.GetLastTxNonce
 
 
 @dataclass
-class MPPendingTxByHashReq(MPRequest):
+class MPPendingTxByHashRequest(MPRequest):
     tx_hash: str = None
 
     def __post_init__(self):
-        super().__post_init__()
         self.type = MPRequestType.GetTxByHash
 
 
 @dataclass
-class MPGasPriceReq(MPRequest):
+class MPGasPriceRequest(MPRequest):
     def __post_init__(self):
-        super().__post_init__()
         self.type = MPRequestType.GetGasPrice
 
 
 @dataclass
-class MPSenderTxCntReq(MPRequest):
-    sender_list: List[str]
+class MPSenderTxCntRequest(MPRequest):
+    sender_list: List[str] = None
 
     def __post_init__(self):
-        super().__post_init__()
         self.type = MPRequestType.GetStateTxCnt
 
 
