@@ -123,6 +123,8 @@ class NeonTxSendCtx:
 
         self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
 
+        self._is_holder_completed = False
+
     def init(self):
         self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.account_dict)
 
@@ -173,8 +175,8 @@ class NeonTxSendCtx:
         return self._neon_tx_exec_cfg.state_tx_cnt
 
     @property
-    def is_holder_completed(self):
-        return self._neon_tx_exec_cfg.is_holder_completed
+    def is_holder_completed(self) -> bool:
+        return self._is_holder_completed
 
     def set_holder_completed(self, value=True) -> None:
-        self._neon_tx_exec_cfg.set_holder_completed(value)
+        self._is_holder_completed = value

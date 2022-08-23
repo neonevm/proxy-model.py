@@ -38,7 +38,6 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int,
 
 
 class MockTask:
-
     def __init__(self, result: Any, is_done: bool = True, exception: Exception = None):
         self._result = result
         self._is_done = is_done
@@ -55,7 +54,6 @@ class MockTask:
 
 
 class MockMPExecutor(IMPExecutor):
-
     def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, MockTask]:
         return 1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))
 
@@ -346,7 +344,7 @@ class TestMPSenderTxPool(unittest.TestCase):
             self.assertEqual(1, self._pool.len())
 
     def test_fail_tx(self):
-       tx = self._pool.acquire_tx()
-       self.assertTrue(self._pool.is_processing())
-       self._pool.fail_tx(tx)
-       self.assertEqual(self._pool.len(), 0)
+        tx = self._pool.acquire_tx()
+        self.assertTrue(self._pool.is_processing())
+        self._pool.fail_tx(tx)
+        self.assertEqual(self._pool.len(), 0)

@@ -10,7 +10,7 @@ from neon_py.network import PipePickableDataClient
 
 from ..common_neon.config import IConfig
 
-from .mempool_api import MPRequest, IMPExecutor, MPRequestType, MPTxRequest
+from .mempool_api import MPRequest, IMPExecutor, MPTask, MPRequestType, MPTxRequest
 from .mempool_executor import MPExecutor
 
 
@@ -54,7 +54,7 @@ class MPExecutorMng(IMPExecutor):
         for ex_info in self._executors:
             await ex_info.client.async_init()
 
-    def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, asyncio.Task]:
+    def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
         executor_id, executor = self._get_executor()
         if mp_request.type == MPRequestType.SendTransaction:
             tx_hash = cast(MPTxRequest, mp_request).signature
@@ -62,7 +62,7 @@ class MPExecutorMng(IMPExecutor):
         elif mp_request.type == MPRequestType.GetGasPrice:
             self.debug(f"Calculate gas price scheduled on executor: {executor_id}")
         task = asyncio.get_event_loop().create_task(executor.send_data_async(mp_request))
-        return executor_id, task
+        return MPTask(resource_id=executor_id, aio_task=task, mp_request=mp_request)
 
     def is_available(self) -> bool:
         return self._has_available()

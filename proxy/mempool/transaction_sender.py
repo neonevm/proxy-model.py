@@ -22,7 +22,7 @@ from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxReceiptInfo
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.utils import NeonTxResultInfo
-from ..common_neon.data import NeonTxExecCfg, NeonEmulatedResult
+from ..common_neon.data import NeonEmulatedResult
 from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.evm_log_decoder import decode_neon_tx_result
@@ -615,7 +615,6 @@ class NeonTxSendStrategyExecutor:
         self._operator = f'{str(self._ctx.resource)}'
 
     def execute(self) -> NeonTxResultInfo:
-        self._ctx.neon_tx_exec_cfg.set_state_tx_cnt(self._get_state_tx_cnt())
         self._validate_nonce()
         self._ctx.init()
         return self._execute()
@@ -626,11 +625,13 @@ class NeonTxSendStrategyExecutor:
 
     def _emulate_neon_tx(self) -> None:
         emulated_result: NeonEmulatedResult = call_trx_emulated(self._ctx.neon_tx)
-        state_tx_cnt = self._get_state_tx_cnt()
-        self._ctx.neon_tx_exec_cfg.set_emulated_result(emulated_result).set_state_tx_cnt(state_tx_cnt)
+        self._ctx.neon_tx_exec_cfg.set_emulated_result(emulated_result)
+        self._validate_nonce()
         self._ctx.init()
 
     def _validate_nonce(self) -> None:
+        state_tx_cnt = self._get_state_tx_cnt()
+        self._ctx.neon_tx_exec_cfg.set_state_tx_cnt(state_tx_cnt)
         if self._ctx.state_tx_cnt > self._ctx.neon_tx.nonce:
             raise NonceTooLowError()
 

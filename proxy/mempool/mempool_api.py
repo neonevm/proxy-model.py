@@ -2,17 +2,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Tuple, Optional
+from typing import Any, Optional, List
 from abc import ABC, abstractmethod
-from asyncio import Task
+
+import asyncio
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
 
 
+@dataclass
+class MPTask:
+    resource_id: int
+    aio_task: asyncio.Task
+    mp_request: MPRequest
+
+
 class IMPExecutor(ABC):
     @abstractmethod
-    def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, Task]:
+    def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
         pass
 
     @abstractmethod
@@ -34,9 +42,11 @@ class MPRequestType(IntEnum):
     GetLastTxNonce = 1,
     GetTxByHash = 2,
     GetGasPrice = 3,
+    GetStateTxCnt = 4,
     Dummy = -1
 
 
+@dataclass
 class MPRequest:
     req_id: str
     type: MPRequestType
@@ -87,6 +97,15 @@ class MPGasPriceReq(MPRequest):
         self.type = MPRequestType.GetGasPrice
 
 
+@dataclass
+class MPSenderTxCntReq(MPRequest):
+    sender_list: List[str]
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.type = MPRequestType.GetStateTxCnt
+
+
 class MPTxExecResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
@@ -120,3 +139,14 @@ class MPTxSendResult:
 class MPGasPriceResult:
     suggested_gas_price: int
     min_gas_price: int
+
+
+@dataclass
+class MPSenderTxCntData:
+    sender: str
+    state_tx_cnt: int
+
+
+@dataclass
+class MPSenderTxCntResult:
+    sender_tx_cnt_list: List[MPSenderTxCntData]
