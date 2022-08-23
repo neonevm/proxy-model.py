@@ -142,7 +142,14 @@ class NeonTxSendCtx:
 
         self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
 
-        self._is_holder_completed = False
+        self._is_holder_completed = self.check_holder()
+
+    def check_holder(self) -> bool:
+        holder_msg_len = 1 + len(self._builder.holder_msg)
+        holder_info = self._solana.get_account_info(self._resource.holder, holder_msg_len)
+        if not holder_info or len(holder_info.data) < holder_msg_len:
+            return False
+        return holder_info.data[1:] == self._builder.holder_msg
 
     @property
     def neon_sig(self) -> str:
@@ -597,6 +604,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         assert self.is_valid()
 
         if self._ctx.is_holder_completed:
+            self.debug(f"Using same holder account w/o rewriting")
             return []
 
         # write eth transaction to the holder account
