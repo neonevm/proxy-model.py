@@ -16,6 +16,13 @@ jobs:
        sanitizer:
           - undefined
     steps:
+    - name: Checkout source
+      uses: actions/checkout@v2
+      id: checkout
+      with:
+        path: storage/proxy-model.py
+        submodules: true
+
     - name: Build Fuzzers (${{ matrix.sanitizer }})
       id: build
       uses: google/clusterfuzzlite/actions/build_fuzzers@50707aeae5d98426f417414b7854fdf47bc4def6
