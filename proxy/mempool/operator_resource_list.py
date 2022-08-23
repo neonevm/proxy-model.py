@@ -221,8 +221,6 @@ class OperatorResourceManager:
         self._config = config
 
         self._init_resource_list()
-
-    def start_periodical_checker(self):
         self._check_resources_task = asyncio.get_event_loop().create_task(self._check_resources_schedule())
 
     def _init_resource_list(self):

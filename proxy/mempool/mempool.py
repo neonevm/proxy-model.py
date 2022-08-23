@@ -23,7 +23,7 @@ class MemPool:
         self.info(f"Init mempool schedule with capacity: {config.get_mempool_capacity()}")
         self._tx_schedule = MPTxSchedule(config.get_mempool_capacity())
         self._resource_mng = OperatorResourceManager(config)
-        self._resource_mng.start_periodical_checker()
+
         self._schedule_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         self._process_tx_results_task = asyncio.get_event_loop().create_task(self.check_processing_tasks())
