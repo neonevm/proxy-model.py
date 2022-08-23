@@ -271,7 +271,10 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         BaseNeonTxStrategy.__init__(self, *args, **kwargs)
 
     def _validate(self) -> bool:
-        if (not self._validate_steps()) or (not self._validate_notdeploy_tx()) or (not self._validate_gas_limit()):
+        if (not self._validate_steps()) \
+                or (not self._validate_notdeploy_tx()) \
+                or (not self._validate_no_additional_resize_steps()) \
+                or (not self._validate_gas_limit()):
             return False
 
         # Attempting to include create accounts instructions into the transaction
@@ -286,6 +289,13 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy, abc.ABC):
         if steps_emulated > self.steps:
             self.error = 'Too big number of EVM steps'
             return False
+        return True
+
+    def _validate_no_additional_resize_steps(self) -> bool:
+        for account in self._precheck_result.emulating_result["accounts"]:
+            if bool(account["additional_resize_steps"] or False):
+                self.error = "Additional resize steps"
+                return False
         return True
 
     def build_tx(self, _=0) -> TransactionWithComputeBudget:
