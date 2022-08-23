@@ -246,7 +246,7 @@ class OperatorResourceManager:
     def _get_current_time() -> int:
         return math.ceil(datetime.now().timestamp())
 
-    def _recheck_bad_resource_list(self) -> int:
+    def _recheck_bad_resource_list(self):
         if not len(self._bad_resource_list):
             return
 
