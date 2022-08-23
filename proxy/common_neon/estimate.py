@@ -39,12 +39,10 @@ class GasEstimate:
     def _resize_cost(self) -> int:
         cost = 0
 
-        # Some accounts may not exist at the emulation time
-        # Calculate gas for them separately
         accounts_size = [
-            a["size"]
+            int(a["size"] or 0) - int(a["size_current"] or 0)
             for a in self.emulator_json.get("accounts", [])
-            if (not a["size_current"]) and a["size"]
+            if int(a["size"] or 0) > int(a["size_current"] or 0)
         ]
 
         if not accounts_size:
