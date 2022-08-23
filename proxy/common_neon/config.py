@@ -2,10 +2,9 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from solana.publickey import PublicKey
 
-from .environment_data import EVM_LOADER_ID, EVM_STEP_COUNT, MEMPOOL_CAPACITY
-from .environment_data import MIN_OPERATOR_BALANCE_TO_ERR, MIN_OPERATOR_BALANCE_TO_WARN
-from .environment_data import PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, SOLANA_URL, STORAGE_SIZE
-from .environment_data import PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
+from .environment_data import EVM_LOADER_ID, EVM_STEP_COUNT, MEMPOOL_CAPACITY, MIN_OPERATOR_BALANCE_TO_ERR, \
+                              MIN_OPERATOR_BALANCE_TO_WARN, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, SOLANA_URL, \
+                              STORAGE_SIZE, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
 
 
 class IConfig(ABC):

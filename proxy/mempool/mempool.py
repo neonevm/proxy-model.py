@@ -4,37 +4,33 @@ from typing import List, Tuple, Optional, cast
 from logged_groups import logged_group
 from neon_py.data import Result
 
-from ..common_neon.config import IConfig
 from ..common_neon.eth_proto import Trx as NeonTx
 
-from .operator_resource_mng import OperatorResourceMng, OperatorResourceInfo, IOperatorResourceMngUser
+from .operator_resource_mng import OperatorResourceInfo, IResourceManager
 from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest, \
                          MPPendingTxNonceReq, MPPendingTxByHashReq, MPSendTxResult
 from .mempool_schedule import MPTxSchedule
 
 
 @logged_group("neon.MemPool")
-class MemPool(IOperatorResourceMngUser):
+class MemPool:
 
     CHECK_TASK_TIMEOUT_SEC = 0.01
     RESCHEDULE_TIMEOUT_SEC = 0.4
 
-    # IOperatorResourceManagerUser
     def on_operator_resource_released(self):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
-    # IOperatorResourceManagerUser
 
-    def __init__(self, executor: IMPExecutor, config: IConfig):
-        self.info(f"Init mempool schedule with capacity: {config.get_mempool_capacity()}")
-        self._tx_schedule = MPTxSchedule(config.get_mempool_capacity())
-        self._resource_mng = OperatorResourceMng(self, config)
-
+    def __init__(self, resource_mng: IResourceManager, executor: IMPExecutor, mempool_capacity: int):
+        self.info(f"Init mempool schedule with capacity: {mempool_capacity}")
+        self._tx_schedule = MPTxSchedule(mempool_capacity)
         self._schedule_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         self._process_tx_results_task = asyncio.get_event_loop().create_task(self.check_processing_tasks())
         self._process_schedule_task = asyncio.get_event_loop().create_task(self.process_tx_schedule())
         self._is_active: bool = True
         self._executor = executor
+        self._resource_mng = resource_mng
 
     async def enqueue_mp_request(self, mp_request: MPRequest):
         if mp_request.type == MPRequestType.SendTransaction:
@@ -88,8 +84,6 @@ class MemPool(IOperatorResourceMngUser):
                         self.error(f"Failed to get the transaction: {tx_hash}.")
                         self._resource_mng.deallocate_resource(tx_hash)
                         break
-
-                    mp_request.resource = operator_resource_info
 
                     try:
                         log_ctx = {"context": {"req_id": mp_request.req_id}}

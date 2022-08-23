@@ -218,8 +218,31 @@ class IOperatorResourceMngUser(abc.ABC):
         pass
 
 
+class IResourceManager(abc.ABC):
+
+    @abc.abstractmethod
+    def get_resource(self, tx_hash: str) -> Optional[OperatorResourceInfo]:
+        pass
+
+    @abc.abstractmethod
+    def deallocate_resource(self, tx_hash: str) -> None:
+        pass
+
+    @abc.abstractmethod
+    def on_bad_resource_info(self, tx_hash: str) -> None:
+        pass
+
+    @abc.abstractmethod
+    def release_resource_info(self, tx_hash: str) -> None:
+        pass
+
+    @abc.abstractmethod
+    def update_allocated_resource(self, tx_hash: str) -> None:
+        pass
+
+
 @logged_group("neon.MemPool")
-class OperatorResourceMng:
+class OperatorResourceMng(IResourceManager):
 
     def __init__(self, user: IOperatorResourceMngUser, config: IConfig):
         self._user = user

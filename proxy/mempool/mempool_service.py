@@ -6,6 +6,7 @@ from typing import Any, cast
 from neon_py.network import AddrPickableDataSrv, IPickableDataServerUser
 from neon_py.maintenance_api import MaintenanceRequest, MaintenanceCommand
 from neon_py.data import Result
+from .operator_resource_mng import OperatorResourceMng, IOperatorResourceMngUser
 
 from ..common_neon.config import IConfig
 
@@ -16,7 +17,7 @@ from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonce
 
 
 @logged_group("neon.MemPool")
-class MPService(IPickableDataServerUser, IMPExecutorMngUser):
+class MPService(IPickableDataServerUser, IMPExecutorMngUser, IOperatorResourceMngUser):
 
     MP_SERVICE_ADDR = ("0.0.0.0", 9091)
     MP_MAINTENANCE_ADDR = ("0.0.0.0", 9092)
@@ -63,12 +64,19 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         self.error(f"Failed to process maintenance mp_reqeust, unknown command: {request.command}")
 
     def run(self):
-        self._mempool_server = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
-        self._mempool_maintenance_srv = AddrPickableDataSrv(user=self, address=self.MP_MAINTENANCE_ADDR)
-        self._mp_executor_mng = MPExecutorMng(self, self.EXECUTOR_COUNT, self._config)
-        self._mempool = MemPool(self._mp_executor_mng, self._config)
-        self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
-        self.event_loop.run_forever()
+        try:
+            self._mempool_server = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
+            self._mempool_maintenance_srv = AddrPickableDataSrv(user=self, address=self.MP_MAINTENANCE_ADDR)
+            self._mp_executor_mng = MPExecutorMng(self, self.EXECUTOR_COUNT, self._config)
+            self._resource_mng = OperatorResourceMng(self, self._config)
+            self._mempool = MemPool(self._resource_mng, self._mp_executor_mng, self._config.get_mempool_capacity())
+            self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
+            self.event_loop.run_forever()
+        except Exception as err:
+            self.error(f"Failed to run mempool_service: {err}")
 
     def on_resource_released(self, resource_id: int):
         self._mempool.on_resource_got_available(resource_id)
+
+    def on_operator_resource_released(self):
+        self._mempool.on_operator_resource_released()
