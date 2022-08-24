@@ -143,7 +143,6 @@ class NeonCreatePermAccountStage(NeonCreateAccountWithSeedStage):
         self.tx.add(self._create_account_with_seed())
 
 
-@logged_group("neon.Proxy")
 class NeonDeletePermAccountStage(NeonCreatePermAccountStage):
     NAME = 'refundPermAccount'
 

@@ -3,18 +3,20 @@ import multiprocessing as mp
 import socket
 import traceback
 
+
 from logged_groups import logged_group, logging_context
 from typing import Optional, Any
 from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 
 from ..common_neon.gas_price_calculator import GasPriceCalculator
-from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError
+from ..common_neon.errors import BadResourceError, BlockedAccountsError
+from ..common_neon.errors import NodeBehindError, SolanaUnavailableError
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.config import IConfig
 from ..common_neon.config import Config
 
 from .transaction_sender import NeonTxSendStrategyExecutor
-from .operator_resource_list import OperatorResourceList
+from .operator_resource_mng import ResourceInitializer, OperatorResourceInfo
 from .mempool_api import MPTxRequest, MPTxResult, MPResultCode
 
 
@@ -51,16 +53,19 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._gas_price_calculator.update_mapping()
         self._gas_price_calculator.try_update_gas_price()
 
-    def execute_neon_tx(self, mp_tx_request: MPTxRequest):
+    def execute_neon_tx(self, mp_tx_request: MPTxRequest, operator_resource_info: OperatorResourceInfo):
         with logging_context(req_id=mp_tx_request.req_id, exectr=self._id):
             try:
                 if mp_tx_request.gas_price < self._gas_price_calculator.get_min_gas_price():
                     self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got low gas price error")
                     return MPTxResult(MPResultCode.LowGasPrice, None)
-                self.execute_neon_tx_impl(mp_tx_request)
+                self.execute_neon_tx_impl(mp_tx_request, operator_resource_info)
             except BlockedAccountsError:
                 self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got blocked accounts result")
                 return MPTxResult(MPResultCode.BlockedAccount, None)
+            except BadResourceError:
+                self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got bad resource error")
+                return MPTxResult(MPResultCode.BadResourceError, None)
             except NodeBehindError:
                 self.debug(f"Failed to execute neon_tx: {mp_tx_request.log_str}, got node behind error")
                 return MPTxResult(MPResultCode.SolanaUnavailable, None)
@@ -73,23 +78,24 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
                 return MPTxResult(MPResultCode.Unspecified, None)
             return MPTxResult(MPResultCode.Done, None)
 
-    def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest):
+    def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest, operator_resource: OperatorResourceInfo):
         neon_tx = mp_tx_request.neon_tx
         neon_tx_exec_cfg = mp_tx_request.neon_tx_exec_cfg
+        resource = operator_resource
+
+        if not ResourceInitializer(self._config, self._solana_interactor).init_resource(resource):
+            self.debug(f"Got bad resource error")
+            raise BadResourceError()
         if neon_tx_exec_cfg is None:
             self.error("Failed to process mp_tx_request, neon_tx_exec_cfg is not set")
             return
 
-        resource_list = OperatorResourceList(self._solana_interactor)
-        resource = resource_list.get_available_resource_info()
-        try:
-            strategy_executor = NeonTxSendStrategyExecutor(self._solana_interactor, resource, neon_tx)
-            strategy_executor.execute(neon_tx_exec_cfg)
-        finally:
-            resource_list.free_resource_info(resource)
+        strategy_executor = NeonTxSendStrategyExecutor(self._solana_interactor, resource, neon_tx)
+        strategy_executor.execute(neon_tx_exec_cfg)
 
     async def on_data_received(self, data: Any) -> Any:
-        return self.execute_neon_tx(data)
+        mp_tx_request, operator_resource_info = data
+        return self.execute_neon_tx(mp_tx_request, operator_resource_info)
 
     def run(self) -> None:
         self._config = Config()
