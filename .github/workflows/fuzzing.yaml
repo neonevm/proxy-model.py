@@ -7,6 +7,8 @@ permissions: read-all
 jobs:
   PR:
     runs-on: [self-hosted, linux]
+    container:
+      image: gcr.io/oss-fuzz-base/base-builder-python
     concurrency:
       group: ${{ github.workflow }}-${{ matrix.sanitizer }}-${{ github.ref }}
       cancel-in-progress: true
@@ -17,11 +19,11 @@ jobs:
           - undefined
     steps:
     - name: Checkout submodules
-      run: |
-          cd ${{ github.workspace }}/storage/proxy-model.py
-          ls -lan
-          git checkout .
-          git submodule update --init --recursive
+      uses: actions/checkout@v3
+      id: checkout
+      with:
+        path: storage/proxy-model.py
+        submodules: true
 
     - name: Build Fuzzers (${{ matrix.sanitizer }})
       id: build

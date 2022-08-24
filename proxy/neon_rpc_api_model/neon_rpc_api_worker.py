@@ -152,7 +152,6 @@ class NeonRpcApiWorker:
             tag = tag.lower().strip()
             assert len(tag) == 66
             assert tag[:2] == '0x'
-
             int(tag[2:], 16)
             return tag
         except (Exception,):
