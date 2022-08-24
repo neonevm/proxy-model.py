@@ -84,18 +84,18 @@ class MPSenderTxPool:
         self.debug(f"New mp_tx_request: {mp_tx_request.log_str} - inserted at: {index}")
         return MPSendTxResult(success=True, last_nonce=last_nonce)
 
-    def get_tx(self):
+    def peek_tx(self):
         return None if self.is_empty() else self._tx_list[0]
 
-    def get_tx_good_for_processing(self):
+    def peek_tx_to_process(self):
         if self.is_processing():
             return None
-        return self.get_tx()
+        return self.peek_tx()
 
     def acquire_tx(self):
         if self.is_processing():
             return None
-        self._processing_tx = self.get_tx()
+        self._processing_tx = self.peek_tx()
         return self._processing_tx
 
     def len(self) -> int:
@@ -107,7 +107,7 @@ class MPSenderTxPool:
         return self._tx_list[-1].nonce
 
     def first_tx_gas_price(self):
-        tx = self.get_tx()
+        tx = self.peek_tx()
         return tx.gas_price if tx is not None else 0
 
     def _validate_processing_tx(self, action: str, nonce: int) -> bool:
@@ -253,13 +253,13 @@ class MPTxSchedule:
 
         return tx
 
-    def get_tx_good_for_execution(self) -> Optional[str]:
+    def peek_tx_to_process(self) -> Optional[str]:
         if len(self._sender_tx_pools) == 0:
             return None
 
         tx_hash: Optional[str] = None
         for sender_txs in self._sender_tx_pools:
-            tx = sender_txs.get_tx_good_for_processing()
+            tx = sender_txs.peek_tx_to_process()
             if tx is None:
                 continue
             tx_hash = tx.signature

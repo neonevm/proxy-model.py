@@ -71,7 +71,7 @@ class MemPool:
                 await self._schedule_cond.wait_for(self.is_active)
                 self.debug(f"Schedule processing  got awake, condition: {self._schedule_cond.__repr__()}")
                 while self._executor.is_available():
-                    tx_hash = self._tx_schedule.get_tx_good_for_execution()
+                    tx_hash = self._tx_schedule.peek_tx_to_process()
                     if tx_hash is None:
                         break
 

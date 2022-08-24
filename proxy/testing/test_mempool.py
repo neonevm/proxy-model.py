@@ -356,7 +356,7 @@ class TestMPSenderTxPool(unittest.TestCase):
         """Checks if transaction pool drops the request with highest nonce properly"""
         self._pool.drop_last_request()
         self.assertEqual(self._pool.len(), 4)
-        self.assertEqual(self._pool.get_tx(), self._requests[0])
+        self.assertEqual(self._pool.peek_tx(), self._requests[0])
         self.assertEqual(self._pool._tx_list[-1], self._requests[3])
 
     def test_drop_last_request_if_processing(self):
