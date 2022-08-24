@@ -5,97 +5,71 @@ evm_loader_addr = EVM_LOADER_ID
 erc20_wrapper = '0xf8658080831fc02094e442c8a04cde867473ab5dd4c9f3dd369945023380b844'
 wrapper_whitelist = [erc20_wrapper]
 
-token_airdrop_address = '0xaa2c8c7375bd9d47d4d80c9a193b4b7438df7d2e'
+token_airdrop_address = '0x7DB850f3a9CA0de897018cBa1eb2c2c86B3A0C6C'
 
 # Solana`s transaction for simple case airdrop
 pre_token_airdrop_trx = {
-    'blockTime': 1660736942,
+    'blockTime': 1661371581,
     'meta': {
         'err': None,
         'fee': 10000,
         'innerInstructions': [
             {
-                'index': 2,
-                'instructions': [  # INNER INSTRUCTIONS OF CREATE ACCOUNT
-                    {
-                        'accounts': [
-                            0,
-                            1
-                        ],
-                        'data': '11115hqdWRoDRcQ1DD5PkJT6w8q5Cw77Q7CPkvGV6qUEaJaN9biJc7L3fqUjHMSRcUWmcB',
-                        'programIdIndex': 9
-                    }
-                ]
-            },
-            {
-                'index': 5,
+                'index': 4,
                 'instructions': [  # INNER INSTRUCTIONS OF CLAIM
                     {
                         'accounts': [
                             0,
-                            3
+                            2
                         ],
                         'data': '3Bxs4PckVVt51W8w',
-                        'programIdIndex': 9
+                        'programIdIndex': 11
                     },
                     {
                         'accounts': [
                             0,
-                            7
+                            8
                         ],
                         'data': '11119os1e9qSs2u7TsThXqkBSRVFxhmYaFKFZ1waB2X7armDmvK3p5GmLdUxYdg3h7QSrL',
-                        'programIdIndex': 9
+                        'programIdIndex': 11
                     },
                     {
                         'accounts': [
-                            7,  # <== new token account
-                            8,  # <== mint account
-                            6
+                            8,  # <== new token account
+                            6,  # <== mint account
+                            5
                         ],
-                        'data': '5rFyaxnaeJ5ZNXwaRKi5ocMLmu3xdwuHAykr2EVUsZQzV',
-                        'programIdIndex': 5  # TOKEN INITIALIZE ACCOUNT 2
+                        'data': '61c59tWbmzV9e3A7GPqmmvSupf6MoE1jCAj8E93iRNmXS',
+                        'programIdIndex': 7  # TOKEN INITIALIZE ACCOUNT 2
                     },
                     {
                         'accounts': [
-                            2,
-                            7,  # <== new ERC20 token account
-                            1   # <== new Neon account
+                            1,
+                            8,  # <== new ERC20 token account
+                            3   # <== new Neon account
                         ],
                         'data': '3QK1PgBtAWnb',
-                        'programIdIndex': 5  # TOKEN TRANSFER
-                    },
-                    {
-                        'accounts': [],
-                        'data': 'APLWvPP1wEXUDXKD4tLjjB2iZZ264guETNt9mAjuF65Dxe81Wqvba6AYa6yMs3Q3oVZgdR3Lef3uWrJ418u3TCyjEjgfJjqWwddReY4U9a8uctVe8mCx2rh3x3pMTYqQkSE9w4jNSY7RV8fM9xda5ATaivshH87XRwb5fhXdKdyopakigSvM6bxoN8pUhnU9gt3m8qaH2W4xpbqCRvZaaK',
-                        'programIdIndex': 12  # EVM ON EVENT
-                    },
-                    {
-                        'accounts': [],
-                        'data': '6sphUX89AzLs9pxG3HPWwWLrGsSqqZJEUgKaVZNraXkRdURmCDjtonqgc',
-                        'programIdIndex': 12  # EVM ON RETURN
+                        'programIdIndex': 7  # TOKEN TRANSFER
                     }
                 ]
             }
         ],
         'loadedAddresses': {
-            'readonly': [],
-            'writable': []
+            'readonly': [
+
+            ],
+            'writable': [
+
+            ]
         },
         'logMessages': [
             'Program ComputeBudget111111111111111111111111111111 invoke [1]',
             'Program ComputeBudget111111111111111111111111111111 success',
             'Program ComputeBudget111111111111111111111111111111 invoke [1]',
             'Program ComputeBudget111111111111111111111111111111 success',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io invoke [1]',
-            'Program log: Instruction: Create Account',
-            'Program 11111111111111111111111111111111 invoke [2]',
-            'Program 11111111111111111111111111111111 success',
-            'Program log: Total memory occupied: 488',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io consumed 8570 of 499944 compute units',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io success',
             'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [1]',
             'Program log: Instruction: Approve',
-            'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 2284 of 491318 compute units',
+            'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 2284 of 499944 compute units',
             'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success',
             'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io invoke [1]',
             'Program log: Instruction: Execute Transaction from Instruction',
@@ -106,47 +80,41 @@ pre_token_airdrop_trx = {
             'Program 11111111111111111111111111111111 success',
             'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]',
             'Program log: Instruction: InitializeAccount2',
-            'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 3394 of 269948 compute units',
+            'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 3394 of 276156 compute units',
             'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success',
             'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]',
             'Program log: Instruction: Transfer',
-            'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 3131 of 263538 compute units',
+            'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 3131 of 269758 compute units',
             'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io invoke [2]',
-            'Program log: Total memory occupied: 0',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io consumed 715 of 258787 compute units',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io success',
+            'Program data: TE9HMw== s0BDV7HHvcd92RP1KhTUE4miOsg= AwAAAAAAAAA= 3fJSrRviyJtpwrBo/DeNqpUrp/FjxKEWKPVaTfUjs+8= AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= AAAAAAAAAAAAAAAAfbhQ86nKDeiXAYy6HrLCyGs6DGw=  AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4kA=',
             'Program log: Applies done',
             'Program log: ExitSucceed: Machine encountered an explict return. exit_status=0x12',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io invoke [2]',
-            'Program log: Total memory occupied: 0',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io consumed 717 of 255363 compute units',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io success',
-            'Program log: Total memory occupied: 26080',
-            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io consumed 235874 of 488978 compute units',
+            'Program data: UkVUVVJO Eg== EJkfAAAAAAA= AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=',
+            'Program log: Total memory occupied: 25881',
+            'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io consumed 235891 of 497604 compute units',
             'Program 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io success'
         ],
         'postBalances': [
-            999996553720,
-            1392000,
+            999997945720,
             2039280,
             895880,
+            1392000,
             93257040,
-            953185920,
             1009200,
-            2039280,
             1461600,
-            1,
+            953185920,
+            2039280,
             1,
             0,
-            8147821440,
+            1,
+            8588640000,
             1
         ],
         'postTokenBalances': [
             {
-                'accountIndex': 2,
-                'mint': 'A6oAjJEPNc5rf6WrQTu3E7hzsydRCc2XLv73CnYNkCW3',
-                'owner': '9JgndtJuNH5aAiEe9c7FeaEjy3sw7yX7a499WH51B9A6',
+                'accountIndex': 1,
+                'mint': 'EL12Jzpv4wpxC2k13r92b8xtoqYWZPe8MEkQU3LfQU22',
+                'owner': 'd8wjSokAHEM9V4hCiFao17TRR2piKJXYs9PEJt6rgbg',
                 'programId': 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
                 'uiTokenAmount': {
                     'amount': '999999876544',
@@ -156,9 +124,9 @@ pre_token_airdrop_trx = {
                 }
             },
             {
-                'accountIndex': 7,
-                'mint': 'A6oAjJEPNc5rf6WrQTu3E7hzsydRCc2XLv73CnYNkCW3',
-                'owner': '6auf2AZ3bKm5Qd3jguF4WpWRu9fU2a9fEwapTkebJB45',
+                'accountIndex': 8,
+                'mint': 'EL12Jzpv4wpxC2k13r92b8xtoqYWZPe8MEkQU3LfQU22',
+                'owner': 'Fw1DwtaBHjMLuqaam2w2pv5UfC4dJgbgRus2NJt97Xb2',
                 'programId': 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
                 'uiTokenAmount': {
                     'amount': '123456',
@@ -170,25 +138,25 @@ pre_token_airdrop_trx = {
         ],
         'preBalances': [
             1000000000000,
-            0,
             2039280,
             890880,
+            1392000,
             93257040,
-            953185920,
             1009200,
-            0,
             1461600,
-            1,
+            953185920,
+            0,
             1,
             0,
-            8147821440,
+            1,
+            8588640000,
             1
         ],
         'preTokenBalances': [
             {
-                'accountIndex': 2,
-                'mint': 'A6oAjJEPNc5rf6WrQTu3E7hzsydRCc2XLv73CnYNkCW3',
-                'owner': '9JgndtJuNH5aAiEe9c7FeaEjy3sw7yX7a499WH51B9A6',
+                'accountIndex': 1,
+                'mint': 'EL12Jzpv4wpxC2k13r92b8xtoqYWZPe8MEkQU3LfQU22',
+                'owner': 'd8wjSokAHEM9V4hCiFao17TRR2piKJXYs9PEJt6rgbg',
                 'programId': 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
                 'uiTokenAmount': {
                     'amount': '1000000000000',
@@ -203,22 +171,22 @@ pre_token_airdrop_trx = {
             'Ok': None
         }
     },
-    'slot': 282,
+    'slot': 189,
     'transaction': {
         'message': {
             'accountKeys': [
-                '9JgndtJuNH5aAiEe9c7FeaEjy3sw7yX7a499WH51B9A6',
-                '7s8Q2eE6AX8SAnviLjgUPYMU8dGtviAj9AKxhi54YMSK',  # <== client Neon account (calculated from eth address 0xAa2C8C7375BD9d47d4D80c9a193b4B7438df7d2e)
-                '8hmm7t1ZXdEdphE9EtYGfns7TWfFNXH5BDggojq9EQfZ',  # <== source token account
-                'AHtxTU3avoswonG9EygvXayrQGYnTxVxpeZNbBsWzkY2',
-                '6auf2AZ3bKm5Qd3jguF4WpWRu9fU2a9fEwapTkebJB45',
-                'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+                'd8wjSokAHEM9V4hCiFao17TRR2piKJXYs9PEJt6rgbg',  # <== client Neon account (calculated from eth address 0x7DB850f3a9CA0de897018cBa1eb2c2c86B3A0C6C)
+                '765VK2fJNFHXFdUm34foQrDTrFbKZVRXyLuySDJZr3Jf',
+                'BTnEnoNFNnosnzM8n6c6fss4U8E3dw9mSaBEHYvQ3Ysm',
+                '95eUKdsNyKvwD1Ja9nbHGMecY2a9vR9XRKLaFN1Qw4AU',
+                'Fw1DwtaBHjMLuqaam2w2pv5UfC4dJgbgRus2NJt97Xb2',
                 'SysvarRent111111111111111111111111111111111',
-                'ECqNkcfeB7dAH5skRYDo9MCVKZBDtNXsxdtmsHCAMj2P',  # <== Token Mint
-                'A6oAjJEPNc5rf6WrQTu3E7hzsydRCc2XLv73CnYNkCW3',
-                '11111111111111111111111111111111',
+                'EL12Jzpv4wpxC2k13r92b8xtoqYWZPe8MEkQU3LfQU22',
+                'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+                'JCPSFHmaqSccAa2SH5Jkn4HS7rHBWy7UEUCu8ZmYtoWg',
                 'KeccakSecp256k11111111111111111111111111111',
                 'Sysvar1nstructions1111111111111111111111111',
+                '11111111111111111111111111111111',
                 '53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io',
                 'ComputeBudget111111111111111111111111111111'
             ],
@@ -240,53 +208,44 @@ pre_token_airdrop_trx = {
                 },
                 {
                     'accounts': [
-                        0,
-                        9,
-                        1
-                    ],
-                    'data': '2ww6N4V5rZsoJ1cdibk9FWbapyoiV',
-                    'programIdIndex': 12  # EVM CREATE ACCOUNT
-                },
-                {
-                    'accounts': [
-                        2,
                         1,
+                        3,
                         0
                     ],
                     'data': '498XbEqWSBH1',
-                    'programIdIndex': 5  # TOKEN APPROVE
+                    'programIdIndex': 7  # TOKEN APPROVE
                 },
                 {
                     'accounts': [
-                        10
+                        9
                     ],
-                    'data': '2CgVnE6omdn3yvxU',
-                    'programIdIndex': 10  # KECCACK
+                    'data': '2CgVmVHHZaFFdmwR',
+                    'programIdIndex': 9  # KECCACK
                 },
                 {
                     'accounts': [
-                        11,
+                        10,
                         0,
+                        2,
                         3,
-                        1,
-                        9,
+                        11,
                         12,
-                        1,
+                        3,
                         4,
                         5,
                         6,
-                        2,
                         7,
-                        8
+                        8,
+                        1
                     ],
-                    'data': 'CdbVXwsdcyuhC4DU6iNhHUKECXzLh2WkGyBUtJHScKczcvjthdXMCjRDpRNJir9UzsPJVs4Bp2qvQPX7jbdCxmMVp1DmTrW5uyzRqNatNSfJSZX5NrtmvRZexNr6ZywGy16bTS8JUF2f1PJ2jtL2fWPSaECoeZRLD5VNgHdRQn1ffKoGBJhrebnB1vuYkWvaSGr7vNJkAJZ257w43Vv3pXvLsZWT8yjFLPXYSMbkBdD2SzCRm3cF29xZngVa2P7GafB9svP',
+                    'data': 'Ce7sSZnkZfB9ed8FVPHRevqecTkWA2eWuXdwpsYkptQbDH9aiHiMbZza6TCWKSVc7AASunCKgToLhqVB1LTdCBDKfrFcJnvs1peswActBjxz3KF1XQoj6Bm6m2WfBq9Po5Teo3YV2ywqLaanqYPbLRYiyEHVGoYsbu5Ft2qWoPeweT3deZ1fMa9PzEQk76Sz3yLAgKtp121gHpRKEaKt6GivNxyqMbPMtEy8wDUZ2cPtAtR8VxmPJjbBgmMNnoLLJLoaqmZ',
                     'programIdIndex': 12  # NEON EVM CALL
                 }
             ],
-            'recentBlockhash': '45m8R5XcMHRTB5LV5LP7Z3YgHxVBA5n1bqtY5k6bFsLh'
+            'recentBlockhash': 'FmyrgTRCHNCwKyVY1U8vJqjTU5cC8pxE99ZWygq6ZkUh'
         },
         'signatures': [
-            '3cZ5tqGKcgUQKLuAgwZ3HkkxZNduaEcoao39oztPgwCXTp5DTrT9hrdWAqhzo79TGAfBuZM1fnMSbreh8fvBmyLt'
+            '2iUszBGUU7wJ2yb8ajwEKujFLY9JCHLpH2YKpTjFrqJ8davSjE5wuBr4E8N5KStDtFZPtrn9khcWBUcEUFJ6Y2r2'
         ]
     }
 }
