@@ -486,7 +486,6 @@ class NeonRpcApiWorker:
         return self._get_transaction(neon_tx_receipt)
 
     def eth_getCode(self, account: str, tag: Union[str, int]) -> str:
-        self.info(f"eth_getCode account: {account}")
         self._validate_block_tag(tag)
         account = self._normalize_account(account)
 
@@ -495,7 +494,6 @@ class NeonRpcApiWorker:
             if (not account_info) or (not account_info.code):
                 return '0x'
 
-            self.info(f"account_info: code_size = {account_info.code_size}, code = {account_info.code}")
             return account_info.code
         except (Exception,):
             return '0x'
