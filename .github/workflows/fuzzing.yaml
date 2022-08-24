@@ -16,12 +16,12 @@ jobs:
        sanitizer:
           - undefined
     steps:
-    - name: Checkout source
-      uses: actions/checkout@v2
-      id: checkout
-      with:
-        path: storage/proxy-model.py
-        submodules: true
+    - name: Checkout submodules
+      run: |
+          cd ${{ github.workspace }}/storage/proxy-model.py
+          ls -lan
+          git checkout .
+          git submodule update --init --recursive
 
     - name: Build Fuzzers (${{ matrix.sanitizer }})
       id: build

@@ -19,6 +19,7 @@
 !.clusterfuzzlite
 !fuzz_eth*
 !*.json
+!.git
 
 # Ignore __pycache__ directory
 proxy/__pycache__
