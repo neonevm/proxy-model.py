@@ -5,7 +5,7 @@ from proxy.common_neon.address import EthereumAddress, ether2program
 from typing import Union
 import spl.token.instructions as spl_token
 from proxy.common_neon.solana_interactor import SolanaInteractor
-from proxy.common_neon.solana_tx_list_sender import SolTxListSender
+from proxy.common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from decimal import Decimal
 import os
 from .compute_budget import TransactionWithComputeBudget
@@ -18,7 +18,7 @@ class PermissionToken:
         self.token_mint = token_mint
 
     def get_token_account_address(self, ether_addr: Union[str, EthereumAddress]):
-        sol_addr = PublicKey(ether2program(ether_addr)[0])
+        sol_addr = ether2program(ether_addr)[0]
         return get_associated_token_address(sol_addr, self.token_mint)
 
     def get_balance(self, ether_addr: Union[str, EthereumAddress]):
@@ -34,11 +34,12 @@ class PermissionToken:
         txn = TransactionWithComputeBudget()
         create_txn = spl_token.create_associated_token_account(
             payer=signer.public_key(),
-            owner=PublicKey(ether2program(ether_addr)[0]),
+            owner=ether2program(ether_addr)[0],
             mint=self.token_mint
         )
         txn.add(create_txn)
-        SolTxListSender(self, [txn], 'CreateAssociatedTokenAccount(1)', skip_preflight=True).send(signer)
+        tx_list_info = SolTxListInfo(name_list=['CreateAssociatedTokenAccount'], tx_list=[txn])
+        SolTxListSender(self.solana, signer).send(tx_list_info, skip_preflight=True)
         return token_account
 
     def mint_to(self, amount: int, ether_addr: Union[str, EthereumAddress], mint_authority_file: str, signer: SolanaAccount):

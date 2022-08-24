@@ -10,7 +10,7 @@ COPY ./requirements.txt /opt
 WORKDIR /opt
 
 RUN apt update && \
-    DEBIAN_FRONTEND=noninteractive apt install -y git software-properties-common openssl curl parallel \
+    DEBIAN_FRONTEND=noninteractive apt install -y git software-properties-common openssl curl parallel netcat-openbsd \
                                                   ca-certificates python3-pip python3-venv postgresql-client && \
     python3 -m venv venv && \
     pip3 install --upgrade pip && \
@@ -40,9 +40,9 @@ COPY proxy/operator-keypairs/id.json /root/.config/solana/
 
 COPY . /opt
 ARG PROXY_REVISION
-ARG LOG_CFG=log_cfg.json
-RUN (cp -f /opt/${LOG_CFG} /opt/log_cfg.json || true)
-RUN sed -i 's/NEON_PROXY_REVISION_TO_BE_REPLACED/'"$PROXY_REVISION"'/g' /opt/proxy/neon_rpc_api_model/neon_rpc_api_model.py
+ARG PROXY_LOG_CFG
+RUN (cp -f /opt/${PROXY_LOG_CFG} /opt/log_cfg.json || true)
+RUN sed -i 's/NEON_PROXY_REVISION_TO_BE_REPLACED/'"$PROXY_REVISION"'/g' /opt/proxy/neon_rpc_api_model/neon_rcp_api_worker.py
 
 COPY ./proxy/solana-py.patch /opt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </opt/solana-py.patch

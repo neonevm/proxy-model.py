@@ -2,6 +2,7 @@ from solana.publickey import PublicKey
 import requests
 import base58
 import traceback
+import psycopg2.extensions
 from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
@@ -9,12 +10,13 @@ from logged_groups import logged_group
 from ..common_neon.environment_data import EVM_LOADER_ID, NEON_PRICE_USD
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..indexer.indexer_base import IndexerBase
+from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
 from ..indexer.pythnetwork import PythNetworkClient
 from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
 from ..indexer.sql_dict import SQLDict
 
-EVM_LOADER_CREATE_ACC           = 0x1f
+EVM_LOADER_CREATE_ACC           = 0x20
 SPL_TOKEN_APPROVE               = 0x04
 EVM_LOADER_CALL_FROM_RAW_TRX    = 0x05
 SPL_TOKEN_INIT_ACC_2            = 0x10
@@ -26,7 +28,8 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 
 class FailedAttempts(BaseDB):
     def __init__(self) -> None:
-        BaseDB.__init__(self, 'failed_airdrop_attempts')
+        super().__init__('failed_airdrop_attempts')
+        self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
     def airdrop_failed(self, eth_address, reason):
         with self._conn.cursor() as cur:
@@ -38,7 +41,8 @@ class FailedAttempts(BaseDB):
 
 class AirdropReadySet(BaseDB):
     def __init__(self):
-        BaseDB.__init__(self, 'airdrop_ready')
+        super().__init__('airdrop_ready')
+        self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):
         finished = int(datetime.now().timestamp())
@@ -69,8 +73,11 @@ class Airdropper(IndexerBase):
 
         solana = SolanaInteractor(solana_url)
         last_known_slot = self._constants.get('latest_processed_slot', None)
-        IndexerBase.__init__(self, solana, last_known_slot)
-        self.latest_processed_slot = self.last_slot
+        super().__init__(solana, last_known_slot)
+        self.latest_processed_slot = self._last_slot
+        self.current_slot = 0
+        sol_tx_meta_dict = SolTxMetaDict()
+        self._sol_tx_collector = FinalizedSolTxMetaCollector(sol_tx_meta_dict, self._solana, self._last_slot)
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -210,8 +217,11 @@ class Airdropper(IndexerBase):
             return account_keys[instr['programIdIndex']] == req_program_id \
                 and base58.b58decode(instr['data'])[0] == req_tag_id
 
-
         account_keys = trx["transaction"]["message"]["accountKeys"]
+        lookup_keys = trx["meta"].get('loadedAddresses', None)
+        if lookup_keys is not None:
+            account_keys += lookup_keys['writable'] + lookup_keys['readonly']
+
         instructions = [(number, entry) for number, entry in enumerate(trx['transaction']['message']['instructions'])]
 
         # Finding instructions specific for airdrop.
@@ -334,15 +344,16 @@ class Airdropper(IndexerBase):
         """
         Overrides IndexerBase.process_functions
         """
+        IndexerBase.process_functions(self)
         self.debug("Process receipts")
         self.process_receipts()
         self.process_scheduled_trxs()
 
     def process_receipts(self):
-        max_slot = 0
-        for slot, _, trx in self.get_tx_receipts():
-            max_slot = max(max_slot, slot)
-            if trx['transaction']['message']['instructions'] is not None:
-                self.process_trx_airdropper_mode(trx)
-        self.latest_processed_slot = max(self.latest_processed_slot, max_slot)
+        last_block_slot = self._solana.get_block_slot(self._sol_tx_collector.commitment)
+        for meta in self._sol_tx_collector.iter_tx_meta(last_block_slot, self._sol_tx_collector.last_block_slot):
+            self.current_slot = meta.block_slot
+            if meta.tx['transaction']['message']['instructions'] is not None:
+                self.process_trx_airdropper_mode(meta.tx)
+        self.latest_processed_slot = self._sol_tx_collector.last_block_slot
         self._constants['latest_processed_slot'] = self.latest_processed_slot

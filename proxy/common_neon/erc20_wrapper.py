@@ -15,7 +15,7 @@ from logged_groups import logged_group
 from .compute_budget import TransactionWithComputeBudget
 from sha3 import keccak_256
 from proxy.common_neon.eth_proto import Trx
-from ..common_neon.neon_instruction import NeonInstruction
+from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.web3 import NeonWeb3
 from proxy.common_neon.address import EthereumAddress
 
@@ -150,26 +150,11 @@ class ERC20Wrapper:
 
         eth_accounts = list(eth_accounts.values())
 
-        neon = NeonInstruction(owner)
+        neon = NeonIxBuilder(owner)
         neon.init_operator_ether(EthereumAddress(to_acc.address))
-        neon.init_eth_trx(Trx.fromString(eth_trx), eth_accounts)
+        neon.init_eth_tx(Trx.fromString(eth_trx))
+        neon.init_eth_accounts(eth_accounts)
         return neon
-
-    def create_neon_erc20_account_instruction(self, payer: PublicKey, eth_address: str):
-        return TransactionInstruction(
-            program_id=self.evm_loader_id,
-            data=bytes.fromhex('0F'),
-            keys=[
-                AccountMeta(pubkey=payer, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=self.get_neon_erc20_account_address(eth_address), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.get_neon_account_address(eth_address), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.solana_contract_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.token.pubkey, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
-            ]
-        )
 
     def create_input_liquidity_instruction(self, payer: PublicKey, from_address: PublicKey, to_address: str, amount: int):
         return TransactionInstruction(

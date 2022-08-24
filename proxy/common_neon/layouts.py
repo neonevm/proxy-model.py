@@ -1,5 +1,5 @@
 
-from construct import Bytes, Int8ul, Int32ul, Int64ul
+from construct import Bytes, Int8ul, Int16ul, Int32ul, Int64ul
 from construct import Struct
 
 STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
@@ -8,21 +8,21 @@ STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
     "nonce" / Int64ul,
     "gas_limit" / Bytes(32),
     "gas_price" / Bytes(32),
-    "slot" / Int64ul,
+    "block_slot" / Int64ul,
     "operator" / Bytes(32),
     "account_list_len" / Int64ul,
     "executor_data_size" / Int64ul,
     "evm_data_size" / Int64ul,
     "gas_used_and_paid" / Bytes(32),
     "number_of_payments" / Int64ul,
-    "sign" / Bytes(65),
+    "sig" / Bytes(65),
 )
 
 ACCOUNT_INFO_LAYOUT = Struct(
     "type" / Int8ul,
     "ether" / Bytes(20),
     "nonce" / Int8ul,
-    "trx_count" / Bytes(8),
+    "tx_count" / Bytes(8),
     "balance" / Bytes(32),
     "is_rw_blocked" / Int8ul,
     "ro_blocked_cnt" / Int8ul,
@@ -33,4 +33,15 @@ ACCOUNT_INFO_LAYOUT = Struct(
 
 CREATE_ACCOUNT_LAYOUT = Struct(
     "ether" / Bytes(20),
+)
+
+
+ACCOUNT_LOOKUP_TABLE_LAYOUT = Struct(
+    "type" / Int32ul,
+    "deactivation_slot" / Int64ul,
+    "last_extended_slot" / Int64ul,
+    "last_extended_slot_start_index" / Int8ul,
+    "has_authority" / Int8ul,
+    "authority" / Bytes(32),
+    "padding" / Int16ul
 )
