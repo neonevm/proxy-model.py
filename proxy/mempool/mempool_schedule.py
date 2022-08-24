@@ -298,5 +298,6 @@ class MPTxSchedule:
             yield taken_out_txs
 
     def take_in_txs(self, sender_address: str, mp_tx_request_list: MPTxRequestList):
+        self.debug(f"Take in mp_tx_request_list, sender_addr: {sender_address}, {len(mp_tx_request_list)} - txs")
         for mp_tx_request in mp_tx_request_list:
             self.add_mp_tx_request(mp_tx_request)
