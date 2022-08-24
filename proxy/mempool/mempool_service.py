@@ -90,7 +90,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser, IOperatorResourceMn
             self._mp_executor_mng = MPExecutorMng(self, self.EXECUTOR_COUNT, self._config)
             self._resource_mng = OperatorResourceMng(self, self._config)
             mempool_capacity = self._config.get_mempool_capacity()
-            self._mempool = MemPool(self._mp_executor_mng, mempool_capacity)
+            self._mempool = MemPool(self._resource_mng, self._mp_executor_mng, mempool_capacity)
             self._replicator = MemPoolReplicator(self._mempool)
 
             self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
