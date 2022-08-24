@@ -6,7 +6,7 @@ permissions: read-all
 
 jobs:
   PR:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     concurrency:
       group: ${{ github.workflow }}-${{ matrix.sanitizer }}-${{ github.ref }}
       cancel-in-progress: true
