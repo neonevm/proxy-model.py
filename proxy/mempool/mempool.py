@@ -6,6 +6,7 @@ from neon_py.data import Result
 
 from ..common_neon.eth_proto import Trx as NeonTx
 
+from .operator_resource_mng import OperatorResourceInfo, IResourceManager
 from .mempool_api import MPRequest, MPResultCode, MPTxResult, IMPExecutor, MPRequestType, MPTxRequest, \
                          MPPendingTxNonceReq, MPPendingTxByHashReq, MPSendTxResult
 from .mempool_schedule import MPTxSchedule
@@ -17,15 +18,19 @@ class MemPool:
     CHECK_TASK_TIMEOUT_SEC = 0.01
     RESCHEDULE_TIMEOUT_SEC = 0.4
 
-    def __init__(self, executor: IMPExecutor, capacity: int):
-        self.info(f"Init mempool schedule with capacity: {capacity}")
-        self._tx_schedule = MPTxSchedule(capacity)
+    def on_operator_resource_released(self):
+        asyncio.get_event_loop().create_task(self._kick_tx_schedule())
+
+    def __init__(self, resource_mng: IResourceManager, executor: IMPExecutor, mempool_capacity: int):
+        self.info(f"Init mempool schedule with capacity: {mempool_capacity}")
+        self._tx_schedule = MPTxSchedule(mempool_capacity)
         self._schedule_cond = asyncio.Condition()
         self._processing_tasks: List[Tuple[int, asyncio.Task, MPRequest]] = []
         self._process_tx_results_task = asyncio.get_event_loop().create_task(self.check_processing_tasks())
         self._process_schedule_task = asyncio.get_event_loop().create_task(self.process_tx_schedule())
         self._is_active: bool = True
         self._executor = executor
+        self._resource_mng = resource_mng
 
     async def enqueue_mp_request(self, mp_request: MPRequest):
         if mp_request.type == MPRequestType.SendTransaction:
@@ -66,20 +71,31 @@ class MemPool:
                 await self._schedule_cond.wait_for(self.is_active)
                 self.debug(f"Schedule processing  got awake, condition: {self._schedule_cond.__repr__()}")
                 while self._executor.is_available():
+                    tx_hash = self._tx_schedule.peek_tx_to_process()
+                    if tx_hash is None:
+                        break
+
+                    operator_resource_info = self._resource_mng.get_resource(tx_hash)
+                    if operator_resource_info is None:
+                        break
+
                     mp_request: MPTxRequest = self._tx_schedule.acquire_tx_for_execution()
                     if mp_request is None:
+                        self.error(f"Failed to get the transaction: {tx_hash}.")
+                        self._resource_mng.deallocate_resource(tx_hash)
                         break
 
                     try:
                         log_ctx = {"context": {"req_id": mp_request.req_id}}
-                        self.debug(f"Got mp_tx_request from schedule: {mp_request.log_str}, left senders in schedule: {len(self._tx_schedule._sender_tx_pools)}", extra=log_ctx)
-                        self.submit_request_to_executor(mp_request)
+                        self.debug(f"Got mp_tx_request from schedule: {mp_request.log_str}, left senders in schedule: "
+                                   f"{len(self._tx_schedule._sender_tx_pools)}", extra=log_ctx)
+                        self.submit_request_to_executor(mp_request, operator_resource_info)
                     except Exception as err:
                         self.error(f"Failed enqueue to execute mp_tx_request: {mp_request.log_str}. Error: {err}")
 
-    def submit_request_to_executor(self, mp_tx_request: MPRequest):
-        resource_id, task = self._executor.submit_mp_request(mp_tx_request)
-        self._processing_tasks.append((resource_id, task, mp_tx_request))
+    def submit_request_to_executor(self, mp_tx_request: MPRequest, operator_resource_info: OperatorResourceInfo):
+        executor_id, task = self._executor.submit_mp_request(mp_tx_request, operator_resource_info)
+        self._processing_tasks.append((executor_id, task, mp_tx_request))
 
     async def check_processing_tasks(self):
         while True:
@@ -115,6 +131,8 @@ class MemPool:
 
             if mp_tx_result.code == MPResultCode.BlockedAccount:
                 self._on_blocked_accounts_result(mp_request, mp_tx_result)
+            elif mp_tx_result.code == MPResultCode.BadResourceError:
+                self._on_bad_resource_error_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.SolanaUnavailable:
                 self._on_solana_unavailable_result(mp_request, mp_tx_result)
             elif mp_tx_result.code == MPResultCode.LowGasPrice:
@@ -130,40 +148,52 @@ class MemPool:
             self._executor.release_resource(resource_id)
 
     def _on_blocked_accounts_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
+        self._update_locked_resource(mp_tx_request)
         self.debug(f"For tx: {mp_tx_request.log_str} - got blocked account transaction status: {mp_tx_result.data}. "
                    f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
+    def _on_bad_resource_error_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
+        self._resource_mng.on_bad_resource_info(mp_tx_request.signature)
+        self.debug(f"For tx: {mp_tx_request.log_str} - got bad resource error status: {mp_tx_result.data}. "
+                   f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
+        asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
+
     def _on_solana_unavailable_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
+        self._update_locked_resource(mp_tx_request)
         self.debug(f"For tx: {mp_tx_request.log_str} - got solana unavailable status: {mp_tx_result.data}. "
                    f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
     def _on_low_gas_price_result(self, mp_tx_request: MPTxRequest, mp_tx_result: MPTxResult):
+        self._free_resource(mp_tx_request)
         self.debug(f"For tx: {mp_tx_request.log_str} - got low gas price status: {mp_tx_result.data}. "
                    f"Will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(mp_tx_request))
 
-    async def _reschedule_tx(self, tx_request: MPTxRequest):
+    async def _reschedule_tx(self, mp_tx_request: MPTxRequest):
         await asyncio.sleep(self.RESCHEDULE_TIMEOUT_SEC)
-        self._tx_schedule.reschedule_tx(tx_request.sender_address, tx_request.nonce)
+        self._tx_schedule.reschedule_tx(mp_tx_request.sender_address, mp_tx_request.nonce)
         await self._kick_tx_schedule()
 
-    def _on_request_done(self, tx_request: MPTxRequest):
-        sender = tx_request.sender_address
-        self._tx_schedule.on_request_done(sender, tx_request.nonce)
+    def _on_request_done(self, mp_tx_request: MPTxRequest):
+        self._free_resource(mp_tx_request)
+
+        sender = mp_tx_request.sender_address
+        self._tx_schedule.on_request_done(sender, mp_tx_request.nonce)
 
         count = self.get_pending_tx_count(sender)
-        log_ctx = {"context": {"req_id": tx_request.req_id}}
+        log_ctx = {"context": {"req_id": mp_tx_request.req_id}}
         self.debug(f"Reqeust done, pending tx count: {count}", extra=log_ctx)
 
-    def _on_fail_tx(self, tx_request: MPTxRequest):
-        sender = tx_request.sender_address
-        if not self._tx_schedule.fail_tx(sender, tx_request.nonce):
+    def _on_fail_tx(self, mp_tx_request: MPTxRequest):
+        self._free_resource(mp_tx_request)
+        sender = mp_tx_request.sender_address
+        if not self._tx_schedule.fail_tx(sender, mp_tx_request.nonce):
             return
-        count = self.get_pending_tx_count(tx_request.sender_address)
-        log_ctx = {"context": {"req_id": tx_request.req_id}}
-        self.debug(f"Reqeust: {tx_request.log_str} - dropped away, pending tx count: {count}", extra=log_ctx)
+        count = self.get_pending_tx_count(mp_tx_request.sender_address)
+        log_ctx = {"context": {"req_id": mp_tx_request.req_id}}
+        self.debug(f"Reqeust: {mp_tx_request.log_str} - dropped away, pending tx count: {count}", extra=log_ctx)
 
     async def _kick_tx_schedule(self):
         async with self._schedule_cond:
@@ -172,6 +202,12 @@ class MemPool:
 
     def on_resource_got_available(self, resource_id: int):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
+
+    def _update_locked_resource(self, mp_tx_request: MPTxRequest):
+        self._resource_mng.update_allocated_resource(mp_tx_request.signature)
+
+    def _free_resource(self, mp_tx_request: MPTxRequest):
+        self._resource_mng.release_resource_info(mp_tx_request.signature)
 
     def suspend_processing(self) -> Result:
         if not self._is_active:

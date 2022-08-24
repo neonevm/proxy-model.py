@@ -2,18 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Tuple, Optional
+from typing import Any, Optional, Tuple
 from abc import ABC, abstractmethod
 from asyncio import Task
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
 
+from .operator_resource_mng import OperatorResourceInfo
+
 
 class IMPExecutor(ABC):
 
     @abstractmethod
-    def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, Task]:
+    def submit_mp_request(self, mp_request: MPRequest, operator_resource_info: OperatorResourceInfo) -> Tuple[int, Task]:
         pass
 
     @abstractmethod
@@ -83,6 +85,7 @@ class MPResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
+    BadResourceError = 3,
     LowGasPrice = 4,
     Unspecified = 255,
     Dummy = -1
