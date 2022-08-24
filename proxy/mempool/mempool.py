@@ -8,6 +8,10 @@ from neon_py.data import Result
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
 
+
+from .operator_resource_mng import OperatorResourceInfo, IResourceManager
+
+
 from .mempool_api import MPRequest, MPTxExecResult, MPTxExecResultCode, IMPExecutor, MPTask, MPRequestType, MPTxRequest
 from .mempool_api import MPTxSendResult, MPTxSendResultCode
 from .mempool_api import MPGasPriceRequest, MPGasPriceResult, MPSenderTxCntRequest, MPSenderTxCntResult
@@ -60,9 +64,10 @@ class MemPool:
     CHECK_TASK_TIMEOUT_SEC = 0.01
     RESCHEDULE_TIMEOUT_SEC = 0.4
 
-    def __init__(self, executor: IMPExecutor, capacity: int):
+    def __init__(self, resource_mng: IResourceManager, executor: IMPExecutor, capacity: int):
         self.info(f"Init mempool schedule with capacity: {capacity}")
         self._tx_schedule = MPTxSchedule(capacity)
+        self._resource_mng = resource_mng
         self._schedule_cond = asyncio.Condition()
         self._processing_task_list: List[MPTask] = []
         self._is_active: bool = True
@@ -201,17 +206,26 @@ class MemPool:
             self._on_blocked_accounts_result(tx)
         elif mp_tx_result.code == MPTxExecResultCode.SolanaUnavailable:
             self._on_solana_unavailable_result(tx)
+        elif mp_tx_result.code == MPTxExecResultCode.BadResourceError:
+            self._on_bad_resource_error_result(tx)
         elif mp_tx_result.code == MPTxExecResultCode.Unspecified:
             self._on_fail_tx(tx)
         elif mp_tx_result.code == MPTxExecResultCode.Done:
             self._on_done_tx(tx)
 
-    def _on_blocked_accounts_result(self, tx: MPTxRequest):
+    def _on_blocked_accounts_result(self, tx: MPTxRequest) -> None:
+        self._update_locked_resource(tx)
         self.debug(f"Got blocked account transaction status for tx {tx.signature}.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(tx))
 
-    def _on_solana_unavailable_result(self, tx: MPTxRequest):
+    def _on_solana_unavailable_result(self, tx: MPTxRequest) -> None:
+        self._update_locked_resource(tx)
         self.debug(f"Got solana unavailable status for tx {tx.signature}.")
+        asyncio.get_event_loop().create_task(self._reschedule_tx(tx))
+
+    def _on_bad_resource_error_result(self, tx: MPTxRequest) -> None:
+        self._resource_mng.on_bad_resource_info(tx.signature)
+        self.debug(f"Got bad resource error status for tx {tx.signature}.")
         asyncio.get_event_loop().create_task(self._reschedule_tx(tx))
 
     async def _reschedule_tx(self, tx: MPTxRequest):
@@ -229,10 +243,12 @@ class MemPool:
         await self._kick_tx_schedule()
 
     def _on_done_tx(self, tx: MPTxRequest):
+        self._free_resource(tx)
         self._tx_schedule.done_tx(tx)
         self.debug(f"Request {tx.signature} is done")
 
     def _on_fail_tx(self, tx: MPTxRequest):
+        self._free_resource(tx)
         self._tx_schedule.fail_tx(tx)
         self.error(f"Request {tx.signature} is failed - dropped away")
 
@@ -240,6 +256,12 @@ class MemPool:
         async with self._schedule_cond:
             # self.debug(f"Kick the schedule, condition: {self._schedule_cond.__repr__()}")
             self._schedule_cond.notify()
+
+    def _update_locked_resource(self, mp_tx_request: MPTxRequest):
+        self._resource_mng.update_allocated_resource(mp_tx_request.signature)
+
+    def _free_resource(self, mp_tx_request: MPTxRequest):
+        self._resource_mng.release_resource_info(mp_tx_request.signature)
 
     def on_resource_got_available(self, resource_id: int):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())

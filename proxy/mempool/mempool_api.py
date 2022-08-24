@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
+
 from typing import Any, Optional, List
 from abc import ABC, abstractmethod
 
@@ -102,6 +103,7 @@ class MPTxExecResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
+    BadResourceError = 3,
     NonceTooLow = 4,
     Unspecified = 255,
     Dummy = -1

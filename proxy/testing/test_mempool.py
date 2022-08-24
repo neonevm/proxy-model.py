@@ -4,11 +4,15 @@ import asyncio
 import logging
 from random import randint
 
+from solana.publickey import PublicKey
 from web3 import Web3, Account
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
 
 import unittest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock, call, ANY
+
+from ..common_neon.config import Config
+from ..mempool import OperatorResourceInfo
 
 from ..mempool.mempool import MemPool, IMPExecutor, MPTask
 from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxExecResult, MPTxExecResultCode
@@ -17,6 +21,7 @@ from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 from ..common_neon.eth_proto import Trx as NeonTx
 
 from .testing_helpers import create_account
+from ..mempool.operator_resource_mng import OperatorResourceMng, IResourceManager
 
 
 def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int, from_acc: Account = None,
@@ -67,6 +72,33 @@ class MockMPExecutor(IMPExecutor):
         pass
 
 
+class MockResourceManager(IResourceManager):
+
+    def get_resource(self, tx_hash: str) -> Optional[OperatorResourceInfo]:
+        return 1
+
+    def deallocate_resource(self, tx_hash: str) -> None:
+        pass
+
+    def release_resource_info(self, tx_hash: str) -> None:
+        pass
+
+    def update_allocated_resource(self, tx_hash: str) -> None:
+        pass
+
+    def on_bad_resource_info(self, tx_hash: str) -> None:
+        pass
+
+
+class FakeConfig(Config):
+
+    def get_evm_loader_id(self) -> PublicKey:
+        return PublicKey('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
+
+    def get_mempool_capacity(self) -> int:
+        return 4000
+
+
 class TestMemPool(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
@@ -80,7 +112,8 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self._executor = MockMPExecutor()
-        self._mempool = MemPool(self._executor, capacity=4096)
+        self._config = FakeConfig()
+        self._mempool = MemPool(MockResourceManager(), self._executor, self._config.get_mempool_capacity())
         price_request = MPGasPriceRequest(req_id='test')
         price_result = MPGasPriceResult(suggested_gas_price=1, min_gas_price=1)
         self._mempool.process_mp_gas_price_result(price_request, price_result)
@@ -94,7 +127,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
 
         submit_mp_request_mock.assert_called_once()
-        submit_mp_request_mock.assert_called_with(mp_tx_request)
+        submit_mp_request_mock.assert_called_with(mp_tx_request, ANY)
 
     @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))))
     @patch.object(MockMPExecutor, "is_available", return_value=False)
@@ -111,7 +144,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self._mempool.on_resource_got_available(1)
         await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 10)
 
-        submit_mp_request_mock.assert_has_calls([call(requests[0]), call(requests[1])])
+        submit_mp_request_mock.assert_has_calls([call(requests[0], ANY), call(requests[1], ANY)])
 
     @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))))
     @patch.object(MockMPExecutor, "is_available", return_value=False)
@@ -126,8 +159,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         is_available_mock.return_value = True
         self._mempool.on_resource_got_available(1)
         await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
-
-        submit_mp_request_mock.assert_has_calls([call(requests[2]), call(requests[0]), call(requests[3]), call(requests[1])])
+        submit_mp_request_mock.assert_has_calls([call(requests[2], ANY), call(requests[0], ANY), call(requests[3], ANY), call(requests[1], ANY)])
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available")
@@ -144,7 +176,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         for i in range(2):
             await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
             self._mempool.on_resource_got_available(1)
-        submit_mp_request_mock.assert_called_once_with(requests[0])
+        submit_mp_request_mock.assert_called_once_with(requests[0], ANY)
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available")
@@ -159,7 +191,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self._mempool.on_resource_got_available(1)
         await asyncio.sleep(0)
         submit_mp_request_mock.assert_called_once()
-        submit_mp_request_mock.assert_called_with(subst_request)
+        submit_mp_request_mock.assert_called_with(subst_request, ANY)
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available")
@@ -174,10 +206,11 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self._mempool.on_resource_got_available(1)
         await asyncio.sleep(0)
         submit_mp_request_mock.assert_called_once()
-        submit_mp_request_mock.assert_called_with(base_request)
+        submit_mp_request_mock.assert_called_with(base_request, ANY)
 
     @patch.object(MockMPExecutor, "is_available")
-    async def test_check_pending_tx_count(self, is_available_mock: MagicMock):
+    @patch.object(OperatorResourceMng, "get_resource", return_value=OperatorResourceInfo("", 0, 0))
+    async def test_check_pending_tx_count(self, get_resource_mock: MagicMock, is_available_mock: MagicMock):
         """Checks if all incoming mp_tx_requests those are not processed are counted as pending"""
         acc = [create_account() for i in range(3)]
         req_data = [dict(req_id="000", nonce=0, gasPrice=30000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[2]),
@@ -329,7 +362,7 @@ class TestMPSenderTxPool(unittest.TestCase):
         """Checks if transaction pool drops the request with highest nonce properly"""
         self._pool.drop_last_request()
         self.assertEqual(self._pool.len(), 4)
-        self.assertEqual(self._pool.get_tx(), self._requests[0])
+        self.assertEqual(self._pool.peek_tx(), self._requests[0])
         self.assertEqual(self._pool._tx_list[-1], self._requests[3])
 
     def test_drop_last_request_if_processing(self):

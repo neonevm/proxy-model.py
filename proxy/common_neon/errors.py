@@ -19,6 +19,10 @@ class AddressLookupTableError(RuntimeError):
     pass
 
 
+class BadResourceError(Exception):
+    pass
+
+
 class BlockedAccountsError(Exception):
     pass
 

@@ -150,7 +150,6 @@ class MPSenderTxPool:
 
     def process_tx(self) -> MPTxRequest:
         assert not self.is_processing()
-
         self._processing_tx = self.get_top_tx()
         return self._processing_tx
 
