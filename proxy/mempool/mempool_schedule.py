@@ -1,11 +1,10 @@
 import bisect
-from typing import List, Dict, Optional, Tuple
-
+from typing import List, Dict, Optional, Tuple, Iterator
 from logged_groups import logged_group
 
 from ..common_neon.eth_proto import Trx as NeonTx
 
-from .mempool_api import MPTxRequest, MPSendTxResult
+from .mempool_api import MPTxRequest, MPSendTxResult, MPTxRequestList
 
 
 @logged_group("neon.MemPool")
@@ -36,7 +35,7 @@ class MPSenderTxPool:
     def __init__(self, sender_address: Optional[str] = None, tx_dict: Optional[MPTxDict] = None):
         self.sender_address = sender_address
         self._tx_dict = tx_dict
-        self._tx_list: List[MPTxRequest] = []
+        self._tx_list: MPTxRequestList = []
         self._processing_tx: Optional[MPTxRequest] = None
 
     def __eq__(self, other):
@@ -110,10 +109,8 @@ class MPSenderTxPool:
             self.error(f"Failed to {action} tx with nonce: {nonce}, processing tx is None")
             return False
         if self._processing_tx.nonce != nonce:
-            self.error(
-                f"Failed to {action} tx, " +
-                f"processing tx has different nonce: {self._processing_tx.nonce} than: {nonce}"
-            )
+            self.error(f"Failed to {action} tx, "
+                       f"processing tx has different nonce: {self._processing_tx.nonce} than: {nonce}")
             return False
 
         if self.is_empty():
@@ -121,12 +118,9 @@ class MPSenderTxPool:
             return False
         tx = self._tx_list[0]
         if tx is not self._processing_tx:
-            self.error(
-                f"Failed to {action} tx, " +
-                f"processing tx has another signature: {self._processing_tx.signature} than: {tx.signature}"
-            )
+            self.error(f"Failed to {action} tx, "
+                       f"processing tx has another signature: {self._processing_tx.signature} than: {tx.signature}")
             return False
-
         return True
 
     def done_tx(self, nonce: int):
@@ -177,6 +171,15 @@ class MPSenderTxPool:
 
         self.debug(f"Reset processing tx back to pending: {self.sender_address} - {self._processing_tx.log_str}")
         self._processing_tx = None
+
+    def take_out_txs(self) -> MPTxRequestList:
+        is_processing = self._processing_tx is not None
+        self.debug(f"Take out txs from sender pool: {self.sender_address}, count: {self.len()}, processing: {is_processing}")
+        _from = 1 if is_processing else 0
+        taken_out_txs = self._tx_list[_from:]
+        [self._tx_dict.pop(tx) for tx in taken_out_txs]
+        self._tx_list = self._tx_list[:_from]
+        return taken_out_txs
 
 
 @logged_group("neon.MemPool")
@@ -288,3 +291,12 @@ class MPTxSchedule:
             self.error(f"Failed reschedule, no sender by sender_address: {sender_address}")
             return
         sender.reschedule_tx(nonce)
+
+    def get_taking_out_txs_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
+        for tx_pool in self._sender_tx_pools:
+            taken_out_txs = tx_pool.sender_address, tx_pool.take_out_txs()
+            yield taken_out_txs
+
+    def take_in_txs(self, sender_address: str, mp_tx_request_list: MPTxRequestList):
+        for mp_tx_request in mp_tx_request_list:
+            self.add_mp_tx_request(mp_tx_request)
