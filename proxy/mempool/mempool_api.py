@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, List
 from abc import ABC, abstractmethod
 from asyncio import Task
 
@@ -60,6 +60,9 @@ class MPTxRequest(MPRequest):
         self.type = MPRequestType.SendTransaction
         tx_hash = self.signature
         self.log_str = f"MPTxRequest(hash={tx_hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
+
+
+MPTxRequestList = List[MPTxRequest]
 
 
 @dataclass
