@@ -7,12 +7,12 @@ from typing import List, Tuple, Deque, Set, cast
 
 from logged_groups import logged_group
 from neon_py.network import PipePickableDataClient
-from .operator_resource_mng import OperatorResourceInfo
 
 from ..common_neon.config import IConfig
 
 from .mempool_api import MPRequest, IMPExecutor, MPRequestType, MPTxRequest
 from .mempool_executor import MPExecutor
+from .operator_resource_mng import OperatorResourceInfo
 
 
 class MPExecutorClient(PipePickableDataClient):
