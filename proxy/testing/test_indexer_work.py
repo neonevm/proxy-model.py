@@ -167,7 +167,7 @@ class CancelTest(unittest.TestCase):
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_store_signed.rawTransaction.hex())
         instruction = from_addr + sign + msg
 
-        (_, self.tx_hash, from_address) = self.get_trx_receipts(self, msg, sign)
+        (_, self.tx_hash, from_address) = self.get_trx_receipts(msg, sign)
         print(self.tx_hash)
         print(from_address)
 
@@ -190,7 +190,7 @@ class CancelTest(unittest.TestCase):
 
         (_, sign, msg) = make_instruction_data_from_tx(trx_transfer_signed.rawTransaction.hex())
 
-        (_, self.tx_hash_invoked, from_address) = self.get_trx_receipts(self, msg, sign)
+        (_, self.tx_hash_invoked, from_address) = self.get_trx_receipts(msg, sign)
         print(self.tx_hash_invoked)
         print(from_address)
 
@@ -225,7 +225,7 @@ class CancelTest(unittest.TestCase):
 
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
         receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
-        self.print_if_err(self, receipt)
+        self.print_if_err(receipt)
 
     def create_invoked_transaction_combined(self):
         print("\ncreate_invoked_transaction_combined")
@@ -242,7 +242,7 @@ class CancelTest(unittest.TestCase):
 
         (_, sign, msg) = make_instruction_data_from_tx(trx_transfer_signed.rawTransaction.hex())
 
-        (_, self.tx_hash_invoked_combined, from_address) = self.get_trx_receipts(self, msg, sign)
+        (_, self.tx_hash_invoked_combined, from_address) = self.get_trx_receipts(msg, sign)
         print(self.tx_hash_invoked_combined)
         print(from_address)
 
@@ -278,7 +278,7 @@ class CancelTest(unittest.TestCase):
 
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
         receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
-        self.print_if_err(self, receipt)
+        self.print_if_err(receipt)
 
     def create_two_calls_in_transaction(self):
         print("\ncreate_two_calls_in_transaction")
@@ -286,7 +286,6 @@ class CancelTest(unittest.TestCase):
         account_list = [
             AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
         ]
 
         nonce1 = proxy.eth.get_transaction_count(proxy.eth.default_account)
@@ -294,7 +293,7 @@ class CancelTest(unittest.TestCase):
         call1_dict = self.storage_contract.functions.addReturn(1, 1).buildTransaction(tx)
         call1_signed = proxy.eth.account.sign_transaction(call1_dict, eth_account.key)
         (_, sign1, msg1) = make_instruction_data_from_tx(call1_signed.rawTransaction.hex())
-        (_, self.tx_hash_call1, _) = self.get_trx_receipts(self, msg1, sign1)
+        (_, self.tx_hash_call1, _) = self.get_trx_receipts(msg1, sign1)
         print('tx_hash_call1:', self.tx_hash_call1)
 
         nonce2 = nonce1 + 1
@@ -302,7 +301,7 @@ class CancelTest(unittest.TestCase):
         call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).buildTransaction(tx)
         call2_signed = proxy.eth.account.sign_transaction(call2_dict, eth_account.key)
         (_, sign2, msg2) = make_instruction_data_from_tx(call2_signed.rawTransaction.hex())
-        (_, self.tx_hash_call2, _) = self.get_trx_receipts(self, msg2, sign2)
+        (_, self.tx_hash_call2, _) = self.get_trx_receipts(msg2, sign2)
         print('tx_hash_call2:', self.tx_hash_call2)
 
         tx = TransactionWithComputeBudget()
@@ -325,9 +324,10 @@ class CancelTest(unittest.TestCase):
 
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
         receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
-        self.print_if_err(self, receipt)
+        self.print_if_err(receipt)
 
-    def get_trx_receipts(self, unsigned_msg, signature):
+    @staticmethod
+    def get_trx_receipts(unsigned_msg, signature):
         trx = rlp.decode(unsigned_msg, EthTrx)
 
         v = int(signature[64]) + 35 + 2 * trx[6]
@@ -338,7 +338,7 @@ class CancelTest(unittest.TestCase):
         eth_signature = '0x' + sha3(trx_raw).hex()
         from_address = w3.eth.account.recover_transaction(trx_raw).lower()
 
-        return (trx_raw.hex(), eth_signature, from_address)
+        return trx_raw.hex(), eth_signature, from_address
 
     def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction):
         return TransactionInstruction(
@@ -372,20 +372,22 @@ class CancelTest(unittest.TestCase):
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
         tx = TransactionWithComputeBudget()
-        tx.add(self.sol_instr_keccak(self, make_keccak_instruction_data(len(tx.instructions) + 1, len(msg), 13)))
+        tx.add(self.sol_instr_keccak(make_keccak_instruction_data(len(tx.instructions) + 1, len(msg), 13)))
         tx.add(self.sol_instr_19_partial_call(self, storage, steps, instruction))
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
         receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
-        self.print_if_err(self, receipt)
+        self.print_if_err(receipt)
 
-    def print_if_err(self, receipt):
+    @staticmethod
+    def print_if_err(receipt):
         if isinstance(receipt, dict) and \
-            receipt.get('result') and \
-            receipt['result'].get('meta') and \
-            receipt['result']['meta'].get('err'):
+                receipt.get('result') and \
+                receipt['result'].get('meta') and \
+                receipt['result']['meta'].get('err'):
             print(f"{receipt}")
 
-    def sol_instr_keccak(self, keccak_instruction):
+    @staticmethod
+    def sol_instr_keccak(keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
