@@ -15,10 +15,22 @@ class InvalidParamError(EthereumError):
         EthereumError.__init__(self, message=message, code=-32602, data=data)
 
 
-class PendingTxError(Exception):
-    pass
-
-
 class AddressLookupTableError(RuntimeError):
     def __init__(self, *args) -> None:
         RuntimeError.__init__(self, *args)
+
+
+class BadResourceError(Exception):
+    pass
+
+
+class BlockedAccountsError(Exception):
+    pass
+
+
+class NodeBehindError(Exception):
+    pass
+
+
+class SolanaUnavailableError(Exception):
+    pass

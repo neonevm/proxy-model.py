@@ -1,14 +1,16 @@
 import unittest
 import os
 import json
-
+from typing import List
 import eth_utils
+from logged_groups import logged_group
 from web3 import Web3
-from .testing_helpers import request_airdrop
 from solcx import compile_source
+from web3.types import TxReceipt
+
+from .testing_helpers import create_account, create_signer_account, request_airdrop, SolidityContractDeployer
 
 
-EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
 eth_account = proxy.eth.account.create('https://github.com/neonlabsorg/proxy-model.py/issues/147')
@@ -221,34 +223,6 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             print('message:', response['message'])
             message = 'gas limit reached'
             self.assertEqual(response['message'][:len(message)], message)
-
-    # @unittest.skip("a.i.")
-    def test_04_execute_with_bad_nonce(self):
-        test_nonce_list = [
-            ('grade_up_one', 1, 'nonce too high:'),
-            ('grade_down_one', -1, 'nonce too low: ')
-        ]
-        for name, offset, message in test_nonce_list:
-            with self.subTest(name=name):
-                print("\ntest_04_execute_with_bad_nonce {} offsets".format(offset))
-                bad_nonce = offset + proxy.eth.get_transaction_count(proxy.eth.default_account)
-                trx_store = self.storage_contract.functions.store(147).buildTransaction({'nonce': bad_nonce})
-                print('trx_store:', trx_store)
-                trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
-                print('trx_store_signed:', trx_store_signed)
-                try:
-                    trx_store_hash = proxy.eth.send_raw_transaction(trx_store_signed.rawTransaction)
-                    print('trx_store_hash:', trx_store_hash)
-                    self.assertTrue(False)
-                except Exception as e:
-                    print('type(e):', type(e))
-                    print('e:', e)
-                    response = json.loads(str(e).replace('\'', '\"').replace('None', 'null'))
-                    print('response:', response)
-                    print('code:', response['code'])
-                    self.assertEqual(response['code'], -32002)
-                    print('message:', response['message'])
-                    self.assertEqual(response['message'][:len(message)], message)
 
     # @unittest.skip("a.i.")
     def test_05_transfer_one_gwei(self):
@@ -575,6 +549,119 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             print('message:', response['message'])
             message = 'insufficient funds for transfer'
             self.assertEqual(response['message'][:len(message)], message)
+
+
+@logged_group("neon.TestCases")
+class TestDistributorContract(unittest.TestCase):
+
+    WAITING_DISTRIBUTE_RECEIPT_TIMEOUT_SEC = 15
+    WAITING_SET_ADDRESS_RECEIPT_TIMEOUT_SEC = 10
+
+    def setUp(self) -> None:
+        signer = create_signer_account()
+        self.contract, self.web3 = self.deploy_distributor_contract(signer)
+
+    def test_distribute_tx_affects_multiple_accounts(self):
+        contract, web3 = self.contract, self.web3
+        signer = create_signer_account()
+
+        wallets = self.generate_wallets()
+
+        self._set_and_check_distributor_addresses(wallets, signer, contract, web3)
+
+        distribute_value_fn = contract.functions.distribute_value()
+        nonce = web3.eth.get_transaction_count(signer.address)
+        tx_built = distribute_value_fn.buildTransaction({"nonce": nonce})
+        tx_built["value"] = 12
+        distribute_fn_msg = signer.sign_transaction(tx_built)
+        tx_hash = web3.eth.send_raw_transaction(distribute_fn_msg.rawTransaction)
+        self.debug(f"Send `distribute_value_fn()` tx with nonce: {nonce}, tx_hash: {tx_hash}")
+        self.debug(f"Wait for `distribute_value_fn` receipt by hash: {tx_hash.hex()}")
+        tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash,
+                                                           timeout=self.WAITING_DISTRIBUTE_RECEIPT_TIMEOUT_SEC)
+        self.assertEqual(tx_receipt.status, 1)
+
+    def _set_and_check_distributor_addresses(self, wallets, signer, contract, web3):
+        nonce: int = 0
+        prebuilt_txs = []
+
+        for name, account in wallets.items():
+            set_address_fn = contract.functions.set_address(name, bytes.fromhex(account.address[2:]))
+            set_address_fn_tx_built = set_address_fn.buildTransaction({"nonce": nonce})
+            set_address_msg = signer.sign_transaction(set_address_fn_tx_built)
+            nonce = nonce + 1
+            prebuilt_txs.append((set_address_msg.rawTransaction, name, account))
+
+        tx_hashes: List[TxReceipt] = []
+        for prebuilt_tx in prebuilt_txs:
+            raw_tx, name, account = prebuilt_tx
+            tx_hash = web3.eth.send_raw_transaction(raw_tx)
+            self.debug(f"Send `set_address_fn(\"{name}\", {account.address[2:]}` tx with nonce: {nonce}, tx_hash: {tx_hash.hex()}")
+            tx_hashes.append(tx_hash)
+
+        for tx_hash in tx_hashes:
+            tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash,
+                                                               timeout=self.WAITING_SET_ADDRESS_RECEIPT_TIMEOUT_SEC)
+            self.assertEqual(tx_receipt.status, 1)
+
+    @staticmethod
+    def generate_wallets():
+        names = ["alice", "bob", "carol", "dave", "erine", "eve", "frank", "mallory", "pat", "peggy", "trudy", "vanna", "victor"]
+        wallets = {name: create_account() for name in names}
+        return wallets
+
+    def deploy_distributor_contract(self, signer):
+        deployer = SolidityContractDeployer()
+        web3 = deployer.web3
+        contract = deployer.from_file("./proxy/testing/solidity_contracts/NeonDistributor.sol", signer)
+        return contract, web3
+
+
+@logged_group("neon.TestCases")
+class TestNonce(unittest.TestCase):
+    TRANSFER_CNT = 25
+
+    def setUp(self) -> None:
+        self.signer = create_signer_account()
+        self.receiver = proxy.eth.account.create('nonce-receiver-25')
+
+    def _get_tranfer_tx(self, nonce: int):
+        return proxy.eth.account.sign_transaction(
+            dict(
+                nonce=nonce,
+                chainId=proxy.eth.chain_id,
+                gas=987654321,
+                gasPrice=1000000000,
+                to=self.receiver.address,
+                value=1
+            ),
+            self.signer.key
+        )
+
+    def test_get_receipt_sequence(self):
+        tx_hash_list = []
+        for i in range(self.TRANSFER_CNT):
+            nonce = proxy.eth.get_transaction_count(self.signer.address, "pending")
+            tx_transfer = self._get_tranfer_tx(nonce)
+            tx_hash = proxy.eth.send_raw_transaction(tx_transfer.rawTransaction)
+            tx_hash_list.append(tx_hash)
+
+        for tx_hash in tx_hash_list:
+            tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+            self.assertEqual(tx_receipt.status, 1)
+
+    def test_mono_sequence(self):
+        nonce = proxy.eth.get_transaction_count(self.signer.address, "pending")
+        tx_hash_list = []
+        for i in range(self.TRANSFER_CNT):
+            tx_transfer = self._get_tranfer_tx(nonce)
+            nonce += 1
+            tx_hash = proxy.eth.send_raw_transaction(tx_transfer.rawTransaction)
+            tx_hash_list.append(tx_hash)
+
+        for tx_hash in tx_hash_list:
+            tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+            self.assertEqual(tx_receipt.status, 1)
 
 
 if __name__ == '__main__':
