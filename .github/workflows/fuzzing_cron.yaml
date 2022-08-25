@@ -1,0 +1,21 @@
+name: ClusterFuzzLite cron tasks
+on:
+  schedule:
+    - cron: '0 1 * * *'  # Once a day at 01:00 AM.
+permissions: read-all
+jobs:
+  Pruning:
+    runs-on: [self-hosted, linux]
+    steps:
+    - name: Build Fuzzers
+      id: build
+      uses: google/clusterfuzzlite/actions/build_fuzzers@v1
+      with:
+        language: python
+    - name: Run Fuzzers
+      id: run
+      uses: google/clusterfuzzlite/actions/run_fuzzers@v1
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        fuzz-seconds: 3600
+        mode: 'prune'
