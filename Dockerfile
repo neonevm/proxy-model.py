@@ -51,4 +51,4 @@ ENV PATH /venv/bin:/cli/bin/:/spl/bin/:/usr/local/sbin:/usr/local/bin:/usr/sbin:
 ENV CONFIG="devnet"
 
 EXPOSE 9090/tcp
-ENTRYPOINT  ["/bin/sh", "-c", "tail", "-f", "/dev/null"]
+ENTRYPOINT [ "./proxy/run-proxy.sh" ]
