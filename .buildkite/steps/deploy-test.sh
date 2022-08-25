@@ -40,16 +40,6 @@ function dump_docker_logs {
     cleanup_docker
 }
 
-trap dump_docker_logs EXIT
-
-cleanup_docker
-
-echo
-if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
-    echo "docker-compose failed to start"
-    exit 1
-fi
-
 function wait-for-faucet {
     declare FAUCET_URL=$(docker exec proxy bash -c 'echo "${FAUCET_URL}"')
     declare FAUCET_IPPORT=$(echo "${FAUCET_URL}" | cut -d / -f 3)
@@ -68,9 +58,24 @@ function wait-for-faucet {
     done
 
     echo `date +%H:%M:%S`" faucet ${FAUCET_IPPORT} is unavailable - time is over"
-    return 9847
+    return 98
 }
-wait-for-faucet
+
+if [ "${SKIP_DOCKER_DOWN}" == "NO" ]; then
+    trap dump_docker_logs EXIT
+fi
+
+if [ "${SKIP_DOCKER_UP}" == "NO" ]; then
+    cleanup_docker
+
+    echo
+    if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
+        echo "docker-compose failed to start"
+        exit 1
+    fi
+
+    wait-for-faucet
+fi
 
 export UNISWAP_TESTNAME="test_UNISWAP.py"
 function run_uniswap_test {

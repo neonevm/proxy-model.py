@@ -15,8 +15,8 @@ MPPeriodicTaskResult = TypeVar('MPPeriodicTaskResult')
 
 
 @logged_group("neon.MemPool")
-class MPPeriodicTask(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.ABC):
-    CHECK_TASK_TIMEOUT_SEC = 0.01
+class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.ABC):
+    _check_sleep_time = 0.01
 
     def __init__(self, name: str, sleep_time: float, executor: IMPExecutor):
         self._name = name
@@ -31,7 +31,7 @@ class MPPeriodicTask(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.A
         now_msec = math.ceil(now * 1000 % 1000)
         return f'{self._name}-{now_sec}.{now_msec}'
 
-    def _error(self, text: str, err: BaseException) -> None:
+    def _on_exception(self, text: str, err: BaseException) -> None:
         err_tb = "".join(traceback.format_tb(err.__traceback__))
         self.error(f"{text}. Error: {err}, Traceback: {err_tb}")
 
@@ -41,7 +41,7 @@ class MPPeriodicTask(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.A
         try:
             self._submit_request()
         except Exception as err:
-            self._error(f'Error during submitting {self._name} to executor', err)
+            self._on_exception(f'Error during submitting {self._name} to executor', err)
 
     @abc.abstractmethod
     def _submit_request(self) -> None:
@@ -71,14 +71,14 @@ class MPPeriodicTask(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.A
             try:
                 self._check_request_status_impl(task)
             except Exception as err:
-                self._error(f'Error during processing {self._name} on mempool', err)
+                self._on_exception(f'Error during processing {self._name} on mempool', err)
 
     def _check_request_status_impl(self, task: MPTask) -> None:
         self._executor.release_resource(task.resource_id)
 
         err = task.aio_task.exception()
         if err is not None:
-            self._error(f'Error during processing {self._name} on executor', err)
+            self._on_exception(f'Error during processing {self._name} on executor', err)
             self._process_error(task.mp_request)
             return
 
@@ -94,7 +94,7 @@ class MPPeriodicTask(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.A
         self._try_to_submit_request()  # first request
         while True:
             if self._task is not None:
-                await asyncio.sleep(self.CHECK_TASK_TIMEOUT_SEC)
+                await asyncio.sleep(self._check_sleep_time)
                 self._check_request_status()
             else:
                 await asyncio.sleep(self._sleep_time)

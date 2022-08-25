@@ -44,6 +44,7 @@ class MPRequestType(IntEnum):
     GetTxByHash = 2,
     GetGasPrice = 3,
     GetStateTxCnt = 4,
+    InitOperatorResource = 5,
     Dummy = -1
 
 
@@ -99,11 +100,19 @@ class MPSenderTxCntRequest(MPRequest):
         self.type = MPRequestType.GetStateTxCnt
 
 
+@dataclass
+class MPOpResInitRequest(MPRequest):
+    resource_ident: str = ''
+
+    def __post_init__(self):
+        self.type = MPRequestType.InitOperatorResource
+
+
 class MPTxExecResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
-    BadResourceError = 3,
+    NodeBehind = 3,
     NonceTooLow = 4,
     Unspecified = 255,
     Dummy = -1
@@ -144,3 +153,14 @@ class MPSenderTxCntData:
 @dataclass
 class MPSenderTxCntResult:
     sender_tx_cnt_list: List[MPSenderTxCntData]
+
+
+class MPOpResInitResultCode(IntEnum):
+    Success = 0
+    Failed = 1
+    Unspecified = 255
+
+
+@dataclass
+class MPOpResInitResult:
+    code: MPOpResInitResultCode

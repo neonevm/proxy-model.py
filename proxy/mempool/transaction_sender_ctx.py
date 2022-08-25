@@ -5,7 +5,7 @@ from logged_groups import logged_group
 from solana.transaction import AccountMeta as SolanaAccountMeta, PublicKey
 
 from ..common_neon.solana_tx_list_sender import SolTxListInfo
-from ..common_neon.data import NeonTxExecCfg, NeonAccountDict
+from ..common_neon.data import NeonTxExecCfg, NeonAccountDict, NeonEmulatedResult
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
@@ -14,7 +14,7 @@ from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage
 from .neon_tx_stages import NeonResizeContractTxStage
 
-from .operator_resource_list import OperatorResourceInfo
+from .operator_resource_mng import OperatorResourceInfo
 
 
 @logged_group("neon.MemPool")
@@ -116,17 +116,29 @@ class NeonTxSendCtx:
         self._builder = NeonIxBuilder(resource.public_key)
 
         self._account_tx_list_builder = AccountTxListBuilder(solana, self._builder)
+        self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.account_dict)
 
         self._builder.init_operator_ether(self._resource.ether)
         self._builder.init_eth_tx(self._neon_tx)
-        self._builder.init_iterative(self._resource.storage, self._resource.holder, self._resource.rid)
+        self._builder.init_iterative(self._resource.storage, self._resource.holder, self._resource.resource_id)
 
         self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
 
-        self._is_holder_completed = False
+        self._is_holder_completed = self._check_holder()
 
-    def init(self):
+    def _check_holder(self) -> bool:
+        holder_msg_len = 1 + len(self._builder.holder_msg)
+        holder_info = self._solana.get_account_info(self._resource.holder, holder_msg_len)
+        if not holder_info or len(holder_info.data) < holder_msg_len:
+            return False
+        return holder_info.data[1:] == self._builder.holder_msg
+
+    def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> None:
+        self._neon_tx_exec_cfg.set_emulated_result(emulated_result)
         self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.account_dict)
+
+    def set_state_tx_cnt(self, value: int) -> None:
+        self._neon_tx_exec_cfg.set_state_tx_cnt(value)
 
     @property
     def neon_sig(self) -> str:
