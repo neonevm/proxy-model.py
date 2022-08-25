@@ -154,9 +154,10 @@ class MemPool:
             if (tx is None) or (tx.gas_price < self._gas_price.min_gas_price):
                 return False
 
-            resource = self._op_res_mng.get_resource(tx.neon_tx_exec_cfg.resource_ident)
-            if resource is None:
-                return False
+            with logging_context(req_id=tx.req_id):
+                resource = self._op_res_mng.get_resource(tx.neon_tx_exec_cfg.resource_ident)
+                if resource is None:
+                    return False
 
             tx = self._tx_schedule.acquire_tx()
         except Exception as err:
@@ -268,16 +269,16 @@ class MemPool:
         await self._kick_tx_schedule()
 
     def _on_done_tx(self, tx: MPTxRequest):
-        self._free_operator_resource_info(tx)
+        self._release_operator_resource_info(tx)
         self._tx_schedule.done_tx(tx)
         self.debug(f"Request {tx.signature} is done")
 
     def _on_fail_tx(self, tx: MPTxRequest):
-        self._free_operator_resource_info(tx)
+        self._release_operator_resource_info(tx)
         self._tx_schedule.fail_tx(tx)
         self.debug(f"Request {tx.signature} is failed - dropped away")
 
-    def _free_operator_resource_info(self, tx: MPTxRequest) -> None:
+    def _release_operator_resource_info(self, tx: MPTxRequest) -> None:
         self._op_res_mng.release_resource(tx.neon_tx_exec_cfg.resource_ident)
 
     def _update_operator_resource_info(self, tx: MPTxRequest) -> None:

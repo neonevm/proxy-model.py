@@ -64,7 +64,7 @@ class NeonTxValidator:
             emulated_result: NeonEmulatedResult = call_trx_emulated(self._tx)
             self.prevalidate_emulator(emulated_result)
 
-            neon_tx_exec_cfg = NeonTxExecCfg.from_emulated_result(self._state_tx_cnt, emulated_result)
+            neon_tx_exec_cfg = NeonTxExecCfg().set_emulated_result(emulated_result).set_state_tx_cnt(self._state_tx_cnt)
             return neon_tx_exec_cfg
         except Exception as e:
             self.extract_ethereum_error(e)

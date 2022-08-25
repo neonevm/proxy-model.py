@@ -613,7 +613,6 @@ class NeonTxSendStrategyExecutor:
     def __init__(self, ctx: NeonTxSendCtx):
         super().__init__()
         self._ctx = ctx
-        self._operator = f'{str(self._ctx.resource)}'
 
     def execute(self) -> NeonTxResultInfo:
         self._validate_nonce()

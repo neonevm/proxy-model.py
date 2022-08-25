@@ -158,7 +158,7 @@ class MPSenderTxPool:
         return self._processing_tx
 
     def get_last_nonce(self) -> Optional[int]:
-        return self._tx_nonce_queue[self._bottom_index] if not self.is_empty() else None
+        return self._tx_nonce_queue[self._bottom_index].nonce if not self.is_empty() else None
 
     def get_gas_price(self) -> int:
         tx = self.get_top_tx()
@@ -260,7 +260,7 @@ class MPTxSchedule:
         self._tx_dict.pop(tx)
         self._remove_empty_sender_pool(sender_pool)
 
-    def _find_sender_pool(self, sender_address) -> Optional[MPSenderTxPool]:
+    def _find_sender_pool(self, sender_address: str) -> Optional[MPSenderTxPool]:
         return self._sender_pool_dict.get(sender_address, None)
 
     def _get_or_create_sender_pool(self, sender_address: str) -> MPSenderTxPool:
@@ -318,7 +318,7 @@ class MPTxSchedule:
             self.debug(f'Old tx {old_tx.signature} has higher gas price {old_tx.gas_price}')
             return MPTxSendResult(code=MPTxSendResultCode.Underprice, state_tx_cnt=None)
 
-        if self.get_tx_count() > self._capacity:
+        if self.get_tx_count() >= self._capacity:
             lower_tx = self._tx_dict.get_tx_with_lower_gas_price()
             if (lower_tx is not None) and (lower_tx.gas_price > tx.gas_price):
                 self.debug(f'Lower tx {lower_tx.signature} has higher gas price {lower_tx.gas_price}')

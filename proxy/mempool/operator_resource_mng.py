@@ -136,9 +136,10 @@ class OperatorResourceInitializer:
 
         account_info = self._solana.get_account_info(solana_address)
         if account_info is not None:
-            self.debug(f"Use existing ether account {str(solana_address)} for resource {resource}")
+            self.debug(f"Use ether account {str(solana_address)}({str(resource.ether)}) for resource {resource}")
             return []
 
+        self.debug(f"Create ether account {str(solana_address)}({str(resource.ether)}) for resource {resource}")
         stage = NeonCreateAccountTxStage(builder, {"address": resource.ether})
         stage.set_balance(self._solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0])
         self._execute_state(stage, resource)
@@ -153,16 +154,20 @@ class OperatorResourceInitializer:
 
         for address, seed, info in zip(address_list, seed_list, info_list):
             if info is None:
+                self.debug(f"Create account {str(address)} for resource {resource}")
                 stage = NeonCreatePermAccountStage(builder, seed, storage_size)
                 stage.set_balance(storage_balance)
                 self._execute_state(stage, resource)
             elif info.lamports < storage_balance:
+                self.debug(f"Resize account {str(address)} for resource {resource}")
                 self._execute_state(NeonDeletePermAccountStage(builder, seed), resource)
                 stage = NeonCreatePermAccountStage(builder, seed, storage_size)
                 stage.set_balance(storage_balance)
                 self._execute_state(stage, resource)
             elif info.owner != self._config.get_evm_loader_id():
                 raise BadResourceError(f'Wrong owner of {str(address)} for resource {resource}')
+            else:
+                self.debug(f"Use account {str(address)} for resource {resource}")
 
     def _validate_storage_account(self, resource: OperatorResourceInfo) -> None:
         info = self._solana.get_account_info(resource.storage)
@@ -208,10 +213,6 @@ class OperatorResourceIdentInfo:
     def reset_used_cnt(self) -> None:
         self._used_cnt = 0
 
-    @property
-    def secret_key(self) -> bytes:
-        return self._signer.secret_key()
-
 
 @logged_group("neon.MemPool")
 class OperatorResourceMng:
@@ -250,8 +251,7 @@ class OperatorResourceMng:
             return resource
 
         if len(self._free_resource_list):
-            resource = self._free_resource_list[0]
-            self._free_resource_list = self._free_resource_list[1:]
+            resource = self._free_resource_list.pop(0)
             self._used_resource_list.append(resource)
             return resource
 
@@ -308,6 +308,7 @@ class OperatorResourceMng:
                 self._disabled_resource_list.pop(i)
                 resource.reset_used_cnt()
                 self._free_resource_list.append(resource)
+                break
 
     def get_disabled_resource_list(self) -> List[str]:
         current_time = self._get_current_time()
@@ -315,16 +316,16 @@ class OperatorResourceMng:
 
         new_resource_list: List[OperatorResourceIdentInfo] = []
         for resource in self._free_resource_list:
-            if recheck_interval < resource.used_cnt:
+            if resource.used_cnt > recheck_interval:
                 self._disabled_resource_list.append(resource)
             else:
                 new_resource_list.append(resource)
         self._free_resource_list = new_resource_list
 
-        check_time = current_time + recheck_interval
-        new_resource_list.clear()
+        check_time = current_time - recheck_interval
+        new_resource_list = []
         for resource in self._used_resource_list:
-            if check_time > resource.last_used_time:
+            if resource.last_used_time < check_time:
                 self._disabled_resource_list.append(resource)
             else:
                 new_resource_list.append(resource)

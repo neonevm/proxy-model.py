@@ -54,10 +54,6 @@ class NeonTxExecCfg:
         self._resource_ident = value
         return self
 
-    @staticmethod
-    def from_emulated_result(state_tx_cnt: int, emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
-        return NeonTxExecCfg().set_emulated_result(emulated_result).set_state_tx_cnt(state_tx_cnt)
-
 
 NeonEmulatedResult = Dict[str, Any]
 NeonAccountDict = Dict[str, Any]

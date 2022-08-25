@@ -530,9 +530,9 @@ class NeonRpcApiWorker:
                 self._stat_tx_success()
                 return neon_signature
             elif result.code == MPTxSendResultCode.Underprice:
-                pass
+                raise EthereumError(message='replacement transaction underpriced')
             elif result.code == MPTxSendResultCode.AlreadyKnown:
-                pass
+                raise EthereumError(message='already known')
             elif result.code == MPTxSendResultCode.NonceTooLow:
                 neon_tx_validator.raise_nonce_error(result.state_tx_cnt, neon_tx.nonce)
 

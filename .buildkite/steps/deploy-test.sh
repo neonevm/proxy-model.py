@@ -92,7 +92,7 @@ function run_uniswap_test {
         --entrypoint ./deploy-test.sh \
         ${EXTRA_ARGS:-} \
         $UNISWAP_V2_CORE_IMAGE \
-        all
+        all 2>&1
 }
 export -f run_uniswap_test
 
@@ -101,7 +101,12 @@ function run_test {
     if [ "${TESTNAME}" == "${UNISWAP_TESTNAME}" ]; then
         run_uniswap_test
     else
-        docker exec -e SKIP_PREPARE_DEPLOY_TEST=YES -e TESTNAME=${TESTNAME} proxy ./proxy/deploy-test.sh ${EXTRA_ARGS:-}
+        docker exec \
+            -e SKIP_PREPARE_DEPLOY_TEST=YES \
+            -e TESTNAME=${TESTNAME} \
+            proxy \
+            ./proxy/deploy-test.sh \
+            ${EXTRA_ARGS:-} 2>&1
     fi
 }
 export -f run_test

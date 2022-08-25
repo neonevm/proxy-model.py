@@ -98,27 +98,26 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             return MPOpResInitResult(code=MPOpResInitResultCode.Failed)
 
     def execute_neon_tx(self, mp_tx_request: MPTxRequest):
-        with logging_context(req_id=mp_tx_request.req_id, exectr=self._id):
-            neon_tx_exec_cfg = mp_tx_request.neon_tx_exec_cfg
-            try:
-                assert neon_tx_exec_cfg is not None
-                self.execute_neon_tx_impl(mp_tx_request, neon_tx_exec_cfg)
-            except BlockedAccountsError:
-                self.debug(f"Failed to execute tx {mp_tx_request.signature}, got blocked accounts result")
-                return MPTxExecResult(MPTxExecResultCode.BlockedAccount, neon_tx_exec_cfg)
-            except NodeBehindError:
-                self.debug(f"Failed to execute tx {mp_tx_request.signature}, got node behind error")
-                return MPTxExecResult(MPTxExecResultCode.NodeBehind, neon_tx_exec_cfg)
-            except SolanaUnavailableError:
-                self.debug(f"Failed to execute tx {mp_tx_request.signature}, got solana unavailable error")
-                return MPTxExecResult(MPTxExecResultCode.SolanaUnavailable, neon_tx_exec_cfg)
-            except NonceTooLowError:
-                self.debug(f"Failed to execute tx {mp_tx_request.signature}, got nonce too low error")
-                return MPTxExecResult(MPTxExecResultCode.NonceTooLow, neon_tx_exec_cfg)
-            except Exception as err:
-                self._on_exception(f"Failed to execute tx {mp_tx_request.signature}.", err)
-                return MPTxExecResult(MPTxExecResultCode.Unspecified, neon_tx_exec_cfg)
-            return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)
+        neon_tx_exec_cfg = mp_tx_request.neon_tx_exec_cfg
+        try:
+            assert neon_tx_exec_cfg is not None
+            self.execute_neon_tx_impl(mp_tx_request, neon_tx_exec_cfg)
+        except BlockedAccountsError:
+            self.debug(f"Failed to execute tx {mp_tx_request.signature}, got blocked accounts result")
+            return MPTxExecResult(MPTxExecResultCode.BlockedAccount, neon_tx_exec_cfg)
+        except NodeBehindError:
+            self.debug(f"Failed to execute tx {mp_tx_request.signature}, got node behind error")
+            return MPTxExecResult(MPTxExecResultCode.NodeBehind, neon_tx_exec_cfg)
+        except SolanaUnavailableError:
+            self.debug(f"Failed to execute tx {mp_tx_request.signature}, got solana unavailable error")
+            return MPTxExecResult(MPTxExecResultCode.SolanaUnavailable, neon_tx_exec_cfg)
+        except NonceTooLowError:
+            self.debug(f"Failed to execute tx {mp_tx_request.signature}, got nonce too low error")
+            return MPTxExecResult(MPTxExecResultCode.NonceTooLow, neon_tx_exec_cfg)
+        except Exception as err:
+            self._on_exception(f"Failed to execute tx {mp_tx_request.signature}.", err)
+            return MPTxExecResult(MPTxExecResultCode.Unspecified, neon_tx_exec_cfg)
+        return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)
 
     def execute_neon_tx_impl(self, mp_tx_request: MPTxRequest, neon_tx_exec_cfg: NeonTxExecCfg):
         resource = OperatorResourceInfo.from_ident(neon_tx_exec_cfg.resource_ident)
@@ -130,18 +129,19 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
     async def on_data_received(self, data: Any) -> Any:
         mp_req = cast(MPRequest, data)
-        if mp_req.type == MPRequestType.SendTransaction:
-            mp_tx_req = cast(MPTxRequest, data)
-            return self.execute_neon_tx(mp_tx_req)
-        elif mp_req.type == MPRequestType.GetGasPrice:
-            return self.calc_gas_price()
-        elif mp_req.type == MPRequestType.GetStateTxCnt:
-            mp_state_req = cast(MPSenderTxCntRequest, data)
-            return self.get_state_tx_cnt(mp_state_req)
-        elif mp_req.type == MPRequestType.InitOperatorResource:
-            mp_op_res_req = cast(MPOpResInitRequest, data)
-            return self.init_operator_resource(mp_op_res_req)
-        self.error(f"Failed to process mp_request, unknown type: {mp_req.type}")
+        with logging_context(req_id=mp_req.req_id, exectr=self._id):
+            if mp_req.type == MPRequestType.SendTransaction:
+                mp_tx_req = cast(MPTxRequest, data)
+                return self.execute_neon_tx(mp_tx_req)
+            elif mp_req.type == MPRequestType.GetGasPrice:
+                return self.calc_gas_price()
+            elif mp_req.type == MPRequestType.GetStateTxCnt:
+                mp_state_req = cast(MPSenderTxCntRequest, data)
+                return self.get_state_tx_cnt(mp_state_req)
+            elif mp_req.type == MPRequestType.InitOperatorResource:
+                mp_op_res_req = cast(MPOpResInitRequest, data)
+                return self.init_operator_resource(mp_op_res_req)
+            self.error(f"Failed to process mp_request, unknown type: {mp_req.type}")
         return None
 
     def run(self) -> None:

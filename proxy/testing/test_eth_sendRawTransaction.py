@@ -1,12 +1,13 @@
 import unittest
 import os
 import json
+import random
 from typing import List
 import eth_utils
 from logged_groups import logged_group
 from web3 import Web3
 from solcx import compile_source
-from web3.types import TxReceipt
+from web3.types import TxReceipt, HexBytes
 
 from .testing_helpers import create_account, create_signer_account, request_airdrop, SolidityContractDeployer
 
@@ -626,8 +627,8 @@ class TestNonce(unittest.TestCase):
         self.signer = create_signer_account()
         self.receiver = proxy.eth.account.create('nonce-receiver-25')
 
-    def _get_tranfer_tx(self, nonce: int):
-        return proxy.eth.account.sign_transaction(
+    def _send_tranfer_tx(self, nonce: int) -> HexBytes:
+        tx_transfer = proxy.eth.account.sign_transaction(
             dict(
                 nonce=nonce,
                 chainId=proxy.eth.chain_id,
@@ -638,31 +639,62 @@ class TestNonce(unittest.TestCase):
             ),
             self.signer.key
         )
+        return proxy.eth.send_raw_transaction(tx_transfer.rawTransaction)
+
+    def _wait_tx_list(self, tx_hash_list: List[HexBytes]) -> None:
+        for tx_hash in tx_hash_list:
+            tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+            self.assertEqual(tx_receipt.status, 1)
+
+    def _get_base_nonce(self) -> int:
+        return proxy.eth.get_transaction_count(self.signer.address, "pending")
 
     def test_get_receipt_sequence(self):
-        tx_hash_list = []
+        tx_hash_list: List[HexBytes] = []
         for i in range(self.TRANSFER_CNT):
-            nonce = proxy.eth.get_transaction_count(self.signer.address, "pending")
-            tx_transfer = self._get_tranfer_tx(nonce)
-            tx_hash = proxy.eth.send_raw_transaction(tx_transfer.rawTransaction)
+            nonce = self._get_base_nonce()
+            tx_hash = self._send_tranfer_tx(nonce)
             tx_hash_list.append(tx_hash)
 
-        for tx_hash in tx_hash_list:
-            tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
-            self.assertEqual(tx_receipt.status, 1)
+        self._wait_tx_list(tx_hash_list)
 
     def test_mono_sequence(self):
-        nonce = proxy.eth.get_transaction_count(self.signer.address, "pending")
-        tx_hash_list = []
+        nonce = self._get_base_nonce()
+        tx_hash_list: List[HexBytes] = []
         for i in range(self.TRANSFER_CNT):
-            tx_transfer = self._get_tranfer_tx(nonce)
+            tx_hash = self._send_tranfer_tx(nonce)
+            tx_hash_list.append(tx_hash)
             nonce += 1
-            tx_hash = proxy.eth.send_raw_transaction(tx_transfer.rawTransaction)
+
+        self._wait_tx_list(tx_hash_list)
+
+    def test_reverse_sequence(self):
+        nonce = self._get_base_nonce()
+        nonce_list: List[int] = []
+        for i in range(self.TRANSFER_CNT):
+            nonce_list.insert(0, nonce)
+            nonce += 1
+
+        tx_hash_list: List[HexBytes] = []
+        for nonce in nonce_list:
+            tx_hash = self._send_tranfer_tx(nonce)
             tx_hash_list.append(tx_hash)
 
-        for tx_hash in tx_hash_list:
-            tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
-            self.assertEqual(tx_receipt.status, 1)
+        self._wait_tx_list(tx_hash_list)
+
+    def test_random_sequence(self):
+        nonce = self._get_base_nonce()
+        nonce_list: List[int] = []
+        for i in range(self.TRANSFER_CNT):
+            nonce_list.append(nonce)
+            nonce += 1
+        random.shuffle(nonce_list)
+
+        tx_hash_list: List[HexBytes] = []
+        for nonce in nonce_list:
+            tx_hash = self._send_tranfer_tx(nonce)
+            tx_hash_list.append(tx_hash)
+        self._wait_tx_list(tx_hash_list)
 
 
 if __name__ == '__main__':
