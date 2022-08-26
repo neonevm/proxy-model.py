@@ -91,7 +91,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         try:
             if (not self.is_evm_version_compatible):
                 response['error'] = {'code': -32603, 'message': f'version of Neon EVM is incompatible'}
-            if (not hasattr(self.model, request['method'])) or is_private_api(request["method"]):
+            elif (not hasattr(self.model, request['method'])) or is_private_api(request["method"]):
                 response['error'] = {'code': -32601, 'message': f'method {request["method"]} is not supported'}
             else:
                 method = getattr(self.model, request['method'])
