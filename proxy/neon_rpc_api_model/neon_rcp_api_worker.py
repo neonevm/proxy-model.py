@@ -517,8 +517,7 @@ class NeonRpcApiWorker:
         try:
             neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_signature)
             if neon_tx_receipt is not None:
-                self._stat_tx_success()
-                return neon_signature
+                raise EthereumError(message='already known')
 
             min_gas_price = self._get_gas_price().min_gas_price
             neon_tx_validator = NeonTxValidator(self._solana, neon_tx, min_gas_price)
@@ -535,11 +534,10 @@ class NeonRpcApiWorker:
                 return neon_signature
             elif result.code == MPTxSendResultCode.Underprice:
                 raise EthereumError(message='replacement transaction underpriced')
-            # elif result.code == MPTxSendResultCode.AlreadyKnown:
-            #     raise EthereumError(message='already known')
             elif result.code == MPTxSendResultCode.NonceTooLow:
                 neon_tx_validator.raise_nonce_error(result.state_tx_cnt, neon_tx.nonce)
-
+            else:
+                raise EthereumError(message='unknown error')
         except EthereumError:
             self._stat_tx_failed()
             raise

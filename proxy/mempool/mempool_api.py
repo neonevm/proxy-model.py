@@ -56,7 +56,6 @@ class MPRequest:
 
 @dataclass
 class MPTxRequest(MPRequest):
-    nonce: int = 0
     signature: str = None
     neon_tx: Optional[NeonTx] = None
     neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
@@ -65,9 +64,15 @@ class MPTxRequest(MPRequest):
 
     def __post_init__(self):
         self.gas_price = self.neon_tx.gasPrice
-        self.nonce = self.neon_tx.nonce
         self.sender_address = "0x" + self.neon_tx.sender()
         self.type = MPRequestType.SendTransaction
+
+    @property
+    def nonce(self) -> int:
+        return self.neon_tx.nonce
+
+    def has_chain_id(self) -> bool:
+        return self.neon_tx.hasChainId()
 
 
 @dataclass

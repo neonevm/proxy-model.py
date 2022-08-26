@@ -127,6 +127,13 @@ class MemPool:
     async def schedule_mp_tx_request(self, tx: MPTxRequest) -> MPTxSendResult:
         with logging_context(req_id=tx.req_id):
             try:
+                if not tx.has_chain_id():
+                    if not self.has_gas_price():
+                        self.debug(f"'Mempool doesn't have gas price information")
+                        return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
+                    self.debug(f'Increase gas-price for wo-chain-id tx {tx.signature}')
+                    tx.gas_price = self._gas_price.suggested_gas_price * 2
+
                 result: MPTxSendResult = self._tx_schedule.add_tx(tx)
                 self.debug(f"Got tx {tx.signature} and scheduled request")
                 return result
