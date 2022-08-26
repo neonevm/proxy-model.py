@@ -1,12 +1,13 @@
 import unittest
 import os
 import json
+import random
 from typing import List
 import eth_utils
 from logged_groups import logged_group
 from web3 import Web3
 from solcx import compile_source
-from web3.types import TxReceipt
+from web3.types import TxReceipt, HexBytes
 
 from .testing_helpers import create_account, create_signer_account, request_airdrop, SolidityContractDeployer
 
@@ -88,7 +89,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/147")
-        request_airdrop(eth_account.address, 100)
+        request_airdrop(eth_account.address, 300)
         print('eth_account.address:', eth_account.address)
         print('eth_account.key:', eth_account.key.hex())
         cls.deploy_storage_147_solidity_contract(cls)
@@ -102,7 +103,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=2000000000,
+            gasPrice=proxy.eth.gas_price,
             to='',
             value=0,
             data=storage.bytecode),
@@ -133,7 +134,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to='',
             value=0,
             data=test_185_solidity_contract.bytecode),
@@ -203,7 +204,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         trx_store = self.storage_contract.functions.store(148).buildTransaction({
             'nonce': right_nonce,
-            'gasPrice': 1000000000,
+            'gasPrice': proxy.eth.gas_price,
             'gas': 0})
         print('trx_store:', trx_store)
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
@@ -243,7 +244,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=eth_account_alice.address,
                 value=eth_utils.denoms.gwei),
                 eth_account.key
@@ -260,7 +261,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=eth_account_bob.address,
                 value=eth_utils.denoms.gwei),
                 eth_account.key
@@ -282,7 +283,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(eth_account_alice.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to=eth_account_bob.address,
             value=eth_utils.denoms.gwei),
             eth_account_alice.key
@@ -320,7 +321,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=eth_account_alice.address,
                 value=2 * eth_utils.denoms.gwei),
                 eth_account.key
@@ -337,7 +338,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=eth_account_bob.address,
                 value=2 * eth_utils.denoms.gwei),
                 eth_account.key
@@ -356,11 +357,12 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         one_and_a_half_gweis = 1_500_000_000
         print('one_and_a_half_gweis:', one_and_a_half_gweis)
 
+        gas_price = proxy.eth.gas_price
         trx_transfer = proxy.eth.account.sign_transaction(dict(
             nonce=proxy.eth.get_transaction_count(eth_account_alice.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to=eth_account_bob.address,
             value=one_and_a_half_gweis),
             eth_account_alice.key
@@ -372,7 +374,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_transfer_receipt = proxy.eth.wait_for_transaction_receipt(trx_transfer_hash)
         print('trx_transfer_receipt:', trx_transfer_receipt)
 
-        gas_cost = trx_transfer_receipt['gasUsed'] * 1000000000
+        gas_cost = trx_transfer_receipt['gasUsed'] * gas_price
         print('gas_cost:', gas_cost)
 
         alice_balance_after_transfer = proxy.eth.get_balance(eth_account_alice.address)
@@ -463,7 +465,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_store = self.storage_contract.functions.store(147).buildTransaction({
             'nonce': nonce,
             'gas': 987654321987654321,
-            'gasPrice': 1000000000})
+            'gasPrice': proxy.eth.gas_price})
         print('trx_store:', trx_store)
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
         print('trx_store_signed:', trx_store_signed)
@@ -496,7 +498,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
         trx_transfer = proxy.eth.account.sign_transaction(dict(
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to=eth_test_account.address,
             value=eth_utils.denoms.gwei),
             eth_account.key
@@ -528,7 +530,7 @@ class Test_eth_sendRawTransaction(unittest.TestCase):
                 "nonce": proxy.eth.get_transaction_count(eth_account_alice.address),
                 "chainId": proxy.eth.chain_id,
                 "gas": 987654321,
-                "gasPrice": 1000000000,
+                "gasPrice": proxy.eth.gas_price,
                 "to": eth_account_bob.address,
                 "value": proxy.eth.get_balance(eth_account_alice.address) + 1,
             },
@@ -625,43 +627,74 @@ class TestNonce(unittest.TestCase):
         self.signer = create_signer_account()
         self.receiver = proxy.eth.account.create('nonce-receiver-25')
 
-    def _get_tranfer_tx(self, nonce: int):
-        return proxy.eth.account.sign_transaction(
+    def _send_tranfer_tx(self, nonce: int) -> HexBytes:
+        tx_transfer = proxy.eth.account.sign_transaction(
             dict(
                 nonce=nonce,
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=1000000000,
+                gasPrice=proxy.eth.gas_price,
                 to=self.receiver.address,
                 value=1
             ),
             self.signer.key
         )
+        return proxy.eth.send_raw_transaction(tx_transfer.rawTransaction)
+
+    def _wait_tx_list(self, tx_hash_list: List[HexBytes]) -> None:
+        for tx_hash in tx_hash_list:
+            tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+            self.assertEqual(tx_receipt.status, 1)
+
+    def _get_base_nonce(self) -> int:
+        return proxy.eth.get_transaction_count(self.signer.address, "pending")
 
     def test_get_receipt_sequence(self):
-        tx_hash_list = []
+        tx_hash_list: List[HexBytes] = []
         for i in range(self.TRANSFER_CNT):
-            nonce = proxy.eth.get_transaction_count(self.signer.address, "pending")
-            tx_transfer = self._get_tranfer_tx(nonce)
-            tx_hash = proxy.eth.send_raw_transaction(tx_transfer.rawTransaction)
+            nonce = self._get_base_nonce()
+            tx_hash = self._send_tranfer_tx(nonce)
             tx_hash_list.append(tx_hash)
 
-        for tx_hash in tx_hash_list:
-            tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
-            self.assertEqual(tx_receipt.status, 1)
+        self._wait_tx_list(tx_hash_list)
 
     def test_mono_sequence(self):
-        nonce = proxy.eth.get_transaction_count(self.signer.address, "pending")
-        tx_hash_list = []
+        nonce = self._get_base_nonce()
+        tx_hash_list: List[HexBytes] = []
         for i in range(self.TRANSFER_CNT):
-            tx_transfer = self._get_tranfer_tx(nonce)
+            tx_hash = self._send_tranfer_tx(nonce)
+            tx_hash_list.append(tx_hash)
             nonce += 1
-            tx_hash = proxy.eth.send_raw_transaction(tx_transfer.rawTransaction)
+
+        self._wait_tx_list(tx_hash_list)
+
+    def test_reverse_sequence(self):
+        nonce = self._get_base_nonce()
+        nonce_list: List[int] = []
+        for i in range(self.TRANSFER_CNT):
+            nonce_list.insert(0, nonce)
+            nonce += 1
+
+        tx_hash_list: List[HexBytes] = []
+        for nonce in nonce_list:
+            tx_hash = self._send_tranfer_tx(nonce)
             tx_hash_list.append(tx_hash)
 
-        for tx_hash in tx_hash_list:
-            tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
-            self.assertEqual(tx_receipt.status, 1)
+        self._wait_tx_list(tx_hash_list)
+
+    def test_random_sequence(self):
+        nonce = self._get_base_nonce()
+        nonce_list: List[int] = []
+        for i in range(self.TRANSFER_CNT):
+            nonce_list.append(nonce)
+            nonce += 1
+        random.shuffle(nonce_list)
+
+        tx_hash_list: List[HexBytes] = []
+        for nonce in nonce_list:
+            tx_hash = self._send_tranfer_tx(nonce)
+            tx_hash_list.append(tx_hash)
+        self._wait_tx_list(tx_hash_list)
 
 
 if __name__ == '__main__':

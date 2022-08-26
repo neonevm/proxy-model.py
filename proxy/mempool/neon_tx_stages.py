@@ -3,7 +3,6 @@ from __future__ import annotations
 import abc
 import os
 import base58
-import sha3
 
 from typing import Optional, Dict, Any
 from logged_groups import logged_group
@@ -17,7 +16,7 @@ from ..common_neon.environment_data import CONTRACT_EXTRA_SPACE
 from ..common_neon.neon_instruction import NeonIxBuilder
 
 
-@logged_group("neon.Proxy")
+@logged_group("neon.MemPool")
 class NeonTxStage(abc.ABC):
     NAME = 'UNKNOWN'
 
@@ -63,7 +62,7 @@ class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
         assert len(self._seed_base) > 0
 
         self._seed = base58.b58encode(self._seed_base)
-        self._sol_account = accountWithSeed(bytes(self._builder.operator_account), self._seed)
+        self._sol_account = accountWithSeed(self._builder.operator_account, self._seed)
 
     @property
     def sol_account(self) -> PublicKey:
@@ -187,12 +186,8 @@ class NeonCreatePermAccountStage(NeonCreateAccountWithSeedStage):
 
     def _init_sol_account(self):
         assert len(self._seed_base) > 0
-        seed = sha3.keccak_256(self._seed_base).hexdigest()[:32]
-        self._seed = bytes(seed, 'utf8')
-        self._sol_account = accountWithSeed(bytes(self._builder.operator_account), self._seed)
-
-    def get_seed(self):
-        return self._seed_base
+        self._seed = self._seed_base
+        self._sol_account = accountWithSeed(self._builder.operator_account, self._seed)
 
     def build(self):
         assert self._is_empty()
@@ -208,7 +203,7 @@ class NeonDeletePermAccountStage(NeonCreatePermAccountStage):
         NeonCreatePermAccountStage.__init__(self, builder, seed_base, 0)
 
     def _delete_account(self):
-        return self._builder.create_refund_instruction(self.sol_account, self._seed)
+        return self._builder.create_refund_instruction(self.sol_account, self._seed_base)
 
     def build(self):
         assert self._is_empty()

@@ -1,10 +1,11 @@
 from __future__ import annotations
 import threading
-from typing import Callable
+from typing import Callable, Optional
 from logged_groups import logged_group
 from neon_py.network import AddrPickableDataClient
 
-from .mempool_api import MPTxRequest, MPPendingTxNonceReq, MPPendingTxByHashReq, MPSendTxResult
+from .mempool_api import MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
+from .mempool_api import MPGasPriceResult, MPGasPriceRequest
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
@@ -62,22 +63,27 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def send_raw_transaction(self, req_id: str, signature: str, neon_tx: NeonTx, sender_tx_cnt: int,
-                             neon_tx_exec_cfg: NeonTxExecCfg) -> MPSendTxResult:
+    def send_raw_transaction(self, req_id: str, signature: str, neon_tx: NeonTx,
+                             neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxSendResult:
         mempool_tx_request = MPTxRequest(
-            req_id=req_id, signature=signature, neon_tx=neon_tx, sender_tx_cnt=sender_tx_cnt,
-            neon_tx_exec_cfg=neon_tx_exec_cfg
+            req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
         )
         return self._pickable_data_client.send_data(mempool_tx_request)
 
     @_guard_conn
     @_reconnecting
     def get_pending_tx_nonce(self, req_id: str, sender: str) -> int:
-        mempool_pending_tx_nonce_req = MPPendingTxNonceReq(req_id=req_id, sender=sender)
+        mempool_pending_tx_nonce_req = MPPendingTxNonceRequest(req_id=req_id, sender=sender)
         return self._pickable_data_client.send_data(mempool_pending_tx_nonce_req)
 
     @_guard_conn
     @_reconnecting
-    def get_pending_tx_by_hash(self, req_id: str, tx_hash: str) -> NeonTx:
-        mempool_pending_tx_by_hash_req = MPPendingTxByHashReq(req_id=req_id, tx_hash=tx_hash)
+    def get_pending_tx_by_hash(self, req_id: str, tx_hash: str) -> Optional[NeonTx]:
+        mempool_pending_tx_by_hash_req = MPPendingTxByHashRequest(req_id=req_id, tx_hash=tx_hash)
         return self._pickable_data_client.send_data(mempool_pending_tx_by_hash_req)
+
+    @_guard_conn
+    @_reconnecting
+    def get_gas_price(self, req_id: str) -> Optional[MPGasPriceResult]:
+        gas_price_req = MPGasPriceRequest(req_id=req_id)
+        return self._pickable_data_client.send_data(gas_price_req)

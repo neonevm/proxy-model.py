@@ -16,8 +16,7 @@ class InvalidParamError(EthereumError):
 
 
 class AddressLookupTableError(RuntimeError):
-    def __init__(self, *args) -> None:
-        RuntimeError.__init__(self, *args)
+    pass
 
 
 class BadResourceError(Exception):
@@ -33,4 +32,8 @@ class NodeBehindError(Exception):
 
 
 class SolanaUnavailableError(Exception):
+    pass
+
+
+class NonceTooLowError(Exception):
     pass
