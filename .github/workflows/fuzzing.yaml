@@ -7,6 +7,8 @@ permissions: read-all
 jobs:
   PR:
     runs-on: [self-hosted, linux]
+    env:
+      PROXY_LOG_CFG: log_cfg_fuzzing.json
     container:
       image: gcr.io/oss-fuzz-base/base-builder-python
     concurrency:
