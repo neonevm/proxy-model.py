@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import Dict, List, Any
 
 
 class NeonTxStatData:
@@ -16,19 +15,44 @@ class NeonTxStatData:
         self.sol_tx_cnt = 0
 
 
-@dataclass
 class NeonTxExecCfg:
-    evm_step_cnt: int
-    account_dict: NeonAccountDict
+    def __init__(self):
+        self._state_tx_cnt = 0
+        self._evm_step_cnt = 0
+        self._resource_ident = ''
+        self._alt_list: List[str] = []
+        self._account_dict: NeonAccountDict = {}
 
-    @staticmethod
-    def from_emulated_result(emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
+    @property
+    def state_tx_cnt(self) -> int:
+        return self._state_tx_cnt
+
+    @property
+    def evm_step_cnt(self) -> int:
+        return self._evm_step_cnt
+
+    @property
+    def account_dict(self) -> NeonAccountDict:
+        return self._account_dict
+
+    @property
+    def resource_ident(self):
+        return self._resource_ident
+
+    def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
         account_dict = {k: emulated_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
         evm_step_cnt = emulated_result["steps_executed"]
-        return NeonTxExecCfg(
-            evm_step_cnt=evm_step_cnt,
-            account_dict=account_dict
-        )
+        self._account_dict = account_dict
+        self._evm_step_cnt = evm_step_cnt
+        return self
+
+    def set_state_tx_cnt(self, value: int) -> NeonTxExecCfg:
+        self._state_tx_cnt = value
+        return self
+
+    def set_resource_ident(self, value: str) -> NeonTxExecCfg:
+        self._resource_ident = value
+        return self
 
 
 NeonEmulatedResult = Dict[str, Any]

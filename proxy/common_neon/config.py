@@ -22,7 +22,7 @@ class IConfig(ABC):
         """Gets the capacity of the MemPool schedule to constrain the transactions count in there"""
 
     @abstractmethod
-    def get_pyth_mapping_account(self) -> Optional[str]:
+    def get_pyth_mapping_account(self) -> Optional[PublicKey]:
         """Gets pyth network account to retrieve gas price from there"""
 
     @abstractmethod
@@ -65,7 +65,7 @@ class Config(IConfig):
     def get_mempool_capacity(self) -> int:
         return MEMPOOL_CAPACITY
 
-    def get_pyth_mapping_account(self) -> Optional[str]:
+    def get_pyth_mapping_account(self) -> Optional[PublicKey]:
         return PYTH_MAPPING_ACCOUNT
 
     def get_pyth_solana_url(self) -> str:
