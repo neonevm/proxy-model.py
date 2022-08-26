@@ -2,6 +2,8 @@ from logged_groups import logged_group
 import asyncio
 from multiprocessing import Process
 
+from ..common_neon.config import IConfig
+
 @logged_group("neon.Background")
 class BackgroundService:
 
