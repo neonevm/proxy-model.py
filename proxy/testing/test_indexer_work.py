@@ -151,7 +151,7 @@ class CancelTest(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to='',
             value=0,
             data=storage.bytecode),
@@ -171,7 +171,10 @@ class CancelTest(unittest.TestCase):
     def create_hanged_transaction(self):
         print("\ncreate_hanged_transaction")
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        trx_store = self.storage_contract.functions.addReturnEventTwice(1, 1).buildTransaction({'nonce': right_nonce, 'gasPrice': MINIMAL_GAS_PRICE})
+        trx_store = self.storage_contract.functions.addReturnEventTwice(1, 1).buildTransaction({
+            'nonce': right_nonce,
+            'gasPrice': proxy.eth.gas_price
+        })
         trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_store_signed.rawTransaction.hex())
@@ -192,7 +195,7 @@ class CancelTest(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(eth_account_invoked.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to=eth_account_getter.address,
             value=1_000_000_000_000_000_000),
             eth_account_invoked.key
@@ -244,7 +247,7 @@ class CancelTest(unittest.TestCase):
             nonce=proxy.eth.get_transaction_count(eth_account_invoked.address),
             chainId=proxy.eth.chain_id,
             gas=987654321,
-            gasPrice=1000000000,
+            gasPrice=proxy.eth.gas_price,
             to=eth_account_getter.address,
             value=500_000_000_000_000_000),
             eth_account_invoked.key
@@ -300,7 +303,7 @@ class CancelTest(unittest.TestCase):
         ]
 
         nonce1 = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        tx = {'nonce': nonce1, 'gasPrice': MINIMAL_GAS_PRICE}
+        tx = {'nonce': nonce1, 'gasPrice': proxy.eth.gas_price}
         call1_dict = self.storage_contract.functions.addReturn(1, 1).buildTransaction(tx)
         call1_signed = proxy.eth.account.sign_transaction(call1_dict, eth_account.key)
         (_, sign1, msg1) = make_instruction_data_from_tx(call1_signed.rawTransaction.hex())
@@ -308,7 +311,7 @@ class CancelTest(unittest.TestCase):
         print('tx_hash_call1:', self.tx_hash_call1)
 
         nonce2 = nonce1 + 1
-        tx = {'nonce': nonce2, 'gasPrice': MINIMAL_GAS_PRICE}
+        tx = {'nonce': nonce2, 'gasPrice': proxy.eth.gas_price}
         call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).buildTransaction(tx)
         call2_signed = proxy.eth.account.sign_transaction(call2_dict, eth_account.key)
         (_, sign2, msg2) = make_instruction_data_from_tx(call2_signed.rawTransaction.hex())
