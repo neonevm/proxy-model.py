@@ -47,7 +47,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         self._stat_exporter = PrometheusExporter()
         self.model = NeonRpcApiPlugin.getModel()
         self.model.set_stat_exporter(self._stat_exporter)
-        self.is_evm_version_compatible = false
+        self.is_evm_version_compatible = False
 
     @classmethod
     def getModel(cls):
