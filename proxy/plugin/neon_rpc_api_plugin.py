@@ -47,6 +47,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         self._stat_exporter = PrometheusExporter()
         self.model = NeonRpcApiPlugin.getModel()
         self.model.set_stat_exporter(self._stat_exporter)
+        self.is_evm_version_compatible = false
 
     @classmethod
     def getModel(cls):
@@ -88,6 +89,8 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             return method_name in private_method_map
 
         try:
+            if (not self.is_evm_version_compatible):
+                response['error'] = {'code': -32603, 'message': f'version of Neon EVM is incompatible'}
             if (not hasattr(self.model, request['method'])) or is_private_api(request["method"]):
                 response['error'] = {'code': -32601, 'message': f'method {request["method"]} is not supported'}
             else:
