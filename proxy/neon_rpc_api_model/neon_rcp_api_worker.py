@@ -510,12 +510,16 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message="wrong transaction format")
 
-        neon_sender = '0x' + neon_tx.sender()
         neon_signature = '0x' + neon_tx.hash_signed().hex()
         self.debug(f"sendRawTransaction {neon_signature}: {json.dumps(neon_tx.as_dict(), cls=JsonEncoder)}")
 
         self._stat_tx_begin()
         try:
+            neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_signature)
+            if neon_tx_receipt is not None:
+                self._stat_tx_success()
+                return neon_signature
+
             min_gas_price = self._get_gas_price().min_gas_price
             neon_tx_validator = NeonTxValidator(self._solana, neon_tx, min_gas_price)
             neon_tx_exec_cfg = neon_tx_validator.precheck()
@@ -526,13 +530,13 @@ class NeonRpcApiWorker:
                 req_id=req_id, signature=neon_signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
             )
 
-            if result.code == MPTxSendResultCode.Success:
+            if result.code in (MPTxSendResultCode.Success, MPTxSendResultCode.AlreadyKnown):
                 self._stat_tx_success()
                 return neon_signature
             elif result.code == MPTxSendResultCode.Underprice:
                 raise EthereumError(message='replacement transaction underpriced')
-            elif result.code == MPTxSendResultCode.AlreadyKnown:
-                raise EthereumError(message='already known')
+            # elif result.code == MPTxSendResultCode.AlreadyKnown:
+            #     raise EthereumError(message='already known')
             elif result.code == MPTxSendResultCode.NonceTooLow:
                 neon_tx_validator.raise_nonce_error(result.state_tx_cnt, neon_tx.nonce)
 
