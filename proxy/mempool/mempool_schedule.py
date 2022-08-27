@@ -5,7 +5,7 @@ from logged_groups import logged_group, logging_context
 
 from ..common_neon.eth_proto import Trx as NeonTx
 
-from .mempool_api import MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData
+from .mempool_api import MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData, MPTxRequestList
 
 
 SortedQueueItem = TypeVar('SortedQueueItem')
@@ -28,13 +28,20 @@ class SortedQueue(Generic[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]):
         def bisect_left(self, item: SortedQueueItem) -> int:
             return bisect.bisect_left(self, self._lt_key_func(item))
 
+        def __iter__(self) -> Iterator[SortedQueueItem]:
+            return iter(self.queue)
+
     def __init__(self, lt_key_func: Callable[[SortedQueueItem], SortedQueueLtKey],
                  eq_key_func: Callable[[SortedQueueItem], SortedQueueEqKey]):
         self._impl = self._SortedQueueImpl(lt_key_func)
         self._eq_key_func = eq_key_func
 
-    def __getitem__(self, index: int) -> SortedQueueItem:
-        return self._impl.queue[index]
+    def __getitem__(self, index: Union[int, slice]) -> SortedQueueItem:
+        if isinstance(index, int):
+            return self._impl.queue[index]
+        sorted_queue = SortedQueue[SortedQueueItem, int, str](lt_key_func=lambda a: -a.nonce,eq_key_func=lambda a: a.signature)
+        sorted_queue._impl.queue = self._impl.queue[index]
+        return sorted_queue
 
     def __contains__(self, item: SortedQueueItem) -> bool:
         return self.find(item) is not None
@@ -61,6 +68,9 @@ class SortedQueue(Generic[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]):
         assert index is not None, 'item is absent in the queue'
 
         return self._impl.queue.pop(index)
+
+    def __iter__(self):
+        return iter(self._impl)
 
 
 @logged_group("neon.MemPool")
@@ -133,6 +143,9 @@ class MPSenderTxPool:
             lt_key_func=lambda a: -a.nonce,
             eq_key_func=lambda a: a.signature
         )
+
+    def __len__(self):
+        return len(self._tx_nonce_queue)
 
     @property
     def sender_address(self) -> str:
@@ -212,11 +225,11 @@ class MPSenderTxPool:
 
     def take_out_txs(self) -> MPTxRequestList:
         is_processing = self._processing_tx is not None
-        self.debug(f"Take out txs from sender pool: {self.sender_address}, count: {self.len()}, processing: {is_processing}")
+        self.debug(f"Take out txs from sender pool: {self.sender_address}, count: {len(self._tx_nonce_queue)}, processing: {is_processing}")
         _from = 1 if is_processing else 0
-        taken_out_txs = self._tx_list[_from:]
-        [self._tx_dict.pop(tx) for tx in taken_out_txs]
-        self._tx_list = self._tx_list[:_from]
+        taken_out_txs = self._tx_nonce_queue[_from:]
+        [self._tx_nonce_queue.pop(tx) for tx in taken_out_txs]
+        self._tx_nonce_queue = self._tx_nonce_queue[:_from]
         return taken_out_txs
 
     def drop_tx(self, tx: MPTxRequest) -> None:
@@ -231,7 +244,6 @@ class MPTxSchedule:
     def __init__(self, capacity: int) -> None:
         self._capacity = capacity
         self._tx_dict = MPTxRequestDict()
-        self._tx_dict = MPTxRequestDict()
 
         self._sender_pool_dict: Dict[str, MPSenderTxPool] = {}
         self._paused_sender_set: Set[str] = set([])
@@ -273,12 +285,6 @@ class MPTxSchedule:
     def _find_sender_pool(self, sender_address: str) -> Optional[MPSenderTxPool]:
         return self._sender_pool_dict.get(sender_address, None)
 
-        self._sender_pool_dict: Dict[str, MPSenderTxPool] = {}
-        self._paused_sender_set: Set[str] = set([])
-        self._sender_pool_queue = SortedQueue[MPSenderTxPool, int, str](
-            lt_key_func=lambda a: a.get_gas_price(),
-            eq_key_func=lambda a: a.sender_address
-        )
     def _add_tx_to_sender_pool(self, sender_pool: MPSenderTxPool, tx: MPTxRequest) -> None:
         self.debug(f'Add tx {tx.signature} to the pool')
         sender_pool.add_tx(tx)
@@ -308,9 +314,6 @@ class MPTxSchedule:
         sender_pool.done_tx(tx)
         self._tx_dict.pop(tx)
         self._remove_empty_sender_pool(sender_pool)
-
-    def _find_sender_pool(self, sender_address: str) -> Optional[MPSenderTxPool]:
-        return self._sender_pool_dict.get(sender_address, None)
 
     def _get_or_create_sender_pool(self, sender_address: str) -> MPSenderTxPool:
         sender_pool = self._find_sender_pool(sender_address)
@@ -510,8 +513,10 @@ class MPTxSchedule:
                 self._schedule_sender_pool(sender_pool)
 
     def get_taking_out_txs_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
-        for tx_pool in self._sender_tx_pools:
+        for tx_pool in self._sender_pool_queue:
             taken_out_txs = tx_pool.sender_address, tx_pool.take_out_txs()
+            if tx_pool.is_empty():
+                self._sender_pool_dict.pop(tx_pool.sender_address)
             yield taken_out_txs
 
     def take_in_txs(self, sender_address: str, mp_tx_request_list: MPTxRequestList):

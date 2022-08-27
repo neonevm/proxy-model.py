@@ -12,7 +12,7 @@ from ..common_neon.config import IConfig
 
 from .operator_resource_mng import OperatorResourceMng
 
-from .mempool_api import MPRequest, MPRequestType, IMPExecutor, MPTask
+from .mempool_api import MPRequest, MPRequestType, IMPExecutor, MPTask, MPTxRequestList
 from .mempool_api import MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxSendResult, MPTxSendResultCode
 from .mempool_api import MPGasPriceRequest, MPGasPriceResult
 from .mempool_api import MPSenderTxCntRequest, MPSenderTxCntResult
@@ -297,6 +297,9 @@ class MemPool:
         async with self._schedule_cond:
             # self.debug(f"Kick the schedule, condition: {self._schedule_cond.__repr__()}")
             self._schedule_cond.notify()
+
+    def on_resource_got_available(self, resource_id: int):
+        asyncio.get_event_loop().create_task(self._kick_tx_schedule())
 
     def _create_kick_tx_schedule_task(self):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())

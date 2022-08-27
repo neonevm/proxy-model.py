@@ -15,7 +15,6 @@ from .mempool import MemPool
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 from .operator_resource_mng import OperatorResourceMng
 
-from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceReq, MPPendingTxByHashReq
 from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest
 from .mempool_replicator import MemPoolReplicator
 
