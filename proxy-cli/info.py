@@ -13,7 +13,7 @@ import logging
 neon_logger = logging.getLogger("neon")
 neon_logger.setLevel(logging.CRITICAL)
 
-from proxy.common_neon.address import EthereumAddress, accountWithSeed
+from proxy.common_neon.address import EthereumAddress, accountWithSeed, permAccountSeed
 from proxy.common_neon.solana_interactor import SolanaInteractor
 from proxy.common_neon.environment_utils import get_solana_accounts
 from proxy.common_neon.environment_data import SOLANA_URL, PERM_ACCOUNT_LIMIT
@@ -204,18 +204,14 @@ class InfoHandler:
         return ret_js
 
     def _generate_storage_address(self, base_address: PublicKey, rid: int) -> PublicKey:
-        return self._generate_resource_address(base_address, rid, b'storage')
+        return self._generate_resource_address(base_address, b'storage', rid)
 
     def _generate_holder_address(self, base_address: PublicKey, rid: int) -> PublicKey:
-        return self._generate_resource_address(base_address, rid, b'holder')
+        return self._generate_resource_address(base_address, b'holder', rid)
 
-    def _generate_resource_address(self, base_address: PublicKey, rid: int, prefix: bytes) -> PublicKey:
-        aid = rid.to_bytes(math.ceil(rid.bit_length() / 8), 'big')
-        seed_base = prefix + aid
-        seed = sha3.keccak_256(seed_base).hexdigest()[:32]
-        seed = bytes(seed, 'utf8')
-        account = accountWithSeed(base_address, seed)
-        return account
+    def _generate_resource_address(self, base_address: PublicKey, prefix: bytes, rid: int) -> PublicKey:
+        seed = permAccountSeed(prefix, rid)
+        return accountWithSeed(base_address, seed)
 
     def _get_neon_balance(self, neon_address: EthereumAddress):
         neon_layout = self._solana.get_neon_account_info(neon_address)

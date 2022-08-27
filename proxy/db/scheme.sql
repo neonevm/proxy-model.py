@@ -56,6 +56,7 @@
         END IF;
     END $$;
 
+    DROP TABLE IF EXISTS neon_accounts;
     DROP TABLE IF EXISTS solana_neon_transactions_costs;
     DROP TABLE IF EXISTS solana_transaction_receipts;
     DROP TABLE IF EXISTS test_storage;
