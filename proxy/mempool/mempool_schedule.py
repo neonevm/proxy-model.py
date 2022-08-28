@@ -467,11 +467,18 @@ class MPTxSchedule:
                 self._schedule_sender_pool(sender_pool)
 
     def get_taking_out_txs_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
+        empty_pools = []
         for tx_pool in self._sender_pool_queue:
-            taken_out_txs = tx_pool.sender_address, tx_pool.take_out_txs()
+            taken_out_txs = tx_pool.take_out_txs()
+            for tx in taken_out_txs:
+                self._tx_dict.pop(tx)
             if tx_pool.is_empty():
-                self._sender_pool_dict.pop(tx_pool.sender_address)
-            yield taken_out_txs
+                empty_pools.append(tx_pool)
+            yield tx_pool.sender_address, taken_out_txs
+
+        for tx_pool in empty_pools:
+            self._remove_empty_sender_pool(tx_pool)
+            self._sender_pool_queue.pop(tx_pool)
 
     def take_in_txs(self, sender_address: str, mp_tx_request_list: MPTxRequestList):
         self.debug(f"Take in mp_tx_request_list, sender_addr: {sender_address}, {len(mp_tx_request_list)} - txs")
