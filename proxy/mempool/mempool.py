@@ -1,7 +1,6 @@
 import asyncio
-from typing import List, Tuple, Optional, cast, Iterator
 import traceback
-from typing import List, Optional, Any, cast
+from typing import List, Tuple, Optional, Any, cast, Iterator
 
 from logged_groups import logged_group, logging_context
 from neon_py.data import Result
@@ -93,7 +92,6 @@ class MPInitOperatorResourceTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOp
 
 @logged_group("neon.MemPool")
 class MemPool:
-
     CHECK_TASK_TIMEOUT_SEC = 0.01
     RESCHEDULE_TIMEOUT_SEC = 0.4
 
