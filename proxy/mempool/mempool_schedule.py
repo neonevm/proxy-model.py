@@ -287,36 +287,6 @@ class MPTxSchedule:
     def _find_sender_pool(self, sender_address: str) -> Optional[MPSenderTxPool]:
         return self._sender_pool_dict.get(sender_address, None)
 
-    def _add_tx_to_sender_pool(self, sender_pool: MPSenderTxPool, tx: MPTxRequest) -> None:
-        self.debug(f'Add tx {tx.signature} to the pool')
-        sender_pool.add_tx(tx)
-        self._tx_dict.add(tx)
-
-        # the first tx in the sender pool
-        if sender_pool.get_queue_len() == 1:
-            self._sender_pool_dict[sender_pool.sender_address] = sender_pool
-
-    def _remove_empty_sender_pool(self, sender_pool: MPSenderTxPool) -> None:
-        if not sender_pool.is_empty():
-            return
-        # No reasons to check sender_pool_queue, because sender_pool is empty
-        self._sender_pool_dict.pop(sender_pool.sender_address, None)
-        self._paused_sender_set.discard(sender_pool.sender_address)
-
-    def _drop_tx_from_sender_pool(self, sender_pool: MPSenderTxPool, tx: MPTxRequest) -> None:
-        self.debug(f'Drop tx {tx.signature} from the pool')
-        if (not sender_pool.is_paused()) and sender_pool.is_top_tx(tx):
-            self._sender_pool_queue.pop(sender_pool)
-        sender_pool.drop_tx(tx)
-        self._tx_dict.pop(tx)
-        self._remove_empty_sender_pool(sender_pool)
-
-    def _done_tx_in_sender_pool(self, sender_pool: MPSenderTxPool, tx: MPTxRequest) -> None:
-        self.debug(f'Done tx {tx.signature} in the pool')
-        sender_pool.done_tx(tx)
-        self._tx_dict.pop(tx)
-        self._remove_empty_sender_pool(sender_pool)
-
     def _get_or_create_sender_pool(self, sender_address: str) -> MPSenderTxPool:
         sender_pool = self._find_sender_pool(sender_address)
         if sender_pool is None:
