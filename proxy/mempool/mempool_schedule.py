@@ -466,24 +466,6 @@ class MPTxSchedule:
             if not sender_pool.is_paused():
                 self._schedule_sender_pool(sender_pool)
 
-    def get_paused_sender_list(self) -> List[str]:
-        return list(self._paused_sender_set)
-
-    def set_sender_state_tx_cnt_list(self, sender_tx_cnt_list: List[MPSenderTxCntData]) -> None:
-        for sender_tx_cnt_data in sender_tx_cnt_list:
-            sender_pool = self._find_sender_pool(sender_tx_cnt_data.sender)
-            if (sender_pool is None) or (not sender_pool.is_paused()):
-                continue
-
-            self._set_sender_tx_cnt(sender_pool, sender_tx_cnt_data.state_tx_cnt)
-            if sender_pool.is_empty():
-                continue
-
-            # the sender pool was paused,
-            #   and now should be included into the execution queue
-            if not sender_pool.is_paused():
-                self._schedule_sender_pool(sender_pool)
-
     def get_taking_out_txs_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
         for tx_pool in self._sender_pool_queue:
             taken_out_txs = tx_pool.sender_address, tx_pool.take_out_txs()
