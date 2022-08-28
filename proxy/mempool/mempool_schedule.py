@@ -39,9 +39,11 @@ class SortedQueue(Generic[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]):
     def __getitem__(self, index: Union[int, slice]) -> SortedQueueItem:
         if isinstance(index, int):
             return self._impl.queue[index]
-        sorted_queue = SortedQueue[SortedQueueItem, int, str](lt_key_func=lambda a: -a.nonce,eq_key_func=lambda a: a.signature)
-        sorted_queue._impl.queue = self._impl.queue[index]
-        return sorted_queue
+        elif isinstance(index, slice):
+            sorted_queue = SortedQueue[SortedQueueItem, int, str](lt_key_func=lambda a: -a.nonce,eq_key_func=lambda a: a.signature)
+            sorted_queue._impl.queue = self._impl.queue[index]
+            return sorted_queue
+        raise TypeError(f"list indices must be integers or slices, not {type(index)}")
 
     def __contains__(self, item: SortedQueueItem) -> bool:
         return self.find(item) is not None
@@ -522,4 +524,4 @@ class MPTxSchedule:
     def take_in_txs(self, sender_address: str, mp_tx_request_list: MPTxRequestList):
         self.debug(f"Take in mp_tx_request_list, sender_addr: {sender_address}, {len(mp_tx_request_list)} - txs")
         for mp_tx_request in mp_tx_request_list:
-            self.add_mp_tx_request(mp_tx_request)
+            self.add_tx(mp_tx_request)

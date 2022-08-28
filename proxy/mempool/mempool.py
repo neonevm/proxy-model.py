@@ -299,7 +299,7 @@ class MemPool:
             self._schedule_cond.notify()
 
     def on_resource_got_available(self, resource_id: int):
-        asyncio.get_event_loop().create_task(self._kick_tx_schedule())
+        self._create_kick_tx_schedule_task()
 
     def _create_kick_tx_schedule_task(self):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
