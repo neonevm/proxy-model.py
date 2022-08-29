@@ -11,7 +11,7 @@ from solana.publickey import PublicKey
 
 from ..common_neon.config import IConfig
 from ..common_neon.address import EthereumAddress, ether2program, permAccountSeed, accountWithSeed
-from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG
+from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
@@ -20,7 +20,7 @@ from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.errors import BadResourceError
 
 from .neon_tx_stages import NeonTxStage
-from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreatePermAccountStage, NeonDeletePermAccountStage
+from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
 
 
 @logged_group("neon.MemPool")
@@ -155,13 +155,13 @@ class OperatorResourceInitializer:
         for address, seed, info in zip(address_list, seed_list, info_list):
             if info is None:
                 self.debug(f"Create account {str(address)} for resource {resource}")
-                stage = NeonCreatePermAccountStage(builder, seed, storage_size)
+                stage = NeonCreateHolderAccountStage(builder, seed, storage_size)
                 stage.set_balance(storage_balance)
                 self._execute_state(stage, resource)
             elif info.lamports < storage_balance:
                 self.debug(f"Resize account {str(address)} for resource {resource}")
-                self._execute_state(NeonDeletePermAccountStage(builder, seed), resource)
-                stage = NeonCreatePermAccountStage(builder, seed, storage_size)
+                self._execute_state(NeonDeleteHolderAccountStage(builder, seed), resource)
+                stage = NeonCreateHolderAccountStage(builder, seed, storage_size)
                 stage.set_balance(storage_balance)
                 self._execute_state(stage, resource)
             elif info.owner != self._config.get_evm_loader_id():
@@ -175,7 +175,7 @@ class OperatorResourceInitializer:
 
         if info.tag == ACTIVE_STORAGE_TAG:
             self._unlock_storage_account(resource)
-        elif info.tag not in (FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG):
+        elif info.tag not in (FINALIZED_STORAGE_TAG, HOLDER_TAG):
             raise BadResourceError(f'Storage {str(resource.storage)} for resource {resource} has bad tag {resource}')
 
     def _unlock_storage_account(self, resource: OperatorResourceInfo) -> None:

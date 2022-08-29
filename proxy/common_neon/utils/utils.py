@@ -380,7 +380,3 @@ def get_from_dict(src: Dict, *path) -> Any:
             return None
     return val
 
-
-def get_holder_msg(eth_trx: NeonTx) -> bytes:
-    unsigned_msg = eth_trx.unsigned_msg()
-    return eth_trx.signature() + len(unsigned_msg).to_bytes(8, byteorder="little") + unsigned_msg
