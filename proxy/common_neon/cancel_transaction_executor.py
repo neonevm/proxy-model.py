@@ -87,13 +87,14 @@ class CancelTxExecutor:
             tx_list_info.name_list.extend(['CloseLookupTable' for _ in alt_tx_list])
             tx_list_info.tx_list.extend(alt_tx_list)
 
-        tx_sender.send(tx_list_info)
-
-        if len(self._alt_tx_set) > 0:
-            # Deactivate Address Lookup Tables
-            tx_list_info_list = self._alt_builder.build_done_alt_tx_set(self._alt_tx_set)
-            for tx_list_info in tx_list_info_list:
-                tx_sender.send(tx_list_info)
+        try:
+            tx_sender.send(tx_list_info)
+        finally:
+            if len(self._alt_tx_set) > 0:
+                # Deactivate Address Lookup Tables
+                tx_list_info_list = self._alt_builder.build_done_alt_tx_set(self._alt_tx_set)
+                for tx_list_info in tx_list_info_list:
+                    tx_sender.send(tx_list_info)
 
     def clear(self) -> None:
         self._alt_info_list.clear()
