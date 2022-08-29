@@ -1,19 +1,27 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Tuple, Optional
+
+from typing import Any, Optional, List
 from abc import ABC, abstractmethod
-from asyncio import Task
+
+import asyncio
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
 
 
-class IMPExecutor(ABC):
+@dataclass
+class MPTask:
+    resource_id: int
+    aio_task: asyncio.Task
+    mp_request: MPRequest
 
+
+class IMPExecutor(ABC):
     @abstractmethod
-    def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, Task]:
+    def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
         pass
 
     @abstractmethod
@@ -34,37 +42,41 @@ class MPRequestType(IntEnum):
     SendTransaction = 0,
     GetLastTxNonce = 1,
     GetTxByHash = 2,
+    GetGasPrice = 3,
+    GetStateTxCnt = 4,
+    InitOperatorResource = 5,
     Dummy = -1
 
 
-@dataclass(order=True)
+@dataclass
 class MPRequest:
-    req_id: str = field(compare=False)
-    type: MPRequestType = field(compare=False, default=MPRequestType.Dummy)
-
-
-@dataclass(eq=True, order=True)
-class MPTxRequest(MPRequest):
-    nonce: Optional[int] = field(compare=True, default=None)
-    signature: Optional[str] = field(compare=False, default=None)
-    neon_tx: Optional[NeonTx] = field(compare=False, default=None)
-    neon_tx_exec_cfg: Optional[NeonTxExecCfg] = field(compare=False, default=None)
-    sender_address: Optional[str] = field(compare=False, default=None)
-    sender_tx_cnt: Optional[int] = field(compare=False, default=None)
-    gas_price: Optional[int] = field(compare=False, default=None)
-
-    def __post_init__(self):
-        self.gas_price = self.neon_tx.gasPrice
-        self.nonce = self.neon_tx.nonce
-        self.sender_address = "0x" + self.neon_tx.sender()
-        self.type = MPRequestType.SendTransaction
-        tx_hash = self.signature
-        self.log_str = f"MPTxRequest(hash={tx_hash[:10]}..., sender_address=0x{self.sender_address[:10]}..., nonce={self.nonce}, gas_price={self.gas_price})"
+    req_id: str
+    type: MPRequestType = MPRequestType.Dummy
 
 
 @dataclass
-class MPPendingTxNonceReq(MPRequest):
+class MPTxRequest(MPRequest):
+    signature: str = None
+    neon_tx: Optional[NeonTx] = None
+    neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
+    sender_address: str = None
+    gas_price: int = 0
 
+    def __post_init__(self):
+        self.gas_price = self.neon_tx.gasPrice
+        self.sender_address = "0x" + self.neon_tx.sender()
+        self.type = MPRequestType.SendTransaction
+
+    @property
+    def nonce(self) -> int:
+        return self.neon_tx.nonce
+
+    def has_chain_id(self) -> bool:
+        return self.neon_tx.hasChainId()
+
+
+@dataclass
+class MPPendingTxNonceRequest(MPRequest):
     sender: str = None
 
     def __post_init__(self):
@@ -72,29 +84,88 @@ class MPPendingTxNonceReq(MPRequest):
 
 
 @dataclass
-class MPPendingTxByHashReq(MPRequest):
+class MPPendingTxByHashRequest(MPRequest):
     tx_hash: str = None
 
     def __post_init__(self):
         self.type = MPRequestType.GetTxByHash
 
 
-class MPResultCode(IntEnum):
+@dataclass
+class MPGasPriceRequest(MPRequest):
+    def __post_init__(self):
+        self.type = MPRequestType.GetGasPrice
+
+
+@dataclass
+class MPSenderTxCntRequest(MPRequest):
+    sender_list: List[str] = None
+
+    def __post_init__(self):
+        self.type = MPRequestType.GetStateTxCnt
+
+
+@dataclass
+class MPOpResInitRequest(MPRequest):
+    resource_ident: str = ''
+
+    def __post_init__(self):
+        self.type = MPRequestType.InitOperatorResource
+
+
+class MPTxExecResultCode(IntEnum):
     Done = 0
     BlockedAccount = 1,
     SolanaUnavailable = 2,
-    LowGasPrice = 4,
+    NodeBehind = 3,
+    NonceTooLow = 4,
     Unspecified = 255,
     Dummy = -1
 
 
 @dataclass
-class MPTxResult:
-    code: MPResultCode
+class MPTxExecResult:
+    code: MPTxExecResultCode
     data: Any
 
 
+class MPTxSendResultCode(IntEnum):
+    Success = 0
+    NonceTooLow = 1
+    Underprice = 2
+    AlreadyKnown = 3
+    Unspecified = 255
+
+
 @dataclass
-class MPSendTxResult:
-    success: bool
-    last_nonce: Optional[int]
+class MPTxSendResult:
+    code: MPTxSendResultCode
+    state_tx_cnt: Optional[int]
+
+
+@dataclass
+class MPGasPriceResult:
+    suggested_gas_price: int
+    min_gas_price: int
+
+
+@dataclass
+class MPSenderTxCntData:
+    sender: str
+    state_tx_cnt: int
+
+
+@dataclass
+class MPSenderTxCntResult:
+    sender_tx_cnt_list: List[MPSenderTxCntData]
+
+
+class MPOpResInitResultCode(IntEnum):
+    Success = 0
+    Failed = 1
+    Unspecified = 255
+
+
+@dataclass
+class MPOpResInitResult:
+    code: MPOpResInitResultCode

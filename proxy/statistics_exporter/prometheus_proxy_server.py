@@ -24,8 +24,8 @@ class PrometheusProxyServer:
         else:
             self._gas_price_calculator = GasPriceCalculator(SolanaInteractor(PP_SOLANA_URL), PYTH_MAPPING_ACCOUNT)
 
-        self._gas_price_calculator.update_mapping()
-        self._gas_price_calculator.try_update_gas_price()
+        self._last_gas_price_update_interval = 0
+        self.update_gas_price()
 
         self._operator_accounts = get_solana_accounts()
         self._sol_accounts = []
@@ -36,6 +36,13 @@ class PrometheusProxyServer:
 
         self.start_http_server()
         self.run_commit_process()
+
+    def update_gas_price(self) -> bool:
+        self._last_gas_price_update_interval = 0
+        if not self._gas_price_calculator.has_price():
+            if not self._gas_price_calculator.update_mapping():
+                return False
+        return self._gas_price_calculator.update_gas_price()
 
     @staticmethod
     def start_http_server():
@@ -50,6 +57,7 @@ class PrometheusProxyServer:
         while True:
             time.sleep(5)
             try:
+                self._stat_gas_price()
                 self._stat_operator_balance()
             except Exception as err:
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
@@ -69,6 +77,13 @@ class PrometheusProxyServer:
                 self._stat_exporter.stat_commit_operator_neon_balance(str(sol_account), str(neon_account), neon_balance)
 
     def _stat_gas_price(self):
+        self._last_gas_price_update_interval += 1
+        if (self._last_gas_price_update_interval > 12) or (not self._gas_price_calculator.is_valid()):
+            self.update_gas_price()
+
+        if not self._gas_price_calculator.is_valid():
+            return
+
         self._stat_exporter.stat_commit_gas_parameters(
             self._gas_price_calculator.get_suggested_gas_price(),
             self._gas_price_calculator.get_sol_price_usd(),

@@ -4,18 +4,24 @@ import asyncio
 import logging
 from random import randint
 
+from solana.publickey import PublicKey
 from web3 import Web3, Account
-from typing import Tuple, Any, List, Dict
+from typing import Any, List, Dict, Optional
 
 import unittest
 from unittest.mock import patch, MagicMock, call
 
-from ..mempool.mempool import MemPool, IMPExecutor
-from ..mempool.mempool_api import MPRequest, MPTxRequest, MPTxResult, MPResultCode
+from ..common_neon.config import Config
+from ..common_neon.data import NeonTxExecCfg
+
+from ..mempool.mempool import MemPool, IMPExecutor, MPTask
+from ..mempool.mempool_api import MPRequest, MPRequestType, MPTxRequest, MPTxExecResult, MPTxExecResultCode
+from ..mempool.mempool_api import MPGasPriceResult, MPSenderTxCntData
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 from ..common_neon.eth_proto import Trx as NeonTx
 
 from .testing_helpers import create_account
+from ..mempool.operator_resource_mng import OperatorResourceMng
 
 
 def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int, from_acc: Account = None,
@@ -32,12 +38,13 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int,
         from_acc.key)
     signature = signed_tx_data.hash.hex()
     neon_tx = NeonTx.fromString(bytearray(signed_tx_data.rawTransaction))
-    mp_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx, sender_tx_cnt=nonce)
+    neon_tx_exec_cfg = NeonTxExecCfg()
+    neon_tx_exec_cfg.set_state_tx_cnt(0)
+    mp_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg)
     return mp_tx_request
 
 
 class MockTask:
-
     def __init__(self, result: Any, is_done: bool = True, exception: Exception = None):
         self._result = result
         self._is_done = is_done
@@ -54,9 +61,8 @@ class MockTask:
 
 
 class MockMPExecutor(IMPExecutor):
-
-    def submit_mp_request(self, mp_request: MPRequest) -> Tuple[int, MockTask]:
-        return 1, MockTask(MPTxResult(MPResultCode.Done, None))
+    def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
+        return MPTask(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None)), mp_request)
 
     def is_available(self) -> bool:
         return False
@@ -66,6 +72,33 @@ class MockMPExecutor(IMPExecutor):
 
     def release_resource(self, resource_id: int):
         pass
+
+
+class MockResourceManager(OperatorResourceMng):
+    def __init__(self, _):
+        pass
+
+    def get_resource(self, ident: str) -> Optional[str]:
+        return 'test'
+
+    def release_resource(self, ident: str) -> None:
+        pass
+
+    def get_disabled_resource_list(self) -> List[str]:
+        return []
+
+
+
+class FakeConfig(Config):
+
+    def get_evm_loader_id(self) -> PublicKey:
+        return PublicKey('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
+
+    def get_mempool_capacity(self) -> int:
+        return 4000
+
+    def get_recheck_resource_list_interval(self) -> int:
+        return 1000
 
 
 class TestMemPool(unittest.IsolatedAsyncioTestCase):
@@ -81,7 +114,13 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self._executor = MockMPExecutor()
-        self._mempool = MemPool(self._executor, capacity=4096)
+        self._config = FakeConfig()
+        self._op_res_mng = MockResourceManager(self._config)
+        self._mempool = MemPool(self._config, self._op_res_mng, self._executor)
+
+        price_result = MPGasPriceResult(suggested_gas_price=1, min_gas_price=1)
+        self._mempool._gas_price_task_loop._task = MockTask(None, False)
+        self._mempool._gas_price_task_loop._gas_price = price_result
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available", return_value=True)
@@ -94,7 +133,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         submit_mp_request_mock.assert_called_once()
         submit_mp_request_mock.assert_called_with(mp_tx_request)
 
-    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxResult(MPResultCode.Done, None))))
+    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))))
     @patch.object(MockMPExecutor, "is_available", return_value=False)
     async def test_single_sender_couple_txs(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         """Checks if an enqueued mp_tx_requests get in effect in the right order"""
@@ -107,11 +146,15 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         submit_mp_request_mock.assert_not_called()
         is_available_mock.return_value = True
         self._mempool.on_resource_got_available(1)
-        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 10)
+        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
+        submit_mp_request_mock.assert_has_calls([call(requests[0])])
 
+        self._update_state_tx_cnt([MPSenderTxCntData(sender=from_acc.address.lower(), state_tx_cnt=1)])
+        self._mempool.on_resource_got_available(1)
+        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
         submit_mp_request_mock.assert_has_calls([call(requests[0]), call(requests[1])])
 
-    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxResult(MPResultCode.Done, None))))
+    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))))
     @patch.object(MockMPExecutor, "is_available", return_value=False)
     async def test_2_senders_4_txs(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         """Checks if an enqueued mp_tx_request from different senders gets in effect in the right order"""
@@ -124,7 +167,13 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         is_available_mock.return_value = True
         self._mempool.on_resource_got_available(1)
         await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
+        submit_mp_request_mock.assert_has_calls([call(requests[2]), call(requests[0])])
 
+        self._update_state_tx_cnt([
+            MPSenderTxCntData(sender=acc[0].address.lower(), state_tx_cnt=1),
+            MPSenderTxCntData(sender=acc[1].address.lower(), state_tx_cnt=1)])
+        self._mempool.on_resource_got_available(1)
+        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
         submit_mp_request_mock.assert_has_calls([call(requests[2]), call(requests[0]), call(requests[3]), call(requests[1])])
 
     @patch.object(MockMPExecutor, "submit_mp_request")
@@ -180,9 +229,9 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         acc = [create_account() for i in range(3)]
         req_data = [dict(req_id="000", nonce=0, gasPrice=30000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[2]),
                     dict(req_id="001", nonce=1, gasPrice=21000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[2]),
-                    dict(req_id="002", nonce=0, gasPrice=40000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
-                    dict(req_id="003", nonce=1, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
-                    dict(req_id="004", nonce=2, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2])]
+                    dict(req_id="002", nonce=2, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
+                    dict(req_id="003", nonce=0, gasPrice=40000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
+                    dict(req_id="004", nonce=1, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2])]
         requests = await self._enqueue_requests(req_data)
         acc_0_count = self._mempool.get_pending_tx_count(requests[0].sender_address)
         self.assertEqual(acc_0_count, 2)
@@ -194,40 +243,59 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         acc_1_count = self._mempool.get_pending_tx_count(requests[3].sender_address)
         self.assertEqual(acc_1_count, 2)
 
-    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxResult(MPResultCode.Done, None))))
+    @patch.object(MockMPExecutor, "submit_mp_request", return_value=(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None))))
     @patch.object(MockMPExecutor, "is_available")
     async def test_over_9000_transfers(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         """Checks if all mp_tx_requests are processed by the MemPool"""
         acc_count_max = 1_000
         from_acc_count = 10
-        sleep_sec = 2
+        sleep_sec = 0.1
         nonce_count = 100
         req_count = from_acc_count * nonce_count
         acc = [create_account() for i in range(acc_count_max)]
         for acc_i in range(0, from_acc_count):
-            for nonce in range(0, nonce_count):
+            nonces = [i for i in range(0, nonce_count)]
+            while len(nonces) > 0:
+                index = randint(0, len(nonces) - 1)
+                nonce = nonces.pop(index)
                 request = get_transfer_mp_request(from_acc=acc[acc_i], to_acc=acc[randint(0, acc_count_max-1)],
                                                   req_id=str(acc_i) + " " + str(nonce), nonce=nonce,
                                                   gasPrice=randint(50000, 100000), gas=randint(4000, 10000))
                 await self._mempool.enqueue_mp_request(request)
         is_available_mock.return_value = True
-        self._mempool.on_resource_got_available(1)
-        await asyncio.sleep(sleep_sec)
-        for ac in acc[:from_acc_count]:
-            acc_nonce = 0
-            for call in submit_mp_request_mock.call_args_list:
-                request = call.args[0]
-                if ac.address.lower() == request.sender_address:
-                    self.assertEqual(request.nonce, acc_nonce)
-                    acc_nonce += 1
+        for i in range(nonce_count):
+            call_count = 0
+            self._mempool.on_resource_got_available(1)
+            await asyncio.sleep(sleep_sec)
+            for ac in acc[:from_acc_count]:
+                acc_nonce = 0
+                for mp_call in submit_mp_request_mock.call_args_list:
+                    request = mp_call.args[0]
+                    if request.type != MPRequestType.SendTransaction:
+                        continue
+                    if ac.address.lower() == request.sender_address:
+                        self.assertEqual(request.nonce, acc_nonce)
+                        acc_nonce += 1
+                        call_count += 1
+            nonce = i + 1
+            self.assertEqual(call_count, from_acc_count * nonce)
 
-        self.assertEqual(submit_mp_request_mock.call_count, req_count)
+            update_tx_cnt_list: List[MPSenderTxCntData] = []
+            for acc_i in range(0, from_acc_count):
+                update_tx_cnt_list.append(MPSenderTxCntData(sender=acc[acc_i].address.lower(), state_tx_cnt=nonce))
+            self._update_state_tx_cnt(update_tx_cnt_list)
 
     async def _enqueue_requests(self, req_data: List[Dict[str, Any]]) -> List[MPTxRequest]:
         requests = [get_transfer_mp_request(**req) for req in req_data]
         for req in requests:
             await self._mempool.enqueue_mp_request(req)
         return requests
+
+    def _update_state_tx_cnt(self, sender_tx_cnt_list: List[MPSenderTxCntData]) -> None:
+        for data in sender_tx_cnt_list:
+            tx = self._mempool._tx_schedule._find_sender_pool(data.sender).get_top_tx()
+            self._mempool._tx_schedule.done_tx(tx)
+        self._mempool._tx_schedule.set_sender_state_tx_cnt_list(sender_tx_cnt_list)
 
 
 class TestMPSchedule(unittest.TestCase):
@@ -242,45 +310,36 @@ class TestMPSchedule(unittest.TestCase):
         neon_logger.setLevel(logging.ERROR)
 
     def test_capacity_oversized_simple(self):
-        """Checks if mp_schedule doesn't get oversized in simple way"""
-        mp_schedule_capacity = 3
+        """Checks if mp_schedule gets oversized in simple way"""
+        mp_schedule_capacity = 5
         schedule = MPTxSchedule(mp_schedule_capacity)
         acc = [create_account() for i in range(3)]
-        req_data = [dict(req_id="000", nonce=0, gasPrice=60000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
-                    dict(req_id="001", nonce=1, gasPrice=60000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+        req_data = [dict(req_id="000", nonce=1, gasPrice=60000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+                    dict(req_id="001", nonce=0, gasPrice=60000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
                     dict(req_id="002", nonce=1, gasPrice=40000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
                     dict(req_id="003", nonce=1, gasPrice=70000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]),
-                    dict(req_id="004", nonce=2, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
+                    dict(req_id="004", nonce=0, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
                     dict(req_id="005", nonce=2, gasPrice=50000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]),
-                    dict(req_id="006", nonce=3, gasPrice=50000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]) ]
+                    dict(req_id="006", nonce=0, gasPrice=50000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]) ]
         self.requests = [get_transfer_mp_request(**req) for req in req_data]
-        for request in self.requests[0:3]:
-            schedule.add_mp_tx_request(request)
+        for request in self.requests[0:5]:
+            schedule.add_tx(request)
 
-        self.assertIs(schedule.acquire_tx_for_execution(), self.requests[0])
-        self.assertIs(schedule.acquire_tx_for_execution(), self.requests[2])
-        self.assertIs(schedule.acquire_tx_for_execution(), None)
-        for request in self.requests[3:]:
-            schedule.add_mp_tx_request(request)
-        self.assertEqual(acc[2].address.lower(), schedule._sender_tx_pools[0].sender_address)
-        self.assertEqual(acc[0].address.lower(), schedule._sender_tx_pools[1].sender_address)
-        self.assertEqual(acc[1].address.lower(), schedule._sender_tx_pools[2].sender_address)
-        self.assertEqual(acc[1].address.lower(), schedule._sender_tx_pools[2].sender_address)
-        self.assertIs(self.requests[3], schedule._sender_tx_pools[0]._tx_list[0])
-        self.assertIs(self.requests[0], schedule._sender_tx_pools[1]._tx_list[0])
-        self.assertIs(self.requests[2], schedule._sender_tx_pools[2]._tx_list[0])
-
-        self.assertEqual(3, schedule.get_mp_tx_count())
-        self.assertEqual(3, len(schedule._sender_tx_pools))
-        self.assertEqual(1, schedule.get_pending_tx_count(acc[0].address.lower()))
+        self.assertIs(schedule.acquire_tx(), self.requests[1])
+        self.assertIs(schedule.acquire_tx(), self.requests[4])
+        self.assertIs(schedule.peek_tx(), None)
+        for request in self.requests[5:]:
+            schedule.add_tx(request)
+        self.assertEqual(acc[2].address.lower(), schedule._sender_pool_queue[0].sender_address)
+        self.assertIs(self.requests[3], schedule._sender_pool_queue[0]._tx_nonce_queue[0])
+        self.assertEqual(5, schedule.get_tx_count())
+        self.assertEqual(1, len(schedule._sender_pool_queue))
+        self.assertEqual(2, schedule.get_pending_tx_count(acc[0].address.lower()))
         self.assertEqual(1, schedule.get_pending_tx_count(acc[1].address.lower()))
-        self.assertEqual(1, schedule.get_pending_tx_count(acc[2].address.lower()))
-        self.assertEqual(3, len(schedule._sender_tx_pools))
-        self.assertIs(self.requests[3], schedule._sender_tx_pools[0]._tx_list[0])
+        self.assertEqual(2, schedule.get_pending_tx_count(acc[2].address.lower()))
 
     def test_capacity_oversized(self):
         """Checks if mp_schedule doesn't get oversized with a quite big set of mp_tx_requests"""
-
         acc_count_max = 10
         from_acc_count = 5
         nonce_count = 1000
@@ -288,12 +347,15 @@ class TestMPSchedule(unittest.TestCase):
         schedule = MPTxSchedule(mp_schedule_capacity)
         acc = [create_account() for i in range(acc_count_max)]
         for acc_i in range(0, from_acc_count):
-            for nonce in range(0, nonce_count):
+            nonces = [i for i in range(0, nonce_count)]
+            while len(nonces) > 0:
+                index = randint(0, len(nonces) - 1)
+                nonce = nonces.pop(index)
                 request = get_transfer_mp_request(from_acc=acc[acc_i], to_acc=acc[randint(0, acc_count_max-1)],
-                                                  req_id=str(acc_i) + " " + str(nonce), nonce=nonce,
+                                                  req_id=str(acc_i) + " " + str(nonce), nonce=nonce_count - nonce - 1,
                                                   gasPrice=randint(50000, 100000), gas=randint(4000, 10000))
-                schedule.add_mp_tx_request(request)
-        self.assertEqual(mp_schedule_capacity, schedule.get_mp_tx_count())
+                schedule.add_tx(request)
+        self.assertEqual(mp_schedule_capacity, schedule.get_tx_count())
 
 
 class TestMPSenderTxPool(unittest.TestCase):
@@ -310,35 +372,35 @@ class TestMPSenderTxPool(unittest.TestCase):
     def setUp(self) -> None:
         self._pool = MPSenderTxPool()
         acc = [create_account() for i in range(2)]
-        req_data = [dict(req_id="000", nonce=0, gasPrice=30000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+        req_data = [dict(req_id="000", nonce=3, gasPrice=30000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
                     dict(req_id="001", nonce=1, gasPrice=21000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
-                    dict(req_id="002", nonce=2, gasPrice=40000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
-                    dict(req_id="003", nonce=3, gasPrice=25000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+                    dict(req_id="002", nonce=0, gasPrice=40000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+                    dict(req_id="003", nonce=2, gasPrice=25000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
                     dict(req_id="004", nonce=4, gasPrice=25000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1])]
         self._requests = [get_transfer_mp_request(**req) for req in req_data]
         for request in self._requests:
             self._pool.add_tx(request)
 
-    def test_drop_last_request(self):
-        """Checks if transaction pool drops the request with highest nonce properly"""
-        self._pool.drop_last_request()
-        self.assertEqual(self._pool.len(), 4)
-        self.assertEqual(self._pool.get_tx(), self._requests[0])
-        self.assertEqual(self._pool._tx_list[-1], self._requests[3])
-
-    def test_drop_last_request_if_processing(self):
-        """Checks if transaction pool doesn't drop the reqeust with the highest nonce if it's in process"""
+    def test_done_tx(self):
         tx = self._pool.acquire_tx()
-        self.assertIs(tx, self._requests[0])
-        with self.assertLogs("neon.MemPool", logging.DEBUG) as logs:
-            for i in range(0, 5):
-                self._pool.drop_last_request()
-            self.assertEqual(5, len(logs.records))
-            self.assertEqual(f"Skip removing transaction: {tx.log_str} - processing", logs.records[4].msg)
-            self.assertEqual(1, self._pool.len())
+        self.assertTrue(self._pool.is_processing())
+        self._pool.done_tx(tx)
+        self.assertEqual(self._pool.get_queue_len(), 4)
 
-    def test_fail_tx(self):
-       tx = self._pool.acquire_tx()
-       self.assertTrue(self._pool.is_processing())
-       self._pool.fail_tx(tx.nonce)
-       self.assertEqual(self._pool.len(), 0)
+    def test_drop_tx(self):
+        tx = self._pool.acquire_tx()
+        self.assertTrue(self._pool.is_processing())
+        with self.assertRaises(AssertionError) as context:
+            self._pool.drop_tx(tx)
+        self.assertTrue('cannot drop processing tx' in str(context.exception))
+        self.assertEqual(self._pool.get_queue_len(), 5)
+
+        tx = self._pool._tx_nonce_queue[0]
+        self._pool.drop_tx(tx)
+        self.assertEqual(self._pool.get_queue_len(), 4)
+
+    def test_cancel_tx(self):
+        tx = self._pool.acquire_tx()
+        self.assertTrue(self._pool.is_processing())
+        self._pool.cancel_process_tx(tx)
+        self.assertEqual(self._pool.get_queue_len(), 5)

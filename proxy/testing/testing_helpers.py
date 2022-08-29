@@ -39,9 +39,9 @@ class SolidityContractDeployer:
         contract = compiled_info.contract
         nonce = self._web3.eth.get_transaction_count(contract_owner.address)
         chain_id = self._web3.eth.chain_id
-        minimal_gas_price = int(os.environ.get("MINIMAL_GAS_PRICE", 1)) * eth_utils.denoms.gwei
+        gas_price = self._web3.eth.gas_price
         trx_signed = self._web3.eth.account.sign_transaction(
-            dict(nonce=nonce, chainId=chain_id, gas=987654321, gasPrice=minimal_gas_price, to='', value=0, data=contract.bytecode),
+            dict(nonce=nonce, chainId=chain_id, gas=987654321, gasPrice=gas_price, to='', value=0, data=contract.bytecode),
             contract_owner.key)
         trx_hash = self._web3.eth.send_raw_transaction(trx_signed.rawTransaction)
         trx_receipt = self._web3.eth.wait_for_transaction_receipt(trx_hash)
@@ -70,7 +70,7 @@ def create_signer_account() -> LocalAccount:
     return signer
 
 
-def request_airdrop(address, amount: int = 10):
+def request_airdrop(address, amount: int = 200):
     FAUCET_URL = os.environ.get('FAUCET_URL', 'http://faucet:3333')
     url = FAUCET_URL + '/request_neon'
     data = f'{{"wallet": "{address}", "amount": {amount}}}'
