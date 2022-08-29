@@ -7,6 +7,7 @@ import copy
 
 from logged_groups import logged_group
 from typing import Dict, Optional, List, Any, cast
+from sha3 import keccak_256
 
 from solana.transaction import Transaction
 from solana.blockhash import Blockhash
@@ -163,7 +164,7 @@ class BaseNeonTxStrategy(abc.ABC):
         return TransactionWithComputeBudget()
 
     def build_cancel_tx(self) -> Transaction:
-        return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
+        return Transaction().add(self._builder.make_cancel_instruction())
 
     def _build_tx_list(self, cnt: int) -> SolTxListInfo:
         return SolTxListInfo(
@@ -397,7 +398,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         tx = TransactionWithComputeBudget(compute_units=self._compute_unit_cnt)
         # generate unique tx
         evm_step_cnt = self._iter_evm_step_cnt + idx
-        tx.add(self._builder.make_partial_call_or_continue_transaction(evm_step_cnt, len(tx.instructions)))
+        tx.add(self._builder.make_partial_call_or_continue_instruction(evm_step_cnt))
         return tx
 
     def _calc_iter_cnt(self) -> int:
@@ -451,11 +452,13 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         tx_list_info = SolTxListInfo([], [])
         holder_msg_offset = 0
         holder_msg = copy.copy(self._builder.holder_msg)
+        hash = keccak_256(holder_msg).digest()
+
         holder_msg_size = ElfParams().holder_msg_size
         while len(holder_msg):
             (holder_msg_part, holder_msg) = (holder_msg[:holder_msg_size], holder_msg[holder_msg_size:])
-            tx = TransactionWithComputeBudget().add(
-                self._builder.make_write_instruction(holder_msg_offset, holder_msg_part)
+            tx = Transaction().add(
+                self._builder.make_write_instruction(hash, holder_msg_offset, holder_msg_part)
             )
             tx_list_info.name_list.append('WriteWithHolder')
             tx_list_info.tx_list.append(tx)

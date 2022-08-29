@@ -46,7 +46,7 @@ class CancelTxExecutor:
         return TransactionWithComputeBudget().add(
             self._builder.make_cancel_instruction(
                 storage_account=storage_info.storage_account,
-                nonce=storage_info.nonce,
+                hash=storage_info.transaction_hash,
                 cancel_key_list=key_list
             )
         )

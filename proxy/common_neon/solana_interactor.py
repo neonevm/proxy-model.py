@@ -96,18 +96,15 @@ class NeonCodeInfo(NamedTuple):
 class StorageAccountInfo(NamedTuple):
     storage_account: PublicKey
     tag: int
+    owner: PublicKey
+    transaction_hash: bytes
     caller: str
-    nonce: int
     gas_limit: int
     gas_price: int
-    block_slot: int
+    gas_used: int
     operator: PublicKey
+    block_slot: int
     account_list_len: int
-    executor_data_size: int
-    evm_data_size: int
-    gas_used_and_paid: int
-    number_of_payments: int
-    sig: bytes
     account_list: List[Tuple[bool, str]]
 
     @staticmethod
@@ -128,18 +125,15 @@ class StorageAccountInfo(NamedTuple):
         return StorageAccountInfo(
             storage_account=storage_account,
             tag=storage.tag,
+            owner=PublicKey(storage.owner),
+            transaction_hash=storage.hash,
             caller=storage.caller.hex(),
-            nonce=storage.nonce,
             gas_limit=int.from_bytes(storage.gas_limit, "little"),
             gas_price=int.from_bytes(storage.gas_price, "little"),
-            block_slot=storage.block_slot,
+            gas_used=int.from_bytes(storage.gas_used, "little"),
             operator=PublicKey(storage.operator),
+            block_slot=storage.block_slot,
             account_list_len=storage.account_list_len,
-            executor_data_size=storage.executor_data_size,
-            evm_data_size=storage.evm_data_size,
-            gas_used_and_paid=int.from_bytes(storage.gas_used_and_paid, "little"),
-            number_of_payments=storage.number_of_payments,
-            sig=storage.sig,
             account_list=account_list
         )
 

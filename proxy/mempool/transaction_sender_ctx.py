@@ -11,7 +11,7 @@ from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 
-from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateERC20TxStage, NeonCreateContractTxStage
+from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateContractTxStage
 from .neon_tx_stages import NeonResizeContractTxStage
 
 from .operator_resource_mng import OperatorResourceInfo
@@ -33,7 +33,6 @@ class AccountTxListBuilder:
 
         # Parse information from the emulator output
         self._parse_accounts_list(emulated_account_dict['accounts'])
-        self._parse_token_list(emulated_account_dict['token_accounts'])
         self._parse_solana_list(emulated_account_dict['solana_accounts'])
 
         eth_meta_list = list(self._eth_meta_dict.values())
@@ -65,12 +64,6 @@ class AccountTxListBuilder:
             self._add_meta(account_desc['account'], True)
             if account_desc['contract']:
                 self._add_meta(account_desc['contract'], account_desc['writable'])
-
-    def _parse_token_list(self, emulated_result_token_accounts: List[Dict[str, Any]]) -> None:
-        for token_account in emulated_result_token_accounts:
-            self._add_meta(token_account['key'], True)
-            if token_account['new']:
-                self._create_account_stage_list.append(NeonCreateERC20TxStage(self._builder, token_account))
 
     def _parse_solana_list(self, emulated_result_solana_account_list: List[Dict[str, Any]]) -> None:
         for account_desc in emulated_result_solana_account_list:
