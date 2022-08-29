@@ -40,7 +40,8 @@ class SortedQueue(Generic[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]):
         if isinstance(index, int):
             return self._impl.queue[index]
         elif isinstance(index, slice):
-            sorted_queue = SortedQueue[SortedQueueItem, int, str](lt_key_func=lambda a: -a.nonce,eq_key_func=lambda a: a.signature)
+            sorted_queue = SortedQueue[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]\
+                (lt_key_func=self._impl._lt_key_func, eq_key_func=self._eq_key_func)
             sorted_queue._impl.queue = self._impl.queue[index]
             return sorted_queue
         raise TypeError(f"list indices must be integers or slices, not {type(index)}")
@@ -146,9 +147,6 @@ class MPSenderTxPool:
             eq_key_func=lambda a: a.signature
         )
 
-    def __len__(self):
-        return len(self._tx_nonce_queue)
-
     @property
     def sender_address(self) -> str:
         return self._sender_address
@@ -232,7 +230,7 @@ class MPSenderTxPool:
         taken_out_txs = self._tx_nonce_queue[_from:]
         [self._tx_nonce_queue.pop(tx) for tx in taken_out_txs]
         self._tx_nonce_queue = self._tx_nonce_queue[:_from]
-        return taken_out_txs
+        return [tx for tx in taken_out_txs]
 
     def drop_tx(self, tx: MPTxRequest) -> None:
         if self.is_processing():
@@ -468,17 +466,18 @@ class MPTxSchedule:
 
     def get_taking_out_txs_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
         empty_pools = []
-        for tx_pool in self._sender_pool_queue:
+
+        for sender_address, tx_pool in self._sender_pool_dict.items():
             taken_out_txs = tx_pool.take_out_txs()
             for tx in taken_out_txs:
                 self._tx_dict.pop(tx)
             if tx_pool.is_empty():
                 empty_pools.append(tx_pool)
-            yield tx_pool.sender_address, taken_out_txs
+            yield sender_address, taken_out_txs
 
         for tx_pool in empty_pools:
             self._remove_empty_sender_pool(tx_pool)
-            self._sender_pool_queue.pop(tx_pool)
+        self._sender_pool_queue = [sender_pool for sender_pool in self._sender_pool_queue if not sender_pool.is_empty()]
 
     def take_in_txs(self, sender_address: str, mp_tx_request_list: MPTxRequestList):
         self.debug(f"Take in mp_tx_request_list, sender_addr: {sender_address}, {len(mp_tx_request_list)} - txs")

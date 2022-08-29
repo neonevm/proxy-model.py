@@ -1,6 +1,6 @@
 import traceback
 
-from logged_groups import logged_group
+from logged_groups import logged_group, logging_context
 import asyncio
 from multiprocessing import Process
 from typing import Any, Optional, cast, Union
@@ -39,7 +39,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         self.info("Run until complete")
         self._process.start()
 
-    async def on_data_received(self, mp_request: Any) -> Any:
+    async def on_data_received(self, mp_request: Union[MPRequest, MaintenanceRequest]) -> Any:
         try:
             if issubclass(type(mp_request), (MPRequest,)):
                 return await self.process_mp_request(cast(MPRequest, mp_request))
@@ -47,12 +47,15 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
                 return self.process_maintenance_request(cast(MaintenanceRequest, mp_request))
             self.error(f"Failed to process mp_request, unknown type: {type(mp_request)}")
         except Exception as err:
-            log_ctx = {"context": {"req_id": mp_request.req_id}}
-            err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error(f"Failed to process maintenance request: {mp_request.command}, {err}, traceback: {err_tb}", extra=log_ctx)
-            return Result("Request failed")
+            with logging_context(req_id=mp_request.req_id):
+                self._on_exception(f"Failed to process maintenance request: {mp_request.command}", err)
+                return Result("Request failed")
 
         return Result("Unexpected problem")
+
+    def _on_exception(self, text: str, err: BaseException) -> None:
+        err_tb = "".join(traceback.format_tb(err.__traceback__))
+        self.error(f"{text}. Error: {err}. Traceback: {err_tb}")
 
     async def process_mp_request(self, mp_request: MPRequest) -> Any:
         if mp_request.type == MPRequestType.SendTransaction:
@@ -66,7 +69,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             return self._mempool.get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
         elif mp_request.type == MPRequestType.GetGasPrice:
             return self._mempool.get_gas_price()
-        self.error(f"Failed to process mp_reqeust, unknown type: {mp_request.type}")
+        self.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
 
     def process_maintenance_request(self, request: MaintenanceRequest) -> Result:
         if request.command == MaintenanceCommand.SuspendMemPool:
@@ -97,6 +100,3 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
 
     def on_resource_released(self, resource_id: int):
         self._mempool.on_resource_got_available(resource_id)
-
-    def on_operator_resource_released(self):
-        self._mempool.on_operator_resource_released()

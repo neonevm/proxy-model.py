@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 
-from typing import Any, Optional, List, Tuple
+from typing import Any, Optional, List
 from abc import ABC, abstractmethod
 
 import asyncio
