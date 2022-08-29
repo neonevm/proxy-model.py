@@ -433,10 +433,10 @@ class TestMPSenderTxPool(unittest.TestCase):
     def test_take_out_txs_on_processing_pool(self):
         self._pool.acquire_tx()
         taken_out_txs = self._pool.take_out_txs()
-        self.assertEqual(len(self._pool), 1)
+        self.assertEqual(self._pool.get_queue_len(), 1)
         self.assertEqual(len(taken_out_txs), 4)
 
     def test_take_out_txs_on_non_processing_pool(self):
         taken_out_txs = self._pool.take_out_txs()
-        self.assertEqual(len(self._pool), 0)
+        self.assertEqual(self._pool.get_queue_len(), 0)
         self.assertEqual(len(taken_out_txs), 5)
