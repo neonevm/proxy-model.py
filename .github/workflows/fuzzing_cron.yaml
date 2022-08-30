@@ -8,6 +8,7 @@ jobs:
     runs-on: [self-hosted, linux]
     env:
       LOG_CFG: log_cfg_fuzzing.json
+      EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
     container:
       image: gcr.io/oss-fuzz-base/base-builder-python
     strategy:
