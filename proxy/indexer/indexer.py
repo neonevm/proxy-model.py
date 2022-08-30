@@ -364,9 +364,6 @@ class CreateAccountV01IxDecoder(DummyIxDecoder):
 class CreateAccountV02IxDecoder(DummyIxDecoder):
     _name = 'CreateAccountV02'
 
-    def __init__(self, state: SolNeonTxDecoderState):
-        DummyIxDecoder.__init__(self, state)
-
     def execute(self) -> bool:
         ix = self.state.sol_neon_ix
         if len(ix.ix_data) < 21:
@@ -382,9 +379,6 @@ class CreateAccountV02IxDecoder(DummyIxDecoder):
 
 class CreateAccountV03IxDecoder(DummyIxDecoder):
     _name = 'CreateAccountV03'
-
-    def __init__(self, state: SolNeonTxDecoderState):
-        DummyIxDecoder.__init__(self, state)
 
     def execute(self) -> bool:
         ix = self.state.sol_neon_ix
