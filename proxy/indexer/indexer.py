@@ -346,14 +346,8 @@ class CreateAccountV01IxDecoder(DummyIxDecoder):
         if len(ix.ix_data) < 41:
             return self._decoding_skip(f'not enough data to get the Neon account {len(ix.ix_data)}')
 
-        if SolReceiptParser(self.ix.tx).check_if_error():
-            return self._decoding_skip("Ignore failed create account")
-
-        if len(self.ix.ix_data) < 41:
-            return self._decoding_skip(f'not enough data to get the Neon account {len(self.ix.ix_data)}')
-
-        neon_account = "0x" + self.ix.ix_data[8+8+4:][:20].hex()
-        pda_account = self.ix.get_account(1)
+        neon_account = "0x" + ix.ix_data[8+8+4:][:20].hex()
+        pda_account = ix.get_account(1)
 
         account_info = NeonAccountInfo(neon_account, pda_account, ix.block_slot, None, ix.sol_sig)
 
@@ -361,24 +355,8 @@ class CreateAccountV01IxDecoder(DummyIxDecoder):
         return self._decoding_success(account_info, 'create account')
 
 
-class CreateAccountV02IxDecoder(DummyIxDecoder):
-    _name = 'CreateAccountV02'
-
-    def execute(self) -> bool:
-        ix = self.state.sol_neon_ix
-        if len(ix.ix_data) < 21:
-            return self._decoding_skip(f'not enough data to get the Neon account {len(ix.ix_data)}')
-
-        neon_account = "0x" + ix.ix_data[1:][:20].hex()
-        pda_account = ix.get_account(2)
-
-        account_info = NeonAccountInfo(neon_account, pda_account, ix.block_slot, None, ix.sol_sig)
-        self.state.neon_block.add_neon_account(account_info, ix)
-        return self._decoding_success(account_info, 'create account')
-
-
-class CreateAccountV03IxDecoder(DummyIxDecoder):
-    _name = 'CreateAccountV03'
+class CreateAccountV0203IxDecoder(DummyIxDecoder):
+    _name = 'CreateAccountV0203'
 
     def execute(self) -> bool:
         ix = self.state.sol_neon_ix
@@ -698,7 +676,7 @@ class Indexer(IndexerBase):
             0x15: CancelV02IxDecoder,
             0x16: ExecuteTrxFromAccountV02IxDecoder,
             0x17: UpdateValidsTableIxDecoder,
-            0x18: CreateAccountV02IxDecoder,
+            0x18: CreateAccountV0203IxDecoder,
             0x19: DepositV02IxDecoder,
             0x1a: Migrate01AccountFromV1ToV2IxDecoder,
             0x1b: ExecuteOrContinueNoChainIdIxParser,
@@ -706,7 +684,7 @@ class Indexer(IndexerBase):
             0x1d: Migrate02ContractFromV1ToV2ConvertDataAccountIxDecoder,
             0x1e: CollectTreasureIxDecoder,
             0x1f: DepositV03IxDecoder,
-            0x20: CreateAccountV03IxDecoder,
+            0x20: CreateAccountV0203IxDecoder,
         }
 
     def _cancel_old_neon_txs(self, neon_block: NeonIndexedBlockInfo) -> None:
