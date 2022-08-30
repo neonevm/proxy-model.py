@@ -122,7 +122,7 @@ echo "Run tests in parallel. "
 
 docker cp proxy:/usr/bin/parallel ./parallel
 docker exec proxy ./proxy/prepare-deploy-test.sh ${EXTRA_ARGS:-}
-if [ "${UNITTEST_TESTNAME}" == "UNISWAP" ]; then
+if [ "${UNITTEST_TESTNAME:=}" == "UNISWAP" ]; then
     run_uniswap_test
 elif [[ -z "${UNITTEST_TESTNAME:=}" ]]; then
     get_test_list | ./parallel --halt now,fail=1 run_test {}
