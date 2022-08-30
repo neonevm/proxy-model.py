@@ -21,10 +21,13 @@ jobs:
        sanitizer:
           - undefined
     steps:
+    - name: Clean up
+      run: rm -rf ${{ github.workspace }}
     - name: Checkout submodules
       uses: actions/checkout@v3
       id: checkout
       with:
+        ref: ${{ github.ref }}
         path: storage/proxy-model.py
         submodules: true
 
