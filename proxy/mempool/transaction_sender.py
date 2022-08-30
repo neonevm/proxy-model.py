@@ -237,7 +237,10 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         return True
 
     def _validate_no_additional_resize_steps(self) -> bool:
-        return not self._ctx.neon_tx_exec_cfg.additional_resize_steps
+        if not self._ctx.neon_tx_exec_cfg.additional_resize_steps:
+            return True
+        self._validation_error_msg = 'Has additional account resize steps'
+        return False
 
     def build_tx(self, _=0) -> Transaction:
         tx = TransactionWithComputeBudget()
