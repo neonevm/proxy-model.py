@@ -19,7 +19,7 @@
             "()": "logged_groups.ContextFilter"
         },
         "neon_prefix_dropper": {
-            "()": "proxy.common_neon.logging.NeonPrefixDropper"
+            "()": "neon_py.logging.NeonPrefixDropper"
         }
     },
     "formatters": {
