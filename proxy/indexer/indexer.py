@@ -692,8 +692,12 @@ class Indexer(IndexerBase):
             if (tx.storage_account != '') and (abs(tx.block_slot - neon_block.block_slot) > CANCEL_TIMEOUT):
                 self._cancel_neon_tx(tx)
 
-        self._cancel_tx_executor.execute_tx_list()
-        self._cancel_tx_executor.clear()
+        try:
+            self._cancel_tx_executor.execute_tx_list()
+        except Exception as err:
+            self.error(f'Fail to cancel neon txs: {str(err)}')
+        finally:
+            self._cancel_tx_executor.clear()
 
     def _cancel_neon_tx(self, tx: NeonIndexedTxInfo) -> bool:
         # We've already indexed the transaction

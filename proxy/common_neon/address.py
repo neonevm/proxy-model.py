@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import random
+import sha3
+import math
 
 from typing import Tuple
 
@@ -40,9 +42,16 @@ class EthereumAddress:
     def __bytes__(self): return self.data
 
 
-def accountWithSeed(base: bytes, seed: bytes) -> PublicKey:
-    result = PublicKey(sha256(bytes(base) + bytes(seed) + bytes(PublicKey(EVM_LOADER_ID))).digest())
+def accountWithSeed(base_address: PublicKey, seed: bytes) -> PublicKey:
+    result = PublicKey(sha256(bytes(base_address) + bytes(seed) + bytes(PublicKey(EVM_LOADER_ID))).digest())
     return result
+
+
+def permAccountSeed(prefix: bytes, resource_id: int) -> bytes:
+    aid = resource_id.to_bytes(math.ceil(resource_id.bit_length() / 8), 'big')
+    seed_base = prefix + aid
+    seed = sha3.keccak_256(seed_base).hexdigest()[:32]
+    return bytes(seed, 'utf8')
 
 
 def ether2program(ether) -> Tuple[PublicKey, int]:

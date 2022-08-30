@@ -40,16 +40,6 @@ function dump_docker_logs {
     cleanup_docker
 }
 
-trap dump_docker_logs EXIT
-
-cleanup_docker
-
-echo
-if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
-    echo "docker-compose failed to start"
-    exit 1
-fi
-
 function wait-for-faucet {
     declare FAUCET_URL=$(docker exec proxy bash -c 'echo "${FAUCET_URL}"')
     declare FAUCET_IPPORT=$(echo "${FAUCET_URL}" | cut -d / -f 3)
@@ -68,10 +58,26 @@ function wait-for-faucet {
     done
 
     echo `date +%H:%M:%S`" faucet ${FAUCET_IPPORT} is unavailable - time is over"
-    return 9847
+    return 98
 }
-wait-for-faucet
 
+if [ "${SKIP_DOCKER_DOWN}" == "NO" ]; then
+    trap dump_docker_logs EXIT
+fi
+
+if [ "${SKIP_DOCKER_UP}" == "NO" ]; then
+    cleanup_docker
+
+    echo
+    if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
+        echo "docker-compose failed to start"
+        exit 1
+    fi
+
+    wait-for-faucet
+fi
+
+export UNISWAP_TESTNAME="test_UNISWAP.py"
 function run_uniswap_test {
     export FAUCET_URL=$(docker exec proxy bash -c 'echo "${FAUCET_URL}"')
     echo
@@ -86,22 +92,27 @@ function run_uniswap_test {
         --entrypoint ./deploy-test.sh \
         ${EXTRA_ARGS:-} \
         $UNISWAP_V2_CORE_IMAGE \
-        all
+        all 2>&1
 }
 export -f run_uniswap_test
 
 function run_test {
     declare TESTNAME="${1}"
-    if [ "${TESTNAME}" == "UNISWAP" ]; then
+    if [ "${TESTNAME}" == "${UNISWAP_TESTNAME}" ]; then
         run_uniswap_test
     else
-        docker exec -e SKIP_PREPARE_DEPLOY_TEST=YES -e TESTNAME=${TESTNAME} proxy ./proxy/deploy-test.sh ${EXTRA_ARGS:-}
+        docker exec \
+            -e SKIP_PREPARE_DEPLOY_TEST=YES \
+            -e TESTNAME=${TESTNAME} \
+            proxy \
+            ./proxy/deploy-test.sh \
+            ${EXTRA_ARGS:-} 2>&1
     fi
 }
 export -f run_test
 
 function get_test_list {
-    echo "UNISWAP"
+    echo "${UNISWAP_TESTNAME}"
     docker exec proxy find . -type f -name "test_*.py" -printf "%f\n"
 }
 export -f get_test_list
