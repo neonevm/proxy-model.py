@@ -75,6 +75,9 @@ class MPTxRequest(MPRequest):
         return self.neon_tx.hasChainId()
 
 
+MPTxRequestList = List[MPTxRequest]
+
+
 @dataclass
 class MPPendingTxNonceRequest(MPRequest):
     sender: str = None

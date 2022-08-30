@@ -56,9 +56,9 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self.error(f"{text}. Error: {err}, Traceback: {err_tb}")
 
     def _init_gas_price_calculator(self):
-        solana_url = self._config.get_solana_url()
         pyth_solana_url = self._config.get_pyth_solana_url()
-        pyth_solana = self._solana if solana_url == pyth_solana_url else SolanaInteractor(pyth_solana_url)
+        solana_url = pyth_solana_url if pyth_solana_url is not None else self._config.get_solana_url()
+        pyth_solana = SolanaInteractor(solana_url)
         pyth_mapping_account = self._config.get_pyth_mapping_account()
         self._gas_price_calculator = GasPriceCalculator(pyth_solana, pyth_mapping_account)
         self._update_gas_price_calculator()

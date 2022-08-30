@@ -1,6 +1,6 @@
 import asyncio
 import traceback
-from typing import List, Optional, Any, cast
+from typing import List, Tuple, Optional, Any, cast, Iterator
 
 from logged_groups import logged_group, logging_context
 from neon_py.data import Result
@@ -11,7 +11,7 @@ from ..common_neon.config import IConfig
 
 from .operator_resource_mng import OperatorResourceMng
 
-from .mempool_api import MPRequest, MPRequestType, IMPExecutor, MPTask
+from .mempool_api import MPRequest, MPRequestType, IMPExecutor, MPTask, MPTxRequestList
 from .mempool_api import MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxSendResult, MPTxSendResultCode
 from .mempool_api import MPGasPriceRequest, MPGasPriceResult
 from .mempool_api import MPSenderTxCntRequest, MPSenderTxCntResult
@@ -297,6 +297,9 @@ class MemPool:
             self._schedule_cond.notify()
 
     def on_resource_got_available(self, resource_id: int):
+        self._create_kick_tx_schedule_task()
+
+    def _create_kick_tx_schedule_task(self):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
 
     def suspend_processing(self) -> Result:
@@ -313,10 +316,18 @@ class MemPool:
             return Result()
         self._is_active = True
         self.info("Transaction processing resumed")
+        self._create_kick_tx_schedule_task()
         return Result()
 
     def is_active(self) -> bool:
         return self._is_active
+
+    def get_taking_out_txs_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
+        return self._tx_schedule.get_taking_out_txs_iterator()
+
+    def take_in_txs(self, sender_addr: str, mp_tx_request_list: MPTxRequestList):
+        self._tx_schedule.take_in_txs(sender_addr, mp_tx_request_list)
+        self._create_kick_tx_schedule_task()
 
     def has_gas_price(self) -> bool:
         return self._gas_price is not None
