@@ -1,4 +1,3 @@
-import traceback
 from logged_groups import logged_group
 import asyncio
 from multiprocessing import Process
@@ -76,8 +75,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             self._mempool = MemPool(self._config, self._operator_resource_mng, self._mp_executor_mng)
             self.event_loop.run_forever()
         except Exception as err:
-            err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error(f"Failed to run mempool_service:  Error: {err}, Traceback: {err_tb}")
+            self.error(f"Failed to run mempool_service: {err}")
 
     def on_resource_released(self, resource_id: int):
         self._mempool.on_resource_got_available(resource_id)

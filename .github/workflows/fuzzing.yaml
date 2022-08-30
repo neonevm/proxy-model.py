@@ -21,8 +21,6 @@ jobs:
        sanitizer:
           - undefined
     steps:
-    - name: Clean up
-      run: rm -rf ${{ github.workspace }}
     - name: Checkout submodules
       uses: actions/checkout@v3
       id: checkout
@@ -47,3 +45,6 @@ jobs:
         fuzz-seconds: 600
         mode: 'code-change'
         sanitizer: ${{ matrix.sanitizer }}
+    - name: Clean up
+      if: always()
+      run: rm -rf ${{ github.workspace }}
