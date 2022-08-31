@@ -35,9 +35,9 @@ class AccountTxListBuilder:
         self._parse_accounts_list(emulated_account_dict['accounts'])
         self._parse_solana_list(emulated_account_dict['solana_accounts'])
 
-        eth_meta_list = list(self._eth_meta_dict.values())
-        self.debug('metas: ' + ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in eth_meta_list]))
-        self._builder.init_eth_accounts(eth_meta_list)
+        neon_meta_list = list(self._eth_meta_dict.values())
+        self.debug('metas: ' + ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in neon_meta_list]))
+        self._builder.init_neon_account_list(neon_meta_list)
 
         # Build all instructions
         self._build_account_stage_list()
@@ -103,7 +103,8 @@ class NeonTxSendCtx:
         self._neon_tx_exec_cfg = neon_tx_exec_cfg
         self._neon_tx = neon_tx
         self._sender = '0x' + neon_tx.sender()
-        self._neon_sig = '0x' + neon_tx.hash_signed().hex()
+        self._bin_neon_sig: bytes = neon_tx.hash_signed()
+        self._neon_sig = '0x' + self._bin_neon_sig.hex()
         self._solana = solana
         self._resource = resource
         self._builder = NeonIxBuilder(resource.public_key)
@@ -111,9 +112,9 @@ class NeonTxSendCtx:
         self._account_tx_list_builder = AccountTxListBuilder(solana, self._builder)
         self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.account_dict)
 
-        self._builder.init_operator_ether(self._resource.ether)
-        self._builder.init_eth_tx(self._neon_tx)
-        self._builder.init_iterative(self._resource.storage, self._resource.holder, self._resource.resource_id)
+        self._builder.init_operator_neon(self._resource.ether)
+        self._builder.init_neon_tx(self._neon_tx)
+        self._builder.init_iterative(self._resource.holder)
 
         self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
 
@@ -136,6 +137,10 @@ class NeonTxSendCtx:
     @property
     def neon_sig(self) -> str:
         return self._neon_sig
+
+    @property
+    def bin_neon_sig(self) -> bytes:
+        return self._bin_neon_sig
 
     @property
     def sender(self) -> str:

@@ -130,11 +130,11 @@ class TestAirdropperIntegration(TestCase):
         )))
         claim_instr = self.wrapper.create_claim_instruction(
             owner = from_owner.public_key(),
-            from_acc=from_spl_token_acc, 
+            from_acc=from_spl_token_acc,
             to_acc=to_neon_acc,
             amount=TRANSFER_AMOUNT,
         )
-        trx.add(claim_instr.make_noniterative_call_transaction(len(trx.instructions)))
+        trx.add(claim_instr.make_tx_exec_from_data_ix())
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
@@ -192,18 +192,18 @@ class TestAirdropperIntegration(TestCase):
         )))
         claim_instr1 = self.wrapper.create_claim_instruction(
             owner = from_owner.public_key(),
-            from_acc=from_spl_token_acc, 
+            from_acc=from_spl_token_acc,
             to_acc=to_neon_acc1,
             amount=TRANSFER_AMOUNT1,
         )
-        trx.add(claim_instr1.make_noniterative_call_transaction(len(trx.instructions)))
+        trx.add(claim_instr1.make_tx_exec_from_data_ix())
         claim_instr2 = self.wrapper.create_claim_instruction(
             owner = from_owner.public_key(),
-            from_acc=from_spl_token_acc, 
+            from_acc=from_spl_token_acc,
             to_acc=to_neon_acc2,
             amount=TRANSFER_AMOUNT2,
         )
-        trx.add(claim_instr2.make_noniterative_call_transaction(len(trx.instructions)))
+        trx.add(claim_instr2.make_tx_exec_from_data_ix())
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
@@ -242,7 +242,7 @@ class TestAirdropperIntegration(TestCase):
 
         initial_balance = 1_000
         # Create account before input liquidity (should not cause airdrop)
-        request_airdrop(to_neon_acc.address, initial_balance) 
+        request_airdrop(to_neon_acc.address, initial_balance)
         sleep(15)
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
@@ -261,11 +261,11 @@ class TestAirdropperIntegration(TestCase):
         )))
         claim_instr = self.wrapper.create_claim_instruction(
             owner = from_owner.public_key(),
-            from_acc=from_spl_token_acc, 
+            from_acc=from_spl_token_acc,
             to_acc=to_neon_acc,
             amount=TRANSFER_AMOUNT,
         )
-        trx.add(claim_instr.make_noniterative_call_transaction(len(trx.instructions)))
+        trx.add(claim_instr.make_tx_exec_from_data_ix())
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
@@ -275,5 +275,5 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), TRANSFER_AMOUNT)
         eth_balance = proxy.eth.get_balance(to_neon_acc.address)
         print("NEON balance is: ", eth_balance)
-        # Balance should not change because airdropper should not handle this transaction 
+        # Balance should not change because airdropper should not handle this transaction
         self.assertEqual(eth_balance, initial_balance * 10**18)

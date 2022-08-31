@@ -5,9 +5,8 @@ from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.compute_budget import TransactionWithComputeBudget
-from ..common_neon.solana_interactor import SolanaInteractor, StorageAccountInfo
-from ..common_neon.solana_tx_list_sender import SolTxListInfo,SolTxListSender
+from ..common_neon.solana_interactor import SolanaInteractor, HolderAccountInfo
+from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.solana_v0_transaction import V0Transaction
 from ..common_neon.solana_alt import AddressLookupTableInfo
 from ..common_neon.solana_alt_builder import AddressLookupTableTxBuilder, AddressLookupTableTxSet
@@ -25,34 +24,34 @@ class CancelTxExecutor:
         self._alt_tx_set = AddressLookupTableTxSet()
         self._alt_info_list: List[AddressLookupTableInfo] = []
         self._cancel_tx_list: List[Transaction] = []
-        self._storage_account_set: Set[str] = set()
+        self._holder_account_set: Set[str] = set()
 
-    def add_blocked_storage_account(self, storage_info: StorageAccountInfo) -> bool:
-        if str(storage_info.storage_account) in self._storage_account_set:
+    def add_blocked_holder_account(self, holder_info: HolderAccountInfo) -> bool:
+        if str(holder_info.holder_account) in self._holder_account_set:
             return False
 
-        if len(storage_info.account_list) >= self._alt_builder.TX_ACCOUNT_CNT:
-            tx = self._build_alt_cancel_tx(storage_info)
+        if len(holder_info.account_list) >= self._alt_builder.TX_ACCOUNT_CNT:
+            tx = self._build_alt_cancel_tx(holder_info)
         else:
-            tx = self._build_cancel_tx(storage_info)
+            tx = self._build_cancel_tx(holder_info)
         self._cancel_tx_list.append(tx)
         return True
 
-    def _build_cancel_tx(self, storage_info: StorageAccountInfo) -> Transaction:
+    def _build_cancel_tx(self, holder_info: HolderAccountInfo) -> Transaction:
         key_list: List[AccountMeta] = []
-        for is_writable, acct in storage_info.account_list:
+        for is_writable, acct in holder_info.account_list:
             key_list.append(AccountMeta(pubkey=PublicKey(acct), is_signer=False, is_writable=is_writable))
 
-        return TransactionWithComputeBudget().add(
-            self._builder.make_cancel_instruction(
-                storage_account=storage_info.storage_account,
-                hash=storage_info.transaction_hash,
+        return Transaction().add(
+            self._builder.make_cancel_ix(
+                holder_account=holder_info.holder_account,
+                neon_tx_sig=bytes.fromhex(holder_info.neon_tx_sig[2:]),
                 cancel_key_list=key_list
             )
         )
 
-    def _build_alt_cancel_tx(self, storage_info: StorageAccountInfo) -> Transaction:
-        legacy_tx = self._build_cancel_tx(storage_info)
+    def _build_alt_cancel_tx(self, holder_info: HolderAccountInfo) -> Transaction:
+        legacy_tx = self._build_cancel_tx(holder_info)
         alt_info = self._alt_builder.build_alt_info(legacy_tx)
         alt_tx_set = self._alt_builder.build_alt_tx_set(alt_info)
 

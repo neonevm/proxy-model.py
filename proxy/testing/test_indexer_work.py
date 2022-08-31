@@ -215,10 +215,11 @@ class CancelTest(unittest.TestCase):
 
         tx = TransactionWithComputeBudget()
         builder = NeonIxBuilder(self.acc.public_key())
-        builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_tx(eth_tx)
-        builder.init_eth_accounts(eth_meta_list)
-        noniterative_transaction = builder.make_noniterative_call_transaction(len(tx.instructions))
+        builder.init_operator_neon(self.caller_ether)
+        builder.init_neon_tx(eth_tx)
+        builder.init_neon_account_list(eth_meta_list)
+
+        noniterative_transaction = TransactionWithComputeBudget().add(builder.make_tx_exec_from_data_ix())
 
         # noniterative_transaction.instructions[-1].program_id = proxy_program
         noniterative_transaction.instructions[-1].keys.insert(0, AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False))
@@ -269,14 +270,14 @@ class CancelTest(unittest.TestCase):
 
         tx = TransactionWithComputeBudget()
         builder = NeonIxBuilder(self.acc.public_key())
-        builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_tx(eth_tx)
-        builder.init_eth_accounts(eth_meta_list)
-        builder.init_iterative(storage_for_invoked, None, None)
+        builder.init_operator_neon(self.caller_ether)
+        builder.init_neon_tx(eth_tx)
+        builder.init_neon_account_list(eth_meta_list)
+        builder.init_iterative(storage_for_invoked)
         # builder.make_partial_call_or_continue_transaction(250, len(tx.instructions))
 
         keccak_instruction = builder.make_keccak_instruction(len(tx.instructions) + 1, len(eth_tx.unsigned_msg()), 14)
-        iterative_transaction = builder.make_partial_call_or_continue_instruction(250)
+        iterative_transaction = builder.make_tx_step_from_data_ix(250, 1)
 
         # noniterative_transaction.instructions[-1].program_id = proxy_program
         iterative_transaction.keys.insert(0, AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False))
@@ -322,23 +323,23 @@ class CancelTest(unittest.TestCase):
 
         call1_tx = Trx.fromString(bytearray.fromhex(call1_signed.rawTransaction.hex()[2:]))
         builder = NeonIxBuilder(self.acc.public_key())
-        builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_tx(call1_tx)
-        builder.init_eth_accounts(account_list)
-        noniterative1 = builder.make_noniterative_call_transaction(len(tx.instructions))
+        builder.init_operator_neon(self.caller_ether)
+        builder.init_neon_tx(call1_tx)
+        builder.init_neon_account_list(account_list)
+        noniterative1 = TransactionWithComputeBudget().add(builder.make_tx_exec_from_data_ix())
         tx.add(noniterative1)
 
         call2_tx = Trx.fromString(bytearray.fromhex(call2_signed.rawTransaction.hex()[2:]))
         builder = NeonIxBuilder(self.acc.public_key())
-        builder.init_operator_ether(self.caller_ether)
-        builder.init_eth_tx(call2_tx)
-        builder.init_eth_accounts(account_list)
-        noniterative2 = builder.make_noniterative_call_transaction(len(tx.instructions))
+        builder.init_operator_neon(self.caller_ether)
+        builder.init_neon_tx(call2_tx)
+        builder.init_neon_account_list(account_list)
+        noniterative2 = TransactionWithComputeBudget().add(builder.make_tx_exec_from_data_ix())
         tx.add(noniterative2)
 
         opts=TxOpts(skip_preflight=True, skip_confirmation=False, preflight_commitment='processed')
         receipt = self.solana.send_transaction(tx, self.acc, opts=opts)
-        self.print_if_err(self, receipt)
+        self.print_if_err(receipt)
 
     def get_trx_receipts(self, unsigned_msg, signature):
         trx = rlp.decode(unsigned_msg, EthTrx)

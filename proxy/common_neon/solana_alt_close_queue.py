@@ -85,7 +85,5 @@ class AddressLookupTableCloseQueue:
 
         builder = NeonIxBuilder(signer_key)
         for table_acct in table_acct_list:
-            tx_list.append(Transaction().add(
-                builder.make_close_lookup_table_instruction(table_acct)
-            ))
+            tx_list.append(Transaction().add(builder.make_close_lookup_table_ix(table_acct)))
         return tx_list

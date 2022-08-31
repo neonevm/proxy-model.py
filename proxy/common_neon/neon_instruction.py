@@ -1,64 +1,36 @@
-import struct
 import rlp
 
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, cast
 
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType
 from solana.publickey import PublicKey
 from solana.system_program import SYS_PROGRAM_ID
-from solana.sysvar import SYSVAR_RENT_PUBKEY
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from spl.token.constants import TOKEN_PROGRAM_ID
+from solana.transaction import AccountMeta, TransactionInstruction
 from logged_groups import logged_group
 
 from ..common_neon.elf_params import ElfParams
 
 from .address import accountWithSeed, ether2program, EthereumAddress
-from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
+from .constants import INCINERATOR_PUBKEY, COLLATERALL_POOL_MAX
 from .layouts import CREATE_ACCOUNT_LAYOUT
-from .eth_proto import Trx as EthTx
+from .eth_proto import Trx as NeonTx
 from .environment_data import EVM_LOADER_ID
 from ..common_neon.solana_alt import ADDRESS_LOOKUP_TABLE_ID
 
 
 class EvmInstruction(Enum):
-    CreateAccount = b'\x02' # 2 deprecated
-    CallFromRawEthereumTX = b'\x05' # 5 deprecated
-    OnReturn = b'\x06' # 6 deprecated
-    OnEvent = b'\x07' # 7 deprecated
-    PartialCallFromRawEthereumTX = b'\x09' # 9 deprecated
-    Continue = b'\x0a' # 10 deprecated
-    ExecuteTrxFromAccountDataIterative = b'\x0b' # 11 deprecated
-    Cancel = b'\x0c' # 12 deprecated
-    PartialCallOrContinueFromRawEthereumTX = b'\x0d' # 13 deprecated
-    ExecuteTrxFromAccountDataIterativeOrContinue = b'\x0e' # 14 deprecated
-    ERC20CreateTokenAccount = b'\x0f' # 15 deprecated
-    DeleteHolderOrStorageAccount = b'\x10' # 16 deprecated
-    ResizeContractAccount = b'\x11' # 17
-    WriteHolderDeprecated = b'\x12' # 18 deprecated
-    PartialCallFromRawEthereumTXv02 = b'\x13' # 19 deprecated
-    ContinueV02 = b'\x14' # 20 deprecated
-    CancelWithNonce = b'\x15' # 21 deprecated
-    ExecuteTrxFromAccountDataIterativeV02 = b'\x16' # 22 deprecated
-    UpdateValidsTable = b'\x17' # 23
-    CreateAccountV02 = b'\x18' # 24
-    Deposit = b'\x19' # 25
-    MigrateAccount = b'\x1a' # 26
-    ExecuteTrxFromAccountDataIterativeOrContinueNoChainId = b'\x1b' # 27 deprecated
-    WriteValueToDistributedStorage = b'\x1c' # 28
-    ConvertDataAccountFromV1ToV2 = b'\x1d' # 29
-    CollectTreasure = b'\x1e' # 30
-    TransactionExecuteFromInstruction = b'\x1f' # 31,
-    TransactionStepFromInstruction = b'\x20' # 32
-    TransactionStepFromAccount = b'\x21' # 33
-    TransactionStepFromAccountNoChainId = b'\x22' # 34
-    CancelWithHash = b'\x23' # 35
-    HolderCreate = b'\x24' # 36
-    HolderDelete = b'\x25' # 37
-    HolderWrite = b'\x26' # 38
-
+    ResizeContractAccount = b'\x11'  # 17
+    CreateAccountV02 = b'\x18'  # 24
+    TransactionExecuteFromData = b'\x1f'  # 31,
+    TransactionStepFromData = b'\x20'  # 32
+    TransactionStepFromAccount = b'\x21'  # 33
+    TransactionStepFromAccountNoChainId = b'\x22'  # 34
+    CancelWithHash = b'\x23'  # 35
+    HolderCreate = b'\x24'  # 36
+    HolderDelete = b'\x25'  # 37
+    HolderWrite = b'\x26'  # 38
 
 
 def create_account_with_seed_layout(base, seed, lamports, space):
@@ -84,52 +56,49 @@ def create_account_layout(ether, nonce):
             )))
 
 
-def write_holder_layout(hash, offset, data):
-    return (EvmInstruction.HolderWrite.value +
-            hash +
-            offset.to_bytes(8, byteorder='little') +
-            data)
-
-
 @logged_group("neon.Proxy")
 class NeonIxBuilder:
     def __init__(self, operator: PublicKey):
-        self.operator_account = operator
-        self.operator_neon_address: Optional[PublicKey] = None
-        self.eth_accounts: List[AccountMeta] = []
-        self.eth_tx: Optional[EthTx] = None
-        self.msg: Optional[bytes] = None
-        self.holder_msg: Optional[bytes] = None
-        self.collateral_pool_index_buf: Optional[bytes] = None
-        self.collateral_pool_address: Optional[PublicKey] = None
-        self.storage: Optional[PublicKey] = None
-        self.holder: Optional[PublicKey] = None
-        self.perm_accs_id: Optional[int] = None
+        self._operator_account = operator
+        self._operator_neon_address: Optional[PublicKey] = None
+        self._neon_account_list: List[AccountMeta] = []
+        self._neon_tx: Optional[NeonTx] = None
+        self._msg: Optional[bytes] = None
+        self._holder_msg: Optional[bytes] = None
+        self._treasury_pool_index_buf: Optional[bytes] = None
+        self._treasury_pool_address: Optional[PublicKey] = None
+        self._holder: Optional[PublicKey] = None
 
-    def init_operator_ether(self, operator_ether: EthereumAddress):
-        self.operator_neon_address = ether2program(operator_ether)[0]
+    @property
+    def operator_account(self) -> PublicKey:
+        return self._operator_account
 
-    def init_eth_tx(self, eth_tx: EthTx):
-        self.eth_tx = eth_tx
+    @property
+    def holder_msg(self) -> bytes:
+        assert self._holder_msg is not None
+        return cast(bytes, self._holder_msg)
 
-        self.msg = rlp.encode(self.eth_tx)
-        self.holder_msg = self.msg
+    def init_operator_neon(self, operator_ether: EthereumAddress):
+        self._operator_neon_address = ether2program(operator_ether)[0]
 
-        keccak_result = keccak_256(self.eth_tx.unsigned_msg()).digest()
-        collateral_pool_index = int().from_bytes(keccak_result[:4], "little") % COLLATERALL_POOL_MAX
-        self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
-        self.collateral_pool_address = self.create_collateral_pool_address(collateral_pool_index)
+    def init_neon_tx(self, neon_tx: NeonTx):
+        self._neon_tx = neon_tx
+
+        self._msg = rlp.encode(self._neon_tx)
+        self._holder_msg = self._msg
+
+        keccak_result = keccak_256(self._neon_tx.unsigned_msg()).digest()
+        treasury_pool_index = int().from_bytes(keccak_result[:4], "little") % COLLATERALL_POOL_MAX
+        self._treasury_pool_index_buf = treasury_pool_index.to_bytes(4, 'little')
+        self._treasury_pool_address = self.create_collateral_pool_address(treasury_pool_index)
 
         return self
 
-    def init_eth_accounts(self, eth_accounts: List[AccountMeta]):
-        self.eth_accounts = eth_accounts
+    def init_neon_account_list(self, neon_account_list: List[AccountMeta]):
+        self._neon_account_list = neon_account_list
 
-    def init_iterative(self, storage: PublicKey, holder: Optional[PublicKey], perm_accs_id: int):
-        self.storage = storage
-        self.holder = holder
-        self.perm_accs_id = perm_accs_id
-
+    def init_iterative(self, holder: PublicKey):
+        self._holder = holder
         return self
 
     @staticmethod
@@ -137,50 +106,50 @@ class NeonIxBuilder:
         COLLATERAL_SEED_PREFIX = "collateral_seed_"
         seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
         collateral_pool_base = PublicKey(ElfParams().collateral_pool_base)
-        return accountWithSeed(bytes(collateral_pool_base), str.encode(seed))
+        return accountWithSeed(collateral_pool_base, str.encode(seed))
 
-    def create_account_with_seed_instruction(self, account, seed, lamports, space) -> TransactionInstruction:
+    def make_create_account_with_seed_ix(self, account, seed, lamports, space) -> TransactionInstruction:
         seed_str = str(seed, 'utf8')
-        self.debug(f"createAccountWithSeedTrx {self.operator_account} account({account} seed({seed_str})")
+        self.debug(f"createAccountWithSeedTrx {self._operator_account} account({account} seed({seed_str})")
         return TransactionInstruction(
             keys=[
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),
             ],
             program_id=SYS_PROGRAM_ID,
-            data=create_account_with_seed_layout(self.operator_account, seed_str, lamports, space)
+            data=create_account_with_seed_layout(self._operator_account, seed_str, lamports, space)
         )
 
-    def create_refund_instruction(self, refunded_account: PublicKey) -> TransactionInstruction:
-        self.debug(f"createRefundTrx {self.operator_account} refunded account({refunded_account})")
+    def make_delete_holder_ix(self, holder_account: PublicKey) -> TransactionInstruction:
+        self.debug(f"createDeleteHolderTrx {self._operator_account} refunded account({holder_account})")
         return TransactionInstruction(
             keys=[
-                AccountMeta(pubkey=refunded_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
             ],
             program_id=EVM_LOADER_ID,
             data=EvmInstruction.HolderDelete.value,
         )
 
-    def create_holder_instruction(self, holder: PublicKey) -> TransactionInstruction:
-        self.debug(f"createHolderTrx {self.operator_account} refunded account({holder})")
+    def create_holder_ix(self, holder: PublicKey) -> TransactionInstruction:
+        self.debug(f"createHolderTrx {self._operator_account} refunded account({holder})")
         return TransactionInstruction(
             keys=[
                 AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
             ],
             program_id=EVM_LOADER_ID,
             data=EvmInstruction.HolderCreate.value,
         )
 
-    def make_create_eth_account_instruction(self, eth_address: EthereumAddress, code_acc=None) -> TransactionInstruction:
+    def make_create_eth_account_ix(self, eth_address: EthereumAddress, code_acc=None) -> TransactionInstruction:
         if isinstance(eth_address, str):
             eth_address = EthereumAddress(eth_address)
         pda_account, nonce = ether2program(eth_address)
         self.debug(f'Create eth account: {str(eth_address)}, sol account: {pda_account}, nonce: {nonce}')
 
-        base = self.operator_account
+        base = self._operator_account
         data = create_account_layout(bytes(eth_address), nonce)
         if code_acc is None:
             return TransactionInstruction(
@@ -201,10 +170,10 @@ class NeonIxBuilder:
                 AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
             ])
 
-    def make_resize_instruction(self, account, code_account_old, code_account_new, seed) -> TransactionInstruction:
+    def make_resize_ix(self, account, code_account_old, code_account_new, seed) -> TransactionInstruction:
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
-            data=EvmInstruction.ResizeContractAccount.value + bytes(seed),  # 17- ResizeStorageAccount
+            data=EvmInstruction.ResizeContractAccount.value + bytes(seed),
             keys=[
                 AccountMeta(pubkey=PublicKey(account), is_signer=False, is_writable=True),
                 (
@@ -213,159 +182,161 @@ class NeonIxBuilder:
                     AccountMeta(pubkey=PublicKey("11111111111111111111111111111111"), is_signer=False, is_writable=False)
                 ),
                 AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False)
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False)
             ],
         )
 
-    def make_write_instruction(self, hash: bytes, offset: int, data: bytes) -> TransactionInstruction:
+    def make_write_ix(self, neon_tx_sig: bytes, offset: int, data: bytes) -> TransactionInstruction:
+        ix_data = b"".join([
+            EvmInstruction.HolderWrite.value,
+            neon_tx_sig,
+            offset.to_bytes(8, byteorder='little'),
+            data
+        ])
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
-            data=write_holder_layout(hash, offset, data),
+            data=ix_data,
             keys=[
-                AccountMeta(pubkey=self.holder, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),
+                AccountMeta(pubkey=self._holder, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),
             ]
         )
 
-    def make_noniterative_call_transaction(self, length_before: int) -> Transaction:
-        trx = Transaction
-        trx.add(TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=EvmInstruction.TransactionExecuteFromInstruction.value + self.collateral_pool_index_buf + self.msg,
-            keys=[
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_neon_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False),
-            ] + self.eth_accounts
-        ))
-        return trx
-
-    def make_cancel_instruction(self, storage_account: Optional[PublicKey] = None,
-                                hash: Optional[bytes] = None,
-                                cancel_key_list: Optional[List[AccountMeta]] = None) -> TransactionInstruction:
-        append_key_list: List[AccountMeta] = self.eth_accounts if cancel_key_list is None else cancel_key_list
-        if hash is None:
-            hash = hash = keccak_256(self.msg).digest()
-        if storage_account is None:
-            storage_account = self.storage
+    def make_tx_exec_from_data_ix(self) -> TransactionInstruction:
+        ix_data = b"".join([
+            EvmInstruction.TransactionExecuteFromData.value,
+            self._treasury_pool_index_buf,
+            self._msg
+        ])
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
-            data=EvmInstruction.CancelWithHash.value + hash,
+            data=ix_data,
             keys=[
-                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self._treasury_pool_address, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self._operator_neon_address, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False),
+            ] + self._neon_account_list
+        )
+
+    def make_cancel_ix(self, holder_account: Optional[PublicKey] = None,
+                       neon_tx_sig: Optional[bytes] = None,
+                       cancel_key_list: Optional[List[AccountMeta]] = None) -> TransactionInstruction:
+        append_key_list: List[AccountMeta] = self._neon_account_list if cancel_key_list is None else cancel_key_list
+
+        if neon_tx_sig is None:
+            neon_tx_sig = keccak_256(self._msg).digest()
+
+        if holder_account is None:
+            holder_account = self._holder
+
+        return TransactionInstruction(
+            program_id=EVM_LOADER_ID,
+            data=EvmInstruction.CancelWithHash.value + neon_tx_sig,
+            keys=[
+                AccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=INCINERATOR_PUBKEY, is_signer=False, is_writable=True),
             ] + append_key_list
         )
 
-    def make_partial_call_or_continue_instruction(self, steps: int) -> TransactionInstruction:
-        data = EvmInstruction.TransactionStepFromInstruction.value + self.collateral_pool_index_buf + steps.to_bytes(8, byteorder="little") + self.msg
+    def make_tx_step_from_data_ix(self, step_cnt: int, index: int) -> TransactionInstruction:
+        return self._make_tx_step_ix(EvmInstruction.TransactionStepFromData.value, step_cnt, index, self._msg)
+
+    def _make_tx_step_ix(self, ix_id_byte: bytes, neon_step_cnt: int, index: int,
+                         data: Optional[bytes]) -> TransactionInstruction:
+        ix_data = b"".join([
+            ix_id_byte,
+            self._treasury_pool_index_buf,
+            neon_step_cnt.to_bytes(4, byteorder='little'),
+            index.to_bytes(4, byteorder="little")
+        ])
+
+        if data is not None:
+            ix_data = ix_data + data
+
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
-            data=data,
+            data=ix_data,
             keys=[
-                AccountMeta(pubkey=self.storage, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_neon_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False),
-            ] + self.eth_accounts
+                 AccountMeta(pubkey=self._holder, is_signer=False, is_writable=True),
+                 AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                 AccountMeta(pubkey=self._treasury_pool_address, is_signer=False, is_writable=True),
+                 AccountMeta(pubkey=self._operator_neon_address, is_signer=False, is_writable=True),
+                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                 AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False),
+             ] + self._neon_account_list
         )
 
-    def _make_partial_call_or_continue_from_account_data(self,
-                                                         ix_id_byte: bytes,
-                                                         steps: int,
-                                                         index: int) -> TransactionInstruction:
-        data = ix_id_byte + self.collateral_pool_index_buf + steps.to_bytes(8, byteorder='little')
-        if index:
-            data = data + index.to_bytes(8, byteorder="little")
-        return TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=data,
-            keys=[
-                     AccountMeta(pubkey=self.holder, is_signer=False, is_writable=True),
-                     AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
-                     AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                     AccountMeta(pubkey=self.operator_neon_address, is_signer=False, is_writable=True),
-                     AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                     AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False),
-                 ] + self.eth_accounts
-        )
+    def make_tx_step_from_account_ix(self, neon_step_cnt: int, index: int) -> TransactionInstruction:
+        return self._make_tx_step_ix(EvmInstruction.TransactionStepFromAccount.value, neon_step_cnt, index, None)
 
-    def make_partial_call_or_continue_from_account_data_instruction(self,
-                                                                    steps: int,
-                                                                    index: int) -> TransactionInstruction:
-        return self._make_partial_call_or_continue_from_account_data(
-            EvmInstruction.TransactionStepFromAccount.value,
-            steps,
-            index
-        )
-
-    def make_partial_call_or_continue_from_account_data_no_chainid_instruction(self,
-                                                                               steps: int,
-                                                                               index: int) -> TransactionInstruction:
-        return self._make_partial_call_or_continue_from_account_data(
+    def make_tx_step_from_account_no_chainid_ix(self, neon_step_cnt: int, index: int) -> TransactionInstruction:
+        return self._make_tx_step_ix(
             EvmInstruction.TransactionStepFromAccountNoChainId.value,
-            steps,
-            index
+            neon_step_cnt, index, None
         )
 
-    def make_create_lookup_table_instruction(self, table_account: PublicKey,
-                                             recent_block_slot: int,
-                                             seed: int) -> TransactionInstruction:
-        data = int(0).to_bytes(4, byteorder="little")
-        data += recent_block_slot.to_bytes(8, byteorder="little")
-        data += seed.to_bytes(1, byteorder="little")
+    def make_create_lookup_table_ix(self, table_account: PublicKey,
+                                    recent_block_slot: int,
+                                    seed: int) -> TransactionInstruction:
+        data = b"".join([
+            int(0).to_bytes(4, byteorder="little"),
+            recent_block_slot.to_bytes(8, byteorder="little"),
+            seed.to_bytes(1, byteorder="little")
+        ])
         return TransactionInstruction(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,
             keys=[
                 AccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),  # signer
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),   # payer
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),  # signer
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),   # payer
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
             ]
         )
 
-    def make_extend_lookup_table_instruction(self, table_account: PublicKey,
-                                             account_list: List[PublicKey]) -> TransactionInstruction:
-        data = int(2).to_bytes(4, byteorder="little")
-        data += len(account_list).to_bytes(8, byteorder="little")
-        data += b"".join([bytes(pubkey) for pubkey in account_list])
+    def make_extend_lookup_table_ix(self, table_account: PublicKey,
+                                    account_list: List[PublicKey]) -> TransactionInstruction:
+        data = b"".join(
+            [
+                int(2).to_bytes(4, byteorder="little"),
+                len(account_list).to_bytes(8, byteorder="little")
+            ] +
+            [bytes(pubkey) for pubkey in account_list]
+        )
 
         return TransactionInstruction(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,
             keys=[
                 AccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),  # signer
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),   # payer
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),  # signer
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),   # payer
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
             ]
         )
 
-    def make_deactivate_lookup_table_instruction(self, table_account: PublicKey) -> TransactionInstruction:
+    def make_deactivate_lookup_table_ix(self, table_account: PublicKey) -> TransactionInstruction:
         data = int(3).to_bytes(4, byteorder="little")
         return TransactionInstruction(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,
             keys=[
                 AccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),  # signer
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),  # signer
             ]
         )
 
-    def make_close_lookup_table_instruction(self, table_account: PublicKey) -> TransactionInstruction:
+    def make_close_lookup_table_ix(self, table_account: PublicKey) -> TransactionInstruction:
         data = int(4).to_bytes(4, byteorder="little")
         return TransactionInstruction(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,
             keys=[
                 AccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),  # signer
-                AccountMeta(pubkey=self.operator_account, is_signer=False, is_writable=True),  # refund
+                AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),  # signer
+                AccountMeta(pubkey=self._operator_account, is_signer=False, is_writable=True),  # refund
             ]
         )

@@ -34,11 +34,11 @@ class StatisticsExporter(ABC):
         """GAS Parameters"""
 
     @abstractmethod
-    def stat_commit_tx_sol_spent(self, neon_tx_hash: str, sol_spent: int):
+    def stat_commit_tx_sol_spent(self, neon_tx_sig: str, sol_spent: int):
         """How many SOLs being spend in Neon transaction per iteration"""
 
     @abstractmethod
-    def stat_commit_tx_steps_bpf(self, neon_tx_hash: str, steps: int, bpf: int):
+    def stat_commit_tx_steps_bpf(self, neon_tx_sig: str, steps: int, bpf: int):
         """How many Steps/BPF cycles was used in each iteration"""
 
     @abstractmethod

@@ -69,23 +69,30 @@ class _ProgramData:
     re_data = re.compile(r'^Program data: (.+)$')
 
 
+def _decode_mnemonic(line: str) -> List[str]:
+    match = _ProgramData.re_data.match(line)
+    if match is None:
+        return []
+
+    tail: str = match.group(1)
+    data_list: List[str] = tail.split()
+    mnemonic = base64.b64decode(data_list[0]).decode('utf-8')
+    return [mnemonic] + data_list[1:]
+
+
 @logged_group("neon.Decoder")
 def decode_neon_tx_result(log_iter: Iterator[str], neon_sig: str, neon_tx_res: NeonTxResultInfo, *, logger) -> bool:
     """Extracts Neon transaction result information"""
 
     data_cnt = 0
     for line in log_iter:
-        match = _ProgramData.re_data.match(line)
-        if match is None:
+        data_list = _decode_mnemonic(line)
+        if len(data_list) == 0:
             continue
-
         data_cnt += 1
-        tail: str = match.group(1)
-        data_list = tail.split()
-        mnemonic = base64.b64decode(data_list[0]).decode('utf-8')
-        if mnemonic == "RETURN":
+        if data_list[0] == 'RETURN':
             decode_neon_tx_return(data_list[1:], neon_sig, neon_tx_res)
-        elif mnemonic.startswith("LOG"):
+        elif data_list[0].startswith('LOG'):
             decode_neon_event(data_list[1:], neon_sig, neon_tx_res)
 
     if data_cnt == 0:
@@ -96,3 +103,18 @@ def decode_neon_tx_result(log_iter: Iterator[str], neon_sig: str, neon_tx_res: N
         neon_tx_res.fill_result(gas_used='0x0', status='0x0', return_value='')
 
     return neon_tx_res.is_valid()
+
+
+def decode_neon_tx_sig(log_iter: Iterator[str]) -> str:
+    """Extracts Neon transaction hash"""
+
+    for line in log_iter:
+        data_list = _decode_mnemonic(line)
+        if len(data_list) == 0:
+            continue
+        if data_list[0] == 'HASH':
+            tx_hash = '0x' + base64.b64decode(data_list[1]).hex().lower()
+            if len(tx_hash) == 66:
+                return tx_hash
+
+    return ''

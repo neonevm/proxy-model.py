@@ -4,7 +4,7 @@ from solana.publickey import PublicKey
 
 from .environment_data import EVM_LOADER_ID, EVM_STEP_COUNT, MEMPOOL_CAPACITY, MIN_OPERATOR_BALANCE_TO_ERR, \
                               MIN_OPERATOR_BALANCE_TO_WARN, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, SOLANA_URL, \
-                              STORAGE_SIZE, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
+                              HOLDER_SIZE, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
 
 
 class IConfig(ABC):
@@ -34,8 +34,8 @@ class IConfig(ABC):
         """Gets EVM Loader ID"""
 
     @abstractmethod
-    def get_storage_size(self) -> int:
-        """Gets size for storage/holder account"""
+    def get_holder_size(self) -> int:
+        """Gets size for holder account"""
 
     @abstractmethod
     def get_min_operator_balance_to_warn(self) -> int:
@@ -74,8 +74,8 @@ class Config(IConfig):
     def get_evm_loader_id(self) -> PublicKey:
         return PublicKey(EVM_LOADER_ID)
 
-    def get_storage_size(self) -> int:
-        return STORAGE_SIZE
+    def get_holder_size(self) -> int:
+        return HOLDER_SIZE
 
     def get_min_operator_balance_to_warn(self) -> int:
         return MIN_OPERATOR_BALANCE_TO_WARN
@@ -97,7 +97,7 @@ class Config(IConfig):
                f"        PYTH_MAPPING_ACCOUNT: {self.get_pyth_mapping_account()}\n" \
                f"        EVM_STEP_LIMIT: {self.get_evm_steps_limit()}, \n" \
                f"        MP_CAPACITY: {self.get_mempool_capacity()}\n" \
-               f"        STORAGE_SIZE: {self.get_storage_size()}\n" \
+               f"        HOLDER_SIZE: {self.get_holder_size()}\n" \
                f"        MIN_OPERATOR_BALANCE_TO_WARN: {self.get_min_operator_balance_to_warn()}\n" \
                f"        MIN_OPERATOR_BALANCE_TO_ERR: {self.get_min_operator_balance_to_err()}\n" \
                f"        PERM_ACCOUNT_LIMIT: {self.get_perm_account_limit()}\n" \

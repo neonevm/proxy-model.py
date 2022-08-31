@@ -2,16 +2,16 @@
 from construct import Bytes, Int8ul, Int16ul, Int32ul, Int64ul
 from construct import Struct
 
-STORAGE_ACCOUNT_INFO_LAYOUT = Struct(
+HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,
     "owner" / Bytes(32),
-    "hash" / Bytes(32),
+    "neon_tx_sig" / Bytes(32),
     "caller" / Bytes(20),
     "gas_limit" / Bytes(32),
     "gas_price" / Bytes(32),
     "gas_used" / Bytes(32),
     "operator" / Bytes(32),
-    "slot" / Int64ul,
+    "block_slot" / Int64ul,
     "account_list_len" / Int64ul,
 )
 
