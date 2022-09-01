@@ -33,18 +33,18 @@ modelInstanceLock = threading.Lock()
 modelInstance = None
 
 CHECK_EVM_VERSION_PERIOD_SECONDS = 3600
-COMPATIBLE_EVM_VERSIONS = [
+COMPATIBLE_EVM_VERSIONS = (
     "0.11.0",
     "0.11.0-dev"
-]
-ALWAYS_AVAILABLE_METHODS = [
+)
+ALWAYS_AVAILABLE_METHODS = (
     "eth_chainId",
     "neon_cli_version",
     "neon_getEvmParams"
     "neon_proxy_version",
     "net_version",
     "web3_clientVersion",
-]
+)
 
 @logged_group("neon.Proxy")
 class NeonRpcApiPlugin(HttpWebServerBasePlugin):
