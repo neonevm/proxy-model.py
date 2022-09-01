@@ -2,9 +2,10 @@ from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, star
 
 from ..common_neon.data import NeonTxStatData
 
-from .proxy_metrics_interface import StatisticsExporter
+from .proxy_metrics_interface import IStatisticsExporter
 
-class IndexerStatistics(StatisticsExporter):
+
+class IndexerStatistics(IStatisticsExporter):
     registry = CollectorRegistry()
     TX_SOL_SPENT = Histogram(
         'tx_sol_spent', 'How many lamports being spend in Neon transaction per iteration',

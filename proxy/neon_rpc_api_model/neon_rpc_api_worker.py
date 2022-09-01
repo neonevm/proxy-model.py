@@ -24,8 +24,10 @@ from ..common_neon.environment_utils import neon_cli
 from ..common_neon.environment_data import SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..indexer.indexer_db import IndexerDB
-from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
+from ..statistics_exporter.proxy_metrics_interface import IStatisticsExporter
+from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
+
 
 
 NEON_PROXY_PKG_VERSION = '0.11.0-dev'
@@ -48,7 +50,7 @@ class NeonRpcApiWorker:
     def __init__(self):
         self._solana = SolanaInteractor(SOLANA_URL)
         self._db = IndexerDB()
-        self._stat_exporter: Optional[StatisticsExporter] = None
+        self._stat_exporter: Optional[IStatisticsExporter] = None
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price: Optional[MPGasPriceResult] = None
@@ -62,7 +64,7 @@ class NeonRpcApiWorker:
             self.debug(f'Neon Proxy version: {self.neon_proxy_version()}')
         self.debug(f"Worker id {self.proxy_id}")
 
-    def set_stat_exporter(self, stat_exporter: StatisticsExporter):
+    def set_stat_exporter(self, stat_exporter: IStatisticsExporter):
         self._stat_exporter = stat_exporter
 
     def _get_gas_price(self) -> MPGasPriceResult:

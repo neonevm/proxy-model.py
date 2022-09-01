@@ -1,15 +1,27 @@
 from decimal import Decimal
 from typing import Optional
-from .proxy_metrics_interface import StatisticsExporter
+
+from neon_py.network import AddrPickableDataClient
+
+from .proxy_metrics_interface import IStatisticsExporter
 
 
-class PrometheusExporter(StatisticsExporter):
+class StatMiddleware:
+
+    def __init__(self):
+        self._stat_mng_client = AddrPickableDataClient(("127.0.0.1", 9093))
+
+    def _stat_method(method):
+        def wrapper(self, *args):
+            self._stat_mng_client.send_data((method.__name__, * args))
+        return wrapper
+
+    @_stat_method
     def stat_commit_request_and_timeout(self, method: str, latency: float):
-        from .prometheus_proxy_metrics import (
-            REQUEST_COUNT, REQUEST_LATENCY,
-        )
-        REQUEST_COUNT.labels(method).inc()
-        REQUEST_LATENCY.labels(method).observe(latency)
+        pass
+
+
+class PrometheusExporter():
 
     def stat_commit_tx_begin(self):
         from .prometheus_proxy_metrics import (

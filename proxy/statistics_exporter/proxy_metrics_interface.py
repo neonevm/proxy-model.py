@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 
 
-class StatisticsExporter(ABC):
+class IStatisticsExporter(ABC):
 
     @abstractmethod
     def stat_commit_request_and_timeout(self, method: str, latency: float):

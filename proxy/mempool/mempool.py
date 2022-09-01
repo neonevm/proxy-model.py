@@ -4,6 +4,7 @@ from typing import List, Tuple, Optional, Any, cast, Iterator
 
 from logged_groups import logged_group, logging_context
 from neon_py.data import Result
+from neon_py.network import AddrPickableDataClient
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
@@ -92,6 +93,7 @@ class MPInitOperatorResourceTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOp
 
 @logged_group("neon.MemPool")
 class MemPool:
+
     CHECK_TASK_TIMEOUT_SEC = 0.01
     RESCHEDULE_TIMEOUT_SEC = 0.4
 
@@ -113,6 +115,11 @@ class MemPool:
     @property
     def _gas_price(self) -> Optional[MPGasPriceResult]:
         return self._gas_price_task_loop.gas_price
+
+    async def async_init(self):
+        print("Init client 9093")
+        self._stat_midleware = AddrPickableDataClient(("127.0.0.1", 9093))
+        await self._stat_midleware.async_init()
 
     async def enqueue_mp_request(self, mp_request: MPRequest):
         assert mp_request.type == MPRequestType.SendTransaction, f'Wrong request type {mp_request}'

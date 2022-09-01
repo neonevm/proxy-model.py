@@ -12,6 +12,7 @@ class NeonProxyApp:
         self._mempool_service = MPService(self._config)
 
     def start(self):
-        self._mempool_service.start()
         PrometheusProxyServer()
+
+        self._mempool_service.start()
         entry_point()
