@@ -122,7 +122,7 @@ class NeonIxBuilder:
         )
 
     def make_delete_holder_ix(self, holder_account: PublicKey) -> TransactionInstruction:
-        self.debug(f"createDeleteHolderTrx {self._operator_account} refunded account({holder_account})")
+        self.debug(f"deleteHolderTrx {self._operator_account} refunded account({holder_account})")
         return TransactionInstruction(
             keys=[
                 AccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
@@ -133,7 +133,7 @@ class NeonIxBuilder:
         )
 
     def create_holder_ix(self, holder: PublicKey) -> TransactionInstruction:
-        self.debug(f"createHolderTrx {self._operator_account} refunded account({holder})")
+        self.debug(f"createHolderTrx {self._operator_account} account({holder})")
         return TransactionInstruction(
             keys=[
                 AccountMeta(pubkey=holder, is_signer=False, is_writable=True),

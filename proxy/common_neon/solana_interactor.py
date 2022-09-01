@@ -126,7 +126,7 @@ class HolderAccountInfo(NamedTuple):
             holder_account=holder_account,
             tag=holder.tag,
             owner=PublicKey(holder.owner),
-            neon_tx_sig='0x' + holder.neon_tx_sig.hex.lower(),
+            neon_tx_sig='0x' + holder.neon_tx_sig.hex().lower(),
             caller=holder.caller.hex(),
             gas_limit=int.from_bytes(holder.gas_limit, "little"),
             gas_price=int.from_bytes(holder.gas_price, "little"),

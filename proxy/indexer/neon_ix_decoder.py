@@ -198,7 +198,6 @@ class BaseTxStepIxDecoder(DummyIxDecoder):
             return None
 
         neon_step_cnt = int.from_bytes(ix.ix_data[5:9], 'little')
-        self.debug(f'evm_step {neon_step_cnt}')
         ix.set_neon_step_cnt(neon_step_cnt)
 
         storage_account: str = ix.get_account(0)
@@ -295,7 +294,7 @@ class CancelWithHashIxDecoder(DummyIxDecoder):
         holder_account = ix.get_account(0)
         iter_blocked_account = ix.iter_account(self._first_blocked_account_idx)
 
-        neon_tx_sig: str = ix.ix_data[1:33].hex().lower()
+        neon_tx_sig: str = '0x' + ix.ix_data[1:33].hex().lower()
         log_tx_sig: str = decode_neon_tx_sig(self.state.sol_neon_ix.iter_log())
         if log_tx_sig != neon_tx_sig:
             return self._decoding_skip(f'Neon tx hash "{log_tx_sig}" != "{neon_tx_sig}"')

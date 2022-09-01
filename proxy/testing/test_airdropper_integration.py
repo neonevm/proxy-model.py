@@ -9,7 +9,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.rpc.commitment import Confirmed
 from solana.publickey import PublicKey
 from solana.rpc.types import TxOpts
-from solana.transaction import TransactionInstruction, Transaction, AccountMeta
+from solana.transaction import TransactionInstruction, AccountMeta
 from proxy.common_neon.neon_instruction import create_account_layout
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from proxy.common_neon.compute_budget import TransactionWithComputeBudget
@@ -77,7 +77,8 @@ class TestAirdropperIntegration(TestCase):
                                     EVM_LOADER_ID)
         self.wrapper.deploy_wrapper()
 
-    def create_account_instruction(self, eth_address: str, payer: PublicKey):
+    @staticmethod
+    def create_account_instruction(eth_address: str, payer: PublicKey):
         dest_address_solana, nonce = get_evm_loader_account_address(eth_address)
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
@@ -129,7 +130,7 @@ class TestAirdropperIntegration(TestCase):
             signers=[],
         )))
         claim_instr = self.wrapper.create_claim_instruction(
-            owner = from_owner.public_key(),
+            owner=from_owner.public_key(),
             from_acc=from_spl_token_acc,
             to_acc=to_neon_acc,
             amount=TRANSFER_AMOUNT,
@@ -142,8 +143,10 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - TRANSFER_AMOUNT)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), TRANSFER_AMOUNT)
 
+        eth_balance = proxy.eth.get_balance(to_neon_acc.address)
+        print("NEON balance before is: ", eth_balance)
+
         wait_time = 0
-        eth_balance = 0
         while wait_time < MAX_AIRDROP_WAIT_TIME:
             eth_balance = proxy.eth.get_balance(to_neon_acc.address)
             balance_ready = eth_balance > 0 and eth_balance < 10 * pow(10, 18)
@@ -191,14 +194,14 @@ class TestAirdropperIntegration(TestCase):
             signers=[],
         )))
         claim_instr1 = self.wrapper.create_claim_instruction(
-            owner = from_owner.public_key(),
+            owner=from_owner.public_key(),
             from_acc=from_spl_token_acc,
             to_acc=to_neon_acc1,
             amount=TRANSFER_AMOUNT1,
         )
         trx.add(claim_instr1.make_tx_exec_from_data_ix())
         claim_instr2 = self.wrapper.create_claim_instruction(
-            owner = from_owner.public_key(),
+            owner=from_owner.public_key(),
             from_acc=from_spl_token_acc,
             to_acc=to_neon_acc2,
             amount=TRANSFER_AMOUNT2,
@@ -212,10 +215,7 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(self.wrapper.get_balance(to_neon_acc1.address), TRANSFER_AMOUNT1)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc2.address), TRANSFER_AMOUNT2)
 
-
         wait_time = 0
-        eth_balance1 = 0
-        eth_balance2 = 0
         while wait_time < MAX_AIRDROP_WAIT_TIME:
             eth_balance1 = proxy.eth.get_balance(to_neon_acc1.address)
             eth_balance2 = proxy.eth.get_balance(to_neon_acc2.address)
@@ -246,8 +246,8 @@ class TestAirdropperIntegration(TestCase):
         sleep(15)
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
-        self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), 0) # Destination-acc ERC20-Token balance is 0
-        self.assertEqual(proxy.eth.get_balance(to_neon_acc.address), initial_balance * 10**18) # Destination-acc Neon balance is initial
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), 0)  # Destination-acc ERC20-Token balance is 0
+        self.assertEqual(proxy.eth.get_balance(to_neon_acc.address), initial_balance * 10**18)  # Destination-acc Neon balance is initial
 
         TRANSFER_AMOUNT = 123456
         trx = TransactionWithComputeBudget()
@@ -260,7 +260,7 @@ class TestAirdropperIntegration(TestCase):
             signers=[],
         )))
         claim_instr = self.wrapper.create_claim_instruction(
-            owner = from_owner.public_key(),
+            owner=from_owner.public_key(),
             from_acc=from_spl_token_acc,
             to_acc=to_neon_acc,
             amount=TRANSFER_AMOUNT,
