@@ -1,3 +1,0 @@
-[submodule "neon_py"]
-	path = neon_py
-	url = git@github.com:neonlabsorg/neon.py.git

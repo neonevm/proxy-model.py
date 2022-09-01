@@ -14,8 +14,7 @@ from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
 
 
 class SolHistoryNotFound(RuntimeError):
-    def __init__(self, error: str):
-        super().__init__(error)
+    pass
 
 
 @logged_group("neon.Indexer")
@@ -72,8 +71,9 @@ class SolTxMetaCollector(ABC):
 
     def _iter_tx_meta(self, sig_slot_list: List[SolTxSigSlotInfo]) -> Iterator[SolTxMetaInfo]:
         group_len = 20
-        flat_len = len(sig_slot_list)
-        grouped_sig_slot_list = [sig_slot_list[i:(i + group_len)] for i in range(0, flat_len, group_len)]
+        filtered_sig_slot_list = [sig_slot for sig_slot in sig_slot_list if not self._tx_meta_dict.has_sig(sig_slot)]
+        flat_len = len(filtered_sig_slot_list)
+        grouped_sig_slot_list = [filtered_sig_slot_list[i:(i + group_len)] for i in range(0, flat_len, group_len)]
         self._gather_tx_meta_dict(grouped_sig_slot_list)
         for sig_slot in reversed(sig_slot_list):
             yield self._tx_meta_dict.get(sig_slot)
@@ -85,10 +85,7 @@ class SolTxMetaCollector(ABC):
             self._request_tx_meta_list(grouped_sig_slot_list[0])
 
     def _request_tx_meta_list(self, sig_slot_list: List[SolTxSigSlotInfo]) -> None:
-        sig_list = [sig_slot.sol_sig for sig_slot in sig_slot_list if not self._tx_meta_dict.has_sig(sig_slot)]
-        if len(sig_list) == 0:
-            return
-
+        sig_list = [sig_slot.sol_sig for sig_slot in sig_slot_list]
         meta_list = self._solana.get_multiple_receipts(sig_list, commitment=self._commitment)
         for sig_slot, tx_meta in zip(sig_slot_list, meta_list):
             self._tx_meta_dict.add(sig_slot, tx_meta)
