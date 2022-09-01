@@ -78,7 +78,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         elapsed = self.last_check_evm_version_timestamp - now
         if (not self.evm_version_ok) or (elapsed >= CHECK_EVM_VERSION_PERIOD_SECONDS):
             self.last_check_evm_version_timestamp = now
-            evm_version = ElfParams().neon_evm_version()
+            evm_version = ElfParams().neon_evm_version
             self.evm_version_ok = evm_version in COMPATIBLE_EVM_VERSIONS
         return self.evm_version_ok
 
