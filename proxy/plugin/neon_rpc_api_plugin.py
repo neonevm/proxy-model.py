@@ -34,7 +34,8 @@ modelInstance = None
 
 CHECK_EVM_VERSION_PERIOD_SECONDS = 3600
 COMPATIBLE_EVM_VERSIONS = [
-    "0.11.0"
+    "0.11.0",
+    "0.11.0-dev"
 ]
 ALWAYS_AVAILABLE_METHODS = [
     "eth_chainId",
