@@ -25,12 +25,14 @@ from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
 from ..common_neon.solana_receipt_parser import SolTxError
 from ..common_neon.errors import EthereumError
 from ..common_neon.environment_data import ENABLE_PRIVATE_API
+from ..common_neon.elf_params import ElfParams
 from ..neon_rpc_api_model import NeonRpcApiWorker
 from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
 
+CHECK_EVM_VERSION_PERIOD_SECONDS = 3600
 
 @logged_group("neon.Proxy")
 class NeonRpcApiPlugin(HttpWebServerBasePlugin):
@@ -47,7 +49,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         self._stat_exporter = PrometheusExporter()
         self.model = NeonRpcApiPlugin.getModel()
         self.model.set_stat_exporter(self._stat_exporter)
-        self.is_evm_version_compatible = False
+        self.last_check_evm_version_timestamp = time.time()
 
     @classmethod
     def getModel(cls):
@@ -57,6 +59,14 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             if modelInstance is None:
                 modelInstance = NeonRpcApiWorker()
             return modelInstance
+
+    def is_evm_version_compatible(self) -> bool:
+        now = time.time()
+        elapsed = self.last_check_evm_version_timestamp - now
+        if (elapsed >= CHECK_EVM_VERSION_PERIOD_SECONDS):
+            self.last_check_evm_version_timestamp = now
+            return False
+        return True
 
     def routes(self) -> List[Tuple[int, str]]:
         return [
@@ -89,7 +99,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             return method_name in private_method_map
 
         try:
-            if (not self.is_evm_version_compatible):
+            if (not self.is_evm_version_compatible()):
                 response['error'] = {'code': -32603, 'message': f'version of Neon EVM is incompatible'}
             elif (not hasattr(self.model, request['method'])) or is_private_api(request["method"]):
                 response['error'] = {'code': -32601, 'message': f'method {request["method"]} is not supported'}
