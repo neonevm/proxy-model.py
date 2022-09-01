@@ -33,6 +33,7 @@ modelInstanceLock = threading.Lock()
 modelInstance = None
 
 CHECK_EVM_VERSION_PERIOD_SECONDS = 3600
+COMPATIBLE_EVM_VERSIONS = ["0.11.0"]
 
 @logged_group("neon.Proxy")
 class NeonRpcApiPlugin(HttpWebServerBasePlugin):
@@ -50,6 +51,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         self.model = NeonRpcApiPlugin.getModel()
         self.model.set_stat_exporter(self._stat_exporter)
         self.last_check_evm_version_timestamp = time.time()
+        self.evm_version_ok = False
 
     @classmethod
     def getModel(cls):
@@ -63,10 +65,11 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
     def is_evm_version_compatible(self) -> bool:
         now = time.time()
         elapsed = self.last_check_evm_version_timestamp - now
-        if (elapsed >= CHECK_EVM_VERSION_PERIOD_SECONDS):
+        if (not self.evm_version_ok) or (elapsed >= CHECK_EVM_VERSION_PERIOD_SECONDS):
             self.last_check_evm_version_timestamp = now
-            return False
-        return True
+            evm_version = ElfParams().neon_evm_version()
+            self.evm_version_ok = evm_version_in COMPATIBLE_EVM_VERSIONS
+        return self.evm_version_ok
 
     def routes(self) -> List[Tuple[int, str]]:
         return [
