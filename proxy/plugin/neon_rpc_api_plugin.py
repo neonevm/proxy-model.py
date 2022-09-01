@@ -26,7 +26,7 @@ from ..common_neon.solana_tx_error_parser import SolTxError
 from ..common_neon.errors import EthereumError
 
 from ..neon_rpc_api_model import NeonRpcApiWorker
-from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
+from ..common_neon.statistic import StatisticMiddlewareClient
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -44,9 +44,9 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
 
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
-        self._stat_exporter = PrometheusExporter()
+        self._stat_middleware = StatisticMiddlewareClient()
         self.model = NeonRpcApiPlugin.getModel()
-        self.model.set_stat_exporter(self._stat_exporter)
+        self.model.set_stat_exporter(self._stat_middleware)
 
     @classmethod
     def getModel(cls):
@@ -144,8 +144,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 b'Content-Type': b'application/json',
                 b'Access-Control-Allow-Origin': b'*',
             })))
-
-        self._stat_exporter.stat_commit_request_and_timeout(method, resp_time_ms)
+        self._stat_middleware.stat_commit_request_and_timeout(method, resp_time_ms)
 
     def on_websocket_open(self) -> None:
         pass

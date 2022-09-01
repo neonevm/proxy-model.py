@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import time
+from abc import ABC, abstractmethod
+
 from collections import deque
 from typing import List, Optional, Dict, Deque, Type
 
@@ -30,9 +32,24 @@ from ..indexer.solana_tx_meta_collector import SolTxMetaDict, SolHistoryNotFound
 from ..indexer.utils import MetricsToLogger
 
 
+class IIndexerUser(ABC):
+
+    @abstractmethod
+    def on_neon_tx_result(self, result: NeonTxStatData):
+        """On Neon transaction result """
+
+    @abstractmethod
+    def on_solana_rpc_status(self, status):
+        """On Solana status"""
+
+    @abstractmethod
+    def on_db_status(self, status):
+        """On Neon database status"""
+
+
 @logged_group("neon.Indexer")
 class Indexer(IndexerBase):
-    def __init__(self, config: Config, indexer_stat_exporter: IIndexerStatExporter):
+    def __init__(self, config: Config, indexer_stat_exporter: IIndexerUser):
         solana = SolInteractor(config, config.solana_url)
         self._db = IndexerDB()
         last_known_slot = self._db.get_min_receipt_block_slot()
