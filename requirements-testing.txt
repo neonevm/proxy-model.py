@@ -2,7 +2,7 @@ python-coveralls==2.9.3
 coverage==6.4.4
 flake8==3.8.3
 pytest==5.4.3
-pytest-cov==2.10.0
+pytest-cov==3.0.0
 autopep8==1.7.0
 mypy==0.780
 py-spy==0.3.12
