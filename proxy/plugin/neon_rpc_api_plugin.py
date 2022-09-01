@@ -35,7 +35,7 @@ modelInstance = None
 CHECK_EVM_VERSION_PERIOD_SECONDS = 3600
 COMPATIBLE_EVM_VERSIONS = (
     "0.11.0",
-    "0.11.0-dev"
+    "0.11.0-dev",
 )
 ALWAYS_AVAILABLE_METHODS = (
     "eth_chainId",
@@ -79,7 +79,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         if (not self.evm_version_ok) or (elapsed >= CHECK_EVM_VERSION_PERIOD_SECONDS):
             self.last_check_evm_version_timestamp = now
             evm_version = ElfParams().neon_evm_version()
-            self.evm_version_ok = evm_version_in COMPATIBLE_EVM_VERSIONS
+            self.evm_version_ok = evm_version in COMPATIBLE_EVM_VERSIONS
         return self.evm_version_ok
 
     def routes(self) -> List[Tuple[int, str]]:
