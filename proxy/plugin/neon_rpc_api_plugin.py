@@ -33,7 +33,17 @@ modelInstanceLock = threading.Lock()
 modelInstance = None
 
 CHECK_EVM_VERSION_PERIOD_SECONDS = 3600
-COMPATIBLE_EVM_VERSIONS = ["0.11.0"]
+COMPATIBLE_EVM_VERSIONS = [
+    "0.11.0"
+]
+ALWAYS_AVAILABLE_METHODS = [
+    "eth_chainId",
+    "neon_cli_version",
+    "neon_getEvmParams"
+    "neon_proxy_version",
+    "net_version",
+    "web3_clientVersion",
+]
 
 @logged_group("neon.Proxy")
 class NeonRpcApiPlugin(HttpWebServerBasePlugin):
@@ -101,8 +111,11 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             )
             return method_name in private_method_map
 
+        def is_always_available(method_name: str) -> bool:
+            return method_name in ALWAYS_AVAILABLE_METHODS
+
         try:
-            if (not self.is_evm_version_compatible()):
+            if (not is_always_available(request["method"])) and (not self.is_evm_version_compatible()):
                 response['error'] = {'code': -32603, 'message': f'version of Neon EVM is incompatible'}
             elif (not hasattr(self.model, request['method'])) or is_private_api(request["method"]):
                 response['error'] = {'code': -32601, 'message': f'method {request["method"]} is not supported'}
