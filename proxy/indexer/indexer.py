@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from abc import ABC, abstractmethod
 
 from typing import Iterator, List, Optional, Dict, Tuple, Any, Deque, cast
 from collections import deque
@@ -8,7 +9,6 @@ from logged_groups import logged_group, logging_context
 from solana.system_program import SYS_PROGRAM_ID
 from solana.publickey import PublicKey
 
-from ..indexer.i_indexer_stat_exporter import IIndexerStatExporter
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
 from ..indexer.solana_tx_meta_collector import SolTxMetaCollector, SolTxMetaDict, SolHistoryNotFound
@@ -645,9 +645,24 @@ class UpdateValidsTableIxDecoder(DummyIxDecoder):
     _name = 'UpdateValidsTable'
 
 
+class IIndexerUser(ABC):
+
+    @abstractmethod
+    def on_neon_tx_result(self, result: NeonTxStatData):
+        """On Neon transaction result """
+
+    @abstractmethod
+    def on_solana_rpc_status(self, status):
+        """On Solana status"""
+
+    @abstractmethod
+    def on_db_status(self, status):
+        """On Neon database status"""
+
+
 @logged_group("neon.Indexer")
 class Indexer(IndexerBase):
-    def __init__(self, solana_url, indexer_stat_exporter: IIndexerStatExporter):
+    def __init__(self, solana_url, indexer_stat_exporter: IIndexerUser):
         solana = SolanaInteractor(solana_url)
         self._db = IndexerDB()
         last_known_slot = self._db.get_min_receipt_block_slot()

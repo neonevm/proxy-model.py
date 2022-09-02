@@ -116,11 +116,6 @@ class MemPool:
     def _gas_price(self) -> Optional[MPGasPriceResult]:
         return self._gas_price_task_loop.gas_price
 
-    async def async_init(self):
-        print("Init client 9093")
-        self._stat_midleware = AddrPickableDataClient(("127.0.0.1", 9093))
-        await self._stat_midleware.async_init()
-
     async def enqueue_mp_request(self, mp_request: MPRequest):
         assert mp_request.type == MPRequestType.SendTransaction, f'Wrong request type {mp_request}'
 

@@ -1,28 +1,33 @@
+import time
 from logged_groups import logged_group
 
+from ..common_neon.statistic import StatisticMiddlewareClient
 from ..common_neon.environment_data import EVM_LOADER_ID, SOLANA_URL, GATHER_STATISTICS
-from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
 from ..common_neon.data import NeonTxStatData
-from .indexer import Indexer
-from .i_indexer_stat_exporter import IIndexerStatExporter
+
+from .indexer_statistic_service import IndexerStatisticService
+from .indexer import Indexer, IIndexerUser
 
 
 @logged_group("neon.Indexer")
-class IndexerApp(IIndexerStatExporter):
+class IndexerApp(IIndexerUser):
 
     def __init__(self, solana_url: str):
-        self.neon_statistics = IndexerStatistics(GATHER_STATISTICS)
+        self._indexer_stat_service = IndexerStatisticService() if GATHER_STATISTICS else None
+        time.sleep(1)
+        self._stat_middleware = StatisticMiddlewareClient(enabled=GATHER_STATISTICS)
+
         indexer = Indexer(solana_url, self)
         indexer.run()
 
     def on_neon_tx_result(self, tx_stat: NeonTxStatData):
-        self.neon_statistics.on_neon_tx_result(tx_stat)
+        self._stat_middleware.stat_commit_neon_tx_result(tx_stat)
 
     def on_db_status(self, neon_db_status: bool):
-        self.neon_statistics.stat_commit_postgres_availability(neon_db_status)
+        self._stat_middleware.stat_commit_postgres_availability(neon_db_status)
 
     def on_solana_rpc_status(self, solana_status: bool):
-        self.neon_statistics.stat_commit_solana_rpc_health(solana_status)
+        self._stat_middleware.stat_commit_solana_rpc_health(solana_status)
 
 
 @logged_group("neon.Indexer")

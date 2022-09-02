@@ -25,10 +25,7 @@ from ..common_neon.environment_data import SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_P
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..indexer.indexer_db import IndexerDB
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
-from ..statistics_exporter.proxy_metrics_interface import IStatisticsExporter
-from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
-
-
+from ..common_neon.statistic import IStatisticsExporter
 
 NEON_PROXY_PKG_VERSION = '0.11.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
@@ -516,6 +513,7 @@ class NeonRpcApiWorker:
         self.debug(f"sendRawTransaction {neon_signature}: {json.dumps(neon_tx.as_dict(), cls=JsonEncoder)}")
 
         self._stat_tx_begin()
+
         try:
             neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_signature)
             if neon_tx_receipt is not None:
@@ -556,7 +554,7 @@ class NeonRpcApiWorker:
         self._stat_exporter.stat_commit_tx_end_success()
 
     def _stat_tx_failed(self):
-        self._stat_exporter.stat_commit_tx_end_failed(None)
+        self._stat_exporter.stat_commit_tx_end_failed()
 
     def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: Union[str, int]) -> Optional[Dict[str, Any]]:
         try:

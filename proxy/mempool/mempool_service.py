@@ -94,7 +94,6 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
             self._mempool = MemPool(self._config, self._operator_resource_mng, self._mp_executor_mng)
             self._replicator = MemPoolReplicator(self._mempool)
-            self.event_loop.run_until_complete(self._mempool.async_init())
             self.event_loop.run_forever()
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
