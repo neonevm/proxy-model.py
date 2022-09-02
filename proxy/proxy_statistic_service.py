@@ -105,7 +105,7 @@ class ProxyStatisticService(IFinanceDataPeekerUser):
 
         self._init_metrics()
 
-        self._process = Process(target=self.run)
+        self._process = Process(target=self._run)
         self._process.start()
 
     def _init_metrics(self):
@@ -122,7 +122,7 @@ class ProxyStatisticService(IFinanceDataPeekerUser):
         self.metr_usd_price_neon = Gauge('usd_price_neon', 'Neon Price USD')
         self.metr_operator_fee = Gauge('operator_fee', 'Operator Fee')
 
-    def run(self):
+    def _run(self):
         try:
             event_loop = asyncio.new_event_loop()
             self.info(f"Listen port: {self.PROMETHEUS_SRV_ADDRESS[1]} on: {self.PROMETHEUS_SRV_ADDRESS[0]}")

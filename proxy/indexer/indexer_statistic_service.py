@@ -6,8 +6,8 @@ from aioprometheus.service import Service
 from logged_groups import logged_group
 from aioprometheus import Counter, Gauge, Histogram
 
-from proxy.common_neon.data import NeonTxStatData
-from proxy.common_neon.statistic.statistic_middleware import StatisticMiddlewareServer
+from ..common_neon.data import NeonTxStatData
+from ..common_neon.statistic.statistic_middleware import StatisticMiddlewareServer
 
 
 @logged_group("neon.Statistic")
@@ -19,7 +19,7 @@ class IndexerStatisticService:
         self._stat_middleware_srv = StatisticMiddlewareServer(self)
 
         self._init_metrics()
-        self._process = Process(target=self.run)
+        self._process = Process(target=self._run)
         self._process.start()
 
     def _init_metrics(self):
@@ -34,7 +34,7 @@ class IndexerStatisticService:
         self.metr_postgres_availability = Gauge('postgres_availability', 'Postgres availability')
         self.metr_solana_rpc_health = Gauge('solana_rpc_health', 'Solana Node status')
 
-    def run(self):
+    def _run(self):
         try:
             event_loop = asyncio.new_event_loop()
             self.info(f"Listen port: {self.PROMETHEUS_SRV_ADDRESS[1]} on: {self.PROMETHEUS_SRV_ADDRESS[0]}")
