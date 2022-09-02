@@ -76,6 +76,8 @@ class ElfParams:
     def get_params(self) -> Dict[str: Any]:
         return self.elf_params
 
+    def reload_params(self):
+        read_elf_params(self.elf_params)
 
 @logged_group("neon.Proxy")
 def read_elf_params(out_dict, *, logger):
