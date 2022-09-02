@@ -164,7 +164,6 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 b'Content-Type': b'application/json',
                 b'Access-Control-Allow-Origin': b'*',
             })))
-        print(f"stat_commit_request: {method}")
         self._stat_middleware.stat_commit_request_and_timeout(method, resp_time_ms)
 
     def on_websocket_open(self) -> None:
