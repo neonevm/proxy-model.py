@@ -125,6 +125,7 @@ class ProxyStatisticService(IFinanceDataPeekerUser):
     def _run(self):
         try:
             event_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(event_loop)
             self.info(f"Listen port: {self.PROMETHEUS_SRV_ADDRESS[1]} on: {self.PROMETHEUS_SRV_ADDRESS[0]}")
             event_loop.run_until_complete(Service().start(*self.PROMETHEUS_SRV_ADDRESS))
             event_loop.run_until_complete(self._stat_middleware_srv.start())
