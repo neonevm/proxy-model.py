@@ -4,7 +4,6 @@ from typing import List, Tuple, Optional, Any, cast, Iterator
 
 from logged_groups import logged_group, logging_context
 from neon_py.data import Result
-from neon_py.network import AddrPickableDataClient
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
@@ -93,7 +92,6 @@ class MPInitOperatorResourceTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOp
 
 @logged_group("neon.MemPool")
 class MemPool:
-
     CHECK_TASK_TIMEOUT_SEC = 0.01
     RESCHEDULE_TIMEOUT_SEC = 0.4
 
