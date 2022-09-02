@@ -8,6 +8,7 @@ from singleton_decorator import singleton
 from solana.publickey import PublicKey
 
 from .environment_utils import neon_cli
+from .environment_data import neon_cli_timeout
 
 
 @singleton
@@ -81,7 +82,7 @@ class ElfParams:
 
 @logged_group("neon.Proxy")
 def read_elf_params(out_dict, *, logger):
-    logger.debug("Read ELF params")
+    logger.debug(f"Read ELF params with timeout {neon_cli_timeout} sec.")
     for param in neon_cli().call("neon-elf-params").splitlines():
         if param.startswith('NEON_') and '=' in param:
             v = param.split('=')
