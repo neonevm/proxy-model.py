@@ -16,20 +16,6 @@ from random import uniform
 from eth_account.signers.local import LocalAccount as NeonAccount
 from proxy.common_neon.compute_budget import TransactionWithComputeBudget
 
-NEON_TOKEN_CONTRACT = '''
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.5.12;
-
-contract NeonToken {
-    address constant NeonPrecompiled = 0xFF00000000000000000000000000000000000003;
-
-    function withdraw(bytes32 spender) public payable {
-        (bool success, bytes memory returnData) = NeonPrecompiled.delegatecall(abi.encodeWithSignature("withdraw(bytes32)", spender));
-        require(success);
-    }
-}
-'''
-
 
 PROXY_URL = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 SOLANA_URL = os.environ.get('SOLANA_URL', 'http://solana:8899/')
@@ -57,7 +43,10 @@ class TestNeonToken(unittest.TestCase):
         return new_sol_acc
 
     def deploy_contract(self):
-        artifacts = compile_source(NEON_TOKEN_CONTRACT)
+        with open('/opt/contracts/neon_wrapper.sol', 'r') as file:
+            source = file.read()
+
+        artifacts = compile_source(source)
         _, self.neon_token_iface = artifacts.popitem()
 
         self.neon_contract = proxy.eth.contract(abi=self.neon_token_iface['abi'],
