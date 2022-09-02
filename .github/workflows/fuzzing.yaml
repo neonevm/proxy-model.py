@@ -5,7 +5,24 @@ on:
 permissions: read-all
 
 jobs:
+  build_docker_image:
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          file: .clusterfuzzlite/Dockerfile
+          push: true
+          tags: neonlabsorg/fuzzing:latest
   PR:
+    needs: build_docker_image
     runs-on: [self-hosted, linux]
     env:
       LOG_CFG: log_cfg_fuzzing.json
@@ -44,10 +61,10 @@ jobs:
         upload-build: true
     - name: Run Fuzzers (${{ matrix.sanitizer }})
       id: run
-      uses: google/clusterfuzzlite/actions/run_fuzzers@50707aeae5d98426f417414b7854fdf47bc4def6
+      uses: neonlabsorg/clusterfuzzlite/actions/run_fuzzers@b05601b4377041cc4b3f6122a2411612d5dadc79
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        fuzz-seconds: 600
+        fuzz-seconds: 300
         mode: 'code-change'
         sanitizer: ${{ matrix.sanitizer }}
     - name: Clean up

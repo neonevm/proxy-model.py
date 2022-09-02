@@ -4,7 +4,7 @@ on:
     - cron: '0 1 * * *'  # Once a day at 01:00 AM.
 permissions: read-all
 jobs:
-  Pruning:
+  Scheduled_fuzzing:
     runs-on: [self-hosted, linux]
     env:
       LOG_CFG: log_cfg_fuzzing.json
@@ -26,7 +26,7 @@ jobs:
       uses: actions/checkout@v3
       id: checkout
       with:
-        ref: ${{ github.ref }}
+        ref: develop
         path: storage/proxy-model.py
         submodules: true
     - name: Build Fuzzers
@@ -43,7 +43,7 @@ jobs:
         sanitizer: ${{ matrix.sanitizer }}
         github-token: ${{ secrets.GITHUB_TOKEN }}
         fuzz-seconds: 3600
-        mode: 'prune'
+        mode: 'code-change'
     - name: Clean up
       if: always()
       run: |
