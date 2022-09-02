@@ -3,28 +3,24 @@ import json
 import os
 import subprocess
 import time
-from enum import Enum
 from hashlib import sha256
 from typing import NamedTuple, Tuple, Union
 
-import base58
 import rlp
 from base58 import b58encode
-from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
+from construct import Bytes, Int8ul, Struct as cStruct
 from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
 from solana.account import Account
 from solana.publickey import PublicKey
-from solana.rpc import types
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
+from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
-import base58
 import math
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
@@ -515,258 +511,6 @@ def send_transaction(client, trx, acc):
     confirm_transaction(client, result["result"])
     result = client.get_confirmed_transaction(result["result"])
     return result
-
-
-def create_neon_evm_instr_05_single(evm_loader_program_id,
-                                    caller_sol_acc,
-                                    operator_sol_acc,
-                                    contract_sol_acc,
-                                    code_sol_acc,
-                                    collateral_pool_index_buf,
-                                    collateral_pool_address,
-                                    evm_instruction,
-                                    add_meta=[]):
-    return TransactionInstruction(
-        program_id=evm_loader_program_id,
-        data=bytearray.fromhex("05") + collateral_pool_index_buf + evm_instruction,
-        keys=[
-                 # System instructions account:
-                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-
-                 # Operator's SOL account:
-                 AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
-                 # Collateral pool address:
-                 AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-                 # Operator's NEON account:
-                 AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-                 # System program account:
-                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-                 # NeonEVM program account
-                 AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
-
-                 AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-                 AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
-                 AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-
-             ] + add_meta + [
-                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-             ])
-
-
-def create_neon_evm_instr_13_partial_call_or_continue(evm_loader_program_id,
-                                                      caller_sol_acc,
-                                                      operator_sol_acc,
-                                                      storage_sol_acc,
-                                                      contract_sol_acc,
-                                                      code_sol_acc,
-                                                      collateral_pool_index_buf,
-                                                      collateral_pool_address,
-                                                      step_count,
-                                                      evm_instruction,
-                                                      writable_code=True,
-                                                      add_meta=[]):
-    return TransactionInstruction(
-        program_id=evm_loader_program_id,
-        data=bytearray.fromhex("0D") + collateral_pool_index_buf + step_count.to_bytes(8,
-                                                                                       byteorder='little') + evm_instruction,
-        keys=[
-                 AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
-                 # System instructions account:
-                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-
-                 # Operator's SOL account:
-                 AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
-                 # Collateral pool address:
-                 AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-                 # Operator's NEON account:
-                 AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-                 # System program account:
-                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-                 # NeonEVM program account
-                 AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
-
-                 AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-                 AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
-                 AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-
-                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-             ] + add_meta + [
-                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-             ])
-
-
-def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
-                                          caller_sol_acc,
-                                          operator_sol_acc,
-                                          storage_sol_acc,
-                                          contract_sol_acc,
-                                          code_sol_acc,
-                                          collateral_pool_index_buf,
-                                          collateral_pool_address,
-                                          step_count,
-                                          evm_instruction,
-                                          writable_code=True,
-                                          add_meta=[]):
-    return TransactionInstruction(
-        program_id=evm_loader_program_id,
-        data=bytearray.fromhex("13") + collateral_pool_index_buf + step_count.to_bytes(8,
-                                                                                       byteorder='little') + evm_instruction,
-        keys=[
-                 AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
-                 # System instructions account:
-                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-
-                 # Operator's SOL account:
-                 AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
-                 # Collateral pool address:
-                 AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-                 # Operator's NEON account:
-                 AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-                 # System program account:
-                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-                 # NeonEVM program account
-                 AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
-
-                 AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-                 AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
-                 AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-             ] + add_meta + [
-                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-             ])
-
-
-def create_neon_evm_instr_20_continue(evm_loader_program_id,
-                                      caller_sol_acc,
-                                      operator_sol_acc,
-                                      storage_sol_acc,
-                                      contract_sol_acc,
-                                      code_sol_acc,
-                                      collateral_pool_index_buf,
-                                      collateral_pool_address,
-                                      step_count,
-                                      writable_code=True,
-                                      add_meta=[]):
-    return TransactionInstruction(
-        program_id=evm_loader_program_id,
-        data=bytearray.fromhex("14") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
-        keys=[
-                 # Operator's storage account:
-                 AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
-                 # Operator's SOL account:
-                 AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
-                 # Collateral pool address:
-                 AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-                 # Operator's NEON account:
-                 AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-                 # System program account:
-                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-                 # NeonEVM program account
-                 AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
-
-                 AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-                 AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
-                 AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-             ] + add_meta + [
-                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-             ])
-
-
-def create_neon_evm_instr_22_begin(evm_loader_program_id,
-                                   caller_sol_acc,
-                                   operator_sol_acc,
-                                   storage_sol_acc,
-                                   holder_sol_acc,
-                                   contract_sol_acc,
-                                   code_sol_acc,
-                                   collateral_pool_index_buf,
-                                   collateral_pool_address,
-                                   step_count):
-    return TransactionInstruction(
-        program_id=evm_loader_program_id,
-        data=bytearray.fromhex("16") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
-        keys=[
-            AccountMeta(pubkey=holder_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
-
-            # Operator's SOL account:
-            AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
-            # Collateral pool address:
-            AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator's NEON token account:
-            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-            # System program account:
-            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-            # NeonEVM program account
-            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
-
-            AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-
-            AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-        ])
-
-
-def create_neon_evm_instr_21_cancel(evm_loader_program_id,
-                                    caller_sol_acc,
-                                    operator_sol_acc,
-                                    storage_sol_acc,
-                                    contract_sol_acc,
-                                    code_sol_acc,
-                                    nonce):
-    return TransactionInstruction(
-        program_id=evm_loader_program_id,
-        data=bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
-        keys=[
-            AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
-
-            # Operator's SOL account:
-            AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
-            # Incinerator
-            AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
-
-            AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-
-            AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-        ])
-
-
-def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
-                                               caller_sol_acc,
-                                               operator_sol_acc,
-                                               storage_sol_acc,
-                                               holder_sol_acc,
-                                               contract_sol_acc,
-                                               code_sol_acc,
-                                               collateral_pool_index_buf,
-                                               collateral_pool_address,
-                                               step_count):
-    return TransactionInstruction(
-        program_id=evm_loader_program_id,
-        data=bytearray.fromhex("0E") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
-        keys=[
-            AccountMeta(pubkey=holder_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
-
-            # Operator's SOL account:
-            AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
-            # Collateral pool address:
-            AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator's NEON account:
-            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-            # System program account:
-            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-            # NeonEVM program account
-            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
-
-            AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-
-            AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-        ])
 
 
 def evm_step_cost():
