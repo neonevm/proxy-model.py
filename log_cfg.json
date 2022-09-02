@@ -51,7 +51,7 @@
             "propagate": false
         },
         "neon.Network": {
-            "level": "DEBUG",
+            "level": "ERROR",
             "handlers": ["standard"],
             "propagate": false
         },
