@@ -14,7 +14,6 @@ from ..common_neon.errors import BlockedAccountsError
 from ..common_neon.errors import NodeBehindError, SolanaUnavailableError, NonceTooLowError
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.address import EthereumAddress
-from ..common_neon.config import IConfig
 from ..common_neon.config import Config
 
 from .transaction_sender_ctx import NeonTxSendCtx
@@ -30,7 +29,7 @@ from .mempool_api import MPOpResInitRequest, MPOpResInitResult, MPOpResInitResul
 
 @logged_group("neon.MemPool")
 class MPExecutor(mp.Process, IPickableDataServerUser):
-    def __init__(self, executor_id: int, srv_sock: socket.socket, config: IConfig):
+    def __init__(self, executor_id: int, srv_sock: socket.socket, config: Config):
         self.info(f"Initialize mempool_executor: {executor_id}")
         self._id = executor_id
         self._srv_sock = srv_sock
