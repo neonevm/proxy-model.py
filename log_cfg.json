@@ -3,13 +3,13 @@
     "handlers": {
         "standard": {
             "class": "logging.StreamHandler",
-            "level": "ERROR",
+            "level": "DEBUG",
             "formatter": "standard",
-            "filters": ["context_filter"]
+            "filters": ["context_filter", "neon_prefix_dropper"]
         },
         "root": {
             "class": "logging.StreamHandler",
-            "level": "ERROR",
+            "level": "DEBUG",
             "formatter": "root",
             "filters": ["context_filter"]
         }
@@ -17,6 +17,9 @@
     "filters": {
         "context_filter": {
             "()": "logged_groups.ContextFilter"
+        },
+        "neon_prefix_dropper": {
+            "()": "neon_py.logging.NeonPrefixDropper"
         }
     },
     "formatters": {
@@ -33,17 +36,17 @@
     },
     "loggers": {
         "neon": {
-            "level": "ERROR",
+            "level": "DEBUG",
             "handlers": ["standard"],
             "propagate": false
         },
         "neon.Proxy": {
-            "level": "ERROR",
+            "level": "DEBUG",
             "handlers": ["standard"],
             "propagate": false
         },
         "neon.MemPool": {
-            "level": "ERROR",
+            "level": "DEBUG",
             "handlers": ["standard"],
             "propagate": false
         },
