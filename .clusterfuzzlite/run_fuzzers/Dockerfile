@@ -22,3 +22,5 @@ COPY --from=spl /opt/neon-cli /spl/bin/emulator
 COPY --from=proxy_program /opt/proxy_program-keypair.json /spl/bin/
 
 COPY proxy/operator-keypairs/id.json /root/.config/solana/
+COPY proxy/operator-keypairs/ /opt/proxy/operator-keypairs/
+RUN ln -s /opt/proxy/operator-keypairs/id?*.json /root/.config/solana/
