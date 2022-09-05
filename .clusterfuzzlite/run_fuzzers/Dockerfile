@@ -23,4 +23,4 @@ COPY --from=proxy_program /opt/proxy_program-keypair.json /spl/bin/
 
 COPY proxy/operator-keypairs/id.json /root/.config/solana/
 COPY proxy/operator-keypairs/ /opt/proxy/operator-keypairs/
-RUN ln -s /opt/proxy/operator-keypairs/id?*.json /root/.config/solana/
+RUN solana config set --keypair ~/.config/solana/id.json && ln -s /opt/proxy/operator-keypairs/id?*.json /root/.config/solana/
