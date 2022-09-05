@@ -148,7 +148,7 @@ class NeonIxBuilder:
         self.debug(f'Create eth account: {str(eth_address)}, sol account: {pda_account}, nonce: {nonce}')
 
         base = self._operator_account
-        data = create_account_layout(bytes(eth_address), nonce)
+        data = create_account_layout(bytes(eth_address))
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=data,
