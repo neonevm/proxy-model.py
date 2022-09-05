@@ -11,7 +11,7 @@ from solana.publickey import PublicKey
 
 from ..common_neon.config import IConfig
 from ..common_neon.address import EthereumAddress, ether2program, permAccountSeed, accountWithSeed
-from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
@@ -20,7 +20,7 @@ from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.errors import BadResourceError
 
 from .neon_tx_stages import NeonTxStage
-from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreatePermAccountStage, NeonDeletePermAccountStage
+from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
 
 
 @logged_group("neon.MemPool")
@@ -28,9 +28,6 @@ class OperatorResourceInfo:
     def __init__(self, signer: SolanaAccount, resource_id: int):
         self._signer = signer
         self._resource_id = resource_id
-
-        self._storage_seed = permAccountSeed(b'storage', resource_id)
-        self._storage = accountWithSeed(self.public_key, self._storage_seed)
 
         self._holder_seed = permAccountSeed(b'holder', resource_id)
         self._holder = accountWithSeed(self.public_key, self._holder_seed)
@@ -44,14 +41,6 @@ class OperatorResourceInfo:
 
     def __str__(self) -> str:
         return f'{str(self.public_key)}:{self._resource_id}'
-
-    @property
-    def storage(self) -> PublicKey:
-        return self._storage
-
-    @property
-    def storage_seed(self) -> bytes:
-        return self._storage_seed
 
     @property
     def holder(self) -> PublicKey:
@@ -95,10 +84,8 @@ class OperatorResourceInitializer:
             self._validate_operator_balance(resource)
 
             builder = NeonIxBuilder(resource.public_key)
-            self._create_perm_accounts(builder, resource)
+            self._create_holder_account(builder, resource)
             self._create_ether_account(builder, resource)
-            self._validate_storage_account(resource)
-
         except BadResourceError:
             raise
         except Exception as err:
@@ -125,7 +112,7 @@ class OperatorResourceInitializer:
                 f'min_operator_balance_to_err = {min_operator_balance_to_err}; '
             )
 
-    def _execute_state(self, stage: NeonTxStage, resource: OperatorResourceInfo) -> None:
+    def _execute_stage(self, stage: NeonTxStage, resource: OperatorResourceInfo) -> None:
         stage.build()
         tx_list = SolTxListInfo(name_list=[stage.NAME], tx_list=[stage.tx])
         tx_sender = SolTxListSender(self._solana, resource.signer)
@@ -142,47 +129,36 @@ class OperatorResourceInitializer:
         self.debug(f"Create ether account {str(solana_address)}({str(resource.ether)}) for resource {resource}")
         stage = NeonCreateAccountTxStage(builder, {"address": resource.ether})
         stage.set_balance(self._solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0])
-        self._execute_state(stage, resource)
+        self._execute_stage(stage, resource)
 
-    def _create_perm_accounts(self, builder: NeonIxBuilder, resource: OperatorResourceInfo) -> None:
-        address_list = [resource.storage, resource.holder]
-        seed_list = [resource.storage_seed, resource.holder_seed]
-        info_list = self._solana.get_account_info_list(address_list)
+    def _create_holder_account(self, builder: NeonIxBuilder, resource: OperatorResourceInfo) -> None:
+        holder_address = str(resource.holder)
+        holder_seed = resource.holder_seed
+        holder_info = self._solana.get_account_info(resource.holder)
+        size = self._config.get_holder_size()
+        balance = self._solana.get_multiple_rent_exempt_balances_for_size([size])[0]
 
-        storage_size = self._config.get_storage_size()
-        storage_balance = self._solana.get_multiple_rent_exempt_balances_for_size([storage_size])[0]
+        if holder_info is None:
+            self.debug(f"Create account {holder_address} for resource {resource}")
+            self._execute_stage(NeonCreateHolderAccountStage(builder, holder_seed, size, balance), resource)
+        elif holder_info.lamports < balance:
+            self.debug(f"Resize account {holder_address} for resource {resource}")
+            self._execute_stage(NeonDeleteHolderAccountStage(builder, resource.holder_seed), resource)
+            self._execute_stage(NeonCreateHolderAccountStage(builder, holder_seed, size, balance), resource)
+        elif holder_info.owner != self._config.get_evm_loader_id():
+            raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
+        elif holder_info.tag == ACTIVE_HOLDER_TAG:
+            self._unlock_holder_account(resource)
+        elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG):
+            raise BadResourceError(f'Holder {holder_address} for resource {resource} has bad tag {holder_info.tag}')
+        else:
+            self.debug(f"Use account {str(holder_info.owner)} for resource {resource}")
 
-        for address, seed, info in zip(address_list, seed_list, info_list):
-            if info is None:
-                self.debug(f"Create account {str(address)} for resource {resource}")
-                stage = NeonCreatePermAccountStage(builder, seed, storage_size)
-                stage.set_balance(storage_balance)
-                self._execute_state(stage, resource)
-            elif info.lamports < storage_balance:
-                self.debug(f"Resize account {str(address)} for resource {resource}")
-                self._execute_state(NeonDeletePermAccountStage(builder, seed), resource)
-                stage = NeonCreatePermAccountStage(builder, seed, storage_size)
-                stage.set_balance(storage_balance)
-                self._execute_state(stage, resource)
-            elif info.owner != self._config.get_evm_loader_id():
-                raise BadResourceError(f'Wrong owner of {str(address)} for resource {resource}')
-            else:
-                self.debug(f"Use account {str(address)} for resource {resource}")
-
-    def _validate_storage_account(self, resource: OperatorResourceInfo) -> None:
-        info = self._solana.get_account_info(resource.storage)
-        assert info is not None, f'Storage {str(resource.storage)} for resource {resource} is not initialized'
-
-        if info.tag == ACTIVE_STORAGE_TAG:
-            self._unlock_storage_account(resource)
-        elif info.tag not in (FINALIZED_STORAGE_TAG, EMPTY_STORAGE_TAG):
-            raise BadResourceError(f'Storage {str(resource.storage)} for resource {resource} has bad tag {resource}')
-
-    def _unlock_storage_account(self, resource: OperatorResourceInfo) -> None:
-        self.debug(f"Cancel transaction in {str(resource.storage)} for resource {resource}")
-        info = self._solana.get_storage_account_info(resource.storage)
+    def _unlock_holder_account(self, resource: OperatorResourceInfo) -> None:
+        self.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
+        holder_info = self._solana.get_holder_account_info(resource.holder)
         cancel_tx_executor = CancelTxExecutor(self._solana, resource.signer)
-        cancel_tx_executor.add_blocked_storage_account(info)
+        cancel_tx_executor.add_blocked_holder_account(holder_info)
         cancel_tx_executor.execute_tx_list()
 
 
@@ -278,12 +254,11 @@ class OperatorResourceMng:
         current_time = self._get_current_time()
         resource.set_last_used_time(current_time)
 
-        info = OperatorResourceInfo.from_ident(resource.ident)
+        resource_info = OperatorResourceInfo.from_ident(resource.ident)
         self.debug(
-            f'Resource is selected: {str(info)}, ' +
-            f'storage: {str(info.storage)}, ' +
-            f'holder: {str(info.holder)}, ' +
-            f'ether: {str(info.ether)}'
+            f'Resource is selected: {str(resource_info)}, ' +
+            f'holder: {str(resource_info.holder)}, ' +
+            f'ether: {str(resource_info.ether)}'
         )
         return resource.ident
 

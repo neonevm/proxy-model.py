@@ -7,6 +7,7 @@ import copy
 
 from logged_groups import logged_group
 from typing import Dict, Optional, List, Any, cast
+from sha3 import keccak_256
 
 from solana.transaction import Transaction
 from solana.blockhash import Blockhash
@@ -72,6 +73,10 @@ class BaseNeonTxStrategy(abc.ABC):
     @property
     def neon_sig(self) -> str:
         return self._ctx.neon_sig
+
+    @property
+    def bin_neon_sig(self) -> bytes:
+        return self._ctx.bin_neon_sig
 
     @property
     def validation_error_msg(self) -> str:
@@ -163,7 +168,7 @@ class BaseNeonTxStrategy(abc.ABC):
         return TransactionWithComputeBudget()
 
     def build_cancel_tx(self) -> Transaction:
-        return TransactionWithComputeBudget().add(self._builder.make_cancel_instruction())
+        return Transaction().add(self._builder.make_cancel_ix())
 
     def _build_tx_list(self, cnt: int) -> SolTxListInfo:
         return SolTxListInfo(
@@ -211,7 +216,7 @@ class SimpleNeonTxSender(SolTxListSender):
 
 @logged_group("neon.MemPool")
 class SimpleNeonTxStrategy(BaseNeonTxStrategy):
-    NAME = 'CallFromRawEthereumTX'
+    NAME = 'TransactionExecuteFromInstruction'
     IS_SIMPLE = True
 
     def __init__(self, *args, **kwargs):
@@ -237,7 +242,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
 
     def build_tx(self, _=0) -> Transaction:
         tx = TransactionWithComputeBudget()
-        tx.add(self._builder.make_noniterative_call_transaction(len(tx.instructions)))
+        tx.add(self._builder.make_tx_exec_from_data_ix())
         return tx
 
     def execute(self) -> NeonTxResultInfo:
@@ -344,7 +349,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
 @logged_group("neon.MemPool")
 class IterativeNeonTxStrategy(BaseNeonTxStrategy):
-    NAME = 'PartialCallOrContinueFromRawEthereumTX'
+    NAME = 'TransactionStepFromInstruction'
     IS_SIMPLE = False
 
     def __init__(self, *args, **kwargs) -> None:
@@ -356,18 +361,8 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return (
             self._validate_notdeploy_tx() and
             self._validate_tx_size() and
-            self._validate_evm_step_cnt() and
             self._validate_tx_has_chainid()
         )
-
-    def _validate_evm_step_cnt(self) -> bool:
-        # Only the instruction with a holder account allows to pass a unique number to make the transaction unique
-        emulated_evm_step_cnt = self._ctx.emulated_evm_step_cnt
-        max_evm_step_cnt = self._iter_evm_step_cnt * 25
-        if emulated_evm_step_cnt > max_evm_step_cnt:
-            self._validation_error_msg = 'Big number of EVM steps'
-            return False
-        return True
 
     def decrease_iter_evm_step_cnt(self, tx_list: List[Transaction]) -> List[Transaction]:
         if self._iter_evm_step_cnt <= 10:
@@ -396,8 +391,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     def build_tx(self, idx=0) -> Transaction:
         tx = TransactionWithComputeBudget(compute_units=self._compute_unit_cnt)
         # generate unique tx
-        evm_step_cnt = self._iter_evm_step_cnt + idx
-        tx.add(self._builder.make_partial_call_or_continue_transaction(evm_step_cnt, len(tx.instructions)))
+        tx.add(self._builder.make_tx_step_from_data_ix(self._iter_evm_step_cnt, idx))
         return tx
 
     def _calc_iter_cnt(self) -> int:
@@ -419,7 +413,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
 @logged_group("neon.MemPool")
 class HolderNeonTxStrategy(IterativeNeonTxStrategy):
-    NAME = 'ExecuteTrxFromAccountDataIterativeOrContinue'
+    NAME = 'TransactionStepFromAccount'
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -434,7 +428,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
     def build_tx(self, idx=0) -> Transaction:
         evm_step_cnt = self._iter_evm_step_cnt
         return TransactionWithComputeBudget(compute_units=self._compute_unit_cnt).add(
-            self._builder.make_partial_call_or_continue_from_account_data_instruction(evm_step_cnt, idx)
+            self._builder.make_tx_step_from_account_ix(evm_step_cnt, idx)
         )
 
     def _calc_iter_cnt(self) -> int:
@@ -451,12 +445,12 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         tx_list_info = SolTxListInfo([], [])
         holder_msg_offset = 0
         holder_msg = copy.copy(self._builder.holder_msg)
+        neon_tx_sig = self.bin_neon_sig
+
         holder_msg_size = ElfParams().holder_msg_size
         while len(holder_msg):
             (holder_msg_part, holder_msg) = (holder_msg[:holder_msg_size], holder_msg[holder_msg_size:])
-            tx = TransactionWithComputeBudget().add(
-                self._builder.make_write_instruction(holder_msg_offset, holder_msg_part)
-            )
+            tx = Transaction().add(self._builder.make_write_ix(neon_tx_sig, holder_msg_offset, holder_msg_part))
             tx_list_info.name_list.append('WriteWithHolder')
             tx_list_info.tx_list.append(tx)
             holder_msg_offset += holder_msg_size
@@ -467,7 +461,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
 
 @logged_group("neon.MemPool")
 class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
-    NAME = 'AltExecuteTrxFromAccountDataIterativeOrContinue'
+    NAME = 'AltTransactionStepFromAccount'
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -558,15 +552,13 @@ class BaseNoChainIdNeonStrategy:
     @staticmethod
     def _build_tx_wo_chainid(self, idx: int) -> Transaction:
         return TransactionWithComputeBudget(compute_units=self._compute_unit_cnt).add(
-            self._builder.make_partial_call_or_continue_from_account_data_no_chainid_instruction(
-                self._iter_evm_step_cnt, idx
-            )
+            self._builder.make_tx_step_from_account_no_chainid_ix(self._iter_evm_step_cnt, idx)
         )
 
 
 @logged_group("neon.MemPool")
 class NoChainIdNeonTxStrategy(HolderNeonTxStrategy, BaseNoChainIdNeonStrategy):
-    NAME = 'ExecuteTrxFromAccountDataIterativeOrContinueNoChainId'
+    NAME = 'TransactionStepFromAccountNoChainId'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -585,7 +577,7 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy, BaseNoChainIdNeonStrategy):
 
 @logged_group("neon.MemPool")
 class AltNoChainIdNeonTxStrategy(AltHolderNeonTxStrategy, BaseNoChainIdNeonStrategy):
-    NAME = 'AltExecuteTrxFromAccountDataIterativeOrContinueNoChainId'
+    NAME = 'AltTransactionStepFromAccountNoChainId'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
