@@ -17,7 +17,7 @@ from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
 from ..indexer.sql_dict import SQLDict
 
-EVM_LOADER_CREATE_ACC           = 0x20
+EVM_LOADER_CREATE_ACC           = 0x28
 SPL_TOKEN_APPROVE               = 0x04
 EVM_LOADER_CALL_FROM_RAW_TRX    = 0x1f
 SPL_TOKEN_INIT_ACC_2            = 0x10
