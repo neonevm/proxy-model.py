@@ -58,7 +58,7 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         sanitizer: ${{ matrix.sanitizer }}
         language: python
-        upload-build: true
+        upload-build: false
     - name: Run Fuzzers (${{ matrix.sanitizer }})
       id: run
       uses: neonlabsorg/clusterfuzzlite/actions/run_fuzzers@b05601b4377041cc4b3f6122a2411612d5dadc79
