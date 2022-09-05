@@ -23,8 +23,9 @@ from base58 import b58decode, b58encode
 from .utils import SolanaBlockInfo
 from .environment_data import EVM_LOADER_ID, RETRY_ON_FAIL, FUZZING_BLOCKHASH
 
-from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT, ACCOUNT_LOOKUP_TABLE_LAYOUT
-from ..common_neon.constants import ACTIVE_STORAGE_TAG, NEON_ACCOUNT_TAG, LOOKUP_ACCOUNT_TAG
+from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, HOLDER_ACCOUNT_INFO_LAYOUT
+from ..common_neon.layouts import ACCOUNT_LOOKUP_TABLE_LAYOUT
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, NEON_ACCOUNT_TAG, LOOKUP_ACCOUNT_TAG
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.utils import get_from_dict
 from ..common_neon.errors import SolanaUnavailableError
@@ -72,30 +73,27 @@ class NeonAccountInfo(NamedTuple):
         )
 
 
-class StorageAccountInfo(NamedTuple):
-    storage_account: PublicKey
+class HolderAccountInfo(NamedTuple):
+    holder_account: PublicKey
     tag: int
+    owner: PublicKey
+    neon_tx_sig: str
     caller: str
-    nonce: int
     gas_limit: int
     gas_price: int
-    block_slot: int
+    gas_used: int
     operator: PublicKey
+    block_slot: int
     account_list_len: int
-    executor_data_size: int
-    evm_data_size: int
-    gas_used_and_paid: int
-    number_of_payments: int
-    sig: bytes
     account_list: List[Tuple[bool, str]]
 
     @staticmethod
-    def frombytes(storage_account: PublicKey, data: bytes) -> StorageAccountInfo:
-        storage = STORAGE_ACCOUNT_INFO_LAYOUT.parse(data)
+    def frombytes(holder_account: PublicKey, data: bytes) -> HolderAccountInfo:
+        holder = HOLDER_ACCOUNT_INFO_LAYOUT.parse(data)
 
         account_list: List[Tuple[bool, str]] = []
-        offset = STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()
-        for _ in range(storage.account_list_len):
+        offset = HOLDER_ACCOUNT_INFO_LAYOUT.sizeof()
+        for _ in range(holder.account_list_len):
             writable = (data[offset] > 0)
             offset += 1
 
@@ -104,21 +102,18 @@ class StorageAccountInfo(NamedTuple):
 
             account_list.append((writable, str(some_pubkey)))
 
-        return StorageAccountInfo(
-            storage_account=storage_account,
-            tag=storage.tag,
-            caller=storage.caller.hex(),
-            nonce=storage.nonce,
-            gas_limit=int.from_bytes(storage.gas_limit, "little"),
-            gas_price=int.from_bytes(storage.gas_price, "little"),
-            block_slot=storage.block_slot,
-            operator=PublicKey(storage.operator),
-            account_list_len=storage.account_list_len,
-            executor_data_size=storage.executor_data_size,
-            evm_data_size=storage.evm_data_size,
-            gas_used_and_paid=int.from_bytes(storage.gas_used_and_paid, "little"),
-            number_of_payments=storage.number_of_payments,
-            sig=storage.sig,
+        return HolderAccountInfo(
+            holder_account=holder_account,
+            tag=holder.tag,
+            owner=PublicKey(holder.owner),
+            neon_tx_sig='0x' + holder.neon_tx_sig.hex().lower(),
+            caller=holder.caller.hex(),
+            gas_limit=int.from_bytes(holder.gas_limit, "little"),
+            gas_price=int.from_bytes(holder.gas_price, "little"),
+            gas_used=int.from_bytes(holder.gas_used, "little"),
+            operator=PublicKey(holder.operator),
+            block_slot=holder.block_slot,
+            account_list_len=holder.account_list_len,
             account_list=account_list
         )
 
@@ -430,17 +425,19 @@ class SolanaInteractor:
             accounts_list.append(NeonAccountInfo.frombytes(account_sol, info.data))
         return accounts_list
 
-    def get_storage_account_info(self, storage_account: PublicKey) -> Optional[StorageAccountInfo]:
-        info = self.get_account_info(storage_account, length=0)
+    def get_holder_account_info(self, holder_account: PublicKey) -> Optional[HolderAccountInfo]:
+        info = self.get_account_info(holder_account, length=0)
         if info is None:
             return None
-        elif info.tag != ACTIVE_STORAGE_TAG:
-            self.debug(f'Storage account {str(storage_account)} has tag {info.tag}')
+        elif info.tag != ACTIVE_HOLDER_TAG:
+            self.debug(f'holder account {str(holder_account)} has tag {info.tag}')
             return None
-        elif len(info.data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for storage data {str(storage_account)}: " +
-                               f"{len(info.data)} < {STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return StorageAccountInfo.frombytes(storage_account, info.data)
+        elif len(info.data) < HOLDER_ACCOUNT_INFO_LAYOUT.sizeof():
+            raise RuntimeError(
+                f"Wrong data length for storage data {str(holder_account)}: "
+                f"{len(info.data)} < {HOLDER_ACCOUNT_INFO_LAYOUT.sizeof()}"
+            )
+        return HolderAccountInfo.frombytes(holder_account, info.data)
 
     def get_account_lookup_table_info(self, table_account: PublicKey) -> Optional[AddressLookupTableAccountInfo]:
         info = self.get_account_info(table_account, length=0)

@@ -151,9 +151,9 @@ class ERC20Wrapper:
         eth_accounts = list(eth_accounts.values())
 
         neon = NeonIxBuilder(owner)
-        neon.init_operator_ether(EthereumAddress(to_acc.address))
-        neon.init_eth_tx(Trx.fromString(eth_trx))
-        neon.init_eth_accounts(eth_accounts)
+        neon.init_operator_neon(EthereumAddress(to_acc.address))
+        neon.init_neon_tx(Trx.fromString(eth_trx))
+        neon.init_neon_account_list(eth_accounts)
         return neon
 
     def create_input_liquidity_instruction(self, payer: PublicKey, from_address: PublicKey, to_address: str, amount: int):

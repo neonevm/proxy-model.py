@@ -11,7 +11,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.rpc.commitment import Confirmed
 from solana.publickey import PublicKey
 from solana.rpc.types import TxOpts
-from solana.transaction import TransactionInstruction, Transaction, AccountMeta
+from solana.transaction import TransactionInstruction, AccountMeta
 from proxy.common_neon.neon_instruction import create_account_layout
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from proxy.common_neon.compute_budget import TransactionWithComputeBudget
@@ -80,7 +80,8 @@ class TestAirdropperIntegration(TestCase):
                                     EVM_LOADER_ID)
         self.wrapper.deploy_wrapper()
 
-    def create_account_instruction(self, eth_address: str, payer: PublicKey):
+    @staticmethod
+    def create_account_instruction(eth_address: str, payer: PublicKey):
         dest_address_solana, nonce = get_evm_loader_account_address(eth_address)
         return TransactionInstruction(
             program_id=EVM_LOADER_ID,
@@ -137,7 +138,7 @@ class TestAirdropperIntegration(TestCase):
             to_acc=to_neon_acc,
             amount=transfer_amount,
         )
-        trx.add(claim_instr.make_noniterative_call_transaction(len(trx.instructions)))
+        trx.add(claim_instr.make_tx_exec_from_data_ix())
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
@@ -145,8 +146,10 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount - transfer_amount)
         self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), transfer_amount)
 
+        eth_balance = proxy.eth.get_balance(to_neon_acc.address)
+        print("NEON balance before is: ", eth_balance)
+
         wait_time = 0
-        eth_balance = 0
         while wait_time < MAX_AIRDROP_WAIT_TIME:
             eth_balance = proxy.eth.get_balance(to_neon_acc.address)
             balance_ready = 0 < eth_balance < 10 * pow(10, 18)
@@ -199,14 +202,14 @@ class TestAirdropperIntegration(TestCase):
             to_acc=to_neon_acc1,
             amount=transfer_amount1,
         )
-        trx.add(claim_instr1.make_noniterative_call_transaction(len(trx.instructions)))
+        trx.add(claim_instr1.make_tx_exec_from_data_ix())
         claim_instr2 = self.wrapper.create_claim_instruction(
             owner=from_owner.public_key(),
             from_acc=from_spl_token_acc,
             to_acc=to_neon_acc2,
             amount=transfer_amount2,
         )
-        trx.add(claim_instr2.make_noniterative_call_transaction(len(trx.instructions)))
+        trx.add(claim_instr2.make_tx_exec_from_data_ix())
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))
@@ -246,8 +249,8 @@ class TestAirdropperIntegration(TestCase):
         sleep(15)
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
-        self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), 0) # Destination-acc ERC20-Token balance is 0
-        self.assertEqual(proxy.eth.get_balance(to_neon_acc.address), initial_balance * 10**18) # Destination-acc Neon balance is initial
+        self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), 0)  # Destination-acc ERC20-Token balance is 0
+        self.assertEqual(proxy.eth.get_balance(to_neon_acc.address), initial_balance * 10**18)  # Destination-acc Neon balance is initial
 
         transfer_amount = 123456
         trx = TransactionWithComputeBudget()
@@ -265,7 +268,7 @@ class TestAirdropperIntegration(TestCase):
             to_acc=to_neon_acc,
             amount=transfer_amount,
         )
-        trx.add(claim_instr.make_noniterative_call_transaction(len(trx.instructions)))
+        trx.add(claim_instr.make_tx_exec_from_data_ix())
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))

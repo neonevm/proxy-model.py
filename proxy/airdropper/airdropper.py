@@ -9,6 +9,7 @@ from logged_groups import logged_group
 
 from ..common_neon.environment_data import EVM_LOADER_ID, NEON_PRICE_USD
 from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.utils import NeonTx
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
 from ..indexer.pythnetwork import PythNetworkClient
@@ -18,7 +19,7 @@ from ..indexer.sql_dict import SQLDict
 
 EVM_LOADER_CREATE_ACC           = 0x20
 SPL_TOKEN_APPROVE               = 0x04
-EVM_LOADER_CALL_FROM_RAW_TRX    = 0x05
+EVM_LOADER_CALL_FROM_RAW_TRX    = 0x1f
 SPL_TOKEN_INIT_ACC_2            = 0x10
 SPL_TOKEN_TRANSFER              = 0x03
 
@@ -146,15 +147,20 @@ class Airdropper(IndexerBase):
     # helper function checking if given 'approve' corresponds to 'call' instruction
     def check_create_approve_call_instr(self, account_keys, create_acc, approve, call):
         # Must use the same Operator account
-        if account_keys[approve['accounts'][2]] != account_keys[call['accounts'][1]]:
+        if account_keys[approve['accounts'][2]] != account_keys[call['accounts'][0]]:
             return False
 
         data = base58.b58decode(call['data'])
-        caller = data[5:25]
-        erc20 = data[90:122]
-        method_id = data[122:126]
-        source_token = data[126:158]
+        try:
+            tx = NeonTx.fromString(data[5:])
+        except (Exception, ):
+            self.debug('bad transaction')
+            return False
 
+        caller = bytes.fromhex(tx.sender())
+        erc20 = tx.toAddress
+        method_id = tx.callData[:4]
+        source_token = tx.callData[4:36]
 
         created_account = base58.b58decode(create_acc['data'])[1:][:20]
         if created_account != caller:
@@ -172,10 +178,12 @@ class Airdropper(IndexerBase):
             return False
 
         if method_id != b'\\\xa3\xe1\xe9':
+            self.debug(f'bad method: {method_id}')
             return False
 
-        if base58.b58decode(account_keys[approve['accounts'][0]]) != source_token:
-            self.debug(f"Claim token account {account_keys[approve['accounts'][0]]} != approve token account {source_token.hex()}")
+        claim_key = base58.b58decode(account_keys[approve['accounts'][0]])
+        if claim_key != source_token:
+            self.debug(f"Claim token account {claim_key.hex()} != approve token account {source_token.hex()}")
             return False
 
         return True
