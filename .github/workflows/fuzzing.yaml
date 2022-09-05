@@ -4,6 +4,9 @@ on:
 
 permissions: read-all
 
+env:
+  SOLANA_URL: http://10.4.0.2:8899
+
 jobs:
   build_docker_image:
     runs-on: [self-hosted, linux]
@@ -18,6 +21,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
+          build-args: |
+            SOLANA_URL=${{ env.SOLANA_URL }}
           file: .clusterfuzzlite/run_fuzzers/Dockerfile
           push: true
           tags: neonlabsorg/fuzzing:latest
@@ -31,7 +36,6 @@ jobs:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: 10.4.0.3
-      SOLANA_URL: http://10.4.0.2:8899
     container:
       image: gcr.io/oss-fuzz-base/base-builder-python
     concurrency:
