@@ -2,7 +2,7 @@ from ..common_neon.environment_data import EVM_LOADER_ID
 
 token_program = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
 evm_loader_addr = EVM_LOADER_ID
-erc20_wrapper = '0x6197a7e7fd1a8463697965e821a6d3e9c600ddeb'
+erc20_wrapper = '0x738aaa80a1dc61d55fda38a234afa6ce93641efc'
 wrapper_whitelist = [erc20_wrapper]
 
 token_airdrop_address = '0x1117a1012e1dff20a69072e8a2aca3ccde6ac3dd'
