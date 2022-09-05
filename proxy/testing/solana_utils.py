@@ -328,7 +328,7 @@ class EvmLoader:
 
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
-            data=bytes.fromhex("1f") + self.ether2bytes(user_ether_address),
+            data=bytes.fromhex("27") + self.ether2bytes(user_ether_address),
             keys=[
                 AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),

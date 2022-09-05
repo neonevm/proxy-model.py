@@ -52,8 +52,8 @@ class EvmInstruction(Enum):
     Migrate02ContractFromV1ToV2WriteValueToDistributedStorage = b'\x1c'  # deprecated
     Migrate02ContractFromV1ToV2ConvertDataAccount = b'\x1d'  # deprecated
     CollectTreasure = b'\x1e'
-    DepositV03 = b'\x1f'
-    CreateAccountV03 = b'\x20'
+    DepositV03 = b'\x27'
+    CreateAccountV03 = b'\x28'
 
 
 def create_account_with_seed_layout(base, seed, lamports, space):
