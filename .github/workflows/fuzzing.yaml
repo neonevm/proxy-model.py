@@ -36,6 +36,8 @@ jobs:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: 10.4.0.3
+      PP_SOLANA_URL: https://api.devnet.solana.com
+      PYTH_MAPPING_ACCOUNT: BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2
     container:
       image: gcr.io/oss-fuzz-base/base-builder-python
     concurrency:

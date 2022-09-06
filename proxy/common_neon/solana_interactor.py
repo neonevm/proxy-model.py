@@ -6,12 +6,12 @@ import base58
 import base64
 import time
 import traceback
-import requests
 import json
+import itertools
+import requests
 
 from solana.blockhash import Blockhash
 from solana.publickey import PublicKey
-from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from solana.rpc.types import RPCResponse
 from solana.transaction import Transaction
@@ -185,28 +185,29 @@ class SendResult(NamedTuple):
 @logged_group("neon.Proxy")
 class SolanaInteractor:
     def __init__(self, solana_url: str) -> None:
-        self._client = SolanaClient(solana_url)._provider
+        self._request_counter = itertools.count()
+        self._endpoint_uri = solana_url
+        self._session = requests.sessions.Session()
         self._fuzzing_hash_cycle = False
 
-    def _send_post_request(self, request) -> RPCResponse:
+    def _send_post_request(self, request) -> requests.Response:
         """This method is used to make retries to send request to Solana"""
 
         headers = {
             "Content-Type": "application/json"
         }
-        client = self._client
 
         retry = 0
         while True:
             try:
                 retry += 1
-                raw_response = client.session.post(client.endpoint_uri, headers=headers, json=request)
+                raw_response = self._session.post(self._endpoint_uri, headers=headers, json=request)
                 raw_response.raise_for_status()
                 return raw_response
 
             except requests.exceptions.RequestException as err:
                 # Hide the Solana URL
-                str_err = str(err).replace(client.endpoint_uri, 'XXXXX')
+                str_err = str(err).replace(self._endpoint_uri, 'XXXXX')
 
                 if retry <= RETRY_ON_FAIL:
                     self.debug(f'Receive connection error {str_err} on connection to Solana. ' +
@@ -226,7 +227,7 @@ class SolanaInteractor:
                 raise
 
     def _send_rpc_request(self, method: str, *params: Any) -> RPCResponse:
-        request_id = next(self._client._request_counter) + 1
+        request_id = next(self._request_counter) + 1
 
         request = {
             "jsonrpc": "2.0",
@@ -242,10 +243,9 @@ class SolanaInteractor:
         full_response_list = []
         request_list = []
         request_data = ''
-        client = self._client
 
         for params in params_list:
-            request_id = next(client._request_counter) + 1
+            request_id = next(self._request_counter) + 1
             request = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
             request_list.append(request)
             request_data += ', ' + json.dumps(request)
