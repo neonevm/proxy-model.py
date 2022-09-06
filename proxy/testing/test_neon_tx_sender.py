@@ -23,7 +23,7 @@ class TestNeonTxSender(unittest.TestCase):
         self._resource_list = OperatorResourceMng(self._config)
         for resource_ident in self._resource_list.get_disabled_resource_list():
             self._resource_list.enable_resource(resource_ident)
-        self._resource_ident = self._resource_list.get_resource('')
+        self._resource_ident = self._resource_list.get_resource('test-tx-hash')
         self._resource = OperatorResourceInfo.from_ident(self._resource_ident)
         self._resource_initializer = OperatorResourceInitializer(self._config, self.solana)
         self._config.get_min_operator_balance_to_warn = Mock()
