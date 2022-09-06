@@ -7,8 +7,7 @@ echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScr
 if [ "$CONFIG" == "ci" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="http://solana:8899"
   [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=0
-  [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="0.5"
-  [[ -z "$CONTINUE_COUNT_FACTOR"        ]] && export CONTINUE_COUNT_FACTOR="3"
+  [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="2.5"
   [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
   [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="postgres"
   [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=10
@@ -16,10 +15,13 @@ if [ "$CONFIG" == "ci" ]; then
   [[ -z "$START_SLOT"                   ]] && export START_SLOT="LATEST"
   [[ -z "$CONFIRM_TIMEOUT"              ]] && export CONFIRM_TIMEOUT=10
   [[ -z "$PERM_ACCOUNT_LIMIT"           ]] && export PERM_ACCOUNT_LIMIT=2
+  [[ -z "$RECHECK_RESOURCE_AFTER_USES_CNT" ]] && export RECHECK_RESOURCE_AFTER_USES_CNT=240
+  [[ -z "$RECHECK_USED_RESOURCE_SEC"    ]] && export RECHECK_USED_RESOURCE_SEC=240
+  [[ -z "$GAS_PRICE_SUGGEST_PCT"        ]] && export GAS_PRICE_SUGGEST_PCT="0.2"
 elif [ "$CONFIG" == "local" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="http://localhost:8899"
   [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=0
-  [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="0.9"
+  [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="2.5"
   [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
   [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="localhost"
   [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=10
