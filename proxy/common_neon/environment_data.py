@@ -32,6 +32,7 @@ SKIP_CANCEL_TIMEOUT = int(os.environ.get("SKIP_CANCEL_TIMEOUT", 1000))
 HOLDER_TIMEOUT = int(os.environ.get("HOLDER_TIMEOUT", "216000"))  # 1 day by default
 HOLDER_SIZE = int(os.environ.get("HOLDER_SIZE", "131072")) # 128*1024
 ACCOUNT_PERMISSION_UPDATE_INT = int(os.environ.get("ACCOUNT_PERMISSION_UPDATE_INT", 60 * 5))
+PERM_ACCOUNT_START = int(os.environ.get("PERM_ACCOUNT_START", 0))
 PERM_ACCOUNT_LIMIT = max(int(os.environ.get("PERM_ACCOUNT_LIMIT", 2)), 2)
 OPERATOR_FEE = Decimal(os.environ.get("OPERATOR_FEE", "0.1"))
 GAS_PRICE_SUGGESTED_PCT = Decimal(os.environ.get("GAS_PRICE_SUGGEST_PCT", "0.01"))

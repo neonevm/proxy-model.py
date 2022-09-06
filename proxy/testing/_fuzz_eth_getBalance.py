@@ -2,7 +2,7 @@ import sys
 import atheris
 
 from random import choice
-from proxy.common_neon.config import Config
+from ._base_fuzz_config import FuzzConfig
 
 from proxy.mempool.mempool_service import MPService
 from ..neon_rpc_api_model import NeonRpcApiWorker
@@ -14,7 +14,7 @@ global mempool_service
 global model
 
 tag = ["latest", "pending"]
-config = Config()
+config = FuzzConfig()
 mempool_service = MPService(config)
 mempool_service.start()
 model = NeonRpcApiWorker()
