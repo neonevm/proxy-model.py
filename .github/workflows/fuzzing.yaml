@@ -72,7 +72,7 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         fuzz-seconds: 60
-        mode: 'code-change'
+        mode: 'batch'
         sanitizer: ${{ matrix.sanitizer }}
         language: python
     - name: Clean up
