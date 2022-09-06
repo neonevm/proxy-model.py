@@ -7,13 +7,15 @@ jobs:
   Scheduled_fuzzing:
     runs-on: [self-hosted, linux]
     env:
+      SOLANA_URL: http://10.4.0.2:8899
       LOG_CFG: log_cfg_fuzzing.json
       EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
       POSTGRES_DB: neon-db
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: 10.4.0.3
-      SOLANA_URL: http://10.4.0.2:8899
+      PP_SOLANA_URL: https://api.devnet.solana.com
+      PYTH_MAPPING_ACCOUNT: BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2
     container:
       image: gcr.io/oss-fuzz-base/base-builder-python
     strategy:
@@ -33,17 +35,19 @@ jobs:
       id: build
       uses: google/clusterfuzzlite/actions/build_fuzzers@50707aeae5d98426f417414b7854fdf47bc4def6
       with:
+        bad-build-check: false
         github-token: ${{ secrets.GITHUB_TOKEN }}
         sanitizer: ${{ matrix.sanitizer }}
         language: python
     - name: Run Fuzzers
       id: run
-      uses: google/clusterfuzzlite/actions/run_fuzzers@50707aeae5d98426f417414b7854fdf47bc4def6
+      uses: neonlabsorg/clusterfuzzlite/actions/run_fuzzers@b05601b4377041cc4b3f6122a2411612d5dadc79
       with:
+        language: python
         sanitizer: ${{ matrix.sanitizer }}
         github-token: ${{ secrets.GITHUB_TOKEN }}
         fuzz-seconds: 3600
-        mode: 'code-change'
+        mode: 'batch'
     - name: Clean up
       if: always()
       run: |
