@@ -23,7 +23,10 @@ COPY --from=proxy_program /opt/proxy_program-keypair.json /spl/bin/
 
 COPY proxy/operator-keypairs/id.json /root/.config/solana/
 COPY proxy/operator-keypairs/ /opt/proxy/operator-keypairs/
-RUN echo $SOLANA_URL
+RUN apt install -y ca-certificates && update-ca-certificates --fresh
+ENV SSL_CERT_DIR=/etc/ssl/certs
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 RUN solana config set --keypair ~/.config/solana/id.json && \
     solana config set -u $SOLANA_URL && \
     ln -s /opt/proxy/operator-keypairs/id?*.json /root/.config/solana/ && \

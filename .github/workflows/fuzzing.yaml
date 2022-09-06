@@ -71,7 +71,7 @@ jobs:
       uses: neonlabsorg/clusterfuzzlite/actions/run_fuzzers@b05601b4377041cc4b3f6122a2411612d5dadc79
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        fuzz-seconds: 300
+        fuzz-seconds: 60
         mode: 'code-change'
         sanitizer: ${{ matrix.sanitizer }}
         language: python
