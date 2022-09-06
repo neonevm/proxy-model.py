@@ -88,7 +88,6 @@ class MockResourceManager(OperatorResourceMng):
         return []
 
 
-
 class FakeConfig(Config):
 
     def get_evm_loader_id(self) -> PublicKey:
@@ -285,7 +284,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
                 update_tx_cnt_list.append(MPSenderTxCntData(sender=acc[acc_i].address.lower(), state_tx_cnt=nonce))
             self._update_state_tx_cnt(update_tx_cnt_list)
 
-    async def _enqueue_requests(self, req_data: List[Dict[str, Any]]) -> List[MPTxRequest]:
+    async def _enqueue_requests(self, req_data: List[Dict[str, Any]]) -> MPTxRequestList:
         requests = [get_transfer_mp_request(**req) for req in req_data]
         for req in requests:
             await self._mempool.enqueue_mp_request(req)
@@ -357,6 +356,32 @@ class TestMPSchedule(unittest.TestCase):
                 schedule.add_tx(request)
         self.assertEqual(mp_schedule_capacity, schedule.get_tx_count())
 
+    def test_take_out_txs(self):
+        mp_schedule_capacity = 4000
+        schedule = MPTxSchedule(mp_schedule_capacity)
+        acc = [create_account() for i in range(3)]
+        req_data = [dict(req_id="000", nonce=0, gasPrice=60000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+                    dict(req_id="001", nonce=1, gasPrice=60000, gas=1000, value=1, from_acc=acc[0], to_acc=acc[1]),
+                    dict(req_id="002", nonce=0, gasPrice=40000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
+                    dict(req_id="003", nonce=0, gasPrice=70000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]),
+                    dict(req_id="004", nonce=1, gasPrice=25000, gas=1000, value=1, from_acc=acc[1], to_acc=acc[2]),
+                    dict(req_id="005", nonce=1, gasPrice=50000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]),
+                    dict(req_id="006", nonce=2, gasPrice=50000, gas=1000, value=1, from_acc=acc[2], to_acc=acc[1]) ]
+        self.requests = [get_transfer_mp_request(**req) for req in req_data]
+        for request in self.requests:
+            schedule.add_tx(request)
+        self.assertEqual(len(schedule._sender_pool_dict), 3)
+        self.assertEqual(len(schedule._sender_pool_queue), 3)
+        acc0, acc1, acc2 = acc[0].address.lower(), acc[1].address.lower(), acc[2].address.lower()
+        awaiting = {acc0: 2, acc1: 2, acc2: 3}
+
+        for sender_addr, txs in schedule.get_taking_out_txs_iterator():
+            self.assertEqual(awaiting[sender_addr], len(txs))
+
+        self.assertEqual(schedule.get_pending_tx_count(acc0), 0)
+        self.assertEqual(schedule.get_pending_tx_count(acc1), 0)
+        self.assertEqual(schedule.get_pending_tx_count(acc2), 0)
+
 
 class TestMPSenderTxPool(unittest.TestCase):
 
@@ -404,3 +429,14 @@ class TestMPSenderTxPool(unittest.TestCase):
         self.assertTrue(self._pool.is_processing())
         self._pool.cancel_process_tx(tx)
         self.assertEqual(self._pool.get_queue_len(), 5)
+
+    def test_take_out_txs_on_processing_pool(self):
+        self._pool.acquire_tx()
+        taken_out_txs = self._pool.take_out_txs()
+        self.assertEqual(self._pool.get_queue_len(), 1)
+        self.assertEqual(len(taken_out_txs), 4)
+
+    def test_take_out_txs_on_non_processing_pool(self):
+        taken_out_txs = self._pool.take_out_txs()
+        self.assertEqual(self._pool.get_queue_len(), 0)
+        self.assertEqual(len(taken_out_txs), 5)

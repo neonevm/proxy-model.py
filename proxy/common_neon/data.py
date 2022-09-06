@@ -4,8 +4,8 @@ from typing import Dict, List, Any
 
 
 class NeonTxStatData:
-    def __init__(self, neon_tx_hash: str, sol_spent: int, neon_income: int, tx_type: str, is_canceled: bool):
-        self.neon_tx_hash = neon_tx_hash
+    def __init__(self, neon_tx_sig: str, sol_spent: int, neon_income: int, tx_type: str, is_canceled: bool):
+        self.neon_tx_sig = neon_tx_sig
         self.neon_income = neon_income
         self.tx_type = tx_type
         self.is_canceled = is_canceled

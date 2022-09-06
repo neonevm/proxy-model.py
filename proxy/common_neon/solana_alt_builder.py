@@ -68,7 +68,7 @@ class AddressLookupTableTxBuilder:
 
     def build_alt_tx_set(self, alt_info: AddressLookupTableInfo) -> AddressLookupTableTxSet:
         # Tx to create an Account Lookup Table
-        create_alt_tx = Transaction().add(self._builder.make_create_lookup_table_instruction(
+        create_alt_tx = Transaction().add(self._builder.make_create_lookup_table_ix(
             alt_info.table_account, alt_info.recent_block_slot, alt_info.nonce
         ))
 
@@ -78,14 +78,10 @@ class AddressLookupTableTxBuilder:
         extend_alt_tx_list: List[Transaction] = []
         while len(acct_list):
             acct_list_part, acct_list = acct_list[:self.TX_ACCOUNT_CNT], acct_list[self.TX_ACCOUNT_CNT:]
-            tx = Transaction().add(self._builder.make_extend_lookup_table_instruction(
-                alt_info.table_account, acct_list_part
-            ))
+            tx = Transaction().add(self._builder.make_extend_lookup_table_ix(alt_info.table_account, acct_list_part))
             extend_alt_tx_list.append(tx)
 
-        deactivate_alt_tx = Transaction().add(self._builder.make_deactivate_lookup_table_instruction(
-            alt_info.table_account
-        ))
+        deactivate_alt_tx = Transaction().add(self._builder.make_deactivate_lookup_table_ix(alt_info.table_account))
 
         # If list of accounts is small, including of first extend-tx into create-tx will decrease time of tx execution
         create_alt_tx.add(extend_alt_tx_list[0])
