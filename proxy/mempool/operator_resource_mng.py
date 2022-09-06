@@ -202,7 +202,7 @@ class OperatorResourceMng:
 
     def _init_resource_list(self):
         signer_list: List[SolanaAccount] = self._get_solana_accounts()
-        for resource_id in range(self._config.get_perm_account_limit()):
+        for resource_id in range(self._config.get_perm_account_start(), self._config.get_perm_account_limit()):
             for signer in signer_list:
                 info = OperatorResourceIdentInfo(signer=signer, resource_id=resource_id)
                 self._disabled_resource_list.append(info)

@@ -4,7 +4,7 @@ from solana.publickey import PublicKey
 
 from .environment_data import EVM_LOADER_ID, EVM_STEP_COUNT, MEMPOOL_CAPACITY, MIN_OPERATOR_BALANCE_TO_ERR, \
                               MIN_OPERATOR_BALANCE_TO_WARN, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, SOLANA_URL, \
-                              HOLDER_SIZE, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
+                              HOLDER_SIZE, PERM_ACCOUNT_START, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
 
 
 class IConfig(ABC):
@@ -46,6 +46,10 @@ class IConfig(ABC):
         """Gets minimal operators balance to error"""
 
     @abstractmethod
+    def get_perm_account_start(self) -> int:
+        """Gets permanent account start index"""
+
+    @abstractmethod
     def get_perm_account_limit(self) -> int:
         """Gets permanent accounts max count"""
 
@@ -82,6 +86,9 @@ class Config(IConfig):
 
     def get_min_operator_balance_to_err(self) -> int:
         return MIN_OPERATOR_BALANCE_TO_ERR
+
+    def get_perm_account_start(self) -> int:
+        return PERM_ACCOUNT_START
 
     def get_perm_account_limit(self) -> int:
         return PERM_ACCOUNT_LIMIT
