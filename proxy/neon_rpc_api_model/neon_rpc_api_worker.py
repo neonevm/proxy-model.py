@@ -735,7 +735,7 @@ class NeonRpcApiWorker:
         slot = self._db.get_finalized_block_slot()
         return hex(slot)
 
-    def neon_getEvmParams(self) -> Dict[str, Any]:
+    @staticmethod
+    def neon_getEvmParams() -> Dict[str, Any]:
         """Returns map of Neon-EVM parameters"""
-        self.debug(f"call neon_getEvmParams")
-        return ElfParams().get_params()
+        return ElfParams().elf_param_dict
