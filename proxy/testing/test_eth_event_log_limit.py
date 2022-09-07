@@ -4,7 +4,6 @@ from web3 import Web3
 from solcx import compile_source
 
 from proxy.testing.testing_helpers import request_airdrop
-from proxy.common_neon import environment_data
 
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/812'
 EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))

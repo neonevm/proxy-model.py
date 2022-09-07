@@ -7,7 +7,6 @@ import copy
 
 from logged_groups import logged_group
 from typing import Dict, Optional, List, Any, cast
-from sha3 import keccak_256
 
 from solana.transaction import Transaction
 from solana.blockhash import Blockhash
@@ -228,17 +227,10 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     def validate(self) -> bool:
         self._validation_error_msg = None
         return (
-            self._validate_evm_step_cnt() and
             self._validate_notdeploy_tx() and
             self._validate_tx_has_chainid() and
             self._validate_tx_size()
         )
-
-    def _validate_evm_step_cnt(self) -> bool:
-        if self._ctx.emulated_evm_step_cnt > self._iter_evm_step_cnt:
-            self._validation_error_msg = 'Too big number of EVM steps'
-            return False
-        return True
 
     def build_tx(self, _=0) -> Transaction:
         tx = TransactionWithComputeBudget()
@@ -361,8 +353,18 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return (
             self._validate_notdeploy_tx() and
             self._validate_tx_size() and
+            self._validate_evm_step_cnt() and
             self._validate_tx_has_chainid()
         )
+
+    def _validate_evm_step_cnt(self) -> bool:
+        # Only the instruction with a holder account allows to pass a unique number to make the transaction unique
+        emulated_evm_step_cnt = self._ctx.emulated_evm_step_cnt
+        max_evm_step_cnt = self._iter_evm_step_cnt * 10
+        if emulated_evm_step_cnt > max_evm_step_cnt:
+            self._validation_error_msg = 'Big number of EVM steps'
+            return False
+        return True
 
     def decrease_iter_evm_step_cnt(self, tx_list: List[Transaction]) -> List[Transaction]:
         if self._iter_evm_step_cnt <= 10:
@@ -395,9 +397,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return tx
 
     def _calc_iter_cnt(self) -> int:
-        iter_cnt = math.ceil(self._ctx.emulated_evm_step_cnt / self._iter_evm_step_cnt)
-        iter_cnt = math.ceil(self._ctx.emulated_evm_step_cnt / (self._iter_evm_step_cnt - iter_cnt))
-        return iter_cnt
+        return math.ceil(self._ctx.emulated_evm_step_cnt / self._iter_evm_step_cnt) + 1
 
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
@@ -430,9 +430,6 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         return TransactionWithComputeBudget(compute_units=self._compute_unit_cnt).add(
             self._builder.make_tx_step_from_account_ix(evm_step_cnt, idx)
         )
-
-    def _calc_iter_cnt(self) -> int:
-        return math.ceil(self._ctx.emulated_evm_step_cnt / self._iter_evm_step_cnt) + 1
 
     def _build_prep_tx_list_before_emulate(self) -> List[SolTxListInfo]:
         assert self.is_valid()

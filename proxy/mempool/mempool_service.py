@@ -9,7 +9,7 @@ from neon_py.network import AddrPickableDataSrv, IPickableDataServerUser
 from neon_py.maintenance_api import MaintenanceRequest, MaintenanceCommand, ReplicationRequest, ReplicationBunch
 from neon_py.data import Result
 
-from ..common_neon.config import IConfig
+from ..common_neon.config import Config
 
 from .mempool import MemPool
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
@@ -25,7 +25,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
 
     EXECUTOR_COUNT = 8
 
-    def __init__(self, config: IConfig):
+    def __init__(self, config: Config):
         self.event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.event_loop)
         self._mempool_srv: Optional[AddrPickableDataSrv] = None

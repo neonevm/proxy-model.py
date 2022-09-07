@@ -3,13 +3,13 @@ from __future__ import annotations
 import math
 import traceback
 from datetime import datetime
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 
 from logged_groups import logged_group
 from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 
-from ..common_neon.config import IConfig
+from ..common_neon.config import Config
 from ..common_neon.address import EthereumAddress, ether2program, permAccountSeed, accountWithSeed
 from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
@@ -73,7 +73,7 @@ class OperatorResourceInfo:
 
 @logged_group("neon.MemPool")
 class OperatorResourceInitializer:
-    def __init__(self, config: IConfig, solana: SolanaInteractor):
+    def __init__(self, config: Config, solana: SolanaInteractor):
         self._config = config
         self._solana = solana
 
@@ -162,7 +162,7 @@ class OperatorResourceInitializer:
         cancel_tx_executor.execute_tx_list()
 
 
-class OperatorResourceIdentInfo:
+class OperatorResourceIdent:
     def __init__(self, signer: SolanaAccount, resource_id: int):
         self._signer = signer
         self._resource_id = resource_id
@@ -178,13 +178,13 @@ class OperatorResourceIdentInfo:
     def last_used_time(self) -> int:
         return self._last_used_time
 
-    def set_last_used_time(self, value: int) -> None:
-        self._used_cnt += 1
-        self._last_used_time = value
-
     @property
     def used_cnt(self) -> int:
         return self._used_cnt
+
+    def set_last_used_time(self, value: int) -> None:
+        self._used_cnt += 1
+        self._last_used_time = value
 
     def reset_used_cnt(self) -> None:
         self._used_cnt = 0
@@ -192,10 +192,10 @@ class OperatorResourceIdentInfo:
 
 @logged_group("neon.MemPool")
 class OperatorResourceMng:
-    def __init__(self, config: IConfig):
-        self._free_resource_list: List[OperatorResourceIdentInfo] = []
-        self._used_resource_list: List[OperatorResourceIdentInfo] = []
-        self._disabled_resource_list: List[OperatorResourceIdentInfo] = []
+    def __init__(self, config: Config):
+        self._free_resource_list: List[OperatorResourceIdent] = []
+        self._used_resource_dict: Dict[str, OperatorResourceIdent] = {}
+        self._disabled_resource_list: List[OperatorResourceIdent] = []
         self._config = config
         self._resource_cnt = 0
         self._init_resource_list()
@@ -204,7 +204,7 @@ class OperatorResourceMng:
         signer_list: List[SolanaAccount] = self._get_solana_accounts()
         for resource_id in range(self._config.get_perm_account_limit()):
             for signer in signer_list:
-                info = OperatorResourceIdentInfo(signer=signer, resource_id=resource_id)
+                info = OperatorResourceIdent(signer=signer, resource_id=resource_id)
                 self._disabled_resource_list.append(info)
         self._resource_cnt = len(self._disabled_resource_list)
         assert self.resource_cnt != 0, 'Operator has NO resources!'
@@ -221,33 +221,20 @@ class OperatorResourceMng:
     def _get_current_time() -> int:
         return math.ceil(datetime.now().timestamp())
 
-    def _get_resource_impl(self, ident: str) -> Optional[OperatorResourceIdentInfo]:
-        resource, _ = self._find_used_resource(ident)
+    def _get_resource_impl(self, neon_sig: str) -> Optional[OperatorResourceIdent]:
+        resource = self._used_resource_dict.get(neon_sig, None)
         if resource is not None:
             return resource
 
         if len(self._free_resource_list):
             resource = self._free_resource_list.pop(0)
-            self._used_resource_list.append(resource)
+            self._used_resource_dict[neon_sig] = resource
             return resource
 
         return None
 
-    def _find_used_resource(self, ident: str) -> Tuple[Optional[OperatorResourceIdentInfo], int]:
-        if len(ident) != 0:
-            for i, resource in enumerate(self._used_resource_list):
-                if resource.ident == ident:
-                    return resource, i
-        return None, -1
-
-    def _pop_used_resource(self, ident: str) -> Optional[OperatorResourceIdentInfo]:
-        resource, i = self._find_used_resource(ident)
-        if resource is not None:
-            self._used_resource_list.pop(i)
-        return resource
-
-    def get_resource(self, ident: str) -> Optional[str]:
-        resource = self._get_resource_impl(ident)
+    def get_resource(self, neon_sig: str) -> Optional[str]:
+        resource = self._get_resource_impl(neon_sig)
         if resource is None:
             return None
 
@@ -262,20 +249,22 @@ class OperatorResourceMng:
         )
         return resource.ident
 
-    def update_resource(self, ident: str) -> None:
-        resource, _ = self._find_used_resource(ident)
+    def update_resource(self, neon_sig: str) -> None:
+        resource = self._used_resource_dict.get(neon_sig, None)
         if resource is not None:
             current_time = self._get_current_time()
             resource.set_last_used_time(current_time)
 
-    def release_resource(self, ident: str) -> None:
-        resource = self._pop_used_resource(ident)
-        if resource is not None:
-            recheck_interval = self._config.get_recheck_resource_list_interval()
-            if resource.used_cnt > recheck_interval:
-                self._disabled_resource_list.append(resource)
-            else:
-                self._free_resource_list.append(resource)
+    def release_resource(self, neon_sig: str) -> None:
+        resource = self._used_resource_dict.pop(neon_sig, None)
+        if resource is None:
+            return
+
+        recheck_cnt = self._config.get_recheck_resource_after_uses_cnt()
+        if resource.used_cnt > recheck_cnt:
+            self._disabled_resource_list.append(resource)
+        else:
+            self._free_resource_list.append(resource)
 
     def enable_resource(self, ident: str) -> None:
         for i, resource in enumerate(self._disabled_resource_list):
@@ -287,23 +276,15 @@ class OperatorResourceMng:
 
     def get_disabled_resource_list(self) -> List[str]:
         current_time = self._get_current_time()
-        recheck_interval = self._config.get_recheck_resource_list_interval()
 
-        new_resource_list: List[OperatorResourceIdentInfo] = []
-        for resource in self._free_resource_list:
-            if resource.used_cnt > recheck_interval:
-                self._disabled_resource_list.append(resource)
-            else:
-                new_resource_list.append(resource)
-        self._free_resource_list = new_resource_list
-
-        check_time = current_time - recheck_interval
-        new_resource_list = []
-        for resource in self._used_resource_list:
+        recheck_sec = self._config.get_recheck_used_resource_sec()
+        check_time = current_time - recheck_sec
+        old_resource_list: List[str, OperatorResourceIdent] = []
+        for neon_sig, resource in self._used_resource_dict.items():
             if resource.last_used_time < check_time:
                 self._disabled_resource_list.append(resource)
-            else:
-                new_resource_list.append(resource)
-        self._used_resource_list = new_resource_list
+                old_resource_list.append(neon_sig)
+        for neon_sig in old_resource_list:
+            self._used_resource_dict.pop(neon_sig)
 
         return [resource.ident for resource in self._disabled_resource_list]

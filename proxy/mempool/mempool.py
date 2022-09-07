@@ -7,7 +7,7 @@ from neon_py.data import Result
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.config import IConfig
+from ..common_neon.config import Config
 
 from .operator_resource_mng import OperatorResourceMng
 
@@ -95,7 +95,7 @@ class MemPool:
     CHECK_TASK_TIMEOUT_SEC = 0.01
     RESCHEDULE_TIMEOUT_SEC = 0.4
 
-    def __init__(self, config: IConfig, op_res_mng: OperatorResourceMng, executor: IMPExecutor):
+    def __init__(self, config: Config, op_res_mng: OperatorResourceMng, executor: IMPExecutor):
         capacity = config.get_mempool_capacity()
         self.info(f"Init mempool schedule with capacity: {capacity}")
         self._tx_schedule = MPTxSchedule(capacity)
@@ -162,7 +162,7 @@ class MemPool:
                 return False
 
             with logging_context(req_id=tx.req_id):
-                resource = self._op_res_mng.get_resource(tx.neon_tx_exec_cfg.resource_ident)
+                resource = self._op_res_mng.get_resource(tx.signature)
                 if resource is None:
                     return False
 
@@ -286,10 +286,10 @@ class MemPool:
         self.debug(f"Request {tx.signature} is failed - dropped away")
 
     def _release_operator_resource_info(self, tx: MPTxRequest) -> None:
-        self._op_res_mng.release_resource(tx.neon_tx_exec_cfg.resource_ident)
+        self._op_res_mng.release_resource(tx.signature)
 
     def _update_operator_resource_info(self, tx: MPTxRequest) -> None:
-        self._op_res_mng.update_resource(tx.neon_tx_exec_cfg.resource_ident)
+        self._op_res_mng.update_resource(tx.signature)
 
     async def _kick_tx_schedule(self):
         async with self._schedule_cond:
