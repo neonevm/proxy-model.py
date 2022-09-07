@@ -4,6 +4,7 @@ from typing import List, Dict, Set, Optional, Tuple, Iterator, Union, Callable, 
 from logged_groups import logged_group, logging_context
 
 from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.data import NeonTxExecCfg
 
 from .mempool_api import MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData, MPTxRequestList
 
@@ -36,15 +37,13 @@ class SortedQueue(Generic[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]):
         self._impl = self._SortedQueueImpl(lt_key_func)
         self._eq_key_func = eq_key_func
 
-    def __getitem__(self, index: Union[int, slice]) -> SortedQueueItem:
-        if isinstance(index, int):
-            return self._impl.queue[index]
-        elif isinstance(index, slice):
-            sorted_queue = SortedQueue[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]\
-                (lt_key_func=self._impl._lt_key_func, eq_key_func=self._eq_key_func)
-            sorted_queue._impl.queue = self._impl.queue[index]
-            return sorted_queue
-        raise TypeError(f"list indices must be integers or slices, not {type(index)}")
+    def __getitem__(self, index: int) -> SortedQueueItem:
+        return self._impl.queue[index]
+
+    def extract_list_from(self, index: int) -> List[SortedQueueItem]:
+        extracted_list = self._impl.queue[index:]
+        self._impl.queue = self._impl.queue[:index]
+        return extracted_list
 
     def __contains__(self, item: SortedQueueItem) -> bool:
         return self.find(item) is not None
@@ -71,6 +70,9 @@ class SortedQueue(Generic[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]):
         assert index is not None, 'item is absent in the queue'
 
         return self._impl.queue.pop(index)
+
+    def remove_if(self, predict: Callable[[SortedQueueItem], bool]) -> None:
+        self._impl.queue = [item for item in self._impl.queue if not predict(item)]
 
     def __iter__(self):
         return iter(self._impl)
@@ -202,7 +204,7 @@ class MPSenderTxPool:
 
     def _validate_processing_tx(self, tx: MPTxRequest) -> None:
         assert not self.is_empty(), f'no transactions in the sender tx pool {self.sender_address}'
-        assert self._processing_tx is not None, f'sender tx pool {self.sender_address} does not process tx'
+        assert self.is_processing(), f'sender tx pool {self.sender_address} does not process tx'
 
         t_tx = self.get_top_tx()
         p_tx = self._processing_tx
@@ -216,21 +218,22 @@ class MPSenderTxPool:
         self.debug(f"Done tx {tx.signature}. The {self.get_queue_len()} txs are left in {self.sender_address} pool")
         self._processing_tx = None
 
-    def cancel_process_tx(self, tx: MPTxRequest) -> None:
+    def cancel_process_tx(self, tx: MPTxRequest, neon_tx_exec_cfg: NeonTxExecCfg) -> None:
         self._validate_processing_tx(tx)
 
         self.debug(f"Reset processing tx {tx.signature} back to pending in {self.sender_address} pool")
-        self._processing_tx.neon_tx_exec_cfg = tx.neon_tx_exec_cfg
+        self._processing_tx.neon_tx_exec_cfg = neon_tx_exec_cfg
         self._processing_tx = None
 
-    def take_out_txs(self) -> MPTxRequestList:
-        is_processing = self._processing_tx is not None
-        self.debug(f"Take out txs from sender pool: {self.sender_address}, count: {len(self._tx_nonce_queue)}, processing: {is_processing}")
+    def take_out_tx_list(self) -> MPTxRequestList:
+        is_processing = self.is_processing()
+        self.debug(
+            f"Take out txs from sender pool: {self.sender_address}, count: {len(self._tx_nonce_queue)}"
+            f", processing: {is_processing}"
+        )
         _from = 1 if is_processing else 0
-        taken_out_txs = self._tx_nonce_queue[_from:]
-        [self._tx_nonce_queue.pop(tx) for tx in taken_out_txs]
-        self._tx_nonce_queue = self._tx_nonce_queue[:_from]
-        return [tx for tx in taken_out_txs]
+        taken_out_tx_list = self._tx_nonce_queue.extract_list_from(_from)
+        return taken_out_tx_list
 
     def drop_tx(self, tx: MPTxRequest) -> None:
         if self.is_processing():
@@ -437,7 +440,7 @@ class MPTxSchedule:
     def reschedule_tx(self, tx: MPTxRequest) -> bool:
         sender_pool = self._get_sender_pool(tx.sender_address)
 
-        sender_pool.cancel_process_tx(tx)
+        sender_pool.cancel_process_tx(tx, tx.neon_tx_exec_cfg)
         self._tx_dict.cancel_process_tx(tx)
         self._set_sender_tx_cnt(sender_pool, tx.neon_tx_exec_cfg.state_tx_cnt)
 
@@ -464,22 +467,22 @@ class MPTxSchedule:
             if not sender_pool.is_paused():
                 self._schedule_sender_pool(sender_pool)
 
-    def get_taking_out_txs_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
-        empty_pools = []
+    def get_taking_out_tx_list_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
+        empty_pool_list: List[MPSenderTxPool] = []
 
         for sender_address, tx_pool in self._sender_pool_dict.items():
-            taken_out_txs = tx_pool.take_out_txs()
-            for tx in taken_out_txs:
+            taken_out_tx_list = tx_pool.take_out_tx_list()
+            for tx in taken_out_tx_list:
                 self._tx_dict.pop(tx)
             if tx_pool.is_empty():
-                empty_pools.append(tx_pool)
-            yield sender_address, taken_out_txs
+                empty_pool_list.append(tx_pool)
+            yield sender_address, taken_out_tx_list
 
-        for tx_pool in empty_pools:
+        for tx_pool in empty_pool_list:
             self._remove_empty_sender_pool(tx_pool)
-        self._sender_pool_queue = [sender_pool for sender_pool in self._sender_pool_queue if not sender_pool.is_empty()]
+        self._sender_pool_queue.remove_if(lambda sender_pool: sender_pool.is_empty())
 
-    def take_in_txs(self, sender_address: str, mp_tx_request_list: MPTxRequestList):
+    def take_in_tx_list(self, sender_address: str, mp_tx_request_list: MPTxRequestList):
         self.debug(f"Take in mp_tx_request_list, sender_addr: {sender_address}, {len(mp_tx_request_list)} - txs")
         for mp_tx_request in mp_tx_request_list:
             self.add_tx(mp_tx_request)

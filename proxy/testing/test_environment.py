@@ -15,8 +15,7 @@ class TestEnvironment(unittest.TestCase):
 
     def test_read_elf_params(self):
         print("\n\nhttps://github.com/neonlabsorg/neon-evm/issues/347")
-        elf_params = ElfParams()
-        elf_params.read_elf_param_dict_from_net()
+        elf_params = ElfParams().read_elf_param_dict_from_net().elf_param_dict
 
         neon_chain_id = elf_params.get('NEON_CHAIN_ID', None)
         self.assertTrue(neon_chain_id is not None)

@@ -18,6 +18,7 @@ from .operator_resource_mng import OperatorResourceMng
 from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest
 from .mempool_replicator import MemPoolReplicator
 
+
 @logged_group("neon.MemPool")
 class MPService(IPickableDataServerUser, IMPExecutorMngUser):
     MP_SERVICE_ADDR = ("0.0.0.0", 9091)
@@ -31,7 +32,9 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         self._mempool_srv: Optional[AddrPickableDataSrv] = None
         self._mempool_maintenance_srv: Optional[AddrPickableDataSrv] = None
         self._mempool: Optional[MemPool] = None
+        self._operator_resource_mng: Optional[OperatorResourceMng] = None
         self._mp_executor_mng: Optional[MPExecutorMng] = None
+        self._replicator: Optional[MemPoolReplicator] = None
         self._process = Process(target=self.run)
         self._config = config
 
@@ -69,6 +72,8 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             return self._mempool.get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
         elif mp_request.type == MPRequestType.GetGasPrice:
             return self._mempool.get_gas_price()
+        elif mp_request.type == MPRequestType.GetElfParamDict:
+            return self._mempool.get_elf_param_dict()
         self.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
 
     def process_maintenance_request(self, request: MaintenanceRequest) -> Result:
@@ -81,7 +86,10 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             return self._replicator.replicate(repl_req.peers)
         elif request.command == MaintenanceCommand.ReplicateTxsBunch:
             mp_tx_bunch: ReplicationBunch = cast(ReplicationBunch, request)
-            self.info(f"Got replication txs bunch, sender: {mp_tx_bunch.sender_addr}, txs: {len(mp_tx_bunch.mp_tx_requests)}")
+            self.info(
+                f"Got replication txs bunch, sender: {mp_tx_bunch.sender_addr}, "
+                f"txs: {len(mp_tx_bunch.mp_tx_requests)}"
+            )
             return self._replicator.on_mp_tx_bunch(mp_tx_bunch.sender_addr, mp_tx_bunch.mp_tx_requests)
         self.error(f"Failed to process maintenance mp_reqeust, unknown command: {request.command}")
 

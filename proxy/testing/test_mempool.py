@@ -15,17 +15,19 @@ from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 
 from ..mempool.mempool import MemPool, IMPExecutor, MPTask, MPTxRequestList
-from ..mempool.mempool_api import MPRequest, MPRequestType, MPTxRequest, MPTxExecResult, MPTxExecResultCode
+from ..mempool.mempool_api import MPRequest, MPRequestType, MPTxRequest
+from ..mempool.mempool_api import MPTxExecRequest, MPTxExecResult, MPTxExecResultCode
 from ..mempool.mempool_api import MPGasPriceResult, MPSenderTxCntData
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.elf_params import ElfParams
 
 from .testing_helpers import create_account
 from ..mempool.operator_resource_mng import OperatorResourceMng
 
 
 def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int, from_acc: Account = None,
-                            to_acc: Account = None, value: int = 0, data: bytes = b'') -> MPTxRequest:
+                            to_acc: Account = None, value: int = 0, data: bytes = b'') -> MPTxExecRequest:
     if from_acc is None:
         from_acc = create_account()
 
@@ -40,7 +42,14 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gasPrice: int,
     neon_tx = NeonTx.fromString(bytearray(signed_tx_data.rawTransaction))
     neon_tx_exec_cfg = NeonTxExecCfg()
     neon_tx_exec_cfg.set_state_tx_cnt(0)
-    mp_tx_request = MPTxRequest(req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg)
+    mp_tx_request = MPTxExecRequest(
+        req_id=req_id,
+        signature=signature,
+        neon_tx=neon_tx,
+        neon_tx_exec_cfg=neon_tx_exec_cfg,
+        resource_ident='test',
+        elf_param_dict=ElfParams().elf_param_dict
+    )
     return mp_tx_request
 
 
@@ -380,7 +389,7 @@ class TestMPSchedule(unittest.TestCase):
         acc0, acc1, acc2 = acc[0].address.lower(), acc[1].address.lower(), acc[2].address.lower()
         awaiting = {acc0: 2, acc1: 2, acc2: 3}
 
-        for sender_addr, txs in schedule.get_taking_out_txs_iterator():
+        for sender_addr, txs in schedule.get_taking_out_tx_list_iterator():
             self.assertEqual(awaiting[sender_addr], len(txs))
 
         self.assertEqual(schedule.get_pending_tx_count(acc0), 0)
@@ -432,16 +441,16 @@ class TestMPSenderTxPool(unittest.TestCase):
     def test_cancel_tx(self):
         tx = self._pool.acquire_tx()
         self.assertTrue(self._pool.is_processing())
-        self._pool.cancel_process_tx(tx)
+        self._pool.cancel_process_tx(tx, tx.neon_tx_exec_cfg)
         self.assertEqual(self._pool.get_queue_len(), 5)
 
     def test_take_out_txs_on_processing_pool(self):
         self._pool.acquire_tx()
-        taken_out_txs = self._pool.take_out_txs()
+        taken_out_txs = self._pool.take_out_tx_list()
         self.assertEqual(self._pool.get_queue_len(), 1)
         self.assertEqual(len(taken_out_txs), 4)
 
     def test_take_out_txs_on_non_processing_pool(self):
-        taken_out_txs = self._pool.take_out_txs()
+        taken_out_txs = self._pool.take_out_tx_list()
         self.assertEqual(self._pool.get_queue_len(), 0)
         self.assertEqual(len(taken_out_txs), 5)

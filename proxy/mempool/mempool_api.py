@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict
 from abc import ABC, abstractmethod
 
 import asyncio
@@ -45,6 +45,7 @@ class MPRequestType(IntEnum):
     GetGasPrice = 3,
     GetStateTxCnt = 4,
     InitOperatorResource = 5,
+    GetElfParamDict = 6,
     Dummy = -1
 
 
@@ -75,6 +76,24 @@ class MPTxRequest(MPRequest):
         return self.neon_tx.hasChainId()
 
 
+@dataclass
+class MPTxExecRequest(MPTxRequest):
+    elf_param_dict: Dict[str, str] = None
+    resource_ident: str = None
+
+    @staticmethod
+    def clone(tx: MPTxRequest, resource_ident: str, elf_param_dict: Dict[str, str]):
+        req = MPTxExecRequest(
+            req_id=tx.req_id,
+            signature=tx.signature,
+            neon_tx=tx.neon_tx,
+            neon_tx_exec_cfg=tx.neon_tx_exec_cfg,
+            elf_param_dict=elf_param_dict,
+            resource_ident=resource_ident
+        )
+        return req
+
+
 MPTxRequestList = List[MPTxRequest]
 
 
@@ -101,6 +120,12 @@ class MPGasPriceRequest(MPRequest):
 
 
 @dataclass
+class MPElfParamDictRequest(MPRequest):
+    def __post_init__(self):
+        self.type = MPRequestType.GetElfParamDict
+
+
+@dataclass
 class MPSenderTxCntRequest(MPRequest):
     sender_list: List[str] = None
 
@@ -110,6 +135,7 @@ class MPSenderTxCntRequest(MPRequest):
 
 @dataclass
 class MPOpResInitRequest(MPRequest):
+    elf_param_dict: Dict[str, str] = None
     resource_ident: str = ''
 
     def __post_init__(self):

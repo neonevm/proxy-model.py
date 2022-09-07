@@ -9,8 +9,7 @@ import solcx
 from eth_account import Account
 from eth_account.account import LocalAccount
 from web3 import Web3, eth as web3_eth
-import eth_utils
-from typing import Union, Type, Any, Dict
+from typing import Union, Type, Dict
 
 
 @dataclasses.dataclass
