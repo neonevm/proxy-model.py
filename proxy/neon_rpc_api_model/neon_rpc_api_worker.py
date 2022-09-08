@@ -196,10 +196,6 @@ class NeonRpcApiWorker:
 
     def _get_full_block_by_number(self, tag: Union[str, int]) -> SolanaBlockInfo:
         block = self._process_block_tag(tag)
-        if block.block_slot is None:
-            self.debug(f"Not found block by number {tag}")
-            return block
-
         if block.is_empty():
             block = self._db.get_block_by_slot(block.block_slot)
             if block.is_empty():
@@ -220,7 +216,7 @@ class NeonRpcApiWorker:
         account = self._normalize_account(account)
 
         try:
-            commitment = 'processed' if  tag == 'pending' else 'confirmed'
+            commitment = 'processed' if tag == 'pending' else 'confirmed'
             neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account), commitment)
             if neon_account_info is None:
                 return hex(0)
@@ -334,7 +330,7 @@ class NeonRpcApiWorker:
             raise InvalidParamError(message=f'bad block hash {block_hash}')
 
         block = self._db.get_block_by_hash(block_hash)
-        if block.block_slot is None:
+        if block.is_empty():
             self.debug("Not found block by hash %s", block_hash)
 
         return block
@@ -345,7 +341,7 @@ class NeonRpcApiWorker:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block = self._get_block_by_hash(block_hash)
-        if block.block_slot is None:
+        if block.is_empty():
             return None
         ret = self._get_block_by_slot(block, full, False)
         return ret
@@ -356,9 +352,6 @@ class NeonRpcApiWorker:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block = self._process_block_tag(tag)
-        if block.block_slot is None:
-            self.debug(f"Not found block by number {tag}")
-            return None
         ret = self._get_block_by_slot(block, full, tag in ('latest', 'pending'))
         return ret
 
@@ -577,10 +570,6 @@ class NeonRpcApiWorker:
 
     def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[dict]:
         block = self._process_block_tag(tag)
-        if block.is_empty():
-            self.debug(f"Not found block by number {tag}")
-            return None
-
         return self._get_transaction_by_index(block, tx_idx)
 
     def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[dict]:
@@ -591,7 +580,7 @@ class NeonRpcApiWorker:
 
     def eth_getBlockTransactionCountByHash(self, block_hash: str) -> str:
         block = self._get_block_by_hash(block_hash)
-        if block.block_slot is None:
+        if block.is_empty():
             return hex(0)
         if block.is_empty():
             block = self._db.get_block_by_slot(block.block_slot)
