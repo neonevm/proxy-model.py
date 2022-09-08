@@ -19,7 +19,6 @@ class NeonTxExecCfg:
     def __init__(self):
         self._state_tx_cnt = 0
         self._evm_step_cnt = 0
-        self._resource_ident = ''
         self._alt_list: List[str] = []
         self._account_dict: NeonAccountDict = {}
 
@@ -35,10 +34,6 @@ class NeonTxExecCfg:
     def account_dict(self) -> NeonAccountDict:
         return self._account_dict
 
-    @property
-    def resource_ident(self):
-        return self._resource_ident
-
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
         account_dict = {k: emulated_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
         evm_step_cnt = emulated_result["steps_executed"]
@@ -48,10 +43,6 @@ class NeonTxExecCfg:
 
     def set_state_tx_cnt(self, value: int) -> NeonTxExecCfg:
         self._state_tx_cnt = value
-        return self
-
-    def set_resource_ident(self, value: str) -> NeonTxExecCfg:
-        self._resource_ident = value
         return self
 
 
