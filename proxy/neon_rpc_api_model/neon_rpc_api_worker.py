@@ -777,4 +777,6 @@ class NeonRpcApiWorker:
             "eth_signTransaction",
         )
 
-        return method_name in private_method_list
+        if method_name in private_method_list:
+            return False
+        return True
