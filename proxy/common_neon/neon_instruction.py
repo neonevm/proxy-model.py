@@ -345,7 +345,6 @@ class NeonIxBuilder:
                 AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=PublicKey(user_solana_address), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=neon_evm_authority, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
