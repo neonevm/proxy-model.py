@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import traceback
 from datetime import datetime
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Dict
 
 from logged_groups import logged_group
 from solana.account import Account as SolanaAccount
@@ -11,7 +11,7 @@ from solana.publickey import PublicKey
 
 from ..common_neon.config import Config
 from ..common_neon.address import EthereumAddress, ether2program, permAccountSeed, accountWithSeed
-from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
+from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
@@ -147,14 +147,14 @@ class OperatorResourceInitializer:
             self._execute_stage(NeonCreateHolderAccountStage(builder, holder_seed, size, balance), resource)
         elif holder_info.owner != self._config.get_evm_loader_id():
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
-        elif holder_info.tag == ACTIVE_HOLDER_TAG:
-            self._unlock_holder_account(resource)
-        elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG):
+        elif holder_info.tag == ACTIVE_STORAGE_TAG:
+            self._unlock_storage_account(resource)
+        elif holder_info.tag not in (FINALIZED_STORAGE_TAG, HOLDER_TAG):
             raise BadResourceError(f'Holder {holder_address} for resource {resource} has bad tag {holder_info.tag}')
         else:
             self.debug(f"Use account {str(holder_info.owner)} for resource {resource}")
 
-    def _unlock_holder_account(self, resource: OperatorResourceInfo) -> None:
+    def _unlock_storage_account(self, resource: OperatorResourceInfo) -> None:
         self.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
         holder_info = self._solana.get_holder_account_info(resource.holder)
         cancel_tx_executor = CancelTxExecutor(self._solana, resource.signer)
@@ -265,6 +265,13 @@ class OperatorResourceMng:
             self._disabled_resource_list.append(resource)
         else:
             self._free_resource_list.append(resource)
+
+    def disable_resource(self, neon_sig: str) -> None:
+        resource = self._used_resource_dict.pop(neon_sig, None)
+        if resource is None:
+            return
+
+        self._disabled_resource_list.append(resource)
 
     def enable_resource(self, ident: str) -> None:
         for i, resource in enumerate(self._disabled_resource_list):

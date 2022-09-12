@@ -74,7 +74,7 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
                 self._on_exception(f'Error during processing {self._name} on mempool', err)
 
     def _check_request_status_impl(self, task: MPTask) -> None:
-        self._executor.release_resource(task.resource_id)
+        self._executor.release_executor(task.executor_id)
 
         err = task.aio_task.exception()
         if err is not None:

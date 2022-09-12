@@ -14,7 +14,7 @@ from ..common_neon.data import NeonTxExecCfg
 
 @dataclass
 class MPTask:
-    resource_id: int
+    executor_id: int
     aio_task: asyncio.Task
     mp_request: MPRequest
 
@@ -28,13 +28,8 @@ class IMPExecutor(ABC):
     def is_available(self) -> bool:
         pass
 
-    # TODO: drop it away
     @abstractmethod
-    def on_no_liquidity(self, resource_id: int):
-        pass
-
-    @abstractmethod
-    def release_resource(self, resource_id: int):
+    def release_executor(self, executor_id: int):
         pass
 
 
@@ -148,6 +143,7 @@ class MPTxExecResultCode(IntEnum):
     SolanaUnavailable = 2,
     NodeBehind = 3,
     NonceTooLow = 4,
+    BadResource = 5,
     Unspecified = 255,
     Dummy = -1
 

@@ -194,7 +194,7 @@ class NeonTxResultInfo:
         self._gas_used = gas_used
         self._return_value = return_value
 
-    def fill_sol_sig_info(self, sol_sig: str, sol_ix_idx: int, sol_ix_inner_idx: int) -> None:
+    def fill_sol_sig_info(self, sol_sig: str, sol_ix_idx: int, sol_ix_inner_idx: Optional[int]) -> None:
         self._sol_sig = sol_sig
         self._sol_ix_idx = sol_ix_idx
         self._sol_ix_inner_idx = sol_ix_inner_idx

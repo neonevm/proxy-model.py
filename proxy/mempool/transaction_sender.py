@@ -384,7 +384,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         total_iteration_cnt = math.ceil(total_evm_step_cnt / evm_step_cnt)
 
         self.debug(
-            f'Decrease EVM steps from {prev_evm_step_cnt} to {evm_step_cnt}, ' +
+            f'Decrease EVM steps from {prev_evm_step_cnt} to {evm_step_cnt}, '
             f'iterations increase from {prev_total_iteration_cnt} to {total_iteration_cnt}'
         )
 

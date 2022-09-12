@@ -210,9 +210,9 @@ class InfoHandler:
             10: 'ACCOUNT',
             2: 'CONTRACT',
             3: 'STORAGE_V1',
-            30: 'ACTIVE_HOLDER',
+            30: 'ACTIVE_STORAGE',
             4: 'ERC20_ALLOWANCE',
-            5: 'FINALIZED_HOLDER',
+            5: 'FINALIZED_STORAGE',
             6: 'HOLDER'
         }
 

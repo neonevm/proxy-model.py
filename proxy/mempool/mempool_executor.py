@@ -9,9 +9,8 @@ from typing import Optional, Any, List, Dict, cast
 from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 
 from ..common_neon.gas_price_calculator import GasPriceCalculator
-from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.errors import BlockedAccountsError
-from ..common_neon.errors import NodeBehindError, SolanaUnavailableError, NonceTooLowError
+from ..common_neon.errors import NodeBehindError, SolanaUnavailableError, NonceTooLowError, BadResourceError
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.address import EthereumAddress
 from ..common_neon.config import Config
@@ -124,6 +123,9 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         except NonceTooLowError:
             self.debug(f"Failed to execute tx {mp_tx_req.signature}, got nonce too low error")
             return MPTxExecResult(MPTxExecResultCode.NonceTooLow, neon_tx_exec_cfg)
+        except BadResourceError as e:
+            self.debug(f"Failed to execute tx {mp_tx_req.signature}, got bad resource error {str(e)}")
+            return MPTxExecResult(MPTxExecResultCode.BadResource, neon_tx_exec_cfg)
         except Exception as err:
             self._on_exception(f"Failed to execute tx {mp_tx_req.signature}.", err)
             return MPTxExecResult(MPTxExecResultCode.Unspecified, neon_tx_exec_cfg)

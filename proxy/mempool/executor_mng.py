@@ -21,17 +21,13 @@ class MPExecutorClient(PipePickableDataClient):
 
 
 class IMPExecutorMngUser(ABC):
-
     @abstractmethod
-    def on_resource_released(self, resource_id: int):
+    def on_executor_released(self, executor_id: int):
         assert False
 
 
 @logged_group("neon.MemPool")
 class MPExecutorMng(IMPExecutor):
-
-    BRING_BACK_EXECUTOR_TIMEOUT_SEC = 1800
-
     @dataclasses.dataclass
     class ExecutorInfo:
         executor: MPExecutor
@@ -58,7 +54,7 @@ class MPExecutorMng(IMPExecutor):
         with logging_context(req_id=mp_request.req_id):
             executor_id, executor = self._get_executor()
         task = asyncio.get_event_loop().create_task(executor.send_data_async(mp_request))
-        return MPTask(resource_id=executor_id, aio_task=task, mp_request=mp_request)
+        return MPTask(executor_id=executor_id, aio_task=task, mp_request=mp_request)
 
     def is_available(self) -> bool:
         return self._has_available()
@@ -73,19 +69,11 @@ class MPExecutorMng(IMPExecutor):
         executor_info = self._executors[executor_id]
         return executor_id, executor_info.client
 
-    def on_no_liquidity(self, resource_id: int):
-        self.debug(f"No liquidity, executor: {resource_id} - will be unblocked in: {MPExecutorMng.BRING_BACK_EXECUTOR_TIMEOUT_SEC} sec")
-        asyncio.get_event_loop().create_task(self._release_executor_later(resource_id))
-
-    async def _release_executor_later(self, executor_id: int):
-        await asyncio.sleep(MPExecutorMng.BRING_BACK_EXECUTOR_TIMEOUT_SEC)
-        self.release_resource(executor_id)
-
-    def release_resource(self, resource_id: int):
-        self.debug(f"Release executor: {resource_id}")
-        self._busy_executor_pool.remove(resource_id)
-        self._available_executor_pool.appendleft(resource_id)
-        self._user.on_resource_released(resource_id)
+    def release_executor(self, executor_id: int):
+        self.debug(f"Release executor: {executor_id}")
+        self._busy_executor_pool.remove(executor_id)
+        self._available_executor_pool.appendleft(executor_id)
+        self._user.on_executor_released(executor_id)
 
     @staticmethod
     def _create_executor(executor_id: int, config: Config) -> ExecutorInfo:

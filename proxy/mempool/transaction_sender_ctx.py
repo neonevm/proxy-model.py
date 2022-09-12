@@ -10,6 +10,8 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
+from ..common_neon.errors import BadResourceError
+from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
 
 from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateContractTxStage
 from .neon_tx_stages import NeonResizeContractTxStage
@@ -104,7 +106,7 @@ class NeonTxSendCtx:
         self._neon_tx = neon_tx
         self._sender = '0x' + neon_tx.sender()
         self._bin_neon_sig: bytes = neon_tx.hash_signed()
-        self._neon_sig = '0x' + self._bin_neon_sig.hex()
+        self._neon_sig = '0x' + self._bin_neon_sig.hex().lower()
         self._solana = solana
         self._resource = resource
         self._builder = NeonIxBuilder(resource.public_key)
@@ -118,14 +120,29 @@ class NeonTxSendCtx:
 
         self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
 
-        self._is_holder_completed = self._check_holder()
+        self._is_holder_completed = False
 
-    def _check_holder(self) -> bool:
-        holder_msg_len = 1 + len(self._builder.holder_msg)
-        holder_info = self._solana.get_account_info(self._resource.holder, holder_msg_len)
-        if not holder_info or len(holder_info.data) < holder_msg_len:
-            return False
-        return holder_info.data[1:] == self._builder.holder_msg
+        self._decode_holder_account()
+
+    def _decode_holder_account(self) -> None:
+        holder_info = self._solana.get_holder_account_info(self._resource.holder)
+        if holder_info is None:
+            raise BadResourceError(f'Bad holder account {str(self._resource.holder)}')
+
+        if holder_info.tag == ACTIVE_STORAGE_TAG:
+            if holder_info.neon_tx_sig != self._neon_sig:
+                raise BadResourceError(
+                    f'Holder account {str(self._resource.holder)} '
+                    f' has another neon tx: {holder_info.neon_tx_sig}'
+                )
+            self._is_holder_completed = True
+        elif holder_info.tag == FINALIZED_STORAGE_TAG:
+            pass
+        elif holder_info.tag == HOLDER_TAG:
+            holder_msg_len = len(self._builder.holder_msg)
+            self._is_holder_completed = (self._builder.holder_msg == holder_info.neon_tx_data[:holder_msg_len])
+        else:
+            raise BadResourceError(f'Holder account has bad tag: {holder_info.tag}')
 
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> None:
         self._neon_tx_exec_cfg.set_emulated_result(emulated_result)

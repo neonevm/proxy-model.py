@@ -106,5 +106,5 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         except Exception as err:
             self.error(f"Failed to run mempool_service: {err}")
 
-    def on_resource_released(self, resource_id: int):
-        self._mempool.on_resource_got_available(resource_id)
+    def on_executor_released(self, executor_id: int):
+        self._mempool.on_executor_got_available(executor_id)

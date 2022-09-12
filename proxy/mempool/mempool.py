@@ -249,7 +249,7 @@ class MemPool:
             if not mp_task.aio_task.done():
                 return False
 
-            self._executor.release_resource(mp_task.resource_id)
+            self._executor.release_executor(mp_task.executor_id)
 
             if mp_task.mp_request.type != MPRequestType.SendTransaction:
                 self.error(f"Got unexpected request: {mp_task.mp_request}")
@@ -282,10 +282,12 @@ class MemPool:
         if isinstance(mp_tx_result.data, NeonTxExecCfg):
             tx.neon_tx_exec_cfg = cast(NeonTxExecCfg, mp_tx_result.data)
 
-        if mp_tx_result.code in (MPTxExecResultCode.BlockedAccount, MPTxExecResultCode.SolanaUnavailable):
+        if mp_tx_result.code == MPTxExecResultCode.BlockedAccount:
             self._on_reschedule_tx(tx)
-        elif mp_tx_result.code == MPTxExecResultCode.NodeBehind:
+        elif mp_tx_result.code in (MPTxExecResultCode.SolanaUnavailable, MPTxExecResultCode.NodeBehind):
             self._on_reschedule_tx(tx)
+        elif mp_tx_result.code == MPTxExecResultCode.BadResource:
+            self._on_bad_resource(tx)
         elif mp_tx_result.code in (MPTxExecResultCode.NonceTooLow, MPTxExecResultCode.Unspecified):
             self._on_fail_tx(tx)
         elif mp_tx_result.code == MPTxExecResultCode.Done:
@@ -301,39 +303,39 @@ class MemPool:
         with logging_context(req_id=tx.req_id):
             self.debug(f"Tx {tx.signature} will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
         await asyncio.sleep(self.RESCHEDULE_TIMEOUT_SEC)
+        self._reschedule_tx_impl(tx)
+        await self._kick_tx_schedule()
 
+    def _reschedule_tx_impl(self, tx: MPTxRequest):
         with logging_context(req_id=tx.req_id):
             try:
-                self._update_operator_resource_info(tx)
+                self._op_res_mng.update_resource(tx.signature)
                 self._tx_schedule.reschedule_tx(tx)
             except Exception as err:
                 self._on_exception(f'Exception on the result processing of tx {tx.signature}', err)
                 return
 
-        await self._kick_tx_schedule()
+    def _on_bad_resource(self, tx: MPTxRequest):
+        self.debug(f"Disable resource for {tx.signature}")
+        self._op_res_mng.disable_resource(tx.signature)
+        self._reschedule_tx_impl(tx)
 
     def _on_done_tx(self, tx: MPTxRequest):
-        self._release_operator_resource_info(tx)
+        self._op_res_mng.release_resource(tx.signature)
         self._tx_schedule.done_tx(tx)
         self.debug(f"Request {tx.signature} is done")
 
     def _on_fail_tx(self, tx: MPTxRequest):
-        self._release_operator_resource_info(tx)
+        self._op_res_mng.release_resource(tx.signature)
         self._tx_schedule.fail_tx(tx)
         self.debug(f"Request {tx.signature} is failed - dropped away")
-
-    def _release_operator_resource_info(self, tx: MPTxRequest) -> None:
-        self._op_res_mng.release_resource(tx.signature)
-
-    def _update_operator_resource_info(self, tx: MPTxRequest) -> None:
-        self._op_res_mng.update_resource(tx.signature)
 
     async def _kick_tx_schedule(self):
         async with self._schedule_cond:
             # self.debug(f"Kick the schedule, condition: {self._schedule_cond.__repr__()}")
             self._schedule_cond.notify()
 
-    def on_resource_got_available(self, _: int):
+    def on_executor_got_available(self, _: int):
         self._create_kick_tx_schedule_task()
 
     def _create_kick_tx_schedule_task(self):
