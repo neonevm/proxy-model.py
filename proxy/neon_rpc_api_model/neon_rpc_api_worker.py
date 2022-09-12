@@ -21,7 +21,7 @@ from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
-from ..common_neon.environment_data import SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED
+from ..common_neon.environment_data import SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED, ENABLE_PRIVATE_API
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..indexer.indexer_db import IndexerDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
@@ -51,8 +51,10 @@ class NeonRpcApiWorker:
         self._stat_exporter: Optional[StatisticsExporter] = None
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
-        self._gas_price: Optional[MPGasPriceResult] = None
+        self._gas_price_value: Optional[MPGasPriceResult] = None
         self._last_gas_price_time = 0
+
+        self._last_elf_params_time = 0
 
         with self.proxy_id_glob.get_lock():
             self.proxy_id = self.proxy_id_glob.value
@@ -65,16 +67,17 @@ class NeonRpcApiWorker:
     def set_stat_exporter(self, stat_exporter: StatisticsExporter):
         self._stat_exporter = stat_exporter
 
-    def _get_gas_price(self) -> MPGasPriceResult:
+    @property
+    def _gas_price(self) -> MPGasPriceResult:
         now = math.ceil(time.time())
         if self._last_gas_price_time != now:
             req_id = LogMng.get_logging_context().get("req_id")
             gas_price = self._mempool_client.get_gas_price(req_id)
             if gas_price is not None:
-                self._gas_price = gas_price
-        if self._gas_price is None:
+                self._gas_price_value = gas_price
+        if self._gas_price_value is None:
             raise EthereumError(message='Failed to estimate gas price. Try again later')
-        return cast(MPGasPriceResult, self._gas_price)
+        return cast(MPGasPriceResult, self._gas_price_value)
 
     @staticmethod
     def neon_proxy_version() -> str:
@@ -97,7 +100,7 @@ class NeonRpcApiWorker:
         return str(ElfParams().chain_id)
 
     def eth_gasPrice(self) -> str:
-        return hex(self._get_gas_price().suggested_gas_price)
+        return hex(self._gas_price.suggested_gas_price)
 
     def eth_estimateGas(self, param: Dict[str, Any]) -> str:
         if not isinstance(param, dict):
@@ -193,10 +196,6 @@ class NeonRpcApiWorker:
 
     def _get_full_block_by_number(self, tag: Union[str, int]) -> SolanaBlockInfo:
         block = self._process_block_tag(tag)
-        if block.block_slot is None:
-            self.debug(f"Not found block by number {tag}")
-            return block
-
         if block.is_empty():
             block = self._db.get_block_by_slot(block.block_slot)
             if block.is_empty():
@@ -217,7 +216,7 @@ class NeonRpcApiWorker:
         account = self._normalize_account(account)
 
         try:
-            commitment = 'processed' if  tag == 'pending' else 'confirmed'
+            commitment = 'processed' if tag == 'pending' else 'confirmed'
             neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account), commitment)
             if neon_account_info is None:
                 return hex(0)
@@ -331,7 +330,7 @@ class NeonRpcApiWorker:
             raise InvalidParamError(message=f'bad block hash {block_hash}')
 
         block = self._db.get_block_by_hash(block_hash)
-        if block.block_slot is None:
+        if block.is_empty():
             self.debug("Not found block by hash %s", block_hash)
 
         return block
@@ -342,7 +341,7 @@ class NeonRpcApiWorker:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block = self._get_block_by_hash(block_hash)
-        if block.block_slot is None:
+        if block.is_empty():
             return None
         ret = self._get_block_by_slot(block, full, False)
         return ret
@@ -353,9 +352,6 @@ class NeonRpcApiWorker:
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         block = self._process_block_tag(tag)
-        if block.block_slot is None:
-            self.debug(f"Not found block by number {tag}")
-            return None
         ret = self._get_block_by_slot(block, full, tag in ('latest', 'pending'))
         return ret
 
@@ -520,7 +516,7 @@ class NeonRpcApiWorker:
             if neon_tx_receipt is not None:
                 raise EthereumError(message='already known')
 
-            min_gas_price = self._get_gas_price().min_gas_price
+            min_gas_price = self._gas_price.min_gas_price
             neon_tx_validator = NeonTxValidator(self._solana, neon_tx, min_gas_price)
             neon_tx_exec_cfg = neon_tx_validator.precheck()
 
@@ -575,10 +571,6 @@ class NeonRpcApiWorker:
 
     def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[dict]:
         block = self._process_block_tag(tag)
-        if block.is_empty():
-            self.debug(f"Not found block by number {tag}")
-            return None
-
         return self._get_transaction_by_index(block, tx_idx)
 
     def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[dict]:
@@ -589,7 +581,7 @@ class NeonRpcApiWorker:
 
     def eth_getBlockTransactionCountByHash(self, block_hash: str) -> str:
         block = self._get_block_by_hash(block_hash)
-        if block.block_slot is None:
+        if block.is_empty():
             return hex(0)
         if block.is_empty():
             block = self._db.get_block_by_slot(block.block_slot)
@@ -736,7 +728,56 @@ class NeonRpcApiWorker:
         slot = self._db.get_finalized_block_slot()
         return hex(slot)
 
-    def neon_getEvmParams(self) -> Dict[str, Any]:
+    @staticmethod
+    def neon_getEvmParams() -> Dict[str, str]:
         """Returns map of Neon-EVM parameters"""
-        self.debug(f"call neon_getEvmParams")
-        return ElfParams().get_params()
+        return ElfParams().elf_param_dict
+
+    def is_allowed_api(self, method_name: str) -> bool:
+        for prefix in ('eth_', 'net_', 'web3_', 'neon_'):
+            if method_name.startswith(prefix):
+                break
+        else:
+            return False
+
+        now = math.ceil(time.time())
+        elf_params = ElfParams()
+        if self._last_elf_params_time != now:
+            req_id = LogMng.get_logging_context().get("req_id")
+            elf_param_dict = self._mempool_client.get_elf_param_dict(req_id)
+            if elf_param_dict is None:
+                raise EthereumError(message='Failed to read Neon EVM params from Solana cluster. Try again later')
+            elf_params.set_elf_param_dict(elf_param_dict)
+
+        always_allowed_method_list = (
+            "eth_chainId",
+            "neon_cli_version",
+            "neon_getEvmParams"
+            "neon_proxy_version",
+            "net_version",
+            "web3_clientVersion"
+        )
+
+        if method_name in always_allowed_method_list:
+            if elf_params.has_params():
+                return True
+
+        if not elf_params.is_evm_compatible(NEON_PROXY_PKG_VERSION):
+            raise EthereumError(
+                f'Neon Proxy {self.neon_proxy_version()} is not compatible with '
+                f'Neon EVM {self.web3_clientVersion()}'
+            )
+
+        if ENABLE_PRIVATE_API:
+            return True
+
+        private_method_list = (
+            "eth_accounts",
+            "eth_sign",
+            "eth_sendTransaction",
+            "eth_signTransaction",
+        )
+
+        if method_name in private_method_list:
+            return False
+        return True

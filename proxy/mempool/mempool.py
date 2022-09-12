@@ -1,20 +1,23 @@
 import asyncio
 import traceback
-from typing import List, Tuple, Optional, Any, cast, Iterator
+from typing import List, Tuple, Optional, Any, Dict, cast, Iterator
 
 from logged_groups import logged_group, logging_context
 from neon_py.data import Result
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.config import IConfig
+from ..common_neon.config import Config
+from ..common_neon.elf_params import ElfParams
 
 from .operator_resource_mng import OperatorResourceMng
 
 from .mempool_api import MPRequest, MPRequestType, IMPExecutor, MPTask, MPTxRequestList
-from .mempool_api import MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxSendResult, MPTxSendResultCode
+from .mempool_api import MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest
+from .mempool_api import MPTxSendResult, MPTxSendResultCode
 from .mempool_api import MPGasPriceRequest, MPGasPriceResult
 from .mempool_api import MPSenderTxCntRequest, MPSenderTxCntResult
+from .mempool_api import MPElfParamDictRequest
 from .mempool_api import MPOpResInitRequest, MPOpResInitResult, MPOpResInitResultCode
 from .mempool_schedule import MPTxSchedule
 from .mempool_periodic_task import MPPeriodicTaskLoop
@@ -38,6 +41,21 @@ class MPGasPriceTaskLoop(MPPeriodicTaskLoop[MPGasPriceRequest, MPGasPriceResult]
 
     def _process_result(self, _: MPGasPriceRequest, mp_res: MPGasPriceResult) -> None:
         self._gas_price = mp_res
+
+
+class MPElfParamDictTaskLoop(MPPeriodicTaskLoop[MPElfParamDictRequest, Dict[str, str]]):
+    def __init__(self, executor: IMPExecutor) -> None:
+        super().__init__(name='elf-params', sleep_time=4.0, executor=executor)
+
+    def _submit_request(self) -> None:
+        mp_req = MPElfParamDictRequest(req_id=self._generate_req_id())
+        self._submit_request_to_executor(mp_req)
+
+    def _process_error(self, _: MPElfParamDictRequest) -> None:
+        pass
+
+    def _process_result(self, _: MPElfParamDictRequest, mp_res: Dict[str, str]) -> None:
+        ElfParams().set_elf_param_dict(mp_res)
 
 
 class MPSenderTxCntTaskLoop(MPPeriodicTaskLoop[MPSenderTxCntRequest, MPSenderTxCntResult]):
@@ -64,11 +82,15 @@ class MPInitOperatorResourceTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOp
     _default_sleep_time = 4.0
 
     def __init__(self, executor: IMPExecutor, op_res_mng: OperatorResourceMng) -> None:
-        super().__init__(name='op-res-init', sleep_time=self._default_sleep_time, executor=executor)
+        super().__init__(name='op-res-init', sleep_time=self._check_sleep_time, executor=executor)
         self._op_res_mng = op_res_mng
         self._disabled_resource_list: List[str] = []
 
     def _submit_request(self) -> None:
+        elf_params = ElfParams()
+        if not elf_params.has_params():
+            return
+
         if len(self._disabled_resource_list) == 0:
             self._disabled_resource_list = self._op_res_mng.get_disabled_resource_list()
         if len(self._disabled_resource_list) == 0:
@@ -79,7 +101,11 @@ class MPInitOperatorResourceTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOp
             self._sleep_time = self._default_sleep_time
         else:
             self._sleep_time = self._check_sleep_time
-        mp_req = MPOpResInitRequest(req_id=self._generate_req_id(), resource_ident=resource)
+        mp_req = MPOpResInitRequest(
+            req_id=self._generate_req_id(),
+            elf_param_dict=elf_params.elf_param_dict,
+            resource_ident=resource
+        )
         self._submit_request_to_executor(mp_req)
 
     def _process_error(self, _: MPOpResInitRequest) -> None:
@@ -95,7 +121,7 @@ class MemPool:
     CHECK_TASK_TIMEOUT_SEC = 0.01
     RESCHEDULE_TIMEOUT_SEC = 0.4
 
-    def __init__(self, config: IConfig, op_res_mng: OperatorResourceMng, executor: IMPExecutor):
+    def __init__(self, config: Config, op_res_mng: OperatorResourceMng, executor: IMPExecutor):
         capacity = config.get_mempool_capacity()
         self.info(f"Init mempool schedule with capacity: {capacity}")
         self._tx_schedule = MPTxSchedule(capacity)
@@ -105,6 +131,7 @@ class MemPool:
         self._executor = executor
         self._op_res_mng = op_res_mng
         self._gas_price_task_loop = MPGasPriceTaskLoop(executor)
+        self._elf_param_dict_task_loop = MPElfParamDictTaskLoop(executor)
         self._state_tx_cnt_task_loop = MPSenderTxCntTaskLoop(executor, self._tx_schedule)
         self._op_res_init_task_loop = MPInitOperatorResourceTaskLoop(executor, self._op_res_mng)
         self._process_tx_result_task_loop = asyncio.get_event_loop().create_task(self._process_tx_result_loop())
@@ -113,6 +140,9 @@ class MemPool:
     @property
     def _gas_price(self) -> Optional[MPGasPriceResult]:
         return self._gas_price_task_loop.gas_price
+
+    def has_gas_price(self) -> bool:
+        return self._gas_price is not None
 
     async def enqueue_mp_request(self, mp_request: MPRequest):
         assert mp_request.type == MPRequestType.SendTransaction, f'Wrong request type {mp_request}'
@@ -129,7 +159,7 @@ class MemPool:
             try:
                 if not tx.has_chain_id():
                     if not self.has_gas_price():
-                        self.debug(f"'Mempool doesn't have gas price information")
+                        self.debug("Mempool doesn't have gas price information")
                         return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
                     self.debug(f'Increase gas-price for wo-chain-id tx {tx.signature}')
                     tx.gas_price = self._gas_price.suggested_gas_price * 2
@@ -155,6 +185,13 @@ class MemPool:
     def get_gas_price(self) -> Optional[MPGasPriceResult]:
         return self._gas_price
 
+    @staticmethod
+    def get_elf_param_dict() -> Optional[Dict[str, str]]:
+        elf_params = ElfParams()
+        if not elf_params.has_params():
+            return None
+        return elf_params.elf_param_dict
+
     def _enqueue_tx_request(self) -> bool:
         try:
             tx = self._tx_schedule.peek_tx()
@@ -162,7 +199,7 @@ class MemPool:
                 return False
 
             with logging_context(req_id=tx.req_id):
-                resource = self._op_res_mng.get_resource(tx.neon_tx_exec_cfg.resource_ident)
+                resource = self._op_res_mng.get_resource(tx.signature)
                 if resource is None:
                     return False
 
@@ -174,7 +211,7 @@ class MemPool:
         with logging_context(req_id=tx.req_id):
             try:
                 self.debug(f"Got tx {tx.signature} from schedule.")
-                tx.neon_tx_exec_cfg.set_resource_ident(resource)
+                tx = MPTxExecRequest.clone(tx, resource, ElfParams().elf_param_dict)
 
                 mp_task = self._executor.submit_mp_request(tx)
                 self._processing_task_list.append(mp_task)
@@ -184,8 +221,8 @@ class MemPool:
                 return False
 
     async def _process_tx_schedule_loop(self):
-        async with self._schedule_cond:
-            await self._schedule_cond.wait_for(self.has_gas_price)
+        while (not self.has_gas_price()) and (not ElfParams().has_params()):
+            await asyncio.sleep(self.CHECK_TASK_TIMEOUT_SEC)
 
         while True:
             async with self._schedule_cond:
@@ -286,17 +323,17 @@ class MemPool:
         self.debug(f"Request {tx.signature} is failed - dropped away")
 
     def _release_operator_resource_info(self, tx: MPTxRequest) -> None:
-        self._op_res_mng.release_resource(tx.neon_tx_exec_cfg.resource_ident)
+        self._op_res_mng.release_resource(tx.signature)
 
     def _update_operator_resource_info(self, tx: MPTxRequest) -> None:
-        self._op_res_mng.update_resource(tx.neon_tx_exec_cfg.resource_ident)
+        self._op_res_mng.update_resource(tx.signature)
 
     async def _kick_tx_schedule(self):
         async with self._schedule_cond:
             # self.debug(f"Kick the schedule, condition: {self._schedule_cond.__repr__()}")
             self._schedule_cond.notify()
 
-    def on_resource_got_available(self, resource_id: int):
+    def on_resource_got_available(self, _: int):
         self._create_kick_tx_schedule_task()
 
     def _create_kick_tx_schedule_task(self):
@@ -322,12 +359,10 @@ class MemPool:
     def is_active(self) -> bool:
         return self._is_active
 
-    def get_taking_out_txs_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
-        return self._tx_schedule.get_taking_out_txs_iterator()
+    def get_taking_out_tx_list_iterator(self) -> Iterator[Tuple[str, MPTxRequestList]]:
+        return self._tx_schedule.get_taking_out_tx_list_iterator()
 
-    def take_in_txs(self, sender_addr: str, mp_tx_request_list: MPTxRequestList):
-        self._tx_schedule.take_in_txs(sender_addr, mp_tx_request_list)
+    def take_in_tx_list(self, sender_addr: str, mp_tx_request_list: MPTxRequestList):
+        self._tx_schedule.take_in_tx_list(sender_addr, mp_tx_request_list)
         self._create_kick_tx_schedule_task()
 
-    def has_gas_price(self) -> bool:
-        return self._gas_price is not None

@@ -1,105 +1,78 @@
-from abc import ABC, abstractmethod
 from typing import Optional
 from solana.publickey import PublicKey
 
 from .environment_data import EVM_LOADER_ID, EVM_STEP_COUNT, MEMPOOL_CAPACITY, MIN_OPERATOR_BALANCE_TO_ERR, \
                               MIN_OPERATOR_BALANCE_TO_WARN, PP_SOLANA_URL, PYTH_MAPPING_ACCOUNT, SOLANA_URL, \
-                              HOLDER_SIZE, PERM_ACCOUNT_LIMIT, RECHECK_RESOURCE_LIST_INTERVAL
+                              HOLDER_SIZE, PERM_ACCOUNT_LIMIT, RECHECK_USED_RESOURCE_SEC, \
+                              RECHECK_RESOURCE_AFTER_USES_CNT
 
 
-class IConfig(ABC):
+class Config:
+    def __init__(self):
+        pass
 
-    @abstractmethod
-    def get_solana_url(self) -> str:
-        """Gets the predefined solana url"""
-
-    @abstractmethod
-    def get_evm_steps_limit(self) -> int:
-        """Gets the evm steps limitation, that is used to check steps gotten over emulating"""
-
-    @abstractmethod
-    def get_mempool_capacity(self) -> int:
-        """Gets the capacity of the MemPool schedule to constrain the transactions count in there"""
-
-    @abstractmethod
-    def get_pyth_mapping_account(self) -> Optional[PublicKey]:
-        """Gets pyth network account to retrieve gas price from there"""
-
-    @abstractmethod
-    def get_pyth_solana_url(self) -> str:
-        """Gets solana url for GasPriceCalculator in test purposes"""
-
-    @abstractmethod
-    def get_evm_loader_id(self) -> PublicKey:
-        """Gets EVM Loader ID"""
-
-    @abstractmethod
-    def get_holder_size(self) -> int:
-        """Gets size for holder account"""
-
-    @abstractmethod
-    def get_min_operator_balance_to_warn(self) -> int:
-        """Gets minimal operators balance to warning"""
-
-    @abstractmethod
-    def get_min_operator_balance_to_err(self) -> int:
-        """Gets minimal operators balance to error"""
-
-    @abstractmethod
-    def get_perm_account_limit(self) -> int:
-        """Gets permanent accounts max count"""
-
-    @abstractmethod
-    def get_recheck_resource_list_interval(self) -> int:
-        """Gets resource recheck interval"""
-
-
-class Config(IConfig):
-
-    def get_solana_url(self) -> str:
+    @staticmethod
+    def get_solana_url() -> str:
         return SOLANA_URL
 
-    def get_evm_steps_limit(self) -> int:
+    @staticmethod
+    def get_evm_steps_limit() -> int:
         return EVM_STEP_COUNT
 
-    def get_mempool_capacity(self) -> int:
+    @staticmethod
+    def get_mempool_capacity() -> int:
         return MEMPOOL_CAPACITY
 
-    def get_pyth_mapping_account(self) -> Optional[PublicKey]:
+    @staticmethod
+    def get_pyth_mapping_account() -> Optional[PublicKey]:
         return PYTH_MAPPING_ACCOUNT
 
-    def get_pyth_solana_url(self) -> str:
+    @staticmethod
+    def get_pyth_solana_url() -> str:
         return PP_SOLANA_URL
 
-    def get_evm_loader_id(self) -> PublicKey:
+    @staticmethod
+    def get_evm_loader_id() -> PublicKey:
         return PublicKey(EVM_LOADER_ID)
 
-    def get_holder_size(self) -> int:
+    @staticmethod
+    def get_holder_size() -> int:
         return HOLDER_SIZE
 
-    def get_min_operator_balance_to_warn(self) -> int:
+    @staticmethod
+    def get_min_operator_balance_to_warn() -> int:
         return MIN_OPERATOR_BALANCE_TO_WARN
 
-    def get_min_operator_balance_to_err(self) -> int:
+    @staticmethod
+    def get_min_operator_balance_to_err() -> int:
         return MIN_OPERATOR_BALANCE_TO_ERR
 
-    def get_perm_account_limit(self) -> int:
+    @staticmethod
+    def get_perm_account_limit() -> int:
         return PERM_ACCOUNT_LIMIT
 
-    def get_recheck_resource_list_interval(self) -> int:
-        return RECHECK_RESOURCE_LIST_INTERVAL
+    @staticmethod
+    def get_recheck_used_resource_sec() -> int:
+        return RECHECK_USED_RESOURCE_SEC
+
+    @staticmethod
+    def get_recheck_resource_after_uses_cnt() -> int:
+        return RECHECK_RESOURCE_AFTER_USES_CNT
 
     def __str__(self):
-        return f"\n" \
-               f"        SOLANA_URL: {self.get_solana_url()}, \n" \
-               f"        EVM_LOADER_ID: {self.get_evm_loader_id()}, \n" \
-               f"        PP_SOLANA_URL: {self.get_pyth_solana_url()}\n" \
-               f"        PYTH_MAPPING_ACCOUNT: {self.get_pyth_mapping_account()}\n" \
-               f"        EVM_STEP_LIMIT: {self.get_evm_steps_limit()}, \n" \
-               f"        MP_CAPACITY: {self.get_mempool_capacity()}\n" \
-               f"        HOLDER_SIZE: {self.get_holder_size()}\n" \
-               f"        MIN_OPERATOR_BALANCE_TO_WARN: {self.get_min_operator_balance_to_warn()}\n" \
-               f"        MIN_OPERATOR_BALANCE_TO_ERR: {self.get_min_operator_balance_to_err()}\n" \
-               f"        PERM_ACCOUNT_LIMIT: {self.get_perm_account_limit()}\n" \
-               f"        RECHECK_RESOURCE_LIST_INTERVAL: {self.get_recheck_resource_list_interval()}\n" \
-               f"        "
+        return '\n        '.join([
+            '',
+            f"SOLANA_URL: {self.get_solana_url()},",
+            f"EVM_LOADER_ID: {self.get_evm_loader_id()},",
+            f"PP_SOLANA_URL: {self.get_pyth_solana_url()}",
+            f"PYTH_MAPPING_ACCOUNT: {self.get_pyth_mapping_account()}",
+            f"EVM_STEP_LIMIT: {self.get_evm_steps_limit()},",
+            f"MP_CAPACITY: {self.get_mempool_capacity()}",
+            f"HOLDER_SIZE: {self.get_holder_size()}",
+            f"MIN_OPERATOR_BALANCE_TO_WARN: {self.get_min_operator_balance_to_warn()}",
+            f"MIN_OPERATOR_BALANCE_TO_ERR: {self.get_min_operator_balance_to_err()}",
+            f"PERM_ACCOUNT_LIMIT: {self.get_perm_account_limit()}",
+            f"RECHECK_USED_RESOURCE_SEC: {self.get_recheck_used_resource_sec()}",
+            f"RECHECK_RESOURCE_AFTER_USES_CNT: {self.get_recheck_resource_after_uses_cnt()}",
+            ""
+        ])

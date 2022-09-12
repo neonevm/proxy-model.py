@@ -3,12 +3,12 @@ import dataclasses
 import socket
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import List, Tuple, Deque, Set, cast
+from typing import List, Tuple, Deque, Set
 
 from logged_groups import logged_group, logging_context
 from neon_py.network import PipePickableDataClient
 
-from ..common_neon.config import IConfig
+from ..common_neon.config import Config
 
 from .mempool_api import MPRequest, IMPExecutor, MPTask
 from .mempool_executor import MPExecutor
@@ -38,7 +38,7 @@ class MPExecutorMng(IMPExecutor):
         client: MPExecutorClient
         id: int
 
-    def __init__(self, user: IMPExecutorMngUser, executor_count: int, config: IConfig):
+    def __init__(self, user: IMPExecutorMngUser, executor_count: int, config: Config):
         self.info(f"Initialize executor mng with executor_count: {executor_count}")
         self._available_executor_pool: Deque[int] = deque()
         self._busy_executor_pool: Set[int] = set()
@@ -88,7 +88,7 @@ class MPExecutorMng(IMPExecutor):
         self._user.on_resource_released(resource_id)
 
     @staticmethod
-    def _create_executor(executor_id: int, config: IConfig) -> ExecutorInfo:
+    def _create_executor(executor_id: int, config: Config) -> ExecutorInfo:
         client_sock, srv_sock = socket.socketpair()
         executor = MPExecutor(executor_id, srv_sock, config)
         client = MPExecutorClient(client_sock)

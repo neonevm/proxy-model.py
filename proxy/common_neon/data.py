@@ -20,7 +20,6 @@ class NeonTxExecCfg:
     def __init__(self):
         self._state_tx_cnt = 0
         self._evm_step_cnt = 0
-        self._resource_ident = ''
         self._alt_list: List[str] = []
         self._account_dict: NeonAccountDict = {}
         self._additional_resize_steps = False
@@ -36,10 +35,6 @@ class NeonTxExecCfg:
     @property
     def account_dict(self) -> NeonAccountDict:
         return self._account_dict
-
-    @property
-    def resource_ident(self):
-        return self._resource_ident
 
     @property
     def additional_resize_steps(self) -> bool:
@@ -64,9 +59,6 @@ class NeonTxExecCfg:
         self._state_tx_cnt = value
         return self
 
-    def set_resource_ident(self, value: str) -> NeonTxExecCfg:
-        self._resource_ident = value
-        return self
 
     def set_additional_resize_steps(self, value: bool) -> NeonTxExecCfg:
         self._additional_resize_steps = value

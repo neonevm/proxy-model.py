@@ -67,10 +67,12 @@ contract ReturnsEvents {
 
 
 class FakeConfig(Config):
-    def get_min_operator_balance_to_warn(self) -> int:
+    @staticmethod
+    def get_min_operator_balance_to_warn() -> int:
         return 1
 
-    def get_min_operator_balance_to_err(self) -> int:
+    @staticmethod
+    def get_min_operator_balance_to_err() -> int:
         return 1
 
 
