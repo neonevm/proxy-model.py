@@ -566,13 +566,17 @@ class NeonRpcApiWorker:
                 self.debug(f"Not found block by slot {block.block_slot}")
                 return None
 
-        return self._db.get_tx_by_block_slot_tx_idx(block.block_slot, tx_idx)
+        neon_tx_receipt = self._db.get_tx_by_block_slot_tx_idx(block.block_slot, tx_idx)
+        if neon_tx_receipt is None:
+            self.debug("Not found receipt")
+            return None
+        return self._get_transaction(neon_tx_receipt)
 
-    def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[dict]:
+    def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[Dict[str, Any]]:
         block = self._process_block_tag(tag)
         return self._get_transaction_by_index(block, tx_idx)
 
-    def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[dict]:
+    def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[Dict[str, Any]]:
         block = self._get_block_by_hash(block_hash)
         if block.is_empty():
             return None
