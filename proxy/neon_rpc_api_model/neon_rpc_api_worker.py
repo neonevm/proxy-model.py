@@ -18,6 +18,7 @@ from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.utils import JsonBytesEncoder
 from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
@@ -30,15 +31,6 @@ from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendRe
 
 NEON_PROXY_PKG_VERSION = '0.11.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
-
-
-class JsonEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, bytearray):
-            return obj.hex()
-        if isinstance(obj, bytes):
-            return obj.hex()
-        return json.JSONEncoder.default(self, obj)
 
 
 @logged_group("neon.Proxy")
@@ -507,7 +499,7 @@ class NeonRpcApiWorker:
             raise InvalidParamError(message="wrong transaction format")
 
         neon_signature = '0x' + neon_tx.hash_signed().hex()
-        self.debug(f"sendRawTransaction {neon_signature}: {json.dumps(neon_tx.as_dict(), cls=JsonEncoder)}")
+        self.debug(f"sendRawTransaction {neon_signature}: {json.dumps(neon_tx.as_dict(), cls=JsonBytesEncoder)}")
 
         self._stat_tx_begin()
         try:

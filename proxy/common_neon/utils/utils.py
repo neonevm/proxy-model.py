@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Any, List, Optional, cast
+from typing import Dict, Any, List, Optional, Tuple, cast
 from enum import Enum
 from logged_groups import logged_group
 from eth_utils import big_endian_to_int
@@ -11,49 +11,71 @@ from ..environment_data import LOG_FULL_OBJECT_INFO
 from ..eth_proto import Trx as NeonTx
 
 
+class JsonBytesEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, bytearray):
+            return obj.hex()
+        if isinstance(obj, bytes):
+            return obj.hex()
+        return json.JSONEncoder.default(self, obj)
+
+
 def str_fmt_object(obj: Any) -> str:
     type_name = 'Type'
     class_prefix = "<class '"
 
-    def lookup(d: Dict[str, Any]) -> Dict[str, Any]:
+    def decode_value(value: Any) -> Tuple[bool, Any]:
+        if callable(value):
+            if LOG_FULL_OBJECT_INFO:
+                return True, 'callable...'
+        elif value is None:
+            if LOG_FULL_OBJECT_INFO:
+                return True, value
+        elif isinstance(value, bool):
+            if value or LOG_FULL_OBJECT_INFO:
+                return True, value
+        elif isinstance(value, Enum):
+            value = str(value)
+            idx = value.find('.')
+            if idx != -1:
+                value = value[idx + 1:]
+            return True, value
+        elif isinstance(value, list) or isinstance(value, set):
+            if LOG_FULL_OBJECT_INFO:
+                result_list: List[Any] = []
+                for item in value:
+                    has_item, item = decode_value(item)
+                    result_list.append(item if has_item else '?...')
+                return True, result_list
+            elif len(value) > 0:
+                return True, f'len={len(value)}'
+        elif isinstance(value, str) or isinstance(value, bytes) or isinstance(value, bytearray):
+            if (not LOG_FULL_OBJECT_INFO) and (len(value) == 0):
+                return False, None
+            if isinstance(value, bytes) or isinstance(value, bytearray):
+                value = value.hex()
+            if (not LOG_FULL_OBJECT_INFO) and (len(value) > 20):
+                value = value[:20] + '...'
+            return True, value
+        elif hasattr(value, '__dict__'):
+            return True, lookup_dict(value.__dict__)
+        elif isinstance(value, dict):
+            return True, lookup_dict(value)
+        elif hasattr(value, '__str__'):
+            return True, str(value)
+        else:
+            return True, value
+        return False, None
+
+    def lookup_dict(d: Dict[str, Any]) -> Dict[str, Any]:
         result: Dict[str, Any] = {}
         for key, value in d.items():
-            if callable(value):
+            has_value, value = decode_value(value)
+            if not has_value:
                 continue
 
             key = key.lstrip('_')
-            if isinstance(value, Enum):
-                value = str(value)
-                idx = value.find('.')
-                if idx != -1:
-                    value = value[idx + 1:]
-                result[key] = value
-            elif LOG_FULL_OBJECT_INFO:
-                result[key] = value
-            elif value is None:
-                pass
-            elif isinstance(value, bool):
-                if value:
-                    result[key] = value
-            elif isinstance(value, list) or isinstance(value, set):
-                if len(value) > 0:
-                    result[f'len({key})'] = len(value)
-            elif isinstance(value, str) or isinstance(value, bytes) or isinstance(value, bytearray):
-                if len(value) == 0:
-                    continue
-                if isinstance(value, bytes) or isinstance(value, bytearray):
-                    value = '0x' + value.hex()
-                if len(value) > 130:
-                    value = value[:130] + '...'
-                result[key] = value
-            elif hasattr(value, '__str__'):
-                value_str = str(value)
-                if value_str.startswith(f'<{type_name} ') and hasattr(value, '__dict__'):
-                    result[key] = lookup(value.__dict__)
-                else:
-                    result[key] = value_str
-            else:
-                result[key] = value
+            result[key] = value
         return result
 
     name = f'{type(obj)}'
@@ -62,9 +84,9 @@ def str_fmt_object(obj: Any) -> str:
         name = name[len(class_prefix):]
 
     if hasattr(obj, '__dict__'):
-        members = json.dumps(lookup(obj.__dict__), skipkeys=True, sort_keys=True)
+        members = json.dumps(lookup_dict(obj.__dict__), skipkeys=True, sort_keys=True)
     elif isinstance(obj, dict):
-        members = json.dumps(lookup(obj), skipkeys=True, sort_keys=True)
+        members = json.dumps(lookup_dict(obj), skipkeys=True, sort_keys=True)
     else:
         members = None
 
