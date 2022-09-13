@@ -26,15 +26,14 @@ from typing import Optional, Union, Dict, List, TypeVar, Type, cast, Any, Tuple
 from .utils import text_, bytes_
 from .constants import DEFAULT_LOG_LEVEL, DEFAULT_LOG_FILE, DEFAULT_LOG_FORMAT, DEFAULT_BACKLOG, DEFAULT_BASIC_AUTH
 from .constants import DEFAULT_TIMEOUT, DEFAULT_DEVTOOLS_WS_PATH, DEFAULT_DISABLE_HTTP_PROXY, DEFAULT_DISABLE_HEADERS
-from .constants import DEFAULT_ENABLE_STATIC_SERVER, DEFAULT_ENABLE_EVENTS, DEFAULT_ENABLE_DEVTOOLS
+from .constants import DEFAULT_ENABLE_STATIC_SERVER, DEFAULT_ENABLE_EVENTS
 from .constants import DEFAULT_ENABLE_WEB_SERVER, DEFAULT_THREADLESS, DEFAULT_CERT_FILE, DEFAULT_KEY_FILE, DEFAULT_CA_FILE
 from .constants import DEFAULT_CA_CERT_DIR, DEFAULT_CA_CERT_FILE, DEFAULT_CA_KEY_FILE, DEFAULT_CA_SIGNING_KEY_FILE
 from .constants import DEFAULT_PAC_FILE_URL_PATH, DEFAULT_PAC_FILE, DEFAULT_PLUGINS, DEFAULT_PID_FILE, DEFAULT_PORT
 from .constants import DEFAULT_NUM_WORKERS, DEFAULT_VERSION, DEFAULT_OPEN_FILE_LIMIT, DEFAULT_IPV6_HOSTNAME
 from .constants import DEFAULT_SERVER_RECVBUF_SIZE, DEFAULT_CLIENT_RECVBUF_SIZE, DEFAULT_STATIC_SERVER_DIR
-from .constants import DEFAULT_ENABLE_DASHBOARD, DEFAULT_DATA_DIRECTORY_PATH, COMMA, DOT
-from .constants import PLUGIN_HTTP_PROXY, PLUGIN_WEB_SERVER, PLUGIN_PAC_FILE
-from .constants import PLUGIN_DEVTOOLS_PROTOCOL, PLUGIN_DASHBOARD, PLUGIN_INSPECT_TRAFFIC
+from .constants import DEFAULT_DATA_DIRECTORY_PATH, COMMA, DOT
+from .constants import PLUGIN_HTTP_PROXY, PLUGIN_WEB_SERVER
 from .version import __version__
 
 __homepage__ = 'https://github.com/abhinavsingh/proxy.py'
@@ -160,24 +159,12 @@ class Flags:
         Flags.set_open_file_limit(args.open_file_limit)
 
         default_plugins: List[Tuple[str, bool]] = []
-        if args.enable_dashboard:
-            default_plugins.append((PLUGIN_WEB_SERVER, True))
-            args.enable_static_server = True
-            default_plugins.append((PLUGIN_DASHBOARD, True))
-            default_plugins.append((PLUGIN_INSPECT_TRAFFIC, True))
-            args.enable_events = True
-            args.enable_devtools = True
-        if args.enable_devtools:
-            default_plugins.append((PLUGIN_DEVTOOLS_PROTOCOL, True))
-            default_plugins.append((PLUGIN_WEB_SERVER, True))
         if not args.disable_http_proxy:
             default_plugins.append((PLUGIN_HTTP_PROXY, True))
         if args.enable_web_server or \
                 args.pac_file is not None or \
                 args.enable_static_server:
             default_plugins.append((PLUGIN_WEB_SERVER, True))
-        if args.pac_file is not None:
-            default_plugins.append((PLUGIN_PAC_FILE, True))
 
         plugins = Flags.load_plugins(
             bytes_(
@@ -364,18 +351,6 @@ class Flags:
             default=DEFAULT_DISABLE_HTTP_PROXY,
             help='Default: False.  Whether to disable proxy.HttpProxyPlugin.')
         parser.add_argument(
-            '--enable-dashboard',
-            action='store_true',
-            default=DEFAULT_ENABLE_DASHBOARD,
-            help='Default: False.  Enables proxy.py dashboard.'
-        )
-        parser.add_argument(
-            '--enable-devtools',
-            action='store_true',
-            default=DEFAULT_ENABLE_DEVTOOLS,
-            help='Default: False.  Enables integration with Chrome Devtool Frontend. Also see --devtools-ws-path.'
-        )
-        parser.add_argument(
             '--enable-events',
             action='store_true',
             default=DEFAULT_ENABLE_EVENTS,
@@ -512,7 +487,6 @@ class Flags:
             b'HttpProtocolHandlerPlugin': [],
             b'HttpProxyBasePlugin': [],
             b'HttpWebServerBasePlugin': [],
-            b'ProxyDashboardWebsocketPlugin': []
         }
         for plugin_ in plugins.split(COMMA):
             plugin = text_(plugin_.strip())
