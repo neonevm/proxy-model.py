@@ -1,5 +1,4 @@
 import os
-from decimal import Decimal
 
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://localhost:8899")
 

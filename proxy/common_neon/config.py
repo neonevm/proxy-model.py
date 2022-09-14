@@ -37,6 +37,7 @@ class Config:
         self._start_slot = os.environ.get('START_SLOT', '0')
         self._indexer_parallel_request_cnt = self._env_int("INDEXER_PARALLEL_REQUEST_COUNT", 1, 10)
         self._indexer_poll_cnt = self._env_int("INDEXER_POLL_COUNT", 1, 1000)
+        self._max_account_cnt = self._env_int("MAX_ACCOUNT_COUNT", 20, 60)
 
         pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
         self._pyth_mapping_account = PublicKey(pyth_mapping_account) if pyth_mapping_account is not None else None
@@ -182,6 +183,10 @@ class Config:
     def indexer_poll_cnt(self) -> int:
         return self._indexer_poll_cnt
 
+    @property
+    def max_account_cnt(self) -> int:
+        return self._max_account_cnt
+
     def __str__(self):
         return '\n        '.join([
             '',
@@ -214,6 +219,7 @@ class Config:
             f"CONFIRMED_COMMITMENT: {self.confirmed_commitment}",
             f"START_SLOT: {self.start_slot}",
             f"INDEXER_PARALLEL_REQUEST_COUNT: {self.indexer_parallel_request_cnt}",
-            f"INDEXER_POLL_COUNT: {self.indexer_poll_cnt}"
+            f"INDEXER_POLL_COUNT: {self.indexer_poll_cnt}",
+            f"MAX_ACCOUNT_COUNT: {self.max_account_cnt}"
             ""
         ])

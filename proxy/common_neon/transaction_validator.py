@@ -84,6 +84,7 @@ class NeonTxValidator:
     def prevalidate_emulator(self, emulator_json: dict):
         self._prevalidate_gas_usage(emulator_json)
         self._prevalidate_account_sizes(emulator_json)
+        self._prevalidate_account_cnt(emulator_json)
 
     def extract_ethereum_error(self, e: Exception):
         receipt_parser = SolReceiptParser(e)
@@ -197,6 +198,13 @@ class NeonTxValidator:
                     f"contract {account_desc['address']} " +
                     f"requests a size increase to more than 9.5Mb"
                 )
+
+    def _prevalidate_account_cnt(self, emulator_json: dict):
+        account_cnt = len(emulator_json.get("accounts", [])) + \
+                      len(emulator_json.get("token_accounts", [])) + \
+                      len(emulator_json.get("solana_accounts", []))
+        if account_cnt > self._config.max_account_cnt:
+            raise EthereumError(f"transaction requires too lot of accounts {account_cnt}")
 
     def raise_nonce_error(self, state_tx_cnt: int, tx_nonce: int):
         if state_tx_cnt > tx_nonce:
