@@ -1,20 +1,20 @@
 import json
 import rlp
+import math
 from logged_groups import logged_group
 
 from proxy.common_neon.emulator_interactor import call_emulated
 from ..common_neon.elf_params import ElfParams
 
-from .environment_data import CONTRACT_EXTRA_SPACE, EXTRA_GAS
+from .config import Config
 from .eth_proto import Trx as EthTrx
 from .solana_interactor import SolanaInteractor
 from .layouts import ACCOUNT_INFO_LAYOUT
 
 
-
 @logged_group("neon.Proxy")
 class GasEstimate:
-    def __init__(self, request: dict, solana: SolanaInteractor):
+    def __init__(self, request: dict, solana: SolanaInteractor, config: Config):
         self._sender = request.get('from') or '0x0000000000000000000000000000000000000000'
         if self._sender:
             self._sender = self._sender[2:]
@@ -30,6 +30,7 @@ class GasEstimate:
         self._value = request.get('value') or '0x00'
 
         self._solana = solana
+        self._config = config
 
         self.emulator_json = {}
 
@@ -43,7 +44,7 @@ class GasEstimate:
         # Some accounts may not exist at the emulation time
         # Calculate gas for them separately
         accounts_size = [
-            a["code_size"] + CONTRACT_EXTRA_SPACE
+            a["code_size"] + self._config.contract_extra_space
             for a in self.emulator_json.get("accounts", [])
             if (not a["code_size_current"]) and a["code_size"]
         ]
@@ -91,7 +92,10 @@ class GasEstimate:
         trx_size_cost = self._trx_size_cost()
         overhead = self._iterative_overhead_cost()
 
-        gas = execution_cost + resize_cost + trx_size_cost + overhead + EXTRA_GAS
+        gas = execution_cost + resize_cost + trx_size_cost + overhead
+        extra_gas_pct = self._config.extra_gas_pct
+        if extra_gas_pct > 0:
+            gas = math.ceil(gas * (1 + extra_gas_pct))
         if gas < 21000:
             gas = 21000
 
@@ -99,7 +103,7 @@ class GasEstimate:
                    f'resize_cost: {resize_cost}, ' +
                    f'trx_size_cost: {trx_size_cost}, ' +
                    f'iterative_overhead: {overhead}, ' +
-                   f'extra_gas: {EXTRA_GAS}, ' +
+                   f'extra_gas_pct: {extra_gas_pct}, ' +
                    f'estimated gas: {gas}')
 
         return gas

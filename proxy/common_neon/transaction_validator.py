@@ -1,7 +1,7 @@
 from __future__ import annotations
 from logged_groups import logged_group
 
-from .eth_proto import Trx as EthTx
+from .eth_proto import Trx as NeonTx
 from .address import EthereumAddress
 from .errors import EthereumError
 from .account_whitelist import AccountWhitelist
@@ -11,7 +11,7 @@ from .estimate import GasEstimate
 from .emulator_interactor import call_trx_emulated
 
 from .elf_params import ElfParams
-from .environment_data import ACCOUNT_PERMISSION_UPDATE_INT, ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID
+from .config import Config
 
 from .data import NeonTxExecCfg, NeonEmulatedResult
 
@@ -21,8 +21,9 @@ class NeonTxValidator:
     MAX_U64 = pow(2, 64)
     MAX_U256 = pow(2, 256)
 
-    def __init__(self, solana: SolanaInteractor, tx: EthTx, min_gas_price: int):
+    def __init__(self, solana: SolanaInteractor, config: Config, tx: NeonTx, min_gas_price: int):
         self._solana = solana
+        self._config = config
         self._tx = tx
 
         self._sender = '0x' + tx.sender()
@@ -43,7 +44,7 @@ class NeonTxValidator:
 
         self._tx_gas_limit = self._tx.gasLimit
 
-        if self._tx.hasChainId() or (not ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID):
+        if self._tx.hasChainId() or (not self._config.allow_underpriced_tx_wo_chainid):
             return
 
         if len(self._tx.callData) == 0:
@@ -91,7 +92,7 @@ class NeonTxValidator:
             self.raise_nonce_error(nonce_error[0], nonce_error[1])
 
     def _prevalidate_whitelist(self):
-        w = AccountWhitelist(self._solana, ACCOUNT_PERMISSION_UPDATE_INT)
+        w = AccountWhitelist(self._solana, self._config)
         if not w.has_client_permission(self._sender[2:]):
             self.warning(f'Sender account {self._sender} is not allowed to execute transactions')
             raise EthereumError(message=f'Sender account {self._sender} is not allowed to execute transactions')
@@ -109,8 +110,9 @@ class NeonTxValidator:
         if self._tx.gasPrice >= self._min_gas_price:
             return
 
-        if ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID and (not self._tx.hasChainId()) and (self._tx.gasPrice >= 10**10):
-            return
+        if self._config.allow_underpriced_tx_wo_chainid:
+            if (not self._tx.hasChainId()) and (self._tx.gasPrice >= 10**10):
+                return
 
         raise EthereumError(message=f"transaction underpriced: have {self._tx.gasPrice} want {self._min_gas_price}")
 
@@ -165,7 +167,7 @@ class NeonTxValidator:
             'value': hex(self._tx.value)
         }
 
-        calculator = GasEstimate(request, self._solana)
+        calculator = GasEstimate(request, self._solana, self._config)
         calculator.emulator_json = emulator_json
         self._estimated_gas = calculator.estimate()
 
@@ -178,7 +180,7 @@ class NeonTxValidator:
     def _prevalidate_underpriced_tx_without_chainid(self):
         if not self.is_underpriced_tx_without_chainid():
             return
-        if ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID:
+        if self._config.allow_underpriced_tx_wo_chainid:
             return
 
         raise EthereumError(f"proxy configuration doesn't allow underpriced transaction without chain-id")
@@ -191,8 +193,10 @@ class NeonTxValidator:
             if (not account_desc['code_size']) or (not account_desc['address']):
                 continue
             if account_desc['code_size'] > ((9 * 1024 + 512) * 1024):
-                raise EthereumError(f"contract {account_desc['address']} " +
-                                    f"requests a size increase to more than 9.5Mb")
+                raise EthereumError(
+                    f"contract {account_desc['address']} " +
+                    f"requests a size increase to more than 9.5Mb"
+                )
 
     def raise_nonce_error(self, state_tx_cnt: int, tx_nonce: int):
         if state_tx_cnt > tx_nonce:

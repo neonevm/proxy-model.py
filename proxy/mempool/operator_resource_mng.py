@@ -96,7 +96,7 @@ class OperatorResourceInitializer:
     def _validate_operator_balance(self, resource: OperatorResourceInfo) -> None:
         # Validate operator's account has enough SOLs
         sol_balance = self._solana.get_sol_balance(resource.public_key)
-        min_operator_balance_to_err = self._config.get_min_operator_balance_to_err()
+        min_operator_balance_to_err = self._config.min_operator_balance_to_err
         if sol_balance <= min_operator_balance_to_err:
             self.error(
                 f'Operator account {resource} has NOT enough SOLs; balance = {sol_balance}; ' +
@@ -104,7 +104,7 @@ class OperatorResourceInitializer:
             )
             raise BadResourceError(f'Not enough SOLs on the resource {resource}')
 
-        min_operator_balance_to_warn = self._config.get_min_operator_balance_to_warn()
+        min_operator_balance_to_warn = self._config.min_operator_balance_to_warn
         if sol_balance <= min_operator_balance_to_warn:
             self.warning(
                 f'Operator account {resource} SOLs are running out; balance = {sol_balance}; ' +
@@ -135,7 +135,7 @@ class OperatorResourceInitializer:
         holder_address = str(resource.holder)
         holder_seed = resource.holder_seed
         holder_info = self._solana.get_account_info(resource.holder)
-        size = self._config.get_holder_size()
+        size = self._config.holder_size
         balance = self._solana.get_multiple_rent_exempt_balances_for_size([size])[0]
 
         if holder_info is None:
@@ -145,7 +145,7 @@ class OperatorResourceInitializer:
             self.debug(f"Resize account {holder_address} for resource {resource}")
             self._execute_stage(NeonDeleteHolderAccountStage(builder, resource.holder_seed), resource)
             self._execute_stage(NeonCreateHolderAccountStage(builder, holder_seed, size, balance), resource)
-        elif holder_info.owner != self._config.get_evm_loader_id():
+        elif holder_info.owner != self._config.evm_loader_id:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
         elif holder_info.tag == ACTIVE_STORAGE_TAG:
             self._unlock_storage_account(resource)
@@ -202,9 +202,10 @@ class OperatorResourceMng:
 
     def _init_resource_list(self):
         signer_list: List[SolanaAccount] = self._get_solana_accounts()
-        for resource_id in range(self._config.get_perm_account_limit()):
+        stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
+        for resource_id in range(self._config.perm_account_id, stop_perm_account_id):
             for signer in signer_list:
-                info = OperatorResourceIdent(signer=signer, resource_id=resource_id)
+                info = OperatorResourceIdent(signer=signer, resource_id=self._config.perm_account_id)
                 self._disabled_resource_list.append(info)
         self._resource_cnt = len(self._disabled_resource_list)
         assert self.resource_cnt != 0, 'Operator has NO resources!'
@@ -260,7 +261,7 @@ class OperatorResourceMng:
         if resource is None:
             return
 
-        recheck_cnt = self._config.get_recheck_resource_after_uses_cnt()
+        recheck_cnt = self._config.recheck_resource_after_uses_cnt
         if resource.used_cnt > recheck_cnt:
             self._disabled_resource_list.append(resource)
         else:
@@ -284,7 +285,7 @@ class OperatorResourceMng:
     def get_disabled_resource_list(self) -> List[str]:
         current_time = self._get_current_time()
 
-        recheck_sec = self._config.get_recheck_used_resource_sec()
+        recheck_sec = self._config.recheck_used_resource_sec
         check_time = current_time - recheck_sec
         old_resource_list: List[str, OperatorResourceIdent] = []
         for neon_sig, resource in self._used_resource_dict.items():

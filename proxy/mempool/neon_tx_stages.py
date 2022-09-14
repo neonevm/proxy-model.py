@@ -9,10 +9,10 @@ from logged_groups import logged_group
 from solana.publickey import PublicKey
 from solana.transaction import TransactionInstruction
 
+from ..common_neon.config import Config
 from ..common_neon.address import accountWithSeed
 from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
-from ..common_neon.environment_data import CONTRACT_EXTRA_SPACE
 from ..common_neon.neon_instruction import NeonIxBuilder
 
 
@@ -103,7 +103,7 @@ class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage):
         self._seed_base = ACCOUNT_SEED_VERSION + bytes.fromhex(self._address[2:])
         self._init_sol_account()
         self._account_desc['contract'] = self.sol_account
-        self._size = account_desc['code_size'] + CONTRACT_EXTRA_SPACE
+        self._size = account_desc['code_size'] + Config().contract_extra_space  # will be removed ..
 
     def _create_account(self) -> TransactionInstruction:
         assert self.has_balance()
@@ -129,7 +129,7 @@ class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage):
         # Replace the old code account with the new code account
         self._old_sol_account = account_desc['contract']
         account_desc['contract'] = self.sol_account
-        self._size = account_desc['code_size'] + CONTRACT_EXTRA_SPACE
+        self._size = account_desc['code_size'] + Config().contract_extra_space  # will be removed ..
 
     def _resize_account(self) -> TransactionInstruction:
         assert self.has_balance()

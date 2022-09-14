@@ -1,4 +1,3 @@
-import os
 import unittest
 
 from solana.publickey import PublicKey
@@ -6,17 +5,15 @@ import time
 from flask import request, Response
 from unittest.mock import Mock, MagicMock, patch, ANY
 from decimal import Decimal
+from typing import Optional
 import itertools
 
 from ..testing.mock_server import MockServer
 from ..airdropper import Airdropper, AIRDROP_AMOUNT_SOL
-from ..common_neon.environment_data import NEON_PRICE_USD
+from ..common_neon.config import Config
 from ..indexer.sql_dict import SQLDict
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..testing.transactions import pre_token_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address
-
-
-SOLANA_URL = os.environ.get("SOLANA_URL", "http://solana:8899")
 
 
 class MockFaucet(MockServer):
@@ -33,21 +30,22 @@ class MockFaucet(MockServer):
 
 def create_signature_for_address(signature: str):
     return {
-        'blockTime': 1638177745, # not make sense
+        'blockTime': 1638177745,  # not make sense
         'confirmationStatus': 'finalized',
         'err': None,
         'memo': None,
         'signature': signature,
-        'slot': 9748200 # not make sense
+        'slot': 9748200  # not make sense
     }
 
 
 def create_get_signatures_for_address(signatures: list):
     return {
         'jsonrpc': '2.0',
-        'result': [ create_signature_for_address(sign) for sign in signatures ],
+        'result': [create_signature_for_address(sign) for sign in signatures],
         'id': 1
     }
+
 
 def create_price_info(valid_slot: int, price: Decimal, conf: Decimal):
     return {
@@ -57,14 +55,19 @@ def create_price_info(valid_slot: int, price: Decimal, conf: Decimal):
     }
 
 
+class FakeConfig(Config):
+    def __init__(self, start_slot: str):
+        super().__init__()
+        self._start_slot = start_slot
+    def pyth_mapping_account(self) -> Optional[PublicKey]:
+        return PublicKey(b'TestMappingAccount')
+
+
 class Test_Airdropper(unittest.TestCase):
-    def create_airdropper(self, start_slot):
-        os.environ['START_SLOT'] = str(start_slot)
-        return Airdropper(solana_url          =SOLANA_URL,
-                          pyth_mapping_account=self.pyth_mapping_account,
-                          faucet_url          =f'http://{self.address}:{self.faucet_port}',
-                          wrapper_whitelist   =self.wrapper_whitelist,
-                          neon_decimals       =self.neon_decimals)
+    def create_airdropper(self, start_slot: str):
+        return Airdropper(config            =FakeConfig(start_slot),
+                          faucet_url        =f'http://{self.address}:{self.faucet_port}',
+                          wrapper_whitelist =self.wrapper_whitelist)
 
     @classmethod
     @patch.object(SQLDict, 'get')
@@ -74,10 +77,8 @@ class Test_Airdropper(unittest.TestCase):
         cls.address = 'localhost'
         cls.faucet_port = 3333
         cls.evm_loader_id = evm_loader_addr
-        cls.pyth_mapping_account = PublicKey(b'TestMappingAccount')
         cls.wrapper_whitelist = wrapper_whitelist
-        cls.neon_decimals = 9
-        cls.airdropper = cls.create_airdropper(cls, 0)
+        cls.airdropper = cls.create_airdropper(cls, '0')
         mock_get_slot.assert_called_once_with('finalized')
         mock_dict_get.assert_called()
 
@@ -120,7 +121,7 @@ class Test_Airdropper(unittest.TestCase):
         """
 
         self.mock_pyth_client.get_price.side_effect = Exception('TestException')
-        self.mock_airdrop_ready.is_airdrop_ready.side_effect = [False] # new eth address
+        self.mock_airdrop_ready.is_airdrop_ready.side_effect = [False]  # new eth address
         self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=200, mimetype='application/json')]
 
         self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
@@ -163,8 +164,10 @@ class Test_Airdropper(unittest.TestCase):
         """
         Should not add address to processed list due to faucet error
         """
+        config = FakeConfig('0')
         sol_price = Decimal('341.5')
-        airdrop_amount = int(pow(Decimal(10), self.neon_decimals) * (AIRDROP_AMOUNT_SOL * sol_price) / NEON_PRICE_USD)
+        airdrop_amount = int(pow(Decimal(10), config.neon_decimals) * (AIRDROP_AMOUNT_SOL * sol_price) /
+                             config.neon_price_usd)
         self.airdropper.current_slot = 2
         self.mock_pyth_client.get_price.side_effect = [{
             'valid_slot': self.airdropper.current_slot,

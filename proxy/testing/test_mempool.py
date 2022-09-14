@@ -95,25 +95,24 @@ class MockResourceManager(OperatorResourceMng):
 
 
 class FakeConfig(Config):
-    @staticmethod
-    def get_evm_loader_id() -> PublicKey:
+    @property
+    def evm_loader_id(self) -> PublicKey:
         return PublicKey('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
 
-    @staticmethod
-    def get_mempool_capacity() -> int:
+    @property
+    def mempool_capacity(self) -> int:
         return 4000
 
-    @staticmethod
-    def get_recheck_used_resource_sec() -> int:
+    @property
+    def recheck_used_resource_sec(self) -> int:
         return 1000
 
-    @staticmethod
-    def get_recheck_resource_after_uses_cnt() -> int:
+    @property
+    def recheck_resource_after_uses_cnt(self) -> int:
         return 1000
 
 
 class TestMemPool(unittest.IsolatedAsyncioTestCase):
-
     @classmethod
     def setUpClass(cls) -> None:
         cls.turn_logger_off()

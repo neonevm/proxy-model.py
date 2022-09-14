@@ -21,7 +21,6 @@ proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
 proxy_program = os.environ.get("TEST_PROGRAM")
 
-MINIMAL_GAS_PRICE = 1
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/196'
 SEED_INVOKED = 'https://github.com/neonlabsorg/proxy-model.py/issues/755'
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
@@ -67,12 +66,12 @@ contract ReturnsEvents {
 
 
 class FakeConfig(Config):
-    @staticmethod
-    def get_min_operator_balance_to_warn() -> int:
+    @property
+    def min_operator_balance_to_warn(self) -> int:
         return 1
 
-    @staticmethod
-    def get_min_operator_balance_to_err() -> int:
+    @property
+    def min_operator_balance_to_err(self) -> int:
         return 1
 
 

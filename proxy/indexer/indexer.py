@@ -15,6 +15,7 @@ from ..common_neon.solana_receipt_parser import SolReceiptParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo, SolNeonIxReceiptInfo
 from ..common_neon.constants import ACTIVE_STORAGE_TAG
 from ..common_neon.environment_utils import get_solana_accounts
+from ..common_neon.config import Config
 from ..common_neon.environment_data import CANCEL_TIMEOUT
 
 from ..indexer.i_indexer_stat_exporter import IIndexerStatExporter
@@ -32,18 +33,20 @@ from ..indexer.neon_ix_decoder_deprecate import get_neon_ix_decoder_deprecated_l
 
 @logged_group("neon.Indexer")
 class Indexer(IndexerBase):
-    def __init__(self, solana_url, indexer_stat_exporter: IIndexerStatExporter):
-        solana = SolanaInteractor(solana_url)
+    def __init__(self, config: Config, indexer_stat_exporter: IIndexerStatExporter):
+        solana = SolanaInteractor(config.solana_url)
         self._db = IndexerDB()
         last_known_slot = self._db.get_min_receipt_block_slot()
-        super().__init__(solana, last_known_slot)
+        super().__init__(solana, config, last_known_slot)
         self._cancel_tx_executor = CancelTxExecutor(solana, get_solana_accounts()[0])
         self._counted_logger = MetricsToLogger()
         self._stat_exporter = indexer_stat_exporter
         self._last_stat_time = 0.0
         sol_tx_meta_dict = SolTxMetaDict()
-        self._finalized_sol_tx_collector = FinalizedSolTxMetaCollector(sol_tx_meta_dict, self._solana, self._last_slot)
-        self._confirmed_sol_tx_collector = ConfirmedSolTxMetaCollector(sol_tx_meta_dict, self._solana)
+        self._finalized_sol_tx_collector = FinalizedSolTxMetaCollector(
+            config, sol_tx_meta_dict, self._solana, self._last_slot
+        )
+        self._confirmed_sol_tx_collector = ConfirmedSolTxMetaCollector(config, sol_tx_meta_dict, self._solana)
         self._confirmed_block_slot: Optional[int] = None
         self._neon_block_dict = NeonIndexedBlockDict()
 

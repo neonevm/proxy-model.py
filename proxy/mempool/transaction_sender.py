@@ -23,9 +23,9 @@ from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxReceiptInfo
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.utils import NeonTxResultInfo
 from ..common_neon.data import NeonEmulatedResult
-from ..common_neon.environment_data import RETRY_ON_FAIL, EVM_STEP_COUNT
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.evm_log_decoder import decode_neon_tx_result
+from ..common_neon.config import Config
 from ..common_neon.address import EthereumAddress
 
 from ..common_neon.solana_alt import AddressLookupTableInfo
@@ -43,7 +43,7 @@ class BaseNeonTxStrategy(abc.ABC):
     def __init__(self, ctx: NeonTxSendCtx):
         self._validation_error_msg: Optional[str] = None
         self._ctx = ctx
-        self._iter_evm_step_cnt = EVM_STEP_COUNT
+        self._iter_evm_step_cnt = ctx.config.evm_step_cnt_limit
 
     @property
     def _account_tx_list_builder(self) -> AccountTxListBuilder:
@@ -68,6 +68,10 @@ class BaseNeonTxStrategy(abc.ABC):
     @property
     def _neon_tx(self) -> NeonTx:
         return self._ctx.neon_tx
+
+    @property
+    def config(self) -> Config:
+        return self._ctx.config
 
     @property
     def neon_sig(self) -> str:
@@ -310,7 +314,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             self._raise_error()
 
         # There is no more retries to send transactions
-        if self._retry_idx >= RETRY_ON_FAIL:
+        if self._retry_idx >= self._strategy.config.retry_on_fail:
             self._set_postponed_exception(RuntimeError('No more retries to complete transaction!'))
             if (not self._is_canceled) and len(self.success_sig_list):
                 return self._cancel()
@@ -600,7 +604,6 @@ class NeonTxSendStrategyExecutor:
     ]
 
     def __init__(self, ctx: NeonTxSendCtx):
-        super().__init__()
         self._ctx = ctx
 
     def execute(self) -> NeonTxResultInfo:
@@ -632,7 +635,7 @@ class NeonTxSendStrategyExecutor:
                 self.debug(f'Use strategy {Strategy.NAME}')
 
                 strategy.prep_before_emulate()
-                for i in range(RETRY_ON_FAIL):
+                for i in range(self._ctx.config.retry_on_fail):
                     self._emulate_neon_tx()
 
                     if not strategy.validate():

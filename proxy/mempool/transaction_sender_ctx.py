@@ -6,6 +6,7 @@ from solana.transaction import AccountMeta as SolanaAccountMeta, PublicKey
 
 from ..common_neon.solana_tx_list_sender import SolTxListInfo
 from ..common_neon.data import NeonTxExecCfg, NeonAccountDict, NeonEmulatedResult
+from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
@@ -100,8 +101,9 @@ class AccountTxListBuilder:
 
 
 class NeonTxSendCtx:
-    def __init__(self, solana: SolanaInteractor, resource: OperatorResourceInfo,
+    def __init__(self, config: Config, solana: SolanaInteractor, resource: OperatorResourceInfo,
                  neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg):
+        self._config = config
         self._neon_tx_exec_cfg = neon_tx_exec_cfg
         self._neon_tx = neon_tx
         self._sender = '0x' + neon_tx.sender()
@@ -150,6 +152,10 @@ class NeonTxSendCtx:
 
     def set_state_tx_cnt(self, value: int) -> None:
         self._neon_tx_exec_cfg.set_state_tx_cnt(value)
+
+    @property
+    def config(self) -> Config:
+        return self._config
 
     @property
     def neon_sig(self) -> str:

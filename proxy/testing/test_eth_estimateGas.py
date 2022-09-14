@@ -7,7 +7,6 @@ from solcx import compile_source
 
 from proxy.testing.testing_helpers import request_airdrop
 
-EXTRA_GAS = int(os.environ.get("EXTRA_GAS", "0"))
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
 eth_account = proxy.eth.account.create('https://github.com/neonlabsorg/proxy-model.py/issues/147')

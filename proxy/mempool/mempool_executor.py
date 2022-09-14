@@ -46,7 +46,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._event_loop)
         self._pickable_data_srv = PipePickableDataSrv(user=self, srv_sock=self._srv_sock)
-        self._solana = SolanaInteractor(self._config.get_solana_url())
+        self._solana = SolanaInteractor(self._config.solana_url)
 
         self._init_gas_price_calculator()
 
@@ -55,11 +55,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self.error(f"{text}. Error: {err}, Traceback: {err_tb}")
 
     def _init_gas_price_calculator(self):
-        pyth_solana_url = self._config.get_pyth_solana_url()
-        solana_url = pyth_solana_url if pyth_solana_url is not None else self._config.get_solana_url()
-        pyth_solana = SolanaInteractor(solana_url)
-        pyth_mapping_account = self._config.get_pyth_mapping_account()
-        self._gas_price_calculator = GasPriceCalculator(pyth_solana, pyth_mapping_account)
+        self._gas_price_calculator = GasPriceCalculator(SolanaInteractor(self._config.pyth_solana_url), self._config)
         self._update_gas_price_calculator()
 
     def _update_gas_price_calculator(self):
@@ -73,8 +69,8 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         if not self._gas_price_calculator.is_valid():
             return None
         return MPGasPriceResult(
-            suggested_gas_price=self._gas_price_calculator.get_suggested_gas_price(),
-            min_gas_price=self._gas_price_calculator.get_min_gas_price()
+            suggested_gas_price=self._gas_price_calculator.suggested_gas_price,
+            min_gas_price=self._gas_price_calculator.min_gas_price
         )
 
     def read_elf_param_dict(self) -> Optional[Dict[str, str]]:
@@ -136,7 +132,9 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
         resource = OperatorResourceInfo.from_ident(mp_tx_req.resource_ident)
 
-        strategy_ctx = NeonTxSendCtx(self._solana, resource, mp_tx_req.neon_tx, mp_tx_req.neon_tx_exec_cfg)
+        neon_tx = mp_tx_req.neon_tx
+        neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
+        strategy_ctx = NeonTxSendCtx(self._config, self._solana, resource, neon_tx, neon_tx_exec_cfg)
         strategy_executor = NeonTxSendStrategyExecutor(strategy_ctx)
         strategy_executor.execute()
 

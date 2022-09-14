@@ -14,7 +14,6 @@ from .testing_helpers import request_airdrop
 from solcx import compile_source
 
 
-MINIMAL_GAS_PRICE = 1000000003
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/365'
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))

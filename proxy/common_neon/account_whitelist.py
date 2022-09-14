@@ -7,15 +7,16 @@ from typing import Union
 from proxy.common_neon.address import EthereumAddress
 from logged_groups import logged_group
 from ..common_neon.elf_params import ElfParams
+from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolanaInteractor
 
 
 @logged_group("neon.AccountWhitelist")
 class AccountWhitelist:
-    def __init__(self, solana: SolanaInteractor, permission_update_int: int):
+    def __init__(self, solana: SolanaInteractor, config: Config):
         self.solana = solana
         self.account_cache = {}
-        self.permission_update_int = permission_update_int
+        self.permission_update_int = config.account_permission_update_int
         self.allowance_token = None
         self.denial_token = None
 

@@ -1,6 +1,7 @@
 from logged_groups import logged_group
 
-from ..common_neon.environment_data import EVM_LOADER_ID, SOLANA_URL, GATHER_STATISTICS
+from ..common_neon.config import Config
+from ..common_neon.environment_data import GATHER_STATISTICS
 from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
 from ..common_neon.data import NeonTxStatData
 from .indexer import Indexer
@@ -10,9 +11,9 @@ from .i_indexer_stat_exporter import IIndexerStatExporter
 @logged_group("neon.Indexer")
 class IndexerApp(IIndexerStatExporter):
 
-    def __init__(self, solana_url: str):
+    def __init__(self, config: Config):
         self.neon_statistics = IndexerStatistics(GATHER_STATISTICS)
-        indexer = Indexer(solana_url, self)
+        indexer = Indexer(config, self)
         indexer.run()
 
     def on_neon_tx_result(self, tx_stat: NeonTxStatData):
@@ -26,14 +27,11 @@ class IndexerApp(IIndexerStatExporter):
 
 
 @logged_group("neon.Indexer")
-def run_indexer(solana_url, *, logger):
-    logger.info(f"""Running indexer with params:
-        solana_url: {solana_url},
-        evm_loader_id: {EVM_LOADER_ID}""")
-
-    IndexerApp(solana_url)
+def run_indexer(*, logger):
+    config = Config()
+    logger.info(f"Running indexer with params: {str(config)}")
+    IndexerApp(config)
 
 
 if __name__ == "__main__":
-    solana_url = SOLANA_URL
-    run_indexer(solana_url)
+    run_indexer()

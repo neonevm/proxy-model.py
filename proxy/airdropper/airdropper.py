@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
 
-from ..common_neon.environment_data import EVM_LOADER_ID, NEON_PRICE_USD
+from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import NeonTx
 from ..indexer.indexer_base import IndexerBase
@@ -63,22 +63,19 @@ class AirdropReadySet(BaseDB):
 @logged_group("neon.Airdropper")
 class Airdropper(IndexerBase):
     def __init__(self,
-                 solana_url,
-                 pyth_mapping_account: PublicKey,
+                 config: Config,
                  faucet_url = '',
                  wrapper_whitelist = 'ANY',
-                 neon_decimals = 9,
-                 pp_solana_url = None,
                  max_conf = 0.1): # maximum confidence interval deviation related to price
         self._constants = SQLDict(tablename="constants")
 
-        solana = SolanaInteractor(solana_url)
+        solana = SolanaInteractor(config.solana_url)
         last_known_slot = self._constants.get('latest_processed_slot', None)
-        super().__init__(solana, last_known_slot)
+        super().__init__(solana, config, last_known_slot)
         self.latest_processed_slot = self._last_slot
         self.current_slot = 0
         sol_tx_meta_dict = SolTxMetaDict()
-        self._sol_tx_collector = FinalizedSolTxMetaCollector(sol_tx_meta_dict, self._solana, self._last_slot)
+        self._sol_tx_collector = FinalizedSolTxMetaCollector(config, sol_tx_meta_dict, self._solana, self._last_slot)
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -89,16 +86,10 @@ class Airdropper(IndexerBase):
         self.faucet_url = faucet_url
         self.recent_price = None
 
-        # Configure price provider
-        if pp_solana_url is None:
-            pp_solana_url = solana_url
-
         # It is possible to use different networks to obtain SOL price
         # but there will be different slot numbers so price should be updated every time
-        self.always_reload_price = (pp_solana_url != solana_url)
-        self.pyth_mapping_account = pyth_mapping_account
-        self.pyth_client = PythNetworkClient(SolanaInteractor(pp_solana_url))
-        self.neon_decimals = neon_decimals
+        self.always_reload_price = config.solana_url != config.pyth_solana_url
+        self.pyth_client = PythNetworkClient(SolanaInteractor(config.pyth_solana_url))
         self.max_conf = Decimal(max_conf)
         self.session = requests.Session()
 
@@ -116,7 +107,7 @@ class Airdropper(IndexerBase):
         current_time = self.get_current_time()
         if self.last_update_pyth_mapping is None or self.last_update_pyth_mapping - current_time > self.max_update_pyth_mapping_int:
             try:
-                self.pyth_client.update_mapping(self.pyth_mapping_account)
+                self.pyth_client.update_mapping(self._config.pyth_mapping_account)
                 self.last_update_pyth_mapping = current_time
             except Exception as err:
                 err_tb = "".join(traceback.format_tb(err.__traceback__))
@@ -131,7 +122,6 @@ class Airdropper(IndexerBase):
         if self.wrapper_whitelist == 'ANY':
             return True
         return contract_addr in self.wrapper_whitelist
-
 
     # helper function checking if given 'create account' corresponds to 'approve' instruction
     def check_create_approve_instr(self, account_keys, create_acc, approve):
@@ -167,7 +157,7 @@ class Airdropper(IndexerBase):
             self.debug(f"Created account {created_account.hex()} and caller {caller.hex()} are different")
             return False
 
-        sol_caller, _ = PublicKey.find_program_address([b"\1", caller], PublicKey(EVM_LOADER_ID))
+        sol_caller, _ = PublicKey.find_program_address([b"\1", caller], self._config.evm_loader_id)
         if PublicKey(account_keys[approve['accounts'][1]]) != sol_caller:
             self.debug(f"account_keys[approve['accounts'][1]] != sol_caller")
             return False
@@ -222,7 +212,7 @@ class Airdropper(IndexerBase):
 
 
         def isRequiredInstruction(instr, req_program_id, req_tag_id):
-            return account_keys[instr['programIdIndex']] == req_program_id \
+            return account_keys[instr['programIdIndex']] == str(req_program_id) \
                 and base58.b58decode(instr['data'])[0] == req_tag_id
 
         account_keys = trx["transaction"]["message"]["accountKeys"]
@@ -240,7 +230,7 @@ class Airdropper(IndexerBase):
         #   1. Create token account (token.init_v2)
         #   2. Transfer tokens (token.transfer)
         # First: select all instructions that can form such chains
-        predicate = lambda instr: isRequiredInstruction(instr, EVM_LOADER_ID, EVM_LOADER_CREATE_ACC)
+        predicate = lambda instr: isRequiredInstruction(instr, self._config.evm_loader_id, EVM_LOADER_CREATE_ACC)
         create_acc_list = find_instructions(instructions, predicate)
         self.debug(f'create_acc_list: {create_acc_list}')
 
@@ -248,7 +238,7 @@ class Airdropper(IndexerBase):
         approve_list = find_instructions(instructions, predicate)
         self.debug(f'approve_list: {approve_list}')
 
-        predicate = lambda  instr: isRequiredInstruction(instr, EVM_LOADER_ID, EVM_LOADER_CALL_FROM_RAW_TRX)
+        predicate = lambda  instr: isRequiredInstruction(instr, self._config.evm_loader_id, EVM_LOADER_CALL_FROM_RAW_TRX)
         call_list = find_instructions(instructions, predicate)
         self.debug(f'call_list: {call_list}')
 
@@ -299,7 +289,8 @@ class Airdropper(IndexerBase):
             self.warning("Failed to get SOL/USD price")
             return None
 
-        self.info(f"NEON price: ${NEON_PRICE_USD}")
+        neon_price_usd = self._config.neon_price_usd
+        self.info(f"NEON price: ${neon_price_usd}")
         self.info(f"Price valid slot: {self.sol_price_usd['valid_slot']}")
         self.info(f"Price confidence interval: ${self.sol_price_usd['conf']}")
         self.info(f"SOL/USD = ${self.sol_price_usd['price']}")
@@ -308,9 +299,9 @@ class Airdropper(IndexerBase):
             return None
 
         self.airdrop_amount_usd = AIRDROP_AMOUNT_SOL * self.sol_price_usd['price']
-        self.airdrop_amount_neon = self.airdrop_amount_usd / NEON_PRICE_USD
+        self.airdrop_amount_neon = self.airdrop_amount_usd / neon_price_usd
         self.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
-        return int(self.airdrop_amount_neon * pow(Decimal(10), self.neon_decimals))
+        return int(self.airdrop_amount_neon * pow(Decimal(10), self._config.neon_decimals))
 
     def schedule_airdrop(self, create_acc):
         eth_address = "0x" + bytearray(base58.b58decode(create_acc['data'])[1:][:20]).hex()

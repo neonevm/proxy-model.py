@@ -20,9 +20,9 @@ from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import JsonBytesEncoder
 from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
+from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
-from ..common_neon.environment_data import SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED, ENABLE_PRIVATE_API
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..indexer.indexer_db import IndexerDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
@@ -38,7 +38,8 @@ class NeonRpcApiWorker:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
     def __init__(self):
-        self._solana = SolanaInteractor(SOLANA_URL)
+        self._config = Config()
+        self._solana = SolanaInteractor(self._config.solana_url)
         self._db = IndexerDB()
         self._stat_exporter: Optional[StatisticsExporter] = None
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
@@ -103,7 +104,7 @@ class NeonRpcApiWorker:
             param['to'] = self._normalize_account(param['to'])
 
         try:
-            calculator = GasEstimate(param, self._solana)
+            calculator = GasEstimate(param, self._solana, self._config)
             calculator.execute()
             return hex(calculator.estimate())
 
@@ -117,10 +118,9 @@ class NeonRpcApiWorker:
     def __repr__(self):
         return str(self.__dict__)
 
-    @staticmethod
-    def _should_return_starting_block(tag: Union[str, int]) -> bool:
+    def _should_return_starting_block(self, tag: Union[str, int]) -> bool:
         return tag == 'earliest' \
-            or ((tag == '0x0' or str(tag) == '0') and USE_EARLIEST_BLOCK_IF_0_PASSED)
+            or ((tag == '0x0' or str(tag) == '0') and self._config.use_earliest_block_if_0_passed)
 
     def _process_block_tag(self, tag: Union[str, int]) -> SolanaBlockInfo:
         if tag in ("latest", "pending"):
@@ -508,7 +508,7 @@ class NeonRpcApiWorker:
                 raise EthereumError(message='already known')
 
             min_gas_price = self._gas_price.min_gas_price
-            neon_tx_validator = NeonTxValidator(self._solana, neon_tx, min_gas_price)
+            neon_tx_validator = NeonTxValidator(self._solana, self._config, neon_tx, min_gas_price)
             neon_tx_exec_cfg = neon_tx_validator.precheck()
 
             req_id = LogMng.get_logging_context().get("req_id")
@@ -763,7 +763,7 @@ class NeonRpcApiWorker:
                 f'Neon EVM {self.web3_clientVersion()}'
             )
 
-        if ENABLE_PRIVATE_API:
+        if self._config.enable_private_api:
             return True
 
         private_method_list = (

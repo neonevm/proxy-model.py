@@ -2,10 +2,17 @@ import os
 import unittest
 from proxy.common_neon.solana_interactor import SolanaInteractor
 from proxy.common_neon.account_whitelist import AccountWhitelist
+from proxy.common_neon.config import Config
 from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from solana.rpc.commitment import Confirmed
 from unittest.mock import Mock, MagicMock, patch, call
+
+
+class FakeConfig(Config):
+    @property
+    def account_permission_update_int(self) -> int:
+        return 10
 
 
 class TestAccountWhitelist(unittest.TestCase):
@@ -16,8 +23,8 @@ class TestAccountWhitelist(unittest.TestCase):
         client = SolanaClient(os.environ['SOLANA_URL'])
         client.request_airdrop(cls.payer.public_key(), 1000_000_000_000, Confirmed)
 
-        cls.permission_update_int = 10
-        cls.testee = AccountWhitelist(cls.solana, cls.permission_update_int)
+        cls.config = FakeConfig()
+        cls.testee = AccountWhitelist(cls.solana, cls.config)
 
         mock_allowance_token = Mock()
         mock_allowance_token.get_token_account_address = MagicMock()
@@ -116,9 +123,9 @@ class TestAccountWhitelist(unittest.TestCase):
     @patch.object(SolanaInteractor, 'get_token_account_balance_list')
     def test_check_has_permission(self, mock_get_token_account_balance_list, mock_get_current_time):
         ether_address = 'Ethereum-Address'
-        time1 = 123                                     # will cause get_token_account_address call
-        time2 = time1 + self.permission_update_int + 2  # will cause get_token_account_address call
-        time3 = time2 + self.permission_update_int - 3  # will NOT cause get_token_account_address call
+        time1 = 123                                                    # will cause get_token_account_address call
+        time2 = time1 + self.config.account_permission_update_int + 2  # will cause get_token_account_address call
+        time3 = time2 + self.config.account_permission_update_int - 3  # will NOT cause get_token_account_address call
         mock_get_current_time.side_effect = [ time1, time2, time3 ]
         mock_get_token_account_balance_list.side_effect = [[100, 50], [100, 150]]
 
