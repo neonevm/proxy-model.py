@@ -1,7 +1,7 @@
 from __future__ import annotations
 from logged_groups import logged_group
 
-from .eth_proto import Trx as NeonTx
+from .eth_proto import NeonTx
 from .address import EthereumAddress
 from .errors import EthereumError
 from .account_whitelist import AccountWhitelist

@@ -19,7 +19,7 @@ from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUn
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxReceiptInfo
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.utils import NeonTxResultInfo
 from ..common_neon.data import NeonEmulatedResult
 from ..common_neon.elf_params import ElfParams

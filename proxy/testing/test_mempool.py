@@ -15,11 +15,11 @@ from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 
 from ..mempool.mempool import MemPool, IMPExecutor, MPTask, MPTxRequestList
-from ..mempool.mempool_api import MPRequest, MPRequestType, MPTxRequest
+from ..mempool.mempool_api import MPRequest, MPRequestType
 from ..mempool.mempool_api import MPTxExecRequest, MPTxExecResult, MPTxExecResultCode
 from ..mempool.mempool_api import MPGasPriceResult, MPSenderTxCntData
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.elf_params import ElfParams
 
 from .testing_helpers import create_account

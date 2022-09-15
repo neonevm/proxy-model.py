@@ -15,7 +15,7 @@ from ..common_neon.elf_params import ElfParams
 from .address import accountWithSeed, ether2program, EthereumAddress
 from .constants import INCINERATOR_PUBKEY, COLLATERALL_POOL_MAX, COMPUTE_BUDGET_ID
 from .layouts import CREATE_ACCOUNT_LAYOUT
-from .eth_proto import Trx as NeonTx
+from .eth_proto import NeonTx
 from .environment_data import EVM_LOADER_ID
 from ..common_neon.solana_alt import ADDRESS_LOOKUP_TABLE_ID
 

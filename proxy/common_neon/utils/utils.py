@@ -5,10 +5,9 @@ from logged_groups import logged_group
 from eth_utils import big_endian_to_int
 
 import json
-import string
 
 from ..environment_data import LOG_FULL_OBJECT_INFO
-from ..eth_proto import Trx as NeonTx
+from ..eth_proto import NeonTx
 
 
 class JsonBytesEncoder(json.JSONEncoder):

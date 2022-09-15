@@ -8,7 +8,7 @@ from ..common_neon.solana_tx_list_sender import SolTxListInfo
 from ..common_neon.data import NeonTxExecCfg, NeonAccountDict, NeonEmulatedResult
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from ..common_neon.errors import BadResourceError

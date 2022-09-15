@@ -5,7 +5,7 @@ from typing import List, Tuple, Optional, Any, Dict, cast, Iterator
 from logged_groups import logged_group, logging_context
 from neon_py.data import Result
 
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams

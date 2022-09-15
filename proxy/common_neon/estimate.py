@@ -7,7 +7,7 @@ from proxy.common_neon.emulator_interactor import call_emulated
 from ..common_neon.elf_params import ElfParams
 
 from .config import Config
-from .eth_proto import Trx as EthTrx
+from .eth_proto import NeonTx
 from .solana_interactor import SolanaInteractor
 from .layouts import ACCOUNT_INFO_LAYOUT
 
@@ -62,10 +62,10 @@ class GasEstimate:
 
         return cost
 
-    def _trx_size_cost(self) -> int:
+    def _tx_size_cost(self) -> int:
         u256_max = int.from_bytes(bytes([0xFF] * 32), "big")
 
-        trx = EthTrx(
+        tx = NeonTx(
             nonce=u256_max,
             gasPrice=u256_max,
             gasLimit=u256_max,
@@ -76,7 +76,7 @@ class GasEstimate:
             r=0x1820182018201820182018201820182018201820182018201820182018201820,
             s=0x1820182018201820182018201820182018201820182018201820182018201820
         )
-        msg = rlp.encode(trx)
+        msg = rlp.encode(tx)
         return ((len(msg) // ElfParams().holder_msg_size) + 1) * 5000
 
     @staticmethod
@@ -89,10 +89,10 @@ class GasEstimate:
     def estimate(self):
         execution_cost = self.emulator_json.get('used_gas', 0)
         resize_cost = self._resize_cost()
-        trx_size_cost = self._trx_size_cost()
+        tx_size_cost = self._tx_size_cost()
         overhead = self._iterative_overhead_cost()
 
-        gas = execution_cost + resize_cost + trx_size_cost + overhead
+        gas = execution_cost + resize_cost + tx_size_cost + overhead
         extra_gas_pct = self._config.extra_gas_pct
         if extra_gas_pct > 0:
             gas = math.ceil(gas * (1 + extra_gas_pct))
@@ -101,7 +101,7 @@ class GasEstimate:
 
         self.debug(f'execution_cost: {execution_cost}, ' +
                    f'resize_cost: {resize_cost}, ' +
-                   f'trx_size_cost: {trx_size_cost}, ' +
+                   f'trx_size_cost: {tx_size_cost}, ' +
                    f'iterative_overhead: {overhead}, ' +
                    f'extra_gas_pct: {extra_gas_pct}, ' +
                    f'estimated gas: {gas}')

@@ -10,7 +10,7 @@ import spl.token.instructions as spl_token
 from typing import Union, Dict
 import struct
 from logged_groups import logged_group
-from proxy.common_neon.eth_proto import Trx
+from proxy.common_neon.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.web3 import NeonWeb3
 from proxy.common_neon.address import EthereumAddress
@@ -132,8 +132,8 @@ class ERC20Wrapper:
         claim_tx = erc20.functions.claim(bytes(from_acc), amount).buildTransaction({'nonce': nonce, 'gasPrice': 0})
         claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, to_acc.key)
 
-        eth_trx = bytearray.fromhex(claim_tx.rawTransaction.hex()[2:])
-        emulating_result = self.proxy.neon.emulate(eth_trx)
+        neon_tx = bytearray.fromhex(claim_tx.rawTransaction.hex()[2:])
+        emulating_result = self.proxy.neon.emulate(neon_tx)
 
         eth_accounts = dict()
         for account in emulating_result['accounts']:
@@ -151,7 +151,7 @@ class ERC20Wrapper:
 
         neon = NeonIxBuilder(owner)
         neon.init_operator_neon(EthereumAddress(to_acc.address))
-        neon.init_neon_tx(Trx.fromString(eth_trx))
+        neon.init_neon_tx(NeonTx.fromString(neon_tx))
         neon.init_neon_account_list(eth_accounts)
         return neon
 

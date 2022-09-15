@@ -7,7 +7,7 @@ from neon_py.network import AddrPickableDataClient
 from .mempool_api import MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
 from .mempool_api import MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest
 
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.data import NeonTxExecCfg
 
 

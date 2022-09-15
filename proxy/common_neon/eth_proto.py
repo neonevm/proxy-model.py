@@ -21,11 +21,11 @@ a0 5d09ca05a62935d6c2a04bfa5bfa1cb46bfcb59e3a115e0c8cceca807efb778b - s
 '''
 
 
-class InvalidTrx(Exception):
+class InvalidNeonTx(Exception):
     pass
 
 
-class NoChainTrx(rlp.Serializable):
+class NeonNoChainTx(rlp.Serializable):
     fields = (
         ('nonce', rlp.codec.big_endian_int),
         ('gasPrice', rlp.codec.big_endian_int),
@@ -36,11 +36,11 @@ class NoChainTrx(rlp.Serializable):
     )
 
     @classmethod
-    def fromString(cls, s) -> NoChainTrx:
-        return rlp.decode(s, NoChainTrx)
+    def fromString(cls, s) -> NeonNoChainTx:
+        return rlp.decode(s, NeonNoChainTx)
 
 
-class Trx(rlp.Serializable):
+class NeonTx(rlp.Serializable):
     fields = (
         ('nonce', rlp.codec.big_endian_int),
         ('gasPrice', rlp.codec.big_endian_int),
@@ -61,18 +61,18 @@ class Trx(rlp.Serializable):
         self._msg = None
 
     @classmethod
-    def fromString(cls, s) -> Trx:
+    def fromString(cls, s) -> NeonTx:
         try:
-            return rlp.decode(s, Trx)
+            return rlp.decode(s, NeonTx)
         except rlp.exceptions.ObjectDeserializationError as err:
             if (not err.list_exception) or (len(err.list_exception.serial) != 6):
                 raise
 
-            tx = NoChainTrx.fromString(s)
+            tx = NeonNoChainTx.fromString(s)
             return cls._copy_from_nochain_tx(tx)
 
     @classmethod
-    def _copy_from_nochain_tx(cls, nochain_tx: NoChainTrx) -> Trx:
+    def _copy_from_nochain_tx(cls, nochain_tx: NeonNoChainTx) -> NeonTx:
         value_list = []
         for value in nochain_tx:
             value_list.append(value)
@@ -90,7 +90,7 @@ class Trx(rlp.Serializable):
             # chainid*2 + 36  xxxxx0 + 100100   xxxx0 + 100011 +1
             return ((self.v - 1) // 2) - 17
         else:
-            raise InvalidTrx(f"Invalid V value {self.v}")
+            raise InvalidNeonTx(f"Invalid V value {self.v}")
 
     def _unsigned_msg(self) -> bytes:
         chain_id = self.chainId()
@@ -98,7 +98,7 @@ class Trx(rlp.Serializable):
             return rlp.encode((self.nonce, self.gasPrice, self.gasLimit, self.toAddress, self.value, self.callData))
         else:
             return rlp.encode((self.nonce, self.gasPrice, self.gasLimit, self.toAddress, self.value, self.callData,
-                               chain_id, 0, 0), Trx)
+                               chain_id, 0, 0))
 
     def unsigned_msg(self) -> bytes:
         if self._msg is None:
@@ -120,10 +120,10 @@ class Trx(rlp.Serializable):
             vee = self.v - self.chainId() * 2 - 8
             assert vee in (27, 28)
         else:
-            raise InvalidTrx(f"Invalid V value {self.v}")
+            raise InvalidNeonTx(f"Invalid V value {self.v}")
 
         if self.r >= self.secpk1n or self.s >= self.secpk1n or self.r == 0 or self.s == 0:
-            raise InvalidTrx(f"Invalid signature values: r={self.r} s={self.s}!")
+            raise InvalidNeonTx(f"Invalid signature values: r={self.r} s={self.s}!")
 
         sighash = keccak_256(self._unsigned_msg()).digest()
         sig = self._signature()
