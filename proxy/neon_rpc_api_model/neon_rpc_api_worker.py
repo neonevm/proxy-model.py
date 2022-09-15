@@ -292,7 +292,7 @@ class NeonRpcApiWorker:
             # 8 byte nonce
             "nonce": '0x0000000000000000',
             "mixHash": '0x' + '0' * 63 + '1',
-            "size": '0x' + '0' * 63 + '1',
+            "size": '0x' + '1',
 
             "gasUsed": hex(gas_used),
             "hash": block.block_hash,
