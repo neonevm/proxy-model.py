@@ -13,7 +13,7 @@ from logged_groups import logged_group
 from ..common_neon.elf_params import ElfParams
 
 from .address import accountWithSeed, ether2program, EthereumAddress
-from .constants import INCINERATOR_PUBKEY, COLLATERALL_POOL_MAX
+from .constants import INCINERATOR_PUBKEY, COLLATERALL_POOL_MAX, COMPUTE_BUDGET_ID
 from .layouts import CREATE_ACCOUNT_LAYOUT
 from .eth_proto import Trx as NeonTx
 from .environment_data import EVM_LOADER_ID
@@ -68,6 +68,7 @@ class NeonIxBuilder:
         self._treasury_pool_index_buf: Optional[bytes] = None
         self._treasury_pool_address: Optional[PublicKey] = None
         self._holder: Optional[PublicKey] = None
+        self._elf_params = ElfParams()
 
     @property
     def operator_account(self) -> PublicKey:
@@ -339,4 +340,12 @@ class NeonIxBuilder:
                 AccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),  # signer
                 AccountMeta(pubkey=self._operator_account, is_signer=False, is_writable=True),  # refund
             ]
+        )
+
+    def make_compute_budget_heap_ix(self) -> TransactionInstruction:
+        heap_frame_size = self._elf_params.neon_heap_frame
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("01") + heap_frame_size.to_bytes(4, "little")
         )

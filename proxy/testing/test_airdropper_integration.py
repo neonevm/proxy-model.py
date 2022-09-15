@@ -173,10 +173,10 @@ class TestAirdropperIntegration(TestCase):
 
         TRANSFER_AMOUNT1 = 123456
         TRANSFER_AMOUNT2 = 654321
-        trx = TransactionWithComputeBudget()
-        trx.add(self.create_account_instruction(to_neon_acc1.address, from_owner.public_key()))
-        trx.add(self.create_account_instruction(to_neon_acc2.address, from_owner.public_key()))
-        trx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
+        tx = Transaction()
+        tx.add(self.create_account_instruction(to_neon_acc1.address, from_owner.public_key()))
+        tx.add(self.create_account_instruction(to_neon_acc2.address, from_owner.public_key()))
+        tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
             program_id=self.token.program_id,
             source=from_spl_token_acc,
             delegate=self.wrapper.get_neon_account_address(to_neon_acc1.address),
@@ -184,7 +184,7 @@ class TestAirdropperIntegration(TestCase):
             amount=TRANSFER_AMOUNT1,
             signers=[],
         )))
-        trx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
+        tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
             program_id=self.token.program_id,
             source=from_spl_token_acc,
             delegate=self.wrapper.get_neon_account_address(to_neon_acc2.address),
@@ -198,14 +198,14 @@ class TestAirdropperIntegration(TestCase):
             to_acc=to_neon_acc1,
             amount=TRANSFER_AMOUNT1,
         )
-        trx.add(claim_instr1.make_tx_exec_from_data_ix())
+        tx.add(claim_instr1.make_tx_exec_from_data_ix())
         claim_instr2 = self.wrapper.create_claim_instruction(
             owner=from_owner.public_key(),
             from_acc=from_spl_token_acc,
             to_acc=to_neon_acc2,
             amount=TRANSFER_AMOUNT2,
         )
-        trx.add(claim_instr2.make_tx_exec_from_data_ix())
+        tx.add(claim_instr2.make_tx_exec_from_data_ix())
 
         opts = TxOpts(skip_preflight=True, skip_confirmation=False)
         print(self.solana_client.send_transaction(trx, from_owner, opts=opts))

@@ -2,9 +2,9 @@ from web3 import Web3
 from web3.module import Module
 from web3.method import Method
 from web3.providers.base import BaseProvider
-from typing import Optional, Tuple
+from typing import Optional
 from web3.types import RPCEndpoint
-from proxy.common_neon.eth_proto import Trx
+
 
 class Neon(Module):
     neon_emulate = RPCEndpoint("neon_emulate")

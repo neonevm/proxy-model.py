@@ -1,7 +1,6 @@
 import datetime
 import multiprocessing
 import unittest
-from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.utils import NeonTx
 from ..common_neon.address import EthereumAddress
@@ -162,7 +161,10 @@ class BlockedTest(unittest.TestCase):
 
         neon_ix_builder.init_iterative(self.resource.holder)
 
-        self.solana_tx = TransactionWithComputeBudget().add(neon_ix_builder.make_tx_step_from_data_ix(500, 1))
+        self.solana_tx = Transaction().add(
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            neon_ix_builder.make_tx_step_from_data_ix(500, 1)
+        )
         return send_transaction(client, self.solana_tx, self.resource.signer)
 
     def finish_blocker_transaction(self):

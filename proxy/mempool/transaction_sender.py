@@ -12,7 +12,6 @@ from solana.transaction import Transaction
 from solana.blockhash import Blockhash
 from solana.account import Account as SolanaAccount
 
-from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.emulator_interactor import call_trx_emulated
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
@@ -91,8 +90,7 @@ class BaseNeonTxStrategy(abc.ABC):
 
     @abc.abstractmethod
     def validate(self) -> bool:
-        self._validation_error_msg = 'Not implemented'
-        return False
+        pass
 
     def _validate_notdeploy_tx(self) -> bool:
         if len(self._ctx.neon_tx.toAddress) == 0:
@@ -167,11 +165,14 @@ class BaseNeonTxStrategy(abc.ABC):
         return True
 
     @abc.abstractmethod
-    def build_tx(self, idx=0) -> Transaction:
-        return TransactionWithComputeBudget()
+    def build_tx(self, idx: int) -> Transaction:
+        pass
 
     def build_cancel_tx(self) -> Transaction:
-        return Transaction().add(self._builder.make_cancel_ix())
+        return Transaction().add(
+            self._builder.make_compute_budget_heap_ix(),
+            self._builder.make_cancel_ix()
+        )
 
     def _build_tx_list(self, cnt: int) -> SolTxListInfo:
         return SolTxListInfo(
@@ -181,8 +182,7 @@ class BaseNeonTxStrategy(abc.ABC):
 
     @abc.abstractmethod
     def execute(self) -> NeonTxResultInfo:
-        assert self.is_valid()
-        return NeonTxResultInfo()
+        pass
 
 
 @logged_group("neon.MemPool")
@@ -236,14 +236,16 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
             self._validate_tx_size()
         )
 
-    def build_tx(self, _=0) -> Transaction:
-        tx = TransactionWithComputeBudget()
-        tx.add(self._builder.make_tx_exec_from_data_ix())
+    def build_tx(self, _: int) -> Transaction:
+        tx = Transaction().add(
+            self._builder.make_compute_budget_heap_ix(),
+            self._builder.make_tx_exec_from_data_ix()
+        )
         return tx
 
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
-        tx_list_info = SolTxListInfo([self.NAME], [self.build_tx()])
+        tx_list_info = SolTxListInfo([self.NAME], [self.build_tx(1)])
 
         tx_sender = SimpleNeonTxSender(self, self._solana, self._signer)
         tx_sender.send(tx_list_info)
@@ -350,7 +352,6 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._compute_unit_cnt: Optional[int] = None
 
     def validate(self) -> bool:
         self._validation_error_msg = None
@@ -382,7 +383,6 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         if evm_step_cnt > 170:
             evm_step_cnt -= 150
         else:
-            self._compute_unit_cnt = 1_375_000
             evm_step_cnt = 10
         self._iter_evm_step_cnt = evm_step_cnt
         total_iteration_cnt = math.ceil(total_evm_step_cnt / evm_step_cnt)
@@ -394,10 +394,11 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
         return [self.build_tx(idx) for idx in range(total_iteration_cnt)]
 
-    def build_tx(self, idx=0) -> Transaction:
-        tx = TransactionWithComputeBudget(compute_units=self._compute_unit_cnt)
-        # generate unique tx
-        tx.add(self._builder.make_tx_step_from_data_ix(self._iter_evm_step_cnt, idx))
+    def build_tx(self, idx: int) -> Transaction:
+        tx = Transaction().add(
+            self._builder.make_compute_budget_heap_ix(),
+            self._builder.make_tx_step_from_data_ix(self._iter_evm_step_cnt, idx)
+        )
         return tx
 
     def _calc_iter_cnt(self) -> int:
@@ -429,9 +430,10 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
             self._validate_tx_has_chainid()
         )
 
-    def build_tx(self, idx=0) -> Transaction:
+    def build_tx(self, idx: int) -> Transaction:
         evm_step_cnt = self._iter_evm_step_cnt
-        return TransactionWithComputeBudget(compute_units=self._compute_unit_cnt).add(
+        return Transaction().add(
+            self._builder.make_compute_budget_heap_ix(),
             self._builder.make_tx_step_from_account_ix(evm_step_cnt, idx)
         )
 
@@ -478,7 +480,7 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
             self._validate_tx_size()
         )
 
-    def _build_legacy_tx(self, idx=0) -> Transaction:
+    def _build_legacy_tx(self, idx: int) -> Transaction:
         return super().build_tx(idx)
 
     def _build_legacy_cancel_tx(self) -> Transaction:
@@ -489,7 +491,7 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
         if self._alt_info is not None:
             return True
 
-        legacy_tx = self._build_legacy_tx()
+        legacy_tx = self._build_legacy_tx(1)
         try:
             alt_builder = AddressLookupTableTxBuilder(self._solana, self._builder, self._signer, self._alt_close_queue)
             self._alt_info = alt_builder.build_alt_info(legacy_tx)
@@ -499,7 +501,7 @@ class AltHolderNeonTxStrategy(HolderNeonTxStrategy):
             return False
         return True
 
-    def build_tx(self, idx=0) -> Transaction:
+    def build_tx(self, idx: int) -> Transaction:
         legacy_tx = self._build_legacy_tx(idx)
         return V0Transaction(address_table_lookups=[self._alt_info]).add(legacy_tx)
 
@@ -552,7 +554,8 @@ class BaseNoChainIdNeonStrategy:
 
     @staticmethod
     def _build_tx_wo_chainid(self, idx: int) -> Transaction:
-        return TransactionWithComputeBudget(compute_units=self._compute_unit_cnt).add(
+        return Transaction().add(
+            self._builder.make_compute_budget_heap_ix(),
             self._builder.make_tx_step_from_account_no_chainid_ix(self._iter_evm_step_cnt, idx)
         )
 
@@ -572,7 +575,7 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy, BaseNoChainIdNeonStrategy):
 
         return self._validate_tx_size()
 
-    def build_tx(self, idx=0) -> Transaction:
+    def build_tx(self, idx: int) -> Transaction:
         return self._build_tx_wo_chainid(self, idx)
 
 

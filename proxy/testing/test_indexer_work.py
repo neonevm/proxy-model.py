@@ -1,23 +1,27 @@
 import unittest
+import os
+import base64
+import base58
 
 from solana.rpc.api import Client as SolanaClient
-from .solana_utils import *
+from solana.transaction import AccountMeta, Transaction, TransactionInstruction
+from solana.account import PublicKey
+from .solana_utils import WalletAccount, wallet_path, EvmLoader, client, send_transaction
 from solcx import compile_source
 from web3 import Web3
 
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.address import EthereumAddress
 from ..common_neon.config import Config
-from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import NeonTx
+from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from ..mempool.operator_resource_mng import OperatorResourceInfo, OperatorResourceInitializer
 
 from .testing_helpers import request_airdrop
 
 
-proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
 proxy_program = os.environ.get("TEST_PROGRAM")
 
@@ -30,7 +34,7 @@ eth_account_invoked = proxy.eth.account.create(SEED_INVOKED)
 eth_account_getter = proxy.eth.account.create("GETTER")
 proxy.eth.default_account = eth_account.address
 
-ACCOUNT_SEED_VERSION=b'\1'
+ACCOUNT_SEED_VERSION = b'\1'
 
 TEST_EVENT_SOURCE_196 = '''
 // SPDX-License-Identifier: MIT
@@ -89,7 +93,7 @@ class CancelTest(unittest.TestCase):
         print(f"proxy_program: {proxy_program}")
 
         wallet = WalletAccount(wallet_path())
-        cls.loader = loader = EvmLoader(wallet, EVM_LOADER)
+        cls.loader = loader = EvmLoader(wallet, EVM_LOADER_ID)
         cls.signer = wallet.get_acc()
 
         tx_deploy_receipt, storage = cls.deploy_contract()
@@ -179,7 +183,7 @@ class CancelTest(unittest.TestCase):
     @staticmethod
     def print_tx(tx):
         print(tx.__dict__)
-        print(f'invoke signature: {b58encode(tx.signature()).decode("utf-8")}')
+        print(f'invoke signature: {base58.b58encode(tx.signature()).decode("utf-8")}')
 
     @staticmethod
     def print_if_err(receipt):
@@ -215,7 +219,10 @@ class CancelTest(unittest.TestCase):
         cls.tx_hash = tx_hash = tx_store_signed.hash
         print(f'tx_hash: {tx_hash.hex()}')
 
-        tx = TransactionWithComputeBudget().add(neon_ix_builder.make_tx_step_from_data_ix(10, 1))
+        tx = Transaction().add(
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            neon_ix_builder.make_tx_step_from_data_ix(10, 1)
+        )
         receipt = send_transaction(client, tx, signer)
         cls.print_tx(tx)
         cls.print_if_err(receipt)
@@ -248,11 +255,14 @@ class CancelTest(unittest.TestCase):
         )
         noniterative = neon_ix_builder.make_tx_exec_from_data_ix()
 
-        tx = TransactionWithComputeBudget().add(TransactionInstruction(
-            keys=[AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False)] + noniterative.keys,
-            data=noniterative.data,
-            program_id=PublicKey(proxy_program)
-        ))
+        tx = Transaction().add(
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            TransactionInstruction(
+                keys=[AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False)] + noniterative.keys,
+                data=noniterative.data,
+                program_id=PublicKey(proxy_program)
+            )
+        )
 
         receipt = send_transaction(client, tx, signer)
         cls.print_tx(tx)
@@ -284,14 +294,16 @@ class CancelTest(unittest.TestCase):
                 AccountMeta(pubkey=cls.caller_invoked, is_signer=False, is_writable=True),
             ]
         )
-        iterative = neon_ix_builder.make_tx_step_from_data_ix(250, 1)
-        iterative = TransactionInstruction(
-            keys=[AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False)] + iterative.keys,
-            data=bytearray.fromhex("ef") + iterative.data,
-            program_id=PublicKey(proxy_program)
-        )
 
-        tx = TransactionWithComputeBudget().add(iterative)
+        iterative = neon_ix_builder.make_tx_step_from_data_ix(250, 1)
+        tx = Transaction().add(
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            TransactionInstruction(
+                keys=[AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False)] + iterative.keys,
+                data=bytearray.fromhex("ef") + iterative.data,
+                program_id=PublicKey(proxy_program)
+            )
+        )
 
         receipt = send_transaction(client, tx, signer)
         cls.print_tx(tx)
@@ -323,15 +335,17 @@ class CancelTest(unittest.TestCase):
         cls.tx_hash_call2 = tx_hash = call2_signed.hash
         print(f'tx_hash_call2: {tx_hash.hex()}')
 
-        tx = TransactionWithComputeBudget()
-
         neon_ix_builder, signer = cls.create_neon_ix_builder(call1_signed.rawTransaction, account_list)
         noniterative1 = neon_ix_builder.make_tx_exec_from_data_ix()
-        tx.add(noniterative1)
 
         neon_ix_builder.init_neon_tx(NeonTx.fromString(call2_signed.rawTransaction))
         noniterative2 = neon_ix_builder.make_tx_exec_from_data_ix()
-        tx.add(noniterative2)
+
+        tx = Transaction().add(
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            noniterative1,
+            noniterative2
+        )
 
         receipt = send_transaction(client, tx, signer)
         cls.print_tx(tx)
