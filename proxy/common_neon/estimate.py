@@ -89,7 +89,7 @@ class GasEstimate:
         # ALT used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
         acc_cnt = len(self.emulator_json.get("accounts", [])) + 6
         if acc_cnt > AddressLookupTableTxBuilder.TX_ACCOUNT_CNT:
-            return 5000 * 11  # ALT instruction count is 11
+            return 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
         else:
             return 0
 
