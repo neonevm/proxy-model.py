@@ -354,6 +354,12 @@ class WriteHolderAccountIx(DummyIxDecoder):
         return True
 
 
+class Deposit3IxDecoder(DummyIxDecoder):
+    _name = 'Deposit3'
+    _ix_code = 0x27
+    _is_deprecated = False
+
+
 def get_neon_ix_decoder_list() -> List[Type[DummyIxDecoder]]:
     return [
         CreateAccount3IxDecoder,
@@ -365,5 +371,6 @@ def get_neon_ix_decoder_list() -> List[Type[DummyIxDecoder]]:
         CancelWithHashIxDecoder,
         CreateHolderAccountIx,
         DeleteHolderAccountIx,
-        WriteHolderAccountIx
+        WriteHolderAccountIx,
+        Deposit3IxDecoder,
     ]
