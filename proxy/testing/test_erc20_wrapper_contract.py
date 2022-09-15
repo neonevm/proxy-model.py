@@ -14,12 +14,11 @@ from solana.rpc.api import Client as SolanaClient
 from solana.account import Account as SolanaAccount
 from solana.publickey import PublicKey
 from solana.rpc.types import TokenAccountOpts
-
+from solana.transaction import Transaction
 
 from ..testing.testing_helpers import request_airdrop
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.erc20_wrapper import ERC20Wrapper
-from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.web3 import NeonWeb3 as Web3
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
@@ -83,7 +82,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         token_account = SplTokenInstrutions.get_associated_token_address(self.solana_account.public_key(), self.token.pubkey)
         admin_address = self.wrapper.get_neon_account_address(admin.address)
 
-        tx = TransactionWithComputeBudget()
+        tx = Transaction()
 
         tx.add(SplTokenInstrutions.create_associated_token_account(
             self.solana_account.public_key(), self.solana_account.public_key(), self.token.pubkey

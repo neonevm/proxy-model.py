@@ -1,5 +1,6 @@
 from solana.publickey import PublicKey
 from solana.account import Account as SolanaAccount
+from solana.transaction import Transaction
 from spl.token.instructions import get_associated_token_address
 from proxy.common_neon.address import EthereumAddress, ether2program
 from typing import Union
@@ -8,7 +9,6 @@ from proxy.common_neon.solana_interactor import SolanaInteractor
 from proxy.common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from decimal import Decimal
 import os
-from .compute_budget import TransactionWithComputeBudget
 
 
 class PermissionToken:
@@ -31,14 +31,14 @@ class PermissionToken:
         if info is not None:
             return token_account
 
-        txn = TransactionWithComputeBudget()
-        create_txn = spl_token.create_associated_token_account(
-            payer=signer.public_key(),
-            owner=ether2program(ether_addr)[0],
-            mint=self.token_mint
+        tx = Transaction().add(
+            spl_token.create_associated_token_account(
+                payer=signer.public_key(),
+                owner=ether2program(ether_addr)[0],
+                mint=self.token_mint
+            )
         )
-        txn.add(create_txn)
-        tx_list_info = SolTxListInfo(name_list=['CreateAssociatedTokenAccount'], tx_list=[txn])
+        tx_list_info = SolTxListInfo(name_list=['CreateAssociatedTokenAccount'], tx_list=[tx])
         SolTxListSender(self.solana, signer).send(tx_list_info, skip_preflight=True)
         return token_account
 

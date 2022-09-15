@@ -9,10 +9,9 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.rpc.commitment import Confirmed
 from solana.publickey import PublicKey
 from solana.rpc.types import TxOpts
-from solana.transaction import TransactionInstruction, AccountMeta
+from solana.transaction import TransactionInstruction, AccountMeta, Transaction
 from proxy.common_neon.neon_instruction import create_account_layout
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
-from proxy.common_neon.compute_budget import TransactionWithComputeBudget
 from time import sleep
 from web3 import Web3
 import os
@@ -119,7 +118,7 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), 0)
 
         TRANSFER_AMOUNT = 123456
-        trx = TransactionWithComputeBudget()
+        trx = Transaction()
         trx.add(self.create_account_instruction(to_neon_acc.address, from_owner.public_key()))
         trx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
             program_id=self.token.program_id,
@@ -250,7 +249,7 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(proxy.eth.get_balance(to_neon_acc.address), initial_balance * 10**18)  # Destination-acc Neon balance is initial
 
         TRANSFER_AMOUNT = 123456
-        trx = TransactionWithComputeBudget()
+        trx = Transaction()
         trx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
             program_id=self.token.program_id,
             source=from_spl_token_acc,

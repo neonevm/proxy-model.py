@@ -520,11 +520,19 @@ def evm_step_cost():
 
 class ComputeBudget():
     @staticmethod
-    def requestUnits(units, additional_fee):
+    def requestUnits(units):
         return TransactionInstruction(
             program_id=COMPUTE_BUDGET_ID,
             keys=[],
-            data=bytes.fromhex("00") + units.to_bytes(4, "little") + additional_fee.to_bytes(4, "little")
+            data=bytes.fromhex("02") + units.to_bytes(4, "little")
+        )
+
+    @staticmethod
+    def setAddtionalFee(additional_fee):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("03") + additional_fee.to_bytes(8, "little")
         )
 
     @staticmethod
@@ -539,6 +547,7 @@ class ComputeBudget():
 def TransactionWithComputeBudget(units=DEFAULT_UNITS, additional_fee=DEFAULT_ADDITIONAL_FEE,
                                  heapFrame=DEFAULT_HEAP_FRAME, **args):
     trx = Transaction(**args)
-    if units: trx.add(ComputeBudget.requestUnits(units, additional_fee))
+    if units: trx.add(ComputeBudget.requestUnits(units))
     if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
+    if additional_fee: trx.add(ComputeBudget.setAddtionalFee(additional_fee))
     return trx

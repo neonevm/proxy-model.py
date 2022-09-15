@@ -7,11 +7,10 @@ import base58
 from typing import Optional, Dict, Any
 from logged_groups import logged_group
 from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction
+from solana.transaction import TransactionInstruction, Transaction
 
 from ..common_neon.config import Config
 from ..common_neon.address import accountWithSeed
-from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.neon_instruction import NeonIxBuilder
 
@@ -24,7 +23,7 @@ class NeonTxStage(abc.ABC):
         self._builder = builder
         self._size = 0
         self._balance = 0
-        self.tx = TransactionWithComputeBudget()
+        self.tx = Transaction()
 
     def _is_empty(self) -> bool:
         return not len(self.tx.signatures)

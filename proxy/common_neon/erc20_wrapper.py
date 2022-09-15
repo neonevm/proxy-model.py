@@ -4,16 +4,12 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from eth_account.signers.local import LocalAccount as NeonAccount
 from solana.rpc.api import Account as SolanaAccount
 from solana.publickey import PublicKey
-from solana.transaction import AccountMeta, TransactionInstruction
-from solana.system_program import SYS_PROGRAM_ID
-from solana.sysvar import SYSVAR_RENT_PUBKEY
+from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from solana.rpc.types import TxOpts, RPCResponse, Commitment
 import spl.token.instructions as spl_token
 from typing import Union, Dict
 import struct
 from logged_groups import logged_group
-from .compute_budget import TransactionWithComputeBudget
-from sha3 import keccak_256
 from proxy.common_neon.eth_proto import Trx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.web3 import NeonWeb3
@@ -122,7 +118,7 @@ class ERC20Wrapper:
         # Construct transaction
         # This part of code is based on original implementation of Token.create_associated_token_account
         # except that skip_preflight is set to True
-        tx = TransactionWithComputeBudget()
+        tx = Transaction()
         create_ix = spl_token.create_associated_token_account(
             payer=payer.public_key(), owner=owner, mint=self.token.pubkey
         )

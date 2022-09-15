@@ -6,6 +6,7 @@ from .testing_helpers import request_airdrop
 from solana.account import Account as SolanaAccount
 from solana.rpc.api import Client as SolanaClient
 from solana.rpc.types import TxOpts
+from solana.transaction import Transaction
 from spl.token.client import Token as SplToken
 from spl.token.instructions import get_associated_token_address, create_associated_token_account
 from ..common_neon.elf_params import ElfParams
@@ -14,13 +15,13 @@ from solana.rpc.commitment import Confirmed
 from web3 import exceptions as web3_exceptions
 from random import uniform
 from eth_account.signers.local import LocalAccount as NeonAccount
-from proxy.common_neon.compute_budget import TransactionWithComputeBudget
 
 
 PROXY_URL = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 SOLANA_URL = os.environ.get('SOLANA_URL', 'http://solana:8899/')
 proxy = Web3(Web3.HTTPProvider(PROXY_URL))
 solana = SolanaClient(SOLANA_URL)
+
 
 class TestNeonToken(unittest.TestCase):
     @classmethod
@@ -122,7 +123,7 @@ class TestNeonToken(unittest.TestCase):
         dest_acc = self.create_sol_account()
 
         # Creating destination Associated Token Account
-        trx = TransactionWithComputeBudget()
+        trx = Transaction()
         trx.add(
             create_associated_token_account(
                 dest_acc.public_key(),
