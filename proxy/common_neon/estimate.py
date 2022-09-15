@@ -87,7 +87,7 @@ class GasEstimate:
 
     def alt_cost(self) -> int:
         # ALT used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
-        acc_cnt = len(self.emulator_json.get("accounts", [])) + 6
+        acc_cnt = len(self.emulator_json.get("accounts", [])) + len(self.emulator_json.get("solana_accounts", [])) + 6
         if acc_cnt > AddressLookupTableTxBuilder.TX_ACCOUNT_CNT:
             return 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
         else:
