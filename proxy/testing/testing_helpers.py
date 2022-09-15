@@ -69,7 +69,7 @@ def create_signer_account() -> LocalAccount:
     return signer
 
 
-def request_airdrop(address, amount: int = 500):
+def request_airdrop(address, amount: int = 5000):
     FAUCET_URL = os.environ.get('FAUCET_URL', 'http://faucet:3333')
     url = FAUCET_URL + '/request_neon'
     data = f'{{"wallet": "{address}", "amount": {amount}}}'
