@@ -123,25 +123,27 @@ def decode_neon_tx_sig(log_iter: Iterator[str]) -> str:
     return ''
 
 
-def decode_cancel_gas(log_iter: Iterator[str]) -> int:
-    """Extracts gas_used of the canceled transaction"""
+def decode_gas(log_iter: Iterator[str], mnemonic: str) -> int:
+    """Extracts gas_used of the canceled transaction and current iteration"""
 
     for line in log_iter:
         data_list = _decode_mnemonic(line)
         if len(data_list) == 0:
             continue
-        if data_list[0] == 'CL_TX_GAS':
+        if data_list[0] == mnemonic:
             bs = base64.b64decode(data_list[1])
             gas_used = int.from_bytes(bs, "little")
             return gas_used
 
     return 0
 
+def decode_cancel_gas(log_iter: Iterator[str]) -> int:
+    """Extracts gas_used of the canceled transaction"""
 
-def decode_ix_gas(data_list: List[str]) -> int:
+    decode_gas(log_iter, 'CL_TX_GAS')
+
+
+def decode_ix_gas(log_iter: Iterator[str]) -> int:
     """Extracts gas_used of the instruction"""
 
-    bs = base64.b64decode(data_list[0])
-    gas_used = int.from_bytes(bs, "little")
-    return gas_used
-
+    decode_gas(log_iter, 'IX_GAS')
