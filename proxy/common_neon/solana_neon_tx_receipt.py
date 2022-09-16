@@ -8,7 +8,7 @@ import base64
 
 from enum import Enum
 from logged_groups import logged_group
-from evm_log_decoder import _decode_mnemonic
+from .evm_log_decoder import _decode_mnemonic
 
 from ..common_neon.utils import str_fmt_object
 from ..common_neon.environment_data import EVM_LOADER_ID
