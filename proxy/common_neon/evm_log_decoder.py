@@ -94,6 +94,9 @@ def decode_neon_tx_result(log_iter: Iterator[str], neon_sig: str, neon_tx_res: N
             decode_neon_tx_return(data_list[1:], neon_sig, neon_tx_res)
         elif data_list[0].startswith('LOG'):
             decode_neon_event(data_list[1:], neon_sig, neon_tx_res)
+        elif data_list[0].startswith('IX_GAS'):
+            gas_used = decode_ix_gas(data_list[1:])
+            neon_tx_res.fill_result(gas_used=gas_used, status='0x0', return_value='')
 
     if data_cnt == 0:
         return False
@@ -133,3 +136,12 @@ def decode_cancel_gas(log_iter: Iterator[str]) -> int:
             return gas_used
 
     return 0
+
+
+def decode_ix_gas(data_list: List[str]) -> int:
+    """Extracts gas_used of the instruction"""
+
+    bs = base64.b64decode(data_list[0])
+    gas_used = int.from_bytes(bs, "little")
+    return gas_used
+
