@@ -5,7 +5,7 @@ from .eth_proto import NeonTx
 from .address import EthereumAddress
 from .errors import EthereumError
 from .account_whitelist import AccountWhitelist
-from .solana_receipt_parser import SolReceiptParser
+from .solana_tx_error_parser import SolTxErrorParser
 from .solana_interactor import SolanaInteractor
 from .estimate import GasEstimate
 from .emulator_interactor import call_trx_emulated
@@ -87,7 +87,7 @@ class NeonTxValidator:
         self._prevalidate_account_cnt(emulator_json)
 
     def extract_ethereum_error(self, e: Exception):
-        receipt_parser = SolReceiptParser(e)
+        receipt_parser = SolTxErrorParser(e)
         nonce_error = receipt_parser.get_nonce_error()
         if nonce_error:
             self.raise_nonce_error(nonce_error[0], nonce_error[1])

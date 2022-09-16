@@ -14,7 +14,7 @@ class SolTxError(Exception):
     def __init__(self, receipt: dict):
         self.result = receipt
 
-        log_list = SolReceiptParser(receipt).get_log_list()
+        log_list = SolTxErrorParser(receipt).get_log_list()
         self.error = '. '.join([log for log in log_list if self._is_program_log(log)])
         if not len(self.error):
             self.error = json.dumps(receipt)
@@ -36,13 +36,11 @@ class SolTxError(Exception):
         return False
 
 
-# TODO: rename SolErrorParser
 @logged_group("neon.Proxy")
-class SolReceiptParser:
+class SolTxErrorParser:
     COMPUTATION_BUDGET_EXCEEDED = 'ComputationalBudgetExceeded'
     PROGRAM_FAILED_TO_COMPLETE = 'ProgramFailedToComplete'
     PROGRAM_EXCEED_INSTRUCTIONS = 'Program failed to complete: exceeded maximum number of instructions allowed'
-    LOG_TRUNCATED = 'Log truncated'
     READ_ONLY_BLOCKED = "trying to execute transaction on ro locked account"
     READ_WRITE_BLOCKED = "trying to execute transaction on rw locked account"
     ALT_INVALID_INDEX = 'invalid transaction: Transaction address table lookup uses an invalid index'
@@ -68,7 +66,7 @@ class SolReceiptParser:
     def raise_budget_exceeded():
         raise SolTxError({
             'err': {
-                'InstructionError': [1, SolReceiptParser.COMPUTATION_BUDGET_EXCEEDED]
+                'InstructionError': [1, SolTxErrorParser.COMPUTATION_BUDGET_EXCEEDED]
             }
         })
 
@@ -194,8 +192,6 @@ class SolReceiptParser:
             for log in log_list:
                 if log.startswith(self.PROGRAM_EXCEED_INSTRUCTIONS):
                     return True
-                if log.startswith(self.LOG_TRUNCATED):
-                    return True
         return False
 
     def check_if_account_already_exists(self) -> bool:
@@ -234,10 +230,11 @@ class SolReceiptParser:
         a = self.get_error_code_msg()
         return self.get_error_code_msg() == (-32602, self.ALT_INVALID_INDEX)
 
-    def get_nonce_error(self) -> Optional[(int, int)]:
+    def get_nonce_error(self) -> Tuple[Optional[int], Optional[int]]:
         log_list = self._get_log_list()
         for log in log_list:
             s = self.NONCE_RE.search(log)
             if s is not None:
-                return s.groups()
-        return None
+                state_tx_cnt, tx_nonce = s.groups()
+                return int(state_tx_cnt), int(tx_nonce)
+        return None, None

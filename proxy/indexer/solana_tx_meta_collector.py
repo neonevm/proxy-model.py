@@ -90,7 +90,7 @@ class SolTxMetaCollector(ABC):
 
     def _request_tx_meta_list(self, sig_slot_list: List[SolTxSigSlotInfo]) -> None:
         sig_list = [sig_slot.sol_sig for sig_slot in sig_slot_list]
-        meta_list = self._solana.get_multiple_receipts(sig_list, commitment=self._commitment)
+        meta_list = self._solana.get_tx_receipt_list(sig_list, commitment=self._commitment)
         for sig_slot, tx_meta in zip(sig_slot_list, meta_list):
             self._tx_meta_dict.add(sig_slot, tx_meta)
 

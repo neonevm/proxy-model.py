@@ -22,7 +22,7 @@ from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-from ..common_neon.solana_receipt_parser import SolTxError
+from ..common_neon.solana_tx_error_parser import SolTxError
 from ..common_neon.errors import EthereumError
 from ..neon_rpc_api_model import NeonRpcApiWorker
 from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter

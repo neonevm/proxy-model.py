@@ -20,7 +20,7 @@ from typing import Dict, Union, Any, List, NamedTuple, Optional, Tuple, cast
 from base58 import b58decode, b58encode
 
 from .utils import SolanaBlockInfo
-from .environment_data import EVM_LOADER_ID, RETRY_ON_FAIL, FUZZING_BLOCKHASH
+from .environment_data import EVM_LOADER_ID, RETRY_ON_FAIL
 
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT
@@ -488,7 +488,9 @@ class SolanaInteractor:
 
         return balance_list
 
-    def get_neon_account_info(self, eth_account: Union[str, EthereumAddress], commitment='processed') -> Optional[NeonAccountInfo]:
+    def get_neon_account_info(
+        self, eth_account: Union[str, EthereumAddress], commitment='processed'
+    ) -> Optional[NeonAccountInfo]:
         if isinstance(eth_account, str):
             eth_account = EthereumAddress(eth_account)
         account_sol, nonce = ether2program(eth_account)
@@ -502,7 +504,9 @@ class SolanaInteractor:
                                f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
         return NeonAccountInfo.frombytes(account_sol, info.data)
 
-    def get_neon_code_info(self, account: Union[str, EthereumAddress, NeonAccountInfo, PublicKey, None]) -> Optional[NeonCodeInfo]:
+    def get_neon_code_info(
+        self, account: Union[str, EthereumAddress, NeonAccountInfo, PublicKey, None]
+    ) -> Optional[NeonCodeInfo]:
         if isinstance(account, str) or isinstance(account, EthereumAddress):
             account = self.get_neon_account_info(account)
         if isinstance(account, NeonAccountInfo):
@@ -556,13 +560,6 @@ class SolanaInteractor:
         request_list = [(size, opts) for size in size_list]
         response_list = self._send_rpc_batch_request("getMinimumBalanceForRentExemption", request_list)
         return [r['result'] for r in response_list]
-
-    def get_block_slot_list(self, last_block_slot: int, limit: int, commitment='confirmed') -> [int]:
-        opts = {
-            "commitment": commitment,
-            "enconding": "json",
-        }
-        return self._send_rpc_request("getBlocksWithLimit", last_block_slot, limit, opts)['result']
 
     def get_block_info(self, block_slot: int, commitment='confirmed') -> SolanaBlockInfo:
         opts = {
@@ -637,6 +634,16 @@ class SolanaInteractor:
         blockhash = blockhash_resp["result"]["value"]["blockhash"]
         return Blockhash(blockhash)
 
+    def get_blockhash(self, block_slot: int) -> Blockhash:
+        block_opts = {
+            "encoding": "json",
+            "transactionDetails": "none",
+            "rewards": False
+        }
+
+        block = self._send_rpc_request("getBlock", block_slot, block_opts)
+        return Blockhash(block['result']['blockhash'])
+
     def get_block_height(self, commitment='confirmed') -> int:
         opts = {
             'commitment': commitment
@@ -644,62 +651,16 @@ class SolanaInteractor:
         blockheight_resp = self._send_rpc_request('getBlockHeight', opts)
         return blockheight_resp['result']
 
-    def _fuzzing_transactions(self, signer: SolanaAccount,
-                              tx_list: List[Transaction], tx_opts: Dict[str, str],
-                              request_list: List[Tuple[str, Dict[str, str]]]) -> List[Tuple[str, Dict[str, str]]]:
-        """
-        Make each second transaction a bad one.
-        This is used to test a transaction sending on a live cluster (testnet/devnet).
-        """
-        if not FUZZING_BLOCKHASH:
-            return request_list
-
-        self._fuzzing_hash_cycle = not self._fuzzing_hash_cycle
-        if not self._fuzzing_hash_cycle:
-            return request_list
-
-        # get bad block slot for sent transactions
-        slot = self.get_recent_blockslot()
-        # blockhash = '4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4'
-        block_opts = {
-            "encoding": "json",
-            "transactionDetails": "none",
-            "rewards": False
-        }
-        slot = max(slot - 500, 10)
-        block = self._send_rpc_request("getBlock", slot, block_opts)
-        fuzzing_blockhash = Blockhash(block['result']['blockhash'])
-        self.debug(f"fuzzing block {fuzzing_blockhash} for slot {slot}")
-
-        # sign half of transactions with a bad blockhash
-        for idx, tx in enumerate(tx_list):
-            if idx % 2 == 1:
-                continue
-            tx.recent_blockhash = fuzzing_blockhash
-            tx.sign(signer)
-            base64_tx = base64.b64encode(tx.serialize()).decode('utf-8')
-            request_list[idx] = (base64_tx, tx_opts)
-        return request_list
-
-    def send_multiple_transactions(self, signer: SolanaAccount, tx_list: List[Transaction],
-                                   skip_preflight: bool, preflight_commitment: str) -> List[SendResult]:
+    def send_tx_list(self, signer: SolanaAccount, tx_list: List[Transaction],
+                     skip_preflight: bool, preflight_commitment: str) -> List[SendResult]:
         opts = {
             "skipPreflight": skip_preflight,
             "encoding": "base64",
             "preflightCommitment": preflight_commitment
         }
 
-        blockhash = None
         request_list = []
-
         for tx in tx_list:
-            if not tx.recent_blockhash:
-                if not blockhash:
-                    blockhash = self.get_recent_blockhash()
-                tx.recent_blockhash = blockhash
-                tx.signatures.clear()
-            if not tx.signatures:
-                tx.sign(signer)
             base64_tx = base64.b64encode(tx.serialize()).decode('utf-8')
             request_list.append((base64_tx, opts))
 
@@ -733,15 +694,15 @@ class SolanaInteractor:
             result_list.append(SendResult(result=result, error=error))
         return result_list
 
-    def get_confirmed_slot_for_multiple_transactions(self, sig_list: List[str]) -> Tuple[int, bool]:
+    def get_confirmed_slot_for_tx_sig_list(self, tx_sig_list: List[str]) -> Tuple[int, bool]:
         opts = {
             "searchTransactionHistory": False
         }
 
         block_slot = 0
-        while len(sig_list):
-            (part_sig_list, sig_list) = (sig_list[:100], sig_list[100:])
-            response = self._send_rpc_request("getSignatureStatuses", part_sig_list, opts)
+        while len(tx_sig_list) > 0:
+            (part_tx_sig_list, tx_sig_list) = (tx_sig_list[:100], tx_sig_list[100:])
+            response = self._send_rpc_request("getSignatureStatuses", part_tx_sig_list, opts)
 
             result = response.get('result', None)
             if not result:
@@ -757,14 +718,14 @@ class SolanaInteractor:
 
         return block_slot, (block_slot != 0)
 
-    def get_multiple_receipts(self, sig_list: List[str], commitment='confirmed') -> List[Optional[Dict]]:
-        if not len(sig_list):
+    def get_tx_receipt_list(self, tx_sig_list: List[str], commitment='confirmed') -> List[Optional[Dict]]:
+        if len(tx_sig_list) == 0:
             return []
         opts = {
             "encoding": "json",
             "commitment": commitment,
             "maxSupportedTransactionVersion": 0
         }
-        request_list = [(sig, opts) for sig in sig_list]
+        request_list = [(tx_sig, opts) for tx_sig in tx_sig_list]
         response_list = self._send_rpc_batch_request("getTransaction", request_list)
         return [r.get('result') for r in response_list]

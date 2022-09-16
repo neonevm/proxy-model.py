@@ -11,7 +11,7 @@ from ..common_neon.data import NeonTxStatData
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolanaInteractor
-from ..common_neon.solana_receipt_parser import SolReceiptParser
+from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo, SolNeonIxReceiptInfo
 from ..common_neon.constants import ACTIVE_STORAGE_TAG
 from ..common_neon.environment_utils import get_solana_accounts
@@ -240,7 +240,7 @@ class Indexer(IndexerBase):
 
                 neon_block.add_sol_tx_cost(SolTxCostInfo(sol_tx_meta))
 
-                if SolReceiptParser(sol_tx_meta.tx).check_if_error():
+                if SolTxErrorParser(sol_tx_meta.tx).check_if_error():
                     # self.debug(f'ignore failed tx {sol_tx_meta}')
                     continue
 

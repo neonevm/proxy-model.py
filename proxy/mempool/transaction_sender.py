@@ -17,7 +17,7 @@ from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError, NonceTooLowError
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
-from ..common_neon.solana_receipt_parser import SolTxError, SolReceiptParser
+from ..common_neon.solana_tx_error_parser import SolTxError, SolTxErrorParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxReceiptInfo
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.utils import NeonTxResultInfo
@@ -107,7 +107,7 @@ class BaseNeonTxStrategy(abc.ABC):
             tx.serialize()
             return True
         except Exception as err:
-            if SolReceiptParser(err).check_if_big_transaction():
+            if SolTxErrorParser(err).check_if_big_transaction():
                 self._validation_error_msg = 'Too big transaction size'
                 return False
             self._validation_error_msg = str(err)
@@ -653,7 +653,7 @@ class NeonTxSendStrategyExecutor:
             except (BlockedAccountsError, NodeBehindError, SolanaUnavailableError, NonceTooLowError):
                 raise
             except Exception as e:
-                if (not Strategy.IS_SIMPLE) or (not SolReceiptParser(e).check_if_budget_exceeded()):
+                if (not Strategy.IS_SIMPLE) or (not SolTxErrorParser(e).check_if_budget_exceeded()):
                     raise
             finally:
                 self._init_state_tx_cnt()
