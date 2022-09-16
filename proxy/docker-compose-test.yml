@@ -165,8 +165,8 @@ services:
     depends_on:
       solana:
         condition: service_healthy
-      deploy_contracts:
-        condition: service_completed_successfully
+#      deploy_contracts:
+#        condition: service_completed_successfully
 
   airdropper:
     container_name: airdropper
