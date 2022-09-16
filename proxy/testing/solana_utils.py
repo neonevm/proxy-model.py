@@ -25,7 +25,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 import math
 
-from proxy.common_neon.layouts import CREATE_ACCOUNT_LAYOUT
+from proxy.common_neon.layouts import CREATE_ACCOUNT_LAYOUT, ACCOUNT_INFO_LAYOUT
 
 system = "11111111111111111111111111111111"
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
@@ -384,18 +384,6 @@ class EvmLoader:
 
 def getBalance(account):
     return client.get_balance(account, commitment=Confirmed)['result']['value']
-
-
-ACCOUNT_INFO_LAYOUT = cStruct(
-    "type" / Int8ul,
-    "ether" / Bytes(20),
-    "nonce" / Int8ul,
-    "tx_count" / Bytes(8),
-    "balance" / Bytes(32),
-    "is_rw_blocked" / Int8ul,
-    "ro_blocked_cnt" / Int8ul,
-    "generation" / Int32ul,
-)
 
 
 class AccountInfo(NamedTuple):

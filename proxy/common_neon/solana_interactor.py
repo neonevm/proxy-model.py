@@ -44,10 +44,9 @@ class NeonAccountInfo(NamedTuple):
     nonce: int
     tx_count: int
     balance: int
-    is_rw_blocked: bool
-    ro_blocked_cnt: int
     generation: int
     code_size: int
+    is_rw_blocked: bool
     code: Optional[str]
 
     @staticmethod
@@ -65,10 +64,9 @@ class NeonAccountInfo(NamedTuple):
             nonce=cont.nonce,
             tx_count=int.from_bytes(cont.tx_count, "little"),
             balance=int.from_bytes(cont.balance, "little"),
-            is_rw_blocked=(cont.is_rw_blocked != 0),
-            ro_blocked_cnt=cont.ro_blocked_cnt,
             generation=cont.generation,
             code_size=cont.code_size,
+            is_rw_blocked=(cont.is_rw_blocked != 0),
             code=code,
         )
 
