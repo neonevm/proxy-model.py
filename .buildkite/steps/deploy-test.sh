@@ -37,7 +37,7 @@ function dump_docker_logs {
 #    if docker logs deploy_contracts >deploy_contracts.log 2>&1; then echo "deploy_contracts logs saved"; fi
     if docker logs proxy_program >proxy_program.log 2>&1; then echo "proxy_program.log logs saved"; fi
 
-    cleanup_docker
+#    cleanup_docker
 }
 
 function wait-for-faucet {
@@ -66,7 +66,7 @@ if [ "${SKIP_DOCKER_DOWN}" == "NO" ]; then
 fi
 
 if [ "${SKIP_DOCKER_UP}" == "NO" ]; then
-    cleanup_docker
+#    cleanup_docker
 
     echo
     if ! docker-compose -f proxy/docker-compose-test.yml up -d; then
