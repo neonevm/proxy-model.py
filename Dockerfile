@@ -6,8 +6,7 @@ FROM neonlabsorg/evm_loader:${NEON_EVM_COMMIT} AS spl
 FROM solanalabs/rust:1.61.0 AS builder
 COPY ./proxy_program/ /opt/proxy_program/
 WORKDIR /opt/proxy_program
-RUN cargo +nightly clippy && \
-    cargo build --release && \
+RUN cargo +nightly clippy &&  cargo build-bpf
 
 FROM ubuntu:20.04
 
