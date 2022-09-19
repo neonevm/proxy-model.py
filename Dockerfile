@@ -4,7 +4,7 @@ FROM neonlabsorg/evm_loader:${NEON_EVM_COMMIT} AS spl
 # FROM neonlabsorg/evm_loader:ci-proxy-caller-program AS proxy_program
 
 FROM solanalabs/rust:1.61.0 AS builder
-COPY ./proxy_program/ /opt/proxy_program/
+COPY ./proxy_program /opt
 WORKDIR /opt/proxy_program
 RUN cargo +nightly clippy &&  cargo build-bpf
 
