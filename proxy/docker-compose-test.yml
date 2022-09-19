@@ -27,7 +27,8 @@ services:
 
   proxy_program_loader:
     container_name: proxy_program_loader
-    image: neonlabsorg/evm_loader:ci-proxy-caller-program
+    image: neonlabsorg/proxy:${REVISION}
+#    image: neonlabsorg/evm_loader:ci-proxy-caller-program
     environment:
       SOLANA_URL: http://solana:8899
     networks:
@@ -35,7 +36,7 @@ services:
     depends_on:
       solana:
         condition: service_healthy
-    command: bash -c "deploy-proxy_program.sh"
+    command: bash -c "/opt/deploy-proxy_program.sh"
 
   postgres:
     container_name: postgres
