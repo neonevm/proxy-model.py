@@ -120,19 +120,6 @@ services:
       retries: 20
       start_period: 5s
 
-  deploy_contracts:
-    container_name: deploy_contracts
-    image: neonlabsorg/evm_loader:${NEON_EVM_COMMIT}
-    environment:
-      SOLANA_URL: http://solana:8899
-      SPL_TOKEN_AUTHORITY: /opt/contracts/ci-tokens/owner-keypair.json
-    networks:
-      - net
-    depends_on:
-      proxy:
-        condition: service_healthy
-    command: bash -c "create-test-accounts.sh 1 && deploy-contracts.sh"
-
   faucet:
     container_name: faucet
     image: neonlabsorg/faucet:${FAUCET_COMMIT}
@@ -165,8 +152,6 @@ services:
     depends_on:
       solana:
         condition: service_healthy
-      deploy_contracts:
-        condition: service_completed_successfully
 
   airdropper:
     container_name: airdropper

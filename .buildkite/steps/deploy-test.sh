@@ -34,7 +34,6 @@ function dump_docker_logs {
     if docker logs faucet >faucet.log 2>&1; then echo "faucet logs saved"; fi
     if docker logs airdropper >airdropper.log 2>&1; then echo "airdropper logs saved"; fi
     if docker logs indexer >indexer.log 2>&1; then echo "indexer logs saved"; fi
-    if docker logs deploy_contracts >deploy_contracts.log 2>&1; then echo "deploy_contracts logs saved"; fi
     if docker logs proxy_program >proxy_program.log 2>&1; then echo "proxy_program.log logs saved"; fi
 
     cleanup_docker

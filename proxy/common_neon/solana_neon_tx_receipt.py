@@ -4,9 +4,11 @@ from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, NamedTuple
 
 import re
 import base58
+import base64
 
 from enum import Enum
 from logged_groups import logged_group
+from .evm_log_decoder import _decode_mnemonic
 
 from ..common_neon.utils import str_fmt_object
 from ..common_neon.environment_data import EVM_LOADER_ID
@@ -410,8 +412,13 @@ class SolNeonIxReceiptInfo:
         return True
 
     def _get_neon_income(self, log_msg: str) -> bool:
-        # TODO: add parsing of NEON income
-        pass
+        data_list = _decode_mnemonic(log_msg)
+        if len(data_list) == 0:
+            return False
+        if data_list[0] == 'IX_GAS':
+            bs = base64.b64decode(data_list[1])
+            self._neon_income = int.from_bytes(bs, "little")
+            return True
 
     def _decode_ixdata(self) -> bool:
         try:
