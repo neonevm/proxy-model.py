@@ -2,19 +2,19 @@ import unittest
 
 from typing import Optional
 
-from solana.publickey import PublicKey
 from ..indexer.pythnetwork import PythNetworkClient
+from ..common_neon.solana_transaction import SolPubKey
 from ..common_neon.gas_price_calculator import GasPriceCalculator
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
-from unittest.mock import patch, call, Mock
+from unittest.mock import patch, call
 from decimal import Decimal
 
 
 class FakeConfig(Config):
     @property
-    def pyth_mapping_account(self) -> PublicKey:
-        return PublicKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')  # only for devnet
+    def pyth_mapping_account(self) -> SolPubKey:
+        return SolPubKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')  # only for devnet
 
     @property
     def min_gas_price(self) -> Optional[int]:
@@ -24,10 +24,10 @@ class FakeConfig(Config):
 class TestGasPriceCalculator(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        solana_url = "https://api.devnet.solana.com"  # devnet
-        solana = SolanaInteractor(solana_url)
         config = FakeConfig()
-        testee = GasPriceCalculator(solana, config)
+        solana_url = "https://api.devnet.solana.com"  # devnet
+        solana = SolInteractor(config, solana_url)
+        testee = GasPriceCalculator(config, solana)
         testee.update_mapping()
         cls.testee = testee
         cls.config = config

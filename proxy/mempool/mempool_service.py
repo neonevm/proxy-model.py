@@ -97,7 +97,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         try:
             self._mempool_srv = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
             self._mempool_maintenance_srv = AddrPickableDataSrv(user=self, address=self.MP_MAINTENANCE_ADDR)
-            self._mp_executor_mng = MPExecutorMng(self, self.EXECUTOR_COUNT, self._config)
+            self._mp_executor_mng = MPExecutorMng(self._config, self, self.EXECUTOR_COUNT)
             self._operator_resource_mng = OperatorResourceMng(self._config)
             self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
             self._mempool = MemPool(self._config, self._operator_resource_mng, self._mp_executor_mng)

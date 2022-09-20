@@ -2,15 +2,12 @@ from typing import List, Dict, Any
 
 from logged_groups import logged_group
 
-from solana.transaction import AccountMeta as SolanaAccountMeta, PublicKey
-
-from ..common_neon.solana_tx_list_sender import SolTxListInfo
+from ..common_neon.solana_transaction import SolTx, SolWrappedTx, SolPubKey, SolAccountMeta, SolAccount
 from ..common_neon.data import NeonTxExecCfg, NeonAccountDict, NeonEmulatedResult
 from ..common_neon.config import Config
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 from ..common_neon.errors import BadResourceError
 from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
 
@@ -22,35 +19,35 @@ from .operator_resource_mng import OperatorResourceInfo
 
 @logged_group("neon.MemPool")
 class AccountTxListBuilder:
-    def __init__(self, solana: SolanaInteractor, builder: NeonIxBuilder):
+    def __init__(self, solana: SolInteractor, builder: NeonIxBuilder):
         self._solana = solana
         self._builder = builder
         self._resize_contract_stage_list: List[NeonTxStage] = []
         self._create_account_stage_list: List[NeonTxStage] = []
-        self._eth_meta_dict: Dict[str, SolanaAccountMeta] = dict()
+        self._neon_meta_dict: Dict[str, SolAccountMeta] = {}
 
-    def build_tx(self, emulated_account_dict: NeonAccountDict) -> None:
+    def build_tx_list(self, emulated_account_dict: NeonAccountDict) -> None:
         self._resize_contract_stage_list.clear()
         self._create_account_stage_list.clear()
-        self._eth_meta_dict.clear()
+        self._neon_meta_dict.clear()
 
         # Parse information from the emulator output
         self._parse_accounts_list(emulated_account_dict['accounts'])
         self._parse_solana_list(emulated_account_dict['solana_accounts'])
 
-        neon_meta_list = list(self._eth_meta_dict.values())
+        neon_meta_list = list(self._neon_meta_dict.values())
         self.debug('metas: ' + ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in neon_meta_list]))
         self._builder.init_neon_account_list(neon_meta_list)
 
         # Build all instructions
         self._build_account_stage_list()
 
-    def _add_meta(self, pubkey: PublicKey, is_writable: bool) -> None:
+    def _add_meta(self, pubkey: SolPubKey, is_writable: bool) -> None:
         key = str(pubkey)
-        if key in self._eth_meta_dict:
-            self._eth_meta_dict[key].is_writable |= is_writable
+        if key in self._neon_meta_dict:
+            self._neon_meta_dict[key].is_writable |= is_writable
         else:
-            self._eth_meta_dict[key] = SolanaAccountMeta(pubkey=pubkey, is_signer=False, is_writable=is_writable)
+            self._neon_meta_dict[key] = SolAccountMeta(pubkey=pubkey, is_signer=False, is_writable=is_writable)
 
     def _parse_accounts_list(self, emulated_result_account_list: List[Dict[str, Any]]) -> None:
         for account_desc in emulated_result_account_list:
@@ -87,13 +84,9 @@ class AccountTxListBuilder:
     def has_tx_list(self) -> bool:
         return len(self._resize_contract_stage_list) > 0 or len(self._create_account_stage_list) > 0
 
-    def get_tx_list_info(self) -> SolTxListInfo:
+    def get_tx_list(self) -> List[SolTx]:
         all_stage_list = self._create_account_stage_list + self._resize_contract_stage_list
-
-        return SolTxListInfo(
-            name_list=[s.NAME for s in all_stage_list],
-            tx_list=[s.tx for s in all_stage_list]
-        )
+        return [SolWrappedTx(name=s.name, tx=s.tx) for s in all_stage_list]
 
     def clear_tx_list(self) -> None:
         self._resize_contract_stage_list.clear()
@@ -101,7 +94,7 @@ class AccountTxListBuilder:
 
 
 class NeonTxSendCtx:
-    def __init__(self, config: Config, solana: SolanaInteractor, resource: OperatorResourceInfo,
+    def __init__(self, config: Config, solana: SolInteractor, resource: OperatorResourceInfo,
                  neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg):
         self._config = config
         self._neon_tx_exec_cfg = neon_tx_exec_cfg
@@ -114,13 +107,11 @@ class NeonTxSendCtx:
         self._builder = NeonIxBuilder(resource.public_key)
 
         self._account_tx_list_builder = AccountTxListBuilder(solana, self._builder)
-        self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.account_dict)
+        self._account_tx_list_builder.build_tx_list(self._neon_tx_exec_cfg.account_dict)
 
         self._builder.init_operator_neon(self._resource.ether)
         self._builder.init_neon_tx(self._neon_tx)
         self._builder.init_iterative(self._resource.holder)
-
-        self._alt_close_queue = AddressLookupTableCloseQueue(self._solana)
 
         self._is_holder_completed = False
 
@@ -148,7 +139,7 @@ class NeonTxSendCtx:
 
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> None:
         self._neon_tx_exec_cfg.set_emulated_result(emulated_result)
-        self._account_tx_list_builder.build_tx(self._neon_tx_exec_cfg.account_dict)
+        self._account_tx_list_builder.build_tx_list(self._neon_tx_exec_cfg.account_dict)
 
     def set_state_tx_cnt(self, value: int) -> None:
         self._neon_tx_exec_cfg.set_state_tx_cnt(value)
@@ -174,24 +165,20 @@ class NeonTxSendCtx:
         return self._neon_tx
 
     @property
-    def resource(self) -> OperatorResourceInfo:
-        return self._resource
+    def signer(self) -> SolAccount:
+        return self._resource.signer
 
     @property
     def builder(self) -> NeonIxBuilder:
         return self._builder
 
     @property
-    def solana(self) -> SolanaInteractor:
+    def solana(self) -> SolInteractor:
         return self._solana
 
     @property
     def account_tx_list_builder(self) -> AccountTxListBuilder:
         return self._account_tx_list_builder
-
-    @property
-    def alt_close_queue(self) -> AddressLookupTableCloseQueue:
-        return self._alt_close_queue
 
     @property
     def neon_tx_exec_cfg(self) -> NeonTxExecCfg:

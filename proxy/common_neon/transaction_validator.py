@@ -1,19 +1,19 @@
 from __future__ import annotations
 from logged_groups import logged_group
 
-from .eth_proto import NeonTx
-from .address import EthereumAddress
-from .errors import EthereumError
-from .account_whitelist import AccountWhitelist
-from .solana_tx_error_parser import SolTxErrorParser
-from .solana_interactor import SolanaInteractor
-from .estimate import GasEstimate
-from .emulator_interactor import call_trx_emulated
+from ..common_neon.eth_proto import NeonTx
+from ..common_neon.address import EthereumAddress
+from ..common_neon.errors import EthereumError
+from ..common_neon.account_whitelist import AccountWhitelist
+from ..common_neon.solana_tx_error_parser import SolTxErrorParser
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.estimate import GasEstimate
+from ..common_neon.emulator_interactor import call_trx_emulated
 
-from .elf_params import ElfParams
-from .config import Config
+from ..common_neon.elf_params import ElfParams
+from ..common_neon.config import Config
 
-from .data import NeonTxExecCfg, NeonEmulatedResult
+from ..common_neon.data import NeonTxExecCfg, NeonEmulatedResult
 
 
 @logged_group("neon.Proxy")
@@ -21,7 +21,7 @@ class NeonTxValidator:
     MAX_U64 = pow(2, 64)
     MAX_U256 = pow(2, 256)
 
-    def __init__(self, solana: SolanaInteractor, config: Config, tx: NeonTx, min_gas_price: int):
+    def __init__(self, config: Config, solana: SolInteractor, tx: NeonTx, min_gas_price: int):
         self._solana = solana
         self._config = config
         self._tx = tx
@@ -88,12 +88,12 @@ class NeonTxValidator:
 
     def extract_ethereum_error(self, e: Exception):
         receipt_parser = SolTxErrorParser(e)
-        nonce_error = receipt_parser.get_nonce_error()
-        if nonce_error:
-            self.raise_nonce_error(nonce_error[0], nonce_error[1])
+        state_tx_cnt, tx_nonce = receipt_parser.get_nonce_error()
+        if state_tx_cnt is not None:
+            self.raise_nonce_error(state_tx_cnt, tx_nonce)
 
     def _prevalidate_whitelist(self):
-        w = AccountWhitelist(self._solana, self._config)
+        w = AccountWhitelist(self._config, self._solana)
         if not w.has_client_permission(self._sender[2:]):
             self.warning(f'Sender account {self._sender} is not allowed to execute transactions')
             raise EthereumError(message=f'Sender account {self._sender} is not allowed to execute transactions')
@@ -168,7 +168,7 @@ class NeonTxValidator:
             'value': hex(self._tx.value)
         }
 
-        calculator = GasEstimate(request, self._solana, self._config)
+        calculator = GasEstimate(self._config, self._solana, request)
         calculator.emulator_json = emulator_json
         self._estimated_gas = calculator.estimate()
 

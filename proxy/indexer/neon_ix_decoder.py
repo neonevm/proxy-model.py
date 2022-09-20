@@ -322,7 +322,7 @@ class DeleteHolderAccountIx(DummyIxDecoder):
 
 
 class WriteHolderAccountIx(DummyIxDecoder):
-    _name = 'WriteHolderAccountIx'
+    _name = 'WriteHolderAccount'
     _ix_code = 0x26
     _is_deprecated = False
 

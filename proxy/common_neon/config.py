@@ -1,16 +1,16 @@
 import os
 from typing import Optional
-from solana.publickey import PublicKey
 from decimal import Decimal
 
-from .environment_data import EVM_LOADER_ID, SOLANA_URL, RETRY_ON_FAIL
+from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.environment_data import EVM_LOADER_ID, SOLANA_URL, RETRY_ON_FAIL
 
 
 class Config:
     def __init__(self):
         self._solana_url = SOLANA_URL
         self._pp_solana_url = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
-        self._evm_loader_id = PublicKey(EVM_LOADER_ID)
+        self._evm_loader_id = SolPubKey(EVM_LOADER_ID)
         self._evm_step_cnt_limit = self._env_int("EVM_STEP_COUNT", 10, 750)
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
         self._holder_size = self._env_int("HOLDER_SIZE", 1024, 131072)  # 128*1024
@@ -38,9 +38,13 @@ class Config:
         self._indexer_parallel_request_cnt = self._env_int("INDEXER_PARALLEL_REQUEST_COUNT", 1, 10)
         self._indexer_poll_cnt = self._env_int("INDEXER_POLL_COUNT", 1, 1000)
         self._max_account_cnt = self._env_int("MAX_ACCOUNT_COUNT", 20, 60)
+        self._skip_preflight = self._env_bool("SKIP_PREFLIGHT", False)
+        self._fuzzing_blockhash = self._env_bool("FUZZING_BLOCKHASH", False)
+        self._confirm_timeout_sec = self._env_int("CONFIRM_TIMEOUT_SEC", 10, 10)
+        self._confirm_check_msec = self._env_int("CONFIRM_CHECK_MSEC", 10, 100)
 
         pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
-        self._pyth_mapping_account = PublicKey(pyth_mapping_account) if pyth_mapping_account is not None else None
+        self._pyth_mapping_account = SolPubKey(pyth_mapping_account) if pyth_mapping_account is not None else None
 
         self._validate()
 
@@ -74,7 +78,7 @@ class Config:
         return self._mempool_capacity
 
     @property
-    def pyth_mapping_account(self) -> Optional[PublicKey]:
+    def pyth_mapping_account(self) -> Optional[SolPubKey]:
         return self._pyth_mapping_account
 
     @property
@@ -82,7 +86,7 @@ class Config:
         return self._pp_solana_url
 
     @property
-    def evm_loader_id(self) -> PublicKey:
+    def evm_loader_id(self) -> SolPubKey:
         return self._evm_loader_id
 
     @property
@@ -187,6 +191,22 @@ class Config:
     def max_account_cnt(self) -> int:
         return self._max_account_cnt
 
+    @property
+    def skip_preflight(self) -> bool:
+        return self._skip_preflight
+
+    @property
+    def fuzzing_blockhash(self) -> bool:
+        return self._fuzzing_blockhash
+
+    @property
+    def confirm_timeout_sec(self) -> int:
+        return self._confirm_timeout_sec
+
+    @property
+    def confirm_check_msec(self) -> int:
+        return self._confirm_check_msec
+
     def __str__(self):
         return '\n        '.join([
             '',
@@ -220,6 +240,10 @@ class Config:
             f"START_SLOT: {self.start_slot}",
             f"INDEXER_PARALLEL_REQUEST_COUNT: {self.indexer_parallel_request_cnt}",
             f"INDEXER_POLL_COUNT: {self.indexer_poll_cnt}",
-            f"MAX_ACCOUNT_COUNT: {self.max_account_cnt}"
+            f"MAX_ACCOUNT_COUNT: {self.max_account_cnt}",
+            f"SKIP_PREFLIGHT: {self.skip_preflight}",
+            f"FUZZING_BLOCKHASH: {self.fuzzing_blockhash}",
+            f"CONFIRM_TIMEOUT_SEC: {self.confirm_timeout_sec}",
+            f"CONFIRM_CHECK_MSEC: {self.confirm_check_msec}",
             ""
         ])

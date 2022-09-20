@@ -4,9 +4,8 @@ import base64
 import base58
 
 from solana.rpc.api import Client as SolanaClient
-from solana.transaction import AccountMeta, Transaction, TransactionInstruction
-from solana.account import PublicKey
 from .solana_utils import WalletAccount, wallet_path, EvmLoader, client, send_transaction
+
 from solcx import compile_source
 from web3 import Web3
 
@@ -14,7 +13,8 @@ from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.address import EthereumAddress
 from ..common_neon.config import Config
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_transaction import SolAccountMeta, SolLegacyTx, SolTxIx, SolPubKey
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.utils import NeonTx
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from ..mempool.operator_resource_mng import OperatorResourceInfo, OperatorResourceInitializer
@@ -22,7 +22,6 @@ from ..mempool.operator_resource_mng import OperatorResourceInfo, OperatorResour
 from .testing_helpers import request_airdrop
 
 
-solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
 proxy_program = os.environ.get("TEST_PROGRAM")
 
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/196'
@@ -84,7 +83,7 @@ class CancelTest(unittest.TestCase):
     def setUpClass(cls):
         print("\ntest_indexer_work.py setUpClass")
 
-        cls.solana = SolanaClient(solana_url)
+        cls.solana = SolanaClient(Config().solana_url)
 
         request_airdrop(eth_account.address)
         request_airdrop(eth_account_invoked.address)
@@ -136,7 +135,7 @@ class CancelTest(unittest.TestCase):
         data = base64.b64decode(info['data'][0])
         acc_info = ACCOUNT_INFO_LAYOUT.parse(data)
 
-        code_address = PublicKey(acc_info.code_account)
+        code_address = SolPubKey(acc_info.code_account)
 
         return sol_address, code_address
 
@@ -167,7 +166,8 @@ class CancelTest(unittest.TestCase):
     @classmethod
     def create_neon_ix_builder(cls, raw_tx, neon_account_list):
         resource = OperatorResourceInfo(cls.signer, int.from_bytes(raw_tx[:8], byteorder="little"))
-        OperatorResourceInitializer(FakeConfig(), SolanaInteractor(solana_url)).init_resource(resource)
+        config = FakeConfig()
+        OperatorResourceInitializer(config, SolInteractor(config, config.solana_url)).init_resource(resource)
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
         neon_ix_builder.init_operator_neon(EthereumAddress.from_private_key(resource.secret_key))
@@ -210,17 +210,18 @@ class CancelTest(unittest.TestCase):
         neon_ix_builder, signer = cls.create_neon_ix_builder(
             tx_store_signed.rawTransaction,
             [
-                AccountMeta(pubkey=cls.re_id, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=cls.re_code, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=cls.caller, is_signer=False, is_writable=True)
+                SolAccountMeta(pubkey=cls.re_id, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=cls.re_code, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=cls.caller, is_signer=False, is_writable=True)
             ]
         )
 
         cls.tx_hash = tx_hash = tx_store_signed.hash
         print(f'tx_hash: {tx_hash.hex()}')
 
-        tx = Transaction().add(
+        tx = SolLegacyTx().add(
             neon_ix_builder.make_compute_budget_heap_ix(),
+            neon_ix_builder.make_compute_budget_cu_ix(),
             neon_ix_builder.make_tx_step_from_data_ix(10, 1)
         )
         receipt = send_transaction(client, tx, signer)
@@ -249,18 +250,19 @@ class CancelTest(unittest.TestCase):
         neon_ix_builder, signer = cls.create_neon_ix_builder(
             tx_transfer_signed.rawTransaction,
             [
-                AccountMeta(pubkey=cls.caller_getter, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=cls.caller_invoked, is_signer=False, is_writable=True)
+                SolAccountMeta(pubkey=cls.caller_getter, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=cls.caller_invoked, is_signer=False, is_writable=True)
             ]
         )
         noniterative = neon_ix_builder.make_tx_exec_from_data_ix()
 
-        tx = Transaction().add(
+        tx = SolLegacyTx().add(
             neon_ix_builder.make_compute_budget_heap_ix(),
-            TransactionInstruction(
-                keys=[AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False)] + noniterative.keys,
+            neon_ix_builder.make_compute_budget_cu_ix(),
+            SolTxIx(
+                keys=[SolAccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False)] + noniterative.keys,
                 data=noniterative.data,
-                program_id=PublicKey(proxy_program)
+                program_id=SolPubKey(proxy_program)
             )
         )
 
@@ -290,18 +292,19 @@ class CancelTest(unittest.TestCase):
         neon_ix_builder, signer = cls.create_neon_ix_builder(
             tx_transfer_signed.rawTransaction,
             [
-                AccountMeta(pubkey=cls.caller_getter, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=cls.caller_invoked, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=cls.caller_getter, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=cls.caller_invoked, is_signer=False, is_writable=True),
             ]
         )
 
         iterative = neon_ix_builder.make_tx_step_from_data_ix(250, 1)
-        tx = Transaction().add(
+        tx = SolLegacyTx().add(
             neon_ix_builder.make_compute_budget_heap_ix(),
-            TransactionInstruction(
-                keys=[AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False)] + iterative.keys,
+            neon_ix_builder.make_compute_budget_cu_ix(),
+            SolTxIx(
+                keys=[SolAccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False)] + iterative.keys,
                 data=bytearray.fromhex("ef") + iterative.data,
-                program_id=PublicKey(proxy_program)
+                program_id=SolPubKey(proxy_program)
             )
         )
 
@@ -314,9 +317,9 @@ class CancelTest(unittest.TestCase):
         print("\ncreate_two_calls_in_transaction")
 
         account_list = [
-            AccountMeta(pubkey=cls.caller, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=cls.re_id, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=cls.re_code, is_signer=False, is_writable=True),
+            SolAccountMeta(pubkey=cls.caller, is_signer=False, is_writable=True),
+            SolAccountMeta(pubkey=cls.re_id, is_signer=False, is_writable=True),
+            SolAccountMeta(pubkey=cls.re_code, is_signer=False, is_writable=True),
         ]
 
         nonce1 = proxy.eth.get_transaction_count(proxy.eth.default_account)
@@ -341,8 +344,9 @@ class CancelTest(unittest.TestCase):
         neon_ix_builder.init_neon_tx(NeonTx.fromString(call2_signed.rawTransaction))
         noniterative2 = neon_ix_builder.make_tx_exec_from_data_ix()
 
-        tx = Transaction().add(
+        tx = SolLegacyTx().add(
             neon_ix_builder.make_compute_budget_heap_ix(),
+            neon_ix_builder.make_compute_budget_cu_ix(),
             noniterative1,
             noniterative2
         )

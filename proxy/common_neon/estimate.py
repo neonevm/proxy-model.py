@@ -1,6 +1,7 @@
 import json
 import rlp
 import math
+from typing import Dict, Any
 from logged_groups import logged_group
 
 from proxy.common_neon.emulator_interactor import call_emulated
@@ -8,13 +9,13 @@ from ..common_neon.elf_params import ElfParams
 
 from .config import Config
 from .eth_proto import NeonTx
-from .solana_interactor import SolanaInteractor
+from .solana_interactor import SolInteractor
 from .layouts import ACCOUNT_INFO_LAYOUT
 
 
 @logged_group("neon.Proxy")
 class GasEstimate:
-    def __init__(self, request: dict, solana: SolanaInteractor, config: Config):
+    def __init__(self, config: Config, solana: SolInteractor, request: Dict[str, Any]):
         self._sender = request.get('from') or '0x0000000000000000000000000000000000000000'
         if self._sender:
             self._sender = self._sender[2:]

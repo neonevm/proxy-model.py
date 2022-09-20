@@ -1,18 +1,18 @@
 import unittest
-
-from solana.publickey import PublicKey
 import time
+import itertools
+
 from flask import request, Response
 from unittest.mock import Mock, MagicMock, patch, ANY
 from decimal import Decimal
 from typing import Optional
-import itertools
 
 from ..testing.mock_server import MockServer
 from ..airdropper import Airdropper, AIRDROP_AMOUNT_SOL
 from ..common_neon.config import Config
+from ..common_neon.solana_transaction import SolPubKey
 from ..indexer.sql_dict import SQLDict
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..testing.transactions import pre_token_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address
 
 
@@ -59,11 +59,12 @@ class FakeConfig(Config):
     def __init__(self, start_slot: str):
         super().__init__()
         self._start_slot = start_slot
-    def pyth_mapping_account(self) -> Optional[PublicKey]:
-        return PublicKey(b'TestMappingAccount')
+
+    def pyth_mapping_account(self) -> Optional[SolPubKey]:
+        return SolPubKey(b'TestMappingAccount')
 
 
-class Test_Airdropper(unittest.TestCase):
+class TestAirdropper(unittest.TestCase):
     def create_airdropper(self, start_slot: str):
         return Airdropper(config            =FakeConfig(start_slot),
                           faucet_url        =f'http://{self.address}:{self.faucet_port}',
@@ -71,7 +72,7 @@ class Test_Airdropper(unittest.TestCase):
 
     @classmethod
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_block_slot')
+    @patch.object(SolInteractor, 'get_block_slot')
     def setUpClass(cls, mock_get_slot, mock_dict_get) -> None:
         print("testing indexer in airdropper mode")
         cls.address = 'localhost'
@@ -254,7 +255,7 @@ class Test_Airdropper(unittest.TestCase):
             self.fail(f'Excpected not throws exception but it does: {err}')
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_block_slot')
+    @patch.object(SolInteractor, 'get_block_slot')
     def test_init_airdropper_slot_continue(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
@@ -265,7 +266,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_block_slot')
+    @patch.object(SolInteractor, 'get_block_slot')
     def test_init_airdropper_slot_continue_recent_slot_not_found(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [None]
@@ -276,7 +277,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_block_slot')
+    @patch.object(SolInteractor, 'get_block_slot')
     def test_init_airdropper_start_slot_parse_error(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
@@ -287,7 +288,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_block_slot')
+    @patch.object(SolInteractor, 'get_block_slot')
     def test_init_airdropper_slot_latest(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
@@ -298,7 +299,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_block_slot')
+    @patch.object(SolInteractor, 'get_block_slot')
     def test_init_airdropper_slot_number(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
@@ -309,7 +310,7 @@ class Test_Airdropper(unittest.TestCase):
         mock_dict_get.assert_called()
 
     @patch.object(SQLDict, 'get')
-    @patch.object(SolanaInteractor, 'get_block_slot')
+    @patch.object(SolInteractor, 'get_block_slot')
     def test_init_airdropper_big_slot_number(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]

@@ -6,16 +6,15 @@ from datetime import datetime
 from typing import Optional, List, Dict
 
 from logged_groups import logged_group
-from solana.account import Account as SolanaAccount
-from solana.publickey import PublicKey
 
 from ..common_neon.config import Config
 from ..common_neon.address import EthereumAddress, ether2program, permAccountSeed, accountWithSeed
 from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
-from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
+from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_transaction import SolPubKey, SolAccount, SolWrappedTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.errors import BadResourceError
 
@@ -25,7 +24,7 @@ from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateHolderAccountSta
 
 @logged_group("neon.MemPool")
 class OperatorResourceInfo:
-    def __init__(self, signer: SolanaAccount, resource_id: int):
+    def __init__(self, signer: SolAccount, resource_id: int):
         self._signer = signer
         self._resource_id = resource_id
 
@@ -37,13 +36,13 @@ class OperatorResourceInfo:
     @staticmethod
     def from_ident(ident: str) -> OperatorResourceInfo:
         key, rid = ident.split(':')
-        return OperatorResourceInfo(signer=SolanaAccount(bytes.fromhex(key)), resource_id=int(rid, 16))
+        return OperatorResourceInfo(signer=SolAccount(bytes.fromhex(key)), resource_id=int(rid, 16))
 
     def __str__(self) -> str:
         return f'{str(self.public_key)}:{self._resource_id}'
 
     @property
-    def holder(self) -> PublicKey:
+    def holder(self) -> SolPubKey:
         return self._holder
 
     @property
@@ -55,11 +54,11 @@ class OperatorResourceInfo:
         return self._ether
 
     @property
-    def signer(self) -> SolanaAccount:
+    def signer(self) -> SolAccount:
         return self._signer
 
     @property
-    def public_key(self) -> PublicKey:
+    def public_key(self) -> SolPubKey:
         return self._signer.public_key()
 
     @property
@@ -73,7 +72,7 @@ class OperatorResourceInfo:
 
 @logged_group("neon.MemPool")
 class OperatorResourceInitializer:
-    def __init__(self, config: Config, solana: SolanaInteractor):
+    def __init__(self, config: Config, solana: SolInteractor):
         self._config = config
         self._solana = solana
 
@@ -114,8 +113,8 @@ class OperatorResourceInitializer:
 
     def _execute_stage(self, stage: NeonTxStage, resource: OperatorResourceInfo) -> None:
         stage.build()
-        tx_list = SolTxListInfo(name_list=[stage.NAME], tx_list=[stage.tx])
-        tx_sender = SolTxListSender(self._solana, resource.signer)
+        tx_list = [SolWrappedTx(name=stage.name, tx=stage.tx)]
+        tx_sender = SolTxListSender(self._config, self._solana, resource.signer)
         tx_sender.send(tx_list)
 
     def _create_ether_account(self, builder: NeonIxBuilder, resource: OperatorResourceInfo):
@@ -157,13 +156,13 @@ class OperatorResourceInitializer:
     def _unlock_storage_account(self, resource: OperatorResourceInfo) -> None:
         self.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
         holder_info = self._solana.get_holder_account_info(resource.holder)
-        cancel_tx_executor = CancelTxExecutor(self._solana, resource.signer)
+        cancel_tx_executor = CancelTxExecutor(self._config, self._solana, resource.signer)
         cancel_tx_executor.add_blocked_holder_account(holder_info)
         cancel_tx_executor.execute_tx_list()
 
 
 class OperatorResourceIdent:
-    def __init__(self, signer: SolanaAccount, resource_id: int):
+    def __init__(self, signer: SolAccount, resource_id: int):
         self._signer = signer
         self._resource_id = resource_id
 
@@ -201,7 +200,7 @@ class OperatorResourceMng:
         self._init_resource_list()
 
     def _init_resource_list(self):
-        signer_list: List[SolanaAccount] = self._get_solana_accounts()
+        signer_list: List[SolAccount] = self._get_solana_accounts()
         stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
         for resource_id in range(self._config.perm_account_id, stop_perm_account_id):
             for signer in signer_list:
@@ -211,7 +210,7 @@ class OperatorResourceMng:
         assert self.resource_cnt != 0, 'Operator has NO resources!'
 
     @staticmethod
-    def _get_solana_accounts() -> List[SolanaAccount]:
+    def _get_solana_accounts() -> List[SolAccount]:
         return get_solana_accounts()
 
     @property

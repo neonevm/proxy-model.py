@@ -34,14 +34,14 @@ class MPExecutorMng(IMPExecutor):
         client: MPExecutorClient
         id: int
 
-    def __init__(self, user: IMPExecutorMngUser, executor_count: int, config: Config):
+    def __init__(self, config: Config, user: IMPExecutorMngUser, executor_count: int):
         self.info(f"Initialize executor mng with executor_count: {executor_count}")
         self._available_executor_pool: Deque[int] = deque()
         self._busy_executor_pool: Set[int] = set()
         self._executors: List[MPExecutorMng.ExecutorInfo] = list()
         self._user = user
         for i in range(executor_count):
-            executor_info = MPExecutorMng._create_executor(i, config)
+            executor_info = MPExecutorMng._create_executor(config, i)
             self._executors.append(executor_info)
             self._available_executor_pool.appendleft(i)
             executor_info.executor.start()
@@ -76,9 +76,9 @@ class MPExecutorMng(IMPExecutor):
         self._user.on_executor_released(executor_id)
 
     @staticmethod
-    def _create_executor(executor_id: int, config: Config) -> ExecutorInfo:
+    def _create_executor(config: Config, executor_id: int) -> ExecutorInfo:
         client_sock, srv_sock = socket.socketpair()
-        executor = MPExecutor(executor_id, srv_sock, config)
+        executor = MPExecutor(config, executor_id, srv_sock)
         client = MPExecutorClient(client_sock)
         return MPExecutorMng.ExecutorInfo(executor=executor, client=client, id=executor_id)
 

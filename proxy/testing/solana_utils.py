@@ -131,9 +131,9 @@ def confirm_transaction(http_client, tx_sig, confirmations=0):
     TIMEOUT = 30  # 30 seconds pylint: disable=invalid-name
     elapsed_time = 0
     while elapsed_time < TIMEOUT:
-        print('confirm_transaction for %s', tx_sig)
+        print(f'confirm_transaction for {tx_sig}')
         resp = http_client.get_signature_statuses([tx_sig])
-        print('confirm_transaction: %s', resp)
+        print(f'confirm_transaction: {resp}')
         if resp["result"]:
             status = resp['result']['value'][0]
             if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
@@ -142,7 +142,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=0):
         sleep_time = 0.1
         time.sleep(sleep_time)
         elapsed_time += sleep_time
-    raise RuntimeError("could not confirm transaction: ", tx_sig)
+    raise RuntimeError(f"could not confirm transaction: {tx_sig}")
 
 
 def accountWithSeed(base, seed, program):
@@ -507,9 +507,12 @@ def operator2_keypair_path():
 
 
 def send_transaction(client, trx, acc):
+    print(f' send_transaction')
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+    print(f' send result: {result}')
     confirm_transaction(client, result["result"])
     result = client.get_confirmed_transaction(result["result"])
+    print(f' done: {result}')
     return result
 
 

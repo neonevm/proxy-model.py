@@ -1,8 +1,7 @@
 from typing import Iterator, Optional, List, Type
 
-from solana.system_program import SYS_PROGRAM_ID
-
 from ..common_neon.utils import NeonTxInfo
+from ..common_neon.constants import SYS_PROGRAM_ID
 
 from ..indexer.neon_ix_decoder import DummyIxDecoder
 from ..indexer.indexed_objects import NeonIndexedTxInfo, NeonIndexedHolderInfo, NeonAccountInfo

@@ -4,9 +4,8 @@ import math
 from logged_groups import logged_group
 from typing import Optional
 
-
 from ..indexer.pythnetwork import PythNetworkClient
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
 
 
@@ -14,7 +13,7 @@ from ..common_neon.config import Config
 class GasPriceCalculator:
     _sol_price_symbol = 'Crypto.SOL/USD'
 
-    def __init__(self, solana: SolanaInteractor, config: Config) -> None:
+    def __init__(self, config: Config, solana: SolInteractor) -> None:
         self._config = config
         self._pyth_network_client = PythNetworkClient(solana)
         self._sol_price_usd: Optional[Decimal] = None

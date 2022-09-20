@@ -5,13 +5,14 @@ import re
 
 from logged_groups import logged_group
 from typing import Union, Optional, Any, Tuple
-from .utils import get_from_dict
 
+from ..common_neon.utils import get_from_dict
+from ..common_neon.solana_transaction import SolTxReceipt
 from ..common_neon.environment_data import EVM_LOADER_ID
 
 
 class SolTxError(Exception):
-    def __init__(self, receipt: dict):
+    def __init__(self, receipt: SolTxReceipt):
         self.result = receipt
 
         log_list = SolTxErrorParser(receipt).get_log_list()
@@ -38,19 +39,30 @@ class SolTxError(Exception):
 
 @logged_group("neon.Proxy")
 class SolTxErrorParser:
-    COMPUTATION_BUDGET_EXCEEDED = 'ComputationalBudgetExceeded'
-    PROGRAM_FAILED_TO_COMPLETE = 'ProgramFailedToComplete'
-    PROGRAM_EXCEED_INSTRUCTIONS = 'Program failed to complete: exceeded maximum number of instructions allowed'
-    READ_ONLY_BLOCKED = "trying to execute transaction on ro locked account"
-    READ_WRITE_BLOCKED = "trying to execute transaction on rw locked account"
-    ALT_INVALID_INDEX = 'invalid transaction: Transaction address table lookup uses an invalid index'
-    BLOCKHASH_NOTFOUND = 'BlockhashNotFound'
-    NUMSLOTS_BEHIND = 'numSlotsBehind'
+    _computation_budget_exceeded = 'ComputationalBudgetExceeded'
+    _program_failed_to_complete = 'ProgramFailedToComplete'
+    _program_exceed_instructions = 'Program failed to complete: exceeded maximum number of instructions allowed'
+    _read_only_blocked = "trying to execute transaction on ro locked account"
+    _read_write_blocked = "trying to execute transaction on rw locked account"
+    _alt_invalid_index = 'invalid transaction: Transaction address table lookup uses an invalid index'
+    _blockhash_notfound = 'BlockhashNotFound'
+    _numslots_behind = 'numSlotsBehind'
 
-    CREATE_ACCOUNT_RE = re.compile(r'Create Account: account Address { address: (\w+), base: Some\((\w+)\) } already in use')
-    NONCE_RE = re.compile(f'Program log: {EVM_LOADER_ID}:\d+ : Invalid Ethereum transaction nonce: acc (\d+), trx (\d+)')
+    _create_account_re = re.compile(
+        r'Program log: program/src/instruction/account_create.rs:\d+ : Account (\w+) - expected system owned'
+    )
 
-    def __init__(self, receipt: Union[dict, Exception, str]):
+    _nonce_re = re.compile(
+        f'Program log: {EVM_LOADER_ID}' + r':\d+ : Invalid Ethereum transaction nonce: acc (\d+), trx (\d+)'
+    )
+
+    _already_finalized_re = re.compile(
+        r'Program log: program/src/instruction/transaction_step_from_account.rs:\d+ : Transaction already finalized'
+    )
+
+    def __init__(self, receipt: Union[SolTxReceipt, Exception, str]):
+        assert isinstance(receipt, dict) or isinstance(receipt, Exception) or isinstance(receipt, str)
+
         if isinstance(receipt, SolTxError):
             self._receipt = receipt.result
         else:
@@ -62,11 +74,17 @@ class SolTxErrorParser:
         self._error_code_msg: Optional[Tuple[int, str]] = None
         self._is_error_code_msg_init = False
 
-    @staticmethod
-    def raise_budget_exceeded():
+    @property
+    def receipt(self) -> Union[SolTxReceipt, Exception, str]:
+        return self._receipt
+
+    def raise_budget_exceeded(self) -> None:
+        if self.check_if_budget_exceeded():
+            raise SolTxError(self._receipt)
+
         raise SolTxError({
             'err': {
-                'InstructionError': [1, SolTxErrorParser.COMPUTATION_BUDGET_EXCEEDED]
+                'InstructionError': [1, SolTxErrorParser._computation_budget_exceeded]
             }
         })
 
@@ -163,6 +181,10 @@ class SolTxErrorParser:
         if not self._is_log_list_init:
             self._is_log_list_init = True
             self._log_list = self._get_log_list()
+
+            if len(self._log_list) == 0:
+                self.error(f"Can't get logs from receipt: {json.dumps(self._receipt, sort_keys=True)}")
+
         return self._log_list
 
     def check_if_error(self) -> bool:
@@ -185,55 +207,56 @@ class SolTxErrorParser:
         if not isinstance(error_type, str):
             return False
 
-        if error_type == self.COMPUTATION_BUDGET_EXCEEDED:
+        if error_type == self._computation_budget_exceeded:
             return True
-        if error_type == self.PROGRAM_FAILED_TO_COMPLETE:
+        if error_type == self._program_failed_to_complete:
             log_list = self.get_log_list()
             for log in log_list:
-                if log.startswith(self.PROGRAM_EXCEED_INSTRUCTIONS):
+                if log.startswith(self._program_exceed_instructions):
                     return True
         return False
 
     def check_if_account_already_exists(self) -> bool:
         log_list = self.get_log_list()
-
-        if not len(log_list):
-            self.error(f"Can't get logs from receipt: {json.dumps(self._receipt, sort_keys=True)}")
-            return False
-
         for log in log_list:
-            m = self.CREATE_ACCOUNT_RE.search(log)
+            m = self._create_account_re.search(log)
+            if m is not None:
+                return True
+        return False
+
+    def check_if_already_finalized(self) -> bool:
+        log_list = self.get_log_list()
+        for log in log_list:
+            m = self._already_finalized_re.search(log)
             if m is not None:
                 return True
         return False
 
     def check_if_accounts_blocked(self) -> bool:
         log_list = self.get_log_list()
-        if not len(log_list):
-            self.error(f"Can't get logs from receipt: {json.dumps(self._receipt, sort_keys=True)}")
-            return False
-
         for log in log_list:
-            if (log.find(self.READ_ONLY_BLOCKED) >= 0) or (log.find(self.READ_WRITE_BLOCKED) >= 0):
+            if (log.find(self._read_only_blocked) >= 0) or (log.find(self._read_write_blocked) >= 0):
                 return True
         return False
 
     def check_if_blockhash_notfound(self) -> bool:
         if not self._receipt:
             return True
-        return self.get_error() == self.BLOCKHASH_NOTFOUND
-
-    def get_slots_behind(self) -> Optional[int]:
-        return self._get_value('data', self.NUMSLOTS_BEHIND)
+        return self.get_error() == self._blockhash_notfound
 
     def check_if_alt_uses_invalid_index(self) -> bool:
-        a = self.get_error_code_msg()
-        return self.get_error_code_msg() == (-32602, self.ALT_INVALID_INDEX)
+        return self.get_error_code_msg() == (-32602, self._alt_invalid_index)
+
+    def check_if_already_processed(self) -> bool:
+        return self._get_value('data', 'err') == 'AlreadyProcessed'
+
+    def get_slots_behind(self) -> Optional[int]:
+        return self._get_value('data', self._numslots_behind)
 
     def get_nonce_error(self) -> Tuple[Optional[int], Optional[int]]:
         log_list = self._get_log_list()
         for log in log_list:
-            s = self.NONCE_RE.search(log)
+            s = self._nonce_re.search(log)
             if s is not None:
                 state_tx_cnt, tx_nonce = s.groups()
                 return int(state_tx_cnt), int(tx_nonce)

@@ -1,22 +1,23 @@
 import traceback
 from datetime import datetime
-from proxy.common_neon.permission_token import PermissionToken
-from solana.publickey import PublicKey
-from solana.account import Account as SolanaAccount
 from typing import Union
-from proxy.common_neon.address import EthereumAddress
 from logged_groups import logged_group
+
+from ..common_neon.address import EthereumAddress
+from ..common_neon.permission_token import PermissionToken
+from ..common_neon.solana_transaction import SolPubKey, SolAccount
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.config import Config
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 
 
 @logged_group("neon.AccountWhitelist")
 class AccountWhitelist:
-    def __init__(self, solana: SolanaInteractor, config: Config):
+    def __init__(self, config: Config, solana: SolInteractor):
         self.solana = solana
         self.account_cache = {}
         self.permission_update_int = config.account_permission_update_int
+        self.mint_authority_file = "/spl/bin/evm_loader-keypair.json"
         self.allowance_token = None
         self.denial_token = None
 
@@ -29,8 +30,8 @@ class AccountWhitelist:
             self.error(f'Wrong proxy configuration: allowance and denial tokens must both exist or absent!')
             raise Exception("NEON service is unhealthy. Try again later")
 
-        self.allowance_token = PermissionToken(self.solana, PublicKey(allowance_token_addr))
-        self.denial_token = PermissionToken(self.solana, PublicKey(denial_token_addr))
+        self.allowance_token = PermissionToken(config, self.solana, SolPubKey(allowance_token_addr))
+        self.denial_token = PermissionToken(config, self.solana, SolPubKey(denial_token_addr))
 
     def read_balance_diff(self, ether_addr: Union[str, EthereumAddress]) -> int:
         token_list = [
@@ -43,7 +44,7 @@ class AccountWhitelist:
         denial_balance = balance_list[1]
         return allowance_balance - denial_balance
 
-    def grant_permissions(self, ether_addr: Union[str, EthereumAddress], min_balance: int, signer: SolanaAccount):
+    def grant_permissions(self, ether_addr: Union[str, EthereumAddress], min_balance: int, signer: SolAccount):
         try:
             diff = self.read_balance_diff(ether_addr)
             if diff >= min_balance:
@@ -51,14 +52,14 @@ class AccountWhitelist:
                 return True
 
             to_mint = min_balance - diff
-            self.allowance_token.mint_to(to_mint, ether_addr, signer)
+            self.allowance_token.mint_to(to_mint, ether_addr, self.mint_authority_file, signer)
             self.info(f'Permissions granted to {ether_addr}')
             return True
         except Exception as err:
             self.error(f'Failed to grant permissions to {ether_addr}: {type(err)}: {err}')
             return False
 
-    def deprive_permissions(self, ether_addr: Union[str, EthereumAddress], min_balance: int, signer: SolanaAccount):
+    def deprive_permissions(self, ether_addr: Union[str, EthereumAddress], min_balance: int, signer: SolAccount):
         try:
             diff = self.read_balance_diff(ether_addr)
             if diff < min_balance:
@@ -66,7 +67,7 @@ class AccountWhitelist:
                 return True
 
             to_mint = diff - min_balance + 1
-            self.denial_token.mint_to(to_mint, ether_addr, signer)
+            self.denial_token.mint_to(to_mint, ether_addr, self.mint_authority_file, signer)
             self.info(f'Permissions deprived to {ether_addr}')
             return True
         except Exception as err:
@@ -75,17 +76,17 @@ class AccountWhitelist:
                        f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
             return False
 
-    def grant_client_permissions(self, ether_addr: Union[str, EthereumAddress]):
-        return self.grant_permissions(ether_addr, ElfParams().neon_minimal_client_allowance_balance)
+    def grant_client_permissions(self, ether_addr: Union[str, EthereumAddress], signer: SolAccount):
+        return self.grant_permissions(ether_addr, ElfParams().neon_minimal_client_allowance_balance, signer)
 
-    def grant_contract_permissions(self, ether_addr: Union[str, EthereumAddress]):
-        return self.grant_permissions(ether_addr, ElfParams().neon_minimal_contract_allowance_balance)
+    def grant_contract_permissions(self, ether_addr: Union[str, EthereumAddress], signer: SolAccount):
+        return self.grant_permissions(ether_addr, ElfParams().neon_minimal_contract_allowance_balance, signer)
 
-    def deprive_client_permissions(self, ether_addr: Union[str, EthereumAddress]):
-        return self.deprive_permissions(ether_addr, ElfParams().neon_minimal_client_allowance_balance)
+    def deprive_client_permissions(self, ether_addr: Union[str, EthereumAddress], signer: SolAccount):
+        return self.deprive_permissions(ether_addr, ElfParams().neon_minimal_client_allowance_balance, signer)
 
-    def deprive_contract_permissions(self, ether_addr: Union[str, EthereumAddress]):
-        return self.deprive_permissions(ether_addr, ElfParams().neon_minimal_contract_allowance_balance)
+    def deprive_contract_permissions(self, ether_addr: Union[str, EthereumAddress], signer: SolAccount):
+        return self.deprive_permissions(ether_addr, ElfParams().neon_minimal_contract_allowance_balance, signer)
 
     def get_current_time(self):
         return datetime.now().timestamp()

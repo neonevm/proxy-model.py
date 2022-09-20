@@ -367,4 +367,3 @@ class MemPool:
     def take_in_tx_list(self, sender_addr: str, mp_tx_request_list: MPTxRequestList):
         self._tx_schedule.take_in_tx_list(sender_addr, mp_tx_request_list)
         self._create_kick_tx_schedule_task()
-

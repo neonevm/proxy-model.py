@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, NamedTuple, cast
+from dataclasses import dataclass
+from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, cast
 
 import re
 import base58
@@ -12,12 +13,16 @@ from ..common_neon.utils import str_fmt_object
 from ..common_neon.environment_data import EVM_LOADER_ID
 
 
-class SolTxSigSlotInfo(NamedTuple):
+@dataclass
+class SolTxSigSlotInfo:
     sol_sig: str
     block_slot: int
 
     def __str__(self) -> str:
         return f'{self.block_slot}:{self.sol_sig}'
+
+    def __hash__(self) -> int:
+        return hash(str(self))
 
 
 class SolTxMetaInfo:

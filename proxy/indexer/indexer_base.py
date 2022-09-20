@@ -3,12 +3,12 @@ import traceback
 from logged_groups import logged_group
 
 from ..common_neon.config import Config
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 
 
 @logged_group("neon.Indexer")
 class IndexerBase:
-    def __init__(self, solana: SolanaInteractor, config: Config, last_slot: int):
+    def __init__(self, config: Config, solana: SolInteractor, last_slot: int):
         self._solana = solana
         self._config = config
         self._last_slot = self._init_last_slot('receipt', last_slot)

@@ -5,12 +5,12 @@ import time
 from typing import List, Optional, Dict, Deque, Type
 from collections import deque
 from logged_groups import logged_group, logging_context
-from solana.publickey import PublicKey
 
+from ..common_neon.solana_transaction import SolPubKey
 from ..common_neon.data import NeonTxStatData
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo, SolNeonIxReceiptInfo
 from ..common_neon.constants import ACTIVE_STORAGE_TAG
@@ -34,19 +34,19 @@ from ..indexer.neon_ix_decoder_deprecate import get_neon_ix_decoder_deprecated_l
 @logged_group("neon.Indexer")
 class Indexer(IndexerBase):
     def __init__(self, config: Config, indexer_stat_exporter: IIndexerStatExporter):
-        solana = SolanaInteractor(config.solana_url)
+        solana = SolInteractor(config, config.solana_url)
         self._db = IndexerDB()
         last_known_slot = self._db.get_min_receipt_block_slot()
-        super().__init__(solana, config, last_known_slot)
-        self._cancel_tx_executor = CancelTxExecutor(solana, get_solana_accounts()[0])
+        super().__init__(config, solana, last_known_slot)
+        self._cancel_tx_executor = CancelTxExecutor(config, solana, get_solana_accounts()[0])
         self._counted_logger = MetricsToLogger()
         self._stat_exporter = indexer_stat_exporter
         self._last_stat_time = 0.0
         sol_tx_meta_dict = SolTxMetaDict()
-        self._finalized_sol_tx_collector = FinalizedSolTxMetaCollector(
-            config, sol_tx_meta_dict, self._solana, self._last_slot
-        )
-        self._confirmed_sol_tx_collector = ConfirmedSolTxMetaCollector(config, sol_tx_meta_dict, self._solana)
+        collector = FinalizedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict, self._last_slot)
+        self._finalized_sol_tx_collector = collector
+        collector = ConfirmedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict)
+        self._confirmed_sol_tx_collector = collector
         self._confirmed_block_slot: Optional[int] = None
         self._neon_block_dict = NeonIndexedBlockDict()
 
@@ -87,7 +87,7 @@ class Indexer(IndexerBase):
 
         holder_account = tx.storage_account
 
-        holder_info = self._solana.get_holder_account_info(PublicKey(holder_account))
+        holder_info = self._solana.get_holder_account_info(SolPubKey(holder_account))
         if not holder_info:
             self.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} is empty')
             return False

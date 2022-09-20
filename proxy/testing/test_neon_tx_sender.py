@@ -7,7 +7,7 @@ from typing import List
 from ..common_neon.config import Config
 from ..common_neon.errors import BadResourceError
 
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 
 from ..mempool.operator_resource_mng import OperatorResourceMng, OperatorResourceInitializer, OperatorResourceInfo
 
@@ -40,7 +40,8 @@ class FakeConfig(Config):
 class TestNeonTxSender(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.solana = SolanaInteractor(os.environ['SOLANA_URL'])
+        config = Config()
+        cls.solana = SolInteractor(config, config.solana_url)
 
     def setUp(self) -> None:
         self._config = FakeConfig()

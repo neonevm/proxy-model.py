@@ -6,7 +6,7 @@ from multiprocessing import Process
 
 from prometheus_client import start_http_server
 from ..common_neon.address import EthereumAddress
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.config import Config
 from ..common_neon.gas_price_calculator import GasPriceCalculator
@@ -19,8 +19,10 @@ class PrometheusProxyServer:
     def __init__(self):
         self._stat_exporter = PrometheusExporter()
         self._config = Config()
-        self._solana = SolanaInteractor(self._config.solana_url)
-        self._gas_price_calculator = GasPriceCalculator(SolanaInteractor(self._config.pyth_solana_url), self._config)
+        self._solana = SolInteractor(self._config, self._config.solana_url)
+        self._gas_price_calculator = GasPriceCalculator(
+            self._config, SolInteractor(self._config, self._config.pyth_solana_url)
+        )
 
         self._last_gas_price_update_interval = 0
         self.update_gas_price()

@@ -5,9 +5,8 @@ from typing import Optional, Dict
 from logged_groups import logged_group
 from singleton_decorator import singleton
 
-from solana.publickey import PublicKey
-
-from .environment_utils import neon_cli
+from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.environment_utils import neon_cli
 
 
 @singleton
@@ -33,8 +32,8 @@ class ElfParams:
         return int(self._elf_param_dict.get("NEON_ADDITIONAL_FEE"))
 
     @property
-    def neon_token_mint(self) -> PublicKey:
-        return PublicKey(self._elf_param_dict.get("NEON_TOKEN_MINT"))
+    def neon_token_mint(self) -> SolPubKey:
+        return SolPubKey(self._elf_param_dict.get("NEON_TOKEN_MINT"))
 
     @property
     def chain_id(self) -> int:

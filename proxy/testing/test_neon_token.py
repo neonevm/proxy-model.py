@@ -3,30 +3,34 @@ from solcx import compile_source
 from web3 import Web3
 import os
 from .testing_helpers import request_airdrop
-from solana.account import Account as SolanaAccount
+
 from solana.rpc.api import Client as SolanaClient
 from solana.rpc.types import TxOpts
-from solana.transaction import Transaction
+from solana.rpc.commitment import Commitment
+
 from spl.token.client import Token as SplToken
 from spl.token.instructions import get_associated_token_address, create_associated_token_account
-from ..common_neon.elf_params import ElfParams
 from spl.token.constants import TOKEN_PROGRAM_ID
-from solana.rpc.commitment import Confirmed
+
 from web3 import exceptions as web3_exceptions
 from random import uniform
 from eth_account.signers.local import LocalAccount as NeonAccount
 
+from proxy.common_neon.config import Config
+from proxy.common_neon.solana_transaction import SolLegacyTx, SolAccount
+from proxy.common_neon.elf_params import ElfParams
+
+Confirmed = Commitment('confirmed')
 
 PROXY_URL = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
-SOLANA_URL = os.environ.get('SOLANA_URL', 'http://solana:8899/')
 proxy = Web3(Web3.HTTPProvider(PROXY_URL))
-solana = SolanaClient(SOLANA_URL)
+solana = SolanaClient(Config().solana_url)
 
 
 class TestNeonToken(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.sol_payer = SolanaAccount()
+        cls.sol_payer = SolAccount()
         cls.deploy_contract(cls)
         cls.spl_neon_token = SplToken(solana, ElfParams().neon_token_mint, TOKEN_PROGRAM_ID, cls.sol_payer)
 
@@ -38,7 +42,7 @@ class TestNeonToken(unittest.TestCase):
         return new_neon_acc
 
     def create_sol_account(self, balance = 1000_000_000_000):
-        new_sol_acc = SolanaAccount()
+        new_sol_acc = SolAccount()
         print(f"New Solana account {new_sol_acc.public_key()} with balance {balance}")
         solana.request_airdrop(new_sol_acc.public_key(), balance)
         return new_sol_acc
@@ -70,7 +74,7 @@ class TestNeonToken(unittest.TestCase):
         self.neon_contract = proxy.eth.contract(address=self.neon_token_address,
                                                 abi=self.neon_token_iface['abi'])
 
-    def withdraw(self, source_acc: NeonAccount, dest_acc: SolanaAccount, withdraw_amount_alan: int):
+    def withdraw(self, source_acc: NeonAccount, dest_acc: SolAccount, withdraw_amount_alan: int):
         nonce = proxy.eth.get_transaction_count(source_acc.address)
         tx = {'value': withdraw_amount_alan, 'nonce': nonce}
         withdraw_tx_dict = self.neon_contract.functions.withdraw(bytes(dest_acc.public_key())).buildTransaction(tx)
@@ -123,7 +127,7 @@ class TestNeonToken(unittest.TestCase):
         dest_acc = self.create_sol_account()
 
         # Creating destination Associated Token Account
-        trx = Transaction()
+        trx = SolLegacyTx()
         trx.add(
             create_associated_token_account(
                 dest_acc.public_key(),

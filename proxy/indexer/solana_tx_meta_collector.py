@@ -7,7 +7,7 @@ from typing import Optional, Dict, Union, Iterator, List, Any
 from abc import ABC, abstractmethod
 
 from .solana_signatures_db import SolSigsDB
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
 
@@ -50,8 +50,8 @@ class SolTxMetaDict:
 @logged_group("neon.Indexer")
 class SolTxMetaCollector(ABC):
     def __init__(self, config: Config,
+                 solana: SolInteractor,
                  tx_meta_dict: SolTxMetaDict,
-                 solana: SolanaInteractor,
                  commitment: str,
                  is_finalized: bool):
         self._solana = solana
@@ -97,7 +97,10 @@ class SolTxMetaCollector(ABC):
     def _iter_sig_slot(self, start_sig: Optional[str], start_slot: int, stop_slot: int) -> Iterator[SolTxSigSlotInfo]:
         response_list_len = 1
         while response_list_len:
-            response_list = self._request_sig_info_list(start_sig, self._config.indexer_poll_cnt)
+            response_list = self._solana.get_sig_list_for_address(
+                self._config.evm_loader_id,
+                start_sig, self._config.indexer_poll_cnt, self._commitment
+            )
             response_list_len = len(response_list)
             if response_list_len == 0:
                 return
@@ -112,19 +115,11 @@ class SolTxMetaCollector(ABC):
 
                 yield SolTxSigSlotInfo(block_slot=block_slot, sol_sig=response['signature'])
 
-    def _request_sig_info_list(self, start_sig: Optional[str], limit: int) -> List[Dict[str, Union[int, str]]]:
-        response = self._solana.get_signatures_for_address(start_sig, limit, self._commitment)
-        error = response.get('error')
-        if error:
-            self.warning(f'fail to get solana signatures: {error}')
-
-        return response.get('result', [])
-
 
 @logged_group("neon.Indexer")
 class FinalizedSolTxMetaCollector(SolTxMetaCollector):
-    def __init__(self, config: Config, tx_meta_dict: SolTxMetaDict, solana: SolanaInteractor, stop_slot: int):
-        super().__init__(config, tx_meta_dict, solana, commitment=config.finalized_commitment, is_finalized=True)
+    def __init__(self, config: Config, solana: SolInteractor, tx_meta_dict: SolTxMetaDict, stop_slot: int):
+        super().__init__(config, solana, tx_meta_dict, commitment=config.finalized_commitment, is_finalized=True)
         self.debug(f'Finalized commitment: {self._commitment}')
         self._sigs_db = SolSigsDB()
         self._stop_slot = stop_slot
@@ -206,8 +201,8 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
 
 @logged_group("neon.Indexer")
 class ConfirmedSolTxMetaCollector(SolTxMetaCollector):
-    def __init__(self, config: Config, tx_meta_dict: SolTxMetaDict, solana: SolanaInteractor):
-        super().__init__(config, tx_meta_dict, solana, commitment=config.confirmed_commitment, is_finalized=False)
+    def __init__(self, config: Config, solana: SolInteractor, tx_meta_dict: SolTxMetaDict):
+        super().__init__(config, solana, tx_meta_dict, commitment=config.confirmed_commitment, is_finalized=False)
         self.debug(f'Confirmed commitment: {self._commitment}')
 
     def iter_tx_meta(self, start_slot: int, stop_slot: int) -> Iterator[SolTxMetaInfo]:

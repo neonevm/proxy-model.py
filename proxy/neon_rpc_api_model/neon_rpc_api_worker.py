@@ -17,7 +17,7 @@ from ..common_neon.errors import EthereumError, InvalidParamError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.keys_storage import KeyStorage
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.utils import JsonBytesEncoder
 from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
 from ..common_neon.config import Config
@@ -39,7 +39,7 @@ class NeonRpcApiWorker:
 
     def __init__(self):
         self._config = Config()
-        self._solana = SolanaInteractor(self._config.solana_url)
+        self._solana = SolInteractor(self._config, self._config.solana_url)
         self._db = IndexerDB()
         self._stat_exporter: Optional[StatisticsExporter] = None
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
@@ -104,7 +104,7 @@ class NeonRpcApiWorker:
             param['to'] = self._normalize_account(param['to'])
 
         try:
-            calculator = GasEstimate(param, self._solana, self._config)
+            calculator = GasEstimate(self._config, self._solana, param)
             calculator.execute()
             return hex(calculator.estimate())
 
@@ -508,7 +508,7 @@ class NeonRpcApiWorker:
                 raise EthereumError(message='already known')
 
             min_gas_price = self._gas_price.min_gas_price
-            neon_tx_validator = NeonTxValidator(self._solana, self._config, neon_tx, min_gas_price)
+            neon_tx_validator = NeonTxValidator(self._config, self._solana, neon_tx, min_gas_price)
             neon_tx_exec_cfg = neon_tx_validator.precheck()
 
             req_id = LogMng.get_logging_context().get("req_id")

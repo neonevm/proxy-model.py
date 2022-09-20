@@ -3,7 +3,6 @@ import multiprocessing as mp
 import socket
 import traceback
 
-
 from logged_groups import logged_group, logging_context
 from typing import Optional, Any, List, Dict, cast
 from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
@@ -11,13 +10,13 @@ from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.errors import BlockedAccountsError
 from ..common_neon.errors import NodeBehindError, SolanaUnavailableError, NonceTooLowError, BadResourceError
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.address import EthereumAddress
 from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 
-from .transaction_sender_ctx import NeonTxSendCtx
-from .transaction_sender import NeonTxSendStrategyExecutor
+from .neon_tx_sender_ctx import NeonTxSendCtx
+from .neon_tx_sender import NeonTxSendStrategyExecutor
 
 from .operator_resource_mng import OperatorResourceInfo, OperatorResourceInitializer
 from .mempool_api import MPRequestType, MPRequest
@@ -29,14 +28,14 @@ from .mempool_api import MPOpResInitRequest, MPOpResInitResult, MPOpResInitResul
 
 @logged_group("neon.MemPool")
 class MPExecutor(mp.Process, IPickableDataServerUser):
-    def __init__(self, executor_id: int, srv_sock: socket.socket, config: Config):
+    def __init__(self, config: Config, executor_id: int, srv_sock: socket.socket):
         self.info(f"Initialize mempool_executor: {executor_id}")
         self._id = executor_id
         self._srv_sock = srv_sock
         self._config = config
         self.info(f"Config: {self._config}")
         self._event_loop: asyncio.BaseEventLoop
-        self._solana: Optional[SolanaInteractor] = None
+        self._solana: Optional[SolInteractor] = None
         self._gas_price_calculator: Optional[GasPriceCalculator] = None
         self._pickable_data_srv: Optional[PipePickableDataSrv] = None
         mp.Process.__init__(self)
@@ -46,7 +45,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._event_loop)
         self._pickable_data_srv = PipePickableDataSrv(user=self, srv_sock=self._srv_sock)
-        self._solana = SolanaInteractor(self._config.solana_url)
+        self._solana = SolInteractor(self._config, self._config.solana_url)
 
         self._init_gas_price_calculator()
 
@@ -55,7 +54,10 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self.error(f"{text}. Error: {err}, Traceback: {err_tb}")
 
     def _init_gas_price_calculator(self):
-        self._gas_price_calculator = GasPriceCalculator(SolanaInteractor(self._config.pyth_solana_url), self._config)
+        self._gas_price_calculator = GasPriceCalculator(
+            self._config,
+            SolInteractor(self._config, self._config.pyth_solana_url)
+        )
         self._update_gas_price_calculator()
 
     def _update_gas_price_calculator(self):

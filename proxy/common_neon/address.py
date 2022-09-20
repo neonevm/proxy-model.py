@@ -8,10 +8,10 @@ from typing import Tuple
 
 from eth_keys import keys as eth_keys
 from hashlib import sha256
-from solana.publickey import PublicKey
 
-from .environment_data import EVM_LOADER_ID
-from .constants import ACCOUNT_SEED_VERSION
+from .solana_transaction import SolPubKey
+from ..common_neon.environment_data import EVM_LOADER_ID
+from ..common_neon.constants import ACCOUNT_SEED_VERSION
 
 
 class EthereumAddress:
@@ -42,8 +42,8 @@ class EthereumAddress:
     def __bytes__(self): return self.data
 
 
-def accountWithSeed(base_address: PublicKey, seed: bytes) -> PublicKey:
-    result = PublicKey(sha256(bytes(base_address) + bytes(seed) + bytes(PublicKey(EVM_LOADER_ID))).digest())
+def accountWithSeed(base_address: SolPubKey, seed: bytes) -> SolPubKey:
+    result = SolPubKey(sha256(bytes(base_address) + bytes(seed) + bytes(SolPubKey(EVM_LOADER_ID))).digest())
     return result
 
 
@@ -54,7 +54,7 @@ def permAccountSeed(prefix: bytes, resource_id: int) -> bytes:
     return bytes(seed, 'utf8')
 
 
-def ether2program(ether) -> Tuple[PublicKey, int]:
+def ether2program(ether) -> Tuple[SolPubKey, int]:
 
     if isinstance(ether, str):
         pass
@@ -66,5 +66,5 @@ def ether2program(ether) -> Tuple[PublicKey, int]:
     if ether[0:2] == '0x':
         ether = ether[2:]
     seed = [ACCOUNT_SEED_VERSION,  bytes.fromhex(ether)]
-    (pda, nonce) = PublicKey.find_program_address(seed, PublicKey(EVM_LOADER_ID))
+    (pda, nonce) = SolPubKey.find_program_address(seed, SolPubKey(EVM_LOADER_ID))
     return pda, nonce

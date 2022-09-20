@@ -1,16 +1,17 @@
-from solana.publickey import PublicKey
 import requests
 import base58
 import traceback
 import psycopg2.extensions
+
 from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
 
 from ..common_neon.config import Config
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.utils import NeonTx
 from ..indexer.indexer_base import IndexerBase
+from ..common_neon.solana_transaction import SolPubKey
 from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
 from ..indexer.pythnetwork import PythNetworkClient
 from ..indexer.base_db import BaseDB
@@ -69,13 +70,13 @@ class Airdropper(IndexerBase):
                  max_conf = 0.1): # maximum confidence interval deviation related to price
         self._constants = SQLDict(tablename="constants")
 
-        solana = SolanaInteractor(config.solana_url)
+        solana = SolInteractor(config, config.solana_url)
         last_known_slot = self._constants.get('latest_processed_slot', None)
-        super().__init__(solana, config, last_known_slot)
+        super().__init__(config, solana, last_known_slot)
         self.latest_processed_slot = self._last_slot
         self.current_slot = 0
         sol_tx_meta_dict = SolTxMetaDict()
-        self._sol_tx_collector = FinalizedSolTxMetaCollector(config, sol_tx_meta_dict, self._solana, self._last_slot)
+        self._sol_tx_collector = FinalizedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict, self._last_slot)
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -89,7 +90,7 @@ class Airdropper(IndexerBase):
         # It is possible to use different networks to obtain SOL price
         # but there will be different slot numbers so price should be updated every time
         self.always_reload_price = config.solana_url != config.pyth_solana_url
-        self.pyth_client = PythNetworkClient(SolanaInteractor(config.pyth_solana_url))
+        self.pyth_client = PythNetworkClient(SolInteractor(config, config.pyth_solana_url))
         self.max_conf = Decimal(max_conf)
         self.session = requests.Session()
 
@@ -157,8 +158,8 @@ class Airdropper(IndexerBase):
             self.debug(f"Created account {created_account.hex()} and caller {caller.hex()} are different")
             return False
 
-        sol_caller, _ = PublicKey.find_program_address([b"\1", caller], self._config.evm_loader_id)
-        if PublicKey(account_keys[approve['accounts'][1]]) != sol_caller:
+        sol_caller, _ = SolPubKey.find_program_address([b"\1", caller], self._config.evm_loader_id)
+        if SolPubKey(account_keys[approve['accounts'][1]]) != sol_caller:
             self.debug(f"account_keys[approve['accounts'][1]] != sol_caller")
             return False
 

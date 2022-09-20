@@ -10,7 +10,7 @@ from coincurve import PublicKey
 import logging
 
 from proxy.common_neon.address import EthereumAddress, accountWithSeed, permAccountSeed
-from proxy.common_neon.solana_interactor import SolanaInteractor
+from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.environment_utils import get_solana_accounts
 from proxy.common_neon.config import Config
 
@@ -29,7 +29,7 @@ class DecimalEncoder(json.JSONEncoder):
 class InfoHandler:
     def __init__(self):
         self._config = Config()
-        self._solana = SolanaInteractor(self._config.solana_url)
+        self._solana = SolInteractor(self._config, self._config.solana_url)
         self.command = 'info'
         self._storage = None
         self.print_stdout = True

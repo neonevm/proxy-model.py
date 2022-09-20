@@ -4,7 +4,6 @@ import asyncio
 import logging
 from random import randint
 
-from solana.publickey import PublicKey
 from web3 import Web3, Account
 from typing import Any, List, Dict, Optional
 
@@ -13,6 +12,7 @@ from unittest.mock import patch, MagicMock, call
 
 from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.solana_transaction import SolPubKey
 
 from ..mempool.mempool import MemPool, IMPExecutor, MPTask, MPTxRequestList
 from ..mempool.mempool_api import MPRequest, MPRequestType
@@ -96,8 +96,8 @@ class MockResourceManager(OperatorResourceMng):
 
 class FakeConfig(Config):
     @property
-    def evm_loader_id(self) -> PublicKey:
-        return PublicKey('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
+    def evm_loader_id(self) -> SolPubKey:
+        return SolPubKey('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
 
     @property
     def mempool_capacity(self) -> int:
