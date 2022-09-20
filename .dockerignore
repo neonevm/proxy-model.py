@@ -16,6 +16,7 @@
 !health_check_proxy.sh
 !health_check_faucet.sh
 !neon_py
+!proxy_program
 
 # Ignore __pycache__ directory
 proxy/__pycache__
