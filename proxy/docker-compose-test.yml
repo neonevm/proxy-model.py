@@ -36,7 +36,7 @@ services:
     depends_on:
       solana:
         condition: service_healthy
-    command: bash -c "/opt/deploy-proxy_program.sh"
+    entrypoint: bash -c "/opt/deploy-proxy_program.sh"
 
   postgres:
     container_name: postgres

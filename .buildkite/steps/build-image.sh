@@ -6,8 +6,6 @@ source .buildkite/steps/revision.sh
 if [ "${SKIP_DOCKER_PULL}" != "YES" ]; then
     # Refreshing neonlabsorg/evm_loader:latest image is required to run .buildkite/steps/build-image.sh locally
     docker pull neonlabsorg/evm_loader:${NEON_EVM_COMMIT}
-    # Refreshing neonlabsorg/evm_loader:ci-proxy-caller-program image is required to run .buildkite/steps/build-image.sh locally
-    docker pull neonlabsorg/evm_loader:ci-proxy-caller-program
 fi
 
 docker build -t neonlabsorg/proxy:${REVISION} \
