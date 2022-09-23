@@ -100,6 +100,7 @@ services:
       ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID: "YES"
       LOG_FULL_OBJECT_INFO: "YES"
       EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
+      RUST_BACKTRACE: ${RUST_BACKTRACE:-0}
     hostname: proxy
     depends_on:
       solana:
@@ -142,6 +143,7 @@ services:
       NEON_TOKEN_MINT: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU
       NEON_TOKEN_MINT_DECIMALS: 9
       SOLANA_COMMITMENT: confirmed
+      RUST_BACKTRACE: ${RUST_BACKTRACE:-0}
     hostname: faucet
     ports:
       - 3333:3333
