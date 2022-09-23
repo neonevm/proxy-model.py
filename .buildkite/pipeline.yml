@@ -29,10 +29,7 @@ steps:
       - "faucet.log"
       - "airdropper.log"
       - "indexer.log"
-      - "deploy_contracts.log"
       - "proxy_program_loader.log"
-#    env:
-#      UNITTEST_TESTNAME: indexer_work
 
   - label: ":coverage: full test suite (FTS)"
     key: "full_test_suite"

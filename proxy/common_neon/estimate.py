@@ -8,7 +8,7 @@ from ..common_neon.elf_params import ElfParams
 from .environment_data import EXTRA_GAS
 from .eth_proto import Trx as EthTrx
 from .solana_interactor import SolanaInteractor
-
+from .solana_alt_builder import AddressLookupTableTxBuilder
 
 
 @logged_group("neon.Proxy")
@@ -80,13 +80,22 @@ class GasEstimate:
 
         return last_iteration_cost + cancel_cost
 
+    def alt_cost(self) -> int:
+        # ALT used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
+        acc_cnt = len(self.emulator_json.get("accounts", [])) + len(self.emulator_json.get("solana_accounts", [])) + 6
+        if acc_cnt > AddressLookupTableTxBuilder.TX_ACCOUNT_CNT:
+            return 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
+        else:
+            return 0
+
     def estimate(self):
         execution_cost = self.emulator_json.get('used_gas', 0)
         resize_cost = self._resize_cost()
         trx_size_cost = self._trx_size_cost()
         overhead = self._iterative_overhead_cost()
+        alt_cost =  self.alt_cost()
 
-        gas = execution_cost + resize_cost + trx_size_cost + overhead + EXTRA_GAS
+        gas = execution_cost + resize_cost + trx_size_cost + overhead + alt_cost + EXTRA_GAS
         if gas < 21000:
             gas = 21000
 
@@ -94,6 +103,7 @@ class GasEstimate:
                    f'resize_cost: {resize_cost}, ' +
                    f'trx_size_cost: {trx_size_cost}, ' +
                    f'iterative_overhead: {overhead}, ' +
+                   f'alt_cost: {alt_cost}, ' +
                    f'extra_gas: {EXTRA_GAS}, ' +
                    f'estimated gas: {gas}')
 

@@ -1,7 +1,7 @@
 from logged_groups import logged_group
 from typing import Any, List, Type, Optional, Iterator
 
-from ..common_neon.evm_log_decoder import decode_neon_tx_result, decode_neon_tx_sig
+from ..common_neon.evm_log_decoder import decode_neon_tx_result, decode_neon_tx_sig, decode_cancel_gas
 from ..common_neon.utils import NeonTxInfo
 
 from ..indexer.indexed_objects import NeonIndexedTxInfo, NeonIndexedHolderInfo, NeonAccountInfo, SolNeonTxDecoderState
@@ -283,8 +283,7 @@ class CancelWithHashIxDecoder(DummyIxDecoder):
         if not tx:
             return self._decoding_skip(f'cannot find tx in the holder {holder_account}')
 
-        # TODO: get used gas
-        gas_used = '0x0'
+        gas_used = decode_cancel_gas(self.state.sol_neon_ix.iter_log())
         tx.neon_tx_res.fill_result(status='0x0', gas_used=gas_used, return_value='')
         tx.neon_tx_res.fill_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
         return self._decode_tx(tx, 'cancel Neon tx')

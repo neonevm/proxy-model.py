@@ -27,7 +27,8 @@ services:
 
   proxy_program_loader:
     container_name: proxy_program_loader
-    image: neonlabsorg/evm_loader:ci-proxy-caller-program
+    image: neonlabsorg/proxy:${REVISION}
+#    image: neonlabsorg/evm_loader:ci-proxy-caller-program
     environment:
       SOLANA_URL: http://solana:8899
     networks:
@@ -35,7 +36,7 @@ services:
     depends_on:
       solana:
         condition: service_healthy
-    command: bash -c "deploy-proxy_program.sh"
+    entrypoint: bash -c "/opt/deploy-proxy_program.sh"
 
   postgres:
     container_name: postgres
@@ -120,19 +121,6 @@ services:
       retries: 20
       start_period: 5s
 
-  deploy_contracts:
-    container_name: deploy_contracts
-    image: neonlabsorg/evm_loader:${NEON_EVM_COMMIT}
-    environment:
-      SOLANA_URL: http://solana:8899
-      SPL_TOKEN_AUTHORITY: /opt/contracts/ci-tokens/owner-keypair.json
-    networks:
-      - net
-    depends_on:
-      proxy:
-        condition: service_healthy
-    command: bash -c "create-test-accounts.sh 1 && deploy-contracts.sh"
-
   faucet:
     container_name: faucet
     image: neonlabsorg/faucet:${FAUCET_COMMIT}
@@ -165,8 +153,6 @@ services:
     depends_on:
       solana:
         condition: service_healthy
-      deploy_contracts:
-        condition: service_completed_successfully
 
   airdropper:
     container_name: airdropper
@@ -182,7 +168,7 @@ services:
       INDEXER_ERC20_WRAPPER_WHITELIST: ANY
       PRICE_UPDATE_INTERVAL: 10
       START_SLOT: LATEST
-      PP_SOLANA_URL: ${PP_SOLANA_URL:-https://api.devnet.solana.com}
+      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
       PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
       MAX_CONFIDENCE_INTERVAL: 0.01
     hostname: airdropper
