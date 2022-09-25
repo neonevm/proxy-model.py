@@ -11,8 +11,8 @@ from decimal import Decimal
 # uses mainnet-beta.
 # PythNetworkClient will fail with 'too many requests' if trying to connect
 # it to the same Solana network
-solana_url = "https://api.devnet.solana.com"
-mapping_account = PublicKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
+solana_url = "https://api.mainnet-beta.solana.com"
+mapping_account = PublicKey('AHtgzX45WTKfkPG53L6WYhGEXwQkN1BVknET3sVsLL8J')
 sol_usd_symbol = 'Crypto.SOL/USD'
 
 class TestPythNetworkClient(unittest.TestCase):
