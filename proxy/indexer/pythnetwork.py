@@ -44,7 +44,7 @@ def unpack(layout_descriptor, raw_data, field_name, index=0):
     length = field['len']
     start_idx = field['pos'] + index * length
     stop_idx = start_idx + length
-    if start_idx >= len(raw_data) or stop_idx >= len(raw_data):
+    if start_idx >= len(raw_data) or stop_idx > len(raw_data):
         raise Exception(f"""Field '{field_name}': Index overflow: 
 len(raw_data) = {len(raw_data)}, start_idx = {start_idx}, stop_idx = {stop_idx}""")
 
