@@ -82,7 +82,7 @@ class TestNeonToken(unittest.TestCase):
 
     def test_success_withdraw_to_non_existing_account(self):
         """
-        Should succesfully withdraw NEON tokens to previously non-existing Associated Token Account
+        Should successfully withdraw NEON tokens to previously non-existing Associated Token Account
         """
         source_acc = self.create_eth_account(10)
         dest_acc = self.create_sol_account()
