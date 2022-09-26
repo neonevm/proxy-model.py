@@ -13,8 +13,8 @@ MINIMAL_GAS_PRICE = None
 class TestGasPriceCalculator(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        mapping_account = PublicKey('AHtgzX45WTKfkPG53L6WYhGEXwQkN1BVknET3sVsLL8J')  # only for mainnet-beta
-        solana_url = "https://api.mainnet-beta.solana.com"  # mainnet-beta
+        mapping_account = PublicKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')  # only for devnet
+        solana_url = "https://api.devnet.solana.com"  # devnet
         solana = SolanaInteractor(solana_url)
         testee = GasPriceCalculator(solana, mapping_account)
         testee.update_mapping()
