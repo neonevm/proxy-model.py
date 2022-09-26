@@ -60,10 +60,5 @@ class NeonTxExecCfg:
         return self
 
 
-    def set_additional_resize_steps(self, value: bool) -> NeonTxExecCfg:
-        self._additional_resize_steps = value
-        return self
-
-
 NeonEmulatedResult = Dict[str, Any]
 NeonAccountDict = Dict[str, Any]
