@@ -204,7 +204,7 @@ class OperatorResourceMng:
         stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
         for resource_id in range(self._config.perm_account_id, stop_perm_account_id):
             for signer in signer_list:
-                info = OperatorResourceIdent(signer=signer, resource_id=self._config.perm_account_id)
+                info = OperatorResourceIdent(signer=signer, resource_id=resource_id)
                 self._disabled_resource_list.append(info)
         self._resource_cnt = len(self._disabled_resource_list)
         assert self.resource_cnt != 0, 'Operator has NO resources!'
