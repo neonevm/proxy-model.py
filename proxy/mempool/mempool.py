@@ -1,5 +1,6 @@
 import asyncio
 import traceback
+import time
 from typing import List, Tuple, Optional, Any, Dict, cast, Iterator
 
 from logged_groups import logged_group, logging_context
@@ -277,7 +278,7 @@ class MemPool:
 
         mp_tx_result = cast(MPTxExecResult, mp_result)
         log_fn = self.warning if mp_tx_result.code != MPTxExecResultCode.Done else self.debug
-        log_fn(f"For tx {tx.signature} got result: {mp_tx_result}.")
+        log_fn(f"For tx {tx.signature} got result: {mp_tx_result}, time: {(time.time_ns() - tx.start_time)/(10**6)}")
 
         if isinstance(mp_tx_result.data, NeonTxExecCfg):
             tx.neon_tx_exec_cfg = cast(NeonTxExecCfg, mp_tx_result.data)

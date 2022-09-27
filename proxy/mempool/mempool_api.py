@@ -7,6 +7,7 @@ from typing import Any, Optional, List, Dict
 from abc import ABC, abstractmethod
 
 import asyncio
+import time
 
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.data import NeonTxExecCfg
@@ -57,11 +58,16 @@ class MPTxRequest(MPRequest):
     neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
     sender_address: str = None
     gas_price: int = 0
+    start_time: int = 0
 
     def __post_init__(self):
-        self.gas_price = self.neon_tx.gasPrice
-        self.sender_address = "0x" + self.neon_tx.sender()
         self.type = MPRequestType.SendTransaction
+
+        self.gas_price = self.neon_tx.gasPrice
+        if self.sender_address is None:
+            self.sender_address = "0x" + self.neon_tx.sender()
+        if self.start_time == 0:
+            self.start_time = time.time_ns()
 
     @property
     def nonce(self) -> int:
@@ -83,6 +89,8 @@ class MPTxExecRequest(MPTxRequest):
             signature=tx.signature,
             neon_tx=tx.neon_tx,
             neon_tx_exec_cfg=tx.neon_tx_exec_cfg,
+            sender_address=tx.sender_address,
+            start_time=tx.start_time,
             elf_param_dict=elf_param_dict,
             resource_ident=resource_ident
         )
