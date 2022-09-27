@@ -11,6 +11,7 @@ from .config import Config
 from .eth_proto import NeonTx
 from .solana_interactor import SolInteractor
 from .layouts import ACCOUNT_INFO_LAYOUT
+from .solana_alt_builder import ALTTxBuilder
 
 
 @logged_group("neon.Proxy")
@@ -87,13 +88,22 @@ class GasEstimate:
 
         return last_iteration_cost + cancel_cost
 
+    def alt_cost(self) -> int:
+        # ALT used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
+        acc_cnt = len(self.emulator_json.get("accounts", [])) + len(self.emulator_json.get("solana_accounts", [])) + 6
+        if acc_cnt > ALTTxBuilder.TX_ACCOUNT_CNT:
+            return 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
+        else:
+            return 0
+
     def estimate(self):
         execution_cost = self.emulator_json.get('used_gas', 0)
         resize_cost = self._resize_cost()
         tx_size_cost = self._tx_size_cost()
         overhead = self._iterative_overhead_cost()
+        alt_cost = self.alt_cost()
 
-        gas = execution_cost + resize_cost + tx_size_cost + overhead
+        gas = execution_cost + resize_cost + tx_size_cost + overhead + alt_cost
         extra_gas_pct = self._config.extra_gas_pct
         if extra_gas_pct > 0:
             gas = math.ceil(gas * (1 + extra_gas_pct))
@@ -102,8 +112,9 @@ class GasEstimate:
 
         self.debug(f'execution_cost: {execution_cost}, ' +
                    f'resize_cost: {resize_cost}, ' +
-                   f'trx_size_cost: {tx_size_cost}, ' +
+                   f'tx_size_cost: {tx_size_cost}, ' +
                    f'iterative_overhead: {overhead}, ' +
+                   f'alt_cost: {alt_cost}, ' +
                    f'extra_gas_pct: {extra_gas_pct}, ' +
                    f'estimated gas: {gas}')
 

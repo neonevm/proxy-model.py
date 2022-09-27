@@ -35,6 +35,9 @@ def read_dict(data):
 
 
 def unpack(layout_descriptor, raw_data, field_name, index=0):
+    if raw_data is None:
+        raise Exception(f"Field '{field_name}': raw_data is None")
+
     field = layout_descriptor.get(field_name, None)
     if field is None:
         raise Exception(f'Unknown field name: {field_name}')
@@ -42,6 +45,10 @@ def unpack(layout_descriptor, raw_data, field_name, index=0):
     length = field['len']
     start_idx = field['pos'] + index * length
     stop_idx = start_idx + length
+    if start_idx >= len(raw_data) or stop_idx > len(raw_data):
+        raise Exception(f"""Field '{field_name}': Index overflow: 
+len(raw_data) = {len(raw_data)}, start_idx = {start_idx}, stop_idx = {stop_idx}""")
+
     if field['format'] == 'acc':  # special case for Solana account address
         return SolPubKey(raw_data[start_idx:stop_idx])
     elif field['format'] == 'dict':  # special case for attribute mapping
@@ -136,6 +143,9 @@ class PythNetworkClient:
         products = []
         while acc_addr != SYS_PROGRAM_ID:
             data = self.read_pyth_acct_data(acc_addr)
+            if data is None:
+                raise Exception(f"Failed to read mapping account {acc_addr}")
+                
             num_products = unpack(self.mapping_account_layout, data, 'num_products')
             acc_addr = unpack(self.mapping_account_layout, data, 'next')
             for i in range(num_products):
@@ -150,6 +160,9 @@ class PythNetworkClient:
 
     def parse_price_account(self, acc_addr: SolPubKey):
         data = self.read_pyth_acct_data(acc_addr)
+        if data is None:
+            raise Exception(f"Failed to read price account {acc_addr}")
+        
         price = Decimal(unpack(self.price_account_layout, data, 'agg.price'))
         conf = Decimal(unpack(self.price_account_layout, data, 'agg.conf'))
         multiply = pow(Decimal(10), unpack(self.price_account_layout, data, 'expo'))
