@@ -9,8 +9,7 @@ import solcx
 from eth_account import Account
 from eth_account.account import LocalAccount
 from web3 import Web3, eth as web3_eth
-import eth_utils
-from typing import Union, Type, Any, Dict
+from typing import Union, Type, Dict
 
 
 @dataclasses.dataclass
@@ -70,7 +69,7 @@ def create_signer_account() -> LocalAccount:
     return signer
 
 
-def request_airdrop(address, amount: int = 200):
+def request_airdrop(address, amount: int = 5000):
     FAUCET_URL = os.environ.get('FAUCET_URL', 'http://faucet:3333')
     url = FAUCET_URL + '/request_neon'
     data = f'{{"wallet": "{address}", "amount": {amount}}}'

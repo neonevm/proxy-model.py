@@ -118,3 +118,18 @@ def decode_neon_tx_sig(log_iter: Iterator[str]) -> str:
                 return tx_hash
 
     return ''
+
+
+def decode_cancel_gas(log_iter: Iterator[str]) -> int:
+    """Extracts gas_used of the canceled transaction"""
+
+    for line in log_iter:
+        data_list = _decode_mnemonic(line)
+        if len(data_list) == 0:
+            continue
+        if data_list[0] == 'CL_TX_GAS':
+            bs = base64.b64decode(data_list[1])
+            gas_used = int.from_bytes(bs, "little")
+            return gas_used
+
+    return 0

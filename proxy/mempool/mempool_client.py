@@ -1,11 +1,11 @@
 from __future__ import annotations
 import threading
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict, Any
 from logged_groups import logged_group
 from neon_py.network import AddrPickableDataClient
 
 from .mempool_api import MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
-from .mempool_api import MPGasPriceResult, MPGasPriceRequest
+from .mempool_api import MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest
 
 from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.data import NeonTxExecCfg
@@ -87,3 +87,9 @@ class MemPoolClient:
     def get_gas_price(self, req_id: str) -> Optional[MPGasPriceResult]:
         gas_price_req = MPGasPriceRequest(req_id=req_id)
         return self._pickable_data_client.send_data(gas_price_req)
+
+    @_guard_conn
+    @_reconnecting
+    def get_elf_param_dict(self, req_id: str) -> Optional[Dict[str, Any]]:
+        elf_param_dict_req = MPElfParamDictRequest(req_id=req_id)
+        return self._pickable_data_client.send_data(elf_param_dict_req)

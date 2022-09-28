@@ -24,7 +24,6 @@ from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
 from ..common_neon.solana_receipt_parser import SolTxError
 from ..common_neon.errors import EthereumError
-from ..common_neon.environment_data import ENABLE_PRIVATE_API
 from ..neon_rpc_api_model import NeonRpcApiWorker
 from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
 
@@ -69,26 +68,8 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             'id': request.get('id', None),
         }
 
-        def is_private_api(method_name: str) -> bool:
-            for prefix in ('eth_', 'net_', 'web3_', 'neon_'):
-                if method_name.startswith(prefix):
-                    break
-            else:
-                return True
-
-            if ENABLE_PRIVATE_API:
-                return False
-
-            private_method_map = (
-                "eth_accounts",
-                "eth_sign",
-                "eth_sendTransaction",
-                "eth_signTransaction",
-            )
-            return method_name in private_method_map
-
         try:
-            if (not hasattr(self.model, request['method'])) or is_private_api(request["method"]):
+            if (not hasattr(self.model, request['method'])) or (not self.model.is_allowed_api(request["method"])):
                 response['error'] = {'code': -32601, 'message': f'method {request["method"]} is not supported'}
             else:
                 method = getattr(self.model, request['method'])
@@ -102,8 +83,10 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             response['error'] = err.getError()
         except Exception as err:
             err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error('Exception on process request. ' +
-                       f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+            self.error(
+                'Exception on process request. '
+                f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}'
+            )
             response['error'] = {'code': -32000, 'message': str(err)}
 
         return response

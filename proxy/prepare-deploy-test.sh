@@ -2,7 +2,7 @@
 set -xeuo pipefail
 
 echo "Prepare deploying of tests..."
-
+sleep 10
 curl -v --header "Content-Type: application/json" --data '{"method":"eth_blockNumber","id":1,"jsonrpc":"2.0","params":[]}' "${PROXY_URL}"
 
 solana config get
