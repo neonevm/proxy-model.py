@@ -36,26 +36,6 @@ class GasEstimate:
         self.emulator_json = call_emulated(self._contract or "deploy", self._sender, self._data, self._value)
         self.debug(f'emulator returns: {json.dumps(self.emulator_json, sort_keys=True)}')
 
-    def _resize_cost(self) -> int:
-        cost = 0
-
-        accounts_size = [
-            int(a["size"] or 0) - int(a["size_current"] or 0)
-            for a in self.emulator_json.get("accounts", [])
-            if int(a["size"] or 0) > int(a["size_current"] or 0)
-        ]
-
-        if not accounts_size:
-            return cost
-
-        balances = self._solana.get_multiple_rent_exempt_balances_for_size(accounts_size)
-        self.debug(f'sizes: {accounts_size}, balances: {balances}')
-
-        for balance in balances:
-            cost += balance
-
-        return cost
-
     def _trx_size_cost(self) -> int:
         u256_max = int.from_bytes(bytes([0xFF] * 32), "big")
 
@@ -90,17 +70,13 @@ class GasEstimate:
 
     def estimate(self):
         execution_cost = self.emulator_json.get('used_gas', 0)
-        resize_cost = self._resize_cost()
         trx_size_cost = self._trx_size_cost()
         overhead = self._iterative_overhead_cost()
-        alt_cost =  self.alt_cost()
+        alt_cost = self.alt_cost()
 
-        gas = execution_cost + resize_cost + trx_size_cost + overhead + alt_cost + EXTRA_GAS
-        if gas < 21000:
-            gas = 21000
+        gas = max(21000, execution_cost + trx_size_cost + overhead + alt_cost + EXTRA_GAS)
 
         self.debug(f'execution_cost: {execution_cost}, ' +
-                   f'resize_cost: {resize_cost}, ' +
                    f'trx_size_cost: {trx_size_cost}, ' +
                    f'iterative_overhead: {overhead}, ' +
                    f'alt_cost: {alt_cost}, ' +
