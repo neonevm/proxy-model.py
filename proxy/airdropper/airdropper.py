@@ -7,6 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from logged_groups import logged_group
 
+from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.environment_data import EVM_LOADER_ID, NEON_PRICE_USD
 from ..common_neon.solana_interactor import SolanaInteractor
 from ..common_neon.utils import NeonTx
@@ -167,7 +168,7 @@ class Airdropper(IndexerBase):
             self.debug(f"Created account {created_account.hex()} and caller {caller.hex()} are different")
             return False
 
-        sol_caller, _ = PublicKey.find_program_address([b"\1", caller], PublicKey(EVM_LOADER_ID))
+        sol_caller, _ = PublicKey.find_program_address([ACCOUNT_SEED_VERSION, caller], PublicKey(EVM_LOADER_ID))
         if PublicKey(account_keys[approve['accounts'][1]]) != sol_caller:
             self.debug(f"account_keys[approve['accounts'][1]] != sol_caller")
             return False

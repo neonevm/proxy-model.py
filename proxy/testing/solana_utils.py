@@ -25,6 +25,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 import math
 
+from proxy.common_neon.constants import ACCOUNT_SEED_VERSION
 from proxy.common_neon.layouts import CREATE_ACCOUNT_LAYOUT, ACCOUNT_INFO_LAYOUT
 
 system = "11111111111111111111111111111111"
@@ -44,8 +45,6 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 client = Client(solana_url)
 path_to_solana = 'solana'
-
-ACCOUNT_SEED_VERSION = b'\1'
 
 # amount of gas per 1 byte evm_storage
 EVM_BYTE_COST = 6960  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
