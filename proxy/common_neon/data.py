@@ -22,7 +22,7 @@ class NeonTxExecCfg:
         self._evm_step_cnt = 0
         self._alt_list: List[str] = []
         self._account_dict: NeonAccountDict = {}
-        self._additional_resize_steps = False
+        self._additional_resize_steps = 0
 
     @property
     def state_tx_cnt(self) -> int:
@@ -37,7 +37,7 @@ class NeonTxExecCfg:
         return self._account_dict
 
     @property
-    def additional_resize_steps(self) -> bool:
+    def additional_resize_steps(self) -> int:
         return self._additional_resize_steps
 
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
@@ -49,9 +49,9 @@ class NeonTxExecCfg:
         return self
 
     @staticmethod
-    def resolve_additional_resize_steps(emulated_result: NeonEmulatedResult) -> bool:
+    def resolve_additional_resize_steps(emulated_result: NeonEmulatedResult) -> int:
         for account in emulated_result["accounts"]:
-            if bool(account["additional_resize_steps"] or False):
+            if int(account["additional_resize_steps"] or 0):
                 return True
         return False
 
