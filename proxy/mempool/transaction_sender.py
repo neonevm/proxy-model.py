@@ -404,7 +404,8 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return tx
 
     def _calc_iter_cnt(self) -> int:
-        return math.ceil(self._ctx.emulated_evm_step_cnt / self._iter_evm_step_cnt) + 1
+        return math.ceil(self._ctx.emulated_evm_step_cnt / self._iter_evm_step_cnt) + \
+               self._ctx.neon_tx_exec_cfg.additional_resize_steps + 1
 
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
