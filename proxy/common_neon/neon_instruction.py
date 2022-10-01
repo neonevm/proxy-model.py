@@ -9,11 +9,8 @@ from solana.publickey import PublicKey
 from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction
 from logged_groups import logged_group
-from spl.token.constants import TOKEN_PROGRAM_ID
-from spl.token.instructions import get_associated_token_address, create_associated_token_account, approve, ApproveParams
 
 from .layouts import CREATE_ACCOUNT_LAYOUT
-from .solana_interactor import SolanaInteractor
 from ..common_neon.elf_params import ElfParams
 
 from .address import accountWithSeed, ether2program, EthereumAddress
@@ -24,16 +21,16 @@ from ..common_neon.solana_alt import ADDRESS_LOOKUP_TABLE_ID
 
 
 class EvmInstruction(Enum):
-    TransactionExecuteFromData = b'\x1f'  # 31,
-    TransactionStepFromData = b'\x20'  # 32
-    TransactionStepFromAccount = b'\x21'  # 33
-    TransactionStepFromAccountNoChainId = b'\x22'  # 34
-    CancelWithHash = b'\x23'  # 35
-    HolderCreate = b'\x24'  # 36
-    HolderDelete = b'\x25'  # 37
-    HolderWrite = b'\x26'  # 38
-    DepositV03 = b'\x27'
-    CreateAccountV03 = b'\x28'
+    TransactionExecuteFromData = b'\x1f'            # 31,
+    TransactionStepFromData = b'\x20'               # 32
+    TransactionStepFromAccount = b'\x21'            # 33
+    TransactionStepFromAccountNoChainId = b'\x22'   # 34
+    CancelWithHash = b'\x23'                        # 35
+    HolderCreate = b'\x24'                          # 36
+    HolderDelete = b'\x25'                          # 37
+    HolderWrite = b'\x26'                           # 38
+    DepositV03 = b'\x27'                            # 39
+    CreateAccountV03 = b'\x28'                      # 40
 
 def create_account_with_seed_layout(base, seed, lamports, space):
     return SYSTEM_INSTRUCTIONS_LAYOUT.build(
