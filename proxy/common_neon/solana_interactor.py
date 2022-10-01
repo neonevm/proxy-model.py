@@ -282,13 +282,13 @@ class SolanaInteractor:
         }
         return self._send_rpc_request('getSlot', opts)['result']
 
-    def get_account_info(self, pubkey: PublicKey, length=64 * 1024, commitment='processed') -> Optional[AccountInfo]:
+    def get_account_info(self, pubkey: PublicKey, length=None, commitment='processed') -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
         }
 
-        if length != 0:
+        if not (length is None):
             opts['dataSlice'] = {
                 'offset': 0,
                 'length': length
@@ -310,13 +310,13 @@ class SolanaInteractor:
 
         return AccountInfo(account_tag, lamports, owner, data)
 
-    def get_account_info_list(self, src_account_list: List[PublicKey], length=64 * 1024, commitment='processed') -> List[AccountInfo]:
+    def get_account_info_list(self, src_account_list: List[PublicKey], length=None, commitment='processed') -> List[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
         }
 
-        if length != 0:
+        if not (length is None):
             opts['dataSlice'] = {
                 'offset': 0,
                 'length': length
@@ -424,7 +424,7 @@ class SolanaInteractor:
         return accounts_list
 
     def get_holder_account_info(self, holder_account: PublicKey) -> Optional[HolderAccountInfo]:
-        info = self.get_account_info(holder_account, length=0)
+        info = self.get_account_info(holder_account)
         if info is None:
             return None
         elif info.tag != ACTIVE_HOLDER_TAG:
@@ -438,7 +438,7 @@ class SolanaInteractor:
         return HolderAccountInfo.frombytes(holder_account, info.data)
 
     def get_account_lookup_table_info(self, table_account: PublicKey) -> Optional[AddressLookupTableAccountInfo]:
-        info = self.get_account_info(table_account, length=0)
+        info = self.get_account_info(table_account)
         if info is None:
             return None
         elif len(info.data) < ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof():
