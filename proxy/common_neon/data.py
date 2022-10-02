@@ -50,10 +50,10 @@ class NeonTxExecCfg:
 
     @staticmethod
     def resolve_additional_resize_steps(emulated_result: NeonEmulatedResult) -> int:
+        max_additional_resize_steps = 0
         for account in emulated_result["accounts"]:
-            if int(account["additional_resize_steps"] or 0):
-                return True
-        return False
+            max_additional_resize_steps = max(max_additional_resize_steps, int(account["additional_resize_steps"] or 0))
+        return max_additional_resize_steps
 
     def set_state_tx_cnt(self, value: int) -> NeonTxExecCfg:
         self._state_tx_cnt = value
