@@ -244,4 +244,5 @@ class MPOpResInitResult:
 
 @dataclass
 class MPALTListResult:
+    block_height: int
     alt_info_list: List[MPALTInfo]

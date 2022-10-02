@@ -475,7 +475,7 @@ class NeonRpcApiWorker:
             if neon_tx is None:
                 self.debug("Not found receipt")
                 return None
-            neon_tx_receipt = NeonTxReceiptInfo(NeonTxInfo(tx=neon_tx), NeonTxResultInfo())
+            neon_tx_receipt = NeonTxReceiptInfo(NeonTxInfo.from_neon_tx(neon_tx), NeonTxResultInfo())
         return self._get_transaction(neon_tx_receipt)
 
     def eth_getCode(self, account: str, tag: Union[str, int]) -> str:

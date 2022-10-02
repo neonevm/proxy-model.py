@@ -99,7 +99,7 @@ class CallFromRawIxDecoder(DummyIxDecoder):
         rlp_sig = ix.ix_data[25:90]
         rlp_unsig_data = ix.ix_data[90:]
 
-        neon_tx = NeonTxInfo(rlp_sig=rlp_sig, rlp_unsig_data=rlp_unsig_data)
+        neon_tx = NeonTxInfo.from_unsig_data(rlp_sig, rlp_unsig_data)
         if neon_tx.error:
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
@@ -187,7 +187,7 @@ class PartialCallIxDecoder(DummyIxDecoder):
         rlp_sig = ix.ix_data[33:98]
         rlp_unsig_data = ix.ix_data[98:]
 
-        neon_tx = NeonTxInfo(rlp_sig=rlp_sig, rlp_unsig_data=rlp_unsig_data)
+        neon_tx = NeonTxInfo.from_unsig_data(rlp_sig, rlp_unsig_data)
         if neon_tx.error:
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
@@ -282,7 +282,7 @@ class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
         rlp_endpos = 73 + rlp_len
         rlp_unsig_data = holder.data[73:rlp_endpos]
 
-        neon_tx = NeonTxInfo(rlp_sig=rlp_sig, rlp_unsig_data=rlp_unsig_data)
+        neon_tx = NeonTxInfo.from_unsig_data(rlp_sig, rlp_unsig_data)
         if neon_tx.error:
             self.warning(f'Neon tx rlp error: {neon_tx.error}')
             return None

@@ -6,11 +6,13 @@ from ..indexer.base_db import BaseDB
 
 class SolNeonTxsDB(BaseDB):
     def __init__(self):
-        super().__init__('solana_neon_transactions')
-        self._column_list = [
-            'sol_sig', 'block_slot', 'idx', 'inner_idx', 'neon_sig', 'neon_step_cnt', 'neon_income',
-            'heap_size', 'max_bpf_cycle_cnt', 'used_bpf_cycle_cnt'
-        ]
+        super().__init__(
+            table_name='solana_neon_transactions',
+            column_list=[
+                'sol_sig', 'block_slot', 'idx', 'inner_idx', 'neon_sig', 'neon_step_cnt', 'neon_income',
+                'heap_size', 'max_bpf_cycle_cnt', 'used_bpf_cycle_cnt'
+            ]
+        )
 
     def set_tx_list(self, cursor: BaseDB.Cursor, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
         value_list_list: List[List[Any]] = []

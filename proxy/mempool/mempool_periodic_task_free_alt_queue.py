@@ -1,6 +1,5 @@
 from typing import List, Type, Callable, cast
 
-from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.sorted_queue import SortedQueue
 
 from ..mempool.mempool_api import IMPExecutor, MPRequest, MPRequestType, MPALTInfo, MPALTListResult
@@ -13,11 +12,11 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
     _closing_depth = 512 + 32
     _get_list_period_sec = 10 * 60
 
-    def __init__(self, executor: IMPExecutor, solana: SolInteractor, op_res_mng: OpResMng) -> None:
+    def __init__(self, executor: IMPExecutor, op_res_mng: OpResMng) -> None:
         super().__init__(name='free-alt', sleep_time=0.4, executor=executor)
-        self._solana = solana
         self._op_res_mng = op_res_mng
         self._iteration = 0
+        self._block_height = 0
         self._deactivate_alt_queue = self._new_queue(lambda a: cast(int, a.deactivated_slot))
         self._close_alt_queue = self._new_queue(lambda a: a.expanded_slot)
 
@@ -41,7 +40,7 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
         self._submit_request_to_executor(mp_req)
 
     def _submit_free_list_request(self, queue, mp_req_type: Type) -> None:
-        block_height = max(self._solana.get_block_height() - self._closing_depth, 0)
+        block_height = max(self._block_height - self._closing_depth, 0)
         alt_info_list: List[MPALTInfo] = []
         for alt_info in queue:
             if alt_info.block_height > block_height:
@@ -64,6 +63,7 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
         pass
 
     def _process_result(self, mp_req: MPRequest, mp_res: MPALTListResult) -> None:
+        self._block_height = mp_res.block_height
         if mp_req.type == MPRequestType.GetALTList:
             self._process_get_list_result(mp_res)
         elif mp_req.type == MPRequestType.DeactivateALTList:

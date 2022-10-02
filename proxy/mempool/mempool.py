@@ -22,6 +22,7 @@ from .mempool_periodic_task_op_res import MPInitOpResTaskLoop
 from .mempool_periodic_task_gas_price import MPGasPriceTaskLoop
 from .mempool_periodic_task_elf_params import MPElfParamDictTaskLoop
 from .mempool_periodic_task_sender_tx_cnt import MPSenderTxCntTaskLoop
+from .mempool_periodic_task_free_alt_queue import MPFreeALTQueueTaskLoop
 
 
 @logged_group("neon.MemPool")
@@ -43,6 +44,7 @@ class MemPool:
         self._elf_param_dict_task_loop = MPElfParamDictTaskLoop(executor)
         self._state_tx_cnt_task_loop = MPSenderTxCntTaskLoop(executor, self._tx_schedule)
         self._op_res_init_task_loop = MPInitOpResTaskLoop(executor, self._op_res_mng)
+        self._free_alt_queue_task_loop = MPFreeALTQueueTaskLoop(executor, self._op_res_mng)
 
         self._process_tx_result_task_loop = asyncio.get_event_loop().create_task(self._process_tx_result_loop())
         self._process_tx_schedule_task_loop = asyncio.get_event_loop().create_task(self._process_tx_schedule_loop())

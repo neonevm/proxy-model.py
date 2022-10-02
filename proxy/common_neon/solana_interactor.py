@@ -616,8 +616,9 @@ class SolInteractor:
         return SolanaBlockInfo(
             block_slot=block_slot,
             block_hash='0x' + base58.b58decode(net_block.get('blockhash', '')).hex().lower(),
-            block_time=net_block.get('blockTime', 0),
-            parent_block_slot=net_block.get('parentSlot', 0)
+            block_time=net_block.get('blockTime', None),
+            block_height=net_block.get('blockHeight', None),
+            parent_block_slot=net_block.get('parentSlot', None)
         )
 
     def get_block_info(self, block_slot: int, commitment='confirmed') -> SolanaBlockInfo:
@@ -694,12 +695,16 @@ class SolInteractor:
         block = self._send_rpc_request("getBlock", block_slot, block_opts)
         return SolBlockhash(block.get('result', {}).get('blockhash', None))
 
-    def get_block_height(self, commitment='confirmed') -> int:
+    def get_block_height(self, block_slot: Optional[int] = None, commitment='confirmed') -> int:
         opts = {
             'commitment': commitment
         }
-        blockheight_resp = self._send_rpc_request('getBlockHeight', opts)
-        return blockheight_resp.get('result', 0)
+        if block_slot is None:
+            block_height_resp = self._send_rpc_request('getBlockHeight', opts)
+            block_height = block_height_resp.get('result', None)
+        else:
+            block_height = self.get_block_info(cast(int, block_slot), commitment).block_height
+        return block_height if block_height is not None else 0
 
     def send_tx_list(self, tx_list: List[SolTx], skip_preflight: bool) -> List[SolSendResult]:
         opts = {

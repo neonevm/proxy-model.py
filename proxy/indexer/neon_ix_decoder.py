@@ -79,7 +79,7 @@ class DummyIxDecoder:
         return False
 
     def _decode_neon_tx_from_holder(self, tx: NeonIndexedTxInfo, holder: NeonIndexedHolderInfo) -> None:
-        neon_tx = NeonTxInfo(rlp_sig_data=holder.data)
+        neon_tx = NeonTxInfo.from_sig_data(holder.data)
         if not neon_tx.is_valid():
             self.warning(f'Neon tx rlp error: {neon_tx.error}')
         elif neon_tx.sig != tx.neon_tx.sig:
@@ -164,7 +164,7 @@ class TxExecFromDataIxDecoder(DummyIxDecoder):
         # 4 bytes - treasury index
 
         rlp_sig_data = ix.ix_data[5:]
-        neon_tx = NeonTxInfo(rlp_sig_data=rlp_sig_data)
+        neon_tx = NeonTxInfo.from_sig_data(rlp_sig_data)
         if neon_tx.error:
             return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
@@ -208,7 +208,7 @@ class BaseTxStepIxDecoder(DummyIxDecoder):
 
         key = NeonIndexedTxInfo.Key.from_neon_tx_sig(neon_tx_sig, storage_account, iter_blocked_account)
         block = self.state.neon_block
-        return block.find_neon_tx(key, ix) or block.add_neon_tx(key, NeonTxInfo(neon_tx_sig=neon_tx_sig), ix)
+        return block.find_neon_tx(key, ix) or block.add_neon_tx(key, NeonTxInfo.from_neon_sig(neon_tx_sig), ix)
 
 
 class TxStepFromDataIxDecoder(BaseTxStepIxDecoder):
@@ -232,7 +232,7 @@ class TxStepFromDataIxDecoder(BaseTxStepIxDecoder):
 
         if not tx.neon_tx.is_valid():
             rlp_sig_data = ix.ix_data[13:]
-            neon_tx = NeonTxInfo(rlp_sig_data=rlp_sig_data)
+            neon_tx = NeonTxInfo.from_sig_data(rlp_sig_data)
             if neon_tx.error:
                 return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 

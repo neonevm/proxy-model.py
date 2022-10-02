@@ -13,6 +13,9 @@ from ..mempool.mempool_executor_task_base import MPExecutorBaseTask
 
 
 class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
+    def _get_block_height(self) -> int:
+        return self._solana.get_block_height(commitment=self._config.finalized_commitment)
+
     def get_alt_list(self, mp_req: MPGetALTList) -> MPALTListResult:
         alt_info_list: List[MPALTInfo] = []
 
@@ -32,8 +35,11 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
                     alt_info = ALTAccountInfo.from_account_info(account_info)
 
                     block_height = self._solana.get_block_height(
-                        alt_info.last_extended_slot if alt_info.deactivation_slot is None else
-                        alt_info.deactivation_slot
+                        block_slot=(
+                            alt_info.last_extended_slot if alt_info.deactivation_slot is None else
+                            alt_info.deactivation_slot
+                        ),
+                        commitment=self._config.finalized_commitment
                     )
 
                     mp_alt_info = MPALTInfo(
@@ -48,47 +54,48 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
                 except BaseException as e:
                     self._on_exception(f'Cannot decode ALT', e)
 
-        return MPALTListResult(alt_info_list=alt_info_list)
+        block_height = self._get_block_height()
+        return MPALTListResult(block_height=block_height, alt_info_list=alt_info_list)
 
     def _free_alt_list(self, alt_info_list: List[MPALTInfo], name: str,
                        make_ix: Callable[[NeonIxBuilder, SolPubKey], SolTxIx]) -> MPALTListResult:
-        def _send_tx_list(_signer: SolAccount, _tx_list: List[SolTx]) -> None:
-            if len(_tx_list) == 0:
+        def _send_tx_list() -> None:
+            if len(tx_list) == 0:
                 return
 
-            tx_sender = SolTxListSender(self._config, self._solana, cast(SolAccount, _signer))
+            tx_sender = SolTxListSender(self._config, self._solana, cast(SolAccount, signer))
             try:
                 tx_sender.send(tx_list)
             except BaseException as e:
                 self._on_exception('fail to execute', e)
-
-            _tx_list.clear()
+            tx_list.clear()
 
         tx_list: List[SolTx] = []
         signer: Optional[SolAccount] = None
 
         alt_info_list = sorted(alt_info_list, key=lambda a: a.operator_key)
         ix_builder: Optional[NeonIxBuilder] = None
-        block_height = 0
+        block_height: Optional[int] = None
 
         for alt_info in alt_info_list:
             operator_key = bytes.fromhex(alt_info.operator_key)
 
             if (signer is not None) and (signer.secret_key() != operator_key):
-                _send_tx_list(signer, tx_list)
-                block_height = self._solana.get_block_height(self._config.finalized_commitment)
-                signer = None
+                _send_tx_list()
 
-            if signer is None:
+            if len(tx_list) == 0:
                 signer = SolAccount(operator_key)
                 ix_builder = NeonIxBuilder(signer.public_key())
+                block_height = self._get_block_height()
 
             alt_info.block_height = block_height
             tx = SolLegacyTx().add(make_ix(ix_builder, SolPubKey(alt_info.table_account)))
             tx_list.append(SolWrappedTx(name=name, tx=tx))
 
-        _send_tx_list(signer, tx_list)
-        return MPALTListResult(alt_info_list=alt_info_list)
+        _send_tx_list()
+
+        block_height = self._get_block_height()
+        return MPALTListResult(block_height=block_height, alt_info_list=alt_info_list)
 
     def deactivate_alt_list(self, mp_req: MPDeactivateALTListRequest) -> MPALTListResult:
         return self._free_alt_list(

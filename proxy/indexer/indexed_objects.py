@@ -227,7 +227,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
     def set_neon_tx(self, neon_tx: NeonTxInfo) -> None:
         assert not self._neon_receipt.neon_tx.is_valid()
         assert neon_tx.is_valid()
-        self._neon_receipt.set_neon_tx(neon_tx)
+        self._neon_receipt = self._neon_receipt.replace_neon_tx(neon_tx)
 
 
 @logged_group("neon.Indexer")
@@ -277,8 +277,7 @@ class NeonIndexedBlockInfo:
         return self._is_completed
 
     def set_finalized(self, value: bool) -> None:
-        for block in self._history_block_deque:
-            block.set_finalized(value)
+        self._history_block_deque = deque([block.replace_finalized(value) for block in self._history_block_deque])
 
     def finalize_history_list(self, finalized_block_slot: int) -> int:
         removed_block_cnt = 0

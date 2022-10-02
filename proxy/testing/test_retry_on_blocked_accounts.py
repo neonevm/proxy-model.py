@@ -2,7 +2,7 @@ import datetime
 import multiprocessing
 import unittest
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.utils import NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.address import EthereumAddress
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor

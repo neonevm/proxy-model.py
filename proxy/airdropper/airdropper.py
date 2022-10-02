@@ -8,7 +8,7 @@ from logged_groups import logged_group
 
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.utils import NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.solana_transaction import SolPubKey
 from ..common_neon.errors import log_error
 
@@ -31,7 +31,7 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 
 class FailedAttempts(BaseDB):
     def __init__(self) -> None:
-        super().__init__('failed_airdrop_attempts')
+        super().__init__('failed_airdrop_attempts', [])
         self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
     def airdrop_failed(self, eth_address, reason):
@@ -44,7 +44,7 @@ class FailedAttempts(BaseDB):
 
 class AirdropReadySet(BaseDB):
     def __init__(self):
-        super().__init__('airdrop_ready')
+        super().__init__('airdrop_ready', [])
         self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
     def register_airdrop(self, eth_address: str, airdrop_info: dict):
