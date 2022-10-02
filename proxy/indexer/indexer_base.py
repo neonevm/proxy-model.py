@@ -1,7 +1,7 @@
 import time
-import traceback
 from logged_groups import logged_group
 
+from ..common_neon.errors import log_error
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 
@@ -56,10 +56,8 @@ class IndexerBase:
         while True:
             try:
                 self.process_functions()
-            except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.warning('Exception on transactions processing. ' +
-                             f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+            except BaseException as err:
+                log_error(self, 'Exception on transactions processing. ', err)
             time.sleep(0.05)
 
     def process_functions(self) -> None:

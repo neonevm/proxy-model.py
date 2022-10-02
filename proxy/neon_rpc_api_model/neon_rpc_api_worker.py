@@ -1,6 +1,5 @@
 import json
 import multiprocessing
-import traceback
 import eth_utils
 import time
 import math
@@ -13,7 +12,7 @@ from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
 from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
-from ..common_neon.errors import EthereumError, InvalidParamError
+from ..common_neon.errors import EthereumError, InvalidParamError, log_error
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.keys_storage import KeyStorage
@@ -110,9 +109,8 @@ class NeonRpcApiWorker:
 
         except EthereumError:
             raise
-        except Exception as err:
-            err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error(f"Exception on eth_estimateGas: {err}: {err_tb}")
+        except BaseException as err:
+            log_error(self, "Exception on eth_estimateGas. ", err)
             raise
 
     def __repr__(self):
@@ -498,12 +496,12 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message="wrong transaction format")
 
-        neon_signature = '0x' + neon_tx.hash_signed().hex()
-        self.debug(f"sendRawTransaction {neon_signature}: {json.dumps(neon_tx.as_dict(), cls=JsonBytesEncoder)}")
+        neon_sig = '0x' + neon_tx.hash_signed().hex()
+        self.debug(f"sendRawTransaction {neon_sig}: {json.dumps(neon_tx.as_dict(), cls=JsonBytesEncoder)}")
 
         self._stat_tx_begin()
         try:
-            neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_signature)
+            neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_sig)
             if neon_tx_receipt is not None:
                 raise EthereumError(message='already known')
 
@@ -514,12 +512,12 @@ class NeonRpcApiWorker:
             req_id = LogMng.get_logging_context().get("req_id")
 
             result: MPTxSendResult = self._mempool_client.send_raw_transaction(
-                req_id=req_id, signature=neon_signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
+                req_id=req_id, neon_sig=neon_sig, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
             )
 
             if result.code in (MPTxSendResultCode.Success, MPTxSendResultCode.AlreadyKnown):
                 self._stat_tx_success()
-                return neon_signature
+                return neon_sig
             elif result.code == MPTxSendResultCode.Underprice:
                 raise EthereumError(message='replacement transaction underpriced')
             elif result.code == MPTxSendResultCode.NonceTooLow:
@@ -651,9 +649,8 @@ class NeonRpcApiWorker:
                 'raw': raw_tx,
                 'tx': tx
             }
-        except Exception as e:
-            err_tb = "".join(traceback.format_tb(e.__traceback__))
-            self.error(f'Exception {type(e)}({str(e)}: {err_tb}')
+        except BaseException as e:
+            log_error(self, "Exception. ", e)
             raise InvalidParamError(message='bad transaction')
 
     def eth_sendTransaction(self, tx: Dict[str, Any]) -> str:

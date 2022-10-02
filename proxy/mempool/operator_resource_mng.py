@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import traceback
 from datetime import datetime
 from typing import Optional, List, Dict
 
@@ -16,14 +15,14 @@ from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_transaction import SolPubKey, SolAccount, SolWrappedTx
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.errors import BadResourceError
+from ..common_neon.errors import BadResourceError, log_error
 
 from .neon_tx_stages import NeonTxStage
 from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
 
 
 @logged_group("neon.MemPool")
-class OperatorResourceInfo:
+class OpResInfo:
     def __init__(self, signer: SolAccount, resource_id: int):
         self._signer = signer
         self._resource_id = resource_id
@@ -34,9 +33,9 @@ class OperatorResourceInfo:
         self._ether = EthereumAddress.from_private_key(self.secret_key)
 
     @staticmethod
-    def from_ident(ident: str) -> OperatorResourceInfo:
+    def from_ident(ident: str) -> OpResInfo:
         key, rid = ident.split(':')
-        return OperatorResourceInfo(signer=SolAccount(bytes.fromhex(key)), resource_id=int(rid, 16))
+        return OpResInfo(signer=SolAccount(bytes.fromhex(key)), resource_id=int(rid, 16))
 
     def __str__(self) -> str:
         return f'{str(self.public_key)}:{self._resource_id}'
@@ -71,12 +70,12 @@ class OperatorResourceInfo:
 
 
 @logged_group("neon.MemPool")
-class OperatorResourceInitializer:
+class OpResInit:
     def __init__(self, config: Config, solana: SolInteractor):
         self._config = config
         self._solana = solana
 
-    def init_resource(self, resource: OperatorResourceInfo):
+    def init_resource(self, resource: OpResInfo):
         self.debug(f'Rechecking of accounts for resource {resource}')
 
         try:
@@ -87,12 +86,11 @@ class OperatorResourceInitializer:
             self._create_ether_account(builder, resource)
         except BadResourceError:
             raise
-        except Exception as err:
-            err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error(f"Fail to init accounts for resource {resource}. Error ({err}). Traceback: {err_tb}")
+        except BaseException as err:
+            log_error(self, f"Fail to init accounts for resource {resource}", err)
             raise BadResourceError(err)
 
-    def _validate_operator_balance(self, resource: OperatorResourceInfo) -> None:
+    def _validate_operator_balance(self, resource: OpResInfo) -> None:
         # Validate operator's account has enough SOLs
         sol_balance = self._solana.get_sol_balance(resource.public_key)
         min_operator_balance_to_err = self._config.min_operator_balance_to_err
@@ -111,13 +109,13 @@ class OperatorResourceInitializer:
                 f'min_operator_balance_to_err = {min_operator_balance_to_err}; '
             )
 
-    def _execute_stage(self, stage: NeonTxStage, resource: OperatorResourceInfo) -> None:
+    def _execute_stage(self, stage: NeonTxStage, resource: OpResInfo) -> None:
         stage.build()
         tx_list = [SolWrappedTx(name=stage.name, tx=stage.tx)]
         tx_sender = SolTxListSender(self._config, self._solana, resource.signer)
         tx_sender.send(tx_list)
 
-    def _create_ether_account(self, builder: NeonIxBuilder, resource: OperatorResourceInfo):
+    def _create_ether_account(self, builder: NeonIxBuilder, resource: OpResInfo):
         solana_address = ether2program(resource.ether)[0]
 
         account_info = self._solana.get_account_info(solana_address)
@@ -130,7 +128,7 @@ class OperatorResourceInitializer:
         stage.set_balance(self._solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0])
         self._execute_stage(stage, resource)
 
-    def _create_holder_account(self, builder: NeonIxBuilder, resource: OperatorResourceInfo) -> None:
+    def _create_holder_account(self, builder: NeonIxBuilder, resource: OpResInfo) -> None:
         holder_address = str(resource.holder)
         holder_seed = resource.holder_seed
         holder_info = self._solana.get_account_info(resource.holder)
@@ -153,7 +151,7 @@ class OperatorResourceInitializer:
         else:
             self.debug(f"Use account {str(holder_info.owner)} for resource {resource}")
 
-    def _unlock_storage_account(self, resource: OperatorResourceInfo) -> None:
+    def _unlock_storage_account(self, resource: OpResInfo) -> None:
         self.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
         holder_info = self._solana.get_holder_account_info(resource.holder)
         cancel_tx_executor = CancelTxExecutor(self._config, self._solana, resource.signer)
@@ -161,7 +159,7 @@ class OperatorResourceInitializer:
         cancel_tx_executor.execute_tx_list()
 
 
-class OperatorResourceIdent:
+class OpResIdent:
     def __init__(self, signer: SolAccount, resource_id: int):
         self._signer = signer
         self._resource_id = resource_id
@@ -190,21 +188,23 @@ class OperatorResourceIdent:
 
 
 @logged_group("neon.MemPool")
-class OperatorResourceMng:
+class OpResMng:
     def __init__(self, config: Config):
-        self._free_resource_list: List[OperatorResourceIdent] = []
-        self._used_resource_dict: Dict[str, OperatorResourceIdent] = {}
-        self._disabled_resource_list: List[OperatorResourceIdent] = []
+        self._free_resource_list: List[OpResIdent] = []
+        self._signer_list: List[SolAccount] = []
+        self._used_resource_dict: Dict[str, OpResIdent] = {}
+        self._disabled_resource_list: List[OpResIdent] = []
         self._config = config
         self._resource_cnt = 0
         self._init_resource_list()
 
     def _init_resource_list(self):
-        signer_list: List[SolAccount] = self._get_solana_accounts()
+        self._signer_list: List[SolAccount] = self._get_solana_accounts()
+
         stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
         for resource_id in range(self._config.perm_account_id, stop_perm_account_id):
-            for signer in signer_list:
-                info = OperatorResourceIdent(signer=signer, resource_id=resource_id)
+            for signer in self._signer_list:
+                info = OpResIdent(signer=signer, resource_id=resource_id)
                 self._disabled_resource_list.append(info)
         self._resource_cnt = len(self._disabled_resource_list)
         assert self.resource_cnt != 0, 'Operator has NO resources!'
@@ -221,7 +221,7 @@ class OperatorResourceMng:
     def _get_current_time() -> int:
         return math.ceil(datetime.now().timestamp())
 
-    def _get_resource_impl(self, neon_sig: str) -> Optional[OperatorResourceIdent]:
+    def _get_resource_impl(self, neon_sig: str) -> Optional[OpResIdent]:
         resource = self._used_resource_dict.get(neon_sig, None)
         if resource is not None:
             return resource
@@ -241,7 +241,7 @@ class OperatorResourceMng:
         current_time = self._get_current_time()
         resource.set_last_used_time(current_time)
 
-        resource_info = OperatorResourceInfo.from_ident(resource.ident)
+        resource_info = OpResInfo.from_ident(resource.ident)
         self.debug(
             f'Resource is selected: {str(resource_info)}, ' +
             f'holder: {str(resource_info.holder)}, ' +
@@ -281,12 +281,15 @@ class OperatorResourceMng:
                 self._free_resource_list.append(resource)
                 break
 
+    def get_signer_list(self) -> List[str]:
+        return [signer.secret_key().hex() for signer in self._signer_list]
+
     def get_disabled_resource_list(self) -> List[str]:
         current_time = self._get_current_time()
 
         recheck_sec = self._config.recheck_used_resource_sec
         check_time = current_time - recheck_sec
-        old_resource_list: List[str, OperatorResourceIdent] = []
+        old_resource_list: List[str, OpResIdent] = []
         for neon_sig, resource in self._used_resource_dict.items():
             if resource.last_used_time < check_time:
                 self._disabled_resource_list.append(resource)

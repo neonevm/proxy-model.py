@@ -7,18 +7,18 @@ from ..common_neon.solana_interactor import SolInteractor, HolderAccountInfo
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.solana_alt import ALTInfo
 from ..common_neon.solana_alt_builder import ALTTxBuilder, ALTTxSet
-from ..common_neon.solana_alt_close_queue import ALTCloseQueue
 from ..common_neon.config import Config
+from ..common_neon.errors import log_error
 
 
 class CancelTxExecutor:
     def __init__(self, config: Config, solana: SolInteractor, signer: SolAccount) -> None:
-        self._builder = NeonIxBuilder(signer.public_key())
+        self._ix_builder = NeonIxBuilder(signer.public_key())
         self._config = config
         self._solana = solana
         self._signer = signer
 
-        self._alt_builder = ALTTxBuilder(solana, self._builder, signer)
+        self._alt_builder = ALTTxBuilder(solana, self._ix_builder, signer)
         self._alt_tx_set = ALTTxSet()
         self._alt_info_list: List[ALTInfo] = []
         self._cancel_tx_list: List[SolLegacyTx] = []
@@ -28,7 +28,7 @@ class CancelTxExecutor:
         if str(holder_info.holder_account) in self._holder_account_set:
             return False
 
-        if len(holder_info.account_list) >= self._alt_builder.TX_ACCOUNT_CNT:
+        if len(holder_info.account_list) >= self._alt_builder.tx_account_cnt:
             tx = self._build_alt_cancel_tx(holder_info)
         else:
             tx = self._build_cancel_tx(holder_info)
@@ -41,7 +41,7 @@ class CancelTxExecutor:
             key_list.append(SolAccountMeta(pubkey=SolPubKey(acct), is_signer=False, is_writable=is_writable))
 
         return SolLegacyTx().add(
-            self._builder.make_cancel_ix(
+            self._ix_builder.make_cancel_ix(
                 holder_account=holder_info.holder_account,
                 neon_tx_sig=bytes.fromhex(holder_info.neon_tx_sig[2:]),
                 cancel_key_list=key_list
@@ -75,19 +75,10 @@ class CancelTxExecutor:
 
         tx_list = [SolWrappedTx(name='CancelWithHash', tx=tx) for tx in self._cancel_tx_list]
 
-        # Close old Address Lookup Tables
-        alt_close_queue = ALTCloseQueue(self._solana)
-        alt_tx_list = alt_close_queue.pop_tx_list(self._signer.public_key())
-        if len(alt_tx_list):
-            tx_list.extend([SolWrappedTx(name='CloseLookupTable', tx=tx) for tx in alt_tx_list])
-
         try:
             tx_sender.send(tx_list)
-        finally:
-            if len(self._alt_tx_set) > 0:
-                # Deactivate Address Lookup Tables
-                tx_list = self._alt_builder.build_done_alt_tx_list(self._alt_tx_set)
-                tx_sender.send(tx_list)
+        except BaseException as err:
+            log_error(self, 'Fail to cancel tx.', err)
 
     def clear(self) -> None:
         self._alt_info_list.clear()

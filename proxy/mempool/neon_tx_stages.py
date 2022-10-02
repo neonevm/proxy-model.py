@@ -18,8 +18,8 @@ from ..common_neon.neon_instruction import NeonIxBuilder
 class NeonTxStage(abc.ABC):
     name = 'UNKNOWN'
 
-    def __init__(self, builder: NeonIxBuilder):
-        self._builder = builder
+    def __init__(self, ix_builder: NeonIxBuilder):
+        self._ix_builder = ix_builder
         self._size = 0
         self._balance = 0
         self.tx = SolLegacyTx()
@@ -60,7 +60,7 @@ class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
         assert len(self._seed_base) > 0
 
         self._seed = base58.b58encode(self._seed_base)
-        self._sol_account = accountWithSeed(self._builder.operator_account, self._seed)
+        self._sol_account = accountWithSeed(self._ix_builder.operator_account, self._seed)
 
     @property
     def sol_account(self) -> SolPubKey:
@@ -70,7 +70,7 @@ class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
     def _create_account_with_seed(self) -> SolTxIx:
         assert len(self._seed) > 0
 
-        return self._builder.make_create_account_with_seed_ix(self.sol_account, self._seed, self.balance, self.size)
+        return self._ix_builder.make_create_account_with_seed_ix(self.sol_account, self._seed, self.balance, self.size)
 
 
 class NeonCreateAccountTxStage(NeonTxStage):
@@ -83,7 +83,7 @@ class NeonCreateAccountTxStage(NeonTxStage):
 
     def _create_account(self) -> SolTxIx:
         assert self.has_balance()
-        return self._builder.make_create_eth_account_ix(self._address)
+        return self._ix_builder.make_create_eth_account_ix(self._address)
 
     def build(self) -> None:
         assert self._is_empty()
@@ -105,7 +105,7 @@ class NeonCreateContractTxStage(NeonCreateAccountWithSeedStage):
 
     def _create_account(self) -> SolTxIx:
         assert self.has_balance()
-        return self._builder.make_create_eth_account_ix(self._address, self.sol_account)
+        return self._ix_builder.make_create_eth_account_ix(self._address, self.sol_account)
 
     def build(self) -> None:
         assert self._is_empty()
@@ -132,7 +132,7 @@ class NeonResizeContractTxStage(NeonCreateAccountWithSeedStage):
     def _resize_account(self) -> SolTxIx:
         assert self.has_balance()
         account = self._account_desc['account']
-        return self._builder.make_resize_ix(account, self._old_sol_account, self.sol_account, self._seed)
+        return self._ix_builder.make_resize_ix(account, self._old_sol_account, self.sol_account, self._seed)
 
     def build(self) -> None:
         assert self._is_empty()
@@ -159,14 +159,14 @@ class NeonCreateHolderAccountStage(NeonCreateAccountWithSeedStage):
 
     def _init_sol_account(self):
         assert len(self._seed) > 0
-        self._sol_account = accountWithSeed(self._builder.operator_account, self._seed)
+        self._sol_account = accountWithSeed(self._ix_builder.operator_account, self._seed)
 
     def build(self):
         assert self._is_empty()
 
         self.debug(f'Create perm account {self.sol_account}')
         self.tx.add(self._create_account_with_seed())
-        self.tx.add(self._builder.create_holder_ix(self.sol_account))
+        self.tx.add(self._ix_builder.create_holder_ix(self.sol_account))
 
 
 class NeonDeleteHolderAccountStage(NeonTxStage):
@@ -180,10 +180,10 @@ class NeonDeleteHolderAccountStage(NeonTxStage):
 
     def _init_sol_account(self):
         assert len(self._seed) > 0
-        self._sol_account = accountWithSeed(self._builder.operator_account, self._seed)
+        self._sol_account = accountWithSeed(self._ix_builder.operator_account, self._seed)
 
     def _delete_account(self):
-        return self._builder.make_delete_holder_ix(self._sol_account)
+        return self._ix_builder.make_delete_holder_ix(self._sol_account)
 
     def build(self):
         assert self._is_empty()

@@ -1,29 +1,22 @@
 import asyncio
 import multiprocessing as mp
 import socket
-import traceback
 
 from logged_groups import logged_group, logging_context
-from typing import Optional, Any, List, Dict, cast
+from typing import Optional, Any, cast
 from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 
-from ..common_neon.gas_price_calculator import GasPriceCalculator
-from ..common_neon.errors import BlockedAccountsError
-from ..common_neon.errors import NodeBehindError, SolanaUnavailableError, NonceTooLowError, BadResourceError
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.address import EthereumAddress
 from ..common_neon.config import Config
-from ..common_neon.elf_params import ElfParams
 
-from .neon_tx_sender_ctx import NeonTxSendCtx
-from .neon_tx_sender import NeonTxSendStrategyExecutor
-
-from .operator_resource_mng import OperatorResourceInfo, OperatorResourceInitializer
-from .mempool_api import MPRequestType, MPRequest
-from .mempool_api import MPTxExecRequest, MPTxExecResult, MPTxExecResultCode
-from .mempool_api import MPGasPriceResult
-from .mempool_api import MPSenderTxCntRequest, MPSenderTxCntResult, MPSenderTxCntData
-from .mempool_api import MPOpResInitRequest, MPOpResInitResult, MPOpResInitResultCode
+from ..mempool.mempool_api import MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPOpResInitRequest
+from ..mempool.mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
+from ..mempool.mempool_executor_task_gas_price import MPExecutorGasPriceTask
+from ..mempool.mempool_executor_task_op_res import MPExecutorOpResTask
+from ..mempool.mempool_executor_task_elf_params import MPExecutorElfParamsTask
+from ..mempool.mempool_executor_task_state_tx_cnt import MPExecutorStateTxCntTask
+from ..mempool.mempool_executor_task_exec_neon_tx import MPExecutorExecNeonTxTask
+from ..mempool.mempool_executor_task_free_alt_queue import MPExecutorFreeALTQueueTask
 
 
 @logged_group("neon.MemPool")
@@ -35,127 +28,58 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._config = config
         self.info(f"Config: {self._config}")
         self._event_loop: asyncio.BaseEventLoop
+
         self._solana: Optional[SolInteractor] = None
-        self._gas_price_calculator: Optional[GasPriceCalculator] = None
         self._pickable_data_srv: Optional[PipePickableDataSrv] = None
+
+        self._gas_price_task: Optional[MPExecutorGasPriceTask] = None
+        self._op_res_task: Optional[MPExecutorOpResTask] = None
+        self._elf_params_task: Optional[MPExecutorElfParamsTask] = None
+        self._state_tx_cnt_task: Optional[MPExecutorStateTxCntTask] = None
+        self._exec_neon_tx_task: Optional[MPExecutorExecNeonTxTask] = None
+        self._free_alt_task: Optional[MPExecutorFreeALTQueueTask] = None
+
         mp.Process.__init__(self)
 
     def _init_in_proc(self):
         self.info(f"Config: {self._config}")
         self._event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._event_loop)
+
         self._pickable_data_srv = PipePickableDataSrv(user=self, srv_sock=self._srv_sock)
         self._solana = SolInteractor(self._config, self._config.solana_url)
 
-        self._init_gas_price_calculator()
-
-    def _on_exception(self, text: str, err: BaseException) -> None:
-        err_tb = "".join(traceback.format_tb(err.__traceback__))
-        self.error(f"{text}. Error: {err}, Traceback: {err_tb}")
-
-    def _init_gas_price_calculator(self):
-        self._gas_price_calculator = GasPriceCalculator(
-            self._config,
-            SolInteractor(self._config, self._config.pyth_solana_url)
-        )
-        self._update_gas_price_calculator()
-
-    def _update_gas_price_calculator(self):
-        if not self._gas_price_calculator.has_price():
-            self._gas_price_calculator.update_mapping()
-        if self._gas_price_calculator.has_price():
-            self._gas_price_calculator.update_gas_price()
-
-    def calc_gas_price(self) -> Optional[MPGasPriceResult]:
-        self._update_gas_price_calculator()
-        if not self._gas_price_calculator.is_valid():
-            return None
-        return MPGasPriceResult(
-            suggested_gas_price=self._gas_price_calculator.suggested_gas_price,
-            min_gas_price=self._gas_price_calculator.min_gas_price
-        )
-
-    def read_elf_param_dict(self) -> Optional[Dict[str, str]]:
-        try:
-            elf_params = ElfParams()
-            elf_params.read_elf_param_dict_from_net()
-            return elf_params.elf_param_dict
-        except Exception as e:
-            self._on_exception('Fail to read elf params', e)
-            return None
-
-    def get_state_tx_cnt(self, mp_state_req: MPSenderTxCntRequest) -> MPSenderTxCntResult:
-        neon_address_list = [EthereumAddress(sender) for sender in mp_state_req.sender_list]
-        neon_account_list = self._solana.get_neon_account_info_list(neon_address_list)
-
-        state_tx_cnt_list: List[MPSenderTxCntData] = []
-        for address, neon_account in zip(mp_state_req.sender_list, neon_account_list):
-            data = MPSenderTxCntData(address, neon_account.tx_count if neon_account is not None else 0)
-            state_tx_cnt_list.append(data)
-        return MPSenderTxCntResult(sender_tx_cnt_list=state_tx_cnt_list)
-
-    def init_operator_resource(self, mp_op_res_req: MPOpResInitRequest) -> MPOpResInitResult:
-        ElfParams().set_elf_param_dict(mp_op_res_req.elf_param_dict)
-        resource = OperatorResourceInfo.from_ident(mp_op_res_req.resource_ident)
-        try:
-            OperatorResourceInitializer(self._config, self._solana).init_resource(resource)
-            return MPOpResInitResult(code=MPOpResInitResultCode.Success)
-        except Exception as err:
-            self._on_exception(f"Failed to init operator resource tx {resource}.", err)
-            return MPOpResInitResult(code=MPOpResInitResultCode.Failed)
-
-    def execute_neon_tx(self, mp_tx_req: MPTxExecRequest):
-        neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
-        try:
-            assert neon_tx_exec_cfg is not None
-            self.execute_neon_tx_impl(mp_tx_req)
-        except BlockedAccountsError:
-            self.debug(f"Failed to execute tx {mp_tx_req.signature}, got blocked accounts result")
-            return MPTxExecResult(MPTxExecResultCode.BlockedAccount, neon_tx_exec_cfg)
-        except NodeBehindError:
-            self.debug(f"Failed to execute tx {mp_tx_req.signature}, got node behind error")
-            return MPTxExecResult(MPTxExecResultCode.NodeBehind, neon_tx_exec_cfg)
-        except SolanaUnavailableError:
-            self.debug(f"Failed to execute tx {mp_tx_req.signature}, got solana unavailable error")
-            return MPTxExecResult(MPTxExecResultCode.SolanaUnavailable, neon_tx_exec_cfg)
-        except NonceTooLowError:
-            self.debug(f"Failed to execute tx {mp_tx_req.signature}, got nonce too low error")
-            return MPTxExecResult(MPTxExecResultCode.NonceTooLow, neon_tx_exec_cfg)
-        except BadResourceError as e:
-            self.debug(f"Failed to execute tx {mp_tx_req.signature}, got bad resource error {str(e)}")
-            return MPTxExecResult(MPTxExecResultCode.BadResource, neon_tx_exec_cfg)
-        except Exception as err:
-            self._on_exception(f"Failed to execute tx {mp_tx_req.signature}.", err)
-            return MPTxExecResult(MPTxExecResultCode.Unspecified, neon_tx_exec_cfg)
-        return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)
-
-    def execute_neon_tx_impl(self, mp_tx_req: MPTxExecRequest):
-        ElfParams().set_elf_param_dict(mp_tx_req.elf_param_dict)
-
-        resource = OperatorResourceInfo.from_ident(mp_tx_req.resource_ident)
-
-        neon_tx = mp_tx_req.neon_tx
-        neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
-        strategy_ctx = NeonTxSendCtx(self._config, self._solana, resource, neon_tx, neon_tx_exec_cfg)
-        strategy_executor = NeonTxSendStrategyExecutor(strategy_ctx)
-        strategy_executor.execute()
+        self._gas_price_task = MPExecutorGasPriceTask(self._config, self._solana)
+        self._op_res_task = MPExecutorOpResTask(self._config, self._solana)
+        self._elf_params_task = MPExecutorElfParamsTask(self._config, self._solana)
+        self._state_tx_cnt_task = MPExecutorStateTxCntTask(self._config, self._solana)
+        self._exec_neon_tx_task = MPExecutorExecNeonTxTask(self._config, self._solana)
 
     async def on_data_received(self, data: Any) -> Any:
         mp_req = cast(MPRequest, data)
         with logging_context(req_id=mp_req.req_id, exectr=self._id):
             if mp_req.type == MPRequestType.SendTransaction:
                 mp_tx_req = cast(MPTxExecRequest, data)
-                return self.execute_neon_tx(mp_tx_req)
+                return self._exec_neon_tx_task.execute_neon_tx(mp_tx_req)
             elif mp_req.type == MPRequestType.GetGasPrice:
-                return self.calc_gas_price()
+                return self._gas_price_task.calc_gas_price()
             elif mp_req.type == MPRequestType.GetElfParamDict:
-                return self.read_elf_param_dict()
+                return self._elf_params_task.read_elf_param_dict()
             elif mp_req.type == MPRequestType.GetStateTxCnt:
                 mp_state_req = cast(MPSenderTxCntRequest, data)
-                return self.get_state_tx_cnt(mp_state_req)
+                return self._state_tx_cnt_task.read_state_tx_cnt(mp_state_req)
             elif mp_req.type == MPRequestType.InitOperatorResource:
                 mp_op_res_req = cast(MPOpResInitRequest, data)
-                return self.init_operator_resource(mp_op_res_req)
+                return self._op_res_task.init_op_res(mp_op_res_req)
+            elif mp_req.type == MPRequestType.GetALTList:
+                mp_get_req = cast(MPGetALTList, data)
+                return self._free_alt_task.get_alt_list(mp_get_req)
+            elif mp_req.type == MPRequestType.DeactivateALTList:
+                mp_deactivate_req = cast(MPDeactivateALTListRequest, data)
+                return self._free_alt_task.deactivate_alt_list(mp_deactivate_req)
+            elif mp_req.type == MPRequestType.CloseALTList:
+                mp_close_req = cast(MPCloseALTListRequest, data)
+                return self._gas_price_task.close_alt_list(mp_close_req)
             self.error(f"Failed to process mp_request, unknown type: {mp_req.type}")
         return None
 

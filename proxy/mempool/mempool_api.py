@@ -35,25 +35,28 @@ class IMPExecutor(ABC):
 
 
 class MPRequestType(IntEnum):
-    SendTransaction = 0,
-    GetLastTxNonce = 1,
-    GetTxByHash = 2,
-    GetGasPrice = 3,
-    GetStateTxCnt = 4,
-    InitOperatorResource = 5,
-    GetElfParamDict = 6,
-    Dummy = -1
+    SendTransaction = 0
+    GetLastTxNonce = 1
+    GetTxByHash = 2
+    GetGasPrice = 3
+    GetStateTxCnt = 4
+    InitOperatorResource = 5
+    GetElfParamDict = 6
+    GetALTList = 7
+    DeactivateALTList = 8
+    CloseALTList = 9
+    Unspecified = 255
 
 
 @dataclass
 class MPRequest:
     req_id: str
-    type: MPRequestType = MPRequestType.Dummy
+    type: MPRequestType = MPRequestType.Unspecified
 
 
 @dataclass
 class MPTxRequest(MPRequest):
-    signature: str = None
+    sig: str = None
     neon_tx: Optional[NeonTx] = None
     neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
     sender_address: str = None
@@ -86,7 +89,7 @@ class MPTxExecRequest(MPTxRequest):
     def clone(tx: MPTxRequest, resource_ident: str, elf_param_dict: Dict[str, str]):
         req = MPTxExecRequest(
             req_id=tx.req_id,
-            signature=tx.signature,
+            sig=tx.sig,
             neon_tx=tx.neon_tx,
             neon_tx_exec_cfg=tx.neon_tx_exec_cfg,
             sender_address=tx.sender_address,
@@ -145,15 +148,50 @@ class MPOpResInitRequest(MPRequest):
         self.type = MPRequestType.InitOperatorResource
 
 
+@dataclass
+class MPGetALTList(MPRequest):
+    operator_key_list: List[str] = None
+
+    def __post_init__(self):
+        self.type = MPRequestType.GetALTList
+
+
+@dataclass
+class MPALTInfo:
+    expanded_slot: int
+    deactivated_slot: Optional[int]
+    block_height: int
+    table_account: str
+    operator_key: str
+
+    def is_deactivated(self) -> bool:
+        return self.deactivated_slot is not None
+
+
+@dataclass
+class MPDeactivateALTListRequest(MPRequest):
+    alt_info_list: List[MPALTInfo] = None
+
+    def __post_init__(self):
+        self.type = MPRequestType.DeactivateALTList
+
+
+@dataclass
+class MPCloseALTListRequest(MPRequest):
+    alt_info_list: List[MPALTInfo] = None
+
+    def __post_init__(self):
+        self.type = MPRequestType.CloseALTList
+
+
 class MPTxExecResultCode(IntEnum):
     Done = 0
-    BlockedAccount = 1,
-    SolanaUnavailable = 2,
-    NodeBehind = 3,
-    NonceTooLow = 4,
-    BadResource = 5,
-    Unspecified = 255,
-    Dummy = -1
+    BlockedAccount = 1
+    SolanaUnavailable = 2
+    NodeBehind = 3
+    NonceTooLow = 4
+    BadResource = 5
+    Unspecified = 255
 
 
 @dataclass
@@ -202,3 +240,8 @@ class MPOpResInitResultCode(IntEnum):
 @dataclass
 class MPOpResInitResult:
     code: MPOpResInitResultCode
+
+
+@dataclass
+class MPALTListResult:
+    alt_info_list: List[MPALTInfo]

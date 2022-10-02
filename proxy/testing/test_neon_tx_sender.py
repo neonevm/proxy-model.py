@@ -9,7 +9,7 @@ from ..common_neon.errors import BadResourceError
 
 from ..common_neon.solana_interactor import SolInteractor
 
-from ..mempool.operator_resource_mng import OperatorResourceMng, OperatorResourceInitializer, OperatorResourceInfo
+from ..mempool.operator_resource_mng import OpResMng, OpResInit, OpResInfo
 
 
 class FakeConfig(Config):
@@ -45,12 +45,12 @@ class TestNeonTxSender(unittest.TestCase):
 
     def setUp(self) -> None:
         self._config = FakeConfig()
-        self._resource_list = OperatorResourceMng(self._config)
+        self._resource_list = OpResMng(self._config)
         for resource_ident in self._resource_list.get_disabled_resource_list():
             self._resource_list.enable_resource(resource_ident)
         self._resource_ident = self._resource_list.get_resource('test-tx-hash')
-        self._resource = OperatorResourceInfo.from_ident(self._resource_ident)
-        self._resource_initializer = OperatorResourceInitializer(self._config, self.solana)
+        self._resource = OpResInfo.from_ident(self._resource_ident)
+        self._resource_initializer = OpResInit(self._config, self.solana)
 
     # @unittest.skip("a.i.")
     def test_01_validate_execution_when_not_enough_sols(self):

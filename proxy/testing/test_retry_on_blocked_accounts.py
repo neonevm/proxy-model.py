@@ -6,7 +6,7 @@ from ..common_neon.utils import NeonTx
 from ..common_neon.address import EthereumAddress
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
-from ..mempool.operator_resource_mng import OperatorResourceInfo, OperatorResourceInitializer
+from ..mempool.operator_resource_mng import OpResInfo, OpResInit
 from .solana_utils import *
 from web3 import Web3
 from .testing_helpers import request_airdrop
@@ -83,11 +83,11 @@ class BlockedTest(unittest.TestCase):
 
         cls.solana = solana = SolInteractor(Config(), solana_url)
 
-        cls.resource_iter = resource = OperatorResourceInfo(wallet.get_acc(), 365)
-        OperatorResourceInitializer(FakeConfig(), solana).init_resource(resource)
+        cls.resource_iter = resource = OpResInfo(wallet.get_acc(), 365)
+        OpResInit(FakeConfig(), solana).init_resource(resource)
 
-        cls.resource_single = resource = OperatorResourceInfo(wallet.get_acc(), 366)
-        OperatorResourceInitializer(FakeConfig(), solana).init_resource(resource)
+        cls.resource_single = resource = OpResInfo(wallet.get_acc(), 366)
+        OpResInit(FakeConfig(), solana).init_resource(resource)
 
         tx_deploy_receipt, storage = cls.deploy_contract()
         cls.contractAddress = tx_deploy_receipt.contractAddress

@@ -109,14 +109,14 @@ class BaseNeonTxStrategy(abc.ABC):
 
     def _build_cancel_tx(self) -> SolLegacyTx:
         return BaseNeonTxStrategy._build_tx(self).add(
-            self._ctx.builder.make_cancel_ix()
+            self._ctx.ix_builder.make_cancel_ix()
         )
 
     @abc.abstractmethod
     def _build_tx(self) -> SolLegacyTx:
         return SolLegacyTx().add(
-            self._ctx.builder.make_compute_budget_heap_ix(),
-            self._ctx.builder.make_compute_budget_cu_ix(self._bpf_cycle_cnt)
+            self._ctx.ix_builder.make_compute_budget_heap_ix(),
+            self._ctx.ix_builder.make_compute_budget_cu_ix(self._bpf_cycle_cnt)
         )
 
     @abc.abstractmethod

@@ -52,7 +52,9 @@ def str_fmt_object(obj: Any) -> str:
             if (not LOG_FULL_OBJECT_INFO) and (len(value) == 0):
                 return False, None
             if isinstance(value, bytes) or isinstance(value, bytearray):
-                value = value.hex()[2:]
+                value = value.hex()
+            if (not LOG_FULL_OBJECT_INFO) and (value[:2] in {'0x', '0X'}):
+                value = value[2:]
             if (not LOG_FULL_OBJECT_INFO) and (len(value) > 20):
                 value = value[:20] + '...'
             return True, value

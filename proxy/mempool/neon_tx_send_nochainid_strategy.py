@@ -17,7 +17,7 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
     def _build_tx(self) -> SolLegacyTx:
         self._uniq_idx += 1
         return BaseNeonTxStrategy._build_tx(self).add(
-            self._ctx.builder.make_tx_step_from_account_no_chainid_ix(self._evm_step_cnt, self._uniq_idx)
+            self._ctx.ix_builder.make_tx_step_from_account_no_chainid_ix(self._evm_step_cnt, self._uniq_idx)
         )
 
 

@@ -5,7 +5,6 @@ import math
 import base58
 import base64
 import time
-import traceback
 import requests
 import itertools
 import json
@@ -27,13 +26,13 @@ from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, NEON_ACCOUNT_TAG, LOOK
 from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.address import EthereumAddress, ether2program
-from ..common_neon.utils import get_from_dict
-from ..common_neon.errors import SolanaUnavailableError
+from ..common_neon.errors import SolanaUnavailableError, log_error
 from ..common_neon.config import Config
 
 
 @dataclass
 class AccountInfo:
+    address: SolPubKey
     tag: int
     lamports: int
     owner: SolPubKey
@@ -52,15 +51,23 @@ class NeonAccountInfo:
     ro_blocked_cnt: int
 
     @staticmethod
-    def frombytes(pda_address: SolPubKey, data: bytes) -> NeonAccountInfo:
-        cont = ACCOUNT_INFO_LAYOUT.parse(data)
+    def from_account_info(info: AccountInfo) -> NeonAccountInfo:
+        if len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
+            raise RuntimeError(
+                f"Wrong data length for account data {str(info.address)}: "
+                f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}"
+            )
+        elif info.tag != NEON_ACCOUNT_TAG:
+            raise RuntimeError(f"Wrong tag {info.tag} for neon account info {str(info.address)}")
+
+        cont = ACCOUNT_INFO_LAYOUT.parse(info.data)
 
         code_account = None
         if cont.code_account != bytes().rjust(SolPubKey.LENGTH, b"\0"):
             code_account = SolPubKey(cont.code_account)
 
         return NeonAccountInfo(
-            pda_address=pda_address,
+            pda_address=info.address,
             ether=cont.ether.hex(),
             nonce=cont.nonce,
             tx_count=int.from_bytes(cont.tx_count, "little"),
@@ -80,16 +87,24 @@ class NeonCodeInfo:
     code: Optional[str]
 
     @staticmethod
-    def frombytes(pda_address: SolPubKey, data: bytes) -> NeonCodeInfo:
-        cont = CODE_ACCOUNT_INFO_LAYOUT.parse(data)
+    def from_account_info(info: AccountInfo) -> NeonCodeInfo:
+        if info.tag != CONTRACT_ACCOUNT_TAG:
+            raise RuntimeError(f"Wrong tag {info.tag} for code account {str(info.address)}")
+        elif len(info.data) < CODE_ACCOUNT_INFO_LAYOUT.sizeof():
+            raise RuntimeError(
+                f"Wrong data length for account data {str(info.address)}: "
+                f"{len(info.data)} < {CODE_ACCOUNT_INFO_LAYOUT.sizeof()}"
+            )
+
+        cont = CODE_ACCOUNT_INFO_LAYOUT.parse(info.data)
 
         offset = CODE_ACCOUNT_INFO_LAYOUT.sizeof()
         code = None
-        if len(data) >= offset + cont.code_size:
-            code = '0x' + data[offset:][:cont.code_size].hex()
+        if len(info.data) >= offset + cont.code_size:
+            code = '0x' + info.data[offset:][:cont.code_size].hex()
 
         return NeonCodeInfo(
-            pda_address=pda_address,
+            pda_address=info.address,
             owner=SolPubKey(cont.owner),
             code_size=cont.code_size,
             generation=cont.generation,
@@ -114,39 +129,38 @@ class HolderAccountInfo:
     account_list: Optional[List[Tuple[bool, str]]]
 
     @staticmethod
-    def frombytes(holder_account: SolPubKey, data: bytes) -> Optional[HolderAccountInfo]:
-        if len(data) < 1:
+    def from_account_info(info: AccountInfo) -> Optional[HolderAccountInfo]:
+        if len(info.data) < 1:
             return None
-        tag = data[0]
-        if tag == ACTIVE_STORAGE_TAG:
-            return HolderAccountInfo._decode_storage_account(holder_account, data)
-        elif tag == FINALIZED_STORAGE_TAG:
-            return HolderAccountInfo._decode_finalized_storage_account(holder_account, data)
-        elif tag == HOLDER_TAG:
-            return HolderAccountInfo._decode_holder_account(holder_account, data)
+        if info.tag == ACTIVE_STORAGE_TAG:
+            return HolderAccountInfo._decode_storage_account(info)
+        elif info.tag == FINALIZED_STORAGE_TAG:
+            return HolderAccountInfo._decode_finalized_storage_account(info)
+        elif info.tag == HOLDER_TAG:
+            return HolderAccountInfo._decode_holder_account(info)
         else:
             return None
 
     @staticmethod
-    def _decode_storage_account(holder_account: SolPubKey, data: bytes) -> Optional[HolderAccountInfo]:
-        if len(data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
+    def _decode_storage_account(info: AccountInfo) -> Optional[HolderAccountInfo]:
+        if len(info.data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
             return None
 
-        storage = STORAGE_ACCOUNT_INFO_LAYOUT.parse(data)
+        storage = STORAGE_ACCOUNT_INFO_LAYOUT.parse(info.data)
 
         account_list: List[Tuple[bool, str]] = []
         offset = STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()
         for _ in range(storage.account_list_len):
-            writable = (data[offset] > 0)
+            writable = (info.data[offset] > 0)
             offset += 1
 
-            some_pubkey = SolPubKey(data[offset:offset + SolPubKey.LENGTH])
+            some_pubkey = SolPubKey(info.data[offset:offset + SolPubKey.LENGTH])
             offset += SolPubKey.LENGTH
 
             account_list.append((writable, str(some_pubkey)))
 
         return HolderAccountInfo(
-            holder_account=holder_account,
+            holder_account=info.address,
             tag=storage.tag,
             owner=SolPubKey(storage.owner),
             neon_tx_sig='0x' + storage.neon_tx_sig.hex().lower(),
@@ -162,14 +176,14 @@ class HolderAccountInfo:
         )
 
     @staticmethod
-    def _decode_finalized_storage_account(holder_account: SolPubKey, data: bytes) -> Optional[HolderAccountInfo]:
-        if len(data) < FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
+    def _decode_finalized_storage_account(info: AccountInfo) -> Optional[HolderAccountInfo]:
+        if len(info.data) < FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
             return None
 
-        storage = FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.parse(data)
+        storage = FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.parse(info.data)
 
         return HolderAccountInfo(
-            holder_account=holder_account,
+            holder_account=info.address,
             tag=storage.tag,
             owner=SolPubKey(storage.owner),
             neon_tx_sig='0x' + storage.neon_tx_sig.hex().lower(),
@@ -185,17 +199,17 @@ class HolderAccountInfo:
         )
 
     @staticmethod
-    def _decode_holder_account(holder_account: SolPubKey, data: bytes) -> Optional[HolderAccountInfo]:
-        if len(data) < HOLDER_ACCOUNT_INFO_LAYOUT.sizeof():
+    def _decode_holder_account(info: AccountInfo) -> Optional[HolderAccountInfo]:
+        if len(info.data) < HOLDER_ACCOUNT_INFO_LAYOUT.sizeof():
             return None
 
-        holder = HOLDER_ACCOUNT_INFO_LAYOUT.parse(data)
+        holder = HOLDER_ACCOUNT_INFO_LAYOUT.parse(info.data)
         offset = HOLDER_ACCOUNT_INFO_LAYOUT.sizeof()
 
-        neon_tx_data = data[offset:]
+        neon_tx_data = info.data[offset:]
 
         return HolderAccountInfo(
-            holder_account=holder_account,
+            holder_account=info.address,
             tag=holder.tag,
             owner=SolPubKey(holder.owner),
             neon_tx_sig='0x' + holder.neon_tx_sig.hex().lower(),
@@ -222,19 +236,25 @@ class ALTAccountInfo:
     account_key_list: List[SolPubKey]
 
     @staticmethod
-    def frombytes(table_account: SolPubKey, data: bytes) -> Optional[ALTAccountInfo]:
-        lookup = ACCOUNT_LOOKUP_TABLE_LAYOUT.parse(data)
+    def from_account_info(info: AccountInfo) -> Optional[ALTAccountInfo]:
+        if len(info.data) < ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof():
+            raise RuntimeError(
+                f"Wrong data length for lookup table data {str(info.address)}: "
+                f"{len(info.data)} < {ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof()}"
+            )
+
+        lookup = ACCOUNT_LOOKUP_TABLE_LAYOUT.parse(info.data)
         if lookup.type != LOOKUP_ACCOUNT_TAG:
             return None
 
         offset = ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof()
-        if (len(data) - offset) % SolPubKey.LENGTH:
+        if (len(info.data) - offset) % SolPubKey.LENGTH:
             return None
 
         account_key_list = []
-        account_key_list_len = math.ceil((len(data) - offset) / SolPubKey.LENGTH)
+        account_key_list_len = math.ceil((len(info.data) - offset) / SolPubKey.LENGTH)
         for _ in range(account_key_list_len):
-            some_pubkey = SolPubKey(data[offset:offset + SolPubKey.LENGTH])
+            some_pubkey = SolPubKey(info.data[offset:offset + SolPubKey.LENGTH])
             offset += SolPubKey.LENGTH
             account_key_list.append(some_pubkey)
 
@@ -242,7 +262,7 @@ class ALTAccountInfo:
 
         return ALTAccountInfo(
             type=lookup.type,
-            table_account=table_account,
+            table_account=info.address,
             deactivation_slot=lookup.deactivation_slot,
             last_extended_slot=lookup.last_extended_slot,
             last_extended_slot_start_index=lookup.last_extended_slot_start_index,
@@ -286,20 +306,18 @@ class SolInteractor:
                 str_err = str(err).replace(self._endpoint_uri, 'XXXXX')
 
                 if retry <= self._config.retry_on_fail:
-                    self.debug(f'Receive connection error {str_err} on connection to Solana. ' +
-                               f'Attempt {retry + 1} to send the request to Solana node...')
+                    self.debug(
+                        f'Receive connection error {str_err} on connection to Solana. '
+                        f'Attempt {retry + 1} to send the request to Solana node...'
+                    )
                     time.sleep(1)
                     continue
 
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.error(f'Connection exception({retry}) on send request to Solana. Retry {retry}' +
-                           f'Type(err): {type(err)}, Error: {str_err}, Traceback: {err_tb}')
+                log_error(self, f'Connection exception on send request to Solana. Retry {retry}', err)
                 raise SolanaUnavailableError(str_err)
 
-            except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.error('Unknown exception on send request to Solana. ' +
-                           f'Type(err): {type(err)}, Error: {str(err)}, Traceback: {err_tb}')
+            except BaseException as err:
+                log_error(self, 'Unknown exception on send request to Solana', err)
                 raise
 
     def _send_rpc_request(self, method: str, *params: Any) -> RPCResponse:
@@ -363,9 +381,9 @@ class SolInteractor:
         status = self._send_rpc_request('getHealth').get('result', 'bad')
         return status == 'ok'
 
-    def get_sig_list_for_address(self, address: SolPubKey,
-                                 before: Optional[str], limit: int, commitment='confirmed') -> List[Dict[str, Any]]:
-        opts: Dict[str, Union[int, str]] = {
+    def get_sig_list_for_address(self, address: SolPubKey, before: Optional[str], limit: int,
+                                 commitment='confirmed') -> List[Dict[str, Any]]:
+        opts = {
             "limit": limit,
             "commitment": commitment
         }
@@ -385,7 +403,15 @@ class SolInteractor:
         opts = {
             'commitment': commitment
         }
-        return self._send_rpc_request('getSlot', opts)['result']
+        return self._send_rpc_request('getSlot', opts).get('result', 0)
+
+    @staticmethod
+    def _decode_account_info(address: SolPubKey, raw_account: Dict[str, Any]) -> AccountInfo:
+        data = base64.b64decode(raw_account.get('data', None)[0])
+        account_tag = data[0] if len(data) > 0 else 0
+        lamports = raw_account.get('lamports', 0)
+        owner = SolPubKey(raw_account.get('owner', None))
+        return AccountInfo(address, account_tag, lamports, owner, data)
 
     def get_account_info(self, pubkey: SolPubKey, length=256, commitment='processed') -> Optional[AccountInfo]:
         opts = {
@@ -401,19 +427,17 @@ class SolInteractor:
 
         result = self._send_rpc_request('getAccountInfo', str(pubkey), opts)
         # self.debug(f"{json.dumps(result, sort_keys=True)}")
+        error = result.get('error')
+        if error is not None:
+            self.debug(f"Can't get information about account {str(pubkey)}: {error}")
+            return None
 
-        info = result['result']['value']
-        if info is None:
+        raw_account = result.get('result', {}).get('value', None)
+        if raw_account is None:
             self.debug(f"Can't get information about {str(pubkey)}")
             return None
 
-        data = base64.b64decode(info['data'][0])
-
-        account_tag = data[0]
-        lamports = info['lamports']
-        owner = SolPubKey(info['owner'])
-
-        return AccountInfo(account_tag, lamports, owner, data)
+        return self._decode_account_info(pubkey, raw_account)
 
     def get_account_info_list(self, src_account_list: List[SolPubKey], length=256,
                               commitment='processed') -> List[AccountInfo]:
@@ -439,22 +463,50 @@ class SolInteractor:
                 self.debug(f"Can't get information about accounts {account_list}: {error}")
                 return account_info_list
 
-            for pubkey, info in zip(account_list, result['result']['value']):
+            for pubkey, info in zip(account_list, result.get('result', {}).get('value', None)):
                 if info is None:
                     account_info_list.append(None)
                 else:
-                    data = base64.b64decode(info['data'][0])
-                    lamports = info['lamports']
-                    owner = SolPubKey(info['owner'])
-                    account_info = AccountInfo(tag=data[0], lamports=lamports, owner=owner, data=data)
-                    account_info_list.append(account_info)
+                    account_info_list.append(self._decode_account_info(SolPubKey(pubkey), info))
+        return account_info_list
+
+    def get_program_account_info_list(self, program: SolPubKey, offset: int, length: int,
+                                      data_offset: int, data: bytes,
+                                      commitment='processed') -> List[AccountInfo]:
+        opts = {
+            "encoding": "base64",
+            "commitment": commitment,
+            "dataSlice": {
+                "offset": offset,
+                "length": length
+            },
+            "filters": [{
+                "memcmp": {
+                    "offset": data_offset,
+                    "bytes": base58.b58encode(data).decode('utf-8'),  # TODO: replace to base64 for version > 1.11.2
+                    "encoding": "base58"
+                }
+            }]
+        }
+        response = self._send_rpc_request("getProgramAccounts", str(program), opts)
+        error = response.get('error')
+        if error is not None:
+            self.debug(f'fail to get program accounts: {error}')
+            return []
+
+        raw_account_list = response.get('result', [])
+        account_info_list: List[AccountInfo] = []
+        for raw_account in raw_account_list:
+            address = SolPubKey(raw_account.get('pubkey'))
+            account_info = self._decode_account_info(address, raw_account.get('account', {}))
+            account_info_list.append(account_info)
         return account_info_list
 
     def get_sol_balance(self, account, commitment='processed') -> int:
         opts = {
             "commitment": commitment
         }
-        return self._send_rpc_request('getBalance', str(account), opts)['result']['value']
+        return self._send_rpc_request('getBalance', str(account), opts).get('result', {}).get('value', 0)
 
     def get_sol_balance_list(self, accounts_list: List[Union[str, SolPubKey]], commitment='processed') -> List[int]:
         opts = {
@@ -467,8 +519,7 @@ class SolInteractor:
         balances_list = []
         response_list = self._send_rpc_batch_request('getBalance', requests_list)
         for response in response_list:
-            value = get_from_dict(response, 'result', 'value')
-            balance = int(value) if value else 0
+            balance = response.get('result', {}).get('value', 0)
             balances_list.append(balance)
 
         return balances_list
@@ -501,21 +552,15 @@ class SolInteractor:
 
         return balance_list
 
-    def get_neon_account_info(
-        self, eth_account: Union[str, EthereumAddress], commitment='processed'
-    ) -> Optional[NeonAccountInfo]:
+    def get_neon_account_info(self, eth_account: Union[str, EthereumAddress],
+                              commitment='processed') -> Optional[NeonAccountInfo]:
         if isinstance(eth_account, str):
             eth_account = EthereumAddress(eth_account)
         account_sol, nonce = ether2program(eth_account)
         info = self.get_account_info(account_sol, commitment=commitment)
         if info is None:
             return None
-        elif info.tag != NEON_ACCOUNT_TAG:
-            raise RuntimeError(f"Wrong tag {info.tag} for neon account info {str(account_sol)}")
-        elif len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for account data {account_sol}: " +
-                               f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return NeonAccountInfo.frombytes(account_sol, info.data)
+        return NeonAccountInfo.from_account_info(info)
 
     def get_neon_code_info(
         self, account: Union[str, EthereumAddress, NeonAccountInfo, SolPubKey, None]
@@ -530,12 +575,7 @@ class SolInteractor:
         info = self.get_account_info(account, length=0)
         if info is None:
             return None
-        elif info.tag != CONTRACT_ACCOUNT_TAG:
-            raise RuntimeError(f"Wrong tag {info.tag} for code account {str(account)}")
-        elif len(info.data) < CODE_ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for account data {str(account)}: " +
-                               f"{len(info.data)} < {CODE_ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return NeonCodeInfo.frombytes(account, info.data)
+        return NeonCodeInfo.from_account_info(info)
 
     def get_neon_account_info_list(self, eth_accounts: List[EthereumAddress]) -> List[Optional[NeonAccountInfo]]:
         requests_list = []
@@ -548,23 +588,20 @@ class SolInteractor:
             if info is None or len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof() or info.tag != NEON_ACCOUNT_TAG:
                 accounts_list.append(None)
                 continue
-            accounts_list.append(NeonAccountInfo.frombytes(account_sol, info.data))
+            accounts_list.append(NeonAccountInfo.from_account_info(info))
         return accounts_list
 
     def get_holder_account_info(self, holder_account: SolPubKey) -> Optional[HolderAccountInfo]:
         info = self.get_account_info(holder_account, length=0)
         if info is None:
             return None
-        return HolderAccountInfo.frombytes(holder_account, info.data)
+        return HolderAccountInfo.from_account_info(info)
 
     def get_account_lookup_table_info(self, table_account: SolPubKey) -> Optional[ALTAccountInfo]:
         info = self.get_account_info(table_account, length=0)
         if info is None:
             return None
-        elif len(info.data) < ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for lookup table data {str(table_account)}: " +
-                               f"{len(info.data)} < {ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof()}")
-        return ALTAccountInfo.frombytes(table_account, info.data)
+        return ALTAccountInfo.from_account_info(info)
 
     def get_multiple_rent_exempt_balances_for_size(self, size_list: List[int], commitment='confirmed') -> List[int]:
         opts = {
@@ -572,7 +609,16 @@ class SolInteractor:
         }
         request_list = [(size, opts) for size in size_list]
         response_list = self._send_rpc_batch_request("getMinimumBalanceForRentExemption", request_list)
-        return [r['result'] for r in response_list]
+        return [r.get('result', 0) for r in response_list]
+
+    @staticmethod
+    def _decode_block_info(block_slot: int, net_block: Dict[str, Any]) -> SolanaBlockInfo:
+        return SolanaBlockInfo(
+            block_slot=block_slot,
+            block_hash='0x' + base58.b58decode(net_block.get('blockhash', '')).hex().lower(),
+            block_time=net_block.get('blockTime', 0),
+            parent_block_slot=net_block.get('parentSlot', 0)
+        )
 
     def get_block_info(self, block_slot: int, commitment='confirmed') -> SolanaBlockInfo:
         opts = {
@@ -587,12 +633,7 @@ class SolInteractor:
         if not net_block:
             return SolanaBlockInfo(block_slot=block_slot)
 
-        return SolanaBlockInfo(
-            block_slot=block_slot,
-            block_hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
-            block_time=net_block['blockTime'],
-            parent_block_slot=net_block['parentSlot']
-        )
+        return self._decode_block_info(block_slot, net_block)
 
     def get_block_info_list(self, block_slot_list: List[int], commitment='confirmed') -> List[SolanaBlockInfo]:
         block_list = []
@@ -615,13 +656,8 @@ class SolInteractor:
             if (not response) or ('result' not in response):
                 block = SolanaBlockInfo(block_slot=block_slot)
             else:
-                net_block = response['result']
-                block = SolanaBlockInfo(
-                    block_slot=block_slot,
-                    block_hash='0x' + base58.b58decode(net_block['blockhash']).hex().lower(),
-                    block_time=net_block['blockTime'],
-                    parent_block_slot=net_block['parentSlot']
-                )
+                net_block = response.get('result', None)
+                block = self._decode_block_info(block_slot, net_block)
             block_list.append(block)
         return block_list
 
@@ -630,12 +666,13 @@ class SolInteractor:
             'commitment': commitment
         }
         blockhash_resp = self._send_rpc_request('getLatestBlockhash', opts)
-        if not blockhash_resp.get("result"):
+        result = blockhash_resp.get("result")
+        if result is None:
             if default:
                 return default
             self.debug(f'{blockhash_resp}')
             raise RuntimeError("failed to get latest blockhash")
-        return blockhash_resp['result']['context']['slot']
+        return result.get('context', {}).get('slot', 0)
 
     def get_recent_blockhash(self, commitment='confirmed') -> SolBlockhash:
         opts = {
@@ -644,7 +681,7 @@ class SolInteractor:
         blockhash_resp = self._send_rpc_request('getLatestBlockhash', opts)
         if not blockhash_resp.get("result"):
             raise RuntimeError("failed to get recent blockhash")
-        blockhash = blockhash_resp["result"]["value"]["blockhash"]
+        blockhash = blockhash_resp.get("result", {}).get("value", {}).get("blockhash", None)
         return SolBlockhash(blockhash)
 
     def get_blockhash(self, block_slot: int) -> SolBlockhash:
@@ -655,14 +692,14 @@ class SolInteractor:
         }
 
         block = self._send_rpc_request("getBlock", block_slot, block_opts)
-        return SolBlockhash(block['result']['blockhash'])
+        return SolBlockhash(block.get('result', {}).get('blockhash', None))
 
     def get_block_height(self, commitment='confirmed') -> int:
         opts = {
             'commitment': commitment
         }
         blockheight_resp = self._send_rpc_request('getBlockHeight', opts)
-        return blockheight_resp['result']
+        return blockheight_resp.get('result', 0)
 
     def send_tx_list(self, tx_list: List[SolTx], skip_preflight: bool) -> List[SolSendResult]:
         opts = {
@@ -722,12 +759,12 @@ class SolInteractor:
             if not result:
                 return block_slot, False
 
-            block_slot = result['context']['slot']
+            block_slot = result.get('context', {}).get('slot', 0)
 
-            for status in result['value']:
+            for status in result.get('value', []):
                 if not status:
                     return block_slot, False
-                if status['confirmationStatus'] == 'processed':
+                if status.get('confirmationStatus', '') == 'processed':
                     return block_slot, False
 
         return block_slot, (block_slot != 0)

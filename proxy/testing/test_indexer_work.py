@@ -17,7 +17,7 @@ from ..common_neon.solana_transaction import SolAccountMeta, SolLegacyTx, SolTxI
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.utils import NeonTx
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from ..mempool.operator_resource_mng import OperatorResourceInfo, OperatorResourceInitializer
+from ..mempool.operator_resource_mng import OpResInfo, OpResInit
 
 from .testing_helpers import request_airdrop
 
@@ -165,9 +165,9 @@ class CancelTest(unittest.TestCase):
 
     @classmethod
     def create_neon_ix_builder(cls, raw_tx, neon_account_list):
-        resource = OperatorResourceInfo(cls.signer, int.from_bytes(raw_tx[:8], byteorder="little"))
+        resource = OpResInfo(cls.signer, int.from_bytes(raw_tx[:8], byteorder="little"))
         config = FakeConfig()
-        OperatorResourceInitializer(config, SolInteractor(config, config.solana_url)).init_resource(resource)
+        OpResInit(config, SolInteractor(config, config.solana_url)).init_resource(resource)
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
         neon_ix_builder.init_operator_neon(EthereumAddress.from_private_key(resource.secret_key))

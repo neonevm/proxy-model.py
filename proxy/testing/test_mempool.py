@@ -24,7 +24,7 @@ from ..common_neon.eth_proto import NeonTx
 from ..common_neon.elf_params import ElfParams
 
 from .testing_helpers import create_account
-from ..mempool.operator_resource_mng import OperatorResourceMng
+from ..mempool.operator_resource_mng import OpResMng
 
 
 def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: int,
@@ -41,13 +41,13 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: int
     signed_tx_data = w3.eth.account.sign_transaction(
         dict(nonce=nonce, chainId=111, gas=gas, gasPrice=gas_price, to=to_addr, value=value, data=data),
         from_acc.key)
-    signature = signed_tx_data.hash.hex()
+    neon_sig = signed_tx_data.hash.hex()
     neon_tx = NeonTx.fromString(bytearray(signed_tx_data.rawTransaction))
     neon_tx_exec_cfg = NeonTxExecCfg()
     neon_tx_exec_cfg.set_state_tx_cnt(0)
     mp_tx_request = MPTxExecRequest(
         req_id=req_id,
-        signature=signature,
+        sig=neon_sig,
         neon_tx=neon_tx,
         neon_tx_exec_cfg=neon_tx_exec_cfg,
         resource_ident='test',
@@ -83,7 +83,7 @@ class MockMPExecutor(IMPExecutor):
         pass
 
 
-class MockResourceManager(OperatorResourceMng):
+class MockResourceManager(OpResMng):
     def __init__(self, _):
         pass
 
@@ -405,7 +405,7 @@ class TestMPSchedule(unittest.TestCase):
         acc0, acc1, acc2 = acc[0].address.lower(), acc[1].address.lower(), acc[2].address.lower()
         awaiting = {acc0: 2, acc1: 2, acc2: 3}
 
-        for sender_addr, txs in schedule.get_taking_out_tx_list_iterator():
+        for sender_addr, txs in schedule.get_taking_out_tx_list_iter():
             self.assertEqual(awaiting[sender_addr], len(txs))
 
         self.assertEqual(schedule.get_pending_tx_count(acc0), 0)

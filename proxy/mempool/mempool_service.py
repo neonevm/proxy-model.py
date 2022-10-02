@@ -1,5 +1,3 @@
-import traceback
-
 from logged_groups import logged_group, logging_context
 import asyncio
 from multiprocessing import Process
@@ -10,10 +8,11 @@ from neon_py.maintenance_api import MaintenanceRequest, MaintenanceCommand, Repl
 from neon_py.data import Result
 
 from ..common_neon.config import Config
+from ..common_neon.errors import log_error
 
 from .mempool import MemPool
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
-from .operator_resource_mng import OperatorResourceMng
+from .operator_resource_mng import OpResMng
 
 from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest
 from .mempool_replicator import MemPoolReplicator
@@ -32,7 +31,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         self._mempool_srv: Optional[AddrPickableDataSrv] = None
         self._mempool_maintenance_srv: Optional[AddrPickableDataSrv] = None
         self._mempool: Optional[MemPool] = None
-        self._operator_resource_mng: Optional[OperatorResourceMng] = None
+        self._op_res_mng: Optional[OpResMng] = None
         self._mp_executor_mng: Optional[MPExecutorMng] = None
         self._replicator: Optional[MemPoolReplicator] = None
         self._process = Process(target=self.run)
@@ -57,8 +56,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         return Result("Unexpected problem")
 
     def _on_exception(self, text: str, err: BaseException) -> None:
-        err_tb = "".join(traceback.format_tb(err.__traceback__))
-        self.error(f"{text}. Error: {err}. Traceback: {err_tb}")
+        log_error(self, text, err)
 
     async def process_mp_request(self, mp_request: MPRequest) -> Any:
         if mp_request.type == MPRequestType.SendTransaction:
@@ -98,9 +96,9 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             self._mempool_srv = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
             self._mempool_maintenance_srv = AddrPickableDataSrv(user=self, address=self.MP_MAINTENANCE_ADDR)
             self._mp_executor_mng = MPExecutorMng(self._config, self, self.EXECUTOR_COUNT)
-            self._operator_resource_mng = OperatorResourceMng(self._config)
+            self._op_res_mng = OpResMng(self._config)
             self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
-            self._mempool = MemPool(self._config, self._operator_resource_mng, self._mp_executor_mng)
+            self._mempool = MemPool(self._config, self._op_res_mng, self._mp_executor_mng)
             self._replicator = MemPoolReplicator(self._mempool)
             self.event_loop.run_forever()
         except Exception as err:

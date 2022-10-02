@@ -1,4 +1,3 @@
-import traceback
 from datetime import datetime
 from typing import Union
 from logged_groups import logged_group
@@ -7,6 +6,7 @@ from ..common_neon.address import EthereumAddress
 from ..common_neon.permission_token import PermissionToken
 from ..common_neon.solana_transaction import SolPubKey, SolAccount
 from ..common_neon.elf_params import ElfParams
+from ..common_neon.errors import log_error
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 
@@ -70,10 +70,8 @@ class AccountWhitelist:
             self.denial_token.mint_to(to_mint, ether_addr, self.mint_authority_file, signer)
             self.info(f'Permissions deprived to {ether_addr}')
             return True
-        except Exception as err:
-            err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error(f'Failed to grant permissions to {ether_addr}: ' +
-                       f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+        except BaseException as err:
+            log_error(self, f'Failed to grant permissions to {ether_addr}', err)
             return False
 
     def grant_client_permissions(self, ether_addr: Union[str, EthereumAddress], signer: SolAccount):
@@ -109,10 +107,8 @@ class AccountWhitelist:
                 'diff': diff
             }
             return diff >= min_balance
-        except Exception as err:
-            err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error(f'Failed to read permissions for {ether_addr}: ' +
-                       f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+        except BaseException as err:
+            log_error(self, f'Failed to read permissions for {ether_addr}', err)
 
     def has_client_permission(self, ether_addr: Union[str, EthereumAddress]):
         return self.has_permission(ether_addr, ElfParams().neon_minimal_client_allowance_balance)

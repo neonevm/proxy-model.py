@@ -11,7 +11,7 @@ from ..common_neon.utils import NeonTxResultInfo
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_simple_strategy import SimpleNeonTxSender
-from ..mempool.neon_tx_send_strategy_base_stages import CreateAccountNeonTxPrepStage, CloseALTNeonTxPrepStage
+from ..mempool.neon_tx_send_strategy_base_stages import CreateAccountNeonTxPrepStage
 from ..mempool.neon_tx_send_strategy_alt_stages import alt_strategy
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 
@@ -89,7 +89,6 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         super().__init__(ctx)
         self._uniq_idx = 0
         self._evm_step_cnt = ctx.config.evm_step_cnt_limit
-        self._prep_stage_list.append(CloseALTNeonTxPrepStage(ctx))
         self._prep_stage_list.append(CreateAccountNeonTxPrepStage(ctx))
 
     def _validate(self) -> bool:
@@ -120,7 +119,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     def _build_tx(self) -> SolLegacyTx:
         self._uniq_idx += 1
         return BaseNeonTxStrategy._build_tx(self).add(
-            self._ctx.builder.make_tx_step_from_data_ix(self._evm_step_cnt, self._uniq_idx)
+            self._ctx.ix_builder.make_tx_step_from_data_ix(self._evm_step_cnt, self._uniq_idx)
         )
 
     def build_tx_list(self, total_evm_step_cnt: int) -> List[SolTx]:

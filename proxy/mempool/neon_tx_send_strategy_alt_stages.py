@@ -21,7 +21,7 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
         if self._alt_info is not None:
             return True
 
-        alt_builder = ALTTxBuilder(self._ctx.solana, self._ctx.builder, self._ctx.signer)
+        alt_builder = ALTTxBuilder(self._ctx.solana, self._ctx.ix_builder, self._ctx.signer)
         self._alt_info = alt_builder.build_alt_info(legacy_tx)
         self._alt_builder = alt_builder
         return True

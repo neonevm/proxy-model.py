@@ -7,7 +7,6 @@ neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "2.5"))
 
 LOG_NEON_CLI_DEBUG = os.environ.get("LOG_NEON_CLI_DEBUG", "NO") == "YES"
 RETRY_ON_FAIL = int(os.environ.get("RETRY_ON_FAIL", "10"))
-RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION = max(int(os.environ.get("RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION", "1000")), 1)
 CANCEL_TIMEOUT = int(os.environ.get("CANCEL_TIMEOUT", 60))
 SKIP_CANCEL_TIMEOUT = int(os.environ.get("SKIP_CANCEL_TIMEOUT", 1000))
 HOLDER_TIMEOUT = int(os.environ.get("HOLDER_TIMEOUT", "216000"))  # 1 day by default

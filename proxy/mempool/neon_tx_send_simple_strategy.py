@@ -10,7 +10,7 @@ from ..common_neon.utils import NeonTxResultInfo
 from ..common_neon.evm_log_decoder import decode_neon_tx_result
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
-from ..mempool.neon_tx_send_strategy_base_stages import CreateAccountNeonTxPrepStage, CloseALTNeonTxPrepStage
+from ..mempool.neon_tx_send_strategy_base_stages import CreateAccountNeonTxPrepStage
 from ..mempool.neon_tx_send_strategy_alt_stages import alt_strategy
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 
@@ -57,7 +57,6 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     def __init__(self, ctx: NeonTxSendCtx):
         super().__init__(ctx)
         self._prep_stage_list.append(CreateAccountNeonTxPrepStage(ctx))
-        self._prep_stage_list.append(CloseALTNeonTxPrepStage(ctx))
 
     def _validate(self) -> bool:
         return (
@@ -67,7 +66,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
 
     def _build_tx(self) -> SolLegacyTx:
         return BaseNeonTxStrategy._build_tx(self).add(
-            self._ctx.builder.make_tx_exec_from_data_ix()
+            self._ctx.ix_builder.make_tx_exec_from_data_ix()
         )
 
     def execute(self) -> NeonTxResultInfo:

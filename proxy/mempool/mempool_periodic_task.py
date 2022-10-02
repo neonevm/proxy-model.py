@@ -1,13 +1,14 @@
 import asyncio
 import time
 import math
-import traceback
 import abc
 from typing import Optional, TypeVar, Generic
 
 from logged_groups import logged_group, logging_context
 
-from .mempool_api import MPTask, IMPExecutor
+from ..common_neon.errors import log_error
+
+from ..mempool.mempool_api import MPTask, IMPExecutor
 
 
 MPPeriodicTaskRequest = TypeVar('MPPeriodicTaskRequest')
@@ -29,11 +30,10 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
         now = time.time()
         now_sec = math.ceil(now)
         now_msec = math.ceil(now * 1000 % 1000)
-        return f'{self._name}-{now_sec}.{now_msec}'
+        return f'{self._name}-{now_sec}.{now_msec:03d}'
 
     def _on_exception(self, text: str, err: BaseException) -> None:
-        err_tb = "".join(traceback.format_tb(err.__traceback__))
-        self.error(f"{text}. Error: {err}, Traceback: {err_tb}")
+        log_error(self, text, err)
 
     def _try_to_submit_request(self) -> None:
         if not self._executor.is_available():

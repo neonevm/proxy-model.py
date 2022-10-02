@@ -1,15 +1,16 @@
 import time
-import traceback
 from decimal import Decimal
 from logged_groups import logged_group
 from multiprocessing import Process
 
 from prometheus_client import start_http_server
+
 from ..common_neon.address import EthereumAddress
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.config import Config
 from ..common_neon.gas_price_calculator import GasPriceCalculator
+from ..common_neon.errors import log_error
 
 from .prometheus_proxy_exporter import PrometheusExporter
 
@@ -60,9 +61,7 @@ class PrometheusProxyServer:
                 self._stat_gas_price()
                 self._stat_operator_balance()
             except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.warning('Exception on transactions processing. ' +
-                             f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+                log_error(self, 'Exception on transactions processing. ', err)
 
     def _stat_operator_balance(self):
         sol_balances = self._solana.get_sol_balance_list(self._sol_accounts)

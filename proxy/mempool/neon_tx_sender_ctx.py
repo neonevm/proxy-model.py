@@ -14,14 +14,14 @@ from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, H
 from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateContractTxStage
 from .neon_tx_stages import NeonResizeContractTxStage
 
-from .operator_resource_mng import OperatorResourceInfo
+from .operator_resource_mng import OpResInfo
 
 
 @logged_group("neon.MemPool")
 class AccountTxListBuilder:
-    def __init__(self, solana: SolInteractor, builder: NeonIxBuilder):
+    def __init__(self, solana: SolInteractor, ix_builder: NeonIxBuilder):
         self._solana = solana
-        self._builder = builder
+        self._ix_builder = ix_builder
         self._resize_contract_stage_list: List[NeonTxStage] = []
         self._create_account_stage_list: List[NeonTxStage] = []
         self._neon_meta_dict: Dict[str, SolAccountMeta] = {}
@@ -37,7 +37,7 @@ class AccountTxListBuilder:
 
         neon_meta_list = list(self._neon_meta_dict.values())
         self.debug('metas: ' + ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in neon_meta_list]))
-        self._builder.init_neon_account_list(neon_meta_list)
+        self._ix_builder.init_neon_account_list(neon_meta_list)
 
         # Build all instructions
         self._build_account_stage_list()
@@ -53,13 +53,13 @@ class AccountTxListBuilder:
         for account_desc in emulated_result_account_list:
             if account_desc['new']:
                 if account_desc['code_size']:
-                    stage = NeonCreateContractTxStage(self._builder, account_desc)
+                    stage = NeonCreateContractTxStage(self._ix_builder, account_desc)
                     self._create_account_stage_list.append(stage)
                 elif account_desc['writable']:
-                    stage = NeonCreateAccountTxStage(self._builder, account_desc)
+                    stage = NeonCreateAccountTxStage(self._ix_builder, account_desc)
                     self._create_account_stage_list.append(stage)
             elif account_desc['code_size'] and (account_desc['code_size_current'] < account_desc['code_size']):
-                self._resize_contract_stage_list.append(NeonResizeContractTxStage(self._builder, account_desc))
+                self._resize_contract_stage_list.append(NeonResizeContractTxStage(self._ix_builder, account_desc))
 
             self._add_meta(account_desc['account'], True)
             if account_desc['contract']:
@@ -94,7 +94,7 @@ class AccountTxListBuilder:
 
 
 class NeonTxSendCtx:
-    def __init__(self, config: Config, solana: SolInteractor, resource: OperatorResourceInfo,
+    def __init__(self, config: Config, solana: SolInteractor, resource: OpResInfo,
                  neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg):
         self._config = config
         self._neon_tx_exec_cfg = neon_tx_exec_cfg
@@ -104,14 +104,14 @@ class NeonTxSendCtx:
         self._neon_sig = '0x' + self._bin_neon_sig.hex().lower()
         self._solana = solana
         self._resource = resource
-        self._builder = NeonIxBuilder(resource.public_key)
+        self._ix_builder = NeonIxBuilder(resource.public_key)
 
-        self._account_tx_list_builder = AccountTxListBuilder(solana, self._builder)
+        self._account_tx_list_builder = AccountTxListBuilder(solana, self._ix_builder)
         self._account_tx_list_builder.build_tx_list(self._neon_tx_exec_cfg.account_dict)
 
-        self._builder.init_operator_neon(self._resource.ether)
-        self._builder.init_neon_tx(self._neon_tx)
-        self._builder.init_iterative(self._resource.holder)
+        self._ix_builder.init_operator_neon(self._resource.ether)
+        self._ix_builder.init_neon_tx(self._neon_tx)
+        self._ix_builder.init_iterative(self._resource.holder)
 
         self._is_holder_completed = False
 
@@ -126,14 +126,14 @@ class NeonTxSendCtx:
             if holder_info.neon_tx_sig != self._neon_sig:
                 raise BadResourceError(
                     f'Holder account {str(self._resource.holder)} '
-                    f' has another neon tx: {holder_info.neon_tx_sig}'
+                    f'has another neon tx: {holder_info.neon_tx_sig}'
                 )
             self._is_holder_completed = True
         elif holder_info.tag == FINALIZED_STORAGE_TAG:
             pass
         elif holder_info.tag == HOLDER_TAG:
-            holder_msg_len = len(self._builder.holder_msg)
-            self._is_holder_completed = (self._builder.holder_msg == holder_info.neon_tx_data[:holder_msg_len])
+            holder_msg_len = len(self._ix_builder.holder_msg)
+            self._is_holder_completed = (self._ix_builder.holder_msg == holder_info.neon_tx_data[:holder_msg_len])
         else:
             raise BadResourceError(f'Holder account has bad tag: {holder_info.tag}')
 
@@ -169,8 +169,8 @@ class NeonTxSendCtx:
         return self._resource.signer
 
     @property
-    def builder(self) -> NeonIxBuilder:
-        return self._builder
+    def ix_builder(self) -> NeonIxBuilder:
+        return self._ix_builder
 
     @property
     def solana(self) -> SolInteractor:

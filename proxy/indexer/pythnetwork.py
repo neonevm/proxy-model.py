@@ -1,11 +1,11 @@
 import struct
-import traceback
 
 from decimal import Decimal
 from logged_groups import logged_group
 from typing import List, Union, Dict, Any, Optional
 
 from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.errors import log_error
 from ..common_neon.constants import SYS_PROGRAM_ID
 from ..common_neon.solana_interactor import SolInteractor
 
@@ -46,7 +46,7 @@ def unpack(layout_descriptor, raw_data, field_name, index=0):
     start_idx = field['pos'] + index * length
     stop_idx = start_idx + length
     if start_idx >= len(raw_data) or stop_idx > len(raw_data):
-        raise Exception(f"""Field '{field_name}': Index overflow: 
+        raise Exception(f"""Field '{field_name}': Index overflow:
 len(raw_data) = {len(raw_data)}, start_idx = {start_idx}, stop_idx = {stop_idx}""")
 
     if field['format'] == 'acc':  # special case for Solana account address
@@ -145,7 +145,7 @@ class PythNetworkClient:
             data = self.read_pyth_acct_data(acc_addr)
             if data is None:
                 raise Exception(f"Failed to read mapping account {acc_addr}")
-                
+
             num_products = unpack(self.mapping_account_layout, data, 'num_products')
             acc_addr = unpack(self.mapping_account_layout, data, 'next')
             for i in range(num_products):
@@ -162,7 +162,7 @@ class PythNetworkClient:
         data = self.read_pyth_acct_data(acc_addr)
         if data is None:
             raise Exception(f"Failed to read price account {acc_addr}")
-        
+
         price = Decimal(unpack(self.price_account_layout, data, 'agg.price'))
         conf = Decimal(unpack(self.price_account_layout, data, 'agg.conf'))
         multiply = pow(Decimal(10), unpack(self.price_account_layout, data, 'expo'))
@@ -191,10 +191,8 @@ class PythNetworkClient:
                 symbol = product['attrs']['symbol']
                 self.info(f'Product account {acct_addr}: {symbol}')
                 self.price_accounts[symbol] = product['price_acc']
-            except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.warning(f'Failed to parse product account data {acct_addr}, ' +
-                             f'{type(err)}, Error: {err}, Traceback: {err_tb}')
+            except BaseException as err:
+                log_error(self, f'Failed to parse product account data {acct_addr}. ', err)
         self.info('Pyth.Network update finished.\n\n\n')
 
     def get_price(self, symbol: str) -> Optional[Dict[str, Any]]:

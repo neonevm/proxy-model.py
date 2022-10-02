@@ -1,6 +1,5 @@
 import requests
 import base58
-import traceback
 import psycopg2.extensions
 
 from datetime import datetime
@@ -10,8 +9,10 @@ from logged_groups import logged_group
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.utils import NeonTx
-from ..indexer.indexer_base import IndexerBase
 from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.errors import log_error
+
+from ..indexer.indexer_base import IndexerBase
 from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
 from ..indexer.pythnetwork import PythNetworkClient
 from ..indexer.base_db import BaseDB
@@ -110,10 +111,8 @@ class Airdropper(IndexerBase):
             try:
                 self.pyth_client.update_mapping(self._config.pyth_mapping_account)
                 self.last_update_pyth_mapping = current_time
-            except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.warning(f'Failed to update pyth.network mapping account data ' +
-                             f'{type(err)}, Error: {err}, Traceback: {err_tb}')
+            except BaseException as err:
+                log_error(self, f'Failed to update pyth.network mapping account data.', err)
                 return False
 
         return True
@@ -276,10 +275,8 @@ class Airdropper(IndexerBase):
         if should_reload:
             try:
                 self.recent_price = self.pyth_client.get_price('Crypto.SOL/USD')
-            except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.warning(f'Exception occured when reading price ' +
-                             f'{type(err)}, Error: {err}, Traceback: {err_tb}')
+            except BaseException as err:
+                log_error(self, 'Exception occured when reading price ', err)
                 return None
 
         return self.recent_price

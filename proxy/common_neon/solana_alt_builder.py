@@ -8,41 +8,35 @@ from ..common_neon.errors import ALTError
 from ..common_neon.solana_transaction import SolLegacyTx, SolWrappedTx, SolTx, SolAccount
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_alt import ALTInfo
-from ..common_neon.solana_alt_close_queue import ALTCloseQueue
 from ..common_neon.neon_instruction import NeonIxBuilder
 
 
 class ALTTxSet:
     def __init__(self, create_alt_tx_list: Optional[List[SolLegacyTx]] = None,
-                 extend_alt_tx_list: Optional[List[SolLegacyTx]] = None,
-                 deactivate_alt_tx_list: Optional[List[SolLegacyTx]] = None) -> None:
+                 extend_alt_tx_list: Optional[List[SolLegacyTx]] = None) -> None:
         self.create_alt_tx_list = create_alt_tx_list if create_alt_tx_list is not None else []
         self.extend_alt_tx_list = extend_alt_tx_list if extend_alt_tx_list is not None else []
-        self.deactivate_alt_tx_list = deactivate_alt_tx_list if deactivate_alt_tx_list is not None else []
 
     def extend(self, tx_list: ALTTxSet) -> ALTTxSet:
         self.create_alt_tx_list.extend(tx_list.create_alt_tx_list)
         self.extend_alt_tx_list.extend(tx_list.extend_alt_tx_list)
-        self.deactivate_alt_tx_list.extend(tx_list.deactivate_alt_tx_list)
         return self
 
     def __len__(self) -> int:
-        return len(self.create_alt_tx_list) + len(self.extend_alt_tx_list) + len(self.deactivate_alt_tx_list)
+        return len(self.create_alt_tx_list) + len(self.extend_alt_tx_list)
 
     def clear(self) -> None:
         self.create_alt_tx_list.clear()
         self.extend_alt_tx_list.clear()
-        self.deactivate_alt_tx_list.clear()
 
 
 class ALTTxBuilder:
-    TX_ACCOUNT_CNT = 30
+    tx_account_cnt = 30
 
-    def __init__(self, solana: SolInteractor, builder: NeonIxBuilder, signer: SolAccount) -> None:
+    def __init__(self, solana: SolInteractor, ix_builder: NeonIxBuilder, signer: SolAccount) -> None:
         self._solana = solana
-        self._builder = builder
+        self._ix_builder = ix_builder
         self._signer = signer
-        self._alt_close_queue = ALTCloseQueue(solana)
         self._recent_block_slot: Optional[int] = None
 
     def _get_recent_block_slot(self) -> int:
@@ -64,7 +58,7 @@ class ALTTxBuilder:
 
     def build_alt_tx_set(self, alt_info: ALTInfo) -> ALTTxSet:
         # Tx to create an Account Lookup Table
-        create_alt_tx = SolLegacyTx().add(self._builder.make_create_lookup_table_ix(
+        create_alt_tx = SolLegacyTx().add(self._ix_builder.make_create_lookup_table_ix(
             alt_info.table_account, alt_info.recent_block_slot, alt_info.nonce
         ))
 
@@ -73,11 +67,9 @@ class ALTTxBuilder:
 
         extend_alt_tx_list: List[SolLegacyTx] = []
         while len(acct_list):
-            acct_list_part, acct_list = acct_list[:self.TX_ACCOUNT_CNT], acct_list[self.TX_ACCOUNT_CNT:]
-            tx = SolLegacyTx().add(self._builder.make_extend_lookup_table_ix(alt_info.table_account, acct_list_part))
+            acct_list_part, acct_list = acct_list[:self.tx_account_cnt], acct_list[self.tx_account_cnt:]
+            tx = SolLegacyTx().add(self._ix_builder.make_extend_lookup_table_ix(alt_info.table_account, acct_list_part))
             extend_alt_tx_list.append(tx)
-
-        deactivate_alt_tx = SolLegacyTx().add(self._builder.make_deactivate_lookup_table_ix(alt_info.table_account))
 
         # If list of accounts is small, including of first extend-tx into create-tx will decrease time of tx execution
         create_alt_tx.add(extend_alt_tx_list[0])
@@ -85,8 +77,7 @@ class ALTTxBuilder:
 
         return ALTTxSet(
             create_alt_tx_list=[create_alt_tx],
-            extend_alt_tx_list=extend_alt_tx_list,
-            deactivate_alt_tx_list=[deactivate_alt_tx]
+            extend_alt_tx_list=extend_alt_tx_list
         )
 
     @staticmethod
@@ -101,15 +92,9 @@ class ALTTxBuilder:
         return tx_list_list
 
     def update_alt_info_list(self, alt_info_list: List[ALTInfo]) -> None:
-        self._alt_close_queue.push_list(self._signer.public_key(), [a.table_account for a in alt_info_list])
-
         # Accounts in Account Lookup Table can be reordered
         for alt_info in alt_info_list:
             alt_acct_info = self._solana.get_account_lookup_table_info(alt_info.table_account)
             if alt_acct_info is None:
                 raise ALTError(f'Cannot read lookup table {str(alt_info.table_account)}')
             alt_info.update_from_account(alt_acct_info)
-
-    @staticmethod
-    def build_done_alt_tx_list(alt_tx_set: ALTTxSet) -> List[SolTx]:
-        return [SolWrappedTx(name='DeactivateLookupTable', tx=tx) for tx in alt_tx_set.deactivate_alt_tx_list]

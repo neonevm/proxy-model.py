@@ -5,9 +5,9 @@ from ..common_neon.errors import ALTError
 
 
 class ALTListFilter:
-    MAX_REQUIRED_SIG_CNT = 19
-    MAX_TX_ACCOUNT_CNT = 27
-    MAX_ACCOUNT_CNT = 255
+    _max_required_sig_cnt = 19
+    _max_tx_account_cnt = 27
+    _max_account_cnt = 255
 
     def __init__(self, legacy_msg: SolLegacyMsg) -> None:
         self._msg = legacy_msg
@@ -16,6 +16,18 @@ class ALTListFilter:
         self._tx_acct_key_set: Set[str] = tx_key_set
         self._tx_unsigned_acct_key_cnt = tx_unsigned_key_cnt
         self._tx_acct_key_list: List[SolPubKey] = self._filter_tx_acct_key_list()
+
+    @property
+    def max_required_sig_cnt(self) -> int:
+        return type(self)._max_required_sig_cnt
+
+    @property
+    def max_tx_account_cnt(self) -> int:
+        return type(self)._max_tx_account_cnt
+
+    @property
+    def max_account_cnt(self) -> int:
+        return type(self)._max_account_cnt
 
     @property
     def tx_unsigned_account_key_cnt(self):
@@ -30,11 +42,11 @@ class ALTListFilter:
         return len(self._tx_acct_key_list)
 
     def _validate_legacy_msg(self) -> None:
-        if self._msg.header.num_required_signatures > self.MAX_REQUIRED_SIG_CNT:
+        if self._msg.header.num_required_signatures > self.max_required_sig_cnt:
             raise ALTError(
                 f'Too big number {self._msg.header.num_required_signatures} of signed accounts for a V0Transaction'
             )
-        elif len(self._msg.account_keys) > self.MAX_ACCOUNT_CNT:
+        elif len(self._msg.account_keys) > self.max_account_cnt:
             raise ALTError(f'Too big number {len(self._msg.account_keys)} of accounts for a V0Transaction')
 
     def _filter_tx_acct_key_set(self) -> Tuple[Set[str], int]:
@@ -52,10 +64,10 @@ class ALTListFilter:
             raise ALTError('Zero number of static transaction accounts')
         elif len(tx_acct_key_set) != len(required_key_list) + len(prog_key_list):
             raise ALTError('Transaction uses signature from a program?')
-        elif len(tx_acct_key_set) > self.MAX_TX_ACCOUNT_CNT:
+        elif len(tx_acct_key_set) > self.max_tx_account_cnt:
             raise ALTError(
                 'Too big number of transactions account keys: '
-                f'{len(tx_acct_key_set)} > {self.MAX_TX_ACCOUNT_CNT}'
+                f'{len(tx_acct_key_set)} > {self.max_tx_account_cnt}'
             )
 
         return tx_acct_key_set, len(prog_key_list)
