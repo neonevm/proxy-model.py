@@ -11,7 +11,7 @@ from solana.publickey import PublicKey
 
 from ..common_neon.config import Config
 from ..common_neon.address import EthereumAddress, ether2program, permAccountSeed, accountWithSeed
-from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG, EMPTY_HOLDER_TAG
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListInfo, SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
@@ -29,7 +29,7 @@ class OperatorResourceInfo:
         self._signer = signer
         self._resource_id = resource_id
 
-        self._holder_seed = permAccountSeed(b'holder', resource_id)
+        self._holder_seed = permAccountSeed(b'holder-', resource_id)
         self._holder = accountWithSeed(self.public_key, self._holder_seed)
 
         self._ether = EthereumAddress.from_private_key(self.secret_key)
@@ -149,7 +149,7 @@ class OperatorResourceInitializer:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
         elif holder_info.tag == ACTIVE_HOLDER_TAG:
             self._unlock_holder_account(resource)
-        elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG, EMPTY_HOLDER_TAG):
+        elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG):
             raise BadResourceError(f'Holder {holder_address} for resource {resource} has bad tag {holder_info.tag}')
         else:
             self.debug(f"Use account {str(holder_info.owner)} for resource {resource}")
