@@ -149,7 +149,7 @@ class OperatorResourceInitializer:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
         elif holder_info.tag == ACTIVE_HOLDER_TAG:
             self._unlock_holder_account(resource)
-        elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG):
+        elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG, EMPTY_HOLDER_TAG):
             raise BadResourceError(f'Holder {holder_address} for resource {resource} has bad tag {holder_info.tag}')
         else:
             self.debug(f"Use account {str(holder_info.owner)} for resource {resource}")
