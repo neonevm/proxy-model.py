@@ -21,8 +21,6 @@ proxy = Web3(Web3.HTTPProvider(proxy_url))
 eth_account = proxy.eth.account.create(SEED)
 proxy.eth.default_account = eth_account.address
 
-ACCOUNT_SEED_VERSION = b'\1'
-
 TEST_RETRY_BLOCKED_365 = '''
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.5.12;

@@ -4,6 +4,7 @@ from solana.account import Account as SolanaAccount
 from spl.token.client import Token as SplToken
 
 from .solana_utils import wallet_path, EvmLoader, EVM_LOADER, OperatorAccount
+from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.environment_data import SOLANA_URL, EVM_LOADER_ID
 from ..common_neon.web3 import NeonWeb3
 from solana.system_program import SYS_PROGRAM_ID
@@ -39,7 +40,7 @@ request_airdrop(admin.address)
 # Helper function calculating solana address and nonce from given NEON(Ethereum) address
 def get_evm_loader_account_address(eth_address: str):
     eth_addressbytes = bytes.fromhex(eth_address[2:])
-    return PublicKey.find_program_address([b"\1", eth_addressbytes], EVM_LOADER_ID)
+    return PublicKey.find_program_address([ACCOUNT_SEED_VERSION, eth_addressbytes], EVM_LOADER_ID)
 
 
 class TestAirdropperIntegration(TestCase):

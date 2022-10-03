@@ -31,8 +31,6 @@ eth_account_invoked = proxy.eth.account.create(SEED_INVOKED)
 eth_account_getter = proxy.eth.account.create("GETTER")
 proxy.eth.default_account = eth_account.address
 
-ACCOUNT_SEED_VERSION=b'\1'
-
 TEST_EVENT_SOURCE_196 = '''
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.5.12;
