@@ -228,9 +228,16 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         self._validation_error_msg = None
         return (
             self._validate_notdeploy_tx() and
+            self._validate_no_additional_resize_steps() and
             self._validate_tx_has_chainid() and
             self._validate_tx_size()
         )
+
+    def _validate_no_additional_resize_steps(self) -> bool:
+        if self._ctx.neon_tx_exec_cfg.additional_resize_steps <= 0:
+            return True
+        self._validation_error_msg = 'Has additional account resize steps'
+        return False
 
     def build_tx(self, _=0) -> Transaction:
         tx = TransactionWithComputeBudget()
@@ -397,7 +404,8 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return tx
 
     def _calc_iter_cnt(self) -> int:
-        return math.ceil(self._ctx.emulated_evm_step_cnt / self._iter_evm_step_cnt) + 1
+        return math.ceil(self._ctx.emulated_evm_step_cnt / self._iter_evm_step_cnt) + \
+               self._ctx.neon_tx_exec_cfg.additional_resize_steps + 1
 
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()

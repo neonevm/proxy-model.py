@@ -58,13 +58,11 @@ class BaseNeonIndexedObjInfo:
 class NeonAccountInfo:
     def __init__(self, neon_address: Optional[str],
                  pda_address: str,
-                 code_address: Optional[str],
                  block_slot: int,
                  code: Optional[str],
                  sol_sig: Optional[str]):
         self._neon_address = neon_address
         self._pda_address = pda_address
-        self._code_address = code_address
         self._block_slot = block_slot
         self._code = code
         self._sol_sig = sol_sig

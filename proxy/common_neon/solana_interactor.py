@@ -23,9 +23,9 @@ from base58 import b58decode, b58encode
 from .utils import SolanaBlockInfo
 from .environment_data import EVM_LOADER_ID, RETRY_ON_FAIL, FUZZING_BLOCKHASH
 
-from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, HOLDER_ACCOUNT_INFO_LAYOUT
+from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, HOLDER_ACCOUNT_INFO_LAYOUT
 from ..common_neon.layouts import ACCOUNT_LOOKUP_TABLE_LAYOUT
-from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, ACTIVE_HOLDER_TAG, NEON_ACCOUNT_TAG, LOOKUP_ACCOUNT_TAG
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, NEON_ACCOUNT_TAG, LOOKUP_ACCOUNT_TAG
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.utils import get_from_dict
 from ..common_neon.errors import SolanaUnavailableError
@@ -44,17 +44,19 @@ class NeonAccountInfo(NamedTuple):
     nonce: int
     tx_count: int
     balance: int
-    code_account: Optional[PublicKey]
+    generation: int
+    code_size: int
     is_rw_blocked: bool
-    ro_blocked_cnt: int
+    code: Optional[str]
 
     @staticmethod
     def frombytes(pda_address: PublicKey, data: bytes) -> NeonAccountInfo:
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
 
-        code_account = None
-        if cont.code_account != bytes().rjust(PublicKey.LENGTH, b"\0"):
-            code_account = PublicKey(cont.code_account)
+        base_size = ACCOUNT_INFO_LAYOUT.sizeof()
+        code = None
+        if cont.code_size > 0 and len(data) >= base_size:
+            code = '0x' + data[base_size:][:cont.code_size].hex()
 
         return NeonAccountInfo(
             pda_address=pda_address,
@@ -62,34 +64,10 @@ class NeonAccountInfo(NamedTuple):
             nonce=cont.nonce,
             tx_count=int.from_bytes(cont.tx_count, "little"),
             balance=int.from_bytes(cont.balance, "little"),
-            code_account=code_account,
-            is_rw_blocked=(cont.is_rw_blocked != 0),
-            ro_blocked_cnt=cont.ro_blocked_cnt
-        )
-
-
-class NeonCodeInfo(NamedTuple):
-    pda_address: PublicKey
-    owner: PublicKey
-    code_size: int
-    generation: int
-    code: Optional[str]
-
-    @staticmethod
-    def frombytes(pda_address: PublicKey, data: bytes) -> NeonCodeInfo:
-        cont = CODE_ACCOUNT_INFO_LAYOUT.parse(data)
-
-        offset = CODE_ACCOUNT_INFO_LAYOUT.sizeof()
-        code = None
-        if len(data) >= offset + cont.code_size:
-            code = '0x' + data[offset:][:cont.code_size].hex()
-
-        return NeonCodeInfo(
-            pda_address=pda_address,
-            owner=PublicKey(cont.owner),
-            code_size=cont.code_size,
             generation=cont.generation,
-            code=code
+            code_size=cont.code_size,
+            is_rw_blocked=(cont.is_rw_blocked != 0),
+            code=code,
         )
 
 
@@ -304,13 +282,13 @@ class SolanaInteractor:
         }
         return self._send_rpc_request('getSlot', opts)['result']
 
-    def get_account_info(self, pubkey: PublicKey, length=256, commitment='processed') -> Optional[AccountInfo]:
+    def get_account_info(self, pubkey: PublicKey, length=None, commitment='processed') -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
         }
 
-        if length != 0:
+        if not (length is None):
             opts['dataSlice'] = {
                 'offset': 0,
                 'length': length
@@ -332,14 +310,13 @@ class SolanaInteractor:
 
         return AccountInfo(account_tag, lamports, owner, data)
 
-    def get_account_info_list(self, src_account_list: List[PublicKey], length=256,
-                              commitment='processed') -> List[AccountInfo]:
+    def get_account_info_list(self, src_account_list: List[PublicKey], length=None, commitment='processed') -> List[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
         }
 
-        if length != 0:
+        if not (length is None):
             opts['dataSlice'] = {
                 'offset': 0,
                 'length': length
@@ -432,24 +409,6 @@ class SolanaInteractor:
                                f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
         return NeonAccountInfo.frombytes(account_sol, info.data)
 
-    def get_neon_code_info(self, account: Union[str, EthereumAddress, NeonAccountInfo, PublicKey, None]) -> Optional[NeonCodeInfo]:
-        if isinstance(account, str) or isinstance(account, EthereumAddress):
-            account = self.get_neon_account_info(account)
-        if isinstance(account, NeonAccountInfo):
-            account = account.code_account
-        if not isinstance(account, PublicKey):
-            return None
-
-        info = self.get_account_info(account, length=0)
-        if info is None:
-            return None
-        elif info.tag != CONTRACT_ACCOUNT_TAG:
-            raise RuntimeError(f"Wrong tag {info.tag} for code account {str(account)}")
-        elif len(info.data) < CODE_ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for account data {str(account)}: " +
-                               f"{len(info.data)} < {CODE_ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return NeonCodeInfo.frombytes(account, info.data)
-
     def get_neon_account_info_list(self, eth_accounts: List[EthereumAddress]) -> List[Optional[NeonAccountInfo]]:
         requests_list = []
         for eth_account in eth_accounts:
@@ -465,7 +424,7 @@ class SolanaInteractor:
         return accounts_list
 
     def get_holder_account_info(self, holder_account: PublicKey) -> Optional[HolderAccountInfo]:
-        info = self.get_account_info(holder_account, length=0)
+        info = self.get_account_info(holder_account)
         if info is None:
             return None
         elif info.tag != ACTIVE_HOLDER_TAG:
@@ -479,7 +438,7 @@ class SolanaInteractor:
         return HolderAccountInfo.frombytes(holder_account, info.data)
 
     def get_account_lookup_table_info(self, table_account: PublicKey) -> Optional[AddressLookupTableAccountInfo]:
-        info = self.get_account_info(table_account, length=0)
+        info = self.get_account_info(table_account)
         if info is None:
             return None
         elif len(info.data) < ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof():

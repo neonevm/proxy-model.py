@@ -74,17 +74,52 @@ class CreateAccountIxDecoder(DummyIxDecoder):
 
         neon_account = "0x" + ix.ix_data[8+8+4:][:20].hex()
         pda_account = ix.get_account(1)
-        code_account = ix.get_account(3)
-        if code_account == str(SYS_PROGRAM_ID) or code_account == '':
-            code_account = None
 
         account_info = NeonAccountInfo(
-            neon_account, pda_account, code_account,
+            neon_account, pda_account,
             ix.block_slot, None, ix.sol_sig
         )
 
         self.state.neon_block.add_neon_account(account_info, ix)
         return self._decoding_success(account_info, 'create Neon account')
+
+
+class CreateAccount2IxDecoder(DummyIxDecoder):
+    _name = 'CreateAccount2'
+    _ix_code = 0x18
+    _is_deprecated = True
+
+    def execute(self) -> bool:
+        ix = self.state.sol_neon_ix
+        if len(ix.ix_data) < 21:
+            return self._decoding_skip(f'not enough data to get Neon account {len(ix.ix_data)}')
+
+        neon_account = "0x" + ix.ix_data[1:][:20].hex()
+        pda_account = ix.get_account(2)
+
+        account_info = NeonAccountInfo(
+            neon_account, pda_account,
+            ix.block_slot, None, ix.sol_sig
+        )
+        self.state.neon_block.add_neon_account(account_info, ix)
+        return self._decoding_success(account_info, 'create Neon account')
+
+
+class ResizeStorageAccountIxDecoder(DummyIxDecoder):
+    _name = 'ResizeStorageAccount'
+    _ix_code = 0x11
+    _is_deprecated = True
+
+    def execute(self) -> bool:
+        ix = self.state.sol_neon_ix
+        pda_account = ix.get_account(0)
+
+        account_info = NeonAccountInfo(
+            None, pda_account,
+            ix.block_slot, None, ix.sol_sig
+        )
+        self.state.neon_block.add_neon_account(account_info, ix)
+        return self._decoding_success(account_info, 'resize Neon account')
 
 
 class CallFromRawIxDecoder(DummyIxDecoder):
@@ -421,6 +456,8 @@ def get_neon_ix_decoder_deprecated_list() -> List[Type[DummyIxDecoder]]:
         WriteIxDecoder,
         FinalizeIxDecode,
         CreateAccountIxDecoder,
+        CreateAccount2IxDecoder,
+        ResizeStorageAccountIxDecoder,
         CallIxDecoder,
         CreateAccountWithSeedIxDecoder,
         CallFromRawIxDecoder,

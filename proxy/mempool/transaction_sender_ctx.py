@@ -11,8 +11,7 @@ from ..common_neon.eth_proto import Trx as NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt_close_queue import AddressLookupTableCloseQueue
 
-from .neon_tx_stages import NeonTxStage, NeonCreateAccountTxStage, NeonCreateContractTxStage
-from .neon_tx_stages import NeonResizeContractTxStage
+from .neon_tx_stages import NeonTxStage
 
 from .operator_resource_mng import OperatorResourceInfo
 
@@ -27,7 +26,6 @@ class AccountTxListBuilder:
         self._eth_meta_dict: Dict[str, SolanaAccountMeta] = dict()
 
     def build_tx(self, emulated_account_dict: NeonAccountDict) -> None:
-        self._resize_contract_stage_list.clear()
         self._create_account_stage_list.clear()
         self._eth_meta_dict.clear()
 
@@ -51,19 +49,7 @@ class AccountTxListBuilder:
 
     def _parse_accounts_list(self, emulated_result_account_list: List[Dict[str, Any]]) -> None:
         for account_desc in emulated_result_account_list:
-            if account_desc['new']:
-                if account_desc['code_size']:
-                    stage = NeonCreateContractTxStage(self._builder, account_desc)
-                    self._create_account_stage_list.append(stage)
-                elif account_desc['writable']:
-                    stage = NeonCreateAccountTxStage(self._builder, account_desc)
-                    self._create_account_stage_list.append(stage)
-            elif account_desc['code_size'] and (account_desc['code_size_current'] < account_desc['code_size']):
-                self._resize_contract_stage_list.append(NeonResizeContractTxStage(self._builder, account_desc))
-
             self._add_meta(account_desc['account'], True)
-            if account_desc['contract']:
-                self._add_meta(account_desc['contract'], account_desc['writable'])
 
     def _parse_solana_list(self, emulated_result_solana_account_list: List[Dict[str, Any]]) -> None:
         for account_desc in emulated_result_solana_account_list:
@@ -73,7 +59,7 @@ class AccountTxListBuilder:
         if not self.has_tx_list():
             return
 
-        all_stage_list = self._create_account_stage_list + self._resize_contract_stage_list
+        all_stage_list = self._create_account_stage_list
         size_list = list(set([s.size for s in all_stage_list]))
         balance_list = self._solana.get_multiple_rent_exempt_balances_for_size(size_list)
         balance_map = {size: balance for size, balance in zip(size_list, balance_list)}
@@ -82,10 +68,10 @@ class AccountTxListBuilder:
             s.build()
 
     def has_tx_list(self) -> bool:
-        return len(self._resize_contract_stage_list) > 0 or len(self._create_account_stage_list) > 0
+        return len(self._create_account_stage_list) > 0
 
     def get_tx_list_info(self) -> SolTxListInfo:
-        all_stage_list = self._create_account_stage_list + self._resize_contract_stage_list
+        all_stage_list = self._create_account_stage_list
 
         return SolTxListInfo(
             name_list=[s.NAME for s in all_stage_list],
@@ -93,7 +79,6 @@ class AccountTxListBuilder:
         )
 
     def clear_tx_list(self) -> None:
-        self._resize_contract_stage_list.clear()
         self._create_account_stage_list.clear()
 
 

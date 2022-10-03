@@ -103,9 +103,8 @@ class CancelTest(unittest.TestCase):
 
         reid_eth = storage_contract.address.lower()
         print('contract_eth', reid_eth)
-        cls.re_id, cls.re_code = re_id, re_code = cls.get_accounts(loader, reid_eth)
+        cls.re_id, _ = re_id, _ = loader.ether2program(str(reid_eth))
         print('contract', re_id)
-        print('contract_code', re_code)
 
         # Create ethereum account for user account
         cls.caller_ether = caller_ether = EthereumAddress.from_private_key(bytes(eth_account.key))
@@ -125,17 +124,6 @@ class CancelTest(unittest.TestCase):
         cls.create_hanged_transaction()
         cls.create_invoked_transaction()
         cls.create_invoked_transaction_combined()
-
-    @staticmethod
-    def get_accounts(loader, ether):
-        sol_address, _ = loader.ether2program(str(ether))
-        info = client.get_account_info(sol_address, commitment="confirmed")['result']['value']
-        data = base64.b64decode(info['data'][0])
-        acc_info = ACCOUNT_INFO_LAYOUT.parse(data)
-
-        code_address = PublicKey(acc_info.code_account)
-
-        return sol_address, code_address
 
     @staticmethod
     def deploy_contract():
@@ -208,7 +196,6 @@ class CancelTest(unittest.TestCase):
             tx_store_signed.rawTransaction,
             [
                 AccountMeta(pubkey=cls.re_id, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=cls.re_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=cls.caller, is_signer=False, is_writable=True)
             ]
         )
@@ -305,7 +292,6 @@ class CancelTest(unittest.TestCase):
         account_list = [
             AccountMeta(pubkey=cls.caller, is_signer=False, is_writable=True),
             AccountMeta(pubkey=cls.re_id, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=cls.re_code, is_signer=False, is_writable=True),
         ]
 
         nonce1 = proxy.eth.get_transaction_count(proxy.eth.default_account)
@@ -348,6 +334,8 @@ class CancelTest(unittest.TestCase):
     def test_02_get_code_from_indexer(self):
         print("\ntest_02_get_code_from_indexer")
         code = proxy.eth.get_code(self.storage_contract.address)
+        print("getCode result:", code.hex())
+        print("storage_contract.bytecode:", self.storage_contract.bytecode.hex())
         self.assertEqual(code, self.storage_contract.bytecode[-len(code):])
 
     def test_03_invoked_found(self):
