@@ -29,7 +29,7 @@ class OperatorResourceInfo:
         self._signer = signer
         self._resource_id = resource_id
 
-        self._holder_seed = permAccountSeed(b'holder', resource_id)
+        self._holder_seed = permAccountSeed(b'holder-', resource_id)
         self._holder = accountWithSeed(self.public_key, self._holder_seed)
 
         self._ether = EthereumAddress.from_private_key(self.secret_key)
