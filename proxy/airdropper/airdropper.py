@@ -7,6 +7,7 @@ from decimal import Decimal
 from logged_groups import logged_group
 
 from ..common_neon.config import Config
+from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.solana_transaction import SolPubKey
@@ -18,7 +19,7 @@ from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
 from ..indexer.sql_dict import SQLDict
 
-EVM_LOADER_CREATE_ACC           = 0x18
+EVM_LOADER_CREATE_ACC           = 0x28
 SPL_TOKEN_APPROVE               = 0x04
 EVM_LOADER_CALL_FROM_RAW_TRX    = 0x1f
 SPL_TOKEN_INIT_ACC_2            = 0x10
@@ -156,7 +157,7 @@ class Airdropper(IndexerBase):
             self.debug(f"Created account {created_account.hex()} and caller {caller.hex()} are different")
             return False
 
-        sol_caller, _ = SolPubKey.find_program_address([b"\1", caller], self._config.evm_loader_id)
+        sol_caller, _ = SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, caller], self._config.evm_loader_id)
         if SolPubKey(account_keys[approve['accounts'][1]]) != sol_caller:
             self.debug(f"account_keys[approve['accounts'][1]] != sol_caller")
             return False
@@ -192,23 +193,23 @@ class Airdropper(IndexerBase):
             return
 
         self.debug(f"Processing transaction: {trx}")
+
         # helper function finding all instructions that satisfies predicate
         def find_instructions(instructions, predicate):
             return [(number, instr) for number, instr in instructions if predicate(instr)]
 
         def find_inner_instructions(trx, instr_idx, predicate):
-            inner_insturctions = None
+            inner_instructions = None
             for entry in trx['meta']['innerInstructions']:
                 if entry['index'] == instr_idx:
-                    inner_insturctions = entry['instructions']
+                    inner_instructions = entry['instructions']
                     break
 
-            if inner_insturctions is None:
+            if inner_instructions is None:
                 self.debug(f'Inner instructions for instruction {instr_idx} not found')
                 return []
 
-            return [instruction for instruction in inner_insturctions if predicate(instruction)]
-
+            return [instruction for instruction in inner_instructions if predicate(instruction)]
 
         def isRequiredInstruction(instr, req_program_id, req_tag_id):
             return account_keys[instr['programIdIndex']] == str(req_program_id) \

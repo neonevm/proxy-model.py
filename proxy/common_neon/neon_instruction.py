@@ -9,6 +9,7 @@ from sha3 import keccak_256
 
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType
 
+from ..common_neon.layouts import CREATE_ACCOUNT_LAYOUT
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.solana_transaction import SolTxIx, SolPubKey, SolAccountMeta
 from ..common_neon.address import accountWithSeed, ether2program, EthereumAddress
@@ -20,17 +21,16 @@ from ..common_neon.environment_data import EVM_LOADER_ID
 
 
 class EvmInstruction(Enum):
-    ResizeContractAccount = b'\x11'  # 17
-    CreateAccountV02 = b'\x18'  # 24
-    TransactionExecuteFromData = b'\x1f'  # 31,
-    TransactionStepFromData = b'\x20'  # 32
-    TransactionStepFromAccount = b'\x21'  # 33
-    TransactionStepFromAccountNoChainId = b'\x22'  # 34
-    CancelWithHash = b'\x23'  # 35
-    HolderCreate = b'\x24'  # 36
-    HolderDelete = b'\x25'  # 37
-    HolderWrite = b'\x26'  # 38
-
+    TransactionExecuteFromData = b'\x1f'            # 31,
+    TransactionStepFromData = b'\x20'               # 32
+    TransactionStepFromAccount = b'\x21'            # 33
+    TransactionStepFromAccountNoChainId = b'\x22'   # 34
+    CancelWithHash = b'\x23'                        # 35
+    HolderCreate = b'\x24'                          # 36
+    HolderDelete = b'\x25'                          # 37
+    HolderWrite = b'\x26'                           # 38
+    DepositV03 = b'\x27'                            # 39
+    CreateAccountV03 = b'\x28'                      # 40
 
 def create_account_with_seed_layout(base: SolPubKey, seed: str, lamports: int, space: int):
     return SYSTEM_INSTRUCTIONS_LAYOUT.build(
@@ -47,12 +47,8 @@ def create_account_with_seed_layout(base: SolPubKey, seed: str, lamports: int, s
     )
 
 
-def create_account_layout(ether, nonce):
-    return (EvmInstruction.CreateAccountV02.value +
-            CREATE_ACCOUNT_LAYOUT.build(dict(
-                ether=ether,
-                nonce=nonce
-            )))
+def create_account_layout(ether):
+    return EvmInstruction.CreateAccountV03.value + CREATE_ACCOUNT_LAYOUT.build(dict(ether=ether))
 
 
 @logged_group("neon.Proxy")
@@ -145,48 +141,22 @@ class NeonIxBuilder:
             data=EvmInstruction.HolderCreate.value,
         )
 
-    def make_create_eth_account_ix(self, eth_address: EthereumAddress, code_acc=None) -> SolTxIx:
+    def make_create_eth_account_ix(self, eth_address: EthereumAddress) -> SolTxIx:
         if isinstance(eth_address, str):
             eth_address = EthereumAddress(eth_address)
         pda_account, nonce = ether2program(eth_address)
         self.debug(f'Create eth account: {str(eth_address)}, sol account: {pda_account}, nonce: {nonce}')
 
         base = self._operator_account
-        data = create_account_layout(bytes(eth_address), nonce)
-        if code_acc is None:
-            return SolTxIx(
-                program_id=EVM_LOADER_ID,
-                data=data,
-                keys=[
-                    SolAccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                    SolAccountMeta(pubkey=pda_account, is_signer=False, is_writable=True),
-                ])
-        return SolTxIx(
+        data = create_account_layout(bytes(eth_address))
+        return TransactionInstruction(
             program_id=EVM_LOADER_ID,
             data=data,
             keys=[
-                SolAccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                SolAccountMeta(pubkey=pda_account, is_signer=False, is_writable=True),
-                SolAccountMeta(pubkey=SolPubKey(code_acc), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=pda_account, is_signer=False, is_writable=True),
             ])
-
-    def make_resize_ix(self, account, code_account_old, code_account_new, seed) -> SolTxIx:
-        return SolTxIx(
-            program_id=EVM_LOADER_ID,
-            data=EvmInstruction.ResizeContractAccount.value + bytes(seed),
-            keys=[
-                SolAccountMeta(pubkey=SolPubKey(account), is_signer=False, is_writable=True),
-                (
-                    SolAccountMeta(pubkey=code_account_old, is_signer=False, is_writable=True)
-                    if code_account_old else
-                    SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False)
-                ),
-                SolAccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
-                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False)
-            ],
-        )
 
     def make_write_ix(self, neon_tx_sig: bytes, offset: int, data: bytes) -> SolTxIx:
         ix_data = b"".join([

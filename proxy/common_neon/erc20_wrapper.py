@@ -15,6 +15,7 @@ from logged_groups import logged_group
 
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.solana_transaction import SolPubKey, SolAccountMeta, SolTxIx, SolLegacyTx, SolAccount
+from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.web3 import NeonWeb3
 from ..common_neon.address import EthereumAddress
@@ -83,7 +84,7 @@ class ERC20Wrapper:
 
     def get_neon_account_address(self, neon_account_address: str) -> SolPubKey:
         neon_account_addressbytes = bytes.fromhex(neon_account_address[2:])
-        return SolPubKey.find_program_address([b"\1", neon_account_addressbytes], self.evm_loader_id)[0]
+        return SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, neon_account_addressbytes], self.evm_loader_id)[0]
 
     def deploy_wrapper(self):
         compiled_interface = compile_source(ERC20FORSPL_INTERFACE_SOURCE)
@@ -113,10 +114,13 @@ class ERC20Wrapper:
     def get_neon_erc20_account_address(self, neon_account_address: str):
         neon_contract_address_bytes = bytes.fromhex(self.neon_contract_address[2:])
         neon_account_address_bytes = bytes.fromhex(neon_account_address[2:])
-        seeds = [b"\1", b"ERC20Balance",
-                 bytes(self.token.pubkey),
-                 neon_contract_address_bytes,
-                 neon_account_address_bytes]
+        seeds = [
+            ACCOUNT_SEED_VERSION,
+            b"ERC20Balance",
+            bytes(self.token.pubkey),
+            neon_contract_address_bytes,
+            neon_account_address_bytes,
+        ]
         return SolPubKey.find_program_address(seeds, self.evm_loader_id)[0]
 
     def create_associated_token_account(self, owner: SolPubKey, payer: SolAccount):
@@ -143,10 +147,7 @@ class ERC20Wrapper:
         eth_accounts = dict()
         for account in emulating_result['accounts']:
             key = account['account']
-            eth_accounts[key] = SolAccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
-            if account['contract']:
-                key = account['contract']
-                eth_accounts[key] = SolAccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
+            eth_accounts[key] = AccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
 
         for account in emulating_result['solana_accounts']:
             key = account['pubkey']

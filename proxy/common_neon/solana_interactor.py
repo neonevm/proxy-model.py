@@ -17,16 +17,17 @@ from typing import Dict, Union, Any, List, Optional, Tuple, cast
 
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.solana_transaction import SolTx, SolBlockhash, SolPubKey
-from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT
+from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT
 from ..common_neon.layouts import HOLDER_ACCOUNT_INFO_LAYOUT
 from ..common_neon.layouts import ACCOUNT_LOOKUP_TABLE_LAYOUT
-from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, NEON_ACCOUNT_TAG, LOOKUP_ACCOUNT_TAG
+from ..common_neon.constants import NEON_ACCOUNT_TAG, LOOKUP_ACCOUNT_TAG
 from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.errors import SolanaUnavailableError
 from ..common_neon.config import Config
+from ..common_neon.elf_params import ElfParams
 
 
 @dataclasses.dataclass
@@ -45,9 +46,10 @@ class NeonAccountInfo:
     nonce: int
     tx_count: int
     balance: int
-    code_account: Optional[SolPubKey]
+    generation: int
+    code_size: int
     is_rw_blocked: bool
-    ro_blocked_cnt: int
+    code: Optional[str]
 
     @staticmethod
     def from_account_info(info: AccountInfo) -> NeonAccountInfo:
@@ -61,9 +63,13 @@ class NeonAccountInfo:
 
         cont = ACCOUNT_INFO_LAYOUT.parse(info.data)
 
-        code_account = None
-        if cont.code_account != bytes().rjust(SolPubKey.LENGTH, b"\0"):
-            code_account = SolPubKey(cont.code_account)
+        base_size = ACCOUNT_INFO_LAYOUT.sizeof()
+        storage_size = ElfParams().storage_entries_in_contract_account * 32
+        code_offset = base_size + storage_size
+
+        code = None
+        if cont.code_size > 0 and len(data) >= code_offset:
+            code = '0x' + data[code_offset:][:cont.code_size].hex()
 
         return NeonAccountInfo(
             pda_address=info.address,
@@ -71,43 +77,10 @@ class NeonAccountInfo:
             nonce=cont.nonce,
             tx_count=int.from_bytes(cont.tx_count, "little"),
             balance=int.from_bytes(cont.balance, "little"),
-            code_account=code_account,
-            is_rw_blocked=(cont.is_rw_blocked != 0),
-            ro_blocked_cnt=cont.ro_blocked_cnt
-        )
-
-
-@dataclasses.dataclass
-class NeonCodeInfo:
-    pda_address: SolPubKey
-    owner: SolPubKey
-    code_size: int
-    generation: int
-    code: Optional[str]
-
-    @staticmethod
-    def from_account_info(info: AccountInfo) -> NeonCodeInfo:
-        if info.tag != CONTRACT_ACCOUNT_TAG:
-            raise RuntimeError(f"Wrong tag {info.tag} for code account {str(info.address)}")
-        elif len(info.data) < CODE_ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(
-                f"Wrong data length for account data {str(info.address)}: "
-                f"{len(info.data)} < {CODE_ACCOUNT_INFO_LAYOUT.sizeof()}"
-            )
-
-        cont = CODE_ACCOUNT_INFO_LAYOUT.parse(info.data)
-
-        offset = CODE_ACCOUNT_INFO_LAYOUT.sizeof()
-        code = None
-        if len(info.data) >= offset + cont.code_size:
-            code = '0x' + info.data[offset:][:cont.code_size].hex()
-
-        return NeonCodeInfo(
-            pda_address=info.address,
-            owner=SolPubKey(cont.owner),
-            code_size=cont.code_size,
             generation=cont.generation,
-            code=code
+            code_size=cont.code_size,
+            is_rw_blocked=(cont.is_rw_blocked != 0),
+            code=code,
         )
 
 
@@ -415,13 +388,13 @@ class SolInteractor:
         owner = SolPubKey(raw_account.get('owner', None))
         return AccountInfo(address, account_tag, lamports, owner, data)
 
-    def get_account_info(self, pubkey: SolPubKey, length=256, commitment='processed') -> Optional[AccountInfo]:
+    def get_account_info(self, pubkey: PublicKey, length=None, commitment='processed') -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
         }
 
-        if length != 0:
+        if not (length is None):
             opts['dataSlice'] = {
                 'offset': 0,
                 'length': length
@@ -441,14 +414,14 @@ class SolInteractor:
 
         return self._decode_account_info(pubkey, raw_account)
 
-    def get_account_info_list(self, src_account_list: List[SolPubKey], length=256,
+    def get_account_info_list(self, src_account_list: List[SolPubKey], length=None,
                               commitment='processed') -> List[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
         }
 
-        if length != 0:
+        if not (length is None):
             opts['dataSlice'] = {
                 'offset': 0,
                 'length': length
@@ -564,21 +537,6 @@ class SolInteractor:
             return None
         return NeonAccountInfo.from_account_info(info)
 
-    def get_neon_code_info(
-        self, account: Union[str, EthereumAddress, NeonAccountInfo, SolPubKey, None]
-    ) -> Optional[NeonCodeInfo]:
-        if isinstance(account, str) or isinstance(account, EthereumAddress):
-            account = self.get_neon_account_info(account)
-        if isinstance(account, NeonAccountInfo):
-            account = account.code_account
-        if not isinstance(account, SolPubKey):
-            return None
-
-        info = self.get_account_info(account, length=0)
-        if info is None:
-            return None
-        return NeonCodeInfo.from_account_info(info)
-
     def get_neon_account_info_list(self, eth_accounts: List[EthereumAddress]) -> List[Optional[NeonAccountInfo]]:
         requests_list = []
         for eth_account in eth_accounts:
@@ -594,7 +552,7 @@ class SolInteractor:
         return accounts_list
 
     def get_holder_account_info(self, holder_account: SolPubKey) -> Optional[HolderAccountInfo]:
-        info = self.get_account_info(holder_account, length=0)
+        info = self.get_account_info(holder_account)
         if info is None:
             return None
         return HolderAccountInfo.from_account_info(info)

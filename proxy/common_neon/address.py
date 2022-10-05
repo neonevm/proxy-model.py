@@ -55,16 +55,13 @@ def permAccountSeed(prefix: bytes, resource_id: int) -> bytes:
 
 
 def ether2program(ether) -> Tuple[SolPubKey, int]:
+    if isinstance(ether, EthereumAddress):
+        ether = bytes(ether)
+    elif isinstance(ether, str):
+        if ether[0:2] == '0x':
+            ether = ether[2:]
+        ether = bytes.fromhex(ether)
 
-    if isinstance(ether, str):
-        pass
-    elif isinstance(ether, EthereumAddress):
-        ether = str(ether)
-    else:
-        ether = ether.hex()
-
-    if ether[0:2] == '0x':
-        ether = ether[2:]
-    seed = [ACCOUNT_SEED_VERSION,  bytes.fromhex(ether)]
+    seed = [ACCOUNT_SEED_VERSION, ether]
     (pda, nonce) = SolPubKey.find_program_address(seed, SolPubKey(EVM_LOADER_ID))
     return pda, nonce

@@ -8,7 +8,7 @@ cd .buildkite/steps/full_test_suite
 # Terraform part
 export TF_VAR_branch=${BUILDKITE_BRANCH}
 export TFSTATE_BUCKET="nl-ci-stands"
-export TFSTATE_KEY="tests/test-${BUILDKITE_COMMIT}"
+export TFSTATE_KEY="tests/test-${BUILDKITE_COMMIT}-${BUILDKITE_BUILD_ID}"
 export TFSTATE_REGION="us-east-2"
 export TF_BACKEND_CONFIG="-backend-config="bucket=${TFSTATE_BUCKET}" -backend-config="key=${TFSTATE_KEY}" -backend-config="region=${TFSTATE_REGION}""
 export TF_VAR_proxy_model_commit=${REVISION}

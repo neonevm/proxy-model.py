@@ -19,9 +19,6 @@ proxy = Web3(Web3.HTTPProvider(proxy_url))
 eth_account = proxy.eth.account.create(SEED)
 proxy.eth.default_account = eth_account.address
 
-ACCOUNT_SEED_VERSION = b'\1'
-
-
 TEST_RETRY_BLOCKED_365 = '''
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.5.12;
@@ -103,22 +100,10 @@ class BlockedTest(unittest.TestCase):
 
         reid_eth = storage_contract.address.lower()
         print('contract_eth', reid_eth)
-        cls.re_id, cls.re_code = re_id, re_code = cls.get_accounts(loader, reid_eth)
+        cls.re_id, _ = re_id, _ = loader.ether2program(reid_eth)
         print('contract', re_id)
-        print('contract_code', re_code)
 
         cls.caller, _ = loader.ether2program(proxy.eth.default_account)
-
-    @staticmethod
-    def get_accounts(loader, ether):
-        (sol_address, _) = loader.ether2program(ether)
-        info = client.get_account_info(sol_address, commitment='confirmed')['result']['value']
-        data = base64.b64decode(info['data'][0])
-        acc_info = ACCOUNT_INFO_LAYOUT.parse(data)
-
-        code_address = PublicKey(acc_info.code_account)
-
-        return sol_address, code_address
 
     @staticmethod
     def deploy_contract():
@@ -161,7 +146,6 @@ class BlockedTest(unittest.TestCase):
         neon_ix_builder.init_neon_tx(neon_tx)
         neon_ix_builder.init_neon_account_list([
             AccountMeta(pubkey=self.re_id, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True)
         ])
 

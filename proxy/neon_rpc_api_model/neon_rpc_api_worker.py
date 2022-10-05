@@ -28,7 +28,7 @@ from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
 
 
-NEON_PROXY_PKG_VERSION = '0.11.0-dev'
+NEON_PROXY_PKG_VERSION = '0.12.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -483,10 +483,11 @@ class NeonRpcApiWorker:
         account = self._normalize_account(account)
 
         try:
-            code_info = self._solana.get_neon_code_info(account)
-            if (not code_info) or (not code_info.code):
+            account_info = self._solana.get_neon_account_info(account)
+            if (not account_info) or (not account_info.code):
                 return '0x'
-            return code_info.code
+
+            return account_info.code
         except (Exception,):
             return '0x'
 
