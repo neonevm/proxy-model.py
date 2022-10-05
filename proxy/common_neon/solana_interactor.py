@@ -29,7 +29,7 @@ from ..common_neon.constants import ACTIVE_HOLDER_TAG, NEON_ACCOUNT_TAG, LOOKUP_
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.utils import get_from_dict
 from ..common_neon.errors import SolanaUnavailableError
-
+from ..common_neon.elf_params import ElfParams
 
 class AccountInfo(NamedTuple):
     tag: int
@@ -54,9 +54,12 @@ class NeonAccountInfo(NamedTuple):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
 
         base_size = ACCOUNT_INFO_LAYOUT.sizeof()
+        storage_size = ElfParams().storage_entries_in_contract_account * 32
+        code_offset = base_size + storage_size
+
         code = None
-        if cont.code_size > 0 and len(data) >= base_size:
-            code = '0x' + data[base_size:][:cont.code_size].hex()
+        if cont.code_size > 0 and len(data) >= code_offset:
+            code = '0x' + data[code_offset:][:cont.code_size].hex()
 
         return NeonAccountInfo(
             pda_address=pda_address,
