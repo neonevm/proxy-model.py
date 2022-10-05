@@ -6,9 +6,9 @@ from typing import List, Optional
 
 import logging
 from logged_groups import logged_group, LogMng
-from solana.account import Account as SolanaAccount
 
-from .environment_data import SOLANA_URL, EVM_LOADER_ID, LOG_NEON_CLI_DEBUG, neon_cli_timeout
+from ..common_neon.solana_transaction import SolAccount
+from ..common_neon.environment_data import SOLANA_URL, EVM_LOADER_ID, LOG_NEON_CLI_DEBUG, neon_cli_timeout
 
 
 class CliBase:
@@ -38,8 +38,8 @@ class solana_cli(CliBase):
 
 
 @logged_group("neon.Proxy")
-def get_solana_accounts(*, logger) -> [SolanaAccount]:
-    def read_sol_account(name) -> Optional[SolanaAccount]:
+def get_solana_accounts(*, logger) -> [SolAccount]:
+    def read_sol_account(name) -> Optional[SolAccount]:
         if not os.path.isfile(name):
             return None
         logger.debug(f"Open a sol_account file: {name}")
@@ -47,7 +47,7 @@ def get_solana_accounts(*, logger) -> [SolanaAccount]:
             pkey = (d.read())
             num_list = [int(v) for v in pkey.strip("[] \n").split(',')]
             value_list = bytes(num_list[0:32])
-            return SolanaAccount(value_list)
+            return SolAccount(value_list)
 
     res = solana_cli().call('config', 'get')
     logger.debug(f"Got solana config: {res}")
@@ -115,5 +115,3 @@ class neon_cli(CliBase):
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
-
-

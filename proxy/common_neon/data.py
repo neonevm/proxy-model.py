@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Dict, List, Any
 
 
@@ -22,7 +21,7 @@ class NeonTxExecCfg:
         self._evm_step_cnt = 0
         self._alt_list: List[str] = []
         self._account_dict: NeonAccountDict = {}
-        self._additional_resize_steps = 0
+        self._resize_iter_cnt = 0
 
     @property
     def state_tx_cnt(self) -> int:
@@ -37,23 +36,23 @@ class NeonTxExecCfg:
         return self._account_dict
 
     @property
-    def additional_resize_steps(self) -> int:
-        return self._additional_resize_steps
+    def resize_iter_cnt(self) -> int:
+        return self._resize_iter_cnt
 
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
         account_dict = {k: emulated_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
         evm_step_cnt = emulated_result["steps_executed"]
         self._account_dict = account_dict
         self._evm_step_cnt = evm_step_cnt
-        self._additional_resize_steps = NeonTxExecCfg.resolve_additional_resize_steps(account_dict)
+        self._resize_iter_cnt = NeonTxExecCfg.resolve_resize_iter_cnt(account_dict)
         return self
 
     @staticmethod
-    def resolve_additional_resize_steps(emulated_result: NeonEmulatedResult) -> int:
-        max_additional_resize_steps = 0
+    def resolve_resize_iter_cnt(emulated_result: NeonEmulatedResult) -> int:
+        max_resize_iter_cnt = 0
         for account in emulated_result["accounts"]:
-            max_additional_resize_steps = max(max_additional_resize_steps, int(account["additional_resize_steps"] or 0))
-        return max_additional_resize_steps
+            max_resize_iter_cnt = max(max_resize_iter_cnt, int(account["additional_resize_steps"] or 0))
+        return max_resize_iter_cnt
 
     def set_state_tx_cnt(self, value: int) -> NeonTxExecCfg:
         self._state_tx_cnt = value

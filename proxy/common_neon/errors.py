@@ -1,3 +1,6 @@
+import traceback
+
+
 class EthereumError(Exception):
     def __init__(self, message, code=-32000, data=None):
         self.code = code
@@ -15,7 +18,7 @@ class InvalidParamError(EthereumError):
         EthereumError.__init__(self, message=message, code=-32602, data=data)
 
 
-class AddressLookupTableError(RuntimeError):
+class ALTError(RuntimeError):
     pass
 
 
@@ -36,4 +39,12 @@ class SolanaUnavailableError(Exception):
 
 
 class NonceTooLowError(Exception):
+    pass
+
+
+class NoMoreRetriesError(Exception):
+    pass
+
+
+class BudgetExceededError(Exception):
     pass

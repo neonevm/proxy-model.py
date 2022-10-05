@@ -1,31 +1,37 @@
 import os
 import unittest
-from solana.rpc.api import Client as SolanaClient
-from ..common_neon.permission_token import PermissionToken
-from ..common_neon.solana_interactor import SolanaInteractor
-from solana.publickey import PublicKey
-from solana.account import Account as SolanaAccount
 from web3 import Web3
-from solana.rpc.commitment import Confirmed
+
+from solana.rpc.api import Client as SolanaClient
+from solana.rpc.commitment import Commitment
+
+from ..common_neon.permission_token import PermissionToken
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_transaction import SolPubKey, SolAccount
 from ..common_neon.elf_params import ElfParams
+from ..common_neon.config import Config
 from .testing_helpers import request_airdrop
+
+
+Confirmed = Commitment('confirmed')
 
 
 class TestPermissionToken(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.solana = SolanaInteractor(os.environ['SOLANA_URL'])
+        config = Config()
+        cls.solana = SolInteractor(config, config.solana_url)
         cls.mint_authority_file = "/spl/bin/evm_loader-keypair.json"
         proxy_url = os.environ['PROXY_URL']
         cls.proxy = Web3(Web3.HTTPProvider(proxy_url))
         cls.eth_account = cls.proxy.eth.account.create('https://github.com/neonlabsorg/proxy-model.py/issues/468')
         request_airdrop(cls.eth_account.address)
 
-        cls.payer = SolanaAccount()
-        client = SolanaClient(os.environ['SOLANA_URL'])
+        cls.payer = SolAccount()
+        client = SolanaClient(config.solana_url)
         client.request_airdrop(cls.payer.public_key(), 1000_000_000_000, Confirmed)
-        cls.allowance_token = PermissionToken(cls.solana, PublicKey(ElfParams().allowance_token_addr))
-        cls.denial_token = PermissionToken(cls.solana, PublicKey(ElfParams().denial_token_addr))
+        cls.allowance_token = PermissionToken(config, cls.solana, SolPubKey(ElfParams().allowance_token_addr))
+        cls.denial_token = PermissionToken(config, cls.solana, SolPubKey(ElfParams().denial_token_addr))
 
     def test_mint_permission_tokens(self):
         """

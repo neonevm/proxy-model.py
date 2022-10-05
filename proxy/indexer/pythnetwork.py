@@ -1,12 +1,12 @@
-from solana.publickey import PublicKey
-from solana.system_program import SYS_PROGRAM_ID
-from decimal import Decimal
 import struct
-import traceback
+
+from decimal import Decimal
 from logged_groups import logged_group
 from typing import List, Union, Dict, Any, Optional
 
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.constants import SYS_PROGRAM_ID
+from ..common_neon.solana_interactor import SolInteractor
 
 
 def read_str(pos, data):
@@ -49,7 +49,7 @@ def unpack(layout_descriptor, raw_data, field_name, index=0):
 len(raw_data) = {len(raw_data)}, start_idx = {start_idx}, stop_idx = {stop_idx}""")
 
     if field['format'] == 'acc':  # special case for Solana account address
-        return PublicKey(raw_data[start_idx:stop_idx])
+        return SolPubKey(raw_data[start_idx:stop_idx])
     elif field['format'] == 'dict':  # special case for attribute mapping
         return read_dict(raw_data[start_idx:stop_idx])
     return struct.unpack(field['format'], raw_data[start_idx:stop_idx])[0]
@@ -88,9 +88,9 @@ class PythNetworkClient:
         'agg.status': {'pos': 224, 'len': 4, 'format': '<I'},
     }
 
-    def __init__(self, solana: SolanaInteractor):
+    def __init__(self, solana: SolInteractor):
         self.solana = solana
-        self.price_accounts: Dict[str, PublicKey] = {}
+        self.price_accounts: Dict[str, SolPubKey] = {}
 
     def parse_pyth_account_data(self, acct_addr, acct_info_value):
         # it is possible when calling to getMultipleAccounts (if some accounts are absent in blockchain)
@@ -108,24 +108,24 @@ class PythNetworkClient:
 
         return data
 
-    def read_pyth_acct_data(self, acc_addrs: Union[List[PublicKey], PublicKey]):
+    def read_pyth_acct_data(self, acc_addrs: Union[List[SolPubKey], SolPubKey]):
         """
         Method is possible to read one or more account data from blockchain
-        Given PublicKey as argument, method will return account data as bytes or None in case if account not found
+        Given SolPubKey as argument, method will return account data as bytes or None in case if account not found
             OR throw error otherwise (e.g. wrong account data format)
-        Given list PublicKeys as argument, method will return mapping of account addresses to bytes or Nones (for not found accounts)
+        Given list SolPubKeys as argument, method will return mapping of account addresses to bytes or Nones (for not found accounts)
             OR throw error otherwise  (e.g. wrong account data format)
         """
 
-        if isinstance(acc_addrs, PublicKey):
+        if isinstance(acc_addrs, SolPubKey):
             acct_values = self.solana.get_account_info(acc_addrs)
         elif isinstance(acc_addrs, list):
             acct_values = self.solana.get_account_info_list(acc_addrs)
         else:
             raise Exception(f'Unsupported argument to read_pyth_acct_data: {acc_addrs}')
 
-        if isinstance(acc_addrs, PublicKey):
-            # One PublicKey given
+        if isinstance(acc_addrs, SolPubKey):
+            # One SolPubKey given
             return self.parse_pyth_account_data(acc_addrs, acct_values)
 
         # Several accounts given
@@ -138,7 +138,7 @@ class PythNetworkClient:
                 for acct_addr, acct_value in zip(acc_addrs, acct_values)
         }
 
-    def parse_mapping_account(self, acc_addr: PublicKey):
+    def parse_mapping_account(self, acc_addr: SolPubKey):
         products = []
         while acc_addr != SYS_PROGRAM_ID:
             data = self.read_pyth_acct_data(acc_addr)
@@ -157,7 +157,7 @@ class PythNetworkClient:
             'attrs': unpack(self.product_account_layout, acc_data, 'attrs')
         }
 
-    def parse_price_account(self, acc_addr: PublicKey):
+    def parse_price_account(self, acc_addr: SolPubKey):
         data = self.read_pyth_acct_data(acc_addr)
         if data is None:
             raise Exception(f"Failed to read price account {acc_addr}")
@@ -172,7 +172,7 @@ class PythNetworkClient:
             'status':       unpack(self.price_account_layout, data, 'agg.status')
         }
 
-    def update_mapping(self, mapping_acc: PublicKey):
+    def update_mapping(self, mapping_acc: SolPubKey):
         """
         Reads pyth.network mapping account and prepares mapping
         symbol -> price_acc_addr
@@ -190,10 +190,8 @@ class PythNetworkClient:
                 symbol = product['attrs']['symbol']
                 self.info(f'Product account {acct_addr}: {symbol}')
                 self.price_accounts[symbol] = product['price_acc']
-            except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.warning(f'Failed to parse product account data {acct_addr}, ' +
-                             f'{type(err)}, Error: {err}, Traceback: {err_tb}')
+            except BaseException as exc:
+                self.error(f'Failed to parse product account data {acct_addr}.', exc_info=exc)
         self.info('Pyth.Network update finished.\n\n\n')
 
     def get_price(self, symbol: str) -> Optional[Dict[str, Any]]:

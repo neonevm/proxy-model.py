@@ -1,27 +1,31 @@
 ## File: test_erc20_wrapper_contract.py
 ## Integration test for the Neon ERC20 Wrapper contract.
 
-from time import sleep
 import unittest
 import os
 import json
-from xmlrpc.client import Boolean
-from solana.rpc.commitment import Confirmed
+
+from time import sleep
 from web3 import Web3
+
+from solana.rpc.commitment import Commitment
+from solana.rpc.api import Client as SolanaClient
+
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
-from solana.rpc.api import Client as SolanaClient
-from solana.account import Account as SolanaAccount
-from solana.publickey import PublicKey
+
 from solcx import compile_source
 
+from ..common_neon.config import Config
+from ..common_neon.solana_transaction import SolAccount, SolPubKey
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.erc20_wrapper import ERC20Wrapper
 
 from .testing_helpers import request_airdrop
 
+Confirmed = Commitment('confirmed')
+
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
-solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
 proxy = Web3(Web3.HTTPProvider(proxy_url))
 admin = proxy.eth.account.create('issues/neonlabsorg/proxy-model.py/197/readonly')
 proxy.eth.default_account = admin.address
@@ -46,16 +50,16 @@ class Test_read_only_accounts(unittest.TestCase):
         cls.deploy_erc20_wrapper_contract(cls)
         cls.deploy_test_contract(cls)
 
-    def account_exists(self, key: PublicKey) -> Boolean:
+    def account_exists(self, key: SolPubKey) -> bool:
         info = self.solana_client.get_account_info(key)
         info["result"]["value"] is not None
 
     def create_token_mint(self):
-        self.solana_client = SolanaClient(solana_url)
+        self.solana_client = SolanaClient(Config().solana_url)
 
         with open("proxy/operator-keypairs/id.json") as f:
             d = json.load(f)
-        self.solana_account = SolanaAccount(d[0:32])
+        self.solana_account = SolAccount(d[0:32])
         self.solana_client.request_airdrop(self.solana_account.public_key(), 1000_000_000_000, Confirmed)
 
         while True:
@@ -77,7 +81,7 @@ class Test_read_only_accounts(unittest.TestCase):
         self.wrapper = ERC20Wrapper(proxy, "NEON", "NEON",
                                     self.token, admin,
                                     self.solana_account,
-                                    PublicKey(EVM_LOADER_ID))
+                                    SolPubKey(EVM_LOADER_ID))
         self.wrapper.deploy_wrapper()
 
     def deploy_test_contract(self):
@@ -102,7 +106,6 @@ class Test_read_only_accounts(unittest.TestCase):
             abi=contract.abi
         )
 
-
     def test_balanceOf(self):
         account = proxy.eth.account.create()
 
@@ -120,7 +123,6 @@ class Test_read_only_accounts(unittest.TestCase):
         self.assertEqual(tx_receipt.status, 1)
 
         self.assertFalse(self.account_exists(solana_account))
-
 
     def test_erc20_balanceOf(self):
         erc20 = self.wrapper.erc20_interface()
@@ -145,7 +147,6 @@ class Test_read_only_accounts(unittest.TestCase):
 
         self.assertFalse(self.account_exists(solana_account))
         self.assertFalse(self.account_exists(token_account))
-
 
 
 if __name__ == '__main__':

@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import patch, call
 from proxy.indexer.pythnetwork import PythNetworkClient
-from proxy.common_neon.solana_interactor import SolanaInteractor
-from solana.publickey import PublicKey
-from time import sleep
+from proxy.common_neon.solana_interactor import SolInteractor
+from proxy.common_neon.config import Config
+from proxy.common_neon.solana_transaction import SolPubKey
 from decimal import Decimal
 
 # Will perform tests with devnet network
@@ -12,17 +12,18 @@ from decimal import Decimal
 # PythNetworkClient will fail with 'too many requests' if trying to connect
 # it to the same Solana network
 solana_url = "https://api.devnet.solana.com"
-mapping_account = PublicKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
+mapping_account = SolPubKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
 sol_usd_symbol = 'Crypto.SOL/USD'
+
 
 class TestPythNetworkClient(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.price_acct1_addr = PublicKey(b'PriceAcct1')
-        cls.price_acct2_addr = PublicKey(b'PriceAcct2')
+        cls.price_acct1_addr = SolPubKey(b'PriceAcct1')
+        cls.price_acct2_addr = SolPubKey(b'PriceAcct2')
 
-        cls.prod_acct1_addr = PublicKey(b'ProdAcct1')
-        cls.prod_acct2_addr = PublicKey(b'ProdAcct2')
+        cls.prod_acct1_addr = SolPubKey(b'ProdAcct1')
+        cls.prod_acct2_addr = SolPubKey(b'ProdAcct2')
 
         cls.prod_acct1_data = b'Acct1Data'
         cls.prod_acct2_data = b'Acct2Data'
@@ -57,7 +58,7 @@ class TestPythNetworkClient(unittest.TestCase):
             'status':       1
         }
 
-        cls.testee = PythNetworkClient(SolanaInteractor(solana_url))
+        cls.testee = PythNetworkClient(SolInteractor(Config(), solana_url))
 
     def update_mapping(self):
         self.testee.update_mapping(mapping_account)
@@ -126,7 +127,7 @@ class TestPythNetworkClient(unittest.TestCase):
             self.fail(f"Expected not throws exception but it does: {err}")
 
 
-    @patch.object(SolanaInteractor, 'get_account_info')
+    @patch.object(SolInteractor, 'get_account_info')
     def test_forward_exception_when_reading_mapping_account(self, mock_get_account_info):
         mock_get_account_info.side_effect = Exception('TestException')
         with self.assertRaises(Exception):

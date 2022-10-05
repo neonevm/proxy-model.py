@@ -10,9 +10,9 @@ from coincurve import PublicKey
 import logging
 
 from proxy.common_neon.address import EthereumAddress, accountWithSeed, permAccountSeed
-from proxy.common_neon.solana_interactor import SolanaInteractor
+from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.environment_utils import get_solana_accounts
-from proxy.common_neon.environment_data import SOLANA_URL, PERM_ACCOUNT_LIMIT
+from proxy.common_neon.config import Config
 
 
 neon_logger = logging.getLogger("neon")
@@ -28,7 +28,8 @@ class DecimalEncoder(json.JSONEncoder):
 
 class InfoHandler:
     def __init__(self):
-        self._solana = SolanaInteractor(SOLANA_URL)
+        self._config = Config()
+        self._solana = SolInteractor(self._config, self._config.solana_url)
         self.command = 'info'
         self._storage = None
         self.print_stdout = True
@@ -69,8 +70,9 @@ class InfoHandler:
             'holder-accounts': []
         }
 
+        stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
         for sol_account in get_solana_accounts():
-            for rid in range(max(PERM_ACCOUNT_LIMIT, 16)):
+            for rid in range(self._config.perm_account_id, stop_perm_account_id):
                 holder_address = self._generate_holder_address(sol_account.public_key(), rid)
                 ret_js['holder-accounts'].append(str(holder_address))
                 self._print(str(holder_address))
@@ -210,9 +212,9 @@ class InfoHandler:
             10: 'ACCOUNT',
             2: 'CONTRACT',
             3: 'STORAGE_V1',
-            30: 'ACTIVE_HOLDER',
+            30: 'ACTIVE_STORAGE',
             4: 'ERC20_ALLOWANCE',
-            5: 'FINALIZED_HOLDER',
+            5: 'FINALIZED_STORAGE',
             6: 'HOLDER'
         }
 
@@ -222,7 +224,8 @@ class InfoHandler:
             'holder': []
         }
 
-        for rid in range(max(PERM_ACCOUNT_LIMIT, 16)):
+        stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
+        for rid in range(self._config.perm_account_id, stop_perm_account_id):
             holder_address = self._generate_holder_address(sol_account.public_key(), rid)
             holder_info = self._solana.get_account_info(holder_address)
 

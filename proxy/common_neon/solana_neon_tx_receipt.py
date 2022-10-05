@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, NamedTuple, cast
+from dataclasses import dataclass
+from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, cast
 
 import re
 import base58
@@ -14,12 +15,16 @@ from ..common_neon.utils import str_fmt_object
 from ..common_neon.environment_data import EVM_LOADER_ID
 
 
-class SolTxSigSlotInfo(NamedTuple):
+@dataclass
+class SolTxSigSlotInfo:
     sol_sig: str
     block_slot: int
 
     def __str__(self) -> str:
         return f'{self.block_slot}:{self.sol_sig}'
+
+    def __hash__(self) -> int:
+        return hash(str(self))
 
 
 class SolTxMetaInfo:
@@ -28,16 +33,24 @@ class SolTxMetaInfo:
         self._block_slot = block_slot
         self._tx = tx
 
-    @property
-    def ident(self) -> SolTxSigSlotInfo:
-        return SolTxSigSlotInfo(block_slot=self._block_slot, sol_sig=self._sol_sig)
-
-    def __str__(self) -> str:
-        return str(self.ident)
+    @staticmethod
+    def from_end_range(block_slot: int, postfix: str) -> SolTxMetaInfo:
+        return SolTxMetaInfo(block_slot, f'end-{postfix}', {})
 
     @staticmethod
     def from_response(sig_slot: SolTxSigSlotInfo, response: Dict[str, Any]) -> SolTxMetaInfo:
         return SolTxMetaInfo(block_slot=sig_slot.block_slot, sol_sig=sig_slot.sol_sig, tx=response)
+
+    @property
+    def ident(self) -> SolTxSigSlotInfo:
+        return SolTxSigSlotInfo(block_slot=self._block_slot, sol_sig=self._sol_sig)
+
+    @property
+    def req_id(self) -> str:
+        return f'{self._sol_sig[:7]}_{self._block_slot}'
+
+    def __str__(self) -> str:
+        return str(self.ident)
 
     @property
     def sol_sig(self) -> str:
@@ -285,22 +298,17 @@ class SolNeonIxReceiptInfo:
     _bpf_cycle_cnt_re = re.compile(f'^Program {EVM_LOADER_ID}' + r' consumed (\d+) of (\d+) compute units$')
     _heap_size_re = re.compile(r'^Program log: Total memory occupied: (\d+)$')
 
-    def __init__(self, tx_meta: SolTxMetaInfo, ix_meta: SolIxMetaInfo, tx_cost: SolTxCostInfo):
+    def __init__(self, tx_meta: SolTxMetaInfo):
         self._tx_meta = tx_meta
-        self._ix_meta = ix_meta
-        self._tx_cost = tx_cost
+        self._tx_cost: Optional[SolTxCostInfo] = None
+        self._ix_meta: Optional[SolIxMetaInfo] = None
 
-        msg = tx_meta.tx['transaction']['message']
-        self._account_list = ix_meta.ix['accounts']
+        self._account_list: List[int] = []
 
-        self._account_key_list = msg['accountKeys']
-        lookup_key_list = tx_meta.tx['meta'].get('loadedAddresses', None)
-        if lookup_key_list is not None:
-            self._account_key_list += lookup_key_list['writable'] + lookup_key_list['readonly']
+        self._account_key_list: List[str] = []
 
-        self._program_ix: Optional[int] = None
-        self._ix_data: Optional[bytes] = None
-        self._decode_ixdata()
+        self._program_ix = -1
+        self._ix_data = bytes()
 
         self._heap_size = 0
         self._used_bpf_cycle_cnt = 0
@@ -308,7 +316,26 @@ class SolNeonIxReceiptInfo:
         self._neon_step_cnt = 0
         self._neon_income = 0
 
-        self._parse_log_list()
+    @staticmethod
+    def from_ix(tx_meta: SolTxMetaInfo, tx_cost: SolTxCostInfo, ix_meta: SolIxMetaInfo) -> SolNeonIxReceiptInfo:
+        sol_neon_ix = SolNeonIxReceiptInfo(tx_meta)
+        sol_neon_ix._tx_cost = tx_cost
+        sol_neon_ix._ix_meta = ix_meta
+
+        sol_neon_ix._account_list = ix_meta.ix['accounts']
+
+        sol_neon_ix._account_key_list = tx_meta.tx['transaction']['message']['accountKeys']
+        lookup_key_list = tx_meta.tx['meta'].get('loadedAddresses', None)
+        if lookup_key_list is not None:
+            sol_neon_ix._account_key_list += lookup_key_list['writable'] + lookup_key_list['readonly']
+
+        sol_neon_ix._decode_ixdata()
+        sol_neon_ix._parse_log_list()
+        return sol_neon_ix
+
+    @staticmethod
+    def from_tx(tx_meta: SolTxMetaInfo) -> SolNeonIxReceiptInfo:
+        return SolNeonIxReceiptInfo(tx_meta)
 
     def __str__(self) -> str:
         return ':'.join([str(s) for s in self.ident])
@@ -329,33 +356,37 @@ class SolNeonIxReceiptInfo:
 
     @property
     def sol_tx_cost(self) -> SolTxCostInfo:
-        return self._tx_cost
+        assert self._tx_cost is not None
+        return cast(SolTxCostInfo, self._tx_cost)
 
     @property
     def idx(self) -> int:
+        assert self._ix_meta is not None
         return self._ix_meta.idx
 
     @property
-    def inner_idx(self) -> int:
+    def inner_idx(self) -> Optional[int]:
+        assert self._ix_meta is not None
         return self._ix_meta.inner_idx
 
     @property
     def level(self) -> int:
+        assert self._ix_meta is not None
         return self._ix_meta.level
 
     @property
     def program(self) -> str:
+        assert self._ix_meta is not None
         return self._ix_meta.program
 
     @property
     def program_ix(self) -> int:
-        assert self._program_ix is not None
-        return cast(int, self._program_ix)
+        assert self._program_ix >= 0
+        return self._program_ix
 
     @property
     def ix_data(self) -> bytes:
-        assert self._ix_data is not None
-        return cast(bytes, self._ix_data)
+        return self._ix_data
 
     @property
     def heap_size(self) -> int:
@@ -382,8 +413,12 @@ class SolNeonIxReceiptInfo:
         self._neon_step_cnt = value
 
     @property
-    def ident(self) -> Tuple[int, str, int, Optional[int]]:
-        return self._tx_meta.block_slot, self._tx_meta.sol_sig, self._ix_meta.idx, self._ix_meta.inner_idx
+    def ident(self) -> Union[Tuple[str, int, int, int], Tuple[str, int, int], Tuple[str, int]]:
+        if self._ix_meta is None:
+            return self._tx_meta.sol_sig, self._tx_meta.block_slot
+        elif self._ix_meta.inner_idx is None:
+            return self._tx_meta.sol_sig, self._tx_meta.block_slot, self._ix_meta.idx
+        return self._tx_meta.sol_sig, self._tx_meta.block_slot, self._ix_meta.idx, cast(int, self._ix_meta.inner_idx)
 
     def _parse_log_list(self) -> None:
         for log_msg in self._ix_meta.iter_log():
@@ -425,10 +460,8 @@ class SolNeonIxReceiptInfo:
             self._ix_data = base58.b58decode(self._ix_meta.ix['data'])
             self._program_ix = int(self.ix_data[0])
             return True
-        except Exception as e:
-            self.debug(f'{self} fail to get a program instruction: {e}')
-            self._program_ix = None
-            self._ix_data = None
+        except BaseException as exc:
+            self.debug(f'{self} fail to get a program instruction', exc_info=exc)
         return False
 
     @property
@@ -437,7 +470,7 @@ class SolNeonIxReceiptInfo:
 
     @property
     def req_id(self) -> str:
-        return f"{hex(abs(hash(self)))}"[:7]
+        return '_'.join([s[:7] if isinstance(s, str) else str(s) for s in self.ident])
 
     def get_account(self, account_idx: int) -> str:
         if len(self._account_list) > account_idx:
@@ -574,13 +607,13 @@ class SolTxReceiptInfo:
             if self._is_neon_program(ix):
                 log_list = self._get_log_list(ix_idx)
                 if log_list is not None:
-                    ix_meta = SolIxMetaInfo(ix=ix, idx=ix_idx, log_list=log_list)
-                    yield SolNeonIxReceiptInfo(tx_meta=self._tx_meta, ix_meta=ix_meta, tx_cost=self._sol_cost)
+                    ix_meta = SolIxMetaInfo(ix, ix_idx, log_list=log_list)
+                    yield SolNeonIxReceiptInfo.from_ix(self._tx_meta, self._sol_cost, ix_meta=ix_meta)
 
             inner_ix_list = self._get_inner_ix_list(ix_idx)
             for inner_idx, inner_ix in enumerate(inner_ix_list):
                 if self._is_neon_program(inner_ix):
                     log_list = self._get_log_list(ix_idx, inner_idx)
                     if log_list is not None:
-                        ix_meta = SolIxMetaInfo(ix=inner_ix, idx=ix_idx, inner_idx=inner_idx, log_list=log_list)
-                        yield SolNeonIxReceiptInfo(tx_meta=self._tx_meta, ix_meta=ix_meta, tx_cost=self._sol_cost)
+                        ix_meta = SolIxMetaInfo(inner_ix, ix_idx, inner_idx=inner_idx, log_list=log_list)
+                        yield SolNeonIxReceiptInfo.from_ix(self._tx_meta, self._sol_cost, ix_meta=ix_meta)

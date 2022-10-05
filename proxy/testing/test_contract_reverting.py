@@ -7,7 +7,7 @@ from eth_account.account import LocalAccount
 
 from .testing_helpers import SolidityContractDeployer, request_airdrop
 from ..common_neon.emulator_interactor import decode_revert_message
-
+from ..common_neon.config import Config
 
 class TestContractReverting(unittest.TestCase):
 
@@ -16,7 +16,7 @@ class TestContractReverting(unittest.TestCase):
         cls._contract_deployer = SolidityContractDeployer()
         cls._web3 = cls._contract_deployer.web3
 
-        solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
+        solana_url = Config().solana_url
         cls._solana_client = SolanaClient(solana_url)
 
     def test_revert_message_decoding(self):

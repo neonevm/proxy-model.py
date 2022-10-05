@@ -7,7 +7,7 @@ from neon_py.network import AddrPickableDataClient
 from .mempool_api import MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
 from .mempool_api import MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest
 
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.data import NeonTxExecCfg
 
 
@@ -54,8 +54,8 @@ class MemPoolClient:
         try:
             self.debug(f"Connect MemPool: {self._address}")
             self._pickable_data_client = AddrPickableDataClient(self._address)
-        except Exception as err:
-            self.error(f"Failed to connect MemPool: {self._address}, error: {err}")
+        except BaseException as exc:
+            self.error(f'Failed to connect MemPool: {self._address}.', exc_info=exc)
             self._is_connecting.clear()
             self._reconnect_mp()
         finally:
@@ -63,10 +63,10 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def send_raw_transaction(self, req_id: str, signature: str, neon_tx: NeonTx,
+    def send_raw_transaction(self, req_id: str, neon_sig: str, neon_tx: NeonTx,
                              neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxSendResult:
         mempool_tx_request = MPTxRequest(
-            req_id=req_id, signature=signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
+            req_id=req_id, sig=neon_sig, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
         )
         return self._pickable_data_client.send_data(mempool_tx_request)
 

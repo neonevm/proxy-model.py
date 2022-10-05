@@ -1,29 +1,28 @@
 ## File: test_erc20_wrapper_contract.py
 ## Integration test for the Neon ERC20 Wrapper contract.
 
-from time import sleep
 import unittest
 import os
 import json
-from solana.rpc.commitment import Confirmed, Recent
-from solana.rpc.types import TxOpts
+
+from time import sleep
+
+from solana.rpc.commitment import Commitment, Recent
+from solana.rpc.types import TxOpts, TokenAccountOpts
+from solana.rpc.api import Client as SolanaClient
+
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
 import spl.token.instructions as SplTokenInstrutions
-from solana.rpc.api import Client as SolanaClient
-from solana.account import Account as SolanaAccount
-from solana.publickey import PublicKey
-from solana.rpc.types import TokenAccountOpts
-
 
 from ..testing.testing_helpers import request_airdrop
+from ..common_neon.solana_transaction import SolAccount, SolPubKey, SolLegacyTx
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.erc20_wrapper import ERC20Wrapper
-from ..common_neon.compute_budget import TransactionWithComputeBudget
 from ..common_neon.web3 import NeonWeb3 as Web3
+from ..common_neon.config import Config
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
-solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
 proxy = Web3(Web3.HTTPProvider(proxy_url))
 admin = proxy.eth.account.create('issues/neonlabsorg/proxy-model.py/197/admin')
 user = proxy.eth.account.create('issues/neonlabsorg/proxy-model.py/197/user')
@@ -34,6 +33,9 @@ request_airdrop(user.address)
 NAME = 'NEON'
 SYMBOL = 'NEO'
 
+Confirmed = Commitment('confirmed')
+
+
 class Test_erc20_wrapper_contract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -43,78 +45,79 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         print('user.key:', user.key.hex())
         print('user.address:', user.address)
 
-        cls.create_token_mint(cls)
-        cls.deploy_erc20_wrapper_contract(cls)
-        cls.create_token_accounts(cls)
+        cls.create_token_mint()
+        cls.deploy_erc20_wrapper_contract()
+        cls.create_token_accounts()
 
-
-    def create_token_mint(self):
-        self.solana_client = SolanaClient(solana_url)
+    @classmethod
+    def create_token_mint(cls):
+        cls.solana_client = SolanaClient(Config().solana_url)
 
         with open("proxy/operator-keypairs/id.json") as f:
             d = json.load(f)
-        self.solana_account = SolanaAccount(d[0:32])
-        self.solana_client.request_airdrop(self.solana_account.public_key(), 1000_000_000_000, Confirmed)
+        cls.solana_account = SolAccount(d[0:32])
+        cls.solana_client.request_airdrop(cls.solana_account.public_key(), 1000_000_000_000, Confirmed)
 
         while True:
-            balance = self.solana_client.get_balance(self.solana_account.public_key(), Confirmed)["result"]["value"]
+            balance = cls.solana_client.get_balance(cls.solana_account.public_key(), Confirmed)["result"]["value"]
             if balance > 0:
                 break
             sleep(1)
-        print('create_token_mint mint, SolanaAccount: ', self.solana_account.public_key())
+        print('create_token_mint mint, SolanaAccount: ', cls.solana_account.public_key())
 
-        self.token = SplToken.create_mint(
-            self.solana_client,
-            self.solana_account,
-            self.solana_account.public_key(),
+        cls.token = SplToken.create_mint(
+            cls.solana_client,
+            cls.solana_account,
+            cls.solana_account.public_key(),
             9,
             TOKEN_PROGRAM_ID,
         )
 
-    def deploy_erc20_wrapper_contract(self):
-        self.wrapper = ERC20Wrapper(proxy, NAME, SYMBOL,
-                                    self.token, admin,
-                                    self.solana_account,
-                                    PublicKey(EVM_LOADER_ID))
-        self.wrapper.deploy_wrapper()
+    @classmethod
+    def deploy_erc20_wrapper_contract(cls):
+        cls.wrapper = ERC20Wrapper(proxy, NAME, SYMBOL,
+                                   cls.token, admin,
+                                   cls.solana_account,
+                                   SolPubKey(EVM_LOADER_ID))
+        cls.wrapper.deploy_wrapper()
 
-    def create_token_accounts(self):
+    @classmethod
+    def create_token_accounts(cls):
         amount = 10_000_000_000_000
-        token_account = SplTokenInstrutions.get_associated_token_address(self.solana_account.public_key(), self.token.pubkey)
-        admin_address = self.wrapper.get_neon_account_address(admin.address)
+        token_account = SplTokenInstrutions.get_associated_token_address(cls.solana_account.public_key(), cls.token.pubkey)
+        admin_address = cls.wrapper.get_neon_account_address(admin.address)
 
-        tx = TransactionWithComputeBudget()
+        tx = SolLegacyTx()
 
         tx.add(SplTokenInstrutions.create_associated_token_account(
-            self.solana_account.public_key(), self.solana_account.public_key(), self.token.pubkey
+            cls.solana_account.public_key(), cls.solana_account.public_key(), cls.token.pubkey
         ))
         tx.add(SplTokenInstrutions.mint_to(SplTokenInstrutions.MintToParams(
-            program_id=self.token.program_id,
-            mint=self.token.pubkey,
+            program_id=cls.token.program_id,
+            mint=cls.token.pubkey,
             dest=token_account,
-            mint_authority=self.solana_account.public_key(),
+            mint_authority=cls.solana_account.public_key(),
             amount=amount,
             signers=[],
         )))
         tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
-            program_id=self.token.program_id,
+            program_id=cls.token.program_id,
             source=token_account,
             delegate=admin_address,
-            owner=self.solana_account.public_key(),
+            owner=cls.solana_account.public_key(),
             amount=amount,
             signers=[],
         )))
 
-        claim_instr = self.wrapper.create_claim_instruction(
-            owner = self.solana_account.public_key(),
+        claim_instr = cls.wrapper.create_claim_instruction(
+            owner=cls.solana_account.public_key(),
             from_acc=token_account,
             to_acc=admin,
             amount=amount,
         )
         tx.add(claim_instr.make_tx_exec_from_data_ix())
 
-        self.solana_client.send_transaction(tx, self.solana_account, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
-
+        cls.solana_client.send_transaction(tx, cls.solana_account, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
 
     def test_erc20_name(self):
         erc20 = proxy.eth.contract(address=self.wrapper.neon_contract_address, abi=self.wrapper.wrapper['abi'])
@@ -269,7 +272,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
             )
 
     def test_erc20_approveSolana(self):
-        delegate = SolanaAccount()
+        delegate = SolAccount()
         approve_value = 1000
         erc20 = self.wrapper.erc20_interface()
 
@@ -282,7 +285,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
 
         self.assertIsNotNone(tx_receipt)
         accounts = self.solana_client.get_token_accounts_by_delegate(delegate.public_key(), TokenAccountOpts(mint=self.token.pubkey), commitment=Recent)
-        accounts = list(map(lambda a: PublicKey(a['pubkey']), accounts['result']['value']))
+        accounts = list(map(lambda a: SolPubKey(a['pubkey']), accounts['result']['value']))
 
         self.assertGreaterEqual(len(accounts), 1)
 

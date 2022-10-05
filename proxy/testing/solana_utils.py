@@ -1,6 +1,5 @@
 import base64
 import json
-import math
 import os
 import subprocess
 import time
@@ -9,7 +8,6 @@ from typing import NamedTuple, Tuple, Union
 
 import rlp
 from base58 import b58encode
-from construct import Bytes, Int8ul, Struct as cStruct, Int32ul
 from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
@@ -18,11 +16,8 @@ from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
-from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 
-from spl.token.constants import TOKEN_PROGRAM_ID
-from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 import math
 
 from proxy.common_neon.constants import ACCOUNT_SEED_VERSION
@@ -129,9 +124,9 @@ def confirm_transaction(http_client, tx_sig, confirmations=0):
     TIMEOUT = 30  # 30 seconds pylint: disable=invalid-name
     elapsed_time = 0
     while elapsed_time < TIMEOUT:
-        print('confirm_transaction for %s', tx_sig)
+        print(f'confirm_transaction for {tx_sig}')
         resp = http_client.get_signature_statuses([tx_sig])
-        print('confirm_transaction: %s', resp)
+        print(f'confirm_transaction: {resp}')
         if resp["result"]:
             status = resp['result']['value'][0]
             if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
@@ -140,7 +135,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=0):
         sleep_time = 0.1
         time.sleep(sleep_time)
         elapsed_time += sleep_time
-    raise RuntimeError("could not confirm transaction: ", tx_sig)
+    raise RuntimeError(f"could not confirm transaction: {tx_sig}")
 
 
 def accountWithSeed(base, seed, program):
@@ -446,9 +441,12 @@ def operator2_keypair_path():
 
 
 def send_transaction(client, trx, acc):
+    print(f' send_transaction')
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+    print(f' send result: {result}')
     confirm_transaction(client, result["result"])
     result = client.get_confirmed_transaction(result["result"])
+    print(f' done: {result}')
     return result
 
 
@@ -459,11 +457,19 @@ def evm_step_cost():
 
 class ComputeBudget():
     @staticmethod
-    def requestUnits(units, additional_fee):
+    def requestUnits(units):
         return TransactionInstruction(
             program_id=COMPUTE_BUDGET_ID,
             keys=[],
-            data=bytes.fromhex("00") + units.to_bytes(4, "little") + additional_fee.to_bytes(4, "little")
+            data=bytes.fromhex("02") + units.to_bytes(4, "little")
+        )
+
+    @staticmethod
+    def setAddtionalFee(additional_fee):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("03") + additional_fee.to_bytes(8, "little")
         )
 
     @staticmethod
@@ -478,6 +484,7 @@ class ComputeBudget():
 def TransactionWithComputeBudget(units=DEFAULT_UNITS, additional_fee=DEFAULT_ADDITIONAL_FEE,
                                  heapFrame=DEFAULT_HEAP_FRAME, **args):
     trx = Transaction(**args)
-    if units: trx.add(ComputeBudget.requestUnits(units, additional_fee))
+    if units: trx.add(ComputeBudget.requestUnits(units))
     if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
+    if additional_fee: trx.add(ComputeBudget.setAddtionalFee(additional_fee))
     return trx

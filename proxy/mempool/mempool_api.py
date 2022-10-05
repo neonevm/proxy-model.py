@@ -7,14 +7,15 @@ from typing import Any, Optional, List, Dict
 from abc import ABC, abstractmethod
 
 import asyncio
+import time
 
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.data import NeonTxExecCfg
 
 
 @dataclass
 class MPTask:
-    resource_id: int
+    executor_id: int
     aio_task: asyncio.Task
     mp_request: MPRequest
 
@@ -28,45 +29,48 @@ class IMPExecutor(ABC):
     def is_available(self) -> bool:
         pass
 
-    # TODO: drop it away
     @abstractmethod
-    def on_no_liquidity(self, resource_id: int):
-        pass
-
-    @abstractmethod
-    def release_resource(self, resource_id: int):
+    def release_executor(self, executor_id: int):
         pass
 
 
 class MPRequestType(IntEnum):
-    SendTransaction = 0,
-    GetLastTxNonce = 1,
-    GetTxByHash = 2,
-    GetGasPrice = 3,
-    GetStateTxCnt = 4,
-    InitOperatorResource = 5,
-    GetElfParamDict = 6,
-    Dummy = -1
+    SendTransaction = 0
+    GetLastTxNonce = 1
+    GetTxByHash = 2
+    GetGasPrice = 3
+    GetStateTxCnt = 4
+    InitOperatorResource = 5
+    GetElfParamDict = 6
+    GetALTList = 7
+    DeactivateALTList = 8
+    CloseALTList = 9
+    Unspecified = 255
 
 
 @dataclass
 class MPRequest:
     req_id: str
-    type: MPRequestType = MPRequestType.Dummy
+    type: MPRequestType = MPRequestType.Unspecified
 
 
 @dataclass
 class MPTxRequest(MPRequest):
-    signature: str = None
+    sig: str = None
     neon_tx: Optional[NeonTx] = None
     neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
     sender_address: str = None
     gas_price: int = 0
+    start_time: int = 0
 
     def __post_init__(self):
-        self.gas_price = self.neon_tx.gasPrice
-        self.sender_address = "0x" + self.neon_tx.sender()
         self.type = MPRequestType.SendTransaction
+
+        self.gas_price = self.neon_tx.gasPrice
+        if self.sender_address is None:
+            self.sender_address = "0x" + self.neon_tx.sender()
+        if self.start_time == 0:
+            self.start_time = time.time_ns()
 
     @property
     def nonce(self) -> int:
@@ -85,9 +89,11 @@ class MPTxExecRequest(MPTxRequest):
     def clone(tx: MPTxRequest, resource_ident: str, elf_param_dict: Dict[str, str]):
         req = MPTxExecRequest(
             req_id=tx.req_id,
-            signature=tx.signature,
+            sig=tx.sig,
             neon_tx=tx.neon_tx,
             neon_tx_exec_cfg=tx.neon_tx_exec_cfg,
+            sender_address=tx.sender_address,
+            start_time=tx.start_time,
             elf_param_dict=elf_param_dict,
             resource_ident=resource_ident
         )
@@ -142,14 +148,50 @@ class MPOpResInitRequest(MPRequest):
         self.type = MPRequestType.InitOperatorResource
 
 
+@dataclass
+class MPGetALTList(MPRequest):
+    operator_key_list: List[str] = None
+
+    def __post_init__(self):
+        self.type = MPRequestType.GetALTList
+
+
+@dataclass
+class MPALTInfo:
+    last_extended_slot: int
+    deactivation_slot: Optional[int]
+    block_height: int
+    table_account: str
+    operator_key: str
+
+    def is_deactivated(self) -> bool:
+        return self.deactivation_slot is not None
+
+
+@dataclass
+class MPDeactivateALTListRequest(MPRequest):
+    alt_info_list: List[MPALTInfo] = None
+
+    def __post_init__(self):
+        self.type = MPRequestType.DeactivateALTList
+
+
+@dataclass
+class MPCloseALTListRequest(MPRequest):
+    alt_info_list: List[MPALTInfo] = None
+
+    def __post_init__(self):
+        self.type = MPRequestType.CloseALTList
+
+
 class MPTxExecResultCode(IntEnum):
     Done = 0
-    BlockedAccount = 1,
-    SolanaUnavailable = 2,
-    NodeBehind = 3,
-    NonceTooLow = 4,
-    Unspecified = 255,
-    Dummy = -1
+    BlockedAccount = 1
+    SolanaUnavailable = 2
+    NodeBehind = 3
+    NonceTooLow = 4
+    BadResource = 5
+    Unspecified = 255
 
 
 @dataclass
@@ -198,3 +240,9 @@ class MPOpResInitResultCode(IntEnum):
 @dataclass
 class MPOpResInitResult:
     code: MPOpResInitResultCode
+
+
+@dataclass
+class MPALTListResult:
+    block_height: int
+    alt_info_list: List[MPALTInfo]

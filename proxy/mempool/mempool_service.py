@@ -1,5 +1,3 @@
-import traceback
-
 from logged_groups import logged_group, logging_context
 import asyncio
 from multiprocessing import Process
@@ -13,7 +11,7 @@ from ..common_neon.config import Config
 
 from .mempool import MemPool
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
-from .operator_resource_mng import OperatorResourceMng
+from .operator_resource_mng import OpResMng
 
 from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest
 from .mempool_replicator import MemPoolReplicator
@@ -32,7 +30,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         self._mempool_srv: Optional[AddrPickableDataSrv] = None
         self._mempool_maintenance_srv: Optional[AddrPickableDataSrv] = None
         self._mempool: Optional[MemPool] = None
-        self._operator_resource_mng: Optional[OperatorResourceMng] = None
+        self._op_res_mng: Optional[OpResMng] = None
         self._mp_executor_mng: Optional[MPExecutorMng] = None
         self._replicator: Optional[MemPoolReplicator] = None
         self._process = Process(target=self.run)
@@ -49,16 +47,12 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             elif issubclass(type(mp_request), (MaintenanceRequest,)):
                 return self.process_maintenance_request(cast(MaintenanceRequest, mp_request))
             self.error(f"Failed to process mp_request, unknown type: {type(mp_request)}")
-        except Exception as err:
+        except BaseException as exc:
             with logging_context(req_id=mp_request.req_id):
-                self._on_exception(f"Failed to process maintenance request: {mp_request.command}", err)
+                self.error(f"Failed to process maintenance request: {mp_request.command}.", exc_info=exc)
                 return Result("Request failed")
 
         return Result("Unexpected problem")
-
-    def _on_exception(self, text: str, err: BaseException) -> None:
-        err_tb = "".join(traceback.format_tb(err.__traceback__))
-        self.error(f"{text}. Error: {err}. Traceback: {err_tb}")
 
     async def process_mp_request(self, mp_request: MPRequest) -> Any:
         if mp_request.type == MPRequestType.SendTransaction:
@@ -97,14 +91,14 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         try:
             self._mempool_srv = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
             self._mempool_maintenance_srv = AddrPickableDataSrv(user=self, address=self.MP_MAINTENANCE_ADDR)
-            self._mp_executor_mng = MPExecutorMng(self, self.EXECUTOR_COUNT, self._config)
-            self._operator_resource_mng = OperatorResourceMng(self._config)
+            self._mp_executor_mng = MPExecutorMng(self._config, self, self.EXECUTOR_COUNT)
+            self._op_res_mng = OpResMng(self._config)
             self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
-            self._mempool = MemPool(self._config, self._operator_resource_mng, self._mp_executor_mng)
+            self._mempool = MemPool(self._config, self._op_res_mng, self._mp_executor_mng)
             self._replicator = MemPoolReplicator(self._mempool)
             self.event_loop.run_forever()
-        except Exception as err:
-            self.error(f"Failed to run mempool_service: {err}")
+        except BaseException as exc:
+            self.error('Failed to run mempool_service.', exc_info=exc)
 
-    def on_resource_released(self, resource_id: int):
-        self._mempool.on_resource_got_available(resource_id)
+    def on_executor_released(self, executor_id: int):
+        self._mempool.on_executor_got_available(executor_id)

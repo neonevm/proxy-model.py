@@ -1,20 +1,19 @@
-import os, subprocess, unittest
+import unittest
 from web3 import Web3
-from solana.publickey import PublicKey
 from solcx import compile_source
-from solana.rpc.api import Client
-from solana.rpc.commitment import Confirmed
+from solana.rpc.commitment import Commitment
 from .solana_utils import *
 
+from proxy.common_neon.config import Config
 from proxy.testing.testing_helpers import request_airdrop
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
-solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
-evm_loader_id = PublicKey(os.environ.get("EVM_LOADER"))
 # evm_loader_id = PublicKey("qRuSs83NqmYLuUtF1WRcJ6cffqgMcusi8kr3Efchv7h")
 neon_cli_timeout = float(os.environ.get("NEON_CLI_TIMEOUT", "0.5"))
 
 proxy = Web3(Web3.HTTPProvider(proxy_url))
+
+Confirmed = Commitment('confirmed')
 
 CONTRACT = '''
 pragma solidity >=0.5.12;
@@ -34,13 +33,14 @@ contract Increase_storage {
 }
 '''
 
+
 class neon_cli:
     def call(self, *args):
         try:
             cmd = ["neon-cli",
                    "--commitment=recent",
                    "--url", solana_url,
-                   "--evm_loader={}".format(evm_loader_id),
+                   "--evm_loader={}".format(str(Config().evm_loader_id)),
                    ] + list(args)
             print(cmd)
             return subprocess.check_output(cmd, timeout=neon_cli_timeout, universal_newlines=True)
@@ -49,7 +49,8 @@ class neon_cli:
             print("ERR: neon-cli error {}".format(err))
             raise
 
-class transacton_cost(unittest.TestCase):
+
+class TransactonCost(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         print("\n\nhttps://app.zenhub.com/workspaces/solana-evm-6007c75a9dc141001100ccb8/issues/neonlabsorg/proxy-model.py/245")
@@ -57,7 +58,7 @@ class transacton_cost(unittest.TestCase):
         print('account.address:', self.account.address)
         request_airdrop(self.account.address)
 
-        self.client = Client(solana_url)
+        self.client = Client(Config().solana_url)
         wallet = WalletAccount(wallet_path())
         self.acc = wallet.get_acc()
 

@@ -4,10 +4,13 @@ from ..common_neon.solana_neon_tx_receipt import SolTxCostInfo
 
 from ..indexer.base_db import BaseDB
 
+
 class SolTxCostsDB(BaseDB):
     def __init__(self):
-        super().__init__('solana_transaction_costs')
-        self._column_list = ['sol_sig', 'block_slot', 'operator', 'sol_spent']
+        super().__init__(
+            table_name='solana_transaction_costs',
+            column_list=['sol_sig', 'block_slot', 'operator', 'sol_spent']
+        )
 
     def set_cost_list(self, cursor: BaseDB.Cursor, iter_sol_tx_cost: Iterator[SolTxCostInfo]) -> None:
         value_list_list: List[List[Any]] = []

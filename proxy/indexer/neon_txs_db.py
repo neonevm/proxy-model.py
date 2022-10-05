@@ -8,31 +8,40 @@ from ..indexer.base_db import BaseDB
 
 class NeonTxsDB(BaseDB):
     def __init__(self):
-        super().__init__('neon_transactions')
-        self._column_list = [
-            'neon_sig', 'from_addr', 'sol_sig', 'sol_ix_idx', 'sol_ix_inner_idx', 'block_slot',
-            'tx_idx', 'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value',
-            'calldata', 'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs'
-        ]
+        super().__init__(
+            table_name='neon_transactions',
+            column_list=[
+                'neon_sig', 'from_addr', 'sol_sig', 'sol_ix_idx', 'sol_ix_inner_idx', 'block_slot',
+                'tx_idx', 'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value',
+                'calldata', 'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs'
+            ]
+        )
 
     def _tx_from_value(self, value_list: Optional[List[Any]]) -> Optional[NeonTxReceiptInfo]:
         if not value_list:
             return None
 
-        neon_tx = NeonTxInfo()
+        neon_tx = NeonTxInfo(
+            addr=self._get_column_value('from_addr', value_list),
+            sig=self._get_column_value('neon_sig', value_list),
+            nonce=self._get_column_value('nonce', value_list),
+            gas_price=self._get_column_value('gas_price', value_list),
+            gas_limit=self._get_column_value('gas_limit', value_list),
+            to_addr=self._get_column_value('to_addr', value_list),
+            contract=self._get_column_value('contract', value_list),
+            value=self._get_column_value('value', value_list),
+            calldata=self._get_column_value('calldata', value_list),
+            v=self._get_column_value('v', value_list),
+            r=self._get_column_value('r', value_list),
+            s=self._get_column_value('s', value_list)
+        )
         neon_tx_res = NeonTxResultInfo()
 
         for idx, column in enumerate(self._column_list):
-            if column == 'neon_sig':
-                neon_tx._sig = value_list[idx]
-            elif column == 'from_addr':
-                neon_tx._addr = value_list[idx]
-            elif column == 'logs':
+            if column == 'logs':
                 neon_tx_res.log_list = self._decode_list(value_list[idx])
             elif column == 'block_slot':
                 neon_tx_res._block_slot = value_list[idx]
-            elif hasattr(neon_tx, column):
-                setattr(neon_tx, '_' + column, value_list[idx])
             elif hasattr(neon_tx_res, column):
                 setattr(neon_tx_res, '_' + column, value_list[idx])
             else:
