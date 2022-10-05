@@ -72,6 +72,10 @@ class ElfParams:
     def denial_token_addr(self) -> str:
         return self._elf_param_dict.get("NEON_PERMISSION_DENIAL_TOKEN", '')
 
+    @property
+    def storage_entries_in_contract_account(self) -> int:
+        return int(self._elf_param_dict.get("NEON_STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT", 0))
+
     def has_params(self) -> bool:
         return len(self._elf_param_dict) > 0
 
