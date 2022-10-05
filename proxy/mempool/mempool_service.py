@@ -8,7 +8,6 @@ from neon_py.maintenance_api import MaintenanceRequest, MaintenanceCommand, Repl
 from neon_py.data import Result
 
 from ..common_neon.config import Config
-from ..common_neon.errors import log_error
 
 from .mempool import MemPool
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
@@ -48,15 +47,12 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             elif issubclass(type(mp_request), (MaintenanceRequest,)):
                 return self.process_maintenance_request(cast(MaintenanceRequest, mp_request))
             self.error(f"Failed to process mp_request, unknown type: {type(mp_request)}")
-        except Exception as err:
+        except BaseException as exc:
             with logging_context(req_id=mp_request.req_id):
-                self._on_exception(f"Failed to process maintenance request: {mp_request.command}", err)
+                self.error(f"Failed to process maintenance request: {mp_request.command}.", exc_info=exc)
                 return Result("Request failed")
 
         return Result("Unexpected problem")
-
-    def _on_exception(self, text: str, err: BaseException) -> None:
-        log_error(self, text, err)
 
     async def process_mp_request(self, mp_request: MPRequest) -> Any:
         if mp_request.type == MPRequestType.SendTransaction:
@@ -101,8 +97,8 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             self._mempool = MemPool(self._config, self._op_res_mng, self._mp_executor_mng)
             self._replicator = MemPoolReplicator(self._mempool)
             self.event_loop.run_forever()
-        except Exception as err:
-            self.error(f"Failed to run mempool_service: {err}")
+        except BaseException as exc:
+            self.error('Failed to run mempool_service.', exc_info=exc)
 
     def on_executor_released(self, executor_id: int):
         self._mempool.on_executor_got_available(executor_id)

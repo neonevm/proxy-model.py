@@ -5,7 +5,6 @@ from logged_groups import logged_group
 from typing import List, Union, Dict, Any, Optional
 
 from ..common_neon.solana_transaction import SolPubKey
-from ..common_neon.errors import log_error
 from ..common_neon.constants import SYS_PROGRAM_ID
 from ..common_neon.solana_interactor import SolInteractor
 
@@ -191,8 +190,8 @@ class PythNetworkClient:
                 symbol = product['attrs']['symbol']
                 self.info(f'Product account {acct_addr}: {symbol}')
                 self.price_accounts[symbol] = product['price_acc']
-            except BaseException as err:
-                log_error(self, f'Failed to parse product account data {acct_addr}. ', err)
+            except BaseException as exc:
+                self.error(f'Failed to parse product account data {acct_addr}.', exc_info=exc)
         self.info('Pyth.Network update finished.\n\n\n')
 
     def get_price(self, symbol: str) -> Optional[Dict[str, Any]]:

@@ -88,7 +88,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     def __init__(self, ctx: NeonTxSendCtx) -> None:
         super().__init__(ctx)
         self._uniq_idx = 0
-        self._evm_step_cnt = ctx.config.evm_step_cnt_limit
+        self._evm_step_cnt = self._start_evm_step_cnt
         self._prep_stage_list.append(CreateAccountNeonTxPrepStage(ctx))
 
     def _validate(self) -> bool:
@@ -101,12 +101,8 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return self._build_cancel_tx()
 
     def decrease_evm_step_cnt(self) -> bool:
-        if self._bpf_cycle_cnt is not None:
-            return False
-
         if self._evm_step_cnt == 10:
-            self._bpf_cycle_cnt = 1_400_000
-            self.debug(f'Increase BPF cycles to {self._bpf_cycle_cnt}')
+            return False
 
         prev_evm_step_cnt = self._evm_step_cnt
         if self._evm_step_cnt > 170:
@@ -114,6 +110,11 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         else:
             self._evm_step_cnt = 10
         self.debug(f'Decrease EVM steps from {prev_evm_step_cnt} to {self._evm_step_cnt}')
+
+        if (self._evm_step_cnt < self._base_evm_step_cnt) and (self._bpf_cycle_cnt is None):
+            self._bpf_cycle_cnt = 1_400_000
+            self.debug(f'Increase BPF cycles to {self._bpf_cycle_cnt}.')
+
         return True
 
     def _build_tx(self) -> SolLegacyTx:
@@ -124,7 +125,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
     def build_tx_list(self, total_evm_step_cnt: int) -> List[SolTx]:
         if total_evm_step_cnt == 0:
-            total_evm_step_cnt = self._ctx.config.evm_step_cnt_limit
+            total_evm_step_cnt = self._start_evm_step_cnt
             self._evm_step_cnt = total_evm_step_cnt
             self._bpf_cycle_cnt = None
 

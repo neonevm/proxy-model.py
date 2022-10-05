@@ -5,6 +5,7 @@ from typing import Optional, List, cast
 
 from ..common_neon.solana_transaction import SolLegacyTx, SolTx, SolBlockhash
 from ..common_neon.solana_tx_list_sender import SolTxListSender
+from ..common_neon.elf_params import ElfParams
 from ..common_neon.utils import NeonTxResultInfo
 
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
@@ -33,6 +34,8 @@ class BaseNeonTxStrategy(abc.ABC):
         self._validation_error_msg: Optional[str] = None
         self._prep_stage_list: List[BaseNeonTxPrepStage] = []
         self._ctx = ctx
+        self._base_evm_step_cnt = ElfParams().neon_evm_steps
+        self._start_evm_step_cnt = int(self._base_evm_step_cnt * (ctx.config.evm_step_cnt_inc_pct + 1))
 
     @property
     def ctx(self) -> NeonTxSendCtx:
@@ -78,7 +81,7 @@ class BaseNeonTxStrategy(abc.ABC):
         if self._ctx.neon_tx.hasChainId():
             return True
 
-        self._validation_error_msg = "Transaction without chain-id"
+        self._validation_error_msg = 'Transaction without chain-id'
         return False
 
     def prep_before_emulate(self) -> bool:

@@ -30,8 +30,8 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
         except BadResourceError as e:
             self.debug(f"Failed to execute tx {mp_tx_req.sig}, got bad resource error {str(e)}")
             return MPTxExecResult(MPTxExecResultCode.BadResource, neon_tx_exec_cfg)
-        except Exception as err:
-            self._on_exception(f"Failed to execute tx {mp_tx_req.sig}.", err)
+        except BaseException as exc:
+            self.error(f'Failed to execute tx {mp_tx_req.sig}.', exc_info=exc)
             return MPTxExecResult(MPTxExecResultCode.Unspecified, neon_tx_exec_cfg)
         return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)
 

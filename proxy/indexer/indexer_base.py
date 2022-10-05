@@ -1,7 +1,6 @@
 import time
 from logged_groups import logged_group
 
-from ..common_neon.errors import log_error
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 
@@ -56,8 +55,8 @@ class IndexerBase:
         while True:
             try:
                 self.process_functions()
-            except BaseException as err:
-                log_error(self, 'Exception on transactions processing. ', err)
+            except BaseException as exc:
+                self.debug('Exception on transactions processing.', exc_info=exc)
             time.sleep(0.05)
 
     def process_functions(self) -> None:

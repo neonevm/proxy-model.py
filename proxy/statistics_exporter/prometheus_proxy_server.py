@@ -10,7 +10,6 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.config import Config
 from ..common_neon.gas_price_calculator import GasPriceCalculator
-from ..common_neon.errors import log_error
 
 from .prometheus_proxy_exporter import PrometheusExporter
 
@@ -60,8 +59,8 @@ class PrometheusProxyServer:
             try:
                 self._stat_gas_price()
                 self._stat_operator_balance()
-            except Exception as err:
-                log_error(self, 'Exception on transactions processing. ', err)
+            except BaseException as exc:
+                self.error('Exception on transactions processing.', exc_info=exc)
 
     def _stat_operator_balance(self):
         sol_balances = self._solana.get_sol_balance_list(self._sol_accounts)

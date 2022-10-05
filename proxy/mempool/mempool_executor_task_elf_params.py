@@ -11,6 +11,6 @@ class MPExecutorElfParamsTask(MPExecutorBaseTask):
             elf_params = ElfParams()
             elf_params.read_elf_param_dict_from_net()
             return elf_params.elf_param_dict
-        except Exception as e:
-            self._on_exception('Fail to read elf params', e)
+        except BaseException as exc:
+            self.error('Failed to read elf params.', exc_info=exc)
             return None

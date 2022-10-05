@@ -13,6 +13,14 @@ from ..mempool.mempool_executor_task_base import MPExecutorBaseTask
 
 
 class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._auth_offset = 0
+        for sc in ACCOUNT_LOOKUP_TABLE_LAYOUT.subcons:
+            if sc.name == 'authority':
+                break
+            self._auth_offset += sc.sizeof()
+
     def _get_block_height(self) -> int:
         return self._solana.get_block_height(commitment=self._config.finalized_commitment)
 
@@ -26,7 +34,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
                 program=ADDRESS_LOOKUP_TABLE_ID,
                 offset=0,
                 length=ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof(),
-                data_offset=ACCOUNT_LOOKUP_TABLE_LAYOUT.authority.offset,
+                data_offset=self._auth_offset,
                 data=bytes(operator_account.public_key())
             )
 
@@ -43,16 +51,16 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
                     )
 
                     mp_alt_info = MPALTInfo(
-                        expanded_slot=alt_info.last_extended_slot,
-                        deactivated_slot=alt_info.deactivation_slot,
+                        last_extended_slot=alt_info.last_extended_slot,
+                        deactivation_slot=alt_info.deactivation_slot,
                         block_height=block_height,
                         table_account=str(account_info.address),
                         operator_key=operator_key
                     )
 
                     alt_info_list.append(mp_alt_info)
-                except BaseException as e:
-                    self._on_exception(f'Cannot decode ALT', e)
+                except BaseException as exc:
+                    self.error('Cannot decode ALT.', exc_info=exc)
 
         block_height = self._get_block_height()
         return MPALTListResult(block_height=block_height, alt_info_list=alt_info_list)
@@ -66,8 +74,8 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             tx_sender = SolTxListSender(self._config, self._solana, cast(SolAccount, signer))
             try:
                 tx_sender.send(tx_list)
-            except BaseException as e:
-                self._on_exception('fail to execute', e)
+            except BaseException as exc:
+                self.debug('Failed to execute.', exc_info=exc)
             tx_list.clear()
 
         tx_list: List[SolTx] = []
@@ -93,7 +101,6 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             tx_list.append(SolWrappedTx(name=name, tx=tx))
 
         _send_tx_list()
-
         block_height = self._get_block_height()
         return MPALTListResult(block_height=block_height, alt_info_list=alt_info_list)
 

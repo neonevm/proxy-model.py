@@ -158,14 +158,14 @@ class MPGetALTList(MPRequest):
 
 @dataclass
 class MPALTInfo:
-    expanded_slot: int
-    deactivated_slot: Optional[int]
+    last_extended_slot: int
+    deactivation_slot: Optional[int]
     block_height: int
     table_account: str
     operator_key: str
 
     def is_deactivated(self) -> bool:
-        return self.deactivated_slot is not None
+        return self.deactivation_slot is not None
 
 
 @dataclass

@@ -15,7 +15,7 @@ from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_transaction import SolPubKey, SolAccount, SolWrappedTx
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.errors import BadResourceError, log_error
+from ..common_neon.errors import BadResourceError
 
 from .neon_tx_stages import NeonTxStage
 from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
@@ -86,9 +86,9 @@ class OpResInit:
             self._create_ether_account(builder, resource)
         except BadResourceError:
             raise
-        except BaseException as err:
-            log_error(self, f"Fail to init accounts for resource {resource}", err)
-            raise BadResourceError(err)
+        except BaseException as exc:
+            self.error(f'Fail to init accounts for resource {resource}.', exc_info=exc)
+            raise BadResourceError(exc)
 
     def _validate_operator_balance(self, resource: OpResInfo) -> None:
         # Validate operator's account has enough SOLs

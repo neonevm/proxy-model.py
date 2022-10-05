@@ -8,7 +8,6 @@ from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.solana_alt import ALTInfo
 from ..common_neon.solana_alt_builder import ALTTxBuilder, ALTTxSet
 from ..common_neon.config import Config
-from ..common_neon.errors import log_error
 
 
 class CancelTxExecutor:
@@ -77,8 +76,8 @@ class CancelTxExecutor:
 
         try:
             tx_sender.send(tx_list)
-        except BaseException as err:
-            log_error(self, 'Fail to cancel tx.', err)
+        except BaseException as exc:
+            self.warning('Failed to cancel tx', exc_info=exc)
 
     def clear(self) -> None:
         self._alt_info_list.clear()

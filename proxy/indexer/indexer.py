@@ -67,8 +67,8 @@ class Indexer(IndexerBase):
 
         try:
             self._cancel_tx_executor.execute_tx_list()
-        except Exception as err:
-            self.error(f'Fail to cancel neon txs: {str(err)}')
+        except BaseException as exc:
+            self.warning('Failed to cancel neon txs.', exc_info=exc)
         finally:
             self._cancel_tx_executor.clear()
 

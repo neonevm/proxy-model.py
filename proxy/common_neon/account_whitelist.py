@@ -6,7 +6,6 @@ from ..common_neon.address import EthereumAddress
 from ..common_neon.permission_token import PermissionToken
 from ..common_neon.solana_transaction import SolPubKey, SolAccount
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.errors import log_error
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 
@@ -55,8 +54,8 @@ class AccountWhitelist:
             self.allowance_token.mint_to(to_mint, ether_addr, self.mint_authority_file, signer)
             self.info(f'Permissions granted to {ether_addr}')
             return True
-        except Exception as err:
-            self.error(f'Failed to grant permissions to {ether_addr}: {type(err)}: {err}')
+        except BaseException as exc:
+            self.error(f'Failed to grant permissions to {ether_addr}', exc_info=exc)
             return False
 
     def deprive_permissions(self, ether_addr: Union[str, EthereumAddress], min_balance: int, signer: SolAccount):
@@ -70,8 +69,8 @@ class AccountWhitelist:
             self.denial_token.mint_to(to_mint, ether_addr, self.mint_authority_file, signer)
             self.info(f'Permissions deprived to {ether_addr}')
             return True
-        except BaseException as err:
-            log_error(self, f'Failed to grant permissions to {ether_addr}', err)
+        except BaseException as exc:
+            self.error(f'Failed to grant permissions to {ether_addr}', exc_info=exc)
             return False
 
     def grant_client_permissions(self, ether_addr: Union[str, EthereumAddress], signer: SolAccount):
@@ -107,8 +106,8 @@ class AccountWhitelist:
                 'diff': diff
             }
             return diff >= min_balance
-        except BaseException as err:
-            log_error(self, f'Failed to read permissions for {ether_addr}', err)
+        except BaseException as exc:
+            self.error(f'Failed to read permissions for {ether_addr}', exc_info=exc)
 
     def has_client_permission(self, ether_addr: Union[str, EthereumAddress]):
         return self.has_permission(ether_addr, ElfParams().neon_minimal_client_allowance_balance)

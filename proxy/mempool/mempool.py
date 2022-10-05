@@ -9,7 +9,6 @@ from ..common_neon.eth_proto import NeonTx
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.errors import log_error
 
 from .operator_resource_mng import OpResMng
 
@@ -62,9 +61,6 @@ class MemPool:
         tx_request = cast(MPTxRequest, mp_request)
         return await self.schedule_mp_tx_request(tx_request)
 
-    def _on_exception(self, text: str, err: BaseException) -> None:
-        log_error(self, text, err)
-
     async def schedule_mp_tx_request(self, tx: MPTxRequest) -> MPTxSendResult:
         with logging_context(req_id=tx.req_id):
             try:
@@ -78,8 +74,8 @@ class MemPool:
                 result: MPTxSendResult = self._tx_schedule.add_tx(tx)
                 self.debug(f"Got tx {tx.sig} and scheduled request")
                 return result
-            except Exception as err:
-                self._on_exception(f"Failed to schedule tx {tx.sig}", err)
+            except BaseException as exc:
+                self.error(f"Failed to schedule tx {tx.sig}.", exc_info=exc)
                 return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
             finally:
                 await self._kick_tx_schedule()
@@ -115,8 +111,8 @@ class MemPool:
                     return False
 
             tx = self._tx_schedule.acquire_tx()
-        except Exception as err:
-            self._on_exception(f'Failed to get tx for execution', err)
+        except BaseException as exc:
+            self.error('Failed to get tx for execution.', exc_info=exc)
             return False
 
         with logging_context(req_id=tx.req_id):
@@ -127,8 +123,8 @@ class MemPool:
                 mp_task = self._executor.submit_mp_request(tx)
                 self._processing_task_list.append(mp_task)
                 return True
-            except Exception as err:
-                self._on_exception(f'Failed to enqueue to execute {tx.sig}', err)
+            except BaseException as exc:
+                self.error(f'Failed to enqueue to execute {tx.sig}.', exc_info=exc)
                 return False
 
     async def _process_tx_schedule_loop(self):
@@ -165,22 +161,22 @@ class MemPool:
             if mp_task.mp_request.type != MPRequestType.SendTransaction:
                 self.error(f"Got unexpected request: {mp_task.mp_request}")
                 return True  # skip task
-        except Exception as err:
-            self._on_exception(f"Exception on checking type of request.", err)
+        except BaseException as exc:
+            self.error('Exception on checking type of request.', exc_info=exc)
             return True
 
         tx = cast(MPTxRequest, mp_task.mp_request)
         try:
-            err = mp_task.aio_task.exception()
-            if err is not None:
-                self._on_exception(f'Exception during processing tx {tx.sig} on executor', err)
+            exc = mp_task.aio_task.exception()
+            if exc is not None:
+                self.error(f'Exception during processing tx {tx.sig} on executor.', exc_info=exc)
                 self._on_fail_tx(tx)
                 return True
 
             mp_result = mp_task.aio_task.result()
             self._process_mp_tx_result(tx, mp_result)
-        except Exception as err:
-            self._on_exception(f"Exception on the result processing of tx {tx.sig}", err)
+        except BaseException as exc:
+            self.error(f'Exception on the result processing of tx {tx.sig}.', exc_info=exc)
         return True
 
     def _process_mp_tx_result(self, tx: MPTxRequest, mp_result: Any):
@@ -222,8 +218,8 @@ class MemPool:
             try:
                 self._op_res_mng.update_resource(tx.sig)
                 self._tx_schedule.reschedule_tx(tx)
-            except Exception as err:
-                self._on_exception(f'Exception on the result processing of tx {tx.sig}', err)
+            except BaseException as exc:
+                self.error(f'Exception on the result processing of tx {tx.sig}.', exc_info=exc)
                 return
 
     def _on_bad_resource(self, tx: MPTxRequest):

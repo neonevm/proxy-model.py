@@ -28,6 +28,10 @@ class ElfParams:
         return int(self._elf_param_dict.get("NEON_COMPUTE_UNITS"))
 
     @property
+    def neon_evm_steps(self) -> int:
+        return 500
+
+    @property
     def neon_additional_fee(self):
         return int(self._elf_param_dict.get("NEON_ADDITIONAL_FEE"))
 
@@ -81,8 +85,8 @@ class ElfParams:
             major_evm_version, minor_evm_version, _ = evm_version.split('.')
             major_proxy_version, minor_proxy_version, _ = proxy_version.split('.')
             return (major_evm_version == major_proxy_version) and (minor_evm_version == minor_proxy_version)
-        except Exception as e:
-            self.error(f"can't compare evm version {evm_version} with proxy version {proxy_version}: {str(e)}")
+        except BaseException as exc:
+            self.error(f'Cannot compare evm version {evm_version} with proxy version {proxy_version}.', exc_info=exc)
             return False
 
     @property

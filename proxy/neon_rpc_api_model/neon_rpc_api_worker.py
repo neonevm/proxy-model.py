@@ -12,7 +12,7 @@ from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
 from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
-from ..common_neon.errors import EthereumError, InvalidParamError, log_error
+from ..common_neon.errors import EthereumError, InvalidParamError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.keys_storage import KeyStorage
@@ -109,8 +109,8 @@ class NeonRpcApiWorker:
 
         except EthereumError:
             raise
-        except BaseException as err:
-            log_error(self, "Exception on eth_estimateGas. ", err)
+        except BaseException as exc:
+            self.debug(f"Exception on eth_estimateGas: {str(exc)}")
             raise
 
     def __repr__(self):
@@ -373,7 +373,7 @@ class NeonRpcApiWorker:
         except EthereumError:
             raise
         except Exception as err:
-            self.error(f"eth_call Exception {err}")
+            self.debug(f'eth_call Exception {err}.')
             raise
 
     def eth_getTransactionCount(self, account: str, tag: Union[str, int]) -> str:
@@ -528,8 +528,8 @@ class NeonRpcApiWorker:
             self._stat_tx_failed()
             raise
 
-        except Exception as err:
-            self.error(f"Failed to process eth_sendRawTransaction, Error: {err}")
+        except BaseException as exc:
+            self.error('Failed to process eth_sendRawTransaction.', exc_info=exc)
             self._stat_tx_failed()
             raise
 
@@ -649,8 +649,8 @@ class NeonRpcApiWorker:
                 'raw': raw_tx,
                 'tx': tx
             }
-        except BaseException as e:
-            log_error(self, "Exception. ", e)
+        except BaseException as exc:
+            self.error('Failed on sign transaction.', exc_info=exc)
             raise InvalidParamError(message='bad transaction')
 
     def eth_sendTransaction(self, tx: Dict[str, Any]) -> str:

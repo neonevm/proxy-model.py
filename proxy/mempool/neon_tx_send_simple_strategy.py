@@ -61,8 +61,15 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     def _validate(self) -> bool:
         return (
             self._validate_notdeploy_tx() and
-            self._validate_tx_has_chainid()
+            self._validate_tx_has_chainid() and
+            self._validate_evm_step_cnt()
         )
+
+    def _validate_evm_step_cnt(self) -> bool:
+        if self._ctx.emulated_evm_step_cnt < self._start_evm_step:
+            return True
+        self._validation_error = 'Too lot of EVM steps'
+        return False
 
     def _build_tx(self) -> SolLegacyTx:
         return BaseNeonTxStrategy._build_tx(self).add(

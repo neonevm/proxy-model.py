@@ -48,8 +48,3 @@ class NoMoreRetriesError(Exception):
 
 class BudgetExceededError(Exception):
     pass
-
-
-def log_error(logger, text: str, err: BaseException):
-    err_tb = "".join(traceback.format_tb(err.__traceback__))
-    logger.error(f"{text}. ErrorType: {type(err)}, Error: {err}, Traceback: {err_tb}")

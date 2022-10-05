@@ -54,8 +54,8 @@ class MemPoolClient:
         try:
             self.debug(f"Connect MemPool: {self._address}")
             self._pickable_data_client = AddrPickableDataClient(self._address)
-        except Exception as err:
-            self.error(f"Failed to connect MemPool: {self._address}, error: {err}")
+        except BaseException as exc:
+            self.error(f'Failed to connect MemPool: {self._address}.', exc_info=exc)
             self._is_connecting.clear()
             self._reconnect_mp()
         finally:

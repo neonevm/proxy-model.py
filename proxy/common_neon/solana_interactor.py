@@ -8,13 +8,12 @@ import time
 import requests
 import itertools
 import json
+import dataclasses
 
 from solana.rpc.types import RPCResponse
 
 from logged_groups import logged_group
 from typing import Dict, Union, Any, List, Optional, Tuple, cast
-from base58 import b58decode, b58encode
-from dataclasses import dataclass
 
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.solana_transaction import SolTx, SolBlockhash, SolPubKey
@@ -26,11 +25,11 @@ from ..common_neon.constants import CONTRACT_ACCOUNT_TAG, NEON_ACCOUNT_TAG, LOOK
 from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.address import EthereumAddress, ether2program
-from ..common_neon.errors import SolanaUnavailableError, log_error
+from ..common_neon.errors import SolanaUnavailableError
 from ..common_neon.config import Config
 
 
-@dataclass
+@dataclasses.dataclass
 class AccountInfo:
     address: SolPubKey
     tag: int
@@ -39,7 +38,7 @@ class AccountInfo:
     data: bytes
 
 
-@dataclass
+@dataclasses.dataclass
 class NeonAccountInfo:
     pda_address: SolPubKey
     ether: str
@@ -78,7 +77,7 @@ class NeonAccountInfo:
         )
 
 
-@dataclass
+@dataclasses.dataclass
 class NeonCodeInfo:
     pda_address: SolPubKey
     owner: SolPubKey
@@ -112,7 +111,7 @@ class NeonCodeInfo:
         )
 
 
-@dataclass
+@dataclasses.dataclass
 class HolderAccountInfo:
     holder_account: SolPubKey
     tag: int
@@ -225,11 +224,11 @@ class HolderAccountInfo:
         )
 
 
-@dataclass
+@dataclasses.dataclass
 class ALTAccountInfo:
     type: int
     table_account: SolPubKey
-    deactivation_slot: int
+    deactivation_slot: Optional[int]
     last_extended_slot: int
     last_extended_slot_start_index: int
     authority: Optional[SolPubKey]
@@ -260,10 +259,12 @@ class ALTAccountInfo:
 
         authority = SolPubKey(lookup.authority) if lookup.has_authority else None
 
+        u64_max = pow(2, 64) - 1
+
         return ALTAccountInfo(
             type=lookup.type,
             table_account=info.address,
-            deactivation_slot=lookup.deactivation_slot,
+            deactivation_slot=None if lookup.deactivation_slot == u64_max else lookup.deactivation_slot,
             last_extended_slot=lookup.last_extended_slot,
             last_extended_slot_start_index=lookup.last_extended_slot_start_index,
             authority=authority,
@@ -271,7 +272,7 @@ class ALTAccountInfo:
         )
 
 
-@dataclass
+@dataclasses.dataclass
 class SolSendResult:
     error: Dict[str, Any]
     result: Optional[str]
@@ -301,9 +302,9 @@ class SolInteractor:
                 raw_response.raise_for_status()
                 return raw_response
 
-            except requests.exceptions.RequestException as err:
+            except requests.exceptions.RequestException as exc:
                 # Hide the Solana URL
-                str_err = str(err).replace(self._endpoint_uri, 'XXXXX')
+                str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
 
                 if retry <= self._config.retry_on_fail:
                     self.debug(
@@ -313,11 +314,12 @@ class SolInteractor:
                     time.sleep(1)
                     continue
 
-                log_error(self, f'Connection exception on send request to Solana. Retry {retry}', err)
+                self.warning(f'Connection exception on send request to Solana. Retry {retry}: {str_err}.')
                 raise SolanaUnavailableError(str_err)
 
-            except BaseException as err:
-                log_error(self, 'Unknown exception on send request to Solana', err)
+            except BaseException as exc:
+                str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
+                self.error(f'Unknown exception on send request to Solana: {str_err}.')
                 raise
 
     def _send_rpc_request(self, method: str, *params: Any) -> RPCResponse:
@@ -728,16 +730,16 @@ class SolInteractor:
             if isinstance(raw_result, dict):
                 self.debug(f'Got strange result on transaction execution: {json.dumps(raw_result)}')
             elif isinstance(raw_result, str):
-                result = b58encode(b58decode(raw_result)).decode("utf-8")
+                result = base58.b58encode(base58.b58decode(raw_result)).decode("utf-8")
             elif isinstance(raw_result, bytes):
-                result = b58encode(raw_result).decode("utf-8")
+                result = base58.b58encode(raw_result).decode("utf-8")
             elif raw_result is not None:
                 self.debug(f'Got strange result on transaction execution: {str(raw_result)}')
 
             error = response.get('error')
             if error:
                 if SolTxErrorParser(error).check_if_already_processed():
-                    result = b58encode(tx.signature()).decode("utf-8")
+                    result = base58.b58encode(tx.signature()).decode("utf-8")
                     self.debug(f'Transaction is already processed: {str(result)}')
                     error = None
                 else:

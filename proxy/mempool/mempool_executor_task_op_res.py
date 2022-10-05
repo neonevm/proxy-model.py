@@ -12,6 +12,6 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
         try:
             OpResInit(self._config, self._solana).init_resource(resource)
             return MPOpResInitResult(code=MPOpResInitResultCode.Success)
-        except Exception as err:
-            self._on_exception(f"Failed to init operator resource tx {resource}.", err)
+        except BaseException as exc:
+            self.error(f'Failed to init operator resource tx {resource}.', exc_info=exc)
             return MPOpResInitResult(code=MPOpResInitResultCode.Failed)

@@ -5,6 +5,7 @@ from logged_groups import logged_group
 from typing import Optional
 
 from ..indexer.pythnetwork import PythNetworkClient
+
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
 
@@ -69,8 +70,8 @@ class GasPriceCalculator:
             self._sol_price_usd = Decimal(price['price'])
 
             return (self._sol_price_usd / self._neon_price_usd) * pow(Decimal(10), 9)
-        except Exception as err:
-            self.error(f'Failed to retrieve SOL price: {err}')
+        except BaseException as exc:
+            self.error('Failed to retrieve SOL price.', exc_info=exc)
             return None
 
     @property

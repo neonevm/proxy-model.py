@@ -10,7 +10,6 @@ from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.solana_transaction import SolPubKey
-from ..common_neon.errors import log_error
 
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
@@ -111,8 +110,8 @@ class Airdropper(IndexerBase):
             try:
                 self.pyth_client.update_mapping(self._config.pyth_mapping_account)
                 self.last_update_pyth_mapping = current_time
-            except BaseException as err:
-                log_error(self, f'Failed to update pyth.network mapping account data.', err)
+            except BaseException as exc:
+                self.error('Failed to update pyth.network mapping account data', exc_info=exc)
                 return False
 
         return True
@@ -275,8 +274,8 @@ class Airdropper(IndexerBase):
         if should_reload:
             try:
                 self.recent_price = self.pyth_client.get_price('Crypto.SOL/USD')
-            except BaseException as err:
-                log_error(self, 'Exception occured when reading price ', err)
+            except BaseException as exc:
+                self.error('Exception occurred when reading price', exc_info=exc)
                 return None
 
         return self.recent_price

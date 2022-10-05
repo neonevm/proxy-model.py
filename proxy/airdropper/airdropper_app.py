@@ -29,7 +29,7 @@ class AirdropperApp:
     def run(self) -> int:
         try:
             self._airdropper.run()
-        except Exception as err:
-            self.error(f'Failed to start Airdropper: {err}')
+        except BaseException as exc:
+            self.error('Failed to start Airdropper', exc_info=exc)
             return 1
         return 0

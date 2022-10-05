@@ -19,11 +19,8 @@ class SolanaBlockInfo:
     def __str__(self) -> str:
         return str_fmt_object(self)
 
-    def replace_finalized(self, value: bool) -> SolanaBlockInfo:
-        return dataclasses.replace(self, is_finalized=value)
-
-    def replace_block_hash(self, block_hash: str) -> SolanaBlockInfo:
-        return dataclasses.replace(self, block_hash=block_hash)
+    def replace(self, /, **changes) -> SolanaBlockInfo:
+        return dataclasses.replace(self, **changes)
 
     def is_empty(self) -> bool:
         return self.block_time is None

@@ -460,8 +460,8 @@ class SolNeonIxReceiptInfo:
             self._ix_data = base58.b58decode(self._ix_meta.ix['data'])
             self._program_ix = int(self.ix_data[0])
             return True
-        except Exception as e:
-            self.debug(f'{self} fail to get a program instruction: {e}')
+        except BaseException as exc:
+            self.debug(f'{self} fail to get a program instruction', exc_info=exc)
         return False
 
     @property

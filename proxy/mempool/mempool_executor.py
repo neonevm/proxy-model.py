@@ -54,34 +54,41 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._elf_params_task = MPExecutorElfParamsTask(self._config, self._solana)
         self._state_tx_cnt_task = MPExecutorStateTxCntTask(self._config, self._solana)
         self._exec_neon_tx_task = MPExecutorExecNeonTxTask(self._config, self._solana)
+        self._free_alt_task = MPExecutorFreeALTQueueTask(self._config, self._solana)
 
     async def on_data_received(self, data: Any) -> Any:
         mp_req = cast(MPRequest, data)
         with logging_context(req_id=mp_req.req_id, exectr=self._id):
-            if mp_req.type == MPRequestType.SendTransaction:
-                mp_tx_req = cast(MPTxExecRequest, data)
-                return self._exec_neon_tx_task.execute_neon_tx(mp_tx_req)
-            elif mp_req.type == MPRequestType.GetGasPrice:
-                return self._gas_price_task.calc_gas_price()
-            elif mp_req.type == MPRequestType.GetElfParamDict:
-                return self._elf_params_task.read_elf_param_dict()
-            elif mp_req.type == MPRequestType.GetStateTxCnt:
-                mp_state_req = cast(MPSenderTxCntRequest, data)
-                return self._state_tx_cnt_task.read_state_tx_cnt(mp_state_req)
-            elif mp_req.type == MPRequestType.InitOperatorResource:
-                mp_op_res_req = cast(MPOpResInitRequest, data)
-                return self._op_res_task.init_op_res(mp_op_res_req)
-            elif mp_req.type == MPRequestType.GetALTList:
-                mp_get_req = cast(MPGetALTList, data)
-                return self._free_alt_task.get_alt_list(mp_get_req)
-            elif mp_req.type == MPRequestType.DeactivateALTList:
-                mp_deactivate_req = cast(MPDeactivateALTListRequest, data)
-                return self._free_alt_task.deactivate_alt_list(mp_deactivate_req)
-            elif mp_req.type == MPRequestType.CloseALTList:
-                mp_close_req = cast(MPCloseALTListRequest, data)
-                return self._gas_price_task.close_alt_list(mp_close_req)
-            self.error(f"Failed to process mp_request, unknown type: {mp_req.type}")
+            try:
+                return self._handle_request(mp_req)
+            except BaseException as exc:
+                self.error('Exception during handle request', exc_info=exc)
         return None
+
+    def _handle_request(self, mp_req: MPRequest) -> Any:
+        if mp_req.type == MPRequestType.SendTransaction:
+            mp_tx_req = cast(MPTxExecRequest, mp_req)
+            return self._exec_neon_tx_task.execute_neon_tx(mp_tx_req)
+        elif mp_req.type == MPRequestType.GetGasPrice:
+            return self._gas_price_task.calc_gas_price()
+        elif mp_req.type == MPRequestType.GetElfParamDict:
+            return self._elf_params_task.read_elf_param_dict()
+        elif mp_req.type == MPRequestType.GetStateTxCnt:
+            mp_state_req = cast(MPSenderTxCntRequest, mp_req)
+            return self._state_tx_cnt_task.read_state_tx_cnt(mp_state_req)
+        elif mp_req.type == MPRequestType.InitOperatorResource:
+            mp_op_res_req = cast(MPOpResInitRequest, mp_req)
+            return self._op_res_task.init_op_res(mp_op_res_req)
+        elif mp_req.type == MPRequestType.GetALTList:
+            mp_get_req = cast(MPGetALTList, mp_req)
+            return self._free_alt_task.get_alt_list(mp_get_req)
+        elif mp_req.type == MPRequestType.DeactivateALTList:
+            mp_deactivate_req = cast(MPDeactivateALTListRequest, mp_req)
+            return self._free_alt_task.deactivate_alt_list(mp_deactivate_req)
+        elif mp_req.type == MPRequestType.CloseALTList:
+            mp_close_req = cast(MPCloseALTListRequest, mp_req)
+            return self._free_alt_task.close_alt_list(mp_close_req)
+        self.error(f"Failed to process mp_request, unknown type: {mp_req.type}")
 
     def run(self) -> None:
         self._config = Config()

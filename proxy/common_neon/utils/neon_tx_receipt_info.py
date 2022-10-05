@@ -15,8 +15,5 @@ class NeonTxReceiptInfo:
     def __str__(self) -> str:
         return str_fmt_object(self)
 
-    def replace_neon_tx(self, neon_tx: NeonTxInfo) -> NeonTxReceiptInfo:
-        return dataclasses.replace(self, neon_tx=neon_tx)
-
-    def replace_neon_tx_res(self, neon_tx_res: NeonTxResultInfo) -> NeonTxReceiptInfo:
-        return dataclasses.replace(self, neon_tx_res=neon_tx_res)
+    def replace(self, /, **changes) -> NeonTxReceiptInfo:
+        return dataclasses.replace(self, **changes)

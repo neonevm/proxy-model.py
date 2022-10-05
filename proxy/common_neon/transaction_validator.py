@@ -18,8 +18,8 @@ from ..common_neon.data import NeonTxExecCfg, NeonEmulatedResult
 
 @logged_group("neon.Proxy")
 class NeonTxValidator:
-    MAX_U64 = pow(2, 64)
-    MAX_U256 = pow(2, 256)
+    MAX_U64 = pow(2, 64) - 1
+    MAX_U256 = pow(2, 256) - 1
 
     def __init__(self, config: Config, solana: SolInteractor, tx: NeonTx, min_gas_price: int):
         self._solana = solana
@@ -67,8 +67,8 @@ class NeonTxValidator:
 
             neon_tx_exec_cfg = NeonTxExecCfg().set_emulated_result(emulated_result).set_state_tx_cnt(self._state_tx_cnt)
             return neon_tx_exec_cfg
-        except Exception as e:
-            self.extract_ethereum_error(e)
+        except BaseException as exc:
+            self.extract_ethereum_error(exc)
             raise
 
     def _prevalidate_tx(self):
@@ -86,7 +86,7 @@ class NeonTxValidator:
         self._prevalidate_account_sizes(emulator_json)
         self._prevalidate_account_cnt(emulator_json)
 
-    def extract_ethereum_error(self, e: Exception):
+    def extract_ethereum_error(self, e: BaseException):
         receipt_parser = SolTxErrorParser(e)
         state_tx_cnt, tx_nonce = receipt_parser.get_nonce_error()
         if state_tx_cnt is not None:

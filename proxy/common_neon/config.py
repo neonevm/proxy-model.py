@@ -11,7 +11,7 @@ class Config:
         self._solana_url = SOLANA_URL
         self._pp_solana_url = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
         self._evm_loader_id = SolPubKey(EVM_LOADER_ID)
-        self._evm_step_cnt_limit = self._env_int("EVM_STEP_COUNT", 10, 750)
+        self._evm_step_cnt_inc_pct = self._env_decimal("EVM_STEP_COUNT_INC_PCT", "0.5")
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
         self._holder_size = self._env_int("HOLDER_SIZE", 1024, 131072)  # 128*1024
         self._min_op_balance_to_warn = self._env_int("MIN_OPERATOR_BALANCE_TO_WARN", 9000000000, 9000000000)
@@ -70,8 +70,8 @@ class Config:
         return self._solana_url
 
     @property
-    def evm_step_cnt_limit(self) -> int:
-        return self._evm_step_cnt_limit
+    def evm_step_cnt_inc_pct(self) -> Decimal:
+        return self._evm_step_cnt_inc_pct
 
     @property
     def mempool_capacity(self) -> int:
@@ -214,7 +214,7 @@ class Config:
             f"EVM_LOADER_ID: {self.evm_loader_id},",
             f"PP_SOLANA_URL: {self.pyth_solana_url}",
             f"PYTH_MAPPING_ACCOUNT: {self.pyth_mapping_account}",
-            f"EVM_STEP_LIMIT: {self.evm_step_cnt_limit},",
+            f"EVM_STEP_COUNT_INC_PCT: {self._evm_step_cnt_inc_pct},",
             f"MP_CAPACITY: {self.mempool_capacity}",
             f"HOLDER_SIZE: {self.holder_size}",
             f"MIN_OPERATOR_BALANCE_TO_WARN: {self.min_operator_balance_to_warn}",
