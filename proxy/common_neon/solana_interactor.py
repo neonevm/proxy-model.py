@@ -18,11 +18,11 @@ from typing import Dict, Union, Any, List, Optional, Tuple, cast
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.solana_transaction import SolTx, SolBlockhash, SolPubKey
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT
+from ..common_neon.layouts import ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT, FINALIZED_HOLDER_ACCOUNT_INFO_LAYOUT
 from ..common_neon.layouts import HOLDER_ACCOUNT_INFO_LAYOUT
 from ..common_neon.layouts import ACCOUNT_LOOKUP_TABLE_LAYOUT
 from ..common_neon.constants import NEON_ACCOUNT_TAG, LOOKUP_ACCOUNT_TAG
-from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.errors import SolanaUnavailableError
@@ -68,8 +68,8 @@ class NeonAccountInfo:
         code_offset = base_size + storage_size
 
         code = None
-        if cont.code_size > 0 and len(data) >= code_offset:
-            code = '0x' + data[code_offset:][:cont.code_size].hex()
+        if cont.code_size > 0 and len(info.data) >= code_offset:
+            code = '0x' + info.data[code_offset:][:cont.code_size].hex()
 
         return NeonAccountInfo(
             pda_address=info.address,
@@ -104,24 +104,24 @@ class HolderAccountInfo:
     def from_account_info(info: AccountInfo) -> Optional[HolderAccountInfo]:
         if len(info.data) < 1:
             return None
-        if info.tag == ACTIVE_STORAGE_TAG:
-            return HolderAccountInfo._decode_storage_account(info)
-        elif info.tag == FINALIZED_STORAGE_TAG:
-            return HolderAccountInfo._decode_finalized_storage_account(info)
+        if info.tag == ACTIVE_HOLDER_TAG:
+            return HolderAccountInfo._decode_active_holder_account(info)
+        elif info.tag == FINALIZED_HOLDER_TAG:
+            return HolderAccountInfo._decode_finalized_holder_account(info)
         elif info.tag == HOLDER_TAG:
             return HolderAccountInfo._decode_holder_account(info)
         else:
             return None
 
     @staticmethod
-    def _decode_storage_account(info: AccountInfo) -> Optional[HolderAccountInfo]:
-        if len(info.data) < STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
+    def _decode_active_holder_account(info: AccountInfo) -> Optional[HolderAccountInfo]:
+        if len(info.data) < ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT.sizeof():
             return None
 
-        storage = STORAGE_ACCOUNT_INFO_LAYOUT.parse(info.data)
+        storage = ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT.parse(info.data)
 
         account_list: List[Tuple[bool, str]] = []
-        offset = STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()
+        offset = ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT.sizeof()
         for _ in range(storage.account_list_len):
             writable = (info.data[offset] > 0)
             offset += 1
@@ -148,11 +148,11 @@ class HolderAccountInfo:
         )
 
     @staticmethod
-    def _decode_finalized_storage_account(info: AccountInfo) -> Optional[HolderAccountInfo]:
-        if len(info.data) < FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.sizeof():
+    def _decode_finalized_holder_account(info: AccountInfo) -> Optional[HolderAccountInfo]:
+        if len(info.data) < FINALIZED_HOLDER_ACCOUNT_INFO_LAYOUT.sizeof():
             return None
 
-        storage = FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.parse(info.data)
+        storage = FINALIZED_HOLDER_ACCOUNT_INFO_LAYOUT.parse(info.data)
 
         return HolderAccountInfo(
             holder_account=info.address,
@@ -388,7 +388,7 @@ class SolInteractor:
         owner = SolPubKey(raw_account.get('owner', None))
         return AccountInfo(address, account_tag, lamports, owner, data)
 
-    def get_account_info(self, pubkey: PublicKey, length=None, commitment='processed') -> Optional[AccountInfo]:
+    def get_account_info(self, pubkey: SolPubKey, length=None, commitment='processed') -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,

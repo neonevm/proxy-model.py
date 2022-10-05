@@ -147,7 +147,7 @@ class ERC20Wrapper:
         eth_accounts = dict()
         for account in emulating_result['accounts']:
             key = account['account']
-            eth_accounts[key] = AccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
+            eth_accounts[key] = SolAccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
 
         for account in emulating_result['solana_accounts']:
             key = account['pubkey']

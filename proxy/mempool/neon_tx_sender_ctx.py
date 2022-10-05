@@ -1,87 +1,20 @@
-from typing import List, Dict, Any
+from typing import Dict
 
 from logged_groups import logged_group
 
-from ..common_neon.solana_transaction import SolTx, SolWrappedTx, SolPubKey, SolAccountMeta, SolAccount
+from ..common_neon.solana_transaction import SolPubKey, SolAccountMeta, SolAccount
 from ..common_neon.data import NeonTxExecCfg, NeonAccountDict, NeonEmulatedResult
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.errors import BadResourceError
-from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
-
-from .neon_tx_stages import NeonTxStage
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
 
 from .operator_resource_mng import OpResInfo
 
 
 @logged_group("neon.MemPool")
-class AccountTxListBuilder:
-    def __init__(self, solana: SolInteractor, ix_builder: NeonIxBuilder):
-        self._solana = solana
-        self._ix_builder = ix_builder
-        self._resize_contract_stage_list: List[NeonTxStage] = []
-        self._create_account_stage_list: List[NeonTxStage] = []
-        self._neon_meta_dict: Dict[str, SolAccountMeta] = {}
-
-    def build_tx_list(self, emulated_account_dict: NeonAccountDict) -> None:
-        self._create_account_stage_list.clear()
-        self._neon_meta_dict.clear()
-
-        # Parse information from the emulator output
-        self._parse_accounts_list(emulated_account_dict['accounts'])
-        self._parse_solana_list(emulated_account_dict['solana_accounts'])
-
-        neon_meta_list = list(self._neon_meta_dict.values())
-        self.debug('metas: ' + ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in neon_meta_list]))
-        self._ix_builder.init_neon_account_list(neon_meta_list)
-
-        # Build all instructions
-        self._build_account_stage_list()
-
-    def _add_meta(self, pubkey: SolPubKey, is_writable: bool) -> None:
-        key = str(pubkey)
-        if key in self._neon_meta_dict:
-            self._neon_meta_dict[key].is_writable |= is_writable
-        else:
-            self._neon_meta_dict[key] = SolAccountMeta(pubkey=pubkey, is_signer=False, is_writable=is_writable)
-
-    def _parse_accounts_list(self, emulated_result_account_list: List[Dict[str, Any]]) -> None:
-        for account_desc in emulated_result_account_list:
-            self._add_meta(account_desc['account'], True)
-
-    def _parse_solana_list(self, emulated_result_solana_account_list: List[Dict[str, Any]]) -> None:
-        for account_desc in emulated_result_solana_account_list:
-            self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
-
-    def _build_account_stage_list(self) -> None:
-        if not self.has_tx_list():
-            return
-
-        all_stage_list = self._create_account_stage_list
-        size_list = list(set([s.size for s in all_stage_list]))
-        balance_list = self._solana.get_multiple_rent_exempt_balances_for_size(size_list)
-        balance_map = {size: balance for size, balance in zip(size_list, balance_list)}
-        for s in all_stage_list:
-            s.set_balance(balance_map[s.size])
-            s.build()
-
-    def has_tx_list(self) -> bool:
-        return len(self._create_account_stage_list) > 0
-
-    def get_tx_list_info(self) -> SolTxListInfo:
-        all_stage_list = self._create_account_stage_list
-
-        return SolTxListInfo(
-            name_list=[s.NAME for s in all_stage_list],
-            tx_list=[s.tx for s in all_stage_list]
-        )
-
-    def clear_tx_list(self) -> None:
-        self._create_account_stage_list.clear()
-
-
 class NeonTxSendCtx:
     def __init__(self, config: Config, solana: SolInteractor, resource: OpResInfo,
                  neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg):
@@ -94,13 +27,13 @@ class NeonTxSendCtx:
         self._solana = solana
         self._resource = resource
         self._ix_builder = NeonIxBuilder(resource.public_key)
-
-        self._account_tx_list_builder = AccountTxListBuilder(solana, self._ix_builder)
-        self._account_tx_list_builder.build_tx_list(self._neon_tx_exec_cfg.account_dict)
+        self._neon_meta_dict: Dict[str, SolAccountMeta] = {}
 
         self._ix_builder.init_operator_neon(self._resource.ether)
         self._ix_builder.init_neon_tx(self._neon_tx)
         self._ix_builder.init_iterative(self._resource.holder)
+
+        self._build_account_list(self._neon_tx_exec_cfg.account_dict)
 
         self._is_holder_completed = False
 
@@ -111,14 +44,14 @@ class NeonTxSendCtx:
         if holder_info is None:
             raise BadResourceError(f'Bad holder account {str(self._resource.holder)}')
 
-        if holder_info.tag == ACTIVE_STORAGE_TAG:
+        if holder_info.tag == ACTIVE_HOLDER_TAG:
             if holder_info.neon_tx_sig != self._neon_sig:
                 raise BadResourceError(
                     f'Holder account {str(self._resource.holder)} '
                     f'has another neon tx: {holder_info.neon_tx_sig}'
                 )
             self._is_holder_completed = True
-        elif holder_info.tag == FINALIZED_STORAGE_TAG:
+        elif holder_info.tag == FINALIZED_HOLDER_TAG:
             pass
         elif holder_info.tag == HOLDER_TAG:
             holder_msg_len = len(self._ix_builder.holder_msg)
@@ -126,9 +59,38 @@ class NeonTxSendCtx:
         else:
             raise BadResourceError(f'Holder account has bad tag: {holder_info.tag}')
 
+    def _add_meta(self, pubkey: SolPubKey, is_writable: bool) -> None:
+        key = str(pubkey)
+        if key in self._neon_meta_dict:
+            self._neon_meta_dict[key].is_writable |= is_writable
+        else:
+            self._neon_meta_dict[key] = SolAccountMeta(pubkey=pubkey, is_signer=False, is_writable=is_writable)
+
+    def _build_account_list(self, emulated_account_dict: NeonAccountDict) -> None:
+        self._neon_meta_dict.clear()
+
+        # Parse information from the emulator output
+        for account_desc in emulated_account_dict['accounts']:
+            self._add_meta(account_desc['account'], True)
+
+        for account_desc in emulated_account_dict['solana_accounts']:
+            self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
+
+        neon_meta_list = list(self._neon_meta_dict.values())
+        self.debug(
+            f'metas ({len(neon_meta_list)}): '
+            ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in neon_meta_list])
+        )
+
+        contract = self._neon_tx.contract()
+        if contract is not None:
+            self.debug(f'contract 0x{contract}: {len(neon_meta_list) + 6} accounts')
+
+        self._ix_builder.init_neon_account_list(neon_meta_list)
+
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> None:
         self._neon_tx_exec_cfg.set_emulated_result(emulated_result)
-        self._account_tx_list_builder.build_tx_list(self._neon_tx_exec_cfg.account_dict)
+        self._build_account_list(self._neon_tx_exec_cfg.account_dict)
 
     def set_state_tx_cnt(self, value: int) -> None:
         self._neon_tx_exec_cfg.set_state_tx_cnt(value)
@@ -164,10 +126,6 @@ class NeonTxSendCtx:
     @property
     def solana(self) -> SolInteractor:
         return self._solana
-
-    @property
-    def account_tx_list_builder(self) -> AccountTxListBuilder:
-        return self._account_tx_list_builder
 
     @property
     def neon_tx_exec_cfg(self) -> NeonTxExecCfg:

@@ -8,7 +8,7 @@ from logged_groups import logged_group
 
 from ..common_neon.config import Config
 from ..common_neon.address import EthereumAddress, ether2program, permAccountSeed, accountWithSeed
-from ..common_neon.constants import ACTIVE_STORAGE_TAG, FINALIZED_STORAGE_TAG, HOLDER_TAG
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
@@ -144,9 +144,9 @@ class OpResInit:
             self._execute_stage(NeonCreateHolderAccountStage(builder, holder_seed, size, balance), resource)
         elif holder_info.owner != self._config.evm_loader_id:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
-        elif holder_info.tag == ACTIVE_STORAGE_TAG:
+        elif holder_info.tag == ACTIVE_HOLDER_TAG:
             self._unlock_storage_account(resource)
-        elif holder_info.tag not in (FINALIZED_STORAGE_TAG, HOLDER_TAG):
+        elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG):
             raise BadResourceError(f'Holder {holder_address} for resource {resource} has bad tag {holder_info.tag}')
         else:
             self.debug(f"Use account {str(holder_info.owner)} for resource {resource}")

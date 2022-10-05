@@ -10,8 +10,7 @@ from ..common_neon.utils import NeonTxResultInfo
 from ..common_neon.evm_log_decoder import decode_neon_tx_result
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
-from ..mempool.neon_tx_send_strategy_base_stages import CreateAccountNeonTxPrepStage
-from ..mempool.neon_tx_send_strategy_alt_stages import alt_strategy
+from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 
 
@@ -56,19 +55,25 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
 
     def __init__(self, ctx: NeonTxSendCtx):
         super().__init__(ctx)
-        self._prep_stage_list.append(CreateAccountNeonTxPrepStage(ctx))
 
     def _validate(self) -> bool:
         return (
             self._validate_notdeploy_tx() and
             self._validate_tx_has_chainid() and
-            self._validate_evm_step_cnt()
+            self._validate_evm_step_cnt() and
+            self._validate_no_resize_iter_cnt()
         )
 
     def _validate_evm_step_cnt(self) -> bool:
         if self._ctx.emulated_evm_step_cnt < self._start_evm_step:
             return True
         self._validation_error = 'Too lot of EVM steps'
+        return False
+
+    def _validate_no_resize_iter_cnt(self) -> bool:
+        if self._ctx.neon_tx_exec_cfg.resize_iter_cnt <= 0:
+            return True
+        self._validation_error_msg = 'Has additional account resize iterations'
         return False
 
     def _build_tx(self) -> SolLegacyTx:

@@ -1,5 +1,7 @@
 from typing import List, Set
 
+from logged_groups import logged_group
+
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_transaction import SolLegacyTx, SolWrappedTx, SolAccountMeta, SolAccount, SolPubKey
 from ..common_neon.solana_v0_transaction import SolV0Tx
@@ -10,6 +12,7 @@ from ..common_neon.solana_alt_builder import ALTTxBuilder, ALTTxSet
 from ..common_neon.config import Config
 
 
+@logged_group("Neon.Canceler")
 class CancelTxExecutor:
     def __init__(self, config: Config, solana: SolInteractor, signer: SolAccount) -> None:
         self._ix_builder = NeonIxBuilder(signer.public_key())

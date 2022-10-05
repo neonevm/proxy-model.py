@@ -2,7 +2,7 @@ from ..common_neon.solana_transaction import SolLegacyTx
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_holder_strategy import HolderNeonTxStrategy
-from ..mempool.neon_tx_send_strategy_alt_stages import alt_strategy
+from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
 
 
 class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):

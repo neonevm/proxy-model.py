@@ -10,7 +10,6 @@ from ..common_neon.elf_params import ElfParams
 from .config import Config
 from .eth_proto import NeonTx
 from .solana_interactor import SolInteractor
-from .layouts import ACCOUNT_INFO_LAYOUT
 from .solana_alt_builder import ALTTxBuilder
 
 
@@ -75,11 +74,11 @@ class GasEstimate:
     def estimate(self):
         execution_cost = self.emulator_json.get('used_gas', 0)
 
-        tx_size_cost = self._trx_size_cost()
+        tx_size_cost = self._tx_size_cost()
         overhead = self._iterative_overhead_cost()
         alt_cost = self.alt_cost()
 
-        gas = execution_cost + trx_size_cost + overhead + alt_cost
+        gas = execution_cost + tx_size_cost + overhead + alt_cost
         extra_gas_pct = self._config.extra_gas_pct
         if extra_gas_pct > 0:
             gas = math.ceil(gas * (1 + extra_gas_pct))

@@ -13,7 +13,7 @@ from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo, SolNeonIxReceiptInfo
-from ..common_neon.constants import ACTIVE_STORAGE_TAG
+from ..common_neon.constants import ACTIVE_HOLDER_TAG
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.config import Config
 from ..common_neon.environment_data import CANCEL_TIMEOUT
@@ -92,7 +92,7 @@ class Indexer(IndexerBase):
             self.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} is empty')
             return False
 
-        if holder_info.tag != ACTIVE_STORAGE_TAG:
+        if holder_info.tag != ACTIVE_HOLDER_TAG:
             self.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} has bad tag: {holder_info.tag}')
             return False
 

@@ -7,7 +7,6 @@ from typing import Optional, Dict, Any
 from logged_groups import logged_group
 
 from ..common_neon.solana_transaction import SolLegacyTx, SolTxIx, SolPubKey
-from ..common_neon.config import Config
 from ..common_neon.address import accountWithSeed
 
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT

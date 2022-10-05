@@ -11,8 +11,7 @@ from ..common_neon.utils import NeonTxResultInfo
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_simple_strategy import SimpleNeonTxSender
-from ..mempool.neon_tx_send_strategy_base_stages import CreateAccountNeonTxPrepStage
-from ..mempool.neon_tx_send_strategy_alt_stages import alt_strategy
+from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 
 
@@ -60,7 +59,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             pass
         elif self._has_good_receipt_list() and (len(tx_list) == 0):
             # send additional iteration to complete tx
-            return self._strategy.build_tx_list(0)
+            return self._strategy.build_tx_list(0, 1)
 
         return tx_list
 
@@ -78,7 +77,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             raise NoMoreRetriesError()
 
         total_evm_step_cnt = sum([cast(SolIterativeTx, tx_state.tx).evm_step_cnt for tx_state in tx_state_list])
-        return self._strategy.build_tx_list(total_evm_step_cnt)
+        return self._strategy.build_tx_list(total_evm_step_cnt, 0)
 
 
 @logged_group("neon.MemPool")
@@ -89,7 +88,6 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         super().__init__(ctx)
         self._uniq_idx = 0
         self._evm_step_cnt = self._start_evm_step_cnt
-        self._prep_stage_list.append(CreateAccountNeonTxPrepStage(ctx))
 
     def _validate(self) -> bool:
         return (
@@ -123,25 +121,21 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
             self._ctx.ix_builder.make_tx_step_from_data_ix(self._evm_step_cnt, self._uniq_idx)
         )
 
-    def build_tx_list(self, total_evm_step_cnt: int) -> List[SolTx]:
-        if total_evm_step_cnt == 0:
-            total_evm_step_cnt = self._start_evm_step_cnt
-            self._evm_step_cnt = total_evm_step_cnt
-            self._bpf_cycle_cnt = None
+    def build_tx_list(self, total_evm_step_cnt: int, add_iter_cnt: int) -> List[SolTx]:
+        def build_tx(step_cnt: int):
+            return SolIterativeTx(name=self.name, tx=self._build_tx(), evm_step_cnt=step_cnt)
 
         tx_list: List[SolTx] = []
         save_evm_step_cnt = total_evm_step_cnt
+
+        for _ in range(add_iter_cnt):
+            tx_list.append(build_tx(self._evm_step_cnt))
 
         while total_evm_step_cnt > 0:
             evm_step_cnt = self._evm_step_cnt if total_evm_step_cnt > self._evm_step_cnt else total_evm_step_cnt
             total_evm_step_cnt -= evm_step_cnt
 
-            tx = SolIterativeTx(
-                name=self.name,
-                tx=self._build_tx(),
-                evm_step_cnt=evm_step_cnt
-            )
-            tx_list.append(tx)
+            tx_list.append(build_tx(evm_step_cnt))
 
         self.debug(f'Total iterations {len(tx_list)} for {save_evm_step_cnt} ({self._evm_step_cnt}) EVM steps')
         return tx_list
@@ -149,7 +143,8 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
 
-        tx_list = self.build_tx_list(self._ctx.emulated_evm_step_cnt)
+        emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._start_evm_step_cnt)
+        tx_list = self.build_tx_list(emulated_step_cnt, self._ctx.neon_tx_exec_cfg.resize_iter_cnt)
         tx_sender = IterativeNeonTxSender(self, self._ctx.solana, self._ctx.signer)
         tx_sender.send(tx_list)
         if not tx_sender.neon_tx_res.is_valid():

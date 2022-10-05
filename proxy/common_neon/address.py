@@ -24,7 +24,7 @@ class EthereumAddress:
     @staticmethod
     def random() -> EthereumAddress:
         letters = '0123456789abcdef'
-        data = bytearray.fromhex(''.join([random.choice(letters) for k in range(64)]))
+        data = bytearray.fromhex(''.join([random.choice(letters) for _ in range(64)]))
         pk = eth_keys.PrivateKey(data)
         return EthereumAddress(pk.public_key.to_canonical_address(), pk)
 

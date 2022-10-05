@@ -1,6 +1,5 @@
 import unittest
 import os
-import base64
 import base58
 
 from solana.rpc.api import Client as SolanaClient
@@ -16,7 +15,6 @@ from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_transaction import SolAccountMeta, SolLegacyTx, SolTxIx, SolPubKey
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.eth_proto import NeonTx
-from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from ..mempool.operator_resource_mng import OpResInfo, OpResInit
 
 from .testing_helpers import request_airdrop

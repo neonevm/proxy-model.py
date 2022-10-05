@@ -23,6 +23,7 @@ from ..common_neon.neon_instruction import create_account_layout
 from ..common_neon.erc20_wrapper import ERC20Wrapper
 
 from proxy.testing.testing_helpers import request_airdrop
+from proxy.testing.solana_utils import EvmLoader, OperatorAccount, wallet_path
 
 Confirmed = Commitment('confirmed')
 
@@ -50,7 +51,7 @@ class TestAirdropperIntegration(TestCase):
         cls.create_token_mint(cls)
         cls.deploy_erc20_wrapper_contract(cls)
         cls.acc_num = 0
-        cls.loader = EvmLoader(OperatorAccount(wallet_path()), EVM_LOADER)
+        cls.loader = EvmLoader(OperatorAccount(wallet_path()), EVM_LOADER_ID)
 
     def create_token_mint(self):
         self.solana_client = SolanaClient(SOLANA_URL)

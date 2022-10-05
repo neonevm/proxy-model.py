@@ -3,8 +3,7 @@ from ..common_neon.solana_transaction import SolLegacyTx
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_iterative_strategy import IterativeNeonTxStrategy
-from ..mempool.neon_tx_send_strategy_base_stages import WriteHolderNeonTxPrepStage
-from ..mempool.neon_tx_send_strategy_alt_stages import alt_strategy
+from ..mempool.neon_tx_send_strategy_base_stages import WriteHolderNeonTxPrepStage, alt_strategy
 
 
 class HolderNeonTxStrategy(IterativeNeonTxStrategy):

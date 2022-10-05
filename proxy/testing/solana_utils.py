@@ -1,6 +1,5 @@
 import base64
 import json
-import math
 import os
 import subprocess
 import time
@@ -9,7 +8,6 @@ from typing import NamedTuple, Tuple, Union
 
 import rlp
 from base58 import b58encode
-from construct import Bytes, Int8ul, Struct as cStruct, Int32ul
 from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
@@ -18,11 +16,8 @@ from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
-from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 
-from spl.token.constants import TOKEN_PROGRAM_ID
-from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 import math
 
 from proxy.common_neon.constants import ACCOUNT_SEED_VERSION

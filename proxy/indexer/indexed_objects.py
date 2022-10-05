@@ -275,7 +275,7 @@ class NeonIndexedBlockInfo:
         return self._is_completed
 
     def set_finalized(self, value: bool) -> None:
-        self._history_block_deque = deque([block.replace(is_finalized=True) for block in self._history_block_deque])
+        self._history_block_deque = deque([block.replace(is_finalized=value) for block in self._history_block_deque])
 
     def finalize_history_list(self, finalized_block_slot: int) -> int:
         removed_block_cnt = 0

@@ -9,7 +9,6 @@ from sha3 import keccak_256
 
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType
 
-from ..common_neon.layouts import CREATE_ACCOUNT_LAYOUT
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.solana_transaction import SolTxIx, SolPubKey, SolAccountMeta
 from ..common_neon.address import accountWithSeed, ether2program, EthereumAddress
@@ -87,7 +86,7 @@ class NeonIxBuilder:
         keccak_result = keccak_256(self._neon_tx.unsigned_msg()).digest()
         treasury_pool_index = int().from_bytes(keccak_result[:4], "little") % TREASURY_POOL_MAX
         self._treasury_pool_index_buf = treasury_pool_index.to_bytes(4, 'little')
-        self._treasury_pool_address = self.create_collateral_pool_address(treasury_pool_index)
+        self._treasury_pool_address = self.create_treasury_pool_address(treasury_pool_index)
 
         return self
 
@@ -100,9 +99,9 @@ class NeonIxBuilder:
         return self
 
     @staticmethod
-    def create_collateral_pool_address(collateral_pool_index):
-        COLLATERAL_SEED_PREFIX = "collateral_seed_"
-        seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
+    def create_treasury_pool_address(treasury_pool_index):
+        TREASURY_SEED_PREFIX = "collateral_seed_"
+        seed = TREASURY_SEED_PREFIX + str(treasury_pool_index)
         collateral_pool_base = SolPubKey(ElfParams().collateral_pool_base)
         return accountWithSeed(collateral_pool_base, str.encode(seed))
 
@@ -149,13 +148,13 @@ class NeonIxBuilder:
 
         base = self._operator_account
         data = create_account_layout(bytes(eth_address))
-        return TransactionInstruction(
+        return SolTxIx(
             program_id=EVM_LOADER_ID,
             data=data,
             keys=[
-                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=pda_account, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                SolAccountMeta(pubkey=pda_account, is_signer=False, is_writable=True),
             ])
 
     def make_write_ix(self, neon_tx_sig: bytes, offset: int, data: bytes) -> SolTxIx:
