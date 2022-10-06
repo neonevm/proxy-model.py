@@ -65,7 +65,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         )
 
     def _validate_evm_step_cnt(self) -> bool:
-        if self._ctx.emulated_evm_step_cnt < self._start_evm_step:
+        if self._ctx.emulated_evm_step_cnt < self._start_evm_step_cnt:
             return True
         self._validation_error = 'Too lot of EVM steps'
         return False
