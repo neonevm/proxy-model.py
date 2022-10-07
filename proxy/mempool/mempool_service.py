@@ -22,8 +22,6 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
     MP_SERVICE_ADDR = ("0.0.0.0", 9091)
     MP_MAINTENANCE_ADDR = ("0.0.0.0", 9092)
 
-    EXECUTOR_COUNT = 8
-
     def __init__(self, config: Config):
         self.event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.event_loop)
@@ -91,8 +89,8 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         try:
             self._mempool_srv = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
             self._mempool_maintenance_srv = AddrPickableDataSrv(user=self, address=self.MP_MAINTENANCE_ADDR)
-            self._mp_executor_mng = MPExecutorMng(self._config, self, self.EXECUTOR_COUNT)
             self._op_res_mng = OpResMng(self._config)
+            self._mp_executor_mng = MPExecutorMng(self._config, self, self._op_res_mng.resource_cnt)
             self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
             self._mempool = MemPool(self._config, self._op_res_mng, self._mp_executor_mng)
             self._replicator = MemPoolReplicator(self._mempool)
