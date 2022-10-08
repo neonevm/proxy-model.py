@@ -682,7 +682,7 @@ class SolNeonTxDecoderState:
 
     @property
     def neon_tx(self) -> NeonIndexedTxInfo:
-        assert self.has_sol_tx()
+        assert self.has_neon_tx()
         tx_key = cast(NeonIndexedTxInfo.Key, self._neon_tx_key_list[-2])
         return self.neon_block.get_neon_tx(tx_key, self._sol_neon_ix)
 
