@@ -39,8 +39,8 @@ class MemPool:
         self._executor = executor
         self._op_res_mng = op_res_mng
 
-        self._gas_price_task_loop = MPGasPriceTaskLoop(executor)
         self._elf_param_dict_task_loop = MPElfParamDictTaskLoop(executor)
+        self._gas_price_task_loop = MPGasPriceTaskLoop(executor)
         self._state_tx_cnt_task_loop = MPSenderTxCntTaskLoop(executor, self._tx_schedule)
         self._op_res_init_task_loop = MPInitOpResTaskLoop(executor, self._op_res_mng)
         self._free_alt_queue_task_loop = MPFreeALTQueueTaskLoop(executor, self._op_res_mng)

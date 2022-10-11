@@ -42,15 +42,16 @@ class TestGasPriceCalculator(unittest.TestCase):
         Should succesfully calculate gas price on first attempt
         """
         sol_price = Decimal('156.3')
+        neon_price = Decimal('0.25')
 
-        mock_get_price.side_effect = [{'status': 1, 'price': sol_price}]
+        mock_get_price.side_effect = [{'status': 1, 'price': neon_price}, {'status': 1, 'price': sol_price}]
 
         self.testee.update_gas_price()
         gas_price = self.testee.min_gas_price
         expected_price = (sol_price / self.testee.neon_price_usd) * (1 + self.testee.operator_fee) * pow(Decimal(10), 9)
         self.assertEqual(gas_price, expected_price)
 
-        mock_get_price.assert_called_once_with('Crypto.SOL/USD')
+        mock_get_price.assert_has_calls([call('Crypto.NEON/USD'), call('Crypto.SOL/USD')])
 
     @patch.object(PythNetworkClient, 'get_price')
     def test_success_update_price_after_retry_due_to_wrong_price_status(self, mock_get_price):
@@ -60,7 +61,9 @@ class TestGasPriceCalculator(unittest.TestCase):
         sol_price = Decimal('156.3')
 
         mock_get_price.side_effect = [
+            None,
             {'status': 0, 'price': sol_price},  # <--- Wrong price status
+            None,
             {'status': 1, 'price': sol_price}
         ]
 
@@ -71,7 +74,7 @@ class TestGasPriceCalculator(unittest.TestCase):
         expected_price = (sol_price / self.testee.neon_price_usd) * (1 + self.testee.operator_fee) * pow(Decimal(10), 9)
         self.assertEqual(gas_price, expected_price)
 
-        mock_get_price.assert_has_calls([call('Crypto.SOL/USD')] * 2)
+        mock_get_price.assert_has_calls([call('Crypto.NEON/USD'), call('Crypto.SOL/USD')] * 2)
 
     @patch.object(PythNetworkClient, 'get_price')
     def test_success_update_price_after_retry_due_to_get_price_exception(self, mock_get_price):
@@ -81,7 +84,9 @@ class TestGasPriceCalculator(unittest.TestCase):
         sol_price = Decimal('156.3')
 
         mock_get_price.side_effect = [
+            None,
             Exception("Test exception happened"),
+            None,
             {'status': 1, 'price': sol_price}
         ]
 
@@ -92,4 +97,4 @@ class TestGasPriceCalculator(unittest.TestCase):
         expected_price = (sol_price / self.testee.neon_price_usd) * (1 + self.testee.operator_fee) * pow(Decimal(10), 9)
         self.assertEqual(gas_price, expected_price)
 
-        mock_get_price.assert_has_calls([call('Crypto.SOL/USD')] * 2)
+        mock_get_price.assert_has_calls([call('Crypto.NEON/USD'), call('Crypto.SOL/USD')] * 2)
