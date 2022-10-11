@@ -149,39 +149,16 @@ def cleanup_docker():
 
 
 def get_fauset_url():
-    command = 'docker exec proxy bash -c "echo ${FAUCET_URL}"'
-    out = subprocess.run(
-        command, shell=True, text=True, stdout=subprocess.PIPE)
+    inspect_out = docker_client.inspect_container("proxy")
+    env = inspect_out["Config"]["Env"]
+    fauset_url = ""
+    for item in env:
+        if "FAUCET_URL=" in item:
+            fauset_url = item.replace("FAUCET_URL=", "")
+            break
 
-    print(out.stdout)
-    faucet_url = out.stdout.strip()
-    # click.echo(f"Faucet url: {faucet_url}")
-
-    # command = 'docker exec proxy bash -c "echo aaaaaa"'
-    # out = subprocess.run(
-    #     command, shell=True, capture_output=True, text=True)
-    # print(out)
-
-    # command = 'docker exec proxy bash -c "echo \"${FAUCET_URL}\""'
-    # out = subprocess.run(
-    #     command, shell=True,  capture_output=True, text=True)
-    # print(out)
-
-    # command = 'docker exec proxy bash -c "echo $FAUCET_URL"'
-    # out = subprocess.run(
-    #     command, shell=True,  capture_output=True, text=True)
-    # print(out)
-
-    # command = 'docker exec proxy bash -c "echo \"${FAUCET_URL}\""'
-    # out = subprocess.run(
-    #     command, shell=True,  capture_output=False, text=True)
-    # print(out)
-
-    # command = 'docker exec proxy bash -c "echo $FAUCET_URL"'
-    # out = subprocess.run(
-    #     command, shell=True,  capture_output=False, text=True)
-    # print(out)
-    return faucet_url
+    print(fauset_url)
+    return fauset_url
 
 
 def wait_for_faucet():
