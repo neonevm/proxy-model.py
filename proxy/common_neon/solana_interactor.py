@@ -98,7 +98,7 @@ class HolderAccountInfo:
     operator: Optional[SolPubKey]
     block_slot: Optional[int]
     account_list_len: Optional[int]
-    account_list: Optional[List[Tuple[bool, str]]]
+    account_list: Optional[List[Tuple[bool, bool, str]]]
 
     @staticmethod
     def from_account_info(info: AccountInfo) -> Optional[HolderAccountInfo]:
@@ -120,16 +120,19 @@ class HolderAccountInfo:
 
         storage = ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT.parse(info.data)
 
-        account_list: List[Tuple[bool, str]] = []
+        account_list: List[Tuple[bool, bool, str]] = []
         offset = ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT.sizeof()
         for _ in range(storage.account_list_len):
             writable = (info.data[offset] > 0)
             offset += 1
 
+            exists = (info.data[offset] > 0)
+            offset += 1
+
             some_pubkey = SolPubKey(info.data[offset:offset + SolPubKey.LENGTH])
             offset += SolPubKey.LENGTH
 
-            account_list.append((writable, str(some_pubkey)))
+            account_list.append((writable, exists, str(some_pubkey)))
 
         return HolderAccountInfo(
             holder_account=info.address,

@@ -39,7 +39,7 @@ class CancelTxExecutor:
 
     def _build_cancel_tx(self, holder_info: HolderAccountInfo) -> SolLegacyTx:
         key_list: List[SolAccountMeta] = []
-        for is_writable, acct in holder_info.account_list:
+        for is_writable, exists, acct in holder_info.account_list:
             key_list.append(SolAccountMeta(pubkey=SolPubKey(acct), is_signer=False, is_writable=is_writable))
 
         return SolLegacyTx().add(
