@@ -99,8 +99,8 @@ def terraform_build_infrastructure():
 @click.option('--github_sha')
 @cli.command(name="deploy_check")
 def deploy_check(neon_evm_commit, github_sha):
-    os.environ["REVISION"] = neon_evm_commit
-    os.environ["NEON_EVM_COMMIT"] = github_sha
+    os.environ["REVISION"] = github_sha
+    os.environ["NEON_EVM_COMMIT"] = neon_evm_commit
     os.environ["FAUCET_COMMIT"] = 'latest'
 
     containers = ['proxy', 'solana', 'proxy_program_loader',
