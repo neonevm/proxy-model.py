@@ -121,7 +121,6 @@ def deploy_check(neon_evm_commit, github_sha):
 
     for container in containers:
         dump_docker_logs(container)
-    time.sleep(30)
     command = 'docker inspect proxy'
     subprocess.run(command, shell=True)
     wait_for_faucet()
@@ -152,36 +151,36 @@ def cleanup_docker():
 def get_fauset_url():
     command = 'docker exec proxy bash -c "echo ${FAUCET_URL}"'
     out = subprocess.run(
-        command, shell=True,  capture_output=True, text=True)
+        command, shell=True,  capture_output=True, text=True, stdout=subprocess.PIPE)
 
-    print(out)
+    print(out.stdout)
     faucet_url = out.stdout.strip()
-    click.echo(f"Faucet url: {faucet_url}")
+    # click.echo(f"Faucet url: {faucet_url}")
 
-    command = 'docker exec proxy bash -c "echo aaaaaa"'
-    out = subprocess.run(
-        command, shell=True, capture_output=True, text=True)
-    print(out)
+    # command = 'docker exec proxy bash -c "echo aaaaaa"'
+    # out = subprocess.run(
+    #     command, shell=True, capture_output=True, text=True)
+    # print(out)
 
-    command = 'docker exec proxy bash -c "echo \"${FAUCET_URL}\""'
-    out = subprocess.run(
-        command, shell=True,  capture_output=True, text=True)
-    print(out)
+    # command = 'docker exec proxy bash -c "echo \"${FAUCET_URL}\""'
+    # out = subprocess.run(
+    #     command, shell=True,  capture_output=True, text=True)
+    # print(out)
 
-    command = 'docker exec proxy bash -c "echo $FAUCET_URL"'
-    out = subprocess.run(
-        command, shell=True,  capture_output=True, text=True)
-    print(out)
+    # command = 'docker exec proxy bash -c "echo $FAUCET_URL"'
+    # out = subprocess.run(
+    #     command, shell=True,  capture_output=True, text=True)
+    # print(out)
 
-    command = 'docker exec proxy bash -c "echo \"${FAUCET_URL}\""'
-    out = subprocess.run(
-        command, shell=True,  capture_output=False, text=True)
-    print(out)
+    # command = 'docker exec proxy bash -c "echo \"${FAUCET_URL}\""'
+    # out = subprocess.run(
+    #     command, shell=True,  capture_output=False, text=True)
+    # print(out)
 
-    command = 'docker exec proxy bash -c "echo $FAUCET_URL"'
-    out = subprocess.run(
-        command, shell=True,  capture_output=False, text=True)
-    print(out)
+    # command = 'docker exec proxy bash -c "echo $FAUCET_URL"'
+    # out = subprocess.run(
+    #     command, shell=True,  capture_output=False, text=True)
+    # print(out)
     return faucet_url
 
 
