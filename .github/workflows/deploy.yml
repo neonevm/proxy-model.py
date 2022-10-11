@@ -34,6 +34,7 @@ jobs:
         run: python ./.github/workflows/deploy.py deploy_check --neon_evm_commit='latest' --github_sha=${GITHUB_SHA}
 
       - uses: actions/upload-artifact@v3
+        if: always()
         with:
-          path: *.log
-  
+          name: Docker logs
+          path: ./*.log
