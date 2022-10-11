@@ -3,7 +3,7 @@ import subprocess
 from logged_groups import logged_group
 
 from typing import Optional, Dict, Any
-from ..common_neon.eth_proto import Trx as NeonTrx
+from ..common_neon.eth_proto import NeonTx
 
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_data import MAX_EVM_STEPS_TO_EXECUTE, RETRY_ON_FAIL
@@ -23,18 +23,18 @@ def call_emulated(contract_id, caller_id, data=None, value=None, *, logger) -> N
 
 
 @logged_group("neon.Proxy")
-def call_trx_emulated(neon_trx: NeonTrx, *, logger) -> NeonEmulatedResult:
-    neon_sender_acc = neon_trx.sender()
-    contract = neon_trx.contract()
+def call_trx_emulated(neon_tx: NeonTx, *, logger) -> NeonEmulatedResult:
+    neon_sender_acc = neon_tx.sender()
+    contract = neon_tx.contract()
     logger.debug(f'sender address: 0x{neon_sender_acc}')
     if contract:
         dst = 'deploy'
         logger.debug(f'deploy contract: {contract}')
     else:
-        dst = neon_trx.toAddress.hex()
+        dst = neon_tx.toAddress.hex()
         logger.debug(f'destination address {dst}')
-    logger.debug(f"Calling data: {(dst, neon_sender_acc, neon_trx.callData.hex(), hex(neon_trx.value))}")
-    emulator_json = call_emulated(dst, neon_sender_acc, neon_trx.callData.hex(), hex(neon_trx.value))
+    logger.debug(f"Calling data: {(dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))}")
+    emulator_json = call_emulated(dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))
     logger.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
     return emulator_json
 

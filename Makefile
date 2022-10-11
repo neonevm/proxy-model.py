@@ -17,12 +17,8 @@ CA_SIGNING_KEY_FILE_PATH := ca-signing-key.pem
 .PHONY: lib-version lib-clean lib-test lib-package lib-coverage lib-lint
 .PHONY: lib-release-test lib-release lib-profile
 .PHONY: container container-run container-release
-.PHONY: dashboard dashboard-clean
 
 all: lib-test
-
-devtools:
-	pushd dashboard && npm run devtools && popd
 
 autopep8:
 	autopep8 --recursive --in-place --aggressive proxy
@@ -94,12 +90,6 @@ lib-coverage:
 
 lib-profile:
 	sudo py-spy -F -f profile.svg -d 3600 proxy.py
-
-dashboard:
-	pushd dashboard && npm run build && popd
-
-dashboard-clean:
-	if [[ -d dashboard/public ]]; then rm -rf dashboard/public; fi
 
 container:
 	docker build -t $(LATEST_TAG) -t $(IMAGE_TAG) .

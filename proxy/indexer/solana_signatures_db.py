@@ -8,7 +8,7 @@ from ..indexer.base_db import BaseDB
 
 class SolSigsDB(BaseDB):
     def __init__(self):
-        super().__init__('solana_transaction_signatures')
+        super().__init__('solana_transaction_signatures', [])
         self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
     def add_sig(self, info: SolTxSigSlotInfo) -> None:

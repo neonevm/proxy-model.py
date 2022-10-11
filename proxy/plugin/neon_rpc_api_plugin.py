@@ -10,20 +10,21 @@
 """
 import json
 import threading
-import traceback
 import time
 from typing import List, Tuple
 
 from logged_groups import logged_group, logging_context
 from neon_py.utils import gen_unique_id
 
-from ..common.utils import build_http_response
 from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
 from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-from ..common_neon.solana_receipt_parser import SolTxError
+
+from ..common.utils import build_http_response
+from ..common_neon.solana_tx_error_parser import SolTxError
 from ..common_neon.errors import EthereumError
+
 from ..neon_rpc_api_model import NeonRpcApiWorker
 from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
 
@@ -81,13 +82,9 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         except EthereumError as err:
             # traceback.print_exc()
             response['error'] = err.getError()
-        except Exception as err:
-            err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error(
-                'Exception on process request. '
-                f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}'
-            )
-            response['error'] = {'code': -32000, 'message': str(err)}
+        except BaseException as exc:
+            self.debug('Exception on process request', exc_info=exc)
+            response['error'] = {'code': -32000, 'message': str(exc)}
 
         return response
 

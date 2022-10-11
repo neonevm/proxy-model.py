@@ -4,7 +4,7 @@ import psycopg2
 import psycopg2.extras
 import psycopg2.extensions
 
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Dict
 from logged_groups import logged_group
 
 from .pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
@@ -16,10 +16,11 @@ class BaseDB:
     Connection = psycopg2.extensions.connection
     Cursor = psycopg2.extensions.cursor
 
-    def __init__(self, table_name: str):
+    def __init__(self, table_name: str, column_list: List[str]):
         self._table_name = table_name
         self._blocks_table_name = 'solana_blocks'
-        self._column_list: List[str] = []
+        self._column_list: List[str] = column_list
+        self._column_dict: Dict[str, int] = {name: idx for idx, name in enumerate(column_list)}
         self._conn = psycopg2.connect(
             dbname=POSTGRES_DB,
             user=POSTGRES_USER,
@@ -30,6 +31,14 @@ class BaseDB:
 
     def __del__(self):
         self._conn.close()
+
+    def _get_column_value(self, column_name: str, value_list: List[Any]) -> Any:
+        idx = self._column_dict.get(column_name, None)
+        if idx is None:
+            raise RuntimeError(f'Cannot find column {self._table_name}.{column_name}!')
+        if idx > len(value_list):
+            raise RuntimeError(f'Index of column {self._table_name}.{column_name} ({idx}) > len({len(value_list)} !')
+        return value_list[idx]
 
     @staticmethod
     def _decode_list(v: Optional[bytes]) -> List[Any]:

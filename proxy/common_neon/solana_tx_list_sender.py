@@ -1,216 +1,257 @@
-from __future__ import annotations
-
 import time
 import json
+import base58
+import random
+import enum
 
 from logged_groups import logged_group
-from typing import Optional, List, Dict, Any, NamedTuple
-from base58 import b58encode
+from dataclasses import dataclass
+from typing import Optional, List, Dict
 
-from solana.transaction import Transaction
-from solana.account import Account as SolanaAccount
-
-from .solana_receipt_parser import SolReceiptParser, SolTxError
-from .solana_interactor import SolanaInteractor
-from .errors import EthereumError, BlockedAccountsError, NodeBehindError
-
-from .environment_data import SKIP_PREFLIGHT, CONFIRMATION_CHECK_DELAY, RETRY_ON_FAIL, CONFIRM_TIMEOUT
+from ..common_neon.solana_transaction import SolTx, SolWrappedTx, SolBlockhash, SolTxReceipt, SolAccount
+from ..common_neon.solana_tx_error_parser import SolTxErrorParser, SolTxError
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.errors import NodeBehindError, NoMoreRetriesError, NonceTooLowError, BlockedAccountsError
+from ..common_neon.errors import BudgetExceededError
+from ..common_neon.config import Config
 
 
-class SolTxListInfo(NamedTuple):
-    name_list: List[str]
-    tx_list: List[Transaction]
+@dataclass
+class SolTxSendState:
+    class Status(enum.Enum):
+        WaitForReceipt = enum.auto()
+        NoReceipt = enum.auto()
+        GoodReceipt = enum.auto()
 
-    def extend(self, src: SolTxListInfo) -> None:
-        self.name_list.extend(src.name_list)
-        self.tx_list.extend(src.tx_list)
+        NodeBehindError = enum.auto()
+        BadNonceError = enum.auto()
+        AltInvalidIndexError = enum.auto()
+        AlreadyFinalizedError = enum.auto()
+        BlockedAccountError = enum.auto()
+        BudgetExceededError = enum.auto()
+        BlockhashNotFoundError = enum.auto()
+        AccountAlreadyExistsError = enum.auto()
+        UnknownError = enum.auto()
+
+    status: Status
+    tx: SolTx
+    receipt: SolTxReceipt
+
+    @property
+    def name(self) -> str:
+        return self.decode_tx_name(self.tx)
+
+    @property
+    def sig(self) -> str:
+        return self.decode_tx_sig(self.tx)
+
+    @staticmethod
+    def decode_tx_name(tx: SolTx) -> str:
+        return tx.name if isinstance(tx, SolWrappedTx) else "Unknown"
+
+    @staticmethod
+    def decode_tx_sig(tx: SolTx) -> str:
+        return base58.b58encode(tx.signature()).decode("utf-8")
 
 
 @logged_group("neon.Proxy")
 class SolTxListSender:
-    ONE_BLOCK_TIME = 0.4
+    _one_block_time = 0.4
 
-    def __init__(self, solana: SolanaInteractor, signer: SolanaAccount):
+    def __init__(self, config: Config, solana: SolInteractor, signer: SolAccount,
+                 skip_preflight: Optional[bool] = None):
+        self._config = config
         self._solana = solana
         self._signer = signer
-
-        self._blockhash = None
+        self._skip_preflight = skip_preflight if skip_preflight is not None else config.skip_preflight
         self._retry_idx = 0
-        self._slots_behind = 0
-        self.success_sig_list: List[str] = []
-        self._tx_list: List[Transaction] = []
-        self._node_behind_list: List[Transaction] = []
-        self._bad_block_list: List[Transaction] = []
-        self._alt_invalid_index_list: List[Transaction] = []
-        self._blocked_account_list: List[Transaction] = []
-        self._pending_list: List[Transaction] = []
-        self._budget_exceeded_list: List[Transaction] = []
-        self._budget_exceeded_receipt: Optional[Dict[str, Any]] = None
-        self._unknown_error_list: List[Transaction] = []
-        self._unknown_error_receipt: Optional[Dict[str, Any]] = None
+        self._blockhash: Optional[SolBlockhash] = None
+        self._tx_state_dict: Dict[SolTxSendState.Status, List[SolTxSendState]] = {}
 
-        self._all_tx_list = [
-            self._node_behind_list,
-            self._bad_block_list,
-            self._alt_invalid_index_list,
-            self._blocked_account_list,
-            self._budget_exceeded_list,
-            self._pending_list
-        ]
+    def clear(self) -> None:
+        self._retry_idx = 0
+        self._blockhash = None
+        self._tx_state_dict.clear()
 
-    def clear(self):
-        self._tx_list.clear()
-        for lst in self._all_tx_list:
-            lst.clear()
-        self._budget_exceeded_receipt = None
-        self._unknown_error_receipt = None
-
-    def _get_full_tx_list(self):
-        return [tx for lst in self._all_tx_list for tx in lst]
-
-    def send(self, tx_list_info: SolTxListInfo,
-             skip_preflight=SKIP_PREFLIGHT, preflight_commitment='processed') -> SolTxListSender:
-        self.debug(f'start transactions sending: {" + ".join(tx_list_info.name_list)}')
-
+    def send(self, tx_list: List[SolTx]) -> None:
         self.clear()
-        self._tx_list = tx_list_info.tx_list
-
-        while (self._retry_idx < RETRY_ON_FAIL) and len(self._tx_list):
+        while (self._retry_idx < self._config.retry_on_fail) and (len(tx_list) > 0):
             self._retry_idx += 1
-            self._slots_behind = 0
+            self._send_tx_list(tx_list)
+            self.debug(f'retry {self._retry_idx} sending stat: {self._fmt_stat()}')
 
-            receipt_list = self._send_tx_list(skip_preflight, preflight_commitment)
+            tx_list = self._get_tx_list_for_send()
+            if len(tx_list) == 0:
+                self._wait_for_tx_receipt_list()
+                self.debug(f'retry {self._retry_idx} waiting stat: {self._fmt_stat()}')
+                tx_list = self._get_tx_list_for_send()
 
-            success_sig_list = []
-            for receipt, tx in zip(receipt_list, self._tx_list):
-                receipt_parser = SolReceiptParser(receipt)
-                slots_behind = receipt_parser.get_slots_behind()
-                if slots_behind:
-                    self._slots_behind = slots_behind
-                    self._node_behind_list.append(tx)
-                elif receipt_parser.check_if_alt_uses_invalid_index():
-                    self._alt_invalid_index_list.append(tx)
-                elif receipt_parser.check_if_blockhash_notfound():
-                    self._bad_block_list.append(tx)
-                elif receipt_parser.check_if_accounts_blocked():
-                    self._blocked_account_list.append(tx)
-                elif receipt_parser.check_if_account_already_exists():
-                    success_sig_list.append(b58encode(tx.signature()).decode("utf-8"))
-                    self.debug(f'skip create account error')
-                elif receipt_parser.check_if_budget_exceeded():
-                    self._budget_exceeded_list.append(tx)
-                    self._budget_exceeded_receipt = receipt
-                elif receipt_parser.check_if_error():
-                    self._unknown_error_list.append(tx)
-                    self._unknown_error_receipt = receipt
-                    self.debug(f'unknown_error_receipt: {json.dumps(receipt, sort_keys=True)}')
-                else:
-                    success_sig_list.append(b58encode(tx.signature()).decode("utf-8"))
-                    self._retry_idx = 0
-                    self._on_success_send(tx, receipt)
+        if len(tx_list) > 0:
+            raise NoMoreRetriesError()
 
-            self.debug(
-                f'retry {self._retry_idx}, ' +
-                f'total receipts {len(receipt_list)}, ' +
-                f'success receipts {len(self.success_sig_list)}(+{len(success_sig_list)}), ' +
-                f'node behind {len(self._node_behind_list)}, ' +
-                f'bad blocks {len(self._bad_block_list)}, ' +
-                f'alt invalid idx {len(self._alt_invalid_index_list)}, ' +
-                f'blocked accounts {len(self._blocked_account_list)}, ' +
-                f'budget exceeded {len(self._budget_exceeded_list)}, ' +
-                f'unknown error: {len(self._unknown_error_list)}'
-            )
+    def _fmt_stat(self) -> str:
+        result = ''
+        for tx_status in list(SolTxSendState.Status):
+            if tx_status not in self._tx_state_dict:
+                continue
+            name = str(tx_status)
+            idx = name.find('.')
+            if idx != -1:
+                name = name[idx + 1:]
+            if len(result) > 0:
+                result += ', '
+            result += f'{name} {len(self._tx_state_dict[tx_status])}'
+        return result
 
-            self.success_sig_list += success_sig_list
-            self._on_post_send()
+    def _send_tx_list(self, tx_list: List[SolTx]) -> None:
+        tx_name_dict: Dict[str, int] = {}
+        for tx in tx_list:
+            tx_name = SolTxSendState.decode_tx_name(tx)
+            tx_name_dict[tx_name] = tx_name_dict.get(tx_name, 0) + 1
 
-        if len(self._tx_list):
-            raise EthereumError(message='No more retries to complete transaction!')
-        return self
+            if tx.recent_blockhash is None:
+                tx.recent_blockhash = self._get_blockhash()
+                tx.sign(self._signer)
 
-    def _on_success_send(self, tx: Transaction, receipt: Dict[str, Any]) -> bool:
-        """Store the last successfully blockhash and set it in _set_tx_blockhash"""
-        self._blockhash = tx.recent_blockhash
-        return False
+        self.debug(f'send transactions: {" + ".join([f"{k}({v})" for k, v in tx_name_dict.items()])}')
+        send_result_list = self._solana.send_tx_list(tx_list, self._skip_preflight)
 
-    def _on_post_send(self):
-        if len(self._unknown_error_list):
-            raise SolTxError(self._unknown_error_receipt)
-        elif len(self._node_behind_list):
-            self.warning(f'Node is behind by {self._slots_behind} slots')
-            raise NodeBehindError()
+        for tx, send_result in zip(tx_list, send_result_list):
+            tx_receipt = send_result.error if send_result.result is None else None
+            self._add_tx_state(tx, tx_receipt, SolTxSendState.Status.WaitForReceipt)
 
-        elif len(self._budget_exceeded_list):
-            raise SolTxError(self._budget_exceeded_receipt)
+    def _get_tx_list_for_send(self) -> List[SolTx]:
+        good_tx_status_set = {
+            SolTxSendState.Status.WaitForReceipt,
+            SolTxSendState.Status.GoodReceipt,
+            SolTxSendState.Status.AlreadyFinalizedError,
+            SolTxSendState.Status.AccountAlreadyExistsError,
+        }
 
-        if len(self._alt_invalid_index_list):
-            time.sleep(self.ONE_BLOCK_TIME)
-        elif len(self._blocked_account_list):
-            raise BlockedAccountsError()
+        tx_list: List[SolTx] = []
+        for tx_status in list(SolTxSendState.Status):
+            if tx_status in good_tx_status_set:
+                continue
+            elif tx_status not in self._tx_state_dict:
+                continue
 
-        # force changing of recent_blockhash if Solana doesn't accept the current one
-        if len(self._bad_block_list):
-            self._blockhash = None
+            tx_state_list = self._tx_state_dict.pop(tx_status)
+            tx_list.extend(self._convert_state_to_tx_list(tx_status, tx_state_list))
+        return tx_list
 
-        # resend not-accepted transactions
-        self._move_tx_list()
-
-    def _set_tx_blockhash(self, tx: Transaction) -> None:
-        """Try to keep the branch of block history"""
-        tx.recent_blockhash = self._blockhash
-        tx.signatures.clear()
-
-    def _move_tx_list(self) -> None:
-        full_tx_list = self._get_full_tx_list()
-        self.clear()
-        for tx in full_tx_list:
-            self._set_tx_blockhash(tx)
-            self._tx_list.append(tx)
-        if len(self._tx_list):
-            self.debug(f' Resend Solana transactions: {len(self._tx_list)}')
-
-    def raise_budget_exceeded(self) -> None:
-        if self._budget_exceeded_receipt is not None:
-            raise SolTxError(self._budget_exceeded_receipt)
-        SolReceiptParser.raise_budget_exceeded()
-
-    def _send_tx_list(self, skip_preflight: bool, preflight_commitment: str) -> List[Dict[str, Any]]:
-
-        send_result_list = self._solana.send_multiple_transactions(
-            self._signer, self._tx_list, skip_preflight, preflight_commitment
-        )
-        # Filter good transactions and wait the confirmations for them
-        sig_list = [s.result for s in send_result_list if s.result]
-        self._confirm_tx_list(sig_list)
-
-        # Get receipts for good transactions
-        confirmed_list = self._solana.get_multiple_receipts(sig_list)
-        # Mix errors with receipts for good transactions
-        receipt_list = []
-        for s in send_result_list:
-            if s.error:
-                receipt_list.append(s.error)
-            else:
-                receipt_list.append(confirmed_list.pop(0))
-
-        return receipt_list
-
-    def _confirm_tx_list(self, sig_list: List[str]) -> None:
-        """Confirm a transaction."""
-        if not len(sig_list):
-            self.debug('No confirmations, because transaction list is empty')
+    def _wait_for_tx_receipt_list(self) -> None:
+        tx_state_list = self._tx_state_dict.pop(SolTxSendState.Status.WaitForReceipt, [])
+        if len(tx_state_list) == 0:
+            self.debug('No new receipts, because transaction list is empty')
             return
 
-        elapsed_time = 0
-        while elapsed_time < CONFIRM_TIMEOUT:
-            if elapsed_time > 0:
-                time.sleep(CONFIRMATION_CHECK_DELAY)
-            elapsed_time += CONFIRMATION_CHECK_DELAY
+        tx_sig_list = [tx_state.sig for tx_state in tx_state_list]
+        self._wait_for_confirmation_of_tx_list(tx_sig_list)
 
-            block_slot, is_confirmed = self._solana.get_confirmed_slot_for_multiple_transactions(sig_list)
+        tx_receipt_list = self._solana.get_tx_receipt_list(tx_sig_list)
+        for tx_state, tx_receipt in zip(tx_state_list, tx_receipt_list):
+            self._add_tx_state(tx_state.tx, tx_receipt, SolTxSendState.Status.NoReceipt)
 
+    def _has_good_receipt_list(self) -> bool:
+        return (SolTxSendState.Status.GoodReceipt in self._tx_state_dict) or self._has_waiting_tx_list()
+
+    def _has_waiting_tx_list(self) -> bool:
+        return SolTxSendState.Status.WaitForReceipt in self._tx_state_dict
+
+    @staticmethod
+    def _get_tx_list_from_state(tx_state_list: List[SolTxSendState]) -> List[SolTx]:
+        return [tx_state.tx for tx_state in tx_state_list]
+
+    def _convert_state_to_tx_list(self, tx_status: SolTxSendState.Status,
+                                  tx_state_list: List[SolTxSendState]) -> List[SolTx]:
+        if tx_status == SolTxSendState.Status.AltInvalidIndexError:
+            time.sleep(self._one_block_time)
+
+        good_tx_status_set = {
+            SolTxSendState.Status.NoReceipt,
+            SolTxSendState.Status.BlockhashNotFoundError,
+            SolTxSendState.Status.AltInvalidIndexError
+        }
+
+        if tx_status in good_tx_status_set:
+            return self._get_tx_list_from_state(tx_state_list)
+
+        if tx_status == SolTxSendState.Status.NodeBehindError:
+            raise NodeBehindError()
+        elif tx_status == SolTxSendState.Status.BadNonceError:
+            raise NonceTooLowError()
+        elif tx_status == SolTxSendState.Status.BlockedAccountError:
+            raise BlockedAccountsError()
+        elif tx_status == SolTxSendState.Status.BudgetExceededError:
+            raise BudgetExceededError()
+        raise SolTxError(tx_state_list[0].receipt)
+
+    def _wait_for_confirmation_of_tx_list(self, tx_sig_list: List[str]) -> None:
+        confirm_timeout = self._config.confirm_timeout_sec
+        confirm_check_delay = float(self._config.confirm_check_msec) / 1000
+        elapsed_time = 0.0
+        while elapsed_time < confirm_timeout:
+            elapsed_time += confirm_check_delay
+
+            block_slot, is_confirmed = self._solana.get_confirmed_slot_for_tx_sig_list(tx_sig_list)
             if is_confirmed:
-                self.debug(f'Got confirmed status for transactions: {sig_list}')
+                self.debug(f'Got confirmed status for transactions: {tx_sig_list}')
                 return
+            time.sleep(confirm_check_delay)
 
-        self.warning(f'No confirmed status for transactions: {sig_list}')
+        self.warning(f'No confirmed status for transactions: {tx_sig_list}')
+
+    def _get_blockhash(self) -> SolBlockhash:
+        if self._config.fuzzing_blockhash and (random.randint(0, 3) == 1):
+            block_slot = max(self._solana.get_recent_blockslot() - 525, 10)
+            return self._solana.get_blockhash(block_slot)
+
+        if self._blockhash is None:
+            self._blockhash = self._solana.get_recent_blockhash()
+        return self._blockhash
+
+    def _decode_tx_status(self, tx: SolTx, tx_error_parser: SolTxErrorParser) -> SolTxSendState.Status:
+        slots_behind = tx_error_parser.get_slots_behind()
+        state_tx_cnt, tx_nonce = tx_error_parser.get_nonce_error()
+
+        if slots_behind is not None:
+            self.warning(f'Node is behind by {self._slots_behind} slots')
+            return SolTxSendState.Status.NodeBehindError
+        elif state_tx_cnt is not None:
+            self.debug(f'tx nonce {tx_nonce} != state tx count {state_tx_cnt}')
+            return SolTxSendState.Status.BadNonceError
+        elif tx_error_parser.check_if_alt_uses_invalid_index():
+            return SolTxSendState.Status.AltInvalidIndexError
+        elif tx_error_parser.check_if_account_already_exists():
+            return SolTxSendState.Status.AlreadyFinalizedError
+        elif tx_error_parser.check_if_blockhash_notfound():
+            if tx.recent_blockhash == self._blockhash:
+                self._blockhash = None
+            tx.recent_blockhash = None
+            return SolTxSendState.Status.BlockhashNotFoundError
+        elif tx_error_parser.check_if_accounts_blocked():
+            return SolTxSendState.Status.BlockedAccountError
+        elif tx_error_parser.check_if_account_already_exists():
+            return SolTxSendState.Status.AccountAlreadyExistsError
+        elif tx_error_parser.check_if_budget_exceeded():
+            return SolTxSendState.Status.BudgetExceededError
+        elif tx_error_parser.check_if_error():
+            self.debug(f'unknown_error_receipt: {json.dumps(tx_error_parser.receipt)}')
+            return SolTxSendState.Status.UnknownError
+
+        # store the latest successfully used blockhash
+        self._blockhash = tx.recent_blockhash
+        return SolTxSendState.Status.GoodReceipt
+
+    def _add_tx_state(self, tx: SolTx, tx_receipt: Optional[SolTxReceipt], no_receipt_status: SolTxSendState.Status):
+        tx_status = no_receipt_status
+        if tx_receipt is not None:
+            tx_status = self._decode_tx_status(tx, SolTxErrorParser(tx_receipt))
+
+        self._tx_state_dict.setdefault(tx_status, []).append(
+            SolTxSendState(
+                status=tx_status,
+                tx=tx,
+                receipt=tx_receipt
+            )
+        )

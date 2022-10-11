@@ -1,18 +1,19 @@
 from __future__ import annotations
+
 from typing import NamedTuple, List, Union
 
-from solana.blockhash import Blockhash
-from solana.publickey import PublicKey
-from solana.message import Message, MessageArgs, MessageHeader, CompiledInstruction
+from ..common_neon.solana_transaction import SolBlockhash, SolPubKey, SolLegacyMsg, SolLegacyMsgArgs, SolMsgHdr
+from ..common_neon.solana_transaction import SolCompiledIx
+
 from solana.utils import shortvec_encoding as shortvec
 from solana.utils import helpers
 
 
-class MessageAddressTableLookup(NamedTuple):
+class SolMsgALT(NamedTuple):
     """Address table lookups describe an on-chain address lookup table to use
     for loading more readonly and writable accounts in a single tx."""
 
-    account_key: Union[str, PublicKey]
+    account_key: Union[str, SolPubKey]
     """Address lookup table account key pub """
     writable_indexes: List[int]
     """List of indexes used to load writable account addresses"""
@@ -20,24 +21,24 @@ class MessageAddressTableLookup(NamedTuple):
     """// / List of indexes used to load readonly account addresses"""
 
 
-class V0MessageArgs(NamedTuple):
+class SolV0MsgArgs(NamedTuple):
     """V0 Message constructor arguments."""
 
-    header: MessageHeader
+    header: SolMsgHdr
     """The message header, identifying signed and read-only `accountKeys`."""
     account_keys: List[str]
     """All the account keys used by this transaction."""
-    recent_blockhash: Blockhash
+    recent_blockhash: SolBlockhash
     """The hash of a recent ledger block."""
-    instructions: List[CompiledInstruction]
+    instructions: List[SolCompiledIx]
     """Instructions that will be executed in sequence and committed in one atomic transaction if all succeed."""
-    address_table_lookups: List[MessageAddressTableLookup]
+    address_table_lookups: List[SolMsgALT]
 
 
-class V0Message(Message):
-    def __init__(self, args: V0MessageArgs) -> None:
+class SolV0Msg(SolLegacyMsg):
+    def __init__(self, args: SolV0MsgArgs) -> None:
         super().__init__(
-            MessageArgs(
+            SolLegacyMsgArgs(
                 header=args.header,
                 account_keys=args.account_keys,
                 recent_blockhash=args.recent_blockhash,
@@ -45,8 +46,8 @@ class V0Message(Message):
             )
         )
         self.address_table_lookups = [
-            MessageAddressTableLookup(
-                account_key=PublicKey(lookup.account_key),
+            SolMsgALT(
+                account_key=SolPubKey(lookup.account_key),
                 writable_indexes=lookup.writable_indexes,
                 readonly_indexes=lookup.readonly_indexes,
             )
@@ -54,7 +55,7 @@ class V0Message(Message):
         ]
 
     @staticmethod
-    def __encode_address_table_lookup(alt_msg_info: MessageAddressTableLookup) -> bytes:
+    def __encode_address_table_lookup(alt_msg_info: SolMsgALT) -> bytes:
         MessageAddressTableLookupFormat = NamedTuple(
             "MessageAddressTableLookupFormat", [
                 ("account_key", bytes),
@@ -83,5 +84,5 @@ class V0Message(Message):
         return bytes(message_buffer)
 
     @staticmethod
-    def deserialize(raw_message: bytes) -> Union[Message, V0Message]:
+    def deserialize(raw_message: bytes) -> Union[SolLegacyMsg, SolV0Msg]:
         raise NotImplementedError("deserialize of v0 message is not implemented!")

@@ -1,13 +1,12 @@
 import asyncio
 import time
 import math
-import traceback
 import abc
 from typing import Optional, TypeVar, Generic
 
 from logged_groups import logged_group, logging_context
 
-from .mempool_api import MPTask, IMPExecutor
+from ..mempool.mempool_api import MPTask, IMPExecutor
 
 
 MPPeriodicTaskRequest = TypeVar('MPPeriodicTaskRequest')
@@ -25,23 +24,21 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
         self._task: Optional[MPTask] = None
         self._task_loop = asyncio.get_event_loop().create_task(self._process_task_loop())
 
-    def _generate_req_id(self) -> str:
+    def _generate_req_id(self, name: Optional[str] = None) -> str:
         now = time.time()
         now_sec = math.ceil(now)
         now_msec = math.ceil(now * 1000 % 1000)
-        return f'{self._name}-{now_sec}.{now_msec}'
-
-    def _on_exception(self, text: str, err: BaseException) -> None:
-        err_tb = "".join(traceback.format_tb(err.__traceback__))
-        self.error(f"{text}. Error: {err}, Traceback: {err_tb}")
+        if name is None:
+            name = self._name
+        return f'{name}-{now_sec}.{now_msec:03d}'
 
     def _try_to_submit_request(self) -> None:
         if not self._executor.is_available():
             return
         try:
             self._submit_request()
-        except Exception as err:
-            self._on_exception(f'Error during submitting {self._name} to executor', err)
+        except BaseException as exc:
+            self.error(f'Error during submitting {self._name} to executor.', exc_info=exc)
 
     @abc.abstractmethod
     def _submit_request(self) -> None:
@@ -70,15 +67,15 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
         with logging_context(req_id=task.mp_request.req_id):
             try:
                 self._check_request_status_impl(task)
-            except Exception as err:
-                self._on_exception(f'Error during processing {self._name} on mempool', err)
+            except BaseException as exc:
+                self.error(f'Error during processing {self._name} on mempool.', exc_info=exc)
 
     def _check_request_status_impl(self, task: MPTask) -> None:
-        self._executor.release_resource(task.resource_id)
+        self._executor.release_executor(task.executor_id)
 
-        err = task.aio_task.exception()
-        if err is not None:
-            self._on_exception(f'Error during processing {self._name} on executor', err)
+        exc = task.aio_task.exception()
+        if exc is not None:
+            self.error(f'Error during processing {self._name} on executor.', exc_info=exc)
             self._process_error(task.mp_request)
             return
 

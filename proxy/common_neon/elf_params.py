@@ -5,9 +5,8 @@ from typing import Optional, Dict
 from logged_groups import logged_group
 from singleton_decorator import singleton
 
-from solana.publickey import PublicKey
-
-from .environment_utils import neon_cli
+from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.environment_utils import neon_cli
 
 
 @singleton
@@ -29,12 +28,16 @@ class ElfParams:
         return int(self._elf_param_dict.get("NEON_COMPUTE_UNITS"))
 
     @property
+    def neon_evm_steps(self) -> int:
+        return 500
+
+    @property
     def neon_additional_fee(self):
         return int(self._elf_param_dict.get("NEON_ADDITIONAL_FEE"))
 
     @property
-    def neon_token_mint(self) -> PublicKey:
-        return PublicKey(self._elf_param_dict.get("NEON_TOKEN_MINT"))
+    def neon_token_mint(self) -> SolPubKey:
+        return SolPubKey(self._elf_param_dict.get("NEON_TOKEN_MINT"))
 
     @property
     def chain_id(self) -> int:
@@ -86,8 +89,8 @@ class ElfParams:
             major_evm_version, minor_evm_version, _ = evm_version.split('.')
             major_proxy_version, minor_proxy_version, _ = proxy_version.split('.')
             return (major_evm_version == major_proxy_version) and (minor_evm_version == minor_proxy_version)
-        except Exception as e:
-            self.error(f"can't compare evm version {evm_version} with proxy version {proxy_version}: {str(e)}")
+        except BaseException as exc:
+            self.error(f'Cannot compare evm version {evm_version} with proxy version {proxy_version}.', exc_info=exc)
             return False
 
     @property

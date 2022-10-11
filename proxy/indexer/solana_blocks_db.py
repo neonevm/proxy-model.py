@@ -8,10 +8,12 @@ from ..common_neon.utils import SolanaBlockInfo
 
 class SolBlocksDB(BaseDB):
     def __init__(self):
-        super().__init__('solana_blocks')
-        self._column_list = [
-            'block_slot', 'block_hash', 'block_time', 'parent_block_slot', 'is_finalized', 'is_active'
-        ]
+        super().__init__(
+            table_name='solana_blocks',
+            column_list=[
+                'block_slot', 'block_hash', 'block_time', 'parent_block_slot', 'is_finalized', 'is_active'
+            ]
+        )
 
     @staticmethod
     def _generate_fake_block_hash(block_slot: int) -> str:
@@ -55,12 +57,12 @@ class SolBlocksDB(BaseDB):
             )
 
         if block_slot is None:
-            block_slot = value_list[0]
+            block_slot = self._get_column_value('block_slot', value_list)
         return SolanaBlockInfo(
             block_slot=block_slot,
-            block_hash=self._check_block_hash(block_slot, value_list[1]),
-            block_time=self._check_block_time(block_slot, value_list[2]),
-            is_finalized=value_list[4],
+            block_hash=self._check_block_hash(block_slot, self._get_column_value('block_hash', value_list)),
+            block_time=self._check_block_time(block_slot, self._get_column_value('block_time', value_list)),
+            is_finalized=self._get_column_value('is_finalized', value_list),
             parent_block_hash=self._check_block_hash(block_slot - 1, value_list[6])
         )
 
@@ -110,8 +112,7 @@ class SolBlocksDB(BaseDB):
         fake_block_slot = self._get_fake_block_slot(block_hash)
         if fake_block_slot is not None:
             block = self.get_block_by_slot(fake_block_slot, latest_block_slot)
-            block.set_block_hash(block_hash)  # it can be a request from an uncle history branch
-            return block
+            return block.replace(block_hash=block_hash)  # it can be a request from an uncle history branch
 
         request = f'''
                  SELECT {",".join(['a.' + c for c in self._column_list])},

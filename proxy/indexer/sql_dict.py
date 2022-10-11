@@ -13,7 +13,7 @@ class SQLDict(MutableMapping, BaseDB):
         self.decode = decode
         self.key_encode = dummy
         self.key_decode = dummy
-        super().__init__(tablename)
+        super().__init__(tablename, [])
         self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
     def __len__(self):

@@ -35,7 +35,6 @@ This funds include native and contracts tokens loaded by:
 
 [![Proxy.py Library Build Status](https://github.com/abhinavsingh/proxy.py/workflows/Proxy.py%20Library/badge.svg)](https://github.com/abhinavsingh/proxy.py/actions)
 [![Proxy.py Docker Build Status](https://github.com/abhinavsingh/proxy.py/workflows/Proxy.py%20Docker/badge.svg)](https://github.com/abhinavsingh/proxy.py/actions)
-[![Proxy.py Docker Build Status](https://github.com/abhinavsingh/proxy.py/workflows/Proxy.py%20Dashboard/badge.svg)](https://github.com/abhinavsingh/proxy.py/actions)
 [![Proxy.py Docker Build Status](https://github.com/abhinavsingh/proxy.py/workflows/Proxy.py%20Brew/badge.svg)](https://github.com/abhinavsingh/proxy.py/actions)
 [![Coverage](https://codecov.io/gh/abhinavsingh/proxy.py/branch/develop/graph/badge.svg)](https://codecov.io/gh/abhinavsingh/proxy.py)
 
@@ -169,12 +168,6 @@ Features
     - Customize proxy and http routing via [plugins](https://github.com/abhinavsingh/proxy.py/tree/develop/proxy/plugin)
     - Enable plugin using command line option e.g. `--plugins proxy.plugin.CacheResponsesPlugin`
     - Plugin API is currently in development phase, expect breaking changes.
-- Realtime Dashboard
-    - Optionally enable bundled dashboard.
-        - Available at `http://localhost:8899/dashboard`.
-    - Inspect, Monitor, Control and Configure `proxy.py` at runtime.
-    - Extend dashboard using plugins.
-    - Dashboard is currently in development phase, expect breaking changes.
 - Secure
     - Enable end-to-end encryption between clients and `proxy.py` using TLS
     - See [End-to-End Encryption](#end-to-end-encryption)
@@ -1619,7 +1612,7 @@ usage: proxy [-h] [--backlog BACKLOG] [--basic-auth BASIC_AUTH]
              [--client-recvbuf-size CLIENT_RECVBUF_SIZE]
              [--devtools-ws-path DEVTOOLS_WS_PATH]
              [--disable-headers DISABLE_HEADERS] [--disable-http-proxy]
-             [--enable-dashboard] [--enable-devtools] [--enable-events]
+             [--enable-devtools] [--enable-events]
              [--enable-static-server] [--enable-web-server]
              [--hostname HOSTNAME] [--key-file KEY_FILE]
              [--log-level LOG_LEVEL] [--log-file LOG_FILE]
@@ -1676,9 +1669,6 @@ optional arguments:
                         server.
   --disable-http-proxy  Default: False. Whether to disable
                         proxy.HttpProxyPlugin.
-  --enable-dashboard    Default: False. Enables proxy.py dashboard.
-  --enable-devtools     Default: False. Enables integration with Chrome
-                        Devtool Frontend. Also see --devtools-ws-path.
   --enable-events       Default: False. Enables core to dispatch lifecycle
                         events. Plugins can be used to subscribe for core
                         events.
@@ -1742,7 +1732,6 @@ Changelog
 
 - No longer ~~a single file module~~.
 - Added support for threadless execution.
-- Added dashboard app.
 - Added support for unit testing.
 
 ## v1.x

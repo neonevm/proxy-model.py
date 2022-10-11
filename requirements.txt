@@ -10,4 +10,5 @@ ethereum
 py-solc-x==1.1.1
 flask==2.2.2
 prometheus_client==0.14.1
+requests
 git+https://github.com/neonlabsorg/neon.py.git@0.1.7

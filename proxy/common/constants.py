@@ -50,8 +50,6 @@ DEFAULT_CLIENT_RECVBUF_SIZE = DEFAULT_BUFFER_SIZE
 DEFAULT_DEVTOOLS_WS_PATH = b'/devtools'
 DEFAULT_DISABLE_HEADERS: List[bytes] = []
 DEFAULT_DISABLE_HTTP_PROXY = False
-DEFAULT_ENABLE_DASHBOARD = False
-DEFAULT_ENABLE_DEVTOOLS = False
 DEFAULT_ENABLE_EVENTS = False
 DEFAULT_EVENTS_QUEUE = None
 DEFAULT_ENABLE_STATIC_SERVER = False
@@ -82,7 +80,3 @@ DEFAULT_DATA_DIRECTORY_PATH = os.path.join(str(pathlib.Path.home()), '.proxy')
 # Cor plugins enabled by default or via flags
 PLUGIN_HTTP_PROXY = 'proxy.http.proxy.HttpProxyPlugin'
 PLUGIN_WEB_SERVER = 'proxy.http.server.HttpWebServerPlugin'
-PLUGIN_PAC_FILE = 'proxy.http.server.HttpWebServerPacFilePlugin'
-PLUGIN_DEVTOOLS_PROTOCOL = 'proxy.http.inspector.DevtoolsProtocolPlugin'
-PLUGIN_DASHBOARD = 'proxy.dashboard.dashboard.ProxyDashboard'
-PLUGIN_INSPECT_TRAFFIC = 'proxy.dashboard.inspect_traffic.InspectTrafficPlugin'

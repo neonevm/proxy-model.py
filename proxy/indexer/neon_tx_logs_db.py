@@ -6,11 +6,13 @@ from ..indexer.indexed_objects import NeonIndexedTxInfo
 
 class NeonTxLogsDB(BaseDB):
     def __init__(self):
-        super().__init__('neon_transaction_logs')
-        self._column_list = [
-            'block_slot', 'tx_idx', 'tx_log_idx', 'log_idx',
-            'address', 'log_data', 'tx_hash', 'topic', 'topic_list'
-        ]
+        super().__init__(
+            table_name='neon_transaction_logs',
+            column_list=[
+                'block_slot', 'tx_idx', 'tx_log_idx', 'log_idx',
+                'address', 'log_data', 'tx_hash', 'topic', 'topic_list'
+            ]
+        )
 
         self._column2field_dict = {
             'address': 'address',

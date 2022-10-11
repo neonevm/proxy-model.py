@@ -1,6 +1,5 @@
 import json
 import multiprocessing
-import traceback
 import eth_utils
 import time
 import math
@@ -15,13 +14,14 @@ from ..common_neon.address import EthereumAddress
 from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
 from ..common_neon.errors import EthereumError, InvalidParamError
 from ..common_neon.estimate import GasEstimate
-from ..common_neon.eth_proto import Trx as NeonTx
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.keys_storage import KeyStorage
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.utils import JsonBytesEncoder
 from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
+from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_utils import neon_cli
-from ..common_neon.environment_data import SOLANA_URL, USE_EARLIEST_BLOCK_IF_0_PASSED, ENABLE_PRIVATE_API
 from ..common_neon.transaction_validator import NeonTxValidator
 from ..indexer.indexer_db import IndexerDB
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
@@ -32,21 +32,13 @@ NEON_PROXY_PKG_VERSION = '0.12.0'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
-class JsonEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, bytearray):
-            return obj.hex()
-        if isinstance(obj, bytes):
-            return obj.hex()
-        return json.JSONEncoder.default(self, obj)
-
-
 @logged_group("neon.Proxy")
 class NeonRpcApiWorker:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
     def __init__(self):
-        self._solana = SolanaInteractor(SOLANA_URL)
+        self._config = Config()
+        self._solana = SolInteractor(self._config, self._config.solana_url)
         self._db = IndexerDB()
         self._stat_exporter: Optional[StatisticsExporter] = None
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
@@ -111,24 +103,22 @@ class NeonRpcApiWorker:
             param['to'] = self._normalize_account(param['to'])
 
         try:
-            calculator = GasEstimate(param, self._solana)
+            calculator = GasEstimate(self._config, self._solana, param)
             calculator.execute()
             return hex(calculator.estimate())
 
         except EthereumError:
             raise
-        except Exception as err:
-            err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error(f"Exception on eth_estimateGas: {err}: {err_tb}")
+        except BaseException as exc:
+            self.debug(f"Exception on eth_estimateGas: {str(exc)}")
             raise
 
     def __repr__(self):
         return str(self.__dict__)
 
-    @staticmethod
-    def _should_return_starting_block(tag: Union[str, int]) -> bool:
+    def _should_return_starting_block(self, tag: Union[str, int]) -> bool:
         return tag == 'earliest' \
-            or ((tag == '0x0' or str(tag) == '0') and USE_EARLIEST_BLOCK_IF_0_PASSED)
+            or ((tag == '0x0' or str(tag) == '0') and self._config.use_earliest_block_if_0_passed)
 
     def _process_block_tag(self, tag: Union[str, int]) -> SolanaBlockInfo:
         if tag in ("latest", "pending"):
@@ -383,7 +373,7 @@ class NeonRpcApiWorker:
         except EthereumError:
             raise
         except Exception as err:
-            self.error(f"eth_call Exception {err}")
+            self.debug(f'eth_call Exception {err}.')
             raise
 
     def eth_getTransactionCount(self, account: str, tag: Union[str, int]) -> str:
@@ -485,7 +475,7 @@ class NeonRpcApiWorker:
             if neon_tx is None:
                 self.debug("Not found receipt")
                 return None
-            neon_tx_receipt = NeonTxReceiptInfo(NeonTxInfo(tx=neon_tx), NeonTxResultInfo())
+            neon_tx_receipt = NeonTxReceiptInfo(NeonTxInfo.from_neon_tx(neon_tx), NeonTxResultInfo())
         return self._get_transaction(neon_tx_receipt)
 
     def eth_getCode(self, account: str, tag: Union[str, int]) -> str:
@@ -507,28 +497,28 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message="wrong transaction format")
 
-        neon_signature = '0x' + neon_tx.hash_signed().hex()
-        self.debug(f"sendRawTransaction {neon_signature}: {json.dumps(neon_tx.as_dict(), cls=JsonEncoder)}")
+        neon_sig = '0x' + neon_tx.hash_signed().hex()
+        self.debug(f"sendRawTransaction {neon_sig}: {json.dumps(neon_tx.as_dict(), cls=JsonBytesEncoder)}")
 
         self._stat_tx_begin()
         try:
-            neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_signature)
+            neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_sig)
             if neon_tx_receipt is not None:
                 raise EthereumError(message='already known')
 
             min_gas_price = self._gas_price.min_gas_price
-            neon_tx_validator = NeonTxValidator(self._solana, neon_tx, min_gas_price)
+            neon_tx_validator = NeonTxValidator(self._config, self._solana, neon_tx, min_gas_price)
             neon_tx_exec_cfg = neon_tx_validator.precheck()
 
             req_id = LogMng.get_logging_context().get("req_id")
 
             result: MPTxSendResult = self._mempool_client.send_raw_transaction(
-                req_id=req_id, signature=neon_signature, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
+                req_id=req_id, neon_sig=neon_sig, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
             )
 
             if result.code in (MPTxSendResultCode.Success, MPTxSendResultCode.AlreadyKnown):
                 self._stat_tx_success()
-                return neon_signature
+                return neon_sig
             elif result.code == MPTxSendResultCode.Underprice:
                 raise EthereumError(message='replacement transaction underpriced')
             elif result.code == MPTxSendResultCode.NonceTooLow:
@@ -539,8 +529,8 @@ class NeonRpcApiWorker:
             self._stat_tx_failed()
             raise
 
-        except Exception as err:
-            self.error(f"Failed to process eth_sendRawTransaction, Error: {err}")
+        except BaseException as exc:
+            self.error('Failed to process eth_sendRawTransaction.', exc_info=exc)
             self._stat_tx_failed()
             raise
 
@@ -567,13 +557,17 @@ class NeonRpcApiWorker:
                 self.debug(f"Not found block by slot {block.block_slot}")
                 return None
 
-        return self._db.get_tx_by_block_slot_tx_idx(block.block_slot, tx_idx)
+        neon_tx_receipt = self._db.get_tx_by_block_slot_tx_idx(block.block_slot, tx_idx)
+        if neon_tx_receipt is None:
+            self.debug("Not found receipt")
+            return None
+        return self._get_transaction(neon_tx_receipt)
 
-    def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[dict]:
+    def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[Dict[str, Any]]:
         block = self._process_block_tag(tag)
         return self._get_transaction_by_index(block, tx_idx)
 
-    def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[dict]:
+    def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[Dict[str, Any]]:
         block = self._get_block_by_hash(block_hash)
         if block.is_empty():
             return None
@@ -656,9 +650,8 @@ class NeonRpcApiWorker:
                 'raw': raw_tx,
                 'tx': tx
             }
-        except Exception as e:
-            err_tb = "".join(traceback.format_tb(e.__traceback__))
-            self.error(f'Exception {type(e)}({str(e)}: {err_tb}')
+        except BaseException as exc:
+            self.error('Failed on sign transaction.', exc_info=exc)
             raise InvalidParamError(message='bad transaction')
 
     def eth_sendTransaction(self, tx: Dict[str, Any]) -> str:
@@ -768,7 +761,7 @@ class NeonRpcApiWorker:
                 f'Neon EVM {self.web3_clientVersion()}'
             )
 
-        if ENABLE_PRIVATE_API:
+        if self._config.enable_private_api:
             return True
 
         private_method_list = (
