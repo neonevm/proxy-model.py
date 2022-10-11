@@ -24,11 +24,11 @@ jobs:
       - name: install python libs
         run: pip install docker python_terraform
 
-      - name: build docker image
-        run: python ./.github/workflows/deploy.py build_docker_image --github_sha=${GITHUB_SHA} --neon_evm_commit='latest'
+      # - name: build docker image
+      #   run: python ./.github/workflows/deploy.py build_docker_image --github_sha=${GITHUB_SHA} --neon_evm_commit='latest'
 
-      - name: publish image
-        run: python ./.github/workflows/deploy.py publish_image --branch=${GITHUB_REF} --github_sha=${GITHUB_SHA}
+      # - name: publish image
+      #   run: python ./.github/workflows/deploy.py publish_image --branch=${GITHUB_REF} --github_sha=${GITHUB_SHA}
 
       - name: deploy_check
         run: python ./.github/workflows/deploy.py deploy_check --neon_evm_commit='latest' --github_sha=${GITHUB_SHA}

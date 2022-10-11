@@ -95,11 +95,11 @@ def terraform_build_infrastructure():
     t.destroy()
 
 
+@cli.command(name="deploy_check")
 @click.option('--neon_evm_commit')
 @click.option('--github_sha')
-@cli.command(name="deploy_check")
 def deploy_check(neon_evm_commit, github_sha):
-    os.environ["REVISION"] = github_sha
+    os.environ["REVISION"] = 'latest'  # TODO github_sha
     os.environ["NEON_EVM_COMMIT"] = neon_evm_commit
     os.environ["FAUCET_COMMIT"] = 'latest'
 
