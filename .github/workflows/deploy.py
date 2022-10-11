@@ -151,7 +151,7 @@ def cleanup_docker():
 def get_fauset_url():
     command = 'docker exec proxy bash -c "echo ${FAUCET_URL}"'
     out = subprocess.run(
-        command, shell=True,  capture_output=True, text=True, stdout=subprocess.PIPE)
+        command, shell=True, text=True, stdout=subprocess.PIPE)
 
     print(out.stdout)
     faucet_url = out.stdout.strip()
