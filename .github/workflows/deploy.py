@@ -153,9 +153,35 @@ def get_fauset_url():
     command = 'docker exec proxy bash -c "echo ${FAUCET_URL}"'
     out = subprocess.run(
         command, shell=True,  capture_output=True, text=True)
+
     print(out)
     faucet_url = out.stdout.strip()
     click.echo(f"Faucet url: {faucet_url}")
+
+    command = 'docker exec proxy bash -c "echo aaaaaa"'
+    out = subprocess.run(
+        command, shell=True, capture_output=True, text=True)
+    print(out)
+
+    command = 'docker exec proxy bash -c "echo \"${FAUCET_URL}\""'
+    out = subprocess.run(
+        command, shell=True,  capture_output=True, text=True)
+    print(out)
+
+    command = 'docker exec proxy bash -c "echo $FAUCET_URL"'
+    out = subprocess.run(
+        command, shell=True,  capture_output=True, text=True)
+    print(out)
+
+    command = 'docker exec proxy bash -c "echo \"${FAUCET_URL}\""'
+    out = subprocess.run(
+        command, shell=True,  capture_output=False, text=True)
+    print(out)
+
+    command = 'docker exec proxy bash -c "echo $FAUCET_URL"'
+    out = subprocess.run(
+        command, shell=True,  capture_output=False, text=True)
+    print(out)
     return faucet_url
 
 
