@@ -117,6 +117,8 @@ def deploy_check(neon_evm_commit, github_sha):
     containers = ["".join(item['Names']).replace("/", "")
                   for item in docker_client.containers() if item['State'] == 'running']
     click.echo(f"Running containers: {containers}")
+    for container in containers:
+        dump_docker_logs(container)
 
     wait_for_faucet()
     run_uniswap_test()
@@ -143,7 +145,6 @@ def cleanup_docker():
     click.echo(f"Removing temporary data done.")
 
 
-@cli.command(name="test")
 def get_fauset_url():
     command = 'docker exec proxy bash -c "echo ${FAUCET_URL}"'
     out = subprocess.run(

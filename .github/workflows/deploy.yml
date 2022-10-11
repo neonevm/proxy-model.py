@@ -31,7 +31,7 @@ jobs:
       #   run: python ./.github/workflows/deploy.py publish_image --branch=${GITHUB_REF} --github_sha=${GITHUB_SHA}
 
       - name: deploy_check
-        run: python ./.github/workflows/deploy.py deploy_check --neon_evm_commit='latest' --github_sha=${GITHUB_SHA}
+        run: python ./.github/workflows/deploy.py deploy_check --github_sha=${GITHUB_SHA} --neon_evm_commit='latest'
 
       - uses: actions/upload-artifact@v3
         if: always()
