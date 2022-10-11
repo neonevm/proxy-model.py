@@ -114,12 +114,15 @@ def deploy_check(neon_evm_commit, github_sha):
         subprocess.run(command, shell=True)
     except:
         raise "Docker-compose failed to start"
+
     containers = ["".join(item['Names']).replace("/", "")
                   for item in docker_client.containers() if item['State'] == 'running']
     click.echo(f"Running containers: {containers}")
+
     for container in containers:
         dump_docker_logs(container)
-
+    command = 'docker inspect proxy'
+    subprocess.run(command, shell=True)
     wait_for_faucet()
     run_uniswap_test()
 
