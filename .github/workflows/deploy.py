@@ -143,10 +143,13 @@ def cleanup_docker():
     click.echo(f"Removing temporary data done.")
 
 
+@cli.command(name="test")
 def get_fauset_url():
     command = 'docker exec proxy bash -c "echo ${FAUCET_URL}"'
-    faucet_url = subprocess.run(
-        command, shell=True,  capture_output=True, text=True).stdout.strip()
+    out = subprocess.run(
+        command, shell=True,  capture_output=True, text=True)
+    print(out)
+    faucet_url = out.stdout.strip()
     click.echo(f"Faucet url: {faucet_url}")
     return faucet_url
 

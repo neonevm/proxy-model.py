@@ -32,3 +32,8 @@ jobs:
 
       - name: deploy_check
         run: python ./.github/workflows/deploy.py deploy_check --neon_evm_commit='latest' --github_sha=${GITHUB_SHA}
+
+      - uses: actions/upload-artifact@v3
+        with:
+          path: *.log
+  
