@@ -1,0 +1,34 @@
+name: Build proxy docker image
+on:
+  workflow_dispatch:
+    inputs:
+      full_test_suite:
+        required: true
+      neon_evm_commit:
+        required: true
+      neon_evm_branch:
+        required: true
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      # - name: TEST
+      #   run: echo ${{ github.event.inputs.full_test_suite }}
+
+      - name: install python libs
+        run: pip install docker
+
+      - name: build docker image
+        run: python ./.github/workflows/deploy.py build_docker_image --github_sha=${GITHUB_SHA}
+
+      - name: publish image
+        run: python ./.github/workflows/deploy.py publish_image --branch=${GITHUB_REF} --github_sha=${GITHUB_SHA}
+
+      - name: deploy_check
+        run: python ./.github/workflows/deploy.py publish_image --neon_evm_commit='latest' --github_sha=${GITHUB_SHA}
