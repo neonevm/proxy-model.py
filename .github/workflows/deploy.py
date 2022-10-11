@@ -120,9 +120,13 @@ def deploy_check(neon_evm_commit, github_sha):
 
 
 def dump_docker_logs(container):
-    logs = docker_client.logs(container).decode("utf-8")
-    with open(f"{container}.log", "w") as file:
-        file.write(logs)
+    try:
+        # print(docker_client.containers())
+        logs = docker_client.logs(container).decode("utf-8")
+        with open(f"{container}.log", "w") as file:
+            file.write(logs)
+    except(docker.errors.NotFound):
+        click.echo(f"Container {container} does not exist")
 
 
 def cleanup_docker():
@@ -143,7 +147,6 @@ def get_fauset_url():
     return faucet_url
 
 
-@cli.command(name="test1")
 def wait_for_faucet():
     faucet_url = get_fauset_url()
     faucet_ip, faucet_port = faucet_url.replace("http://", "").split(':')
