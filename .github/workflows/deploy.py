@@ -114,6 +114,9 @@ def deploy_check(neon_evm_commit, github_sha):
         subprocess.run(command, shell=True)
     except:
         raise "Docker-compose failed to start"
+    containers = ["".join(item['Names']).replace("/", "")
+                  for item in docker_client.containers() if item['State'] == 'running']
+    click.echo(f"Running containers: {containers}")
 
     wait_for_faucet()
     run_uniswap_test()
@@ -144,6 +147,7 @@ def get_fauset_url():
     command = 'docker exec proxy bash -c "echo ${FAUCET_URL}"'
     faucet_url = subprocess.run(
         command, shell=True,  capture_output=True, text=True).stdout.strip()
+    click.echo(f"Faucet url: {faucet_url}")
     return faucet_url
 
 
