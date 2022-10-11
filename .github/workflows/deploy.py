@@ -121,6 +121,7 @@ def deploy_check(neon_evm_commit, github_sha):
 
     for container in containers:
         dump_docker_logs(container)
+    time.sleep(30)
     command = 'docker inspect proxy'
     subprocess.run(command, shell=True)
     wait_for_faucet()
