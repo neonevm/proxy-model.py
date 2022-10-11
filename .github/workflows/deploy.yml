@@ -22,7 +22,7 @@ jobs:
       #   run: echo ${{ github.event.inputs.full_test_suite }}
 
       - name: install python libs
-        run: pip install docker
+        run: pip install docker python_terraform
 
       - name: build docker image
         run: python ./.github/workflows/deploy.py build_docker_image --github_sha=${GITHUB_SHA}
