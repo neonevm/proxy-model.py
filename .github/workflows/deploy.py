@@ -25,7 +25,7 @@ IMAGE_NAME = "neonlabsorg/proxy"
 DOCKER_USER = os.environ.get("DHUBU")
 DOCKER_PASSWORD = os.environ.get("DHUBP")
 
-UNISWAP_V2_CORE_COMMIT = '156524c6c0a3974e5733c51d5065a7c3c2f849cb'  # TODO stable
+UNISWAP_V2_CORE_COMMIT = '2e03bcf7a78ec5e9c6658fa9a802169eba1e07ab'  # TODO stable
 UNISWAP_V2_CORE_IMAGE = f'neonlabsorg/uniswap-v2-core:{UNISWAP_V2_CORE_COMMIT}'
 UNISWAP_TESTNAME = "test_UNISWAP.py"
 
@@ -111,6 +111,7 @@ def deploy_check(neon_evm_commit, github_sha):
 
     try:
         command = 'docker-compose -f proxy/docker-compose-test.yml up -d'
+        click.echo(f"run command: {command}")
         subprocess.run(command, shell=True)
     except:
         raise "Docker-compose failed to start"
@@ -121,8 +122,6 @@ def deploy_check(neon_evm_commit, github_sha):
 
     for container in containers:
         dump_docker_logs(container)
-    command = 'docker inspect proxy'
-    subprocess.run(command, shell=True)
     wait_for_faucet()
     run_uniswap_test()
 
@@ -209,7 +208,7 @@ def run_uniswap_test():
     os.environ["FAUCET_URL"] = fauset_url
 
     docker_client.pull(UNISWAP_V2_CORE_IMAGE)
-    command = f'docker run --rm --network=container:proxy -e FAUCET_URL --entrypoint ./deploy-test.sh {UNISWAP_V2_CORE_IMAGE} all'
+    command = f'docker run --rm --network=container:proxy -e FAUCET_URL --entrypoint ./deploy-test.sh {UNISWAP_V2_CORE_IMAGE} all 2>&1'
     out = subprocess.run(command, shell=True)
 
 
