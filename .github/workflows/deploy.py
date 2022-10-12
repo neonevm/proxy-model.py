@@ -25,7 +25,7 @@ IMAGE_NAME = "neonlabsorg/proxy"
 DOCKER_USER = os.environ.get("DHUBU")
 DOCKER_PASSWORD = os.environ.get("DHUBP")
 
-UNISWAP_V2_CORE_COMMIT = 'stable'
+UNISWAP_V2_CORE_COMMIT = '156524c6c0a3974e5733c51d5065a7c3c2f849cb'  # TODO stable
 UNISWAP_V2_CORE_IMAGE = f'neonlabsorg/uniswap-v2-core:{UNISWAP_V2_CORE_COMMIT}'
 UNISWAP_TESTNAME = "test_UNISWAP.py"
 
@@ -127,6 +127,28 @@ def deploy_check(neon_evm_commit, github_sha):
     run_uniswap_test()
 
 
+def get_test_list():
+    inst = docker_client.exec_create(
+        "proxy", 'find . -type f -name "test_*.py" -printf "%f\n"')
+    out = docker_client.exec_start(inst['Id'])
+    test_list = out.decode('utf-8').strip().split('\n')
+    return test_list
+
+
+def run_test(file_name):
+    env = {"SKIP_PREPARE_DEPLOY_TEST": "YES", "TESTNAME": "file_name"}
+    inst = docker_client.exec_create(
+        "proxy", './proxy/deploy-test.sh', environment=env)
+    out = docker_client.exec_start(inst['Id'])
+    print(out)
+
+
+@cli.command(name="test")
+def test():
+    for file in get_test_list():
+        run_test(file)
+
+
 def dump_docker_logs(container):
     try:
         # print(docker_client.containers())
@@ -156,8 +178,7 @@ def get_fauset_url():
         if "FAUCET_URL=" in item:
             fauset_url = item.replace("FAUCET_URL=", "")
             break
-
-    print(fauset_url)
+    click.echo(f"fauset_url: {fauset_url}")
     return fauset_url
 
 
