@@ -73,25 +73,17 @@ def publish_image(branch, github_sha):
 
 @cli.command(name="terraform")
 def terraform_build_infrastructure():
-    # app = cdktf.App()
 
-    # a = cdktf.S3BackendProps(
-    #     bucket=TFSTATE_BUCKET,
-    #     key=TFSTATE_KEY,
-    #     region=TFSTATE_REGION
-    # )
-
-    # app.synth()
-    # print(app)
     t = Terraform()
 
     backend_config = {"bucket": TFSTATE_BUCKET,
                       "key": TFSTATE_KEY, "region": TFSTATE_REGION}
     return_code, stdout, stderr = t.init(backend_config=backend_config)
-
+    a = t.output()
     print(return_code)
     print(stdout)
     print(stderr)
+    print(a)
     t.destroy()
 
 
@@ -137,12 +129,6 @@ def run_test(file_name):
         "proxy", './proxy/deploy-test.sh', environment=env)
     out = docker_client.exec_start(inst['Id'])
     click.echo(out)
-
-
-@cli.command(name="test")
-def test():
-    for file in get_test_list():
-        run_test(file)
 
 
 @cli.command(name="dump_docker_logs")
@@ -209,7 +195,7 @@ def run_uniswap_test():
 
     docker_client.pull(UNISWAP_V2_CORE_IMAGE)
     command = f'docker run --rm --network=container:proxy -e FAUCET_URL --entrypoint ./deploy-test.sh {UNISWAP_V2_CORE_IMAGE} all 2>&1'
-    out = subprocess.run(command, shell=True)
+    subprocess.run(command, shell=True)
 
 
 if __name__ == "__main__":
