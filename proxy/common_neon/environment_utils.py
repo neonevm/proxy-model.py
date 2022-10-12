@@ -12,9 +12,8 @@ from ..common_neon.environment_data import SOLANA_URL, EVM_LOADER_ID, LOG_NEON_C
 
 
 class CliBase:
-    def run_cli(self, cmd: List[str], **kwargs) -> bytes:
+    def run_cli(self, cmd: List[str], data: str = None, **kwargs) -> bytes:
         self.debug("Calling: " + " ".join(cmd))
-        data = kwargs.pop("data") if kwargs.get("data") else None
 
         if data:
             proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -104,7 +103,7 @@ class neon_cli(CliBase):
                    ]\
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
-            return self.run_cli(cmd, timeout=neon_cli_timeout, universal_newlines=True, data=data)
+            return self.run_cli(cmd, data, timeout=neon_cli_timeout, universal_newlines=True)
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
