@@ -3,6 +3,7 @@ import time
 import sys
 import docker
 import subprocess
+import pathlib
 from python_terraform import Terraform
 try:
     import click
@@ -75,10 +76,11 @@ def publish_image(branch, github_sha):
 def terraform_build_infrastructure():
 
     t = Terraform()
-
+    print(pathlib.Path(__file__).parent.resolve())
     backend_config = {"bucket": TFSTATE_BUCKET,
                       "key": TFSTATE_KEY, "region": TFSTATE_REGION}
-    return_code, stdout, stderr = t.init(backend_config=backend_config)
+    return_code, stdout, stderr = t.init(dir_or_plan=pathlib.Path(
+        __file__).parent.resolve(), backend_config=backend_config)
     a = t.output()
     print(return_code)
     print(stdout)
