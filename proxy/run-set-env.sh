@@ -6,7 +6,6 @@ echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScr
 
 if [ "$CONFIG" == "ci" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="http://solana:8899"
-  [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=0
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="2.5"
   [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
   [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="postgres"
@@ -17,10 +16,8 @@ if [ "$CONFIG" == "ci" ]; then
   [[ -z "$PERM_ACCOUNT_LIMIT"           ]] && export PERM_ACCOUNT_LIMIT=2
   [[ -z "$RECHECK_RESOURCE_AFTER_USES_CNT" ]] && export RECHECK_RESOURCE_AFTER_USES_CNT=240
   [[ -z "$RECHECK_USED_RESOURCE_SEC"    ]] && export RECHECK_USED_RESOURCE_SEC=240
-  [[ -z "$GAS_PRICE_SUGGEST_PCT"        ]] && export GAS_PRICE_SUGGEST_PCT="0.2"
 elif [ "$CONFIG" == "local" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="http://localhost:8899"
-  [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=0
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="2.5"
   [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
   [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="localhost"
@@ -32,7 +29,6 @@ elif [ "$CONFIG" == "local" ]; then
 elif [ "$CONFIG" == "devnet" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="https://api.devnet.solana.com"
   [[ -z "$EVM_LOADER"                   ]] && export EVM_LOADER=eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU
-  [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=0
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="10"
   [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
   [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="localhost"
@@ -44,7 +40,6 @@ elif [ "$CONFIG" == "devnet" ]; then
 elif [ "$CONFIG" == "testnet" ]; then
   [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="https://api.testnet.solana.com"
   [[ -z "$EVM_LOADER"                   ]] && export EVM_LOADER=eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU
-  [[ -z "$EXTRA_GAS"                    ]] && export EXTRA_GAS=0
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="15"
   [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
   [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="localhost"
@@ -57,8 +52,8 @@ elif [ "$CONFIG" != "custom" ]; then
   exit 1
 fi
 
-[[ -z "$SOLANA_URL"               ]] && echo "$(date "+%F %X.%3N") E $(basename $0):${LINENO} $$ ${COMPONENT}:StartScript {} SOLANA_URL is not set" && exit 1
-[[ -z "$EVM_LOADER"               ]] && echo "$(date "+%F %X.%3N") E $(basename $0):${LINENO} $$ ${COMPONENT}:StartScript {} EVM_LOADER is not set" && exit 1
+[[ -z "$SOLANA_URL" ]] && echo "$(date "+%F %X.%3N") E $(basename $0):${LINENO} $$ ${COMPONENT}:StartScript {} SOLANA_URL is not set" && exit 1
+[[ -z "$EVM_LOADER" ]] && echo "$(date "+%F %X.%3N") E $(basename $0):${LINENO} $$ ${COMPONENT}:StartScript {} EVM_LOADER is not set" && exit 1
 
 solana config set -u $SOLANA_URL
 

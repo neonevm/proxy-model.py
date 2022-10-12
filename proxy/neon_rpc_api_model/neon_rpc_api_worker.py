@@ -68,11 +68,14 @@ class NeonRpcApiWorker:
             if gas_price is not None:
                 self._gas_price_value = gas_price
         if self._gas_price_value is None:
-            raise EthereumError(message='Failed to estimate gas price. Try again later')
+            raise EthereumError(message='Failed to calculate gas price. Try again later')
         return cast(MPGasPriceResult, self._gas_price_value)
 
+    def neon_proxy_version(self) -> str:
+        return self.neon_proxyVersion()
+
     @staticmethod
-    def neon_proxy_version() -> str:
+    def neon_proxyVersion() -> str:
         return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
 
     @staticmethod
@@ -83,8 +86,11 @@ class NeonRpcApiWorker:
     def eth_chainId() -> str:
         return hex(ElfParams().chain_id)
 
+    def neon_cli_version(self) -> str:
+        return self.neon_cliVersion()
+
     @staticmethod
-    def neon_cli_version() -> str:
+    def neon_cliVersion() -> str:
         return neon_cli().version()
 
     @staticmethod
@@ -523,6 +529,7 @@ class NeonRpcApiWorker:
                 raise EthereumError(message='replacement transaction underpriced')
             elif result.code == MPTxSendResultCode.NonceTooLow:
                 neon_tx_validator.raise_nonce_error(result.state_tx_cnt, neon_tx.nonce)
+                self._stat_tx_failed()
             else:
                 raise EthereumError(message='unknown error')
         except EthereumError:
@@ -535,13 +542,16 @@ class NeonRpcApiWorker:
             raise
 
     def _stat_tx_begin(self):
-        self._stat_exporter.stat_commit_tx_begin()
+        if self._stat_exporter is not None:
+            self._stat_exporter.stat_commit_tx_begin()
 
     def _stat_tx_success(self):
-        self._stat_exporter.stat_commit_tx_end_success()
+        if self._stat_exporter is not None:
+            self._stat_exporter.stat_commit_tx_end_success()
 
     def _stat_tx_failed(self):
-        self._stat_exporter.stat_commit_tx_end_failed(None)
+        if self._stat_exporter is not None:
+            self._stat_exporter.stat_commit_tx_end_failed(None)
 
     def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: Union[str, int]) -> Optional[Dict[str, Any]]:
         try:
@@ -733,6 +743,9 @@ class NeonRpcApiWorker:
         else:
             return False
 
+        if method_name in {'neon_proxy_version', 'neon_proxyVersion'}:
+            return True
+
         now = math.ceil(time.time())
         elf_params = ElfParams()
         if self._last_elf_params_time != now:
@@ -742,16 +755,16 @@ class NeonRpcApiWorker:
                 raise EthereumError(message='Failed to read Neon EVM params from Solana cluster. Try again later')
             elf_params.set_elf_param_dict(elf_param_dict)
 
-        always_allowed_method_list = (
+        always_allowed_method_set = {
             "eth_chainId",
+            "neon_cliVersion",
             "neon_cli_version",
             "neon_getEvmParams"
-            "neon_proxy_version",
             "net_version",
             "web3_clientVersion"
-        )
+        }
 
-        if method_name in always_allowed_method_list:
+        if method_name in always_allowed_method_set:
             if elf_params.has_params():
                 return True
 

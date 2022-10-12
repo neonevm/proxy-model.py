@@ -81,7 +81,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             response['error'] = {'code': -32000, 'message': err.error}
         except EthereumError as err:
             # traceback.print_exc()
-            response['error'] = err.getError()
+            response['error'] = err.get_error()
         except BaseException as exc:
             self.debug('Exception on process request', exc_info=exc)
             response['error'] = {'code': -32000, 'message': str(exc)}

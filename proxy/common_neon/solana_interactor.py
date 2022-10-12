@@ -232,7 +232,7 @@ class ALTAccountInfo:
 
         authority = SolPubKey(lookup.authority) if lookup.has_authority else None
 
-        u64_max = pow(2, 64) - 1
+        u64_max = 2 ** 64 - 1
 
         return ALTAccountInfo(
             type=lookup.type,

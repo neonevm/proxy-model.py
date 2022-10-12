@@ -104,12 +104,13 @@ class Test_get_block_hash(unittest.TestCase):
         print("\ntest_getBlockHashFromHistory")
         current_block_number = proxy.eth.block_number
         print(current_block_number)
-        block_number_history = int(str(current_block_number), 0) - 50
+        block_number_history = max(int(str(current_block_number), 0) - 25, 1)
         block_hash_history = proxy.eth.get_block(block_number_history)['hash'].hex()
         logs = self.commit_getValues(block_number_history)
         print(block_hash_history)
         print(logs)
         self.assertEqual(logs[0], block_hash_history)
+
 
 if __name__ == '__main__':
     unittest.main()
