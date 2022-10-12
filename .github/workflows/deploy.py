@@ -116,7 +116,10 @@ def deploy_check(neon_evm_commit, github_sha):
     click.echo(f"Running containers: {containers}")
 
     wait_for_faucet()
-    run_uniswap_test()
+    # run_uniswap_test()
+
+    for file in get_test_list():
+        run_test(file)
 
 
 def get_test_list():
@@ -128,11 +131,12 @@ def get_test_list():
 
 
 def run_test(file_name):
-    env = {"SKIP_PREPARE_DEPLOY_TEST": "YES", "TESTNAME": "file_name"}
+    click.echo(f"Running {file_name} tests")
+    env = {"SKIP_PREPARE_DEPLOY_TEST": "YES", "TESTNAME": file_name}
     inst = docker_client.exec_create(
         "proxy", './proxy/deploy-test.sh', environment=env)
     out = docker_client.exec_start(inst['Id'])
-    print(out)
+    click.echo(out)
 
 
 @cli.command(name="test")
