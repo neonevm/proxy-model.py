@@ -102,8 +102,6 @@ def deploy_check(neon_evm_commit, github_sha):
     os.environ["REVISION"] = 'latest'  # TODO github_sha
     os.environ["NEON_EVM_COMMIT"] = neon_evm_commit
     os.environ["FAUCET_COMMIT"] = 'latest'
-
-    dump_docker_logs()
     cleanup_docker()
 
     try:
