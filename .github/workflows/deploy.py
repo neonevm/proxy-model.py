@@ -4,7 +4,12 @@ import sys
 import docker
 import subprocess
 import pathlib
+import requests
+import json
+from urllib.parse import urlparse
 from python_terraform import Terraform
+from paramiko import SSHClient
+from scp import SCPClient
 try:
     import click
 except ImportError:
@@ -17,20 +22,38 @@ def cli():
     pass
 
 
-githab_sha = "247f98b26f325530623ece2a749ffd1787ded7"
-githab_build_id = 1
+ERR_MSG_TPL = {
+    "blocks": [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": ""},
+        },
+        {"type": "divider"},
+    ]
+}
+
 TFSTATE_BUCKET = "nl-ci-stands"
-TFSTATE_KEY = f"tests/test-{githab_sha}-{githab_build_id}"
+TFSTATE_KEY_PREFIX = "tests/test-"
 TFSTATE_REGION = "us-east-2"
 IMAGE_NAME = "neonlabsorg/proxy"
-DOCKER_USER = os.environ.get("DHUBU")
-DOCKER_PASSWORD = os.environ.get("DHUBP")
 
-UNISWAP_V2_CORE_COMMIT = '2e03bcf7a78ec5e9c6658fa9a802169eba1e07ab'  # TODO stable
+UNISWAP_V2_CORE_COMMIT = 'stable'
 UNISWAP_V2_CORE_IMAGE = f'neonlabsorg/uniswap-v2-core:{UNISWAP_V2_CORE_COMMIT}'
-UNISWAP_TESTNAME = "test_UNISWAP.py"
+
+FAUCET_COMMIT = 'latest'
+
+FTS_NAME = "neonlabsorg/full_test_suite:develop"
 
 docker_client = docker.APIClient()
+terraform = Terraform(working_dir=pathlib.Path(
+    __file__).parent / "full_test_suite")
+
+
+def docker_compose(args: str):
+    command = f'docker-compose {args}'
+    click.echo(f"run command: {command}")
+    out = subprocess.run(command, shell=True)
+    return out
 
 
 @cli.command(name="build_docker_image")
@@ -53,55 +76,151 @@ def build_docker_image(neon_evm_commit, github_sha):
 
 
 @cli.command(name="publish_image")
-@click.option('--branch')
+@click.option('--head_ref_branch')
+@click.option('--base_ref_branch')
+@click.option('--github_ref')
 @click.option('--github_sha')
-def publish_image(branch, github_sha):
-    if branch == 'master':
+@click.option('--docker_user')
+@click.option('--docker_password')
+def publish_image(head_ref_branch, base_ref_branch, github_ref, github_sha, docker_user, docker_password):
+    if 'refs/tags/' in github_ref:
+        tag = github_ref.replace("refs/tags/", "")
+    elif base_ref_branch == 'master':
         tag = 'stable'
-    elif branch == 'develop':
+    elif base_ref_branch == 'develop':
         tag = 'latest'
     else:
-        tag = branch.split('/')[-1]
+        tag = head_ref_branch.split('/')[-1]
 
-    docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
+    docker_client.login(username=docker_user, password=docker_password)
+    out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
 
-    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", tag)
-    docker_client.push(f"{IMAGE_NAME}:{tag}")
+    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", f"{IMAGE_NAME}:{tag}")
+    out = docker_client.push(f"{IMAGE_NAME}:{tag}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
 
-    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", github_sha)
-    docker_client.push(f"{IMAGE_NAME}:{github_sha}")
 
+@cli.command(name="terraform_infrastructure")
+@click.option('--branch')
+@click.option('--github_sha')
+@click.option('--neon_evm_commit')
+@click.option('--run_number')
+def terraform_build_infrastructure(branch, github_sha, neon_evm_commit, run_number):
 
-@cli.command(name="terraform")
-def terraform_build_infrastructure():
+    os.environ["TF_VAR_branch"] = branch
+    os.environ["TF_VAR_proxy_model_commit"] = github_sha
+    os.environ["TF_VAR_neon_evm_commit"] = neon_evm_commit
+    os.environ["TF_VAR_faucet_model_commit"] = FAUCET_COMMIT
+    thstate_key = f'{TFSTATE_KEY_PREFIX}{github_sha}-{run_number}'
 
-    t = Terraform()
-    print(pathlib.Path(__file__).parent.resolve())
     backend_config = {"bucket": TFSTATE_BUCKET,
-                      "key": TFSTATE_KEY, "region": TFSTATE_REGION}
-    return_code, stdout, stderr = t.init(dir_or_plan=pathlib.Path(
-        __file__).parent.resolve(), backend_config=backend_config)
-    a = t.output()
-    print(return_code)
-    print(stdout)
-    print(stderr)
-    print(a)
-    t.destroy()
+                      "key": thstate_key, "region": TFSTATE_REGION}
+    terraform.init(backend_config=backend_config)
+    return_code, stdout, stderr = terraform.apply(skip_plan=True)
+    click.echo(f"code: {return_code}")
+    click.echo(f"stdout: {stdout}")
+    click.echo(f"stderr: {stderr}")
+
+
+@cli.command(name="destroy_terraform")
+@click.option('--github_sha')
+@click.option('--run_number')
+def destroy_terraform(github_sha, run_number):
+    thstate_key = f'{TFSTATE_KEY_PREFIX}{github_sha}-{run_number}'
+
+    backend_config = {"bucket": TFSTATE_BUCKET,
+                      "key": thstate_key, "region": TFSTATE_REGION}
+    terraform.init(backend_config=backend_config)
+    terraform.destroy()
+
+
+@cli.command(name="openzeppelin")
+@click.option('--run_number')
+def openzeppelin_test(run_number):
+    container_name = f'fts_{run_number}'
+    os.environ["FTS_THRESHOLD"] = '1920'
+    os.environ["FTS_CONTAINER_NAME"] = container_name
+    os.environ["FTS_IMAGE"] = FTS_NAME
+    os.environ["FTS_USERS_NUMBER"] = '15'
+    os.environ["FTS_JOBS_NUMBER"] = '8'
+    os.environ["NETWORK_NAME"] = f'full-test-suite-{run_number}'
+    os.environ["NETWORK_ID"] = '111'
+    os.environ["REQUEST_AMOUNT"] = '20000'
+    os.environ["USE_FAUCET"] = 'true'
+
+    output = terraform.output(json=True)
+    click.echo(f"output: {output}")
+    os.environ["PROXY_IP"] = output["proxy_ip"]["value"]
+    os.environ["SOLANA_IP"] = output["solana_ip"]["value"]
+    proxy_ip = os.environ.get("PROXY_IP")
+    solana_ip = os.environ.get("SOLANA_IP")
+
+    os.environ["PROXY_URL"] = f"http://{proxy_ip}:9090/solana"
+    os.environ["FAUCET_URL"] = f"http://{proxy_ip}:3333/request_neon"
+    os.environ["SOLANA_URL"] = f"http://{solana_ip}:8899"
+
+    click.echo(f"Env: {os.environ}")
+    click.echo(f"Running tests....")
+
+    docker_compose("-f docker-compose/docker-compose-full-test-suite.yml pull")
+    fts_result = docker_compose(
+        "-f docker-compose/docker-compose-full-test-suite.yml up")
+    click.echo(fts_result)
+    command = f'docker cp {container_name}:/opt/allure-reports.tar.gz ./'
+    click.echo(f"run command: {command}")
+    subprocess.run(command, shell=True)
+
+    dump_docker_logs(container_name)
+    home_path = os.environ.get("HOME")
+    artifact_logs = "./logs"
+    ssh_key = f"{home_path}/.ssh/ci-stands"
+    os.mkdir(artifact_logs)
+
+    subprocess.run(
+        f'ssh-keyscan -H {solana_ip} >> {home_path}/.ssh/known_hosts', shell=True)
+    subprocess.run(
+        f'ssh-keyscan -H {proxy_ip} >> {home_path}/.ssh/known_hosts', shell=True)
+    ssh_client = SSHClient()
+    ssh_client.load_system_host_keys()
+    ssh_client.connect(solana_ip, username='ubuntu',
+                       key_filename=ssh_key, timeout=120)
+
+    upload_remote_logs(ssh_client, "solana", artifact_logs)
+
+    ssh_client.connect(proxy_ip, username='ubuntu',
+                       key_filename=ssh_key, timeout=120)
+    services = ["postgres", "dbcreation", "indexer", "proxy", "faucet"]
+    for service in services:
+        upload_remote_logs(ssh_client, service, artifact_logs)
+
+    docker_compose(
+        "-f docker-compose/docker-compose-full-test-suite.yml rm -f")
+
+
+def upload_remote_logs(ssh_client, service, artifact_logs):
+    scp_client = SCPClient(transport=ssh_client.get_transport())
+    click.echo(f"Upload logs for service: {service}")
+    ssh_client.exec_command(
+        f'sudo docker logs {service} 2>&1 | pbzip2 > /tmp/{service}.log.bz2')
+    scp_client.get(f'/tmp/{service}.log.bz2', artifact_logs)
 
 
 @cli.command(name="deploy_check")
 @click.option('--neon_evm_commit')
 @click.option('--github_sha')
 def deploy_check(neon_evm_commit, github_sha):
-    os.environ["REVISION"] = 'latest'  # TODO github_sha
+    os.environ["REVISION"] = github_sha
     os.environ["NEON_EVM_COMMIT"] = neon_evm_commit
-    os.environ["FAUCET_COMMIT"] = 'latest'
+    os.environ["FAUCET_COMMIT"] = FAUCET_COMMIT
     cleanup_docker()
 
     try:
-        command = 'docker-compose -f proxy/docker-compose-test.yml up -d'
-        click.echo(f"run command: {command}")
-        subprocess.run(command, shell=True)
+        docker_compose("-f proxy/docker-compose-test.yml up -d")
     except:
         raise "Docker-compose failed to start"
 
@@ -110,7 +229,7 @@ def deploy_check(neon_evm_commit, github_sha):
     click.echo(f"Running containers: {containers}")
 
     wait_for_faucet()
-    # run_uniswap_test()
+    run_uniswap_test()
 
     for file in get_test_list():
         run_test(file)
@@ -133,23 +252,26 @@ def run_test(file_name):
     click.echo(out)
 
 
-@cli.command(name="dump_docker_logs")
-def dump_docker_logs():
+@cli.command(name="dump_apps_logs")
+def dump_apps_logs():
     containers = ['proxy', 'solana', 'proxy_program_loader',
                   'dbcreation', 'faucet', 'airdropper', 'indexer']
     for container in containers:
-        try:
-            logs = docker_client.logs(container).decode("utf-8")
-            with open(f"{container}.log", "w") as file:
-                file.write(logs)
-        except(docker.errors.NotFound):
-            click.echo(f"Container {container} does not exist")
+        dump_docker_logs(container)
+
+
+def dump_docker_logs(container):
+    try:
+        logs = docker_client.logs(container).decode("utf-8")
+        with open(f"{container}.log", "w") as file:
+            file.write(logs)
+    except (docker.errors.NotFound):
+        click.echo(f"Container {container} does not exist")
 
 
 def cleanup_docker():
     click.echo(f"Cleanup docker-compose...")
-    command = "docker-compose -f proxy/docker-compose-test.yml down -t 1"
-    subprocess.run(command, shell=True)
+    docker_compose("-f proxy/docker-compose-test.yml down -t 1")
     click.echo(f"Cleanup docker-compose done.")
     click.echo(f"Removing temporary data volumes...")
     command = "docker volume prune -f"
@@ -157,20 +279,20 @@ def cleanup_docker():
     click.echo(f"Removing temporary data done.")
 
 
-def get_fauset_url():
+def get_faucet_url():
     inspect_out = docker_client.inspect_container("proxy")
     env = inspect_out["Config"]["Env"]
-    fauset_url = ""
+    faucet_url = ""
     for item in env:
         if "FAUCET_URL=" in item:
-            fauset_url = item.replace("FAUCET_URL=", "")
+            faucet_url = item.replace("FAUCET_URL=", "")
             break
-    click.echo(f"fauset_url: {fauset_url}")
-    return fauset_url
+    click.echo(f"fauset_url: {faucet_url}")
+    return faucet_url
 
 
 def wait_for_faucet():
-    faucet_url = get_fauset_url()
+    faucet_url = get_faucet_url()
     faucet_ip, faucet_port = faucet_url.replace("http://", "").split(':')
 
     command = f'docker exec proxy nc -zvw1 {faucet_ip} {faucet_port}'
@@ -192,12 +314,30 @@ def wait_for_faucet():
 
 
 def run_uniswap_test():
-    fauset_url = get_fauset_url()
-    os.environ["FAUCET_URL"] = fauset_url
+    faucet_url = get_faucet_url()
+    os.environ["FAUCET_URL"] = faucet_url
 
     docker_client.pull(UNISWAP_V2_CORE_IMAGE)
-    command = f'docker run --rm --network=container:proxy -e FAUCET_URL --entrypoint ./deploy-test.sh {UNISWAP_V2_CORE_IMAGE} all 2>&1'
+    command = f'docker run --rm --network=container:proxy -e FAUCET_URL \
+        --entrypoint ./deploy-test.sh {UNISWAP_V2_CORE_IMAGE} all 2>&1'
     subprocess.run(command, shell=True)
+
+
+@cli.command(name="send_notification", help="Send notification to slack")
+@click.option("-u", "--url", help="slack app endpoint url.")
+@click.option("-b", "--build_url", help="github action test build url.")
+def send_notification(url, build_url):
+    tpl = ERR_MSG_TPL.copy()
+
+    parsed_build_url = urlparse(build_url).path.split("/")
+    build_id = parsed_build_url[-1]
+    repo_name = f"{parsed_build_url[1]}/{parsed_build_url[2]}"
+
+    tpl["blocks"][0]["text"]["text"] = (
+        f"*Build <{build_url}|`{build_id}`> of repository `{repo_name}` is failed.*"
+        f"\n<{build_url}|View build details>"
+    )
+    requests.post(url=url, data=json.dumps(tpl))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,155 @@
+name: Build proxy docker image
+on:
+  workflow_dispatch:
+    inputs:
+      full_test_suite:
+        required: true
+      neon_evm_commit:
+        required: true
+      neon_evm_branch:
+        required: true
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    tags:
+      - "*"
+env:
+  AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
+  AWS_DEFAULT_REGION: ${{secrets.AWS_DEFAULT_REGION}}
+  AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+  BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v6
+
+      - name: install python libs
+        run: pip install docker python_terraform scp paramiko
+
+      - name: Set neon_evm_commit
+        id: neon_evm_commit
+        run: |
+          WORKFLOW_INPUT=${{ github.event.inputs.neon_evm_commit }}
+          echo "::set-output name=value::${WORKFLOW_INPUT:-"latest"}"
+
+      - name: Build docker image
+        run: |
+          python ./.github/workflows/deploy.py build_docker_image \
+          --github_sha=${GITHUB_SHA} \
+          --neon_evm_commit=${{ steps.neon_evm_commit.outputs.value }}
+
+      - name: Publish image
+        run: |
+          python ./.github/workflows/deploy.py publish_image \
+          --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+          --github_ref=${GITHUB_REF} \
+          --base_ref_branch=${{ steps.branch-name.outputs.base_ref_branch }} \
+          --github_sha=${GITHUB_SHA} \
+          --docker_user=${{secrets.DOCKER_USERNAME}} \
+          --docker_password=${{secrets.DOCKER_PASSWORD}}
+
+  deploy-check:
+    needs:
+      - build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Install python libs
+        run: pip install docker python_terraform scp paramiko
+      - name: Set neon_evm_commit
+        id: neon_evm_commit
+        run: |
+          WORKFLOW_INPUT=${{ github.event.inputs.neon_evm_commit }}
+          echo "::set-output name=value::${WORKFLOW_INPUT:-"latest"}"
+      - name: deploy_check
+        run: |
+          python ./.github/workflows/deploy.py deploy_check \
+          --github_sha=${GITHUB_SHA} \
+          --neon_evm_commit=${{ steps.neon_evm_commit.outputs.value }}
+      - name: Dump docker logs
+        if: always()
+        run: python ./.github/workflows/deploy.py dump_apps_logs
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Docker logs
+          path: ./*.log
+  openzeppelin-tests:
+    if: ${{ (github.base_ref =='develop' && ! github.event.pull_request.draft) || github.event.inputs.full_test_suite }}
+    needs:
+      - build-image
+    runs-on: test-label
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v6
+      - name: Set neon_evm_commit
+        id: neon_evm_commit
+        run: |
+          WORKFLOW_INPUT=${{ github.event.inputs.neon_evm_commit }}
+          echo "::set-output name=value::${WORKFLOW_INPUT:-"latest"}"
+      - name: Install python libs
+        run: pip install docker python_terraform scp paramiko
+      - name: Add private key
+        run: |
+          echo "${{ secrets.CI_STANDS_KEY }}" > ${HOME}/.ssh/ci-stands
+          chmod 644 ${HOME}/.ssh/ci-stands
+      - name: Terraform build infra structure
+        run: |
+          python3 ./.github/workflows/deploy.py terraform_infrastructure \
+            --branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+            --github_sha=${GITHUB_SHA} \
+            --neon_evm_commit=${{ steps.neon_evm_commit.outputs.value }} \
+            --run_number=${GITHUB_RUN_NUMBER}
+
+      - name: Run openzeppelin tests
+        run: python3 ./.github/workflows/deploy.py openzeppelin --run_number ${GITHUB_RUN_NUMBER}
+
+      - name: Destroy terraform infrastructure
+        if: always()
+        run: |
+          python3 ./.github/workflows/deploy.py destroy_terraform \
+          --run_number=${GITHUB_RUN_NUMBER} \
+          --github_sha=${GITHUB_SHA}
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: FTS allure report
+          path: allure-reports.tar.gz
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: FTS docker logs
+          path: ./logs/*
+  sent-notification:
+    runs-on: ubuntu-latest
+    if: failure()
+    needs:
+      - openzeppelin-tests
+      - deploy-check
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+
+      - name: install python libs
+        run: pip install docker python_terraform scp paramiko
+
+      - name: Send notification to slack
+        run: |
+          python ./.github/workflows/deploy.py send_notification \
+          --url=${{secrets.SLACK_PROXY_CHANNEL_URL}} \
+          --build_url=${BUILD_URL}
