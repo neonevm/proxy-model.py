@@ -14,7 +14,8 @@ from ..common_neon.environment_data import SOLANA_URL, EVM_LOADER_ID, LOG_NEON_C
 class CliBase:
     def run_cli(self, cmd: List[str], **kwargs) -> bytes:
         self.debug("Calling: " + " ".join(cmd))
-        data = kwargs.get("data")
+        data = kwargs.pop("data") if kwargs.get("data") else None
+
         if data:
             proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                          **kwargs)
