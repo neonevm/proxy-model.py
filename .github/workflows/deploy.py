@@ -103,10 +103,7 @@ def deploy_check(neon_evm_commit, github_sha):
     os.environ["NEON_EVM_COMMIT"] = neon_evm_commit
     os.environ["FAUCET_COMMIT"] = 'latest'
 
-    containers = ['proxy', 'solana', 'proxy_program_loader',
-                  'dbcreation', 'faucet', 'airdropper', 'indexer']
-    for container in containers:
-        dump_docker_logs(container)
+    dump_docker_logs()
     cleanup_docker()
 
     try:
@@ -120,8 +117,6 @@ def deploy_check(neon_evm_commit, github_sha):
                   for item in docker_client.containers() if item['State'] == 'running']
     click.echo(f"Running containers: {containers}")
 
-    for container in containers:
-        dump_docker_logs(container)
     wait_for_faucet()
     run_uniswap_test()
 
@@ -148,14 +143,17 @@ def test():
         run_test(file)
 
 
-def dump_docker_logs(container):
-    try:
-        # print(docker_client.containers())
-        logs = docker_client.logs(container).decode("utf-8")
-        with open(f"{container}.log", "w") as file:
-            file.write(logs)
-    except(docker.errors.NotFound):
-        click.echo(f"Container {container} does not exist")
+@cli.command(name="dump_docker_logs")
+def dump_docker_logs():
+    containers = ['proxy', 'solana', 'proxy_program_loader',
+                  'dbcreation', 'faucet', 'airdropper', 'indexer']
+    for container in containers:
+        try:
+            logs = docker_client.logs(container).decode("utf-8")
+            with open(f"{container}.log", "w") as file:
+                file.write(logs)
+        except(docker.errors.NotFound):
+            click.echo(f"Container {container} does not exist")
 
 
 def cleanup_docker():
