@@ -187,7 +187,7 @@ class CancelTest(unittest.TestCase):
         right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
         tx_store = cls.storage_contract.functions.addReturnEventTwice(1, 1).buildTransaction({
             'nonce': right_nonce,
-            'gasPrice': proxy.eth.gas_price
+            'gasPrice': 0
         })
         tx_store_signed = proxy.eth.account.sign_transaction(tx_store, eth_account.key)
 
@@ -262,7 +262,7 @@ class CancelTest(unittest.TestCase):
                 nonce=proxy.eth.get_transaction_count(eth_account_invoked.address),
                 chainId=proxy.eth.chain_id,
                 gas=987654321,
-                gasPrice=proxy.eth.gas_price,
+                gasPrice=0,
                 to=eth_account_getter.address,
                 value=500_000_000_000_000_000
             ),
