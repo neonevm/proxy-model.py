@@ -11,7 +11,7 @@ class Config:
         self._solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
         self._pp_solana_url = os.environ.get("PP_SOLANA_URL", self._solana_url)
         self._evm_loader_id = SolPubKey(EVM_LOADER_ID)
-        self._evm_step_cnt_inc_pct = self._env_decimal("EVM_STEP_COUNT_INC_PCT", "0.5")
+        self._evm_step_cnt_inc_pct = self._env_decimal("EVM_STEP_COUNT_INC_PCT", "0.9")
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
         self._holder_size = self._env_int("HOLDER_SIZE", 1024, 131072)  # 128*1024
         self._min_op_balance_to_warn = self._env_int("MIN_OPERATOR_BALANCE_TO_WARN", 9000000000, 9000000000)
