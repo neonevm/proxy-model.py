@@ -4,7 +4,7 @@ import statistics
 
 from typing import Dict, Union, Callable, List
 
-from ..common_neon.environment_data import INDEXER_LOG_SKIP_COUNT
+from ..common_neon.config import Config
 
 
 def check_error(trx):
@@ -23,7 +23,7 @@ class MetricsToLogger:
         self._counter = 0
         self._item_list_dict.clear()
 
-    def print(self, logger: Callable[[str], None],
+    def print(self, config: Config, logger: Callable[[str], None],
               list_value_dict: Dict[str, Union[int, float]],
               latest_value_dict: Dict[str, int]):
         for key, value in list_value_dict.items():
@@ -33,7 +33,7 @@ class MetricsToLogger:
             self._item_value_dict[key] = value
         self._counter += 1
 
-        if self._counter % INDEXER_LOG_SKIP_COUNT != 0:
+        if self._counter % config.indexer_log_skip_cnt != 0:
             return
 
         msg = ''

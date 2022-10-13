@@ -2,14 +2,14 @@ from __future__ import annotations
 from typing import Optional
 from eth_utils import big_endian_to_int
 
-import dataclasses
+from dataclasses import dataclass
 
 from .utils import str_fmt_object
 
 from ..eth_proto import NeonTx
 
 
-@dataclasses.dataclass
+@dataclass(frozen=True)
 class NeonTxInfo:
     addr: Optional[str] = None
     sig: str = ''
@@ -25,8 +25,12 @@ class NeonTxInfo:
     s: str = ''
     error: Optional[Exception] = None
 
+    _str: str = ''
+
     def __str__(self) -> str:
-        return str_fmt_object(self)
+        if self._str == '':
+            object.__setattr__(self, '_str', str_fmt_object(self))
+        return self._str
 
     @staticmethod
     def from_neon_tx(tx: NeonTx) -> NeonTxInfo:

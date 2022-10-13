@@ -8,33 +8,33 @@ import logging
 from logged_groups import logged_group, LogMng
 
 from ..common_neon.solana_transaction import SolAccount
-from ..common_neon.environment_data import SOLANA_URL, EVM_LOADER_ID, LOG_NEON_CLI_DEBUG, neon_cli_timeout
-
-
-class CliBase:
-    def run_cli(self, cmd: List[str], data: str = None, **kwargs) -> bytes:
-        self.debug("Calling: " + " ".join(cmd))
-
-        if data:
-            proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                         **kwargs)
-        else:
-            proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                         **kwargs)
-        if proc_result.stderr is not None:
-            print(proc_result.stderr, file=sys.stderr)
-        output = proc_result.stdout
-        if not output:
-            proc_result.check_returncode()
-        return output
+from ..common_neon.config import Config
 
 
 @logged_group("neon.Proxy")
+class CliBase:
+    def __init__(self, config: Config):
+        self._config = config
+
+    def run_cli(self, cmd: List[str], data: str = None, **kwargs) -> str:
+        self.debug("Calling: " + " ".join(cmd))
+
+        if not data:
+            data = ""
+        result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
+        if result.stderr is not None:
+            print(result.stderr, file=sys.stderr)
+        output = result.stdout
+        if not output:
+            result.check_returncode()
+        return output
+
+
 class solana_cli(CliBase):
     def call(self, *args):
         try:
             cmd = ["solana",
-                   "--url", SOLANA_URL,
+                   "--url", self._config.solana_url,
                    ] + list(args)
             self.debug("Calling: " + " ".join(cmd))
             return self.run_cli(cmd, universal_newlines=True)
@@ -44,7 +44,7 @@ class solana_cli(CliBase):
 
 
 @logged_group("neon.Proxy")
-def get_solana_accounts(*, logger) -> [SolAccount]:
+def get_solana_accounts(config, *, logger) -> List[SolAccount]:
     def read_sol_account(name) -> Optional[SolAccount]:
         if not os.path.isfile(name):
             return None
@@ -55,7 +55,7 @@ def get_solana_accounts(*, logger) -> [SolAccount]:
             value_list = bytes(num_list[0:32])
             return SolAccount(value_list)
 
-    res = solana_cli().call('config', 'get')
+    res = solana_cli(config).call('config', 'get')
     logger.debug(f"Got solana config: {res}")
     substr = "Keypair Path: "
     path = ""
@@ -85,25 +85,29 @@ def get_solana_accounts(*, logger) -> [SolAccount]:
     return signer_list
 
 
-@logged_group("neon.Proxy")
 class neon_cli(CliBase):
-
-    EMULATOR_LOGLEVEL = { logging.CRITICAL: "off", logging.ERROR: "error", logging.WARNING: "warn",
-                          logging.INFO: "info", logging.DEBUG: "debug", logging.NOTSET: "warn" }
+    EMULATOR_LOGLEVEL = {
+        logging.CRITICAL: "off",
+        logging.ERROR: "error",
+        logging.WARNING: "warn",
+        logging.INFO: "info",
+        logging.DEBUG: "debug",
+        logging.NOTSET: "warn"
+    }
 
     def call(self, *args, data=None):
         try:
             ctx = json.dumps(LogMng.get_logging_context())
             cmd = ["neon-cli",
                    "--commitment=recent",
-                   "--url", SOLANA_URL,
-                   f"--evm_loader={EVM_LOADER_ID}",
+                   "--url", self._config.solana_url,
+                   f"--evm_loader={str(self._config.evm_loader_id)}",
                    f"--logging_ctx={ctx}",
                    f"--loglevel={self._emulator_logging_level}"
                    ]\
-                  + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
+                  + (["-vvv"] if self._config.neon_cli_debug_log else [])\
                   + list(args)
-            return self.run_cli(cmd, data, timeout=neon_cli_timeout, universal_newlines=True)
+            return self.run_cli(cmd, data, timeout=self._config.neon_cli_timeout, universal_newlines=True)
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise
@@ -117,7 +121,7 @@ class neon_cli(CliBase):
     def version(self):
         try:
             cmd = ["neon-cli", "--version"]
-            return self.run_cli(cmd, timeout=neon_cli_timeout, universal_newlines=True).split()[1]
+            return self.run_cli(cmd, timeout=self._config.neon_cli_timeout, universal_newlines=True).split()[1]
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise

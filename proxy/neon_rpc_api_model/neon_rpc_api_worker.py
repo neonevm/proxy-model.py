@@ -11,7 +11,7 @@ from logged_groups import logged_group, LogMng
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
-from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
+from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status, call_tx_emulated
 from ..common_neon.errors import EthereumError, InvalidParamError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import NeonTx
@@ -89,9 +89,8 @@ class NeonRpcApiWorker:
     def neon_cli_version(self) -> str:
         return self.neon_cliVersion()
 
-    @staticmethod
-    def neon_cliVersion() -> str:
-        return neon_cli().version()
+    def neon_cliVersion(self) -> str:
+        return neon_cli(self._config).version()
 
     @staticmethod
     def net_version() -> str:
@@ -309,7 +308,7 @@ class NeonRpcApiWorker:
         account = self._normalize_account(account)
 
         try:
-            value = neon_cli().call('get-storage-at', account, position)
+            value = neon_cli(self._config).call('get-storage-at', account, position)
             return value
         except (Exception,):
             # self.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
@@ -375,7 +374,9 @@ class NeonRpcApiWorker:
             contract_id = obj.get('to', 'deploy')
             data = obj.get('data', "None")
             value = obj.get('value', '')
-            return "0x"+call_emulated(contract_id, caller_id, data, value)['result']
+            emulator_json = call_emulated(self._config, contract_id, caller_id, data, value)
+            check_emulated_exit_status(emulator_json)
+            return '0x' + emulator_json['result']
         except EthereumError:
             raise
         except Exception as err:
@@ -724,7 +725,7 @@ class NeonRpcApiWorker:
         """
         self.debug(f"Call neon_emulate: {raw_signed_tx}")
         neon_tx = NeonTx.fromString(bytearray.fromhex(raw_signed_tx))
-        emulation_result = call_trx_emulated(neon_tx)
+        emulation_result = call_tx_emulated(self._config, neon_tx)
         return emulation_result
 
     def neon_finalizedBlockNumber(self) -> str:

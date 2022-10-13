@@ -1,6 +1,6 @@
 from logged_groups import logged_group
 
-from ..common_neon.emulator_interactor import call_trx_emulated
+from ..common_neon.emulator_interactor import call_tx_emulated
 from ..common_neon.errors import NonceTooLowError, BudgetExceededError, NoMoreRetriesError
 from ..common_neon.utils import NeonTxResultInfo
 from ..common_neon.data import NeonEmulatedResult
@@ -36,7 +36,7 @@ class NeonTxSendStrategyExecutor:
         self._ctx.set_state_tx_cnt(state_tx_cnt)
 
     def _emulate_neon_tx(self) -> None:
-        emulated_result: NeonEmulatedResult = call_trx_emulated(self._ctx.neon_tx)
+        emulated_result: NeonEmulatedResult = call_tx_emulated(self._ctx.config, self._ctx.neon_tx)
         self._ctx.set_emulated_result(emulated_result)
         self._validate_nonce()
 
