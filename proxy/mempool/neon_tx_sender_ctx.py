@@ -78,7 +78,7 @@ class NeonTxSendCtx:
 
         neon_meta_list = list(self._neon_meta_dict.values())
         self.debug(
-            f'metas ({len(neon_meta_list)}): '
+            f'metas ({len(neon_meta_list)}): ' +
             ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in neon_meta_list])
         )
 

@@ -39,7 +39,6 @@ class SimpleNeonTxSender(SolTxListSender):
         for sol_neon_ix in tx_receipt_info.iter_sol_neon_ix():
             res = sol_neon_ix.neon_tx_return
             if res is not None:
-                self.debug(f' { str(res) }')
                 self._neon_tx_res.set_result(status=res.status, gas_used=res.gas_used, return_value=res.return_value)
                 self.debug(f'Got Neon tx result: {self._neon_tx_res}')
                 break
