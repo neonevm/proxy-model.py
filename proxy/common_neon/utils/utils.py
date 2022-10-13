@@ -72,7 +72,7 @@ def str_fmt_object(obj: Any) -> str:
             if not has_value:
                 continue
 
-            key = key.lstrip('_')
+            key = str(key).lstrip('_')
             result[key] = value
         return result
 
