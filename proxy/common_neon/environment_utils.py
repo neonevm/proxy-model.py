@@ -11,28 +11,25 @@ from ..common_neon.solana_transaction import SolAccount
 from ..common_neon.config import Config
 
 
+@logged_group("neon.Proxy")
 class CliBase:
     def __init__(self, config: Config):
         self._config = config
 
-    def run_cli(self, cmd: List[str], data: str = None, **kwargs) -> bytes:
+    def run_cli(self, cmd: List[str], data: str = None, **kwargs) -> str:
         self.debug("Calling: " + " ".join(cmd))
 
-        if data:
-            proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                         **kwargs)
-        else:
-            proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                         **kwargs)
-        if proc_result.stderr is not None:
-            print(proc_result.stderr, file=sys.stderr)
-        output = proc_result.stdout
+        if not data:
+            data = ""
+        result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
+        if result.stderr is not None:
+            print(result.stderr, file=sys.stderr)
+        output = result.stdout
         if not output:
-            proc_result.check_returncode()
+            result.check_returncode()
         return output
 
 
-@logged_group("neon.Proxy")
 class solana_cli(CliBase):
     def call(self, *args):
         try:
@@ -88,11 +85,15 @@ def get_solana_accounts(config, *, logger) -> List[SolAccount]:
     return signer_list
 
 
-@logged_group("neon.Proxy")
 class neon_cli(CliBase):
-
-    EMULATOR_LOGLEVEL = { logging.CRITICAL: "off", logging.ERROR: "error", logging.WARNING: "warn",
-                          logging.INFO: "info", logging.DEBUG: "debug", logging.NOTSET: "warn" }
+    EMULATOR_LOGLEVEL = {
+        logging.CRITICAL: "off",
+        logging.ERROR: "error",
+        logging.WARNING: "warn",
+        logging.INFO: "info",
+        logging.DEBUG: "debug",
+        logging.NOTSET: "warn"
+    }
 
     def call(self, *args, data=None):
         try:

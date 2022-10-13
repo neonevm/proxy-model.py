@@ -106,7 +106,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         self._evm_step_cnt -= 150
         self.debug(f'Decrease EVM steps from {prev_evm_step_cnt} to {self._evm_step_cnt}')
 
-        if (self._evm_step_cnt <= self._base_evm_step_cnt) and (self._bpf_cycle_cnt is None):
+        if (self._evm_step_cnt <= self._base_evm_step_cnt + 100) and (self._bpf_cycle_cnt is None):
             self._bpf_cycle_cnt = 1_400_000
             self.debug(f'Increase BPF cycles to {self._bpf_cycle_cnt}')
 
