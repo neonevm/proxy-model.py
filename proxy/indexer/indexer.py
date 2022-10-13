@@ -111,7 +111,7 @@ class Indexer(IndexerBase):
             return False
 
         self.debug(f'Neon tx is blocked: storage {holder_account}, {tx.neon_tx}, {holder_info.account_list}')
-        tx.set_status(NeonIndexedTxInfo.Status.CANCELED, SolNeonIxReceiptInfo.from_tx(sol_tx_meta))
+        tx.set_status(NeonIndexedTxInfo.Status.CANCELED, sol_tx_meta.block_slot)
         return True
 
     def _save_checkpoint(self) -> None:
@@ -238,7 +238,7 @@ class Indexer(IndexerBase):
                     # self.debug(f'ignore parsed tx {sol_tx_meta}')
                     continue
 
-                neon_block.add_sol_tx_cost(SolTxCostInfo(sol_tx_meta))
+                neon_block.add_sol_tx_cost(SolTxCostInfo.from_tx_meta(sol_tx_meta))
 
                 if SolTxErrorParser(sol_tx_meta.tx).check_if_error():
                     # self.debug(f'ignore failed tx {sol_tx_meta}')

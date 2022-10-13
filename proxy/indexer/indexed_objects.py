@@ -5,7 +5,8 @@ import copy
 import time
 
 from enum import Enum
-from typing import Iterator, List, Optional, Dict, NamedTuple, Set, Deque, Tuple, cast
+from dataclasses import dataclass
+from typing import Iterator, List, Optional, Dict, Set, Deque, Tuple, cast
 from collections import deque
 from logged_groups import logged_group
 
@@ -55,34 +56,33 @@ class BaseNeonIndexedObjInfo:
         return iter(self._sol_neon_ix_list)
 
 
+@dataclass
 class NeonAccountInfo:
-    def __init__(self, neon_address: Optional[str],
-                 pda_address: str,
-                 block_slot: int,
-                 code: Optional[str],
-                 sol_sig: Optional[str]):
-        self._neon_address = neon_address
-        self._pda_address = pda_address
-        self._block_slot = block_slot
-        self._code = code
-        self._sol_sig = sol_sig
-
-    def __str__(self) -> str:
-        return str_fmt_object(self)
+    neon_address: Optional[str]
+    pda_address: str
+    block_slot: int
+    code: Optional[str]
+    sol_sig: Optional[str]
 
 
 class NeonIndexedHolderInfo(BaseNeonIndexedObjInfo):
-    class DataChunk(NamedTuple):
+    @dataclass(frozen=True)
+    class DataChunk:
         offset: int
         length: int
         data: bytes
+
+        _str: str = ''
 
         @staticmethod
         def init_empty() -> NeonIndexedHolderInfo.DataChunk:
             return NeonIndexedHolderInfo.DataChunk(offset=0, length=0, data=bytes())
 
         def __str__(self):
-            return str_fmt_object(self._asdict())
+            if self._str == '':
+                _str = str_fmt_object(self)
+                object.__setattr__(self, '_str', _str)
+            return self._str
 
         def is_valid(self) -> bool:
             return (self.length > 0) and (len(self.data) == self.length)
@@ -218,14 +218,14 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         self._holder_account = holder.account
         self.move_sol_neon_ix(holder)
 
-    def set_status(self, value: NeonIndexedTxInfo.Status, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
+    def set_status(self, value: NeonIndexedTxInfo.Status, block_slot: int) -> None:
         self._status = value
-        self._block_slot = max(self._block_slot, sol_neon_ix.block_slot)
+        self._block_slot = max(self._block_slot, block_slot)
 
     def set_neon_tx(self, neon_tx: NeonTxInfo) -> None:
         assert not self._neon_receipt.neon_tx.is_valid()
         assert neon_tx.is_valid()
-        self._neon_receipt = self._neon_receipt.replace(neon_tx=neon_tx)
+        self._neon_receipt.set_neon_tx(neon_tx)
 
 
 @logged_group("neon.Indexer")
@@ -275,7 +275,8 @@ class NeonIndexedBlockInfo:
         return self._is_completed
 
     def set_finalized(self, value: bool) -> None:
-        self._history_block_deque = deque([block.replace(is_finalized=value) for block in self._history_block_deque])
+        for block in self._history_block_deque:
+            block.set_finalized(value)
 
     def finalize_history_list(self, finalized_block_slot: int) -> int:
         removed_block_cnt = 0
@@ -394,8 +395,8 @@ class NeonIndexedBlockInfo:
 
         tx_idx = len(self._done_neon_tx_list)
 
-        tx.set_status(NeonIndexedTxInfo.Status.DONE, sol_neon_ix)
-        tx.neon_tx_res.fill_block_info(self._sol_block, tx_idx, self._log_idx)
+        tx.set_status(NeonIndexedTxInfo.Status.DONE, sol_neon_ix.block_slot)
+        tx.neon_tx_res.set_block_info(self._sol_block, tx.neon_tx.sig, tx_idx, self._log_idx)
 
         self._log_idx += len(tx.neon_tx_res.log_list)
 
@@ -710,7 +711,7 @@ class SolNeonTxDecoderState:
         assert self._sol_tx_meta is not None
 
         try:
-            self._sol_tx = SolTxReceiptInfo(self._sol_tx_meta)
+            self._sol_tx = SolTxReceiptInfo.from_tx_meta(self._sol_tx_meta)
             for self._sol_neon_ix in self._sol_tx.iter_sol_neon_ix():
                 if len(self._neon_tx_key_list) < self._sol_neon_ix.level:
                     # goes to the upper level

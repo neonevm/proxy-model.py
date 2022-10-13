@@ -30,7 +30,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             return
         elif self._is_canceled:
             # Transaction with cancel is confirmed
-            self._neon_tx_res.fill_result(status="0x0", gas_used='0x0', return_value='')
+            self._neon_tx_res.set_result(status=0, gas_used=0, return_value=b'')
             self.debug(f'Got Neon tx cancel: {self._neon_tx_res}')
         else:
             super()._decode_neon_tx_result(tx, tx_receipt)

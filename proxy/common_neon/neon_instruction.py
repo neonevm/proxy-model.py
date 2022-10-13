@@ -31,6 +31,7 @@ class EvmInstruction(Enum):
     DepositV03 = b'\x27'                            # 39
     CreateAccountV03 = b'\x28'                      # 40
 
+
 def create_account_with_seed_layout(base: SolPubKey, seed: str, lamports: int, space: int):
     return SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
@@ -100,8 +101,8 @@ class NeonIxBuilder:
 
     @staticmethod
     def create_treasury_pool_address(treasury_pool_index):
-        TREASURY_SEED_PREFIX = "collateral_seed_"
-        seed = TREASURY_SEED_PREFIX + str(treasury_pool_index)
+        treasury_seed_prefix = "collateral_seed_"
+        seed = treasury_seed_prefix + str(treasury_pool_index)
         collateral_pool_base = SolPubKey(ElfParams().collateral_pool_base)
         return accountWithSeed(collateral_pool_base, str.encode(seed))
 
