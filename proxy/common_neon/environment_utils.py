@@ -12,9 +12,15 @@ from ..common_neon.environment_data import SOLANA_URL, EVM_LOADER_ID, LOG_NEON_C
 
 
 class CliBase:
-    def run_cli(self, cmd: List[str], **kwargs) -> bytes:
+    def run_cli(self, cmd: List[str], data: str = None, **kwargs) -> bytes:
         self.debug("Calling: " + " ".join(cmd))
-        proc_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
+
+        if data:
+            proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                         **kwargs)
+        else:
+            proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                         **kwargs)
         if proc_result.stderr is not None:
             print(proc_result.stderr, file=sys.stderr)
         output = proc_result.stdout
@@ -85,7 +91,7 @@ class neon_cli(CliBase):
     EMULATOR_LOGLEVEL = { logging.CRITICAL: "off", logging.ERROR: "error", logging.WARNING: "warn",
                           logging.INFO: "info", logging.DEBUG: "debug", logging.NOTSET: "warn" }
 
-    def call(self, *args):
+    def call(self, *args, data=None):
         try:
             ctx = json.dumps(LogMng.get_logging_context())
             cmd = ["neon-cli",
@@ -97,7 +103,7 @@ class neon_cli(CliBase):
                    ]\
                   + (["-vvv"] if LOG_NEON_CLI_DEBUG else [])\
                   + list(args)
-            return self.run_cli(cmd, timeout=neon_cli_timeout, universal_newlines=True)
+            return self.run_cli(cmd, data, timeout=neon_cli_timeout, universal_newlines=True)
         except subprocess.CalledProcessError as err:
             self.error("ERR: neon-cli error {}".format(err))
             raise

@@ -290,7 +290,6 @@ class NeonCliErrorParser:
 
 
 def emulator(contract, sender, data, value):
-    data = data or "none"
     value = value or ""
     try:
         neon_token_mint = ElfParams().neon_token_mint
@@ -306,8 +305,8 @@ def emulator(contract, sender, data, value):
                     "--max_steps_to_execute", str(max_evm_steps_to_execute),
                     sender,
                     contract,
-                    data,
-                    value
+                    value,
+                    data=data
                 )
             except subprocess.TimeoutExpired:
                 retry_cnt += 1
