@@ -3,13 +3,13 @@ from typing import Optional
 from decimal import Decimal
 
 from ..common_neon.solana_transaction import SolPubKey
-from ..common_neon.environment_data import EVM_LOADER_ID, SOLANA_URL, RETRY_ON_FAIL
+from ..common_neon.environment_data import EVM_LOADER_ID
 
 
 class Config:
     def __init__(self):
-        self._solana_url = SOLANA_URL
-        self._pp_solana_url = os.environ.get("PP_SOLANA_URL", SOLANA_URL)
+        self._solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
+        self._pp_solana_url = os.environ.get("PP_SOLANA_URL", self._solana_url)
         self._evm_loader_id = SolPubKey(EVM_LOADER_ID)
         self._evm_step_cnt_inc_pct = self._env_decimal("EVM_STEP_COUNT_INC_PCT", "0.5")
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
@@ -20,7 +20,7 @@ class Config:
         self._perm_account_limit = self._env_int("PERM_ACCOUNT_LIMIT", 1, 2)
         self._recheck_used_resource_sec = self._env_int('RECHECK_USED_RESOURCE_SEC', 10, 60)
         self._recheck_resource_after_uses_cnt = self._env_int("RECHECK_RESOURCE_AFTER_USES_CNT", 10, 60)
-        self._retry_on_fail = RETRY_ON_FAIL
+        self._retry_on_fail = self._env_int("RETRY_ON_FAIL", 1, 10)
         self._enable_private_api = self._env_bool("ENABLE_PRIVATE_API", False)
         self._use_earliest_block_if_0_passed = self._env_bool("USE_EARLIEST_BLOCK_IF_0_PASSED", False)
         self._account_permission_update_int = self._env_int("ACCOUNT_PERMISSION_UPDATE_INT", 10, 60 * 5)
@@ -43,6 +43,14 @@ class Config:
         self._fuzzing_blockhash = self._env_bool("FUZZING_BLOCKHASH", False)
         self._confirm_timeout_sec = self._env_int("CONFIRM_TIMEOUT_SEC", 10, 10)
         self._confirm_check_msec = self._env_int("CONFIRM_CHECK_MSEC", 10, 100)
+        self._max_evm_step_cnt_emulate = self._env_int("MAX_EVM_STEP_COUNT_TO_EMULATE", 1000, 500000)
+        self._neon_cli_timeout = self._env_decimal("NEON_CLI_TIMEOUT", "2.5")
+        self._neon_cli_debug_log = self._env_bool("NEON_CLI_DEBUG_LOG", False)
+        self._cancel_timeout = self._env_int("CANCEL_TIMEOUT", 1, 60)
+        self._skip_cancel_timeout = self._env_int("SKIP_CANCEL_TIMEOUT", 1, 1000)
+        self._holder_timeout = self._env_int("HOLDER_TIMEOUT", 1, 216000)  # 1 day by default
+        self._indexer_log_skip_cnt = self._env_int("INDEXER_LOG_SKIP_COUNT", 1, 1000)
+        self._gather_statistics = self._env_bool("GATHER_STATISTICS", False)
 
         pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
         self._pyth_mapping_account = SolPubKey(pyth_mapping_account) if pyth_mapping_account is not None else None
@@ -155,11 +163,9 @@ class Config:
         return self._gas_price_suggested_pct
 
     @property
-    def min_gas_price(self) -> Optional[int]:
+    def min_gas_price(self) -> int:
         """Minimal gas price to accept into the mempool"""
-        if self._min_gas_price > 0:
-            return self._min_gas_price
-        return None
+        return self._min_gas_price
 
     @property
     def min_wo_chainid_gas_price(self) -> int:
@@ -214,6 +220,38 @@ class Config:
     def confirm_check_msec(self) -> int:
         return self._confirm_check_msec
 
+    @property
+    def max_evm_step_cnt_emulate(self) -> int:
+        return self._max_evm_step_cnt_emulate
+
+    @property
+    def neon_cli_timeout(self) -> float:
+        return float(self._neon_cli_timeout)
+
+    @property
+    def neon_cli_debug_log(self) -> bool:
+        return self._neon_cli_debug_log
+
+    @property
+    def cancel_timeout(self) -> int:
+        return self._cancel_timeout
+
+    @property
+    def skip_cancel_timeout(self) -> int:
+        return self._skip_cancel_timeout
+
+    @property
+    def holder_timeout(self) -> int:
+        return self._holder_timeout
+
+    @property
+    def indexer_log_skip_cnt(self) -> int:
+        return self._indexer_log_skip_cnt
+
+    @property
+    def gather_statistics(self) -> bool:
+        return self._gather_statistics
+
     def __str__(self):
         return '\n        '.join([
             '',
@@ -253,5 +291,13 @@ class Config:
             f"FUZZING_BLOCKHASH: {self.fuzzing_blockhash}",
             f"CONFIRM_TIMEOUT_SEC: {self.confirm_timeout_sec}",
             f"CONFIRM_CHECK_MSEC: {self.confirm_check_msec}",
+            f"MAX_EVM_STEP_COUNT_TO_EMULATE: {self.max_evm_step_cnt_emulate}",
+            f"NEON_CLI_TIMEOUT: {self.neon_cli_timeout}",
+            f"NEON_CLI_DEBUG_LOG: {self.neon_cli_debug_log}",
+            f"CANCEL_TIMEOUT: {self.cancel_timeout}",
+            f"SKIP_CANCEL_TIMEOUT: {self.skip_cancel_timeout}",
+            f"HOLDER_TIMOUT: {self.holder_timeout}",
+            f"INDEXER_LOG_SKIP_COUNT: {self.indexer_log_skip_cnt}",
+            f"GATHER_STATISTICS: {self.gather_statistics}",
             ""
         ])

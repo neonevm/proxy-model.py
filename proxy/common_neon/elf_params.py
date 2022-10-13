@@ -7,6 +7,7 @@ from singleton_decorator import singleton
 
 from ..common_neon.solana_transaction import SolPubKey
 from ..common_neon.environment_utils import neon_cli
+from ..common_neon.config import Config
 
 
 @singleton
@@ -101,11 +102,11 @@ class ElfParams:
     def elf_param_dict(self) -> Dict[str: str]:
         return self._elf_param_dict
 
-    def read_elf_param_dict_from_net(self) -> ElfParams:
+    def read_elf_param_dict_from_net(self, config: Config) -> ElfParams:
         if not self.has_params():
             self.debug("Read ELF params")
         elf_param_dict: Dict[str, str] = {}
-        for param in neon_cli().call("neon-elf-params").splitlines():
+        for param in neon_cli(config).call("neon-elf-params").splitlines():
             if param.startswith('NEON_') and '=' in param:
                 v = param.split('=')
                 elf_param_dict.setdefault(v[0], v[1])

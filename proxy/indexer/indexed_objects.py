@@ -12,7 +12,7 @@ from logged_groups import logged_group
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolanaBlockInfo, str_fmt_object
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolNeonIxReceiptInfo, SolTxCostInfo, SolTxReceiptInfo
-from ..common_neon.environment_data import SKIP_CANCEL_TIMEOUT, HOLDER_TIMEOUT
+from ..common_neon.config import Config
 
 from ..indexer.solana_tx_meta_collector import SolTxMetaCollector
 
@@ -439,7 +439,7 @@ class NeonIndexedBlockInfo:
     def iter_done_neon_tx(self) -> Iterator[NeonIndexedTxInfo]:
         return iter(self._done_neon_tx_list)
 
-    def complete_block(self) -> None:
+    def complete_block(self, config: Config) -> None:
         for tx in self._done_neon_tx_list:
             self._del_neon_tx(tx)
 
@@ -448,12 +448,12 @@ class NeonIndexedBlockInfo:
         self._sol_tx_cost_list.clear()
 
         for tx in list(self.iter_neon_tx()):
-            if abs(self.block_slot - tx.block_slot) > SKIP_CANCEL_TIMEOUT:
+            if abs(self.block_slot - tx.block_slot) > config.skip_cancel_timeout:
                 self.debug(f'skip to cancel {tx}')
                 self.fail_neon_tx(tx)
 
         for holder in list(self.iter_neon_holder()):
-            if abs(self.block_slot - holder.block_slot) > HOLDER_TIMEOUT:
+            if abs(self.block_slot - holder.block_slot) > config.holder_timeout:
                 self.debug(f'skip the neon holder {holder}')
                 self.fail_neon_holder(holder)
 
