@@ -17,8 +17,8 @@ class FakeConfig(Config):
         return SolPubKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')  # only for devnet
 
     @property
-    def min_gas_price(self) -> Optional[int]:
-        return None
+    def min_gas_price(self) -> int:
+        return 0
 
 
 class TestGasPriceCalculator(unittest.TestCase):

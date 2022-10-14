@@ -32,6 +32,7 @@ class MemPool:
     def __init__(self, config: Config, op_res_mng: OpResMng, executor: IMPExecutor):
         capacity = config.mempool_capacity
         self.info(f"Init mempool schedule with capacity: {capacity}")
+        self.info(f"Config: {config}")
         self._tx_schedule = MPTxSchedule(capacity)
         self._schedule_cond = asyncio.Condition()
         self._processing_task_list: List[MPTask] = []

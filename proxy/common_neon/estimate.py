@@ -4,7 +4,7 @@ import math
 from typing import Dict, Any
 from logged_groups import logged_group
 
-from proxy.common_neon.emulator_interactor import call_emulated
+from proxy.common_neon.emulator_interactor import call_emulated, check_emulated_exit_status
 from ..common_neon.elf_params import ElfParams
 
 from .config import Config
@@ -36,8 +36,11 @@ class GasEstimate:
         self.emulator_json = {}
 
     def execute(self):
-        self.emulator_json = call_emulated(self._contract or "deploy", self._sender, self._data, self._value)
-        self.debug(f'emulator returns: {json.dumps(self.emulator_json, sort_keys=True)}')
+        emulator_json = call_emulated(self._config, self._contract or "deploy", self._sender, self._data, self._value)
+        check_emulated_exit_status(emulator_json)
+
+        self.emulator_json = emulator_json
+        self.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
 
     def _tx_size_cost(self) -> int:
         u256_max = int.from_bytes(bytes([0xFF] * 32), "big")

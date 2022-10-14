@@ -30,7 +30,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             return
         elif self._is_canceled:
             # Transaction with cancel is confirmed
-            self._neon_tx_res.fill_result(status="0x0", gas_used='0x0', return_value='')
+            self._neon_tx_res.set_result(status=0, gas_used=0, return_value=b'')
             self.debug(f'Got Neon tx cancel: {self._neon_tx_res}')
         else:
             super()._decode_neon_tx_result(tx, tx_receipt)
@@ -99,19 +99,16 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         return self._build_cancel_tx()
 
     def decrease_evm_step_cnt(self) -> bool:
-        if self._evm_step_cnt == 10:
+        if self._evm_step_cnt <= self._base_evm_step_cnt:
             return False
 
         prev_evm_step_cnt = self._evm_step_cnt
-        if self._evm_step_cnt > 170:
-            self._evm_step_cnt -= 150
-        else:
-            self._evm_step_cnt = 10
+        self._evm_step_cnt -= 150
         self.debug(f'Decrease EVM steps from {prev_evm_step_cnt} to {self._evm_step_cnt}')
 
-        if (self._evm_step_cnt < self._base_evm_step_cnt) and (self._bpf_cycle_cnt is None):
+        if (self._evm_step_cnt <= self._base_evm_step_cnt + 100) and (self._bpf_cycle_cnt is None):
             self._bpf_cycle_cnt = 1_400_000
-            self.debug(f'Increase BPF cycles to {self._bpf_cycle_cnt}.')
+            self.debug(f'Increase BPF cycles to {self._bpf_cycle_cnt}')
 
         return True
 
@@ -144,7 +141,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         assert self.is_valid()
 
         emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._start_evm_step_cnt)
-        tx_list = self.build_tx_list(emulated_step_cnt, self._ctx.neon_tx_exec_cfg.resize_iter_cnt)
+        tx_list = self.build_tx_list(emulated_step_cnt, self._ctx.neon_tx_exec_cfg.resize_iter_cnt + 2)
         tx_sender = IterativeNeonTxSender(self, self._ctx.solana, self._ctx.signer)
         tx_sender.send(tx_list)
         if not tx_sender.neon_tx_res.is_valid():

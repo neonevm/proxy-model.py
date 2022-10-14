@@ -13,7 +13,6 @@ from ..common_neon.elf_params import ElfParams
 from ..common_neon.solana_transaction import SolTxIx, SolPubKey, SolAccountMeta
 from ..common_neon.address import accountWithSeed, ether2program, EthereumAddress
 from ..common_neon.constants import INCINERATOR_ID, COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID
-from ..common_neon.constants import TREASURY_POOL_MAX
 from ..common_neon.layouts import CREATE_ACCOUNT_LAYOUT
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.environment_data import EVM_LOADER_ID
@@ -30,6 +29,7 @@ class EvmInstruction(Enum):
     HolderWrite = b'\x26'                           # 38
     DepositV03 = b'\x27'                            # 39
     CreateAccountV03 = b'\x28'                      # 40
+
 
 def create_account_with_seed_layout(base: SolPubKey, seed: str, lamports: int, space: int):
     return SYSTEM_INSTRUCTIONS_LAYOUT.build(
@@ -84,9 +84,9 @@ class NeonIxBuilder:
         self._holder_msg = self._msg
 
         keccak_result = keccak_256(self._neon_tx.unsigned_msg()).digest()
-        treasury_pool_index = int().from_bytes(keccak_result[:4], "little") % TREASURY_POOL_MAX
+        treasury_pool_index = int().from_bytes(keccak_result[:4], "little") % ElfParams().treasury_pool_max
         self._treasury_pool_index_buf = treasury_pool_index.to_bytes(4, 'little')
-        self._treasury_pool_address = self.create_treasury_pool_address(treasury_pool_index)
+        self._treasury_pool_address = self._create_treasury_pool_address(treasury_pool_index)
 
         return self
 
@@ -99,11 +99,11 @@ class NeonIxBuilder:
         return self
 
     @staticmethod
-    def create_treasury_pool_address(treasury_pool_index):
-        TREASURY_SEED_PREFIX = "collateral_seed_"
-        seed = TREASURY_SEED_PREFIX + str(treasury_pool_index)
-        collateral_pool_base = SolPubKey(ElfParams().collateral_pool_base)
-        return accountWithSeed(collateral_pool_base, str.encode(seed))
+    def _create_treasury_pool_address(treasury_pool_index):
+        treasury_seed_prefix = "collateral_seed_"
+        seed = treasury_seed_prefix + str(treasury_pool_index)
+        treasury_pool_base = SolPubKey(ElfParams().treasury_pool_base)
+        return accountWithSeed(treasury_pool_base, str.encode(seed))
 
     def make_create_account_with_seed_ix(self, account: SolPubKey, seed: bytes, lamports: int, space: int) -> SolTxIx:
         seed_str = str(seed, 'utf8')

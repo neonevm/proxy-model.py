@@ -48,7 +48,14 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
             return True
 
         alt_builder = ALTTxBuilder(self._ctx.solana, self._ctx.ix_builder, self._ctx.signer)
-        self._alt_info = alt_builder.build_alt_info(legacy_tx)
+        alt_info = alt_builder.build_alt_info(legacy_tx)
+        if alt_info.account_key_list_len < alt_builder.tx_account_cnt:
+            raise RuntimeError(
+                f'Number of accounts {alt_info.account_key_list_len} '
+                f'less than {alt_builder.tx_account_cnt}'
+            )
+
+        self._alt_info = alt_info
         self._alt_builder = alt_builder
         return True
 

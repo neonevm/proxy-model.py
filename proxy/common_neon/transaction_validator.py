@@ -9,7 +9,7 @@ from ..common_neon.account_whitelist import AccountWhitelist
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.estimate import GasEstimate
-from ..common_neon.emulator_interactor import call_trx_emulated
+from ..common_neon.emulator_interactor import call_tx_emulated, check_emulated_exit_status
 
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.config import Config
@@ -63,7 +63,7 @@ class NeonTxValidator:
     def precheck(self) -> NeonTxExecCfg:
         try:
             self._prevalidate_tx()
-            emulated_result: NeonEmulatedResult = call_trx_emulated(self._tx)
+            emulated_result: NeonEmulatedResult = call_tx_emulated(self._config, self._tx)
             self.prevalidate_emulator(emulated_result)
 
             neon_tx_exec_cfg = NeonTxExecCfg().set_emulated_result(emulated_result).set_state_tx_cnt(self._state_tx_cnt)
@@ -82,7 +82,8 @@ class NeonTxValidator:
         self._prevalidate_sender_balance()
         self._prevalidate_underpriced_tx_wo_chainid()
 
-    def prevalidate_emulator(self, emulator_json: dict):
+    def prevalidate_emulator(self, emulator_json: Dict[str, Any]):
+        check_emulated_exit_status(emulator_json)
         self._prevalidate_gas_usage(emulator_json)
         self._prevalidate_account_sizes(emulator_json)
         self._prevalidate_account_cnt(emulator_json)

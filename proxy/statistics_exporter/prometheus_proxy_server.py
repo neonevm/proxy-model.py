@@ -26,7 +26,7 @@ class PrometheusProxyServer:
 
         self._last_gas_price_update_interval = 0
 
-        self._operator_accounts = get_solana_accounts()
+        self._operator_accounts = get_solana_accounts(self._config)
         self._sol_accounts = []
         self._neon_accounts = []
         for account in self._operator_accounts:
