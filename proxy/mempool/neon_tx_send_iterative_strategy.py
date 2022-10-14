@@ -90,10 +90,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         self._evm_step_cnt = self._start_evm_step_cnt
 
     def _validate(self) -> bool:
-        return (
-            self._validate_notdeploy_tx() and
-            self._validate_tx_has_chainid()
-        )
+        return self._validate_notdeploy_tx()
 
     def build_cancel_tx(self) -> SolLegacyTx:
         return self._build_cancel_tx()
