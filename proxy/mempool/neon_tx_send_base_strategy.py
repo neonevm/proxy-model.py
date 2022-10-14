@@ -30,7 +30,6 @@ class BaseNeonTxStrategy(abc.ABC):
     name = 'UNKNOWN STRATEGY'
 
     def __init__(self, ctx: NeonTxSendCtx):
-        self._bpf_cycle_cnt: Optional[int] = None
         self._validation_error_msg: Optional[str] = None
         self._prep_stage_list: List[BaseNeonTxPrepStage] = []
         self._ctx = ctx
@@ -119,7 +118,7 @@ class BaseNeonTxStrategy(abc.ABC):
     def _build_tx(self) -> SolLegacyTx:
         return SolLegacyTx().add(
             self._ctx.ix_builder.make_compute_budget_heap_ix(),
-            self._ctx.ix_builder.make_compute_budget_cu_ix(self._bpf_cycle_cnt)
+            self._ctx.ix_builder.make_compute_budget_cu_ix()
         )
 
     @abc.abstractmethod

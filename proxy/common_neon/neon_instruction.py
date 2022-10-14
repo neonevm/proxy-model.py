@@ -320,10 +320,8 @@ class NeonIxBuilder:
             data=bytes.fromhex("01") + heap_frame_size.to_bytes(4, "little")
         )
 
-    def make_compute_budget_cu_ix(self, compute_unit_cnt: Optional[int] = None) -> SolTxIx:
-        if compute_unit_cnt is None:
-            compute_unit_cnt = self._elf_params.neon_compute_units
-
+    def make_compute_budget_cu_ix(self) -> SolTxIx:
+        compute_unit_cnt = self._elf_params.neon_compute_units
         return SolTxIx(
             program_id=COMPUTE_BUDGET_ID,
             keys=[],
