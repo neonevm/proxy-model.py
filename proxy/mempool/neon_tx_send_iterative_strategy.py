@@ -138,7 +138,12 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         assert self.is_valid()
 
         emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._start_evm_step_cnt)
-        tx_list = self.build_tx_list(emulated_step_cnt, self._ctx.neon_tx_exec_cfg.resize_iter_cnt + 2)
+        additional_iter_cnt = self._ctx.neon_tx_exec_cfg.resize_iter_cnt
+        if additional_iter_cnt > 0:
+            additional_iter_cnt += 1  # begin (finalization happens on the last resize iteration)
+        else:
+            additional_iter_cnt += 2  # begin + finalization
+        tx_list = self.build_tx_list(emulated_step_cnt, additional_iter_cnt)
         tx_sender = IterativeNeonTxSender(self, self._ctx.solana, self._ctx.signer)
         tx_sender.send(tx_list)
         if not tx_sender.neon_tx_res.is_valid():
