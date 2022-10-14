@@ -164,12 +164,12 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         submit_mp_request_mock.assert_not_called()
         is_available_mock.return_value = True
         self._mempool.on_executor_got_available(1)
-        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
+        await asyncio.sleep(MemPool.check_task_timeout_sec * 2)
         submit_mp_request_mock.assert_has_calls([call(requests[0])])
 
         self._update_state_tx_cnt([MPSenderTxCntData(sender=from_acc.address.lower(), state_tx_cnt=1)])
         self._mempool.on_executor_got_available(1)
-        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
+        await asyncio.sleep(MemPool.check_task_timeout_sec * 2)
         submit_mp_request_mock.assert_has_calls([call(requests[0]), call(requests[1])])
 
     @patch.object(MockMPExecutor, "submit_mp_request",
@@ -185,14 +185,14 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         requests = await self._enqueue_requests(req_data)
         is_available_mock.return_value = True
         self._mempool.on_executor_got_available(1)
-        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
+        await asyncio.sleep(MemPool.check_task_timeout_sec * 2)
         submit_mp_request_mock.assert_has_calls([call(requests[2]), call(requests[0])])
 
         self._update_state_tx_cnt([
             MPSenderTxCntData(sender=acc[0].address.lower(), state_tx_cnt=1),
             MPSenderTxCntData(sender=acc[1].address.lower(), state_tx_cnt=1)])
         self._mempool.on_executor_got_available(1)
-        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC * 2)
+        await asyncio.sleep(MemPool.check_task_timeout_sec * 2)
         submit_mp_request_mock.assert_has_calls(
             [call(requests[2]), call(requests[0]), call(requests[3]), call(requests[1])]
         )
@@ -210,7 +210,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         requests = await self._enqueue_requests(req_data)
         is_available_mock.return_value = True
         for i in range(2):
-            await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
+            await asyncio.sleep(MemPool.check_task_timeout_sec)
             self._mempool.on_executor_got_available(1)
         submit_mp_request_mock.assert_called_once_with(requests[0])
 
@@ -268,7 +268,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(acc_1_count, 3)
         is_available_mock.return_value = True
         self._mempool.on_executor_got_available(1)
-        await asyncio.sleep(MemPool.CHECK_TASK_TIMEOUT_SEC)
+        await asyncio.sleep(MemPool.check_task_timeout_sec)
         acc_1_count = self._mempool.get_pending_tx_count(requests[3].sender_address)
         self.assertEqual(acc_1_count, 2)
 

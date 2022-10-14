@@ -70,14 +70,13 @@ def str_fmt_object(obj: Any) -> str:
         for key, value in d.items():
             if not isinstance(key, str):
                 continue
-            if key.startswith('__'):
+            if key.startswith('_'):
                 continue
 
             has_value, value = decode_value(value)
             if not has_value:
                 continue
 
-            key = key.lstrip('_')
             result[key] = value
         return result
 

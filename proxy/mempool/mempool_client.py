@@ -1,14 +1,17 @@
 from __future__ import annotations
+
 import threading
-from typing import Callable, Optional, Dict, Any
+
+from typing import Callable, Optional, Dict, Any, Union
 from logged_groups import logged_group
 from neon_py.network import AddrPickableDataClient
 
-from .mempool_api import MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
 from .mempool_api import MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest
+from .mempool_api import MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
 
-from ..common_neon.eth_proto import NeonTx
 from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.errors import EthereumError
+from ..common_neon.eth_proto import NeonTx
 
 
 def _guard_conn(method: Callable) -> Callable:
@@ -77,7 +80,7 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def get_pending_tx_by_hash(self, req_id: str, tx_hash: str) -> Optional[NeonTx]:
+    def get_pending_tx_by_hash(self, req_id: str, tx_hash: str) -> Union[NeonTx, EthereumError, None]:
         mempool_pending_tx_by_hash_req = MPPendingTxByHashRequest(req_id=req_id, tx_hash=tx_hash)
         return self._pickable_data_client.send_data(mempool_pending_tx_by_hash_req)
 

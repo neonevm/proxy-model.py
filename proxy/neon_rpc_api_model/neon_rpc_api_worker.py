@@ -478,10 +478,13 @@ class NeonRpcApiWorker:
         neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_sig)
         if neon_tx_receipt is None:
             req_id = LogMng.get_logging_context().get("req_id")
-            neon_tx: NeonTx = self._mempool_client.get_pending_tx_by_hash(req_id, neon_sig)
+            neon_tx: Union[NeonTx, EthereumError, None] = self._mempool_client.get_pending_tx_by_hash(req_id, neon_sig)
             if neon_tx is None:
                 self.debug("Not found receipt")
                 return None
+            elif isinstance(neon_tx, EthereumError):
+                raise neon_tx
+
             neon_tx_receipt = NeonTxReceiptInfo(NeonTxInfo.from_neon_tx(neon_tx), NeonTxResultInfo())
         return self._get_transaction(neon_tx_receipt)
 
@@ -725,7 +728,7 @@ class NeonRpcApiWorker:
         """
         self.debug(f"Call neon_emulate: {raw_signed_tx}")
 
-        neon_tx = NeonTx.from_String(bytearray.fromhex(raw_signed_tx))
+        neon_tx = NeonTx.from_string(bytearray.fromhex(raw_signed_tx))
         emulation_result = call_tx_emulated(self._config, neon_tx)
         return emulation_result
 

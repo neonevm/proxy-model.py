@@ -58,11 +58,11 @@ class NeonTx(rlp.Serializable):
 
     def __init__(self, *args, **kwargs):
         rlp.Serializable.__init__(self, *args, **kwargs)
-        self.__msg: Optional[bytes] = None
-        self.__hash_signed: Optional[bytes] = None
-        self.__sig: Optional[keys.Signature] = None
-        self.__sender: Optional[str] = None
-        self.__contract: Optional[str] = None
+        self._msg: Optional[bytes] = None
+        self._hash_signed: Optional[bytes] = None
+        self._sig: Optional[keys.Signature] = None
+        self._hex_sender: Optional[str] = None
+        self._contract: Optional[str] = None
 
     @classmethod
     def from_string(cls, s) -> NeonTx:
@@ -109,14 +109,14 @@ class NeonTx(rlp.Serializable):
             ))
 
     def unsigned_msg(self) -> bytes:
-        if self.__msg is None:
-            self.__msg = self._unsigned_msg()
-        return self.__msg
+        if self._msg is None:
+            self._msg = self._unsigned_msg()
+        return self._msg
 
     def _signature(self) -> keys.Signature:
-        if self.__sig is None:
-            self.__sig = keys.Signature(vrs=[1 if self.v % 2 == 0 else 0, self.r, self.s])
-        return self.__sig
+        if self._sig is None:
+            self._sig = keys.Signature(vrs=[1 if self.v % 2 == 0 else 0, self.r, self.s])
+        return self._sig
 
     def _sender(self) -> bytes:
         if self.r == 0 and self.s == 0:
@@ -139,25 +139,25 @@ class NeonTx(rlp.Serializable):
         return pub.to_canonical_address()
 
     def sender(self) -> str:
-        if self.__sender is None:
-            self.__sender = self._sender().hex()
-        return self.__sender
+        if self._hex_sender is None:
+            self._hex_sender = self._sender().hex()
+        return self._hex_sender
 
     def hash_signed(self) -> bytes:
-        if self.__hash_signed is None:
-            self.__hash_signed = keccak_256(
+        if self._hash_signed is None:
+            self._hash_signed = keccak_256(
                 rlp.encode((
                     self.nonce, self.gasPrice, self.gasLimit,
                     self.toAddress, self.value, self.callData,
                     self.v, self.r, self.s
                 ))
             ).digest()
-        return self.__hash_signed
+        return self._hash_signed
 
     def contract(self) -> Optional[str]:
         if self.toAddress:
             return None
-        if self.__contract is None:
+        if self._contract is None:
             contract_addr = rlp.encode((self._sender(), self.nonce))
-            self.__contract = keccak_256(contract_addr).digest()[-20:].hex()
-        return self.__contract
+            self._contract = keccak_256(contract_addr).digest()[-20:].hex()
+        return self._contract
