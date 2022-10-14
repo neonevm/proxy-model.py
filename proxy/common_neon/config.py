@@ -29,7 +29,7 @@ class Config:
         self._extra_gas_pct = self._env_decimal("EXTRA_GAS_PCT", "0.0")
         self._operator_fee = self._env_decimal("OPERATOR_FEE", "0.1")
         self._gas_price_suggested_pct = self._env_decimal("GAS_PRICE_SUGGEST_PCT", "0.01")
-        self._min_gas_price = self._env_int("MINIMAL_GAS_PRICE", 0, 0) * (10 ** 9)
+        self._min_gas_price = self._env_int("MINIMAL_GAS_PRICE", 0, 1) * (10 ** 9)
         self._min_wo_chainid_gas_price = self._env_int("MINIMAL_WO_CHAINID_GAS_PRICE", 0, 10) * (10 ** 9)
         self._neon_price_usd = Decimal('0.25')
         self._neon_decimals = self._env_int('NEON_DECIMALS', 1, 9)

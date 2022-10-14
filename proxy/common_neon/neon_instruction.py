@@ -83,7 +83,7 @@ class NeonIxBuilder:
         self._msg = rlp.encode(self._neon_tx)
         self._holder_msg = self._msg
 
-        keccak_result = keccak_256(self._neon_tx.unsigned_msg()).digest()
+        keccak_result = self._neon_tx.hash_signed()
         treasury_pool_index = int().from_bytes(keccak_result[:4], "little") % ElfParams().treasury_pool_max
         self._treasury_pool_index_buf = treasury_pool_index.to_bytes(4, 'little')
         self._treasury_pool_address = self._create_treasury_pool_address(treasury_pool_index)

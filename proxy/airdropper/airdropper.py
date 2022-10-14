@@ -142,7 +142,7 @@ class Airdropper(IndexerBase):
 
         data = base58.b58decode(call['data'])
         try:
-            tx = NeonTx.fromString(data[5:])
+            tx = NeonTx.from_string(data[5:])
         except (Exception, ):
             self.debug('bad transaction')
             return False
