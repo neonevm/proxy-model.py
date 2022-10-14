@@ -32,7 +32,6 @@ def _reconnecting(method: Callable) -> Callable:
 
 @logged_group("neon.Proxy")
 class MemPoolClient:
-
     RECONNECT_MP_TIME_SEC = 5
 
     def __init__(self, address):

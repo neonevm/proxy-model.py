@@ -500,7 +500,7 @@ class NeonRpcApiWorker:
 
     def eth_sendRawTransaction(self, raw_tx: str) -> str:
         try:
-            neon_tx = NeonTx.fromString(bytearray.fromhex(raw_tx[2:]))
+            neon_tx = NeonTx.from_string(bytearray.fromhex(raw_tx[2:]))
         except (Exception,):
             raise InvalidParamError(message="wrong transaction format")
 
@@ -651,7 +651,7 @@ class NeonRpcApiWorker:
             raw_tx = signed_tx.rawTransaction.hex()
 
             tx['from'] = sender
-            tx['to'] = NeonTx.fromString(bytearray.fromhex(raw_tx[2:])).toAddress.hex()
+            tx['to'] = NeonTx.from_string(bytearray.fromhex(raw_tx[2:])).toAddress.hex()
             tx['hash'] = signed_tx.hash.hex()
             tx['r'] = hex(signed_tx.r)
             tx['s'] = hex(signed_tx.s)
@@ -724,7 +724,8 @@ class NeonRpcApiWorker:
         """Executes emulator with given transaction
         """
         self.debug(f"Call neon_emulate: {raw_signed_tx}")
-        neon_tx = NeonTx.fromString(bytearray.fromhex(raw_signed_tx))
+
+        neon_tx = NeonTx.from_String(bytearray.fromhex(raw_signed_tx))
         emulation_result = call_tx_emulated(self._config, neon_tx)
         return emulation_result
 

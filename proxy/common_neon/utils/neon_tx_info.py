@@ -59,7 +59,7 @@ class NeonTxInfo:
     @staticmethod
     def from_unsig_data(rlp_sig: bytes, rlp_unsig_data: bytes) -> NeonTxInfo:
         try:
-            utx = NeonTx.fromString(rlp_unsig_data)
+            utx = NeonTx.from_string(rlp_unsig_data)
 
             if utx.v == 0:
                 uv = int(rlp_sig[64]) + 27
@@ -76,7 +76,7 @@ class NeonTxInfo:
     @staticmethod
     def from_sig_data(rlp_sig_data: bytes) -> NeonTxInfo:
         try:
-            tx = NeonTx.fromString(rlp_sig_data)
+            tx = NeonTx.from_string(rlp_sig_data)
             return NeonTxInfo.from_neon_tx(tx)
         except Exception as e:
             return NeonTxInfo(error=e)

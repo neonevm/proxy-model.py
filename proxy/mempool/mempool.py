@@ -5,29 +5,29 @@ from typing import List, Tuple, Optional, Any, Dict, cast, Iterator
 from logged_groups import logged_group, logging_context
 from neon_py.data import Result
 
-from ..common_neon.eth_proto import NeonTx
-from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.config import Config
-from ..common_neon.elf_params import ElfParams
-
-from .operator_resource_mng import OpResMng
-
+from .mempool_api import MPGasPriceResult
 from .mempool_api import MPRequest, MPRequestType, IMPExecutor, MPTask, MPTxRequestList
 from .mempool_api import MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest
 from .mempool_api import MPTxSendResult, MPTxSendResultCode
-from .mempool_api import MPGasPriceResult
-from .mempool_schedule import MPTxSchedule
-from .mempool_periodic_task_op_res import MPInitOpResTaskLoop
-from .mempool_periodic_task_gas_price import MPGasPriceTaskLoop
+
 from .mempool_periodic_task_elf_params import MPElfParamDictTaskLoop
-from .mempool_periodic_task_sender_tx_cnt import MPSenderTxCntTaskLoop
 from .mempool_periodic_task_free_alt_queue import MPFreeALTQueueTaskLoop
+from .mempool_periodic_task_gas_price import MPGasPriceTaskLoop
+from .mempool_periodic_task_op_res import MPInitOpResTaskLoop
+from .mempool_periodic_task_sender_tx_cnt import MPSenderTxCntTaskLoop
+from .mempool_schedule import MPTxSchedule
+from .operator_resource_mng import OpResMng
+
+from ..common_neon.config import Config
+from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.elf_params import ElfParams
+from ..common_neon.eth_proto import NeonTx
 
 
 @logged_group("neon.MemPool")
 class MemPool:
-    CHECK_TASK_TIMEOUT_SEC = 0.01
-    RESCHEDULE_TIMEOUT_SEC = 0.4
+    check_task_timeout_sec = 0.01
+    reschedule_timeout_sec = 0.4
 
     def __init__(self, config: Config, op_res_mng: OpResMng, executor: IMPExecutor):
         capacity = config.mempool_capacity
@@ -130,7 +130,7 @@ class MemPool:
 
     async def _process_tx_schedule_loop(self):
         while (not self.has_gas_price()) and (not ElfParams().has_params()):
-            await asyncio.sleep(self.CHECK_TASK_TIMEOUT_SEC)
+            await asyncio.sleep(self.check_task_timeout_sec)
 
         while True:
             async with self._schedule_cond:
@@ -150,7 +150,7 @@ class MemPool:
                         not_finished_task_list.append(mp_task)
             self._processing_task_list = not_finished_task_list
 
-            await asyncio.sleep(self.CHECK_TASK_TIMEOUT_SEC)
+            await asyncio.sleep(self.check_task_timeout_sec)
 
     def _complete_task(self, mp_task: MPTask) -> bool:
         try:
@@ -209,8 +209,8 @@ class MemPool:
 
     async def _reschedule_tx(self, tx: MPTxRequest):
         with logging_context(req_id=tx.req_id):
-            self.debug(f"Tx {tx.sig} will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
-        await asyncio.sleep(self.RESCHEDULE_TIMEOUT_SEC)
+            self.debug(f"Tx {tx.sig} will be rescheduled in: {self.reschedule_timeout_sec} sec.")
+        await asyncio.sleep(self.reschedule_timeout_sec)
         self._reschedule_tx_impl(tx)
         await self._kick_tx_schedule()
 

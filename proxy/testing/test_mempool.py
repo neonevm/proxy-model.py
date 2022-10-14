@@ -42,7 +42,7 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: int
         dict(nonce=nonce, chainId=111, gas=gas, gasPrice=gas_price, to=to_addr, value=value, data=data),
         from_acc.key)
     neon_sig = signed_tx_data.hash.hex()
-    neon_tx = NeonTx.fromString(bytearray(signed_tx_data.rawTransaction))
+    neon_tx = NeonTx.from_string(bytearray(signed_tx_data.rawTransaction))
     neon_tx_exec_cfg = NeonTxExecCfg()
     neon_tx_exec_cfg.set_state_tx_cnt(0)
     mp_tx_request = MPTxExecRequest(
