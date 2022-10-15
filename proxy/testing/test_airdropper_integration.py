@@ -10,10 +10,13 @@ from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Commitment
 from solana.rpc.types import TxOpts
 from solana.system_program import SYS_PROGRAM_ID
+from solana.transaction import Transaction
 
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
 import spl.token.instructions as SplTokenInstrutions
+
+from ..common_neon.metaplex import create_metadata_instruction_data,create_metadata_instruction
 
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
@@ -77,6 +80,21 @@ class TestAirdropperIntegration(TestCase):
             9,
             TOKEN_PROGRAM_ID,
         )
+        
+        print(f'Created new token mint: {self.token.pubkey}')
+
+        metadata = create_metadata_instruction_data(NAME, SYMBOL, 0, ())
+        txn = Transaction()
+        txn.add(
+            create_metadata_instruction(
+                metadata,
+                self.mint_authority.public_key(),
+                self.token.pubkey,
+                self.mint_authority.public_key(),
+                self.mint_authority.public_key(),
+            )
+        )
+        self.solana_client.send_transaction(txn, self.mint_authority, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
 
     def deploy_erc20_wrapper_contract(self):
         self.wrapper = ERC20Wrapper(proxy, NAME, SYMBOL,
