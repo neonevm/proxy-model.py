@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import IntEnum
-
-from typing import Any, Optional, List, Dict
-from abc import ABC, abstractmethod
-
 import asyncio
 import time
 
-from ..common_neon.eth_proto import NeonTx
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import IntEnum
+from typing import Any, Optional, List, Dict
+
 from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.eth_proto import NeonTx
 
 
 @dataclass

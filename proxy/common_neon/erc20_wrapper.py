@@ -157,7 +157,7 @@ class ERC20Wrapper:
 
         neon = NeonIxBuilder(owner)
         neon.init_operator_neon(EthereumAddress(to_acc.address))
-        neon.init_neon_tx(NeonTx.fromString(neon_tx))
+        neon.init_neon_tx(NeonTx.from_string(neon_tx))
         neon.init_neon_account_list(eth_accounts)
         return neon
 

@@ -88,7 +88,7 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
-      LOG_NEON_CLI_DEBUG: "YES"
+      NEON_CLI_DEBUG_LOG: "YES"
       FUZZING_BLOCKHASH: "NO"
       CONFIG: ci
       PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}

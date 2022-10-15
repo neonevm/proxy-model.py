@@ -11,7 +11,7 @@ from logged_groups import logged_group, LogMng
 from web3.auto import w3
 
 from ..common_neon.address import EthereumAddress
-from ..common_neon.emulator_interactor import call_emulated, call_trx_emulated
+from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status, call_tx_emulated
 from ..common_neon.errors import EthereumError, InvalidParamError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import NeonTx
@@ -28,7 +28,7 @@ from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
 
 
-NEON_PROXY_PKG_VERSION = '0.12.1'
+NEON_PROXY_PKG_VERSION = '0.12.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
@@ -68,11 +68,14 @@ class NeonRpcApiWorker:
             if gas_price is not None:
                 self._gas_price_value = gas_price
         if self._gas_price_value is None:
-            raise EthereumError(message='Failed to estimate gas price. Try again later')
+            raise EthereumError(message='Failed to calculate gas price. Try again later')
         return cast(MPGasPriceResult, self._gas_price_value)
 
+    def neon_proxy_version(self) -> str:
+        return self.neon_proxyVersion()
+
     @staticmethod
-    def neon_proxy_version() -> str:
+    def neon_proxyVersion() -> str:
         return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
 
     @staticmethod
@@ -83,9 +86,11 @@ class NeonRpcApiWorker:
     def eth_chainId() -> str:
         return hex(ElfParams().chain_id)
 
-    @staticmethod
-    def neon_cli_version() -> str:
-        return neon_cli().version()
+    def neon_cli_version(self) -> str:
+        return self.neon_cliVersion()
+
+    def neon_cliVersion(self) -> str:
+        return neon_cli(self._config).version()
 
     @staticmethod
     def net_version() -> str:
@@ -303,7 +308,7 @@ class NeonRpcApiWorker:
         account = self._normalize_account(account)
 
         try:
-            value = neon_cli().call('get-storage-at', account, position)
+            value = neon_cli(self._config).call('get-storage-at', account, position)
             return value
         except (Exception,):
             # self.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
@@ -369,7 +374,9 @@ class NeonRpcApiWorker:
             contract_id = obj.get('to', 'deploy')
             data = obj.get('data', "None")
             value = obj.get('value', '')
-            return "0x"+call_emulated(contract_id, caller_id, data, value)['result']
+            emulator_json = call_emulated(self._config, contract_id, caller_id, data, value)
+            check_emulated_exit_status(emulator_json)
+            return '0x' + emulator_json['result']
         except EthereumError:
             raise
         except Exception as err:
@@ -471,10 +478,13 @@ class NeonRpcApiWorker:
         neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_sig)
         if neon_tx_receipt is None:
             req_id = LogMng.get_logging_context().get("req_id")
-            neon_tx: NeonTx = self._mempool_client.get_pending_tx_by_hash(req_id, neon_sig)
+            neon_tx: Union[NeonTx, EthereumError, None] = self._mempool_client.get_pending_tx_by_hash(req_id, neon_sig)
             if neon_tx is None:
                 self.debug("Not found receipt")
                 return None
+            elif isinstance(neon_tx, EthereumError):
+                raise neon_tx
+
             neon_tx_receipt = NeonTxReceiptInfo(NeonTxInfo.from_neon_tx(neon_tx), NeonTxResultInfo())
         return self._get_transaction(neon_tx_receipt)
 
@@ -493,7 +503,7 @@ class NeonRpcApiWorker:
 
     def eth_sendRawTransaction(self, raw_tx: str) -> str:
         try:
-            neon_tx = NeonTx.fromString(bytearray.fromhex(raw_tx[2:]))
+            neon_tx = NeonTx.from_string(bytearray.fromhex(raw_tx[2:]))
         except (Exception,):
             raise InvalidParamError(message="wrong transaction format")
 
@@ -523,6 +533,7 @@ class NeonRpcApiWorker:
                 raise EthereumError(message='replacement transaction underpriced')
             elif result.code == MPTxSendResultCode.NonceTooLow:
                 neon_tx_validator.raise_nonce_error(result.state_tx_cnt, neon_tx.nonce)
+                self._stat_tx_failed()
             else:
                 raise EthereumError(message='unknown error')
         except EthereumError:
@@ -535,13 +546,16 @@ class NeonRpcApiWorker:
             raise
 
     def _stat_tx_begin(self):
-        self._stat_exporter.stat_commit_tx_begin()
+        if self._stat_exporter is not None:
+            self._stat_exporter.stat_commit_tx_begin()
 
     def _stat_tx_success(self):
-        self._stat_exporter.stat_commit_tx_end_success()
+        if self._stat_exporter is not None:
+            self._stat_exporter.stat_commit_tx_end_success()
 
     def _stat_tx_failed(self):
-        self._stat_exporter.stat_commit_tx_end_failed(None)
+        if self._stat_exporter is not None:
+            self._stat_exporter.stat_commit_tx_end_failed(None)
 
     def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: Union[str, int]) -> Optional[Dict[str, Any]]:
         try:
@@ -640,7 +654,7 @@ class NeonRpcApiWorker:
             raw_tx = signed_tx.rawTransaction.hex()
 
             tx['from'] = sender
-            tx['to'] = NeonTx.fromString(bytearray.fromhex(raw_tx[2:])).toAddress.hex()
+            tx['to'] = NeonTx.from_string(bytearray.fromhex(raw_tx[2:])).toAddress.hex()
             tx['hash'] = signed_tx.hash.hex()
             tx['r'] = hex(signed_tx.r)
             tx['s'] = hex(signed_tx.s)
@@ -713,8 +727,9 @@ class NeonRpcApiWorker:
         """Executes emulator with given transaction
         """
         self.debug(f"Call neon_emulate: {raw_signed_tx}")
-        neon_tx = NeonTx.fromString(bytearray.fromhex(raw_signed_tx))
-        emulation_result = call_trx_emulated(neon_tx)
+
+        neon_tx = NeonTx.from_string(bytearray.fromhex(raw_signed_tx))
+        emulation_result = call_tx_emulated(self._config, neon_tx)
         return emulation_result
 
     def neon_finalizedBlockNumber(self) -> str:
@@ -733,6 +748,9 @@ class NeonRpcApiWorker:
         else:
             return False
 
+        if method_name in {'neon_proxy_version', 'neon_proxyVersion'}:
+            return True
+
         now = math.ceil(time.time())
         elf_params = ElfParams()
         if self._last_elf_params_time != now:
@@ -742,16 +760,16 @@ class NeonRpcApiWorker:
                 raise EthereumError(message='Failed to read Neon EVM params from Solana cluster. Try again later')
             elf_params.set_elf_param_dict(elf_param_dict)
 
-        always_allowed_method_list = (
+        always_allowed_method_set = {
             "eth_chainId",
+            "neon_cliVersion",
             "neon_cli_version",
             "neon_getEvmParams"
-            "neon_proxy_version",
             "net_version",
             "web3_clientVersion"
-        )
+        }
 
-        if method_name in always_allowed_method_list:
+        if method_name in always_allowed_method_set:
             if elf_params.has_params():
                 return True
 

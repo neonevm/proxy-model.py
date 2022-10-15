@@ -2,14 +2,14 @@ from __future__ import annotations
 from typing import Optional
 from eth_utils import big_endian_to_int
 
-import dataclasses
+from dataclasses import dataclass
 
 from .utils import str_fmt_object
 
 from ..eth_proto import NeonTx
 
 
-@dataclasses.dataclass
+@dataclass(frozen=True)
 class NeonTxInfo:
     addr: Optional[str] = None
     sig: str = ''
@@ -25,8 +25,12 @@ class NeonTxInfo:
     s: str = ''
     error: Optional[Exception] = None
 
+    _str: str = ''
+
     def __str__(self) -> str:
-        return str_fmt_object(self)
+        if self._str == '':
+            object.__setattr__(self, '_str', str_fmt_object(self))
+        return self._str
 
     @staticmethod
     def from_neon_tx(tx: NeonTx) -> NeonTxInfo:
@@ -55,7 +59,7 @@ class NeonTxInfo:
     @staticmethod
     def from_unsig_data(rlp_sig: bytes, rlp_unsig_data: bytes) -> NeonTxInfo:
         try:
-            utx = NeonTx.fromString(rlp_unsig_data)
+            utx = NeonTx.from_string(rlp_unsig_data)
 
             if utx.v == 0:
                 uv = int(rlp_sig[64]) + 27
@@ -72,7 +76,7 @@ class NeonTxInfo:
     @staticmethod
     def from_sig_data(rlp_sig_data: bytes) -> NeonTxInfo:
         try:
-            tx = NeonTx.fromString(rlp_sig_data)
+            tx = NeonTx.from_string(rlp_sig_data)
             return NeonTxInfo.from_neon_tx(tx)
         except Exception as e:
             return NeonTxInfo(error=e)

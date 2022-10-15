@@ -142,7 +142,7 @@ class BlockedTest(unittest.TestCase):
         neon_ix_builder = NeonIxBuilder(resource.public_key)
         neon_ix_builder.init_operator_neon(EthereumAddress.from_private_key(resource.secret_key))
 
-        neon_tx = NeonTx.fromString(tx_store_signed.rawTransaction)
+        neon_tx = NeonTx.from_string(tx_store_signed.rawTransaction)
         neon_ix_builder.init_neon_tx(neon_tx)
         neon_ix_builder.init_neon_account_list([
             AccountMeta(pubkey=self.re_id, is_signer=False, is_writable=True),

@@ -209,9 +209,8 @@ class OpResMng:
         self._resource_cnt = len(self._disabled_resource_list)
         assert self.resource_cnt != 0, 'Operator has NO resources!'
 
-    @staticmethod
-    def _get_solana_accounts() -> List[SolAccount]:
-        return get_solana_accounts()
+    def _get_solana_accounts(self) -> List[SolAccount]:
+        return get_solana_accounts(self._config)
 
     @property
     def resource_cnt(self) -> int:

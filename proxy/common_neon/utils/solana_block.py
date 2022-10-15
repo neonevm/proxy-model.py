@@ -1,12 +1,11 @@
 from __future__ import annotations
 from typing import Optional
-
-import dataclasses
+from dataclasses import dataclass
 
 from .utils import str_fmt_object
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclass(frozen=True)
 class SolanaBlockInfo:
     block_slot: int
     block_hash: str = None
@@ -16,11 +15,20 @@ class SolanaBlockInfo:
     parent_block_hash: str = None
     is_finalized: bool = False
 
-    def __str__(self) -> str:
-        return str_fmt_object(self)
+    _str = ''
 
-    def replace(self, /, **changes) -> SolanaBlockInfo:
-        return dataclasses.replace(self, **changes)
+    def __str__(self) -> str:
+        if self._str == '':
+            object.__setattr__(self, '_str', str_fmt_object(self))
+        return self._str
+
+    def set_finalized(self, value: bool) -> None:
+        object.__setattr__(self, 'is_finalized', value)
+        object.__setattr__(self, '_str', '')
+
+    def set_block_hash(self, value: str):
+        object.__setattr__(self, 'block_hash', value)
+        object.__setattr__(self, '_str', '')
 
     def is_empty(self) -> bool:
         return self.block_time is None
