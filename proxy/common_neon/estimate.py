@@ -1,20 +1,28 @@
 import json
-import rlp
 import math
-from typing import Dict, Any
+
+from typing import Dict, Any, List
 from logged_groups import logged_group
 
-from proxy.common_neon.emulator_interactor import call_emulated
+from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status
 from ..common_neon.elf_params import ElfParams
 
-from .config import Config
-from .eth_proto import NeonTx
-from .solana_interactor import SolInteractor
-from .solana_alt_builder import ALTTxBuilder
+from ..common_neon.config import Config
+from ..common_neon.eth_proto import NeonTx
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_alt_builder import ALTTxBuilder
+from ..common_neon.neon_instruction import NeonIxBuilder
+from ..common_neon.solana_transaction import SolAccount, SolPubKey, SolAccountMeta, SolLegacyTx, SolBlockhash
+from ..common_neon.address import EthereumAddress
 
 
 @logged_group("neon.Proxy")
 class GasEstimate:
+    # This values doesn't used on real network, they are used only to generate temporary data
+    _signer = SolAccount()
+    _holder = SolAccount()
+    _neon_address = EthereumAddress.random()
+
     def __init__(self, config: Config, solana: SolInteractor, request: Dict[str, Any]):
         self._sender = request.get('from') or '0x0000000000000000000000000000000000000000'
         if self._sender:
@@ -33,11 +41,15 @@ class GasEstimate:
         self._solana = solana
         self._config = config
 
+        self._account_list: List[SolAccountMeta] = []
         self.emulator_json = {}
 
     def execute(self):
-        self.emulator_json = call_emulated(self._contract or "deploy", self._sender, self._data, self._value)
-        self.debug(f'emulator returns: {json.dumps(self.emulator_json, sort_keys=True)}')
+        emulator_json = call_emulated(self._config, self._contract or "deploy", self._sender, self._data, self._value)
+        check_emulated_exit_status(emulator_json)
+
+        self.emulator_json = emulator_json
+        self.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
 
     def _tx_size_cost(self) -> int:
         u256_max = int.from_bytes(bytes([0xFF] * 32), "big")
@@ -53,8 +65,27 @@ class GasEstimate:
             r=0x1820182018201820182018201820182018201820182018201820182018201820,
             s=0x1820182018201820182018201820182018201820182018201820182018201820
         )
-        msg = rlp.encode(tx)
-        return ((len(msg) // ElfParams().holder_msg_size) + 1) * 5000
+
+        neon_ix_builder = NeonIxBuilder(self._signer.public_key())
+        neon_ix_builder.init_neon_tx(tx)
+        neon_ix_builder.init_operator_neon(self._neon_address)
+        neon_ix_builder.init_neon_account_list(self._account_list)
+        neon_ix_builder.init_iterative(self._holder.public_key())
+
+        tx = SolLegacyTx().add(
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            neon_ix_builder.make_compute_budget_cu_ix(),
+            neon_ix_builder.make_tx_step_from_data_ix(ElfParams().neon_evm_steps, 1)
+        )
+
+        try:
+            # This value is used only for get size, it will be not send to the real network
+            tx.recent_blockhash = SolBlockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+            tx.sign(self._signer)
+            tx.serialize()  # <- there will be exception
+            return 0
+        except (Exception, ) as exc:
+            return ((len(neon_ix_builder.holder_msg) // ElfParams().holder_msg_size) + 1) * 5000
 
     @staticmethod
     def _iterative_overhead_cost() -> int:
@@ -63,20 +94,30 @@ class GasEstimate:
 
         return last_iteration_cost + cancel_cost
 
-    def alt_cost(self) -> int:
+    def _alt_cost(self) -> int:
         # ALT used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
-        acc_cnt = len(self.emulator_json.get("accounts", [])) + len(self.emulator_json.get("solana_accounts", [])) + 6
+        acc_cnt = len(self._account_list) + 6
         if acc_cnt > ALTTxBuilder.tx_account_cnt:
             return 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
         else:
             return 0
 
+    def _build_account_list(self):
+        self._account_list.clear()
+        for account in self.emulator_json.get('accounts', []):
+            self._account_list.append(SolAccountMeta(SolPubKey(account['account']), False, True))
+
+        for account in self.emulator_json.get('solana_accounts', []):
+            self._account_list.append(SolAccountMeta(SolPubKey(account['pubkey']), False, True))
+
     def estimate(self):
+        self._build_account_list()
+
         execution_cost = self.emulator_json.get('used_gas', 0)
 
         tx_size_cost = self._tx_size_cost()
         overhead = self._iterative_overhead_cost()
-        alt_cost = self.alt_cost()
+        alt_cost = self._alt_cost()
 
         gas = execution_cost + tx_size_cost + overhead + alt_cost
         extra_gas_pct = self._config.extra_gas_pct
@@ -85,11 +126,13 @@ class GasEstimate:
         if gas < 21000:
             gas = 21000
 
-        self.debug(f'execution_cost: {execution_cost}, ' +
-                   f'tx_size_cost: {tx_size_cost}, ' +
-                   f'iterative_overhead: {overhead}, ' +
-                   f'alt_cost: {alt_cost}, ' +
-                   f'extra_gas_pct: {extra_gas_pct}, ' +
-                   f'estimated gas: {gas}')
+        self.debug(
+            f'execution_cost: {execution_cost}, '
+            f'tx_size_cost: {tx_size_cost}, '
+            f'iterative_overhead: {overhead}, '
+            f'alt_cost: {alt_cost}, '
+            f'extra_gas_pct: {extra_gas_pct}, '
+            f'estimated gas: {gas}'
+        )
 
         return gas

@@ -3,6 +3,7 @@ import os
 from web3 import Web3
 
 from ..common_neon.elf_params import ElfParams
+from ..common_neon.config import Config
 
 proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
 proxy = Web3(Web3.HTTPProvider(proxy_url))
@@ -15,7 +16,7 @@ class TestEnvironment(unittest.TestCase):
 
     def test_read_elf_params(self):
         print("\n\nhttps://github.com/neonlabsorg/neon-evm/issues/347")
-        elf_params = ElfParams().read_elf_param_dict_from_net().elf_param_dict
+        elf_params = ElfParams().read_elf_param_dict_from_net(Config()).elf_param_dict
 
         neon_chain_id = elf_params.get('NEON_CHAIN_ID', None)
         self.assertTrue(neon_chain_id is not None)

@@ -25,19 +25,19 @@ class PrometheusProxyServer:
         )
 
         self._last_gas_price_update_interval = 0
-        self.update_gas_price()
 
-        self._operator_accounts = get_solana_accounts()
+        self._operator_accounts = get_solana_accounts(self._config)
         self._sol_accounts = []
         self._neon_accounts = []
         for account in self._operator_accounts:
             self._sol_accounts.append(str(account.public_key()))
             self._neon_accounts.append(EthereumAddress.from_private_key(account.secret_key()))
 
-        self.start_http_server()
-        self.run_commit_process()
+    def start(self) -> None:
+        self._start_http_server()
+        self._run_commit_process()
 
-    def update_gas_price(self) -> bool:
+    def _update_gas_price(self) -> bool:
         self._last_gas_price_update_interval = 0
         if not self._gas_price_calculator.has_price():
             if not self._gas_price_calculator.update_mapping():
@@ -45,15 +45,16 @@ class PrometheusProxyServer:
         return self._gas_price_calculator.update_gas_price()
 
     @staticmethod
-    def start_http_server():
+    def _start_http_server():
         from .prometheus_proxy_metrics import registry
         start_http_server(8888, registry=registry)
 
-    def run_commit_process(self):
+    def _run_commit_process(self):
         p = Process(target=self.commit_loop)
         p.start()
 
     def commit_loop(self):
+        self._update_gas_price()
         while True:
             time.sleep(5)
             try:
@@ -77,7 +78,7 @@ class PrometheusProxyServer:
     def _stat_gas_price(self):
         self._last_gas_price_update_interval += 1
         if (self._last_gas_price_update_interval > 12) or (not self._gas_price_calculator.is_valid()):
-            self.update_gas_price()
+            self._update_gas_price()
 
         if not self._gas_price_calculator.is_valid():
             return

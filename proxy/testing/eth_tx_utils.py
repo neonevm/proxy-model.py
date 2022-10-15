@@ -2,7 +2,6 @@ from sha3 import keccak_256
 import json
 from web3.auto import w3
 from eth_keys import keys
-import struct
 
 
 def unpack(data):
