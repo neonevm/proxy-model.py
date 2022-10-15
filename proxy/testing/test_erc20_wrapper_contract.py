@@ -89,9 +89,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
                 cls.solana_account.public_key(),
             )
         )
-        cls.solana_client.send_transaction(
-            txn, cls.solana_account
-        )
+        cls.solana_client.send_transaction(txn, cls.solana_account, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
 
     @classmethod
     def deploy_erc20_wrapper_contract(cls):
