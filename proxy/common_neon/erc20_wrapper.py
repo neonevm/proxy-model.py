@@ -91,17 +91,17 @@ class ERC20Wrapper:
         interface_id, interface = compiled_interface.popitem()
         self.interface = interface
 
-        with open('/opt/contracts/erc20_for_spl.sol', 'r') as file:
+        with open('contracts/erc20_for_spl.sol', 'r') as file:
             source = file.read()
 
-        compiled_wrapper = compile_source(source)
+        compiled_wrapper = compile_source(source, base_path="contracts", output_values=["abi", "bin"])
         wrapper_interface = compiled_wrapper["<stdin>:ERC20ForSpl"]
         self.wrapper = wrapper_interface
 
         erc20 = self.proxy.eth.contract(abi=self.wrapper['abi'], bytecode=wrapper_interface['bin'])
         nonce = self.proxy.eth.get_transaction_count(self.proxy.eth.default_account)
         tx = {'nonce': nonce}
-        tx_constructor = erc20.constructor(self.name, self.symbol, bytes(self.token.pubkey)).buildTransaction(tx)
+        tx_constructor = erc20.constructor(bytes(self.token.pubkey)).buildTransaction(tx)
         tx_deploy = self.proxy.eth.account.sign_transaction(tx_constructor, self.admin.key)
         tx_deploy_hash = self.proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
         self.debug(f'tx_deploy_hash: {tx_deploy_hash.hex()}')
