@@ -85,6 +85,7 @@ class AccountWhitelist:
     def deprive_contract_permissions(self, ether_addr: Union[str, EthereumAddress], signer: SolAccount):
         return self.deprive_permissions(ether_addr, ElfParams().neon_minimal_contract_allowance_balance, signer)
 
+    @staticmethod
     def get_current_time(self):
         return datetime.now().timestamp()
 

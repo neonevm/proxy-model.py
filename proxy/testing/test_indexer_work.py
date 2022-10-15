@@ -167,7 +167,7 @@ class CancelTest(unittest.TestCase):
     @staticmethod
     def print_tx(tx):
         print(tx.__dict__)
-        print(f'invoke signature: {base58.b58encode(tx.signature()).decode("utf-8")}')
+        print(f'invoke signature: {str(tx.signature())}')
 
     @staticmethod
     def print_if_err(receipt):

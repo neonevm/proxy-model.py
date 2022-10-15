@@ -10,8 +10,6 @@ import itertools
 import json
 import dataclasses
 
-from solana.rpc.types import RPCResponse
-
 from logged_groups import logged_group
 from typing import Dict, Union, Any, List, Optional, Tuple, cast
 
@@ -28,6 +26,9 @@ from ..common_neon.address import EthereumAddress, ether2program
 from ..common_neon.errors import SolanaUnavailableError
 from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
+
+
+RPCResponse = Dict[str, Any]
 
 
 @dataclasses.dataclass
@@ -697,7 +698,7 @@ class SolInteractor:
             error = response.get('error')
             if error:
                 if SolTxErrorParser(error).check_if_already_processed():
-                    result = base58.b58encode(tx.signature()).decode("utf-8")
+                    result = str(tx.signature())
                     self.debug(f'Transaction is already processed: {str(result)}')
                     error = None
                 else:

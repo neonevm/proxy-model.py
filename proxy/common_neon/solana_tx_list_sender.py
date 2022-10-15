@@ -51,7 +51,7 @@ class SolTxSendState:
 
     @staticmethod
     def decode_tx_sig(tx: SolTx) -> str:
-        return base58.b58encode(tx.signature()).decode("utf-8")
+        return str(tx.signature())
 
 
 @logged_group("neon.Proxy")

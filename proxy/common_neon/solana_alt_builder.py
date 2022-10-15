@@ -50,7 +50,7 @@ class ALTTxBuilder:
 
     def build_alt_info(self, legacy_tx: SolLegacyTx) -> ALTInfo:
         recent_block_slot = self._get_recent_block_slot()
-        signer_key = self._signer.public_key()
+        signer_key = self._signer.public_key
         acct, nonce = ALTInfo.derive_lookup_table_address(signer_key, recent_block_slot)
         alt_info = ALTInfo(acct, recent_block_slot, nonce)
         alt_info.init_from_legacy_tx(legacy_tx)

@@ -1,9 +1,9 @@
-from typing import Optional, Union, Dict, Any
+from typing import Union, Dict, Any
 from dataclasses import dataclass
 
-from solana.transaction import Transaction, TransactionInstruction, Blockhash, AccountMeta
+from solana.transaction import Transaction, TransactionInstruction, Blockhash, AccountMeta, Signature
 from solana.message import Message, MessageHeader, MessageArgs, CompiledInstruction
-from solana.account import Account
+from solana.keypair import Keypair
 from solana.publickey import PublicKey
 
 
@@ -14,10 +14,11 @@ SolMsgHdr = MessageHeader
 SolTxIx = TransactionInstruction
 SolBlockhash = Blockhash
 SolAccountMeta = AccountMeta
-SolAccount = Account
+SolAccount = Keypair
 SolPubKey = PublicKey
 SolCompiledIx = CompiledInstruction
 SolTxReceipt = Dict[str, Any]
+SolSignature = Signature
 
 
 @dataclass
@@ -33,7 +34,7 @@ class SolWrappedTx:
     def recent_blockhash(self, blockhash: SolBlockhash) -> None:
         self.tx.recent_blockhash = blockhash
 
-    def signature(self) -> Optional[bytes]:
+    def signature(self) -> Signature:
         return self.tx.signature()
 
     def serialize(self) -> bytes:
