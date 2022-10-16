@@ -3,7 +3,7 @@ ecdsa==0.18.0
 pysha3==1.0.2
 eth-keys==0.3.3
 rlp
-web3==5.22.0
+web3==5.31.1
 solana==0.10.0
 psycopg2-binary
 ethereum
