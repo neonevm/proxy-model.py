@@ -3,8 +3,8 @@ from typing import List, Optional, Callable, cast
 from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
 from ..common_neon.layouts import ACCOUNT_LOOKUP_TABLE_LAYOUT, ALTAccountInfo
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_transaction import SolAccount, SolPubKey, SolLegacyTx, SolTxIx
-from ..common_neon.solana_transaction_named import SolNamedTx, SolTx
+from ..common_neon.solana_tx import SolAccount, SolPubKey, SolTxIx, SolTx
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 from ..mempool.mempool_api import MPALTListResult
@@ -97,8 +97,8 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
                 block_height = self._get_block_height()
 
             alt_info.block_height = block_height
-            tx = SolLegacyTx(instructions=[make_ix(ix_builder, SolPubKey(alt_info.table_account))])
-            tx_list.append(SolNamedTx(name=name, tx=tx))
+            tx = SolLegacyTx(name=name, instructions=[make_ix(ix_builder, SolPubKey(alt_info.table_account))])
+            tx_list.append(tx)
 
         _send_tx_list()
         block_height = self._get_block_height()

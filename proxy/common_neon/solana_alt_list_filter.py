@@ -3,7 +3,8 @@ from typing import Set, List, Tuple
 from logged_groups import logged_group
 
 from ..common_neon.errors import ALTError
-from ..common_neon.solana_transaction import SolLegacyMsg, SolPubKey
+from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.solana_tx_legacy import SolLegacyMsg
 
 
 @logged_group('neon.Proxy')

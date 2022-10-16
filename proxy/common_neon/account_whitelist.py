@@ -8,7 +8,7 @@ from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.permission_token import PermissionToken
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_transaction import SolPubKey, SolAccount
+from ..common_neon.solana_tx import SolPubKey, SolAccount
 
 
 @logged_group("neon.AccountWhitelist")

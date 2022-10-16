@@ -1,8 +1,8 @@
 from typing import List
 from logged_groups import logged_group
 
-from ..common_neon.solana_transaction import SolLegacyTx, SolTxReceipt
-from ..common_neon.solana_transaction_named import SolTx, SolNamedTx
+from ..common_neon.solana_tx import SolTxReceipt, SolTx
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender, SolTxSendState
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo
@@ -77,16 +77,13 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         return False
 
     def _build_tx(self) -> SolLegacyTx:
-        return self._build_cu_tx(
-            self._ctx.ix_builder.make_tx_exec_from_data_ix()
-        )
+        return self._build_cu_tx(self._ctx.ix_builder.make_tx_exec_from_data_ix())
 
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
 
-        tx_list = [SolNamedTx(name=self.name, tx=self._build_tx())]
         tx_sender = SimpleNeonTxSender(self, self._ctx.solana, self._ctx.signer)
-        tx_sender.send(tx_list)
+        tx_sender.send([self._build_tx()])
         if not tx_sender.neon_tx_res.is_valid():
             raise BudgetExceededError()
         return tx_sender.neon_tx_res

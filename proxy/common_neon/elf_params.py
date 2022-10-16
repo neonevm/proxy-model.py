@@ -5,7 +5,7 @@ from typing import Optional, Dict
 from logged_groups import logged_group
 from singleton_decorator import singleton
 
-from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.environment_utils import NeonCli
 from ..common_neon.config import Config
 

@@ -12,7 +12,8 @@ from ..common_neon.eth_proto import NeonTx
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_alt_builder import ALTTxBuilder
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_transaction import SolAccount, SolPubKey, SolAccountMeta, SolLegacyTx, SolBlockhash
+from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockhash
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.address import NeonAddress
 
 

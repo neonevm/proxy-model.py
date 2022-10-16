@@ -9,8 +9,8 @@ from logged_groups import logged_group
 from ..common_neon.address import account_with_seed
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_transaction import SolLegacyTx, SolTxIx, SolPubKey
-from ..common_neon.solana_transaction_named import SolNamedTx
+from ..common_neon.solana_tx import SolTxIx, SolPubKey
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 
 
 @logged_group("neon.MemPool")
@@ -21,14 +21,10 @@ class NeonTxStage(abc.ABC):
         self._ix_builder = ix_builder
         self._size = 0
         self._balance = 0
-        self._tx = SolLegacyTx()
-
-    @property
-    def tx(self) -> SolNamedTx:
-        return SolNamedTx(name=self.name, tx=self._tx)
+        self.tx = SolLegacyTx(name=self.name)
 
     def _is_empty(self) -> bool:
-        return self._tx.is_empty()
+        return self.tx.is_empty()
 
     @abc.abstractmethod
     def build(self) -> None:
@@ -91,7 +87,7 @@ class NeonCreateAccountTxStage(NeonTxStage):
     def build(self) -> None:
         assert self._is_empty()
         self.debug(f'Create user account {self._address}')
-        self._tx.add(self._create_account())
+        self.tx.add(self._create_account())
 
 
 class NeonCreateHolderAccountStage(NeonCreateAccountWithSeedStage):
@@ -112,8 +108,8 @@ class NeonCreateHolderAccountStage(NeonCreateAccountWithSeedStage):
         assert self._is_empty()
 
         self.debug(f'Create perm account {self.sol_account}')
-        self._tx.add(self._create_account_with_seed())
-        self._tx.add(self._ix_builder.create_holder_ix(self.sol_account))
+        self.tx.add(self._create_account_with_seed())
+        self.tx.add(self._ix_builder.create_holder_ix(self.sol_account))
 
 
 class NeonDeleteHolderAccountStage(NeonTxStage):
@@ -136,4 +132,4 @@ class NeonDeleteHolderAccountStage(NeonTxStage):
         assert self._is_empty()
 
         self.debug(f'Delete holder account {self._sol_account}')
-        self._tx.add(self._delete_account())
+        self.tx.add(self._delete_account())

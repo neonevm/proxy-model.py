@@ -12,7 +12,7 @@ from unittest.mock import patch, MagicMock, call
 
 from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.solana_tx import SolPubKey
 
 from ..mempool.mempool import MemPool, IMPExecutor, MPTask, MPTxRequestList
 from ..mempool.mempool_api import MPRequest, MPRequestType

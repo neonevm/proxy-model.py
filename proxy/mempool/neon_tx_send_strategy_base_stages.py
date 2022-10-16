@@ -2,9 +2,9 @@ import copy
 
 from typing import List, Optional
 
-from ..common_neon.solana_transaction import SolLegacyTx
-from ..common_neon.solana_transaction_named import SolNamedTx, SolTx
-from ..common_neon.solana_transaction_v0 import SolV0Tx
+from ..common_neon.solana_tx import SolTx
+from ..common_neon.solana_tx_legacy import SolLegacyTx
+from ..common_neon.solana_tx_v0 import SolV0Tx
 from ..common_neon.solana_alt import ALTInfo
 from ..common_neon.solana_alt_builder import ALTTxBuilder, ALTTxSet
 from ..common_neon.elf_params import ElfParams
@@ -28,8 +28,11 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
         holder_msg_size = ElfParams().holder_msg_size
         while len(holder_msg):
             (holder_msg_part, holder_msg) = (holder_msg[:holder_msg_size], holder_msg[holder_msg_size:])
-            tx = SolLegacyTx(instructions=[builder.make_write_ix(neon_tx_sig, holder_msg_offset, holder_msg_part)])
-            tx_list.append(SolNamedTx(name='WriteHolderAccount', tx=tx))
+            tx = SolLegacyTx(
+                name='WriteHolderAccount',
+                instructions=[builder.make_write_ix(neon_tx_sig, holder_msg_offset, holder_msg_part)]
+            )
+            tx_list.append(tx)
             holder_msg_offset += holder_msg_size
 
         return [tx_list]
@@ -70,7 +73,7 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
         self._alt_builder.update_alt_info_list([self._alt_info])
 
     def build_tx(self, legacy_tx: SolLegacyTx) -> SolV0Tx:
-        return SolV0Tx(address_table_lookups=[self._alt_info]).add(legacy_tx)
+        return SolV0Tx(name=legacy_tx.name, address_table_lookups=[self._alt_info]).add(legacy_tx)
 
 
 def alt_strategy(cls):

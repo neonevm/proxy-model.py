@@ -4,7 +4,8 @@ from typing import List, Tuple, Set
 
 from logged_groups import logged_group
 
-from ..common_neon.solana_transaction import SolLegacyTx, SolPubKey
+from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
 from ..common_neon.errors import ALTError
 from ..common_neon.solana_alt_list_filter import ALTListFilter

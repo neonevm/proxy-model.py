@@ -10,7 +10,7 @@ from typing import Optional
 from ..testing.mock_server import MockServer
 from ..airdropper import Airdropper, AIRDROP_AMOUNT_SOL
 from ..common_neon.config import Config
-from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.solana_tx import SolPubKey
 from ..indexer.sql_dict import SQLDict
 from ..common_neon.solana_interactor import SolInteractor
 from ..testing.transactions import pre_token_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address

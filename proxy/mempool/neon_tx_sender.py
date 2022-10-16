@@ -54,15 +54,16 @@ class NeonTxSendStrategyExecutor:
                     continue
                 self.debug(f'Use strategy {Strategy.name}')
 
-                strategy.prep_before_emulate()
-                for i in range(self._ctx.config.retry_on_fail):
-                    self._emulate_neon_tx()
-
-                    if not strategy.validate():
-                        self.debug(f'Skip strategy {Strategy.name}: {strategy.validation_error_msg}')
+                for retry in range(self._ctx.config.retry_on_fail):
+                    has_changes = strategy.prep_before_emulate()
+                    if has_changes or (retry == 0):
+                        self._emulate_neon_tx()
+                        strategy.update_after_emulate()
+                    if has_changes:
                         continue
 
                     return strategy.execute()
+
                 raise NoMoreRetriesError()
 
             except (BudgetExceededError,):

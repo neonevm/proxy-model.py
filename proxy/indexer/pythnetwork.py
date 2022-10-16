@@ -7,7 +7,7 @@ from logged_groups import logged_group
 
 from ..common_neon.constants import SYS_PROGRAM_ID
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.solana_tx import SolPubKey
 
 
 def read_str(pos, data):

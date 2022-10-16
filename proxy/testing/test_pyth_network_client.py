@@ -3,7 +3,7 @@ from unittest.mock import patch, call
 from proxy.indexer.pythnetwork import PythNetworkClient
 from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.config import Config
-from proxy.common_neon.solana_transaction import SolPubKey
+from proxy.common_neon.solana_tx import SolPubKey
 from decimal import Decimal
 
 # Will perform tests with devnet network

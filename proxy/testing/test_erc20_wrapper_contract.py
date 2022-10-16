@@ -16,7 +16,8 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 import spl.token.instructions as SplTokenInstrutions
 
 from ..testing.testing_helpers import request_airdrop
-from ..common_neon.solana_transaction import SolAccount, SolPubKey, SolLegacyTx
+from ..common_neon.solana_tx import SolAccount, SolPubKey
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.erc20_wrapper import ERC20Wrapper
 from ..common_neon.web3 import NeonWeb3 as Web3

@@ -16,8 +16,7 @@ from ..common_neon.config import Config
 from ..common_neon.constants import NEON_ACCOUNT_TAG
 from ..common_neon.errors import SolanaUnavailableError
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from ..common_neon.solana_transaction import SolBlockhash, SolPubKey
-from ..common_neon.solana_transaction_named import SolTx
+from ..common_neon.solana_tx import SolTx, SolBlockhash, SolPubKey
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.layouts import HolderAccountInfo, AccountInfo, NeonAccountInfo, ALTAccountInfo
@@ -416,7 +415,7 @@ class SolInteractor:
             raise RuntimeError("failed to get latest blockhash")
         return result.get('context', {}).get('slot', 0)
 
-    def get_recent_blockhash(self, commitment='confirmed') -> SolBlockhash:
+    def get_recent_blockhash(self, commitment='finalized') -> SolBlockhash:
         opts = {
             'commitment': commitment
         }

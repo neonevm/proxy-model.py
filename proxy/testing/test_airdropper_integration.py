@@ -18,7 +18,8 @@ import spl.token.instructions as SplTokenInstrutions
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.web3 import NeonWeb3
-from ..common_neon.solana_transaction import SolLegacyTx, SolAccountMeta, SolTxIx, SolAccount, SolPubKey
+from ..common_neon.solana_tx import SolAccountMeta, SolTxIx, SolAccount, SolPubKey
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.neon_instruction import create_account_layout
 from ..common_neon.erc20_wrapper import ERC20Wrapper
 from ..common_neon.config import Config

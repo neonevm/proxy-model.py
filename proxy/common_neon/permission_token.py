@@ -8,8 +8,8 @@ import spl.token.instructions as spl_token
 from ..common_neon.address import NeonAddress, neon_2program
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_transaction import SolAccount, SolPubKey, SolLegacyTx
-from ..common_neon.solana_transaction_named import SolNamedTx
+from ..common_neon.solana_tx import SolPubKey, SolAccount
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 
@@ -33,15 +33,17 @@ class PermissionToken:
         if info is not None:
             return token_account
 
-        tx = SolLegacyTx(instructions=[
-            spl_token.create_associated_token_account(
-                payer=signer.public_key,
-                owner=neon_2program(ether_addr)[0],
-                mint=self.token_mint
-            )
-        ])
-        tx_list = [SolNamedTx(name='CreateAssociatedTokenAccount', tx=tx)]
-        SolTxListSender(self.config, self.solana, signer, skip_preflight=True).send(tx_list)
+        tx = SolLegacyTx(
+            name='CreateAssociatedTokenAccount',
+            instructions=[
+                spl_token.create_associated_token_account(
+                    payer=signer.public_key,
+                    owner=neon_2program(ether_addr)[0],
+                    mint=self.token_mint
+                )
+            ]
+        )
+        SolTxListSender(self.config, self.solana, signer, skip_preflight=True).send([tx])
         return token_account
 
     def mint_to(self, amount: int, ether_addr: Union[str, NeonAddress],

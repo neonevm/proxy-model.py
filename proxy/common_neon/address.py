@@ -3,14 +3,13 @@ from __future__ import annotations
 import math
 import random
 
-from hashlib import sha256
 from typing import Tuple
 
 import sha3
 
 from eth_keys import keys as neon_keys
 
-from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.environment_data import EVM_LOADER_ID
 

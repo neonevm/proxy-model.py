@@ -11,7 +11,8 @@ from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_transaction import SolAccountMeta, SolLegacyTx, SolTxIx, SolPubKey
+from ..common_neon.solana_tx import SolAccountMeta, SolTxIx, SolPubKey
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.eth_proto import NeonTx
 from ..mempool.operator_resource_mng import OpResInfo, OpResInit

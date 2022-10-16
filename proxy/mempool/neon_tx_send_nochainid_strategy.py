@@ -1,4 +1,4 @@
-from ..common_neon.solana_transaction import SolLegacyTx
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 
 from ..mempool.neon_tx_send_holder_strategy import HolderNeonTxStrategy
 from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy

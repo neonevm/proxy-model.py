@@ -11,7 +11,7 @@ from ..common_neon.errors import BadResourceError
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_transaction import SolPubKey, SolAccountMeta, SolAccount
+from ..common_neon.solana_tx import SolPubKey, SolAccountMeta, SolAccount
 
 
 @logged_group("neon.MemPool")

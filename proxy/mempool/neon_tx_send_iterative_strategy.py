@@ -5,8 +5,8 @@ from typing import List, cast
 from logged_groups import logged_group
 
 from ..common_neon.errors import NoMoreRetriesError
-from ..common_neon.solana_transaction import SolLegacyTx, SolTxReceipt
-from ..common_neon.solana_transaction_named import SolTx, SolNamedTx
+from ..common_neon.solana_tx import SolTxReceipt, SolTx
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxSendState
 from ..common_neon.utils import NeonTxResultInfo
 
@@ -14,16 +14,6 @@ from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_simple_strategy import SimpleNeonTxSender
 from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
-
-
-class SolIterativeTx(SolNamedTx):
-    def __init__(self, evm_step_cnt: int, *args, **kwargs):
-        super(SolIterativeTx, self).__init__(*args, **kwargs)
-        self._evm_step_cnt = evm_step_cnt
-
-    @property
-    def evm_step_cnt(self) -> int:
-        return self._evm_step_cnt
 
 
 class IterativeNeonTxSender(SimpleNeonTxSender):
@@ -76,13 +66,13 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         self.debug(f'Cancel the transaction')
         self.clear()
         self._is_canceled = True
-        return [SolNamedTx(name='CancelWithHash', tx=self._strategy.build_cancel_tx())]
+        return [self._strategy.build_cancel_tx()]
 
     def _decrease_evm_step_cnt(self, tx_state_list: List[SolTxSendState]) -> List[SolTx]:
         if not self._strategy.decrease_evm_step_cnt():
             raise NoMoreRetriesError()
 
-        total_evm_step_cnt = sum([cast(SolIterativeTx, tx_state.tx).evm_step_cnt for tx_state in tx_state_list])
+        total_evm_step_cnt = sum([getattr(tx_state.tx, 'evm_step_cnt') for tx_state in tx_state_list])
         self.debug('No receipt -> execute additional iteration')
         return self._strategy.build_tx_list(total_evm_step_cnt, 0)
 
@@ -113,13 +103,13 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
     def _build_tx(self) -> SolLegacyTx:
         self._uniq_idx += 1
-        return self._build_cu_tx(
-            self._ctx.ix_builder.make_tx_step_from_data_ix(self._evm_step_cnt, self._uniq_idx)
-        )
+        return self._build_cu_tx(self._ctx.ix_builder.make_tx_step_from_data_ix(self._evm_step_cnt, self._uniq_idx))
 
     def build_tx_list(self, total_evm_step_cnt: int, add_iter_cnt: int) -> List[SolTx]:
         def build_tx(step_cnt: int) -> SolTx:
-            return SolIterativeTx(name=self.name, tx=self._build_tx(), evm_step_cnt=step_cnt)
+            tx = self._build_tx()
+            setattr(tx, 'evm_step_cnt', step_cnt)
+            return tx
 
         tx_list: List[SolTx] = []
         save_evm_step_cnt = total_evm_step_cnt

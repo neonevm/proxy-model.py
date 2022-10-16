@@ -17,7 +17,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from solcx import compile_source
 
 from ..common_neon.config import Config
-from ..common_neon.solana_transaction import SolAccount, SolPubKey
+from ..common_neon.solana_tx import SolAccount, SolPubKey
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.erc20_wrapper import ERC20Wrapper
 

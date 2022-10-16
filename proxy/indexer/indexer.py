@@ -13,7 +13,7 @@ from ..common_neon.data import NeonTxStatData
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo
-from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.utils import SolanaBlockInfo
 

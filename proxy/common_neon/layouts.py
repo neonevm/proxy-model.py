@@ -10,7 +10,7 @@ from construct import Struct
 
 from .constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG, LOOKUP_ACCOUNT_TAG, NEON_ACCOUNT_TAG
 from .elf_params import ElfParams
-from .solana_transaction import SolPubKey
+from .solana_tx import SolPubKey
 
 HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,

@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 
 from ..common_neon.environment_data import EVM_LOADER_ID
-from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.solana_tx import SolPubKey
 
 
 class Config:

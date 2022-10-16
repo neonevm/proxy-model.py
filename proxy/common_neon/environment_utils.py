@@ -7,7 +7,7 @@ from typing import List, Optional
 import logging
 from logged_groups import logged_group, LogMng
 
-from ..common_neon.solana_transaction import SolAccount
+from ..common_neon.solana_tx import SolAccount
 from ..common_neon.config import Config
 
 

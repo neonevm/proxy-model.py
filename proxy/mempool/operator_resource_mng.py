@@ -17,7 +17,7 @@ from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.errors import BadResourceError
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_transaction import SolPubKey, SolAccount
+from ..common_neon.solana_tx import SolPubKey, SolAccount
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 
@@ -111,9 +111,8 @@ class OpResInit:
 
     def _execute_stage(self, stage: NeonTxStage, resource: OpResInfo) -> None:
         stage.build()
-        tx_list = [stage.tx]
         tx_sender = SolTxListSender(self._config, self._solana, resource.signer)
-        tx_sender.send(tx_list)
+        tx_sender.send([stage.tx])
 
     def _create_ether_account(self, builder: NeonIxBuilder, resource: OpResInfo):
         solana_address = neon_2program(resource.ether)[0]

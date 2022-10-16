@@ -17,7 +17,8 @@ from random import uniform
 from eth_account.signers.local import LocalAccount as NeonAccount
 
 from proxy.common_neon.config import Config
-from proxy.common_neon.solana_transaction import SolLegacyTx, SolAccount
+from proxy.common_neon.solana_tx import SolAccount
+from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.common_neon.elf_params import ElfParams
 
 Confirmed = Commitment('confirmed')

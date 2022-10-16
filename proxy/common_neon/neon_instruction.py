@@ -16,7 +16,7 @@ from ..common_neon.elf_params import ElfParams
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.layouts import CREATE_ACCOUNT_LAYOUT
-from ..common_neon.solana_transaction import SolTxIx, SolPubKey, SolAccountMeta
+from ..common_neon.solana_tx import SolTxIx, SolPubKey, SolAccountMeta
 
 
 class EvmInstruction(Enum):
