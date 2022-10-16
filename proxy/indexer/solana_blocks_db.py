@@ -2,8 +2,8 @@ import math
 
 from typing import Optional, List, Any, Iterator
 
-from ..indexer.base_db import BaseDB
 from ..common_neon.utils import SolanaBlockInfo
+from ..indexer.base_db import BaseDB
 
 
 class SolBlocksDB(BaseDB):

@@ -1,5 +1,4 @@
 import unittest
-import os
 
 from web3 import exceptions as web3_exceptions
 from solana.rpc.api import Client as SolanaClient
@@ -8,6 +7,7 @@ from eth_account.account import LocalAccount
 from .testing_helpers import SolidityContractDeployer, request_airdrop
 from ..common_neon.emulator_interactor import decode_revert_message
 from ..common_neon.config import Config
+
 
 class TestContractReverting(unittest.TestCase):
 

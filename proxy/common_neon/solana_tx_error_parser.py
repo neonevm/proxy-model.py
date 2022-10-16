@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 import re
 
-from logged_groups import logged_group
 from typing import Union, Optional, Any, Tuple
+from logged_groups import logged_group
 
-from ..common_neon.utils import get_from_dict
-from ..common_neon.solana_transaction import SolTxReceipt
 from ..common_neon.environment_data import EVM_LOADER_ID
+from ..common_neon.solana_transaction import SolTxReceipt
+from ..common_neon.utils import get_from_dict
 
 
 class SolTxError(Exception):

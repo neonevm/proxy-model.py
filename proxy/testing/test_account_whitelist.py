@@ -25,7 +25,7 @@ class TestAccountWhitelist(unittest.TestCase):
         cls.mint_authority_file = "/spl/bin/evm_loader-keypair.json"
         cls.payer = payer = SolAccount()
         client = SolanaClient(config.solana_url)
-        client.request_airdrop(payer.public_key(), 1000_000_000_000, Confirmed)
+        client.request_airdrop(payer.public_key, 1000_000_000_000, Confirmed)
 
         cls.testee = testee = AccountWhitelist(config, solana)
 

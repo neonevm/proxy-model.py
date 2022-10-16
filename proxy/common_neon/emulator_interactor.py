@@ -1,16 +1,15 @@
 import json
 import subprocess
-from logged_groups import logged_group
 
 from typing import Optional, Dict, Any
-from ..common_neon.eth_proto import NeonTx
+from logged_groups import logged_group
 
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.data import NeonEmulatedResult
+from ..common_neon.environment_utils import NeonCli
+from ..common_neon.errors import EthereumError
 from ..common_neon.config import Config
-
-from .environment_utils import neon_cli
-from .errors import EthereumError
-from .data import NeonEmulatedResult
+from ..common_neon.elf_params import ElfParams
+from ..common_neon.eth_proto import NeonTx
 
 
 @logged_group("neon.Proxy")
@@ -70,7 +69,7 @@ def check_emulated_exit_status(result: Dict[str, Any], *, logger):
 
 
 def decode_error_message(reason: str) -> Optional[str]:
-    ERROR_DICT = {
+    error_dict = {
         'StackUnderflow': 'trying to pop from an empty stack',
         'StackOverflow': 'trying to push into a stack over stack limit',
         'InvalidJump': 'jump destination is invalid',
@@ -86,16 +85,16 @@ def decode_error_message(reason: str) -> Optional[str]:
         'CreateEmpty': 'attempt to create an empty account (runtime, unused)',
         'StaticModeViolation': 'STATICCALL tried to change state',
     }
-    return ERROR_DICT.get(reason)
+    return error_dict.get(reason)
 
 
 def decode_fatal_message(reason: str) -> Optional[str]:
-    FATAL_DICT = {
+    fatal_dict = {
         'NotSupported': 'the operation is not supported',
         'UnhandledInterrupt': 'the trap (interrupt) is unhandled',
         'CallErrorAsFatal': 'the environment explicitly set call errors as fatal error'
     }
-    return FATAL_DICT.get(reason)
+    return fatal_dict.get(reason)
 
 
 @logged_group("neon.Proxy")
@@ -221,7 +220,8 @@ class FindAccount(BaseNeonCliErrorParser):
                 account = line[pos + len(hdr):]
                 pos = account.find(',')
                 account = account[:pos]
-                hdr = ' => ' + account  # Not found account for 0x1c074b10a40b95d1cfad9da99a59fb6aab20b694 => kNEjs3pevk1fdhkQDUDc1E9eEj4V5puXAwLgMuf5KAE
+                # Not found account for 0x1c074b10a40b95d1c....9a59fb6aab20b694 => kNEjs3pevk1fdhkQDUDc...wLgMuf5KAE
+                hdr = ' => ' + account
             else:
                 account = line[:pos]
                 pos = account.rfind(' ')
@@ -291,7 +291,6 @@ class NeonCliErrorParser:
         return parser.execute(err)
 
 
-
 def emulator(config: Config, contract, sender, data, value):
     value = value or ""
     try:
@@ -301,7 +300,7 @@ def emulator(config: Config, contract, sender, data, value):
         retry_cnt = 0
         while True:
             try:
-                return neon_cli(config).call(
+                return NeonCli(config).call(
                     "emulate",
                     "--token_mint", str(neon_token_mint),
                     "--chain_id", str(chain_id),

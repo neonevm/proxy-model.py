@@ -5,10 +5,11 @@ import time
 from typing import Optional, List
 
 from ..common_neon.errors import ALTError
-from ..common_neon.solana_transaction import SolLegacyTx, SolWrappedTx, SolTx, SolAccount
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_alt import ALTInfo
 from ..common_neon.neon_instruction import NeonIxBuilder
+from ..common_neon.solana_alt import ALTInfo
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_transaction import SolLegacyTx, SolAccount
+from ..common_neon.solana_transaction_named import SolNamedTx, SolTx
 
 
 class ALTTxSet:
@@ -58,9 +59,13 @@ class ALTTxBuilder:
 
     def build_alt_tx_set(self, alt_info: ALTInfo) -> ALTTxSet:
         # Tx to create an Account Lookup Table
-        create_alt_tx = SolLegacyTx().add(self._ix_builder.make_create_lookup_table_ix(
-            alt_info.table_account, alt_info.recent_block_slot, alt_info.nonce
-        ))
+        create_alt_tx = SolLegacyTx(instructions=[
+            self._ix_builder.make_create_lookup_table_ix(
+                alt_info.table_account,
+                alt_info.recent_block_slot,
+                alt_info.nonce
+            )
+        ])
 
         # List of tx to extend the Account Lookup Table
         acct_list = alt_info.account_key_list
@@ -68,7 +73,12 @@ class ALTTxBuilder:
         extend_alt_tx_list: List[SolLegacyTx] = []
         while len(acct_list):
             acct_list_part, acct_list = acct_list[:self.tx_account_cnt], acct_list[self.tx_account_cnt:]
-            tx = SolLegacyTx().add(self._ix_builder.make_extend_lookup_table_ix(alt_info.table_account, acct_list_part))
+            tx = SolLegacyTx(instructions=[
+                self._ix_builder.make_extend_lookup_table_ix(
+                    alt_info.table_account,
+                    acct_list_part
+                )
+            ])
             extend_alt_tx_list.append(tx)
 
         # If list of accounts is small, including of first extend-tx into create-tx will decrease time of tx execution
@@ -83,11 +93,11 @@ class ALTTxBuilder:
     @staticmethod
     def build_prep_alt_list(alt_tx_set: ALTTxSet) -> List[List[SolTx]]:
         tx_list_list: List[List[SolTx]] = [[
-            SolWrappedTx(name='CreateLookupTable:ExtendLookupTable', tx=tx) for tx in alt_tx_set.create_alt_tx_list
+            SolNamedTx(name='CreateLookupTable:ExtendLookupTable', tx=tx) for tx in alt_tx_set.create_alt_tx_list
         ]]
 
         if len(alt_tx_set.extend_alt_tx_list) > 0:
-            tx_list_list.append([SolWrappedTx(name='ExtendLookupTable', tx=tx) for tx in alt_tx_set.extend_alt_tx_list])
+            tx_list_list.append([SolNamedTx(name='ExtendLookupTable', tx=tx) for tx in alt_tx_set.extend_alt_tx_list])
 
         return tx_list_list
 

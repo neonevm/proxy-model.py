@@ -1,19 +1,19 @@
-import time
-import json
-import base58
-import random
 import enum
+import json
+import random
+import time
 
-from logged_groups import logged_group
 from dataclasses import dataclass
 from typing import Optional, List, Dict
+from logged_groups import logged_group
 
-from ..common_neon.solana_transaction import SolTx, SolWrappedTx, SolBlockhash, SolTxReceipt, SolAccount
-from ..common_neon.solana_tx_error_parser import SolTxErrorParser, SolTxError
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.errors import NodeBehindError, NoMoreRetriesError, NonceTooLowError, BlockedAccountsError
-from ..common_neon.errors import BudgetExceededError
 from ..common_neon.config import Config
+from ..common_neon.errors import BudgetExceededError
+from ..common_neon.errors import NodeBehindError, NoMoreRetriesError, NonceTooLowError, BlockedAccountsError
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_transaction_named import SolTx, SolNamedTx
+from ..common_neon.solana_transaction import SolBlockhash, SolTxReceipt, SolAccount
+from ..common_neon.solana_tx_error_parser import SolTxErrorParser, SolTxError
 
 
 @dataclass
@@ -47,11 +47,11 @@ class SolTxSendState:
 
     @staticmethod
     def decode_tx_name(tx: SolTx) -> str:
-        return tx.name if isinstance(tx, SolWrappedTx) else "Unknown"
+        return tx.name if isinstance(tx, SolNamedTx) else "Unknown"
 
     @staticmethod
     def decode_tx_sig(tx: SolTx) -> str:
-        return str(tx.signature())
+        return str(tx.signature)
 
 
 @logged_group("neon.Proxy")

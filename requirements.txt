@@ -1,10 +1,10 @@
 typing-extensions==4.3.0
 ecdsa==0.18.0
 pysha3==1.0.2
-eth-keys==0.3.3
+eth-keys==0.4.0
 rlp
-web3==5.22.0
-solana==0.26.0
+solana==0.27.2
+solders==0.9.3
 psycopg2-binary
 ethereum
 py-solc-x==1.1.1
@@ -12,5 +12,7 @@ flask==2.2.2
 prometheus_client==0.15.0
 requests
 base58
-sha3
+pysha3
+construct
+git+https://github.com/ethereum/web3.py.git@v6.0.0-beta.6
 git+https://github.com/neonlabsorg/neon.py.git@0.1.7

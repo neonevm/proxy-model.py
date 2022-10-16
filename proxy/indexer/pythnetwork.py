@@ -1,12 +1,13 @@
 import struct
 
 from decimal import Decimal
-from logged_groups import logged_group
 from typing import List, Union, Dict, Any, Optional
 
-from ..common_neon.solana_transaction import SolPubKey
+from logged_groups import logged_group
+
 from ..common_neon.constants import SYS_PROGRAM_ID
 from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_transaction import SolPubKey
 
 
 def read_str(pos, data):

@@ -3,7 +3,8 @@ import abc
 from logged_groups import logged_group
 from typing import Optional, List, cast
 
-from ..common_neon.solana_transaction import SolLegacyTx, SolTx, SolBlockhash
+from ..common_neon.solana_transaction import SolLegacyTx, SolBlockhash, SolTxIx
+from ..common_neon.solana_transaction_named import SolTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.utils import NeonTxResultInfo
@@ -58,6 +59,7 @@ class BaseNeonTxStrategy(abc.ABC):
 
             return result
         except Exception as e:
+            self.debug(f'-> fail:', exc_info=e)
             self._validation_error_msg = str(e)
             return False
 
@@ -109,17 +111,19 @@ class BaseNeonTxStrategy(abc.ABC):
         for stage in self._prep_stage_list:
             stage.update_after_emulate()
 
+    def _build_cu_tx(self, ix: SolTxIx) -> SolLegacyTx:
+        return SolLegacyTx(instructions=[
+            self._ctx.ix_builder.make_compute_budget_heap_ix(),
+            self._ctx.ix_builder.make_compute_budget_cu_ix(),
+            ix
+        ])
+
     def _build_cancel_tx(self) -> SolLegacyTx:
-        return BaseNeonTxStrategy._build_tx(self).add(
-            self._ctx.ix_builder.make_cancel_ix()
-        )
+        return self._build_cu_tx(self._ctx.ix_builder.make_cancel_ix())
 
     @abc.abstractmethod
     def _build_tx(self) -> SolLegacyTx:
-        return SolLegacyTx().add(
-            self._ctx.ix_builder.make_compute_budget_heap_ix(),
-            self._ctx.ix_builder.make_compute_budget_cu_ix()
-        )
+        pass
 
     @abc.abstractmethod
     def _validate(self) -> bool:

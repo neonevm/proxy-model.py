@@ -3,7 +3,7 @@ import multiprocessing
 import unittest
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.eth_proto import NeonTx
-from ..common_neon.address import EthereumAddress
+from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 from ..mempool.operator_resource_mng import OpResInfo, OpResInit
@@ -140,7 +140,7 @@ class BlockedTest(unittest.TestCase):
         print(f'blocked tx hash: {tx_store_signed.hash.hex()}')
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
-        neon_ix_builder.init_operator_neon(EthereumAddress.from_private_key(resource.secret_key))
+        neon_ix_builder.init_operator_neon(NeonAddress.from_private_key(resource.secret_key))
 
         neon_tx = NeonTx.from_string(tx_store_signed.rawTransaction)
         neon_ix_builder.init_neon_tx(neon_tx)
@@ -151,11 +151,11 @@ class BlockedTest(unittest.TestCase):
 
         neon_ix_builder.init_iterative(resource.holder)
 
-        solana_tx = Transaction().add(
+        solana_tx = Transaction(instructions=[
             neon_ix_builder.make_compute_budget_heap_ix(),
             neon_ix_builder.make_compute_budget_cu_ix(),
             neon_ix_builder.make_tx_step_from_data_ix(500, 1)
-        )
+        ])
         send_transaction(client, solana_tx, resource.signer)
         return solana_tx
 

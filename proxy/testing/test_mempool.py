@@ -4,8 +4,7 @@ import asyncio
 import logging
 from random import randint
 
-from web3 import Web3, Account
-from eth_account.account import LocalAccount
+from eth_account.account import LocalAccount as NeonLocalAccount, Account as NeonAccount
 from typing import Any, List, Dict, Optional, Union
 
 import unittest
@@ -28,8 +27,8 @@ from ..mempool.operator_resource_mng import OpResMng
 
 
 def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: int,
-                            from_acc: Union[Account, LocalAccount, None] = None,
-                            to_acc: Union[Account, LocalAccount, None] = None,
+                            from_acc: Union[NeonAccount, NeonLocalAccount, None] = None,
+                            to_acc: Union[NeonAccount, NeonLocalAccount, None] = None,
                             value: int = 0, data: bytes = b'') -> MPTxExecRequest:
     if from_acc is None:
         from_acc = create_account()
@@ -37,8 +36,7 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: int
     if to_acc is None:
         to_acc = create_account()
     to_addr = to_acc.address
-    w3 = Web3()
-    signed_tx_data = w3.eth.account.sign_transaction(
+    signed_tx_data = NeonAccount().sign_transaction(
         dict(nonce=nonce, chainId=111, gas=gas, gasPrice=gas_price, to=to_addr, value=value, data=data),
         from_acc.key)
     neon_sig = signed_tx_data.hash.hex()

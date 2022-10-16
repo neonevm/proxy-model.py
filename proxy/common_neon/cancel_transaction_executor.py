@@ -2,20 +2,22 @@ from typing import List, Set
 
 from logged_groups import logged_group
 
+from ..common_neon.config import Config
+from ..common_neon.layouts import HolderAccountInfo
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_transaction import SolLegacyTx, SolWrappedTx, SolAccountMeta, SolAccount, SolPubKey
-from ..common_neon.solana_v0_transaction import SolV0Tx
-from ..common_neon.solana_interactor import SolInteractor, HolderAccountInfo
-from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.solana_alt import ALTInfo
 from ..common_neon.solana_alt_builder import ALTTxBuilder, ALTTxSet
-from ..common_neon.config import Config
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_transaction import SolLegacyTx, SolAccountMeta, SolAccount, SolPubKey
+from ..common_neon.solana_transaction_named import SolNamedTx
+from ..common_neon.solana_transaction_v0 import SolV0Tx
+from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 
 @logged_group("Neon.Canceler")
 class CancelTxExecutor:
     def __init__(self, config: Config, solana: SolInteractor, signer: SolAccount) -> None:
-        self._ix_builder = NeonIxBuilder(signer.public_key())
+        self._ix_builder = NeonIxBuilder(signer.public_key)
         self._config = config
         self._solana = solana
         self._signer = signer
@@ -23,7 +25,7 @@ class CancelTxExecutor:
         self._alt_builder = ALTTxBuilder(solana, self._ix_builder, signer)
         self._alt_tx_set = ALTTxSet()
         self._alt_info_list: List[ALTInfo] = []
-        self._cancel_tx_list: List[SolLegacyTx] = []
+        self._cancel_tx_list: List[SolNamedTx] = []
         self._holder_account_set: Set[str] = set()
 
     def add_blocked_holder_account(self, holder_info: HolderAccountInfo) -> bool:
@@ -34,7 +36,7 @@ class CancelTxExecutor:
             tx = self._build_alt_cancel_tx(holder_info)
         else:
             tx = self._build_cancel_tx(holder_info)
-        self._cancel_tx_list.append(tx)
+        self._cancel_tx_list.append(SolNamedTx(name='CancelWithHash', tx=tx))
         return True
 
     def _build_cancel_tx(self, holder_info: HolderAccountInfo) -> SolLegacyTx:
@@ -42,13 +44,13 @@ class CancelTxExecutor:
         for is_writable, acct in holder_info.account_list:
             key_list.append(SolAccountMeta(pubkey=SolPubKey(acct), is_signer=False, is_writable=is_writable))
 
-        return SolLegacyTx().add(
+        return SolLegacyTx(instructions=[
             self._ix_builder.make_cancel_ix(
                 holder_account=holder_info.holder_account,
                 neon_tx_sig=bytes.fromhex(holder_info.neon_tx_sig[2:]),
                 cancel_key_list=key_list
             )
-        )
+        ])
 
     def _build_alt_cancel_tx(self, holder_info: HolderAccountInfo) -> SolV0Tx:
         legacy_tx = self._build_cancel_tx(holder_info)
@@ -75,10 +77,8 @@ class CancelTxExecutor:
             # Update lookups from Solana
             self._alt_builder.update_alt_info_list(self._alt_info_list)
 
-        tx_list = [SolWrappedTx(name='CancelWithHash', tx=tx) for tx in self._cancel_tx_list]
-
         try:
-            tx_sender.send(tx_list)
+            tx_sender.send(self._cancel_tx_list)
         except BaseException as exc:
             self.warning('Failed to cancel tx', exc_info=exc)
 

@@ -6,19 +6,19 @@ from typing import Optional, List, Dict
 
 from logged_groups import logged_group
 
-from ..common_neon.config import Config
-from ..common_neon.address import EthereumAddress, ether2program, permAccountSeed, accountWithSeed
-from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
-from ..common_neon.solana_tx_list_sender import SolTxListSender
-from ..common_neon.environment_utils import get_solana_accounts
-from ..common_neon.cancel_transaction_executor import CancelTxExecutor
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_transaction import SolPubKey, SolAccount, SolWrappedTx
-from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.errors import BadResourceError
-
-from .neon_tx_stages import NeonTxStage
 from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
+from .neon_tx_stages import NeonTxStage
+
+from ..common_neon.address import NeonAddress, neon_2program, perm_account_seed, account_with_seed
+from ..common_neon.cancel_transaction_executor import CancelTxExecutor
+from ..common_neon.config import Config
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
+from ..common_neon.environment_utils import get_solana_accounts
+from ..common_neon.errors import BadResourceError
+from ..common_neon.neon_instruction import NeonIxBuilder
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_transaction import SolPubKey, SolAccount
+from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 
 @logged_group("neon.MemPool")
@@ -27,15 +27,15 @@ class OpResInfo:
         self._signer = signer
         self._resource_id = resource_id
 
-        self._holder_seed = permAccountSeed(b'holder-', resource_id)
-        self._holder = accountWithSeed(self.public_key, self._holder_seed)
+        self._holder_seed = perm_account_seed(b'holder-', resource_id)
+        self._holder = account_with_seed(self.public_key, self._holder_seed)
 
-        self._ether = EthereumAddress.from_private_key(self.secret_key)
+        self._ether = NeonAddress.from_private_key(self.secret_key)
 
     @staticmethod
     def from_ident(ident: str) -> OpResInfo:
         key, rid = ident.split(':')
-        return OpResInfo(signer=SolAccount(bytes.fromhex(key)), resource_id=int(rid, 16))
+        return OpResInfo(signer=SolAccount.from_secret_key(bytes.fromhex(key)), resource_id=int(rid, 16))
 
     def __str__(self) -> str:
         return f'{str(self.public_key)}:{self._resource_id}'
@@ -49,7 +49,7 @@ class OpResInfo:
         return self._holder_seed
 
     @property
-    def ether(self) -> EthereumAddress:
+    def ether(self) -> NeonAddress:
         return self._ether
 
     @property
@@ -58,11 +58,11 @@ class OpResInfo:
 
     @property
     def public_key(self) -> SolPubKey:
-        return self._signer.public_key()
+        return self._signer.public_key
 
     @property
     def secret_key(self) -> bytes:
-        return self._signer.secret_key()
+        return self._signer.secret_key
 
     @property
     def resource_id(self) -> int:
@@ -111,12 +111,12 @@ class OpResInit:
 
     def _execute_stage(self, stage: NeonTxStage, resource: OpResInfo) -> None:
         stage.build()
-        tx_list = [SolWrappedTx(name=stage.name, tx=stage.tx)]
+        tx_list = [stage.tx]
         tx_sender = SolTxListSender(self._config, self._solana, resource.signer)
         tx_sender.send(tx_list)
 
     def _create_ether_account(self, builder: NeonIxBuilder, resource: OpResInfo):
-        solana_address = ether2program(resource.ether)[0]
+        solana_address = neon_2program(resource.ether)[0]
 
         account_info = self._solana.get_account_info(solana_address)
         if account_info is not None:
@@ -169,7 +169,7 @@ class OpResIdent:
 
     @property
     def ident(self) -> str:
-        return f'{self._signer.secret_key().hex()}:{hex(self._resource_id)}'
+        return f'{self._signer.secret_key.hex()}:{hex(self._resource_id)}'
 
     @property
     def last_used_time(self) -> int:
@@ -281,7 +281,7 @@ class OpResMng:
                 break
 
     def get_signer_list(self) -> List[str]:
-        return [signer.secret_key().hex() for signer in self._signer_list]
+        return [signer.secret_key.hex() for signer in self._signer_list]
 
     def get_disabled_resource_list(self) -> List[str]:
         current_time = self._get_current_time()

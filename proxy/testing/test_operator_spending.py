@@ -34,7 +34,7 @@ contract Increase_storage {
 '''
 
 
-class neon_cli:
+class NeonCli:
     def call(self, *args):
         try:
             cmd = ["neon-cli",
@@ -69,14 +69,16 @@ class TransactonCost(unittest.TestCase):
         compiled = compile_source(CONTRACT)
         id, interface = compiled.popitem()
         contract = proxy.eth.contract(abi=interface['abi'], bytecode=interface['bin'])
-        trx = proxy.eth.account.sign_transaction(dict(
-            nonce=proxy.eth.get_transaction_count(self.account.address),
-            chainId=proxy.eth.chain_id,
-            gas=987654321,
-            gasPrice=proxy.eth.gas_price,
-            to='',
-            value=0,
-            data=contract.bytecode),
+        trx = proxy.eth.account.sign_transaction(
+            dict(
+                nonce=proxy.eth.get_transaction_count(self.account.address),
+                chainId=proxy.eth.chain_id,
+                gas=987654321,
+                gasPrice=proxy.eth.gas_price,
+                to='',
+                value=0,
+                data=contract.bytecode
+            ),
             self.account.key
         )
         print("trx_hash", trx.hash.hex()[2:])

@@ -1,17 +1,17 @@
 from logged_groups import logged_group
 
+from ..common_neon.address import NeonAddress
+from ..common_neon.data import NeonEmulatedResult
 from ..common_neon.emulator_interactor import call_tx_emulated
 from ..common_neon.errors import NonceTooLowError, BudgetExceededError, NoMoreRetriesError
 from ..common_neon.utils import NeonTxResultInfo
-from ..common_neon.data import NeonEmulatedResult
-from ..common_neon.address import EthereumAddress
 
-from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
-from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
-from ..mempool.neon_tx_send_simple_strategy import SimpleNeonTxStrategy, ALTSimpleNeonTxStrategy
-from ..mempool.neon_tx_send_iterative_strategy import IterativeNeonTxStrategy, ALTIterativeNeonTxStrategy
-from ..mempool.neon_tx_send_holder_strategy import HolderNeonTxStrategy, ALTHolderNeonTxStrategy
-from ..mempool.neon_tx_send_nochainid_strategy import NoChainIdNeonTxStrategy, ALTNoChainIdNeonTxStrategy
+from .neon_tx_send_base_strategy import BaseNeonTxStrategy
+from .neon_tx_send_holder_strategy import HolderNeonTxStrategy, ALTHolderNeonTxStrategy
+from .neon_tx_send_iterative_strategy import IterativeNeonTxStrategy, ALTIterativeNeonTxStrategy
+from .neon_tx_send_nochainid_strategy import NoChainIdNeonTxStrategy, ALTNoChainIdNeonTxStrategy
+from .neon_tx_send_simple_strategy import SimpleNeonTxStrategy, ALTSimpleNeonTxStrategy
+from .neon_tx_sender_ctx import NeonTxSendCtx
 
 
 @logged_group("neon.MemPool")
@@ -31,7 +31,7 @@ class NeonTxSendStrategyExecutor:
         return self._execute()
 
     def _init_state_tx_cnt(self) -> None:
-        neon_account_info = self._ctx.solana.get_neon_account_info(EthereumAddress(self._ctx.sender))
+        neon_account_info = self._ctx.solana.get_neon_account_info(NeonAddress(self._ctx.sender))
         state_tx_cnt = neon_account_info.tx_count if neon_account_info is not None else 0
         self._ctx.set_state_tx_cnt(state_tx_cnt)
 

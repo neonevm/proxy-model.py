@@ -2,8 +2,9 @@ import copy
 
 from typing import List, Optional
 
-from ..common_neon.solana_transaction import SolTx, SolLegacyTx, SolWrappedTx
-from ..common_neon.solana_v0_transaction import SolV0Tx
+from ..common_neon.solana_transaction import SolLegacyTx
+from ..common_neon.solana_transaction_named import SolNamedTx, SolTx
+from ..common_neon.solana_transaction_v0 import SolV0Tx
 from ..common_neon.solana_alt import ALTInfo
 from ..common_neon.solana_alt_builder import ALTTxBuilder, ALTTxSet
 from ..common_neon.elf_params import ElfParams
@@ -17,16 +18,18 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
         if self._ctx.is_holder_completed:
             return []
 
+        builder = self._ctx.ix_builder
+
         tx_list: List[SolTx] = []
         holder_msg_offset = 0
-        holder_msg = copy.copy(self._ctx.ix_builder.holder_msg)
+        holder_msg = copy.copy(builder.holder_msg)
         neon_tx_sig = self._ctx.bin_neon_sig
 
         holder_msg_size = ElfParams().holder_msg_size
         while len(holder_msg):
             (holder_msg_part, holder_msg) = (holder_msg[:holder_msg_size], holder_msg[holder_msg_size:])
-            tx = SolLegacyTx().add(self._ctx.ix_builder.make_write_ix(neon_tx_sig, holder_msg_offset, holder_msg_part))
-            tx_list.append(SolWrappedTx(tx=tx, name='WriteHolderAccount'))
+            tx = SolLegacyTx(instructions=[builder.make_write_ix(neon_tx_sig, holder_msg_offset, holder_msg_part)])
+            tx_list.append(SolNamedTx(name='WriteHolderAccount', tx=tx))
             holder_msg_offset += holder_msg_size
 
         return [tx_list]

@@ -1,13 +1,13 @@
 from typing import List
 from logged_groups import logged_group
 
-from ..common_neon.solana_transaction import SolTx, SolLegacyTx, SolWrappedTx, SolTxReceipt
+from ..common_neon.solana_transaction import SolLegacyTx, SolTxReceipt
+from ..common_neon.solana_transaction_named import SolTx, SolNamedTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender, SolTxSendState
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
-from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxReceiptInfo, SolTxSigSlotInfo
+from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo
 from ..common_neon.errors import BudgetExceededError
 from ..common_neon.utils import NeonTxResultInfo
-from ..common_neon.evm_log_decoder import decode_log_list
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
@@ -77,14 +77,14 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         return False
 
     def _build_tx(self) -> SolLegacyTx:
-        return BaseNeonTxStrategy._build_tx(self).add(
+        return self._build_cu_tx(
             self._ctx.ix_builder.make_tx_exec_from_data_ix()
         )
 
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
 
-        tx_list = [SolWrappedTx(name=self.name, tx=self._build_tx())]
+        tx_list = [SolNamedTx(name=self.name, tx=self._build_tx())]
         tx_sender = SimpleNeonTxSender(self, self._ctx.solana, self._ctx.signer)
         tx_sender.send(tx_list)
         if not tx_sender.neon_tx_res.is_valid():

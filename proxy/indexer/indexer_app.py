@@ -1,10 +1,12 @@
 from logged_groups import logged_group
 
-from ..common_neon.config import Config
-from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
-from ..common_neon.data import NeonTxStatData
-from .indexer import Indexer
 from .i_indexer_stat_exporter import IIndexerStatExporter
+from .indexer import Indexer
+
+from ..common_neon.config import Config
+from ..common_neon.data import NeonTxStatData
+
+from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
 
 
 @logged_group("neon.Indexer")

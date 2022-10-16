@@ -1,6 +1,5 @@
 import unittest
 import os
-import base58
 
 from solana.rpc.api import Client as SolanaClient
 from .solana_utils import WalletAccount, wallet_path, EvmLoader, client, send_transaction
@@ -9,7 +8,7 @@ from solcx import compile_source
 from web3 import Web3
 
 from ..common_neon.environment_data import EVM_LOADER_ID
-from ..common_neon.address import EthereumAddress
+from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_transaction import SolAccountMeta, SolLegacyTx, SolTxIx, SolPubKey
@@ -105,13 +104,13 @@ class CancelTest(unittest.TestCase):
         print('contract', re_id)
 
         # Create ethereum account for user account
-        cls.caller_ether = caller_ether = EthereumAddress.from_private_key(bytes(eth_account.key))
+        cls.caller_ether = caller_ether = NeonAddress.from_private_key(bytes(eth_account.key))
         cls.caller, _ = caller, _ = loader.ether2program(str(caller_ether))
 
-        cls.caller_ether_invoked = caller_ether_invoked = EthereumAddress.from_private_key(bytes(eth_account_invoked.key))
+        cls.caller_ether_invoked = caller_ether_invoked = NeonAddress.from_private_key(bytes(eth_account_invoked.key))
         cls.caller_invoked, _ = caller_invoked, _ = loader.ether2program(str(caller_ether_invoked))
 
-        cls.caller_ether_getter = caller_ether_getter = EthereumAddress.from_private_key(bytes(eth_account_getter.key))
+        cls.caller_ether_getter = caller_ether_getter = NeonAddress.from_private_key(bytes(eth_account_getter.key))
         cls.caller_getter, _ = caller_getter, _ = loader.ether2program(str(caller_ether_getter))
 
         print(f'caller_ether: {caller_ether} {caller}')
@@ -154,7 +153,7 @@ class CancelTest(unittest.TestCase):
         OpResInit(config, SolInteractor(config, config.solana_url)).init_resource(resource)
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
-        neon_ix_builder.init_operator_neon(EthereumAddress.from_private_key(resource.secret_key))
+        neon_ix_builder.init_operator_neon(NeonAddress.from_private_key(resource.secret_key))
 
         neon_tx = NeonTx.from_string(raw_tx)
         neon_ix_builder.init_neon_tx(neon_tx)
@@ -202,11 +201,11 @@ class CancelTest(unittest.TestCase):
         cls.tx_hash = tx_hash = tx_store_signed.hash
         print(f'tx_hash: {tx_hash.hex()}')
 
-        tx = SolLegacyTx().add(
+        tx = SolLegacyTx(instructions=[
             neon_ix_builder.make_compute_budget_heap_ix(),
             neon_ix_builder.make_compute_budget_cu_ix(),
             neon_ix_builder.make_tx_step_from_data_ix(10, 1)
-        )
+        ])
         receipt = send_transaction(client, tx, signer)
         cls.print_tx(tx)
         cls.print_if_err(receipt)
@@ -239,7 +238,7 @@ class CancelTest(unittest.TestCase):
         )
         noniterative = neon_ix_builder.make_tx_exec_from_data_ix()
 
-        tx = SolLegacyTx().add(
+        tx = SolLegacyTx(instructions=[
             neon_ix_builder.make_compute_budget_heap_ix(),
             neon_ix_builder.make_compute_budget_cu_ix(),
             SolTxIx(
@@ -247,7 +246,7 @@ class CancelTest(unittest.TestCase):
                 data=noniterative.data,
                 program_id=SolPubKey(proxy_program)
             )
-        )
+        ])
 
         receipt = send_transaction(client, tx, signer)
         cls.print_tx(tx)
@@ -281,7 +280,7 @@ class CancelTest(unittest.TestCase):
         )
 
         iterative = neon_ix_builder.make_tx_step_from_data_ix(250, 1)
-        tx = SolLegacyTx().add(
+        tx = SolLegacyTx(instructions=[
             neon_ix_builder.make_compute_budget_heap_ix(),
             neon_ix_builder.make_compute_budget_cu_ix(),
             SolTxIx(
@@ -289,7 +288,7 @@ class CancelTest(unittest.TestCase):
                 data=bytearray.fromhex("ef") + iterative.data,
                 program_id=SolPubKey(proxy_program)
             )
-        )
+        ])
 
         receipt = send_transaction(client, tx, signer)
         cls.print_tx(tx)
@@ -326,12 +325,12 @@ class CancelTest(unittest.TestCase):
         neon_ix_builder.init_neon_tx(NeonTx.from_string(call2_signed.rawTransaction))
         noniterative2 = neon_ix_builder.make_tx_exec_from_data_ix()
 
-        tx = SolLegacyTx().add(
+        tx = SolLegacyTx(instructions=[
             neon_ix_builder.make_compute_budget_heap_ix(),
             neon_ix_builder.make_compute_budget_cu_ix(),
             noniterative1,
             noniterative2
-        )
+        ])
 
         receipt = send_transaction(client, tx, signer)
         cls.print_tx(tx)

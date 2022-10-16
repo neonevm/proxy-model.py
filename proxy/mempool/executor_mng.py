@@ -1,6 +1,7 @@
 import asyncio
 import dataclasses
 import socket
+
 from abc import ABC, abstractmethod
 from collections import deque
 from typing import List, Tuple, Deque, Set
@@ -8,14 +9,12 @@ from typing import List, Tuple, Deque, Set
 from logged_groups import logged_group, logging_context
 from neon_py.network import PipePickableDataClient
 
-from ..common_neon.config import Config
-
 from .mempool_api import MPRequest, IMPExecutor, MPTask
 from .mempool_executor import MPExecutor
+from ..common_neon.config import Config
 
 
 class MPExecutorClient(PipePickableDataClient):
-
     def __init__(self, client_sock: socket.socket):
         PipePickableDataClient.__init__(self, client_sock=client_sock)
 

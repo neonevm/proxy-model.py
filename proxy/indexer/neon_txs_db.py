@@ -2,8 +2,8 @@ from typing import Optional, List, Any, Iterator
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo
 
-from ..indexer.indexed_objects import NeonIndexedTxInfo
 from ..indexer.base_db import BaseDB
+from ..indexer.indexed_objects import NeonIndexedTxInfo
 
 
 class NeonTxsDB(BaseDB):

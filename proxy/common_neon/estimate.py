@@ -13,7 +13,7 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_alt_builder import ALTTxBuilder
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_transaction import SolAccount, SolPubKey, SolAccountMeta, SolLegacyTx, SolBlockhash
-from ..common_neon.address import EthereumAddress
+from ..common_neon.address import NeonAddress
 
 
 class _GasTxBuilder:
@@ -23,29 +23,29 @@ class _GasTxBuilder:
             61, 147, 166, 57, 23, 88, 41, 136, 224, 223, 120, 142, 155, 123, 221, 134,
             16, 102, 170, 82, 76, 94, 95, 178, 125, 232, 191, 172, 103, 157, 145, 190
         ])
-        holder = SolAccount(holder_key)
+        holder = SolAccount.from_secret_key(holder_key)
 
         operator_key = bytes([
             161, 247, 66, 157, 203, 188, 141, 236, 124, 123, 200, 192, 255, 23, 161, 34,
             116, 202, 70, 182, 176, 194, 195, 168, 185, 132, 161, 142, 203, 57, 245, 90
         ])
-        self._signer = SolAccount(operator_key)
-        neon_address = EthereumAddress.from_private_key(operator_key)
+        self._signer = SolAccount.from_secret_key(operator_key)
+        neon_address = NeonAddress.from_private_key(operator_key)
         self._blockhash = SolBlockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
 
-        self._neon_ix_builder = NeonIxBuilder(self._signer.public_key())
-        self._neon_ix_builder.init_iterative(holder.public_key())
+        self._neon_ix_builder = NeonIxBuilder(self._signer.public_key)
+        self._neon_ix_builder.init_iterative(holder.public_key)
         self._neon_ix_builder.init_operator_neon(neon_address)
 
     def build_tx(self, tx: NeonTx, account_list: List[SolAccountMeta]) -> SolLegacyTx:
         self._neon_ix_builder.init_neon_tx(tx)
         self._neon_ix_builder.init_neon_account_list(account_list)
 
-        tx = SolLegacyTx().add(
+        tx = SolLegacyTx(instructions=[
             self._neon_ix_builder.make_compute_budget_heap_ix(),
             self._neon_ix_builder.make_compute_budget_cu_ix(),
             self._neon_ix_builder.make_tx_step_from_data_ix(ElfParams().neon_evm_steps, 1)
-        )
+        ])
 
         tx.recent_blockhash = self._blockhash
         tx.sign(self._signer)

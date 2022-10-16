@@ -29,7 +29,7 @@ class TestPermissionToken(unittest.TestCase):
 
         cls.payer = SolAccount()
         client = SolanaClient(config.solana_url)
-        client.request_airdrop(cls.payer.public_key(), 1000_000_000_000, Confirmed)
+        client.request_airdrop(cls.payer.public_key, 1000_000_000_000, Confirmed)
         cls.allowance_token = PermissionToken(config, cls.solana, SolPubKey(ElfParams().allowance_token_addr))
         cls.denial_token = PermissionToken(config, cls.solana, SolPubKey(ElfParams().denial_token_addr))
 

@@ -1,9 +1,9 @@
-from typing import Dict, Deque, Union, Tuple, Optional
+import math
+import time
+
 from collections import deque
 from dataclasses import dataclass
-
-import time
-import math
+from typing import Dict, Deque, Union, Optional
 
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import NeonTx
