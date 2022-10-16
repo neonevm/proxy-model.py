@@ -10,7 +10,7 @@ steps:
     key: "create_infrastructure"
     if: &is_fts_enabled |
         (build.pull_request.base_branch == "develop" && !build.pull_request.draft) ||
-        (build.source == "trigger_job" && build.env("NEON_EVM_FULL_TEST_SUITE") == "true")
+        build.env("NEON_EVM_FULL_TEST_SUITE") == "true"
     agents:
       queue: "testing"
     command:
