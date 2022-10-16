@@ -10,9 +10,12 @@ from web3 import Web3
 
 from solana.rpc.commitment import Commitment
 from solana.rpc.api import Client as SolanaClient
+from solana.rpc.types import TxOpts
 
+from solana.transaction import Transaction
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
+from ..common_neon.metaplex import create_metadata_instruction_data,create_metadata_instruction
 
 from solcx import compile_source
 
@@ -31,6 +34,8 @@ admin = proxy.eth.account.create('issues/neonlabsorg/proxy-model.py/197/readonly
 proxy.eth.default_account = admin.address
 request_airdrop(proxy.eth.default_account)
 
+NAME = 'TestToken'
+SYMBOL = 'TST'
 CONTRACT = '''
 pragma solidity >= 0.7.0;
 
@@ -76,6 +81,21 @@ class Test_read_only_accounts(unittest.TestCase):
             9,
             TOKEN_PROGRAM_ID,
         )
+        print(f'Created new token mint: {self.token.pubkey}')
+
+        metadata = create_metadata_instruction_data(NAME, SYMBOL, 0, ())
+        txn = Transaction()
+        txn.add(
+            create_metadata_instruction(
+                metadata,
+                self.solana_account.public_key(),
+                self.token.pubkey,
+                self.solana_account.public_key(),
+                self.solana_account.public_key(),
+            )
+        )
+        self.solana_client.send_transaction(txn, self.solana_account, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
+
 
     def deploy_erc20_wrapper_contract(self):
         self.wrapper = ERC20Wrapper(proxy, "NEON", "NEON",
