@@ -35,11 +35,12 @@ request_airdrop(user.address)
 
 NAME = 'NEON'
 SYMBOL = 'NEO'
+DECIMALS = 9
 
 Confirmed = Commitment('confirmed')
 
 
-class Test_erc20_wrapper_contract(unittest.TestCase):
+class Test_erc20ForSpl_contract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/197")
@@ -48,12 +49,13 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         print('user.key:', user.key.hex())
         print('user.address:', user.address)
 
+        cls.init_solana_client()
         cls.create_token_mint()
         cls.deploy_erc20_wrapper_contract()
         cls.create_token_accounts()
 
     @classmethod
-    def create_token_mint(cls):
+    def init_solana_client(cls):
         cls.solana_client = SolanaClient(Config().solana_url)
 
         with open("proxy/operator-keypairs/id.json") as f:
@@ -61,6 +63,8 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         cls.solana_account = SolAccount(d[0:32])
         cls.solana_client.request_airdrop(cls.solana_account.public_key(), 1000_000_000_000, Confirmed)
 
+    @classmethod
+    def create_token_mint(cls):
         while True:
             balance = cls.solana_client.get_balance(cls.solana_account.public_key(), Confirmed)["result"]["value"]
             if balance > 0:
@@ -72,7 +76,7 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
             cls.solana_client,
             cls.solana_account,
             cls.solana_account.public_key(),
-            9,
+            DECIMALS,
             TOKEN_PROGRAM_ID,
         )
 
@@ -306,6 +310,40 @@ class Test_erc20_wrapper_contract(unittest.TestCase):
         accounts = list(map(lambda a: SolPubKey(a['pubkey']), accounts['result']['value']))
 
         self.assertGreaterEqual(len(accounts), 1)
+
+class Test_erc20ForSplMintable_contract(Test_erc20ForSpl_contract):
+
+    @classmethod
+    def setUpClass(cls):
+        print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/197")
+        print('admin.key:', admin.key.hex())
+        print('admin.address:', admin.address)
+        print('user.key:', user.key.hex())
+        print('user.address:', user.address)
+
+        cls.init_solana_client()
+
+        cls.wrapper = ERC20Wrapper(proxy, NAME, SYMBOL,
+                                   None, admin, # cls.token, admin,
+                                   None, #cls.solana_account,
+                                   SolPubKey(EVM_LOADER_ID))
+        cls.wrapper.deploy_mintable_wrapper(NAME, SYMBOL, DECIMALS, admin.address)
+
+        nonce = proxy.eth.get_transaction_count(admin.address)
+        tx = cls.wrapper.erc20.functions.mint(admin.address, 1000000000).buildTransaction({'nonce': nonce})
+        tx = proxy.eth.account.sign_transaction(tx, admin.key)
+        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
+        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
+        assert(tx_receipt.status == 1)
+
+        mint_account = SolPubKey(cls.wrapper.erc20.functions.findMintAccount().call())
+        cls.token = SplToken(
+            cls.solana_client, 
+            mint_account, TOKEN_PROGRAM_ID,
+            cls.solana_account
+        )
+
+        print(f"Mint account {mint_account}")
 
 
 if __name__ == '__main__':

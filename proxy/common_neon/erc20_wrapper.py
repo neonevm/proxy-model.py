@@ -86,7 +86,7 @@ class ERC20Wrapper:
         neon_account_addressbytes = bytes.fromhex(neon_account_address[2:])
         return SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, neon_account_addressbytes], self.evm_loader_id)[0]
 
-    def deploy_wrapper(self):
+    def _deploy_wrapper(self, contract: str, init_args):
         compiled_interface = compile_source(ERC20FORSPL_INTERFACE_SOURCE)
         interface_id, interface = compiled_interface.popitem()
         self.interface = interface
@@ -95,13 +95,13 @@ class ERC20Wrapper:
             source = file.read()
 
         compiled_wrapper = compile_source(source, base_path="contracts", output_values=["abi", "bin"])
-        wrapper_interface = compiled_wrapper["<stdin>:ERC20ForSpl"]
+        wrapper_interface = compiled_wrapper[f"<stdin>:{contract}"]
         self.wrapper = wrapper_interface
 
         erc20 = self.proxy.eth.contract(abi=self.wrapper['abi'], bytecode=wrapper_interface['bin'])
         nonce = self.proxy.eth.get_transaction_count(self.proxy.eth.default_account)
         tx = {'nonce': nonce}
-        tx_constructor = erc20.constructor(bytes(self.token.pubkey)).buildTransaction(tx)
+        tx_constructor = erc20.constructor(*init_args).buildTransaction(tx)
         tx_deploy = self.proxy.eth.account.sign_transaction(tx_constructor, self.admin.key)
         tx_deploy_hash = self.proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
         self.debug(f'tx_deploy_hash: {tx_deploy_hash.hex()}')
@@ -110,6 +110,15 @@ class ERC20Wrapper:
         self.debug(f'deploy status: {tx_deploy_receipt.status}')
         self.neon_contract_address = tx_deploy_receipt.contractAddress
         self.solana_contract_address = self.get_neon_account_address(self.neon_contract_address)
+
+        self.erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
+
+    def deploy_wrapper(self):
+        self._deploy_wrapper("ERC20ForSpl", (bytes(self.token.pubkey),))
+
+    def deploy_mintable_wrapper(self, name: str, symbol: str, decimals: int, mint_auth: str):
+        neon_mint_auth = bytes.fromhex(mint_auth[2:])
+        self._deploy_wrapper("ERC20ForSplMintable", (name, symbol, decimals, bytes(neon_mint_auth),)) #(name, symbol, decimals, bytes(neon_mint_auth,)))
 
     def get_neon_erc20_account_address(self, neon_account_address: str):
         neon_contract_address_bytes = bytes.fromhex(self.neon_contract_address[2:])
