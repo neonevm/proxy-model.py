@@ -1,6 +1,6 @@
 import struct
 
-from typing import Union, Dict
+from typing import Union, Dict, Tuple
 
 from solcx import install_solc
 from eth_account.signers.local import LocalAccount as NeonAccount
@@ -86,7 +86,7 @@ class ERC20Wrapper:
         neon_account_addressbytes = bytes.fromhex(neon_account_address[2:])
         return SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, neon_account_addressbytes], self.evm_loader_id)[0]
 
-    def _deploy_wrapper(self, contract: str, init_args):
+    def _deploy_wrapper(self, contract: str, init_args: Tuple):
         compiled_interface = compile_source(ERC20FORSPL_INTERFACE_SOURCE)
         interface_id, interface = compiled_interface.popitem()
         self.interface = interface
