@@ -1,33 +1,36 @@
 import asyncio
 import time
-from typing import List, Tuple, Optional, Any, Dict, cast, Iterator
 
+from typing import List, Tuple, Optional, Any, Dict, cast, Iterator, Union
 from logged_groups import logged_group, logging_context
 from neon_py.data import Result
 
-from ..common_neon.eth_proto import NeonTx
-from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.config import Config
-from ..common_neon.elf_params import ElfParams
-
-from .operator_resource_mng import OpResMng
-
+from .mempool_api import MPGasPriceResult
 from .mempool_api import MPRequest, MPRequestType, IMPExecutor, MPTask, MPTxRequestList
 from .mempool_api import MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest
 from .mempool_api import MPTxSendResult, MPTxSendResultCode
-from .mempool_api import MPGasPriceResult
-from .mempool_schedule import MPTxSchedule
-from .mempool_periodic_task_op_res import MPInitOpResTaskLoop
-from .mempool_periodic_task_gas_price import MPGasPriceTaskLoop
+
+from .mempool_neon_tx_dict import MPTxDict
 from .mempool_periodic_task_elf_params import MPElfParamDictTaskLoop
-from .mempool_periodic_task_sender_tx_cnt import MPSenderTxCntTaskLoop
 from .mempool_periodic_task_free_alt_queue import MPFreeALTQueueTaskLoop
+from .mempool_periodic_task_gas_price import MPGasPriceTaskLoop
+from .mempool_periodic_task_op_res import MPInitOpResTaskLoop
+from .mempool_periodic_task_sender_tx_cnt import MPSenderTxCntTaskLoop
+from .mempool_schedule import MPTxSchedule
+from .operator_resource_mng import OpResMng
+
+from ..common_neon.errors import EthereumError
+from ..common_neon.config import Config
+from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.elf_params import ElfParams
+from ..common_neon.eth_proto import NeonTx
 
 
 @logged_group("neon.MemPool")
 class MemPool:
-    CHECK_TASK_TIMEOUT_SEC = 0.01
-    RESCHEDULE_TIMEOUT_SEC = 0.4
+    check_task_timeout_sec = 0.01
+    reschedule_timeout_sec = 0.4
+    clear_task_timeout_sec = 5
 
     def __init__(self, config: Config, op_res_mng: OpResMng, executor: IMPExecutor):
         capacity = config.mempool_capacity
@@ -39,6 +42,7 @@ class MemPool:
         self._is_active: bool = True
         self._executor = executor
         self._op_res_mng = op_res_mng
+        self._completed_tx_dict = MPTxDict()
 
         self._elf_param_dict_task_loop = MPElfParamDictTaskLoop(executor)
         self._gas_price_task_loop = MPGasPriceTaskLoop(executor)
@@ -48,6 +52,7 @@ class MemPool:
 
         self._process_tx_result_task_loop = asyncio.get_event_loop().create_task(self._process_tx_result_loop())
         self._process_tx_schedule_task_loop = asyncio.get_event_loop().create_task(self._process_tx_schedule_loop())
+        self._process_tx_dict_clear_task_loop = asyncio.get_event_loop().create_task(self._process_tx_dict_clear_loop())
 
     @property
     def _gas_price(self) -> Optional[MPGasPriceResult]:
@@ -87,8 +92,11 @@ class MemPool:
     def get_pending_tx_nonce(self, sender_addr: str) -> int:
         return self._tx_schedule.get_pending_tx_nonce(sender_addr)
 
-    def get_pending_tx_by_hash(self, tx_hash: str) -> Optional[NeonTx]:
-        return self._tx_schedule.get_pending_tx_by_hash(tx_hash)
+    def get_pending_tx_by_hash(self, tx_hash: str) -> Union[NeonTx, EthereumError, None]:
+        neon_tx = self._tx_schedule.get_pending_tx_by_hash(tx_hash)
+        if neon_tx is not None:
+            return neon_tx
+        return self._completed_tx_dict.get(tx_hash)
 
     def get_gas_price(self) -> Optional[MPGasPriceResult]:
         return self._gas_price
@@ -130,7 +138,7 @@ class MemPool:
 
     async def _process_tx_schedule_loop(self):
         while (not self.has_gas_price()) and (not ElfParams().has_params()):
-            await asyncio.sleep(self.CHECK_TASK_TIMEOUT_SEC)
+            await asyncio.sleep(self.check_task_timeout_sec)
 
         while True:
             async with self._schedule_cond:
@@ -150,7 +158,7 @@ class MemPool:
                         not_finished_task_list.append(mp_task)
             self._processing_task_list = not_finished_task_list
 
-            await asyncio.sleep(self.CHECK_TASK_TIMEOUT_SEC)
+            await asyncio.sleep(self.check_task_timeout_sec)
 
     def _complete_task(self, mp_task: MPTask) -> bool:
         try:
@@ -171,7 +179,7 @@ class MemPool:
             exc = mp_task.aio_task.exception()
             if exc is not None:
                 self.error(f'Exception during processing tx {tx.sig} on executor.', exc_info=exc)
-                self._on_fail_tx(tx)
+                self._on_fail_tx(tx, exc)
                 return True
 
             mp_result = mp_task.aio_task.result()
@@ -180,28 +188,33 @@ class MemPool:
             self.error(f'Exception on the result processing of tx {tx.sig}.', exc_info=exc)
         return True
 
-    def _process_mp_tx_result(self, tx: MPTxRequest, mp_result: Any):
-        assert isinstance(mp_result, MPTxExecResult), f'Wrong type of tx result processing {tx.sig}: {mp_result}'
+    def _process_mp_tx_result(self, tx: MPTxRequest, mp_res: Any):
+        assert isinstance(mp_res, MPTxExecResult), f'Wrong type of tx result processing {tx.sig}: {mp_res}'
 
-        mp_tx_result = cast(MPTxExecResult, mp_result)
-        log_fn = self.warning if mp_tx_result.code != MPTxExecResultCode.Done else self.debug
-        log_fn(f"For tx {tx.sig} got result: {mp_tx_result}, time: {(time.time_ns() - tx.start_time)/(10**6)}")
+        mp_tx_res = cast(MPTxExecResult, mp_res)
+        log_fn = self.warning if mp_tx_res.code != MPTxExecResultCode.Done else self.debug
+        log_fn(f"For tx {tx.sig} got result: {mp_tx_res}, time: {(time.time_ns() - tx.start_time)/(10**6)}")
 
-        if isinstance(mp_tx_result.data, NeonTxExecCfg):
-            tx.neon_tx_exec_cfg = cast(NeonTxExecCfg, mp_tx_result.data)
+        if isinstance(mp_tx_res.data, NeonTxExecCfg):
+            tx.neon_tx_exec_cfg = cast(NeonTxExecCfg, mp_tx_res.data)
 
-        if mp_tx_result.code == MPTxExecResultCode.BlockedAccount:
+        reschedule_code_set = {
+            MPTxExecResultCode.BlockedAccount,
+            MPTxExecResultCode.SolanaUnavailable,
+            MPTxExecResultCode.NodeBehind,
+        }
+
+        if mp_tx_res.code in reschedule_code_set:
             self._on_reschedule_tx(tx)
-        elif mp_tx_result.code in (MPTxExecResultCode.SolanaUnavailable, MPTxExecResultCode.NodeBehind):
-            self._on_reschedule_tx(tx)
-        elif mp_tx_result.code == MPTxExecResultCode.BadResource:
+        elif mp_tx_res.code == MPTxExecResultCode.BadResource:
             self._on_bad_resource(tx)
-        elif mp_tx_result.code in (MPTxExecResultCode.NonceTooLow, MPTxExecResultCode.Unspecified):
-            self._on_fail_tx(tx)
-        elif mp_tx_result.code == MPTxExecResultCode.Done:
+        elif mp_tx_res.code in (MPTxExecResultCode.NonceTooLow, MPTxExecResultCode.Unspecified):
+            exc = cast(BaseException, mp_tx_res.data) if isinstance(mp_tx_res.data, BaseException) else None
+            self._on_fail_tx(tx, exc)
+        elif mp_tx_res.code == MPTxExecResultCode.Done:
             self._on_done_tx(tx)
         else:
-            assert False, f'Unknown result code {mp_tx_result.code}'
+            assert False, f'Unknown result code {mp_tx_res.code}'
 
     def _on_reschedule_tx(self, tx: MPTxRequest) -> None:
         self.debug(f"Got reschedule status for tx {tx.sig}.")
@@ -209,8 +222,8 @@ class MemPool:
 
     async def _reschedule_tx(self, tx: MPTxRequest):
         with logging_context(req_id=tx.req_id):
-            self.debug(f"Tx {tx.sig} will be rescheduled in: {self.RESCHEDULE_TIMEOUT_SEC} sec.")
-        await asyncio.sleep(self.RESCHEDULE_TIMEOUT_SEC)
+            self.debug(f"Tx {tx.sig} will be rescheduled in: {self.reschedule_timeout_sec} sec.")
+        await asyncio.sleep(self.reschedule_timeout_sec)
         self._reschedule_tx_impl(tx)
         await self._kick_tx_schedule()
 
@@ -231,11 +244,13 @@ class MemPool:
     def _on_done_tx(self, tx: MPTxRequest):
         self._op_res_mng.release_resource(tx.sig)
         self._tx_schedule.done_tx(tx)
+        self._completed_tx_dict.add(tx.sig, tx.neon_tx, None)
         self.debug(f"Request {tx.sig} is done")
 
-    def _on_fail_tx(self, tx: MPTxRequest):
+    def _on_fail_tx(self, tx: MPTxRequest, exc: Optional[BaseException]):
         self._op_res_mng.release_resource(tx.sig)
         self._tx_schedule.fail_tx(tx)
+        self._completed_tx_dict.add(tx.sig, tx.neon_tx, exc)
         self.debug(f"Request {tx.sig} is failed - dropped away")
 
     async def _kick_tx_schedule(self):
@@ -275,3 +290,8 @@ class MemPool:
     def take_in_tx_list(self, sender_addr: str, mp_tx_request_list: MPTxRequestList):
         self._tx_schedule.take_in_tx_list(sender_addr, mp_tx_request_list)
         self._create_kick_tx_schedule_task()
+
+    async def _process_tx_dict_clear_loop(self) -> None:
+        while True:
+            self._completed_tx_dict.clear()
+            await asyncio.sleep(self.clear_task_timeout_sec)

@@ -156,7 +156,7 @@ class CancelTest(unittest.TestCase):
         neon_ix_builder = NeonIxBuilder(resource.public_key)
         neon_ix_builder.init_operator_neon(EthereumAddress.from_private_key(resource.secret_key))
 
-        neon_tx = NeonTx.fromString(raw_tx)
+        neon_tx = NeonTx.from_string(raw_tx)
         neon_ix_builder.init_neon_tx(neon_tx)
         neon_ix_builder.init_neon_account_list(neon_account_list)
 
@@ -323,7 +323,7 @@ class CancelTest(unittest.TestCase):
         neon_ix_builder, signer = cls.create_neon_ix_builder(call1_signed.rawTransaction, account_list)
         noniterative1 = neon_ix_builder.make_tx_exec_from_data_ix()
 
-        neon_ix_builder.init_neon_tx(NeonTx.fromString(call2_signed.rawTransaction))
+        neon_ix_builder.init_neon_tx(NeonTx.from_string(call2_signed.rawTransaction))
         noniterative2 = neon_ix_builder.make_tx_exec_from_data_ix()
 
         tx = SolLegacyTx().add(

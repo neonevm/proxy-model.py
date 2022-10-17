@@ -32,7 +32,7 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
             return MPTxExecResult(MPTxExecResultCode.BadResource, neon_tx_exec_cfg)
         except BaseException as exc:
             self.error(f'Failed to execute tx {mp_tx_req.sig}.', exc_info=exc)
-            return MPTxExecResult(MPTxExecResultCode.Unspecified, neon_tx_exec_cfg)
+            return MPTxExecResult(MPTxExecResultCode.Unspecified, exc)
         return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)
 
     def execute_neon_tx_impl(self, mp_tx_req: MPTxExecRequest):
