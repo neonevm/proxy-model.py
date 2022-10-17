@@ -1,4 +1,4 @@
-typing-extensions==4.3.0
+typing-extensions==4.4.0
 ecdsa==0.18.0
 pysha3==1.0.2
 eth-keys==0.3.3
