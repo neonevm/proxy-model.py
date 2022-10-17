@@ -98,7 +98,10 @@ class ALTTxBuilder:
 
     @staticmethod
     def build_prep_alt_list(alt_tx_set: ALTTxSet) -> List[List[SolTx]]:
-        tx_list_list: List[List[SolTx]] = [alt_tx_set.create_alt_tx_list]
+        tx_list_list: List[List[SolTx]] = []
+
+        if len(alt_tx_set.create_alt_tx_list) > 0:
+            tx_list_list.append(alt_tx_set.create_alt_tx_list)
 
         if len(alt_tx_set.extend_alt_tx_list) > 0:
             tx_list_list.append(alt_tx_set.extend_alt_tx_list)

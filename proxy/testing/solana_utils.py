@@ -7,13 +7,14 @@ from hashlib import sha256
 from typing import NamedTuple, Tuple, Union, Optional
 
 import rlp
+import solders.transaction_status
 from base58 import b58encode
 from eth_keys import keys as neon_keys
 from sha3 import keccak_256
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
-from solana.rpc.commitment import Confirmed
+from solana.rpc.commitment import Confirmed, Finalized
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 
@@ -123,8 +124,11 @@ def confirm_transaction(http_client, tx_sig, confirmations=0):
         print(f'confirm_transaction: {resp}')
         if resp:
             status = resp[0]
-            if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
-                           and status['confirmations'] >= confirmations):
+            if status and (
+                status.confirmation_status == solders.transaction_status.TransactionConfirmationStatus.Finalized or
+                status.confirmation_status == solders.transaction_status.TransactionConfirmationStatus.Confirmed and
+                status.confirmations >= confirmations
+            ):
                 return
         sleep_time = 0.1
         time.sleep(sleep_time)
@@ -307,7 +311,7 @@ class EvmLoader:
         output = NeonCli().call(
             "create-program-address --evm_loader {} {}".format(self.loader_id, self.ether2hex(ether)))
         items = output.rstrip().split(' ')
-        return items[0], int(items[1])
+        return PublicKey(items[0]), int(items[1])
 
     def checkAccount(self, solana):
         info = client.get_account_info(solana)
@@ -412,10 +416,9 @@ def operator2_keypair_path():
 def send_transaction(client, trx, acc):
     print(f' send_transaction')
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
-    result = result.to_json()
-    print(f' send result: {result}')
-    confirm_transaction(client, result["result"])
-    result = client.get_transaction(result["result"])
+    print(f' send result: {result.value}')
+    confirm_transaction(client, result.value)
+    result = client.get_transaction(result.value)
     print(f' done: {result}')
     return result
 

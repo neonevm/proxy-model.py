@@ -90,7 +90,6 @@ class GasEstimate:
         self.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
 
     def _tx_size_cost(self) -> int:
-        self.debug('__tx_size_cost 1')
         tx = NeonTx(
             nonce=self._u256_max,
             gasPrice=self._u256_max,

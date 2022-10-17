@@ -13,18 +13,10 @@
 ##------------------------------------------
 
 import unittest
-import os
-from web3 import Web3
-from solcx import compile_source
 
-from proxy.testing.testing_helpers import request_airdrop
+from proxy.testing.testing_helpers import Proxy
 
 issue = 'https://github.com/neonlabsorg/neon-evm/issues/360'
-proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-proxy = Web3(Web3.HTTPProvider(proxy_url))
-admin = proxy.eth.account.create(issue + '/admin')
-proxy.eth.default_account = admin.address
-request_airdrop(admin.address)
 
 # Address: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU (a token mint account)
 # uint256: 110178555362476360822489549210862241441608066866019832842197691544474470948129
@@ -349,58 +341,49 @@ contract TestQueryAccount {
 class Test_Query_Account_Contract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.proxy = proxy = Proxy()
+        cls.admin = proxy.create_signer_account(issue + '/admin')
+
         print('\n\n' + issue)
-        print('admin address:', admin.address)
+        print('admin address:', cls.admin.address)
+
         cls.deploy_contract(cls)
 
     def deploy_contract(self):
-        compiled = compile_source(CONTRACT_SOURCE)
-        id, interface = compiled.popitem()
-        self.contract = interface
-        contract = proxy.eth.contract(abi=self.contract['abi'], bytecode=self.contract['bin'])
-        nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        tx = {'nonce': nonce}
-        tx_constructor = contract.constructor().buildTransaction(tx)
-        tx_deploy = proxy.eth.account.sign_transaction(tx_constructor, admin.key)
-        tx_deploy_hash = proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
-        tx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
-        self.contract_address = tx_deploy_receipt.contractAddress
-        print('contract address:', self.contract_address)
+        deployed_info = self.proxy.compile_and_deploy_contract(self.admin, CONTRACT_SOURCE)
+        self.contract = deployed_info.contract
+        print('contract address:', self.contract.address)
 
     # @unittest.skip("a.i.")
     def test_cache(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_cache().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_cache().call()
+        self.assertTrue(ok)
 
     # @unittest.skip("a.i.")
     def test_noncached(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_noncached().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_noncached().call()
+        self.assertTrue(ok)
 
     # @unittest.skip("a.i.")
     def test_metadata_ok(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_metadata_ok().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_metadata_ok().call()
+        self.assertTrue(ok)
 
     @unittest.skip("a.i.")
     def test_data_ok(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_data_ok().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_data_ok().call()
+        self.assertTrue(ok)
 
     # @unittest.skip("a.i.")
     def test_data_wrong_range(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_data_wrong_range().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_data_wrong_range().call()
+        self.assertTrue(ok)
+
 
 if __name__ == '__main__':
     unittest.main()

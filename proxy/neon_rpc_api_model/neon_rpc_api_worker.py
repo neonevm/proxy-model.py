@@ -438,7 +438,10 @@ class NeonRpcApiWorker:
 
         tx = self._db.get_tx_by_neon_sig(neon_sig)
         if not tx:
-            self.debug("Not found receipt")
+            req_id = LogMng.get_logging_context().get("req_id")
+            neon_tx_or_error = self._mempool_client.get_pending_tx_by_hash(req_id, neon_tx_sig)
+            if isinstance(neon_tx_or_error, EthereumError):
+                raise neon_tx_or_error
             return None
         return self._get_transaction_receipt(tx)
 

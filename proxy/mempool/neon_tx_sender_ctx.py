@@ -88,6 +88,9 @@ class NeonTxSendCtx:
 
         self._ix_builder.init_neon_account_list(neon_meta_list)
 
+    def len_account_list(self) -> int:
+        return len(self._neon_meta_dict)
+
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> None:
         self._neon_tx_exec_cfg.set_emulated_result(emulated_result)
         self._build_account_list(self._neon_tx_exec_cfg.account_dict)

@@ -55,21 +55,17 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
 
         alt_builder = ALTTxBuilder(self._ctx.solana, self._ctx.ix_builder, self._ctx.signer)
         alt_info = alt_builder.build_alt_info(legacy_tx)
-        if alt_info.account_key_list_len < alt_builder.tx_account_cnt:
-            raise RuntimeError(
-                f'Number of accounts {alt_info.account_key_list_len} '
-                f'less than {alt_builder.tx_account_cnt}'
-            )
 
         self._alt_info = alt_info
         self._alt_builder = alt_builder
+        self._alt_tx_set = self._alt_builder.build_alt_tx_set(self._alt_info)
         return True
 
     def build_prep_tx_list_before_emulate(self) -> List[List[SolTx]]:
-        self._alt_tx_set = self._alt_builder.build_alt_tx_set(self._alt_info)
         return self._alt_builder.build_prep_alt_list(self._alt_tx_set)
 
     def update_after_emulate(self) -> None:
+        self._alt_tx_set.clear()
         self._alt_builder.update_alt_info_list([self._alt_info])
 
     def build_tx(self, legacy_tx: SolLegacyTx) -> SolV0Tx:
@@ -87,9 +83,20 @@ def alt_strategy(cls):
 
         def _validate(self) -> bool:
             return (
+                self._validate_account_list_len() and
                 self._alt_stage.init_alt_info(cls._build_tx(self)) and
                 cls._validate(self)
             )
+
+        def _validate_account_list_len(self) -> bool:
+            account_list_len = self._ctx.len_account_list() + 6
+            if account_list_len < ALTTxBuilder.tx_account_cnt:
+                self._validation_error_msg = (
+                    f'Number of accounts {account_list_len} '
+                    f'less than {ALTTxBuilder.tx_account_cnt}'
+                )
+                return False
+            return True
 
         def _build_tx(self) -> SolV0Tx:
             return self._alt_stage.build_tx(cls._build_tx(self))

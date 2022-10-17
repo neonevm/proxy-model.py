@@ -7,11 +7,10 @@ from typing import Dict, Deque, Union, Optional
 
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import NeonTx
+from ..common_neon.config import Config
 
 
 class MPTxDict:
-    _life_time = 15
-
     @dataclass(frozen=True)
     class _Item:
         last_time: int
@@ -19,9 +18,10 @@ class MPTxDict:
         neon_tx: NeonTx
         error: Optional[EthereumError]
 
-    def __init__(self):
+    def __init__(self, config: Config):
         self._neon_tx_dict: Dict[str, MPTxDict._Item] = {}
         self._neon_tx_queue: Deque[MPTxDict._Item] = deque()
+        self.clear_time_sec = config.mempool_cache_life_sec
 
     @staticmethod
     def _get_time() -> int:
@@ -47,7 +47,7 @@ class MPTxDict:
         if len(self._neon_tx_queue) == 0:
             return
 
-        last_time = max(self._get_time() - self._life_time, 0)
+        last_time = max(self._get_time() - self.clear_time_sec, 0)
         while (len(self._neon_tx_queue) > 0) and (self._neon_tx_queue[0].last_time < last_time):
             item = self._neon_tx_queue.popleft()
             self._neon_tx_dict.pop(item.neon_sig, None)

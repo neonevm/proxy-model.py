@@ -55,7 +55,7 @@ class BaseNeonTxStrategy(abc.ABC):
             result = self._validate()
             if result:
                 result = self._validate_tx_size()
-            assert result != (self._validation_error_msg is not None)
+            assert result == (self._validation_error_msg is None)
 
             return result
         except Exception as e:

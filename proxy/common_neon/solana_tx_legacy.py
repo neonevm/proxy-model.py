@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import solana.message
+import solana.transaction
 
 from .solana_tx import SolTx, SolAccount, SolSignature
 
 
 SolLegacyMsg = solana.message.Message
+SolLegacyLowLevelTx = solana.transaction.Transaction
 
 
 class SolLegacyTx(SolTx):
     """Legacy transaction class to represent an atomic versioned transaction."""
+
+    @property
+    def low_level_tx(self) -> SolLegacyLowLevelTx:
+        return self._tx
 
     @property
     def message(self) -> SolLegacyMsg:

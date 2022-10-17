@@ -1,3 +1,4 @@
+import json
 import struct
 from typing import Union, Dict, Any
 
@@ -6,16 +7,15 @@ import spl.token.instructions as spl_token
 from spl.token.client import Token
 from spl.token.constants import TOKEN_PROGRAM_ID
 
-from solana.rpc.types import TxOpts, Commitment
-
-import solana.transaction
-import solana.keypair
-import solana.publickey
+from solana.rpc.types import TxOpts
+from solana.rpc.commitment import Confirmed
 
 from eth_account.signers.local import LocalAccount as NeonAccount
 from logged_groups import logged_group
 from solcx import install_solc
 
+from ..common_neon.solana_tx import SolTxIx, SolAccountMeta, SolAccount, SolPubKey
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.address import NeonAddress
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.eth_proto import NeonTx
@@ -24,13 +24,6 @@ from ..common_neon.web3 import NeonWeb3, ChecksumAddress
 
 install_solc(version='0.7.6')
 from solcx import compile_source
-
-
-SolLegacyTx = solana.transaction.Transaction
-SolTxIx = solana.transaction.TransactionInstruction
-SolAccountMeta = solana.transaction.AccountMeta
-SolAccount = solana.keypair.Keypair
-SolPubKey = solana.publickey.PublicKey
 
 
 # Standard interface of ERC20 contract to generate ABI for wrapper
@@ -113,9 +106,9 @@ class ERC20Wrapper:
         self.wrapper = wrapper_interface
 
         erc20 = self.proxy.eth.contract(abi=self.wrapper['abi'], bytecode=wrapper_interface['bin'])
-        nonce = self.proxy.eth.get_transaction_count(self.proxy.eth.default_account)
-        tx = {'nonce': nonce}
-        tx_constructor = erc20.constructor(self.name, self.symbol, bytes(self.token.pubkey)).buildTransaction(tx)
+        nonce = self.proxy.eth.get_transaction_count(self.admin.address)
+        tx = {'nonce': nonce, 'from': self.admin.address}
+        tx_constructor = erc20.constructor(self.name, self.symbol, bytes(self.token.pubkey)).build_transaction(tx)
         tx_deploy = self.proxy.eth.account.sign_transaction(tx_constructor, self.admin.key)
         tx_deploy_hash = self.proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
         self.debug(f'tx_deploy_hash: {tx_deploy_hash.hex()}')
@@ -145,14 +138,14 @@ class ERC20Wrapper:
             spl_token.create_associated_token_account(
                 payer=payer.public_key, owner=owner, mint=self.token.pubkey
             )
-        ])
+        ]).low_level_tx
         self.token._conn.send_transaction(tx, payer, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
         return tx.instructions[0].keys[1].pubkey
 
     def create_claim_instruction(self, owner: SolPubKey, from_acc: SolPubKey, to_acc: NeonAccount, amount: int):
         erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
         nonce = self.proxy.eth.get_transaction_count(to_acc.address)
-        claim_tx = erc20.functions.claim(bytes(from_acc), amount).buildTransaction({'nonce': nonce, 'gasPrice': 0})
+        claim_tx = erc20.functions.claim(bytes(from_acc), amount).build_transaction({'nonce': nonce, 'gasPrice': 0})
         claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, to_acc.key)
 
         neon_tx = bytearray.fromhex(claim_tx.rawTransaction.hex()[2:])
@@ -197,17 +190,18 @@ class ERC20Wrapper:
         """
         if isinstance(destination, str):
             destination = self.get_neon_erc20_account_address(destination)
-        return self.token.mint_to(
+        json_str = self.token.mint_to(
             destination, self.mint_authority, amount,
             opts=TxOpts(skip_preflight=True, skip_confirmation=False)
         ).to_json()
+        return json.loads(json_str)
 
     def erc20_interface(self):
         return self.proxy.eth.contract(address=self.neon_contract_address, abi=self.interface['abi'])
 
     def get_balance(self, address: Union[SolPubKey, str]) -> int:
         if isinstance(address, SolPubKey):
-            return self.token.get_balance(address, Commitment('confirmed')).value
+            return int(self.token.get_balance(address, Confirmed).value.amount)
 
         erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.interface['abi'])
         return erc20.functions.balanceOf(address).call()

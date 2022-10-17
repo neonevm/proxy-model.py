@@ -338,7 +338,7 @@ class SolInteractor:
         return HolderAccountInfo.from_account_info(info)
 
     def get_account_lookup_table_info(self, table_account: SolPubKey) -> Optional[ALTAccountInfo]:
-        info = self.get_account_info(table_account, length=0)
+        info = self.get_account_info(table_account)
         if info is None:
             return None
         return ALTAccountInfo.from_account_info(info)

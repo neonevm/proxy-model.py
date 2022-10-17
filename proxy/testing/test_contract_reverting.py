@@ -2,19 +2,17 @@ import unittest
 
 from web3 import exceptions as web3_exceptions
 from solana.rpc.api import Client as SolanaClient
-from eth_account.account import LocalAccount
 
-from .testing_helpers import SolidityContractDeployer, request_airdrop
-from ..common_neon.emulator_interactor import decode_revert_message
-from ..common_neon.config import Config
+from proxy.testing.testing_helpers import Proxy
+from proxy.common_neon.emulator_interactor import decode_revert_message
+from proxy.common_neon.config import Config
 
 
 class TestContractReverting(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls._contract_deployer = SolidityContractDeployer()
-        cls._web3 = cls._contract_deployer.web3
+        cls._proxy = Proxy()
 
         solana_url = Config().solana_url
         cls._solana_client = SolanaClient(solana_url)
@@ -29,9 +27,9 @@ class TestContractReverting(unittest.TestCase):
                                 "4e6f7420656e6f7567682045746865722070726f76696465642e000000000000"
 
     def test_constructor_raises_string_based_error(self):
-        compiled_info = self._contract_deployer.compile_contract(self._CONTRACT_CONSTRUCTOR_STRING_BASED_REVERT)
+        compiled_info = self._proxy.compile_contract(self._CONTRACT_CONSTRUCTOR_STRING_BASED_REVERT)
         with self.assertRaises(web3_exceptions.ContractLogicError) as cm:
-            compiled_info.contract.constructor([]).buildTransaction()
+            compiled_info.contract.constructor([]).build_transaction()
         self.assertEqual("execution reverted: ListConstructable: empty list", str(cm.exception))
 
     _CONTRACT_CONSTRUCTOR_STRING_BASED_REVERT = '''
@@ -44,9 +42,9 @@ class TestContractReverting(unittest.TestCase):
     '''
 
     def test_constructor_raises_no_argument_error(self):
-        compiled_info = self._contract_deployer.compile_contract(self._CONTRACT_CONSTRUCTOR_REVERT)
+        compiled_info = self._proxy.compile_contract(self._CONTRACT_CONSTRUCTOR_REVERT)
         with self.assertRaises(web3_exceptions.ContractLogicError) as cm:
-            compiled_info.contract.constructor([]).buildTransaction()
+            compiled_info.contract.constructor([]).build_transaction()
         self.assertEqual("execution reverted", str(cm.exception))
 
     _CONTRACT_CONSTRUCTOR_REVERT = '''
@@ -59,19 +57,21 @@ class TestContractReverting(unittest.TestCase):
     '''
 
     def test_method_raises_string_based_error(self):
-        contract_owner: LocalAccount = self._web3.eth.account.create()
-        request_airdrop(contract_owner.address)
-        contract = self._contract_deployer.compile_and_deploy_contract(contract_owner, self._CONTRACT_METHOD_STRING_BASED_REVERT)
+        contract_owner = self._proxy.create_signer_account()
+        contract_info = self._proxy.compile_and_deploy_contract(
+            contract_owner, self._CONTRACT_METHOD_STRING_BASED_REVERT
+        )
         with self.assertRaises(web3_exceptions.ContractLogicError) as cm:
-            contract.functions.do_string_based_revert().call()
+            contract_info.contract.functions.do_string_based_revert().call()
         self.assertEqual("execution reverted: Predefined revert happened", str(cm.exception))
 
     def test_method_raises_trivial_error(self):
-        contract_owner: LocalAccount = self._web3.eth.account.create()
-        request_airdrop(contract_owner.address)
-        contract = self._contract_deployer.compile_and_deploy_contract(contract_owner, self._CONTRACT_METHOD_STRING_BASED_REVERT)
+        contract_owner = self._proxy.create_signer_account()
+        contract_info = self._proxy.compile_and_deploy_contract(
+            contract_owner, self._CONTRACT_METHOD_STRING_BASED_REVERT
+        )
         with self.assertRaises(web3_exceptions.ContractLogicError) as cm:
-            contract.functions.do_trivial_revert().call()
+            contract_info.contract.functions.do_trivial_revert().call()
         self.assertEqual("execution reverted", str(cm.exception))
 
     _CONTRACT_METHOD_STRING_BASED_REVERT = '''

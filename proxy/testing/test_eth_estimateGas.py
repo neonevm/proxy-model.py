@@ -1,16 +1,6 @@
 import unittest
-import os
 
-import eth_utils
-from web3 import Web3
-from solcx import compile_source
-
-from proxy.testing.testing_helpers import request_airdrop
-
-proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-proxy = Web3(Web3.HTTPProvider(proxy_url))
-eth_account = proxy.eth.account.create('https://github.com/neonlabsorg/proxy-model.py/issues/147')
-proxy.eth.default_account = eth_account.address
+from proxy.testing.testing_helpers import Proxy
 
 REVERTING_SOLIDITY_SOURCE_487 = '''
 pragma solidity >=0.7.0 <0.9.0;
@@ -36,50 +26,31 @@ contract Reverting {
 class Test_eth_estimateGas(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.proxy = Proxy()
+        cls.eth_account = cls.proxy.create_signer_account('https://github.com/neonlabsorg/proxy-model.py/issues/147')
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/487")
-        print('eth_account.address:', eth_account.address)
-        print('eth_account.key:', eth_account.key.hex())
-        request_airdrop(eth_account.address)
+        print('eth_account.address:', cls.eth_account.address)
+        print('eth_account.key:', cls.eth_account.key.hex())
         cls.deploy_counter_487_solidity_contract(cls)
 
     def deploy_counter_487_solidity_contract(self):
-        compiled_sol = compile_source(REVERTING_SOLIDITY_SOURCE_487)
-        contract_id, contract_interface = compiled_sol.popitem()
-        counter = proxy.eth.contract(abi=contract_interface['abi'], bytecode=contract_interface['bin'])
-        trx_deploy = proxy.eth.account.sign_transaction(dict(
-            nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
-            chainId=proxy.eth.chain_id,
-            gas=987654321,
-            gasPrice=proxy.eth.gas_price,
-            to='',
-            value=0,
-            data=counter.bytecode),
-            eth_account.key
-        )
-        print('trx_deploy:', trx_deploy)
-        trx_deploy_hash = proxy.eth.send_raw_transaction(trx_deploy.rawTransaction)
-        print('trx_deploy_hash:', trx_deploy_hash.hex())
-        trx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(trx_deploy_hash)
-        print('trx_deploy_receipt:', trx_deploy_receipt)
+        deployed_info = self.proxy.compile_and_deploy_contract(self.eth_account, REVERTING_SOLIDITY_SOURCE_487)
 
-        self.deploy_block_hash = trx_deploy_receipt['blockHash']
-        self.deploy_block_num = trx_deploy_receipt['blockNumber']
+        self.deploy_block_hash = deployed_info.tx_receipt['blockHash']
+        self.deploy_block_num = deployed_info.tx_receipt['blockNumber']
         print('deploy_block_hash:', self.deploy_block_hash)
         print('deploy_block_num:', self.deploy_block_num)
 
-        self.reverting_contract = proxy.eth.contract(
-            address=trx_deploy_receipt.contractAddress,
-            abi=counter.abi
-        )
+        self.reverting_contract = deployed_info.contract
 
     # @unittest.skip("a.i.")
     def test_01_check_do_revert(self):
         print("\ntest_01_check_do_revert")
         try:
-            nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-            trx_revert = self.reverting_contract.functions.do_revert().buildTransaction({'nonce': nonce})
+            trx_revert = self.reverting_contract.functions.do_revert().build_transaction(
+                {'from': self.eth_account.address})
             print('trx_revert:', trx_revert)
-            trx_estimate_gas_response = proxy.eth.estimate_gas(trx_revert)
+            trx_estimate_gas_response = self.proxy.conn.estimate_gas(trx_revert)
             print('trx_estimate_gas_response:', trx_estimate_gas_response)
             self.assertTrue(False)
         except Exception as e:
@@ -90,10 +61,10 @@ class Test_eth_estimateGas(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_02_check_no_revert_big_gas(self):
         print("\ntest_02_check_no_revert_big_gas")
-        nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        trx_big_gas = self.reverting_contract.functions.consume_a_lot().buildTransaction({'nonce': nonce})
+        trx_big_gas = self.reverting_contract.functions.consume_a_lot().build_transaction(
+            {'from': self.eth_account.address})
         print('trx_big_gas:', trx_big_gas)
-        trx_estimate_gas_response = proxy.eth.estimate_gas(trx_big_gas)
+        trx_estimate_gas_response = self.proxy.conn.estimate_gas(trx_big_gas)
         print('trx_estimate_gas_response:', trx_estimate_gas_response)
 
 

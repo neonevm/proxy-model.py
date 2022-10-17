@@ -39,7 +39,7 @@ class SolV0Tx(SolTx):
         return bytes(self._solders_tx)
 
     def _sign(self, signer: SolAccount) -> None:
-        legacy_msg = self._tx.message
+        legacy_msg = self._tx.compile_message()
         alt_filter = ALTListFilter(legacy_msg)
 
         rw_key_set = alt_filter.filter_rw_account_key_set()

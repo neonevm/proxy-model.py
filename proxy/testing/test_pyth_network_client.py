@@ -63,7 +63,6 @@ class TestPythNetworkClient(unittest.TestCase):
     def update_mapping(self):
         self.testee.update_mapping(mapping_account)
 
-
     @patch.object(PythNetworkClient, 'read_pyth_acct_data')
     @patch.object(PythNetworkClient, 'parse_mapping_account')
     @patch.object(PythNetworkClient, 'parse_prod_account')
@@ -92,7 +91,6 @@ class TestPythNetworkClient(unittest.TestCase):
             mock_parse_price_account.assert_has_calls([call(self.price_acct1_addr), call(self.price_acct2_addr)])
         except Exception as err:
             self.fail(f"Expected not throws exception but it does: {err}")
-
 
     @patch.object(PythNetworkClient, 'read_pyth_acct_data')
     @patch.object(PythNetworkClient, 'parse_mapping_account')
@@ -126,14 +124,12 @@ class TestPythNetworkClient(unittest.TestCase):
         except Exception as err:
             self.fail(f"Expected not throws exception but it does: {err}")
 
-
     @patch.object(SolInteractor, 'get_account_info')
     def test_forward_exception_when_reading_mapping_account(self, mock_get_account_info):
         mock_get_account_info.side_effect = Exception('TestException')
         with self.assertRaises(Exception):
             self.update_mapping()
         mock_get_account_info.assert_called_once_with(mapping_account)
-
 
     def test_integration_success_read_price(self):
         '''
