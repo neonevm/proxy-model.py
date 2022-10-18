@@ -32,7 +32,7 @@ from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendRe
 from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 
 
-NEON_PROXY_PKG_VERSION = '0.12.2'
+NEON_PROXY_PKG_VERSION = '0.12.3'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
 
