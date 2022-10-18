@@ -2,16 +2,16 @@ from typing import Dict
 
 from logged_groups import logged_group
 
-from ..common_neon.solana_transaction import SolPubKey, SolAccountMeta, SolAccount
-from ..common_neon.data import NeonTxExecCfg, NeonAccountDict, NeonEmulatedResult
+from .operator_resource_mng import OpResInfo
+
 from ..common_neon.config import Config
-from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
+from ..common_neon.data import NeonTxExecCfg, NeonAccountDict, NeonEmulatedResult
+from ..common_neon.errors import BadResourceError
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.errors import BadResourceError
-from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
-
-from .operator_resource_mng import OpResInfo
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_tx import SolPubKey, SolAccountMeta, SolAccount
 
 
 @logged_group("neon.MemPool")
@@ -71,10 +71,10 @@ class NeonTxSendCtx:
 
         # Parse information from the emulator output
         for account_desc in emulated_account_dict['accounts']:
-            self._add_meta(account_desc['account'], True)
+            self._add_meta(SolPubKey(account_desc['account']), True)
 
         for account_desc in emulated_account_dict['solana_accounts']:
-            self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
+            self._add_meta(SolPubKey(account_desc['pubkey']), account_desc['is_writable'])
 
         neon_meta_list = list(self._neon_meta_dict.values())
         self.debug(
@@ -87,6 +87,9 @@ class NeonTxSendCtx:
             self.debug(f'contract 0x{contract}: {len(neon_meta_list) + 6} accounts')
 
         self._ix_builder.init_neon_account_list(neon_meta_list)
+
+    def len_account_list(self) -> int:
+        return len(self._neon_meta_dict)
 
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> None:
         self._neon_tx_exec_cfg.set_emulated_result(emulated_result)

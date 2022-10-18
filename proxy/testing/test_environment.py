@@ -1,18 +1,15 @@
 import unittest
 import os
-from web3 import Web3
 
-from ..common_neon.elf_params import ElfParams
-from ..common_neon.config import Config
-
-proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
-proxy = Web3(Web3.HTTPProvider(proxy_url))
+from proxy.common_neon.elf_params import ElfParams
+from proxy.common_neon.config import Config
+from proxy.testing.testing_helpers import Proxy
 
 
 class TestEnvironment(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        pass
+        cls._proxy = Proxy()
 
     def test_read_elf_params(self):
         print("\n\nhttps://github.com/neonlabsorg/neon-evm/issues/347")
@@ -36,10 +33,10 @@ class TestEnvironment(unittest.TestCase):
         print(f"NEON_CHAIN_ID = {neon_chain_id}")
         self.assertTrue(neon_chain_id is not None)
 
-        eth_chainId: int = proxy.eth.chain_id
-        print(f"eth_chainId = {eth_chainId}")
-        self.assertEqual(eth_chainId, int(neon_chain_id))
+        eth_chainid: int = self._proxy.conn.chain_id
+        print(f"eth_chainId = {eth_chainid}")
+        self.assertEqual(eth_chainid, int(neon_chain_id))
 
-        net_version: str = proxy.net.version
+        net_version: str = self._proxy.conn.w3.net.version
         print(f"net_version = {net_version}")
         self.assertEqual(net_version, neon_chain_id)

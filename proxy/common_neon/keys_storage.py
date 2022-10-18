@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from proxy.common_neon.address import EthereumAddress
+from proxy.common_neon.address import NeonAddress
 
 
 class KeyStorage:
@@ -16,17 +16,17 @@ class KeyStorage:
                 pk_key_str = line.strip().lower()
                 try:
                     pk_key_data = bytes.fromhex(pk_key_str)
-                    EthereumAddress.from_private_key(pk_key_data)
+                    NeonAddress.from_private_key(pk_key_data)
                     self._key_list.add(pk_key_str)
-                except:
+                except (Exception,):
                     pass
 
     @staticmethod
     def storage_path() -> os.path:
-        dir = os.path.join(os.path.expanduser('~'), '.neon')
-        if not os.path.isdir(dir):
-            os.mkdir(dir)
-        return os.path.join(dir, 'accounts.dat')
+        dir_name = os.path.join(os.path.expanduser('~'), '.neon')
+        if not os.path.isdir(dir_name):
+            os.mkdir(dir_name)
+        return os.path.join(dir_name, 'accounts.dat')
 
     def _save_to_file(self):
         with open(self.storage_path(), mode='w') as f:
@@ -35,22 +35,22 @@ class KeyStorage:
                 f.write(pk_key_str)
                 f.write('\n')
 
-    def generate_new(self) -> EthereumAddress:
-        new_address = EthereumAddress.random()
+    def generate_new(self) -> NeonAddress:
+        new_address = NeonAddress.random()
         self._key_list.add(new_address.private.to_hex()[2:])
         self._save_to_file()
         return new_address
 
-    def import_private_key(self, pk_key) -> EthereumAddress:
-        new_address = EthereumAddress.from_private_key(pk_key)
+    def import_private_key(self, pk_key) -> NeonAddress:
+        new_address = NeonAddress.from_private_key(pk_key)
         self._key_list.add(new_address.private.to_hex()[2:])
         self._save_to_file()
         return new_address
 
-    def get_list(self) -> [EthereumAddress]:
-        return [EthereumAddress.from_private_key(bytes.fromhex(p)) for p in self._key_list]
+    def get_list(self) -> [NeonAddress]:
+        return [NeonAddress.from_private_key(bytes.fromhex(p)) for p in self._key_list]
 
-    def get_key(self, address: str) -> Optional[EthereumAddress]:
+    def get_key(self, address: str) -> Optional[NeonAddress]:
         if not isinstance(address, str):
             return None
 
@@ -60,4 +60,3 @@ class KeyStorage:
             if str(account) == address:
                 return account
         return None
-

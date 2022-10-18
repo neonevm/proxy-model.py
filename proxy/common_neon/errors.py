@@ -1,6 +1,3 @@
-import traceback
-
-
 class EthereumError(Exception):
     def __init__(self, message: str, code=-32000, data=None):
         self.code = code
@@ -9,7 +6,8 @@ class EthereumError(Exception):
 
     def get_error(self):
         error = {'code': self.code, 'message': self.message}
-        if self.data: error['data'] = self.data
+        if self.data:
+            error['data'] = self.data
         return error
 
 
