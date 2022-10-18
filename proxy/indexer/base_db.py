@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import psycopg2
-import psycopg2.extras
-import psycopg2.extensions
-
 from typing import List, Any, Optional, Dict
+
+import psycopg2
+import psycopg2.extensions
+import psycopg2.extras
+
 from logged_groups import logged_group
 
 from .pg_common import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST

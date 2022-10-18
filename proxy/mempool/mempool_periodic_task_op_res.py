@@ -1,10 +1,10 @@
 from typing import List
 
-from ..common_neon.elf_params import ElfParams
-
 from .mempool_api import IMPExecutor, MPOpResInitRequest, MPOpResInitResult, MPOpResInitResultCode
 from .mempool_periodic_task import MPPeriodicTaskLoop
 from .operator_resource_mng import OpResMng
+
+from ..common_neon.elf_params import ElfParams
 
 
 class MPInitOpResTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOpResInitResult]):

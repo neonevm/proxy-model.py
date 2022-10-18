@@ -4,8 +4,8 @@ from ..common_neon.sorted_queue import SortedQueue
 
 from ..mempool.mempool_api import IMPExecutor, MPRequest, MPRequestType, MPALTInfo, MPALTListResult
 from ..mempool.mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
-from ..mempool.operator_resource_mng import OpResMng
 from ..mempool.mempool_periodic_task import MPPeriodicTaskLoop
+from ..mempool.operator_resource_mng import OpResMng
 
 
 class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):

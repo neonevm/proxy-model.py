@@ -1,19 +1,18 @@
-import time
-import json
-import base58
-import random
 import enum
+import json
+import random
+import time
 
-from logged_groups import logged_group
 from dataclasses import dataclass
 from typing import Optional, List, Dict
+from logged_groups import logged_group
 
-from ..common_neon.solana_transaction import SolTx, SolWrappedTx, SolBlockhash, SolTxReceipt, SolAccount
-from ..common_neon.solana_tx_error_parser import SolTxErrorParser, SolTxError
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.errors import NodeBehindError, NoMoreRetriesError, NonceTooLowError, BlockedAccountsError
-from ..common_neon.errors import BudgetExceededError
 from ..common_neon.config import Config
+from ..common_neon.errors import BudgetExceededError
+from ..common_neon.errors import NodeBehindError, NoMoreRetriesError, NonceTooLowError, BlockedAccountsError
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_tx import SolTx, SolBlockhash, SolTxReceipt, SolAccount
+from ..common_neon.solana_tx_error_parser import SolTxErrorParser, SolTxError
 
 
 @dataclass
@@ -39,19 +38,11 @@ class SolTxSendState:
 
     @property
     def name(self) -> str:
-        return self.decode_tx_name(self.tx)
+        return self.tx.name
 
     @property
     def sig(self) -> str:
-        return self.decode_tx_sig(self.tx)
-
-    @staticmethod
-    def decode_tx_name(tx: SolTx) -> str:
-        return tx.name if isinstance(tx, SolWrappedTx) else "Unknown"
-
-    @staticmethod
-    def decode_tx_sig(tx: SolTx) -> str:
-        return base58.b58encode(tx.signature()).decode("utf-8")
+        return str(self.tx.signature)
 
 
 @logged_group("neon.Proxy")
@@ -106,7 +97,7 @@ class SolTxListSender:
     def _send_tx_list(self, tx_list: List[SolTx]) -> None:
         tx_name_dict: Dict[str, int] = {}
         for tx in tx_list:
-            tx_name = SolTxSendState.decode_tx_name(tx)
+            tx_name = tx.name if len(tx.name) > 0 else 'Unknown'
             tx_name_dict[tx_name] = tx_name_dict.get(tx_name, 0) + 1
 
             if tx.recent_blockhash is None:

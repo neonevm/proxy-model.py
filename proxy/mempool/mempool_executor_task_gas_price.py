@@ -1,8 +1,8 @@
 from typing import Optional
 
+from ..common_neon.config import Config
 from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.config import Config
 
 from ..mempool.mempool_api import MPGasPriceResult
 from ..mempool.mempool_executor_task_base import MPExecutorBaseTask

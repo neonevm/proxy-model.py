@@ -1,20 +1,19 @@
-from logged_groups import logged_group, logging_context
 import asyncio
+
 from multiprocessing import Process
 from typing import Any, Optional, cast, Union
 
-from neon_py.network import AddrPickableDataSrv, IPickableDataServerUser
-from neon_py.maintenance_api import MaintenanceRequest, MaintenanceCommand, ReplicationRequest, ReplicationBunch
+from logged_groups import logged_group, logging_context
 from neon_py.data import Result
+from neon_py.maintenance_api import MaintenanceRequest, MaintenanceCommand, ReplicationRequest, ReplicationBunch
+from neon_py.network import AddrPickableDataSrv, IPickableDataServerUser
 
-from ..common_neon.config import Config
-
-from .mempool import MemPool
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
-from .operator_resource_mng import OpResMng
-
+from .mempool import MemPool
 from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest
 from .mempool_replicator import MemPoolReplicator
+from .operator_resource_mng import OpResMng
+from ..common_neon.config import Config
 
 
 @logged_group("neon.MemPool")

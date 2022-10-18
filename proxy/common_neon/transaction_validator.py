@@ -1,20 +1,20 @@
 from __future__ import annotations
-from logged_groups import logged_group
+
 from typing import Dict, Any
 
-from ..common_neon.eth_proto import NeonTx
-from ..common_neon.address import EthereumAddress
-from ..common_neon.errors import EthereumError
+from logged_groups import logged_group
+
 from ..common_neon.account_whitelist import AccountWhitelist
-from ..common_neon.solana_tx_error_parser import SolTxErrorParser
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.estimate import GasEstimate
-from ..common_neon.emulator_interactor import call_tx_emulated, check_emulated_exit_status
-
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
-
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatedResult
+from ..common_neon.elf_params import ElfParams
+from ..common_neon.emulator_interactor import call_tx_emulated, check_emulated_exit_status
+from ..common_neon.errors import EthereumError
+from ..common_neon.estimate import GasEstimate
+from ..common_neon.eth_proto import NeonTx
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 
 
 @logged_group("neon.Proxy")
@@ -28,7 +28,7 @@ class NeonTxValidator:
         self._tx = tx
 
         self._sender = '0x' + tx.sender()
-        self._neon_account_info = self._solana.get_neon_account_info(EthereumAddress(self._sender))
+        self._neon_account_info = self._solana.get_neon_account_info(NeonAddress(self._sender))
         self._state_tx_cnt = self._neon_account_info.tx_count if self._neon_account_info is not None else 0
 
         self._deployed_contract = tx.contract()

@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import abc
-import base58
-
 from typing import Optional, Dict, Any
+
+import base58
 from logged_groups import logged_group
 
-from ..common_neon.solana_transaction import SolLegacyTx, SolTxIx, SolPubKey
-from ..common_neon.address import accountWithSeed
-
+from ..common_neon.address import account_with_seed
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
 from ..common_neon.neon_instruction import NeonIxBuilder
+from ..common_neon.solana_tx import SolTxIx, SolPubKey
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 
 
 @logged_group("neon.MemPool")
@@ -21,10 +21,10 @@ class NeonTxStage(abc.ABC):
         self._ix_builder = ix_builder
         self._size = 0
         self._balance = 0
-        self.tx = SolLegacyTx()
+        self.tx = SolLegacyTx(name=self.name)
 
     def _is_empty(self) -> bool:
-        return not len(self.tx.signatures)
+        return self.tx.is_empty()
 
     @abc.abstractmethod
     def build(self) -> None:
@@ -59,7 +59,7 @@ class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
         assert len(self._seed_base) > 0
 
         self._seed = base58.b58encode(self._seed_base)
-        self._sol_account = accountWithSeed(self._ix_builder.operator_account, self._seed)
+        self._sol_account = account_with_seed(self._ix_builder.operator_account, self._seed)
 
     @property
     def sol_account(self) -> SolPubKey:
@@ -102,7 +102,7 @@ class NeonCreateHolderAccountStage(NeonCreateAccountWithSeedStage):
 
     def _init_sol_account(self):
         assert len(self._seed) > 0
-        self._sol_account = accountWithSeed(self._ix_builder.operator_account, self._seed)
+        self._sol_account = account_with_seed(self._ix_builder.operator_account, self._seed)
 
     def build(self):
         assert self._is_empty()
@@ -123,7 +123,7 @@ class NeonDeleteHolderAccountStage(NeonTxStage):
 
     def _init_sol_account(self):
         assert len(self._seed) > 0
-        self._sol_account = accountWithSeed(self._ix_builder.operator_account, self._seed)
+        self._sol_account = account_with_seed(self._ix_builder.operator_account, self._seed)
 
     def _delete_account(self):
         return self._ix_builder.make_delete_holder_ix(self._sol_account)

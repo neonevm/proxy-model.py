@@ -1,8 +1,9 @@
+from collections.abc import MutableMapping
+
 import psycopg2.extensions
 
-from collections.abc import MutableMapping
-from ..indexer.pg_common import encode, decode, dummy
 from ..indexer.base_db import BaseDB
+from ..indexer.pg_common import encode, decode, dummy
 
 
 class SQLDict(MutableMapping, BaseDB):
