@@ -1,24 +1,26 @@
 from __future__ import annotations
-from sha3 import keccak_256
-import rlp
-from eth_keys import keys
+
 from typing import Optional
 
-public = '0x2377BB12320F46F0B9E30EBFB941121352716f2C'
-private = '0x886d5b4ce9465473701bf394b1b0b217548c57576436864fcbc1f554033a0680'
-trx = '0xF86B80850BA43B7400825208947917bc33eea648809c285607579c9919fb864f8f8703BAF82D03A0008025A0067940651530790861714b2e8fd8b080361d1ada048189000c07a66848afde46A069b041db7c29dbcc6becf42017ca7ac086b12bd53ec8ee494596f790fb6a0a69'
-'''
-0xf8 73
-80 - nonce
-85 3374a06200 - gasPrice
-82 5208 - gasLimit
-94 2377bb12320f46f0b9e30ebfb941121352716f2c - toAddress
-89 055de6a779bbac0000 - value
-80 - callData
-86 02e92be91e86 - v
-a0 602af7bd4ac154a568c2d1478b23d697390e035cd72250e77a0d56ce2c4a63db - r
-a0 5d09ca05a62935d6c2a04bfa5bfa1cb46bfcb59e3a115e0c8cceca807efb778b - s
-'''
+import rlp
+from eth_keys import keys as neon_keys
+from sha3 import keccak_256
+
+# public = '0x2377BB12320F46F0B9E30EBFB941121352716f2C'
+# private = '0x886d5b4ce9465473701bf394b1b0b217548c57576436864fcbc1f554033a0680'
+# trx = '0xF86B80850BA43B7400825208947917bc33eea648809c285607579c9919fb864f8f8703BAF82D03A0008025A0067940651530790861714b2e8fd8b080361d1ada048189000c07a66848afde46A069b041db7c29dbcc6becf42017ca7ac086b12bd53ec8ee494596f790fb6a0a69'
+# '''
+# 0xf8 73
+# 80 - nonce
+# 85 3374a06200 - gasPrice
+# 82 5208 - gasLimit
+# 94 2377bb12320f46f0b9e30ebfb941121352716f2c - toAddress
+# 89 055de6a779bbac0000 - value
+# 80 - callData
+# 86 02e92be91e86 - v
+# a0 602af7bd4ac154a568c2d1478b23d697390e035cd72250e77a0d56ce2c4a63db - r
+# a0 5d09ca05a62935d6c2a04bfa5bfa1cb46bfcb59e3a115e0c8cceca807efb778b - s
+# '''
 
 
 class InvalidNeonTx(Exception):
@@ -60,7 +62,7 @@ class NeonTx(rlp.Serializable):
         rlp.Serializable.__init__(self, *args, **kwargs)
         self._msg: Optional[bytes] = None
         self._hash_signed: Optional[bytes] = None
-        self._sig: Optional[keys.Signature] = None
+        self._sig: Optional[neon_keys.Signature] = None
         self._hex_sender: Optional[str] = None
         self._contract: Optional[str] = None
 
@@ -113,9 +115,9 @@ class NeonTx(rlp.Serializable):
             self._msg = self._unsigned_msg()
         return self._msg
 
-    def _signature(self) -> keys.Signature:
+    def _signature(self) -> neon_keys.Signature:
         if self._sig is None:
-            self._sig = keys.Signature(vrs=[1 if self.v % 2 == 0 else 0, self.r, self.s])
+            self._sig = neon_keys.Signature(vrs=[1 if self.v % 2 == 0 else 0, self.r, self.s])
         return self._sig
 
     def _sender(self) -> bytes:

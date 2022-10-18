@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import re
-import base58
 
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, cast
+
+import base58
+
 from logged_groups import logged_group
 
 from ..common_neon.environment_data import EVM_LOADER_ID

@@ -9,7 +9,7 @@ from coincurve import PublicKey
 
 import logging
 
-from proxy.common_neon.address import EthereumAddress, accountWithSeed, permAccountSeed
+from proxy.common_neon.address import NeonAddress, account_with_seed, perm_account_seed
 from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.environment_utils import get_solana_accounts
 from proxy.common_neon.config import Config
@@ -76,7 +76,7 @@ class InfoHandler:
         stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
         for sol_account in self._get_solana_accounts():
             for rid in range(self._config.perm_account_id, stop_perm_account_id):
-                holder_address = self._generate_holder_address(sol_account.public_key(), rid)
+                holder_address = self._generate_holder_address(sol_account.public_key, rid)
                 ret_js['holder-accounts'].append(str(holder_address))
                 self._print(str(holder_address))
 
@@ -89,8 +89,8 @@ class InfoHandler:
 
         for sol_account in self._get_solana_accounts():
             acc_info_js = {
-                'address': str(sol_account.public_key()),
-                'private': list(sol_account.keypair())
+                'address': str(sol_account.public_key),
+                'private': list(sol_account.secret_key)
             }
 
             self._print(f"{acc_info_js['address']}    {acc_info_js['private']}")
@@ -105,7 +105,7 @@ class InfoHandler:
         }
 
         neon_accounts = [
-            EthereumAddress.from_private_key(operator.secret_key())
+            NeonAddress.from_private_key(operator.secret_key)
             for operator in self._get_solana_accounts()
         ]
 
@@ -128,7 +128,7 @@ class InfoHandler:
         }
 
         operator_accounts = self._get_solana_accounts()
-        neon_accounts = [EthereumAddress.from_private_key(operator.secret_key()) for operator in operator_accounts]
+        neon_accounts = [NeonAddress.from_private_key(operator.secret_key) for operator in operator_accounts]
 
         for neon_account in neon_accounts:
             acc_info_js = {
@@ -178,11 +178,11 @@ class InfoHandler:
         }
 
         operator_accounts = self._get_solana_accounts()
-        neon_accounts = [EthereumAddress.from_private_key(operator.secret_key()) for operator in operator_accounts]
+        neon_accounts = [NeonAddress.from_private_key(operator.secret_key) for operator in operator_accounts]
 
         for sol_account, neon_account in zip(operator_accounts, neon_accounts):
             acc_info_js = self._get_solana_account_info(sol_account)
-            acc_info_js['private'] = list(sol_account.keypair())
+            acc_info_js['private'] = list(sol_account.secret_key)
 
             ret_js['total_balance'] += acc_info_js['balance']
 
@@ -200,14 +200,14 @@ class InfoHandler:
         return ret_js
 
     def _generate_holder_address(self, base_address: PublicKey, rid: int) -> PublicKey:
-        return self._generate_resource_address(base_address, b'holder', rid)
+        return self._generate_resource_address(base_address, b'holder-', rid)
 
     @staticmethod
     def _generate_resource_address(base_address: PublicKey, prefix: bytes, rid: int) -> PublicKey:
-        seed = permAccountSeed(prefix, rid)
-        return accountWithSeed(base_address, seed)
+        seed = perm_account_seed(prefix, rid)
+        return account_with_seed(base_address, seed)
 
-    def _get_neon_balance(self, neon_address: EthereumAddress):
+    def _get_neon_balance(self, neon_address: NeonAddress):
         neon_layout = self._solana.get_neon_account_info(neon_address)
         return Decimal(neon_layout.balance) / 1_000_000_000 / 1_000_000_000 if neon_layout else 0
 
@@ -221,14 +221,14 @@ class InfoHandler:
         }
 
         acc_info_js = {
-            'address': str(sol_account.public_key()),
-            'balance': Decimal(self._solana.get_sol_balance(sol_account.public_key())) / 1_000_000_000,
+            'address': str(sol_account.public_key),
+            'balance': Decimal(self._solana.get_sol_balance(sol_account.public_key)) / 1_000_000_000,
             'holder': []
         }
 
         stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
         for rid in range(self._config.perm_account_id, stop_perm_account_id):
-            holder_address = self._generate_holder_address(sol_account.public_key(), rid)
+            holder_address = self._generate_holder_address(sol_account.public_key, rid)
             holder_info = self._solana.get_account_info(holder_address)
 
             if holder_info:

@@ -1,5 +1,6 @@
-from logged_groups import logged_group
 from typing import Any, List, Type, Optional, Iterator
+
+from logged_groups import logged_group
 
 from ..common_neon.utils import NeonTxInfo
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import statistics
-
 from typing import Dict, Union, Callable, List
 
 from ..common_neon.config import Config

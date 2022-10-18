@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from typing import List, Tuple, Set
 
-from ..common_neon.solana_transaction import SolLegacyTx, SolPubKey, SolBlockhash, SolLegacyMsg
+from logged_groups import logged_group
+
+from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
 from ..common_neon.errors import ALTError
 from ..common_neon.solana_alt_list_filter import ALTListFilter
-from ..common_neon.solana_interactor import ALTAccountInfo
+from ..common_neon.layouts import ALTAccountInfo
 
 
+@logged_group('neon.Proxy')
 class ALTInfo:
     def __init__(self, table_account: SolPubKey, recent_block_slot: int, nonce: int):
         self._table_acct = table_account
@@ -44,19 +48,11 @@ class ALTInfo:
     def account_key_list_len(self) -> int:
         return len(self._acct_key_list)
 
-    @staticmethod
-    def _compile_msg(tx: SolLegacyTx) -> SolLegacyMsg:
-        # Predefined blockhash is used only to compile legacy tx, the transaction won't be sent to network
-        tx.recent_blockhash = SolBlockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
-        # Predefined public key is used only to compile legacy tx, the transaction won't be sent to network
-        tx.fee_payer = SolPubKey('AdtXr9yGAsTokY75WernsmQdcBPu2LE2Bsh8Nx3ApbbR')
-        return tx.compile_message()
-
-    def init_from_legacy_tx(self, tx: SolLegacyTx) -> None:
+    def init_from_legacy_tx(self, legacy_tx: SolLegacyTx) -> None:
         assert not len(self._acct_key_list)
 
-        msg = self._compile_msg(tx)
-        alt_filter = ALTListFilter(msg)
+        legacy_msg = legacy_tx.message
+        alt_filter = ALTListFilter(legacy_msg)
 
         alt_acct_set = alt_filter.filter_alt_account_key_set()
         self._acct_key_set = alt_acct_set
