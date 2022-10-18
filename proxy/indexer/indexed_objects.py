@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import hashlib
 import copy
+import hashlib
 import time
 
-from enum import Enum
-from dataclasses import dataclass
-from typing import Iterator, List, Optional, Dict, Set, Deque, Tuple, cast
 from collections import deque
+from dataclasses import dataclass
+from enum import Enum
+from typing import Iterator, List, Optional, Dict, Set, Deque, Tuple, cast
+
 from logged_groups import logged_group
 
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolanaBlockInfo, str_fmt_object
-from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolNeonIxReceiptInfo, SolTxCostInfo, SolTxReceiptInfo
 from ..common_neon.config import Config
-
+from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolNeonIxReceiptInfo, SolTxCostInfo, SolTxReceiptInfo
+from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolanaBlockInfo, str_fmt_object
 from ..indexer.solana_tx_meta_collector import SolTxMetaCollector
 
 
@@ -56,7 +56,7 @@ class BaseNeonIndexedObjInfo:
         return iter(self._sol_neon_ix_list)
 
 
-@dataclass
+@dataclass(frozen=True)
 class NeonAccountInfo:
     neon_address: Optional[str]
     pda_address: str

@@ -1,25 +1,23 @@
 import unittest
 import os
-from web3 import Web3
+from proxy.testing.testing_helpers import Proxy
 
-proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-proxy = Web3(Web3.HTTPProvider(proxy_url))
-eth_account = proxy.eth.account.create('web3_clientVersion')
-proxy.eth.default_account = eth_account.address
 
 neon_revision = os.environ.get('NEON_REVISION', 'env var NEON_REVISION is not set')
 
 
-class Test_web3_clientVersion(unittest.TestCase):
+class TestWeb3clientVersion(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.proxy = Proxy()
+        cls.eth_account = cls.proxy.create_account('web3_clientVersion')
         print('\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/205')
-        print('eth_account.address:', eth_account.address)
-        print('eth_account.key:', eth_account.key.hex())
+        print('eth_account.address:', cls.eth_account.address)
+        print('eth_account.key:', cls.eth_account.key.hex())
 
     def test_web3_clientVersion(self):
         print('check tag Neon/v in web3_clientVersion')
-        web3_clientVersion = proxy.clientVersion
+        web3_clientVersion = self.proxy.conn.w3.clientVersion
         print('web3_clientVersion:', web3_clientVersion)
         self.assertTrue(web3_clientVersion.startswith('Neon/v'))
         print('check for neon_revision:', neon_revision)

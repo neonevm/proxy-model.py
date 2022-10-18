@@ -12,16 +12,54 @@ from ..common_neon.eth_proto import NeonTx
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_alt_builder import ALTTxBuilder
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_transaction import SolAccount, SolPubKey, SolAccountMeta, SolLegacyTx, SolBlockhash
-from ..common_neon.address import EthereumAddress
+from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockhash
+from ..common_neon.solana_tx_legacy import SolLegacyTx
+from ..common_neon.address import NeonAddress
+
+
+class _GasTxBuilder:
+    def __init__(self):
+        # This values doesn't used on real network, they are used only to generate temporary data
+        holder_key = bytes([
+            61, 147, 166, 57, 23, 88, 41, 136, 224, 223, 120, 142, 155, 123, 221, 134,
+            16, 102, 170, 82, 76, 94, 95, 178, 125, 232, 191, 172, 103, 157, 145, 190
+        ])
+        holder = SolAccount.from_secret_key(holder_key)
+
+        operator_key = bytes([
+            161, 247, 66, 157, 203, 188, 141, 236, 124, 123, 200, 192, 255, 23, 161, 34,
+            116, 202, 70, 182, 176, 194, 195, 168, 185, 132, 161, 142, 203, 57, 245, 90
+        ])
+        self._signer = SolAccount.from_secret_key(operator_key)
+        neon_address = NeonAddress.from_private_key(operator_key)
+        self._blockhash = SolBlockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+
+        self._neon_ix_builder = NeonIxBuilder(self._signer.public_key)
+        self._neon_ix_builder.init_iterative(holder.public_key)
+        self._neon_ix_builder.init_operator_neon(neon_address)
+
+    def build_tx(self, tx: NeonTx, account_list: List[SolAccountMeta]) -> SolLegacyTx:
+        self._neon_ix_builder.init_neon_tx(tx)
+        self._neon_ix_builder.init_neon_account_list(account_list)
+
+        tx = SolLegacyTx(instructions=[
+            self._neon_ix_builder.make_compute_budget_heap_ix(),
+            self._neon_ix_builder.make_compute_budget_cu_ix(),
+            self._neon_ix_builder.make_tx_step_from_data_ix(ElfParams().neon_evm_steps, 1)
+        ])
+
+        tx.recent_blockhash = self._blockhash
+        tx.sign(self._signer)
+        return tx
+
+    def neon_tx_len(self) -> int:
+        return len(self._neon_ix_builder.holder_msg)
 
 
 @logged_group("neon.Proxy")
 class GasEstimate:
-    # This values doesn't used on real network, they are used only to generate temporary data
-    _signer = SolAccount()
-    _holder = SolAccount()
-    _neon_address = EthereumAddress.random()
+    _tx_builder = _GasTxBuilder()
+    _u256_max = int.from_bytes(bytes([0xFF] * 32), "big")
 
     def __init__(self, config: Config, solana: SolInteractor, request: Dict[str, Any]):
         self._sender = request.get('from') or '0x0000000000000000000000000000000000000000'
@@ -52,12 +90,10 @@ class GasEstimate:
         self.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
 
     def _tx_size_cost(self) -> int:
-        u256_max = int.from_bytes(bytes([0xFF] * 32), "big")
-
         tx = NeonTx(
-            nonce=u256_max,
-            gasPrice=u256_max,
-            gasLimit=u256_max,
+            nonce=self._u256_max,
+            gasPrice=self._u256_max,
+            gasLimit=self._u256_max,
             toAddress=bytes.fromhex(self._contract),
             value=int(self._value, 16),
             callData=bytes.fromhex(self._data),
@@ -66,26 +102,12 @@ class GasEstimate:
             s=0x1820182018201820182018201820182018201820182018201820182018201820
         )
 
-        neon_ix_builder = NeonIxBuilder(self._signer.public_key())
-        neon_ix_builder.init_neon_tx(tx)
-        neon_ix_builder.init_operator_neon(self._neon_address)
-        neon_ix_builder.init_neon_account_list(self._account_list)
-        neon_ix_builder.init_iterative(self._holder.public_key())
-
-        tx = SolLegacyTx().add(
-            neon_ix_builder.make_compute_budget_heap_ix(),
-            neon_ix_builder.make_compute_budget_cu_ix(),
-            neon_ix_builder.make_tx_step_from_data_ix(ElfParams().neon_evm_steps, 1)
-        )
-
         try:
-            # This value is used only for get size, it will be not send to the real network
-            tx.recent_blockhash = SolBlockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
-            tx.sign(self._signer)
-            tx.serialize()  # <- there will be exception
+            sol_tx = self._tx_builder.build_tx(tx, self._account_list)
+            sol_tx.serialize()  # <- there will be exception
             return 0
-        except (Exception, ) as exc:
-            return ((len(neon_ix_builder.holder_msg) // ElfParams().holder_msg_size) + 1) * 5000
+        except (Exception, ):
+            return ((self._tx_builder.neon_tx_len() // ElfParams().holder_msg_size) + 1) * 5000
 
     @staticmethod
     def _iterative_overhead_cost() -> int:

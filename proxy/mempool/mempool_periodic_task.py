@@ -1,13 +1,11 @@
-import asyncio
-import time
-import math
 import abc
+import asyncio
+
 from typing import Optional, TypeVar, Generic
 
 from logged_groups import logged_group, logging_context
 
 from ..mempool.mempool_api import MPTask, IMPExecutor
-
 
 MPPeriodicTaskRequest = TypeVar('MPPeriodicTaskRequest')
 MPPeriodicTaskResult = TypeVar('MPPeriodicTaskResult')

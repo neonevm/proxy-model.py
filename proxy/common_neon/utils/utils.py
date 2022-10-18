@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import Dict, Any, List, Tuple
-from enum import Enum
 
 import json
+
+from enum import Enum
+from typing import Dict, Any, List, Tuple
 
 from ..environment_data import LOG_FULL_OBJECT_INFO
 

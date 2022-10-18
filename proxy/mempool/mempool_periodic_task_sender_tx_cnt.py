@@ -1,7 +1,6 @@
-
 from .mempool_api import IMPExecutor, MPSenderTxCntRequest, MPSenderTxCntResult
-from .mempool_schedule import MPTxSchedule
 from .mempool_periodic_task import MPPeriodicTaskLoop
+from .mempool_schedule import MPTxSchedule
 
 
 class MPSenderTxCntTaskLoop(MPPeriodicTaskLoop[MPSenderTxCntRequest, MPSenderTxCntResult]):

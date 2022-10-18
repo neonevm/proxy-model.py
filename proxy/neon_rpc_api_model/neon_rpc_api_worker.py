@@ -1,31 +1,35 @@
 import json
-import multiprocessing
-import eth_utils
-import time
 import math
+import multiprocessing
+import time
 
 from typing import Optional, Union, Dict, Any, List, cast
 
+import eth_utils
 import sha3
-from logged_groups import logged_group, LogMng
-from web3.auto import w3
 
-from ..common_neon.address import EthereumAddress
+from logged_groups import logged_group, LogMng
+from eth_account import Account as NeonAccount
+
+from ..common_neon.address import NeonAddress
+from ..common_neon.config import Config
+from ..common_neon.elf_params import ElfParams
 from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status, call_tx_emulated
+from ..common_neon.environment_utils import NeonCli
 from ..common_neon.errors import EthereumError, InvalidParamError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.transaction_validator import NeonTxValidator
 from ..common_neon.utils import JsonBytesEncoder
 from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
-from ..common_neon.config import Config
-from ..common_neon.elf_params import ElfParams
-from ..common_neon.environment_utils import neon_cli
-from ..common_neon.transaction_validator import NeonTxValidator
+
 from ..indexer.indexer_db import IndexerDB
-from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
+
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
+
+from ..statistics_exporter.proxy_metrics_interface import StatisticsExporter
 
 
 NEON_PROXY_PKG_VERSION = '0.12.2'
@@ -90,7 +94,7 @@ class NeonRpcApiWorker:
         return self.neon_cliVersion()
 
     def neon_cliVersion(self) -> str:
-        return neon_cli(self._config).version()
+        return NeonCli(self._config).version()
 
     @staticmethod
     def net_version() -> str:
@@ -212,7 +216,7 @@ class NeonRpcApiWorker:
 
         try:
             commitment = 'processed' if tag == 'pending' else 'confirmed'
-            neon_account_info = self._solana.get_neon_account_info(EthereumAddress(account), commitment)
+            neon_account_info = self._solana.get_neon_account_info(NeonAddress(account), commitment)
             if neon_account_info is None:
                 return hex(0)
 
@@ -308,7 +312,7 @@ class NeonRpcApiWorker:
         account = self._normalize_account(account)
 
         try:
-            value = neon_cli(self._config).call('get-storage-at', account, position)
+            value = NeonCli(self._config).call('get-storage-at', account, position)
             return value
         except (Exception,):
             # self.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
@@ -435,7 +439,10 @@ class NeonRpcApiWorker:
 
         tx = self._db.get_tx_by_neon_sig(neon_sig)
         if not tx:
-            self.debug("Not found receipt")
+            req_id = LogMng.get_logging_context().get("req_id")
+            neon_tx_or_error = self._mempool_client.get_pending_tx_by_hash(req_id, neon_tx_sig)
+            if isinstance(neon_tx_or_error, EthereumError):
+                raise neon_tx_or_error
             return None
         return self._get_transaction_receipt(tx)
 
@@ -650,7 +657,7 @@ class NeonRpcApiWorker:
             tx['chainId'] = hex(ElfParams().chain_id)
 
         try:
-            signed_tx = w3.eth.account.sign_transaction(tx, account.private)
+            signed_tx = NeonAccount().sign_transaction(tx, account.private)
             raw_tx = signed_tx.rawTransaction.hex()
 
             tx['from'] = sender

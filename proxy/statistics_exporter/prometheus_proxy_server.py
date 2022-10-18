@@ -5,7 +5,7 @@ from multiprocessing import Process
 
 from prometheus_client import start_http_server
 
-from ..common_neon.address import EthereumAddress
+from ..common_neon.address import NeonAddress
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.config import Config
@@ -30,8 +30,8 @@ class PrometheusProxyServer:
         self._sol_accounts = []
         self._neon_accounts = []
         for account in self._operator_accounts:
-            self._sol_accounts.append(str(account.public_key()))
-            self._neon_accounts.append(EthereumAddress.from_private_key(account.secret_key()))
+            self._sol_accounts.append(str(account.public_key))
+            self._neon_accounts.append(NeonAddress.from_private_key(account.secret_key))
 
     def start(self) -> None:
         self._start_http_server()

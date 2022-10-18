@@ -1,9 +1,10 @@
 import os
-from typing import Optional
-from decimal import Decimal
 
-from ..common_neon.solana_transaction import SolPubKey
+from decimal import Decimal
+from typing import Optional
+
 from ..common_neon.environment_data import EVM_LOADER_ID
+from ..common_neon.solana_tx import SolPubKey
 
 
 class Config:
@@ -51,6 +52,7 @@ class Config:
         self._holder_timeout = self._env_int("HOLDER_TIMEOUT", 1, 216000)  # 1 day by default
         self._indexer_log_skip_cnt = self._env_int("INDEXER_LOG_SKIP_COUNT", 1, 1000)
         self._gather_statistics = self._env_bool("GATHER_STATISTICS", False)
+        self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 15 * 60)
 
         pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
         self._pyth_mapping_account = SolPubKey(pyth_mapping_account) if pyth_mapping_account is not None else None
@@ -252,6 +254,10 @@ class Config:
     def gather_statistics(self) -> bool:
         return self._gather_statistics
 
+    @property
+    def mempool_cache_life_sec(self) -> int:
+        return self._mempool_cache_life_sec
+
     def __str__(self):
         return '\n        '.join([
             '',
@@ -299,5 +305,6 @@ class Config:
             f"HOLDER_TIMOUT: {self.holder_timeout}",
             f"INDEXER_LOG_SKIP_COUNT: {self.indexer_log_skip_cnt}",
             f"GATHER_STATISTICS: {self.gather_statistics}",
+            f"MEMPOOL_CACHE_LIFE_SEC: {self.mempool_cache_life_sec}",
             ""
         ])

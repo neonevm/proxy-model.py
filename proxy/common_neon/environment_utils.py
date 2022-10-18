@@ -7,7 +7,7 @@ from typing import List, Optional
 import logging
 from logged_groups import logged_group, LogMng
 
-from ..common_neon.solana_transaction import SolAccount
+from ..common_neon.solana_tx import SolAccount
 from ..common_neon.config import Config
 
 
@@ -30,7 +30,7 @@ class CliBase:
         return output
 
 
-class solana_cli(CliBase):
+class SolanaCli(CliBase):
     def call(self, *args):
         try:
             cmd = ["solana",
@@ -53,9 +53,9 @@ def get_solana_accounts(config, *, logger) -> List[SolAccount]:
             pkey = (d.read())
             num_list = [int(v) for v in pkey.strip("[] \n").split(',')]
             value_list = bytes(num_list[0:32])
-            return SolAccount(value_list)
+            return SolAccount.from_secret_key(value_list)
 
-    res = solana_cli(config).call('config', 'get')
+    res = SolanaCli(config).call('config', 'get')
     logger.debug(f"Got solana config: {res}")
     substr = "Keypair Path: "
     path = ""
@@ -77,7 +77,7 @@ def get_solana_accounts(config, *, logger) -> List[SolAccount]:
         if not signer:
             break
         signer_list.append(signer)
-        logger.debug(f'Add signer: {signer.public_key()}')
+        logger.debug(f'Add signer: {signer.public_key}')
 
     if not len(signer_list):
         raise Exception("No keypairs")
@@ -85,7 +85,7 @@ def get_solana_accounts(config, *, logger) -> List[SolAccount]:
     return signer_list
 
 
-class neon_cli(CliBase):
+class NeonCli(CliBase):
     EMULATOR_LOGLEVEL = {
         logging.CRITICAL: "off",
         logging.ERROR: "error",

@@ -2,8 +2,8 @@ from typing import List, Dict, Set, Optional, Tuple, Iterator, cast
 
 from logged_groups import logged_group, logging_context
 
-from ..common_neon.eth_proto import NeonTx
 from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.eth_proto import NeonTx
 from ..common_neon.sorted_queue import SortedQueue
 
 from ..mempool.mempool_api import MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData, MPTxRequestList

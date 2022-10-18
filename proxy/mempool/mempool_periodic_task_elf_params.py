@@ -1,9 +1,9 @@
 from typing import Dict
 
-from ..common_neon.elf_params import ElfParams
-
 from .mempool_api import IMPExecutor, MPElfParamDictRequest
 from .mempool_periodic_task import MPPeriodicTaskLoop
+
+from ..common_neon.elf_params import ElfParams
 
 
 class MPElfParamDictTaskLoop(MPPeriodicTaskLoop[MPElfParamDictRequest, Dict[str, str]]):
