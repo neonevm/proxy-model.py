@@ -1,6 +1,6 @@
 from typing import List
 
-from ..common_neon.address import EthereumAddress
+from ..common_neon.address import NeonAddress
 
 from ..mempool.mempool_api import MPSenderTxCntRequest, MPSenderTxCntResult, MPSenderTxCntData
 from ..mempool.mempool_executor_task_base import MPExecutorBaseTask
@@ -8,7 +8,7 @@ from ..mempool.mempool_executor_task_base import MPExecutorBaseTask
 
 class MPExecutorStateTxCntTask(MPExecutorBaseTask):
     def read_state_tx_cnt(self, mp_state_req: MPSenderTxCntRequest) -> MPSenderTxCntResult:
-        neon_address_list = [EthereumAddress(sender) for sender in mp_state_req.sender_list]
+        neon_address_list = [NeonAddress(sender) for sender in mp_state_req.sender_list]
         neon_account_list = self._solana.get_neon_account_info_list(neon_address_list)
 
         state_tx_cnt_list: List[MPSenderTxCntData] = []

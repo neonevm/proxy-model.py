@@ -30,7 +30,6 @@ from ..common_neon.eth_proto import NeonTx
 class MemPool:
     check_task_timeout_sec = 0.01
     reschedule_timeout_sec = 0.4
-    clear_task_timeout_sec = 5
 
     def __init__(self, config: Config, op_res_mng: OpResMng, executor: IMPExecutor):
         capacity = config.mempool_capacity
@@ -42,7 +41,7 @@ class MemPool:
         self._is_active: bool = True
         self._executor = executor
         self._op_res_mng = op_res_mng
-        self._completed_tx_dict = MPTxDict()
+        self._completed_tx_dict = MPTxDict(config)
 
         self._elf_param_dict_task_loop = MPElfParamDictTaskLoop(executor)
         self._gas_price_task_loop = MPGasPriceTaskLoop(executor)
@@ -294,4 +293,4 @@ class MemPool:
     async def _process_tx_dict_clear_loop(self) -> None:
         while True:
             self._completed_tx_dict.clear()
-            await asyncio.sleep(self.clear_task_timeout_sec)
+            await asyncio.sleep(self._completed_tx_dict.clear_time_sec)

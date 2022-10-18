@@ -1,7 +1,7 @@
 from typing import List, Any, Iterator
 
-from ..indexer.indexed_objects import NeonIndexedTxInfo
 from ..indexer.base_db import BaseDB
+from ..indexer.indexed_objects import NeonIndexedTxInfo
 
 
 class SolNeonTxsDB(BaseDB):

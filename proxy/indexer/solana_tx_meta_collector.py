@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from multiprocessing.dummy import Pool as ThreadPool
+from typing import Optional, Dict, Iterator, List, Any
 
 from logged_groups import logged_group
-from typing import Optional, Dict, Union, Iterator, List, Any
-from abc import ABC, abstractmethod
 
 from .solana_signatures_db import SolSigsDB
-from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
+from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
 
 
