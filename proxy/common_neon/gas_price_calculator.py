@@ -68,6 +68,9 @@ class GasPriceCalculator:
         return True
 
     def _get_gas_price_from_network(self) -> Optional[int]:
+        if self._config.pyth_mapping_account is None:
+            return None
+
         try:
             neon_price = self._pyth_network_client.get_price(self._neon_price_symbol)
             if (neon_price is not None) and (neon_price.get('status', 0) == 1) and ('price' in neon_price):
