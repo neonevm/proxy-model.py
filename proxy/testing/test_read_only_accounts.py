@@ -7,9 +7,13 @@ import json
 from time import sleep
 
 from solana.rpc.api import Client as SolanaClient
+from solana.rpc.types import TxOpts
+from solana.rpc.commitment import Confirmed
 
+from solana.transaction import Transaction
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
+from ..common_neon.metaplex import create_metadata_instruction_data,create_metadata_instruction
 
 from proxy.common_neon.config import Config
 from proxy.common_neon.solana_tx import SolAccount, SolPubKey
@@ -17,7 +21,8 @@ from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 
 from proxy.testing.testing_helpers import Proxy
 
-
+NAME = 'TestToken'
+SYMBOL = 'TST'
 CONTRACT = '''
 pragma solidity >= 0.7.0;
 
@@ -71,6 +76,22 @@ class TestReadOnlyAccounts(unittest.TestCase):
                     'create_token_mint mint, SolanaAccount: ',
                     self.solana_client.get_account_info(self.solana_account.public_key)
                 )
+
+                print(f'Created new token mint: {self.token.pubkey}')
+
+                metadata = create_metadata_instruction_data(NAME, SYMBOL, 0, ())
+                txn = Transaction()
+                txn.add(
+                    create_metadata_instruction(
+                        metadata,
+                        self.solana_account.public_key,
+                        self.token.pubkey,
+                        self.solana_account.public_key,
+                        self.solana_account.public_key,
+                    )
+                )
+                self.solana_client.send_transaction(txn, self.solana_account, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
+
                 return
             except (Exception,):
                 continue
@@ -78,7 +99,7 @@ class TestReadOnlyAccounts(unittest.TestCase):
 
     def deploy_erc20_wrapper_contract(self):
         self.wrapper = ERC20Wrapper(
-            self.proxy.web3, "NEON", "NEON",
+            self.proxy.web3, NAME, SYMBOL,
             self.token, self.admin,
             self.solana_account,
             self.config.evm_loader_id

@@ -8,18 +8,21 @@ from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.system_program import SYS_PROGRAM_ID
+from solana.transaction import Transaction
 
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
 import spl.token.instructions as SplTokenInstrutions
 
-from proxy.common_neon.environment_data import EVM_LOADER_ID
-from proxy.common_neon.constants import ACCOUNT_SEED_VERSION
+from ..common_neon.metaplex import create_metadata_instruction_data,create_metadata_instruction
+from ..common_neon.environment_data import EVM_LOADER_ID
+from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolAccount, SolPubKey
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.common_neon.neon_instruction import create_account_layout
-from proxy.common_neon.erc20_wrapper import ERC20Wrapper
-from proxy.common_neon.config import Config
+from ..common_neon.neon_instruction import create_account_layout
+from ..common_neon.erc20_wrapper import ERC20Wrapper
+from ..common_neon.config import Config
 
 from proxy.testing.testing_helpers import Proxy
 from proxy.testing.solana_utils import EvmLoader, OperatorAccount, wallet_path
@@ -75,6 +78,22 @@ class TestAirdropperIntegration(TestCase):
                     'create_token_mint mint, SolanaAccount: ',
                     self.solana_client.get_account_info(self.mint_authority.public_key)
                 )
+
+                print(f'Created new token mint: {self.token.pubkey}')
+
+                metadata = create_metadata_instruction_data(NAME, SYMBOL, 0, ())
+                txn = Transaction()
+                txn.add(
+                    create_metadata_instruction(
+                        metadata,
+                        self.mint_authority.public_key,
+                        self.token.pubkey,
+                        self.mint_authority.public_key,
+                        self.mint_authority.public_key,
+                    )
+                )
+                self.solana_client.send_transaction(txn, self.mint_authority, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
+
                 return
             except (Exception,):
                 continue
