@@ -49,21 +49,21 @@ pre_token_airdrop_trx = {
                     },
                     {
                         'accounts': [
-                            6,
-                            8,
-                            5
+                            6,# new account
+                            8,# token mint
+                            5 # Rent account
                         ],
                         'data': '5y6y1AhNodC9fS5rkiR7mmrpYQ2g5gnr2QButZWTwSFou',
-                        'programIdIndex': 7
+                        'programIdIndex': 7 # Token Program Initialize account 2
                     },
                     {
                         'accounts': [
-                            2,
-                            6,
+                            2, # source account
+                            6, # destination account
                             1
                         ],
                         'data': '3QK1PgBtAWnb',
-                        'programIdIndex': 7
+                        'programIdIndex': 7 # Token Program transfer
                     }
                 ]
             }

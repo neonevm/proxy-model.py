@@ -28,6 +28,7 @@ SPL_TOKEN_TRANSFER              = 0x03
 ACCOUNT_CREATION_PRICE_SOL = Decimal('0.00472692')
 AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 
+CLAIM_TO_METHOD_ID = bytes.fromhex('67d1c218')
 
 class FailedAttempts(BaseDB):
     def __init__(self) -> None:
@@ -60,7 +61,6 @@ class AirdropReadySet(BaseDB):
         with self._conn.cursor() as cur:
             cur.execute(f"SELECT 1 FROM {self._table_name} WHERE eth_address = '{eth_address}'")
             return cur.fetchone() is not None
-
 
 @logged_group("neon.Airdropper")
 class Airdropper(IndexerBase):
@@ -101,6 +101,15 @@ class Airdropper(IndexerBase):
         self.last_update_pyth_mapping = None
         self.max_update_pyth_mapping_int = 60 * 60  # update once an hour
 
+    # Calculates ERC20 balance account given
+    #    owner - H160 owner address in a form of 20 bytes
+    #    signer - Solana signer in a form of SolPubkey or bytes
+    def get_token_account_address(self, owner, signer):
+        return SolPubKey.find_program_address(
+            [ACCOUNT_SEED_VERSION, b"ContractData", bytes(signer), owner.rjust(32, b'\0') ], 
+            self._config.evm_loader_id
+        )
+
     @staticmethod
     def get_current_time():
         return datetime.now().timestamp()
@@ -125,8 +134,11 @@ class Airdropper(IndexerBase):
 
     # helper function checking if given 'create account' corresponds to 'approve' instruction
     def check_create_approve_instr(self, account_keys, create_acc, approve):
+        created_account = account_keys[create_acc['accounts'][2]]
+        approved_account = account_keys[approve['accounts'][1]]
         # Must use the same Ethereum account
-        if account_keys[create_acc['accounts'][2]] != account_keys[approve['accounts'][1]]:
+        if created_account != approved_account:
+            self.debug(f"created_account [{created_account}] and approved_account [{approved_account}] are different")
             return False
 
         # Must use the same Operator account
@@ -138,42 +150,63 @@ class Airdropper(IndexerBase):
     def check_create_approve_call_instr(self, account_keys, create_acc, approve, call):
         # Must use the same Operator account
         if account_keys[approve['accounts'][2]] != account_keys[call['accounts'][0]]:
-            return False
+            return None
 
         data = base58.b58decode(call['data'])
         try:
             tx = NeonTx.from_string(data[5:])
         except (Exception, ):
             self.debug('bad transaction')
-            return False
+            return None
 
         caller = bytes.fromhex(tx.sender())
         erc20 = tx.toAddress
         method_id = tx.callData[:4]
         source_token = tx.callData[4:36]
+        target_neon_acc = tx.callData[48:68]
 
         created_account = base58.b58decode(create_acc['data'])[1:][:20]
-        if created_account != caller:
-            self.debug(f"Created account {created_account.hex()} and caller {caller.hex()} are different")
-            return False
+        if created_account != target_neon_acc:
+            self.debug(f"Created account {created_account.hex()} and target {target_neon_acc.hex()} are different")
+            return None
 
         sol_caller, _ = SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, caller], self._config.evm_loader_id)
         if SolPubKey(account_keys[approve['accounts'][1]]) != sol_caller:
             self.debug(f"account_keys[approve['accounts'][1]] != sol_caller")
-            return False
+            return None
 
         # CreateERC20TokenAccount instruction must use ERC20-wrapper from whitelist
         if not self.is_allowed_wrapper_contract("0x" + erc20.hex()):
             self.debug(f"{erc20.hex()} Is not whitelisted ERC20 contract")
-            return False
+            return None
 
-        if method_id != b'\\\xa3\xe1\xe9':
+        if method_id != CLAIM_TO_METHOD_ID:
             self.debug(f'bad method: {method_id}')
-            return False
+            return None
 
         claim_key = base58.b58decode(account_keys[approve['accounts'][0]])
         if claim_key != source_token:
             self.debug(f"Claim token account {claim_key.hex()} != approve token account {source_token.hex()}")
+            return None
+
+        return (source_token, target_neon_acc, sol_caller)
+
+    def check_inittoken2_transfer_instr(
+        self, 
+        account_keys, 
+        init_token2_instr, 
+        transfer_instr, 
+        expected_token_account
+    ):
+        created_account = account_keys[init_token2_instr['accounts'][0]]
+        transfer_target_acc = account_keys[transfer_instr['accounts'][1]]
+
+        if created_account != transfer_target_acc:
+            self.debug(f"created_account [{created_account}] != transfer_target_acc [{transfer_target_acc}]")
+            return False
+
+        if created_account != expected_token_account:
+            self.debug(f"Expected token account is [{expected_token_account}]. But found [{created_account}]")
             return False
 
         return True
@@ -246,25 +279,44 @@ class Airdropper(IndexerBase):
         for _, create_acc in create_acc_list:
             for _, approve in approve_list:
                 if not self.check_create_approve_instr(account_keys, create_acc, approve):
-                    self.debug(f'check_create_approve_instr failed')
                     continue
                 for call_idx, call in call_list:
-                    if not self.check_create_approve_call_instr(account_keys, create_acc, approve, call):
-                        self.debug(f'check_create_approve_call_instr failed')
+                    check_res = self.check_create_approve_call_instr(account_keys, create_acc, approve, call)
+                    if check_res is None:
                         continue
+
+                    _, target_neon_acc, caller = check_res
 
                     predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SPL_TOKEN_INIT_ACC_2)
                     init_token2_list = find_inner_instructions(trx, call_idx, predicate)
 
                     self.debug(f'init_token2_list = {init_token2_list}')
+                    if len(init_token2_list) != 1:
+                        self.debug(f"Expected exactly one inner inittoken2 instruction")
+                        continue
 
                     predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SPL_TOKEN_TRANSFER)
                     token_transfer_list = find_inner_instructions(trx, call_idx, predicate)
 
                     self.debug(f'token_transfer_list = {token_transfer_list}')
+                    if len(token_transfer_list) != 1:
+                        self.debug(f"expected exactly one inner transfer instruction")
+                        continue
 
-                    if len(init_token2_list) > 0 and len(token_transfer_list) > 0:
-                        self.schedule_airdrop(create_acc)
+                    init_token2 = init_token2_list[0]
+                    token_transfer = token_transfer_list[0]
+                    target_token_sol_acc, _ = self.get_token_account_address(target_neon_acc, caller)
+                    check_res = self.check_inittoken2_transfer_instr(
+                        account_keys, 
+                        init_token2, 
+                        token_transfer, 
+                        target_token_sol_acc
+                    )
+
+                    if not check_res:
+                        continue
+
+                    self.schedule_airdrop(create_acc)
 
     def get_sol_usd_price(self):
         should_reload = self.always_reload_price
