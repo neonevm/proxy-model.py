@@ -112,7 +112,8 @@ class SolBlocksDB(BaseDB):
         fake_block_slot = self._get_fake_block_slot(block_hash)
         if fake_block_slot is not None:
             block = self.get_block_by_slot(fake_block_slot, latest_block_slot)
-            return block.set_block_hash(block_hash)  # it can be a request from an uncle history branch
+            block.set_block_hash(block_hash)  # it can be a request from an uncle history branch
+            return block
 
         request = f'''
                  SELECT {",".join(['a.' + c for c in self._column_list])},
