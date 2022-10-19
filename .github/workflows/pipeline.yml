@@ -17,11 +17,16 @@ env:
   AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
   AWS_DEFAULT_REGION: ${{secrets.AWS_DEFAULT_REGION}}
   AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+  DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
+  DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
   BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
 jobs:
   build-image:
     runs-on: ubuntu-latest
+    outputs:
+      proxy_tag: ${{ steps.tags.outputs.proxy }}
+      neon_evm_tag: ${{ steps.tags.outputs.neon_evm }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -29,32 +34,35 @@ jobs:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-
       - name: install python libs
         run: pip install docker python_terraform scp paramiko
-
-      - name: Set neon_evm_commit
-        id: neon_evm_commit
+      - name: Define images tags
+        id: tags
         run: |
-          WORKFLOW_INPUT=${{ github.event.inputs.neon_evm_commit }}
-          echo "::set-output name=value::${WORKFLOW_INPUT:-"latest"}"
-
+          if [[ "${{ github.event.inputs.neon_evm_branch }}" =~ "refs/tags/".* ]]; then
+            neon_evm_tag=`echo "${{ github.event.inputs.neon_evm_branch }}" | sed 's/refs\/tags\///g'` 
+          else
+            neon_evm_tag=${{ github.event.inputs.neon_evm_commit }}
+          fi;
+          echo "neon_evm=${neon_evm_tag:-'latest'}" >> $GITHUB_OUTPUT
+          if [[ "${GITHUB_REF}" =~ "refs/tags/".* ]]; then
+            proxy_tag=`echo "${GITHUB_REF}" | sed 's/refs\/tags\///g'`
+          else
+            proxy_tag=${GITHUB_SHA}
+          fi;
+          echo "proxy=$proxy_tag" >> $GITHUB_OUTPUT
       - name: Build docker image
+        if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags') }}
         run: |
           python ./.github/workflows/deploy.py build_docker_image \
           --github_sha=${GITHUB_SHA} \
-          --neon_evm_commit=${{ steps.neon_evm_commit.outputs.value }}
-
+          --neon_evm_tag=${{ steps.tags.outputs.neon_evm }} \
+          --proxy_tag=${{ steps.tags.outputs.proxy }}
       - name: Publish image
+        if: ${{ !startsWith(github.event.inputs.neon_evm_branch, 'refs/tags/') }}
         run: |
           python ./.github/workflows/deploy.py publish_image \
-          --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
-          --github_ref=${GITHUB_REF} \
-          --base_ref_branch=${{ steps.branch-name.outputs.base_ref_branch }} \
-          --github_sha=${GITHUB_SHA} \
-          --docker_user=${{secrets.DOCKER_USERNAME}} \
-          --docker_password=${{secrets.DOCKER_PASSWORD}}
-
+          --github_sha=${GITHUB_SHA}
   deploy-check:
     needs:
       - build-image
@@ -65,16 +73,11 @@ jobs:
           submodules: "true"
       - name: Install python libs
         run: pip install docker python_terraform scp paramiko
-      - name: Set neon_evm_commit
-        id: neon_evm_commit
-        run: |
-          WORKFLOW_INPUT=${{ github.event.inputs.neon_evm_commit }}
-          echo "::set-output name=value::${WORKFLOW_INPUT:-"latest"}"
       - name: deploy_check
         run: |
           python ./.github/workflows/deploy.py deploy_check \
-          --github_sha=${GITHUB_SHA} \
-          --neon_evm_commit=${{ steps.neon_evm_commit.outputs.value }}
+          --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
+          --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }}
       - name: Dump docker logs
         if: always()
         run: python ./.github/workflows/deploy.py dump_apps_logs
@@ -95,11 +98,6 @@ jobs:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-      - name: Set neon_evm_commit
-        id: neon_evm_commit
-        run: |
-          WORKFLOW_INPUT=${{ github.event.inputs.neon_evm_commit }}
-          echo "::set-output name=value::${WORKFLOW_INPUT:-"latest"}"
       - name: Install python libs
         run: pip install docker python_terraform scp paramiko
       - name: Add private key
@@ -111,11 +109,12 @@ jobs:
           python3 ./.github/workflows/deploy.py terraform_infrastructure \
             --branch=${{ steps.branch-name.outputs.head_ref_branch }} \
             --github_sha=${GITHUB_SHA} \
-            --neon_evm_commit=${{ steps.neon_evm_commit.outputs.value }} \
+            --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
+            --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
             --run_number=${GITHUB_RUN_NUMBER}
 
       - name: Run openzeppelin tests
-        run: python3 ./.github/workflows/deploy.py openzeppelin --run_number ${GITHUB_RUN_NUMBER}
+        run: python3 ./.github/workflows/deploy.py openzeppelin --run_number=${GITHUB_RUN_NUMBER}
 
       - name: Destroy terraform infrastructure
         if: always()
@@ -134,9 +133,8 @@ jobs:
         with:
           name: FTS docker logs
           path: ./logs/*
-  sent-notification:
+  finalize-image:
     runs-on: ubuntu-latest
-    if: failure()
     needs:
       - openzeppelin-tests
       - deploy-check
@@ -145,10 +143,24 @@ jobs:
         with:
           submodules: "true"
 
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v6
+
       - name: install python libs
         run: pip install docker python_terraform scp paramiko
 
+      - name: Tag published image
+        if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/') }}
+        run: |
+          python ./.github/workflows/deploy.py finalize_image \
+          --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+          --github_ref=${GITHUB_REF} \
+          --base_ref_branch=${{ steps.branch-name.outputs.base_ref_branch }} \
+          --github_sha=${GITHUB_SHA}
+
       - name: Send notification to slack
+        if: failure()
         run: |
           python ./.github/workflows/deploy.py send_notification \
           --url=${{secrets.SLACK_PROXY_CHANNEL_URL}} \

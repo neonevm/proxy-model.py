@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import sys
 import docker
@@ -32,6 +33,9 @@ ERR_MSG_TPL = {
     ]
 }
 
+DOCKER_USERNAME = os.environ.get("DOCKER_USERNAME")
+DOCKER_PASSWORD = os.environ.get("DOCKER_PASSWORD")
+
 TFSTATE_BUCKET = "nl-ci-stands"
 TFSTATE_KEY_PREFIX = "tests/test-"
 TFSTATE_REGION = "us-east-2"
@@ -56,14 +60,29 @@ def docker_compose(args: str):
     return out
 
 
-@cli.command(name="build_docker_image")
-@click.option('--neon_evm_commit')
-@click.option('--github_sha')
-def build_docker_image(neon_evm_commit, github_sha):
-    neon_evm_image = f'neonlabsorg/evm_loader:{neon_evm_commit}'
+def get_neon_evm_tag(proxy_tag):
+    evm_tag = re.sub('\d{1,2}$', 'x', proxy_tag)
+    response = requests.get(
+        url=f"https://registry.hub.docker.com/v2/repositories/neonlabsorg/evm_loader/tags/{evm_tag}")
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"evm_loader image with {evm_tag} tag isn't found. Response: {response.json()}")
+    click.echo(f"Neon evm mage with tag {evm_tag} will be used")
+    return evm_tag
+
+
+@ cli.command(name="build_docker_image")
+@ click.option('--neon_evm_tag')
+@ click.option('--proxy_tag')
+@ click.option('--github_sha')
+def build_docker_image(neon_evm_tag, proxy_tag, github_sha):
+    if re.match(r"v\d{1,2}\.\d{1,2}\.\d{1,2}\.*", proxy_tag):
+        neon_evm_tag = get_neon_evm_tag(proxy_tag)
+
+    neon_evm_image = f'neonlabsorg/evm_loader:{neon_evm_tag}'
     docker_client.pull(neon_evm_image)
 
-    buildargs = {"NEON_EVM_COMMIT": neon_evm_commit,
+    buildargs = {"NEON_EVM_COMMIT": neon_evm_tag,
                  "PROXY_REVISION": github_sha,
                  "PROXY_LOG_CFG": "log_cfg.json"}
 
@@ -75,14 +94,22 @@ def build_docker_image(neon_evm_commit, github_sha):
             click.echo(str(line).strip('\n'))
 
 
-@cli.command(name="publish_image")
-@click.option('--head_ref_branch')
-@click.option('--base_ref_branch')
-@click.option('--github_ref')
-@click.option('--github_sha')
-@click.option('--docker_user')
-@click.option('--docker_password')
-def publish_image(head_ref_branch, base_ref_branch, github_ref, github_sha, docker_user, docker_password):
+@ cli.command(name="publish_image")
+@ click.option('--github_sha')
+def publish_image(github_sha):
+    docker_client.login(username=DOCKER_USERNAME, password=DOCKER_PASSWORD)
+    out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+
+
+@ cli.command(name="finalize_image")
+@ click.option('--head_ref_branch')
+@ click.option('--base_ref_branch')
+@ click.option('--github_ref')
+@ click.option('--github_sha')
+def finalize_image(head_ref_branch, base_ref_branch, github_ref, github_sha):
     if 'refs/tags/' in github_ref:
         tag = github_ref.replace("refs/tags/", "")
     elif base_ref_branch == 'master':
@@ -92,11 +119,11 @@ def publish_image(head_ref_branch, base_ref_branch, github_ref, github_sha, dock
     else:
         tag = head_ref_branch.split('/')[-1]
 
-    docker_client.login(username=docker_user, password=docker_password)
-    out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
+    docker_client.login(username=DOCKER_USERNAME, password=DOCKER_PASSWORD)
+    out = docker_client.pull(f"{IMAGE_NAME}:{github_sha}")
     if "error" in out:
         raise RuntimeError(
-            f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+            f"Pull {IMAGE_NAME}:{github_sha} finished with error: {out}")
 
     docker_client.tag(f"{IMAGE_NAME}:{github_sha}", f"{IMAGE_NAME}:{tag}")
     out = docker_client.push(f"{IMAGE_NAME}:{tag}")
@@ -105,16 +132,17 @@ def publish_image(head_ref_branch, base_ref_branch, github_ref, github_sha, dock
             f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
 
 
-@cli.command(name="terraform_infrastructure")
-@click.option('--branch')
-@click.option('--github_sha')
-@click.option('--neon_evm_commit')
-@click.option('--run_number')
-def terraform_build_infrastructure(branch, github_sha, neon_evm_commit, run_number):
+@ cli.command(name="terraform_infrastructure")
+@ click.option('--branch')
+@ click.option('--github_sha')
+@ click.option('--neon_evm_tag')
+@ click.option('--proxy_tag')
+@ click.option('--run_number')
+def terraform_build_infrastructure(branch, github_sha, proxy_tag, neon_evm_tag, run_number):
 
     os.environ["TF_VAR_branch"] = branch
-    os.environ["TF_VAR_proxy_model_commit"] = github_sha
-    os.environ["TF_VAR_neon_evm_commit"] = neon_evm_commit
+    os.environ["TF_VAR_proxy_model_commit"] = proxy_tag
+    os.environ["TF_VAR_neon_evm_commit"] = neon_evm_tag
     os.environ["TF_VAR_faucet_model_commit"] = FAUCET_COMMIT
     thstate_key = f'{TFSTATE_KEY_PREFIX}{github_sha}-{run_number}'
 
@@ -127,9 +155,9 @@ def terraform_build_infrastructure(branch, github_sha, neon_evm_commit, run_numb
     click.echo(f"stderr: {stderr}")
 
 
-@cli.command(name="destroy_terraform")
-@click.option('--github_sha')
-@click.option('--run_number')
+@ cli.command(name="destroy_terraform")
+@ click.option('--github_sha')
+@ click.option('--run_number')
 def destroy_terraform(github_sha, run_number):
     thstate_key = f'{TFSTATE_KEY_PREFIX}{github_sha}-{run_number}'
 
@@ -139,11 +167,11 @@ def destroy_terraform(github_sha, run_number):
     terraform.destroy()
 
 
-@cli.command(name="openzeppelin")
-@click.option('--run_number')
+@ cli.command(name="openzeppelin")
+@ click.option('--run_number')
 def openzeppelin_test(run_number):
     container_name = f'fts_{run_number}'
-    os.environ["FTS_THRESHOLD"] = '1920'
+    fts_threshold = 1920
     os.environ["FTS_CONTAINER_NAME"] = container_name
     os.environ["FTS_IMAGE"] = FTS_NAME
     os.environ["FTS_USERS_NUMBER"] = '15'
@@ -197,9 +225,25 @@ def openzeppelin_test(run_number):
     services = ["postgres", "dbcreation", "indexer", "proxy", "faucet"]
     for service in services:
         upload_remote_logs(ssh_client, service, artifact_logs)
-
+    dump_docker_logs(container_name)
     docker_compose(
         "-f docker-compose/docker-compose-full-test-suite.yml rm -f")
+    check_tests_results(fts_threshold, f"{container_name}.log")
+
+
+def check_tests_results(fts_threshold, log_file):
+    passing_test_count = 0
+    with open(log_file, "r") as file:
+        while True:
+            line = file.readline()
+            if not line:
+                break
+            if re.match(r".*Passing - ", line):
+                passing_test_count = int(line.split('-')[1].strip())
+                break
+    if passing_test_count < fts_threshold:
+        raise RuntimeError(
+            f"Tests failed: Passing - {passing_test_count}\n Threshold - {fts_threshold}")
 
 
 def upload_remote_logs(ssh_client, service, artifact_logs):
@@ -210,12 +254,12 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
     scp_client.get(f'/tmp/{service}.log.bz2', artifact_logs)
 
 
-@cli.command(name="deploy_check")
-@click.option('--neon_evm_commit')
-@click.option('--github_sha')
-def deploy_check(neon_evm_commit, github_sha):
-    os.environ["REVISION"] = github_sha
-    os.environ["NEON_EVM_COMMIT"] = neon_evm_commit
+@ cli.command(name="deploy_check")
+@ click.option('--proxy_tag')
+@ click.option('--neon_evm_tag')
+def deploy_check(proxy_tag, neon_evm_tag):
+    os.environ["REVISION"] = proxy_tag
+    os.environ["NEON_EVM_COMMIT"] = neon_evm_tag
     os.environ["FAUCET_COMMIT"] = FAUCET_COMMIT
     cleanup_docker()
 
@@ -252,7 +296,7 @@ def run_test(file_name):
     click.echo(out)
 
 
-@cli.command(name="dump_apps_logs")
+@ cli.command(name="dump_apps_logs")
 def dump_apps_logs():
     containers = ['proxy', 'solana', 'proxy_program_loader',
                   'dbcreation', 'faucet', 'airdropper', 'indexer']
@@ -323,9 +367,9 @@ def run_uniswap_test():
     subprocess.run(command, shell=True)
 
 
-@cli.command(name="send_notification", help="Send notification to slack")
-@click.option("-u", "--url", help="slack app endpoint url.")
-@click.option("-b", "--build_url", help="github action test build url.")
+@ cli.command(name="send_notification", help="Send notification to slack")
+@ click.option("-u", "--url", help="slack app endpoint url.")
+@ click.option("-b", "--build_url", help="github action test build url.")
 def send_notification(url, build_url):
     tpl = ERR_MSG_TPL.copy()
 
