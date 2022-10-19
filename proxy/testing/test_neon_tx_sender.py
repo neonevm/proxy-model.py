@@ -7,11 +7,17 @@ from ..common_neon.config import Config
 from ..common_neon.errors import BadResourceError
 
 from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.operator_secret_mng import OpSecretMng
 
 from ..mempool.operator_resource_mng import OpResMng, OpResInit, OpResInfo
 
 
 class FakeConfig(Config):
+    def __init__(self):
+        super().__init__()
+        self._warn_list: List[int] = []
+        self._err_list: List[int] = []
+
     def set_min_operator_balance_to_warn(self, warn_list: List[int]):
         self._warn_list = warn_list
 
@@ -44,9 +50,16 @@ class TestNeonTxSender(unittest.TestCase):
 
     def setUp(self) -> None:
         self._config = FakeConfig()
+
         self._resource_list = OpResMng(self._config)
-        for resource_ident in self._resource_list.get_disabled_resource_list():
-            self._resource_list.enable_resource(resource_ident)
+        secret_list = OpSecretMng(self._config).read_secret_list()
+        self._resource_list.init_resource_list(secret_list)
+        while True:
+            res_ident = self._resource_list.get_disabled_resource()
+            if res_ident is None:
+                break
+            self._resource_list.enable_resource(res_ident)
+
         self._resource_ident = self._resource_list.get_resource('test-tx-hash')
         self._resource = OpResInfo.from_ident(self._resource_ident)
         self._resource_initializer = OpResInit(self._config, self.solana)

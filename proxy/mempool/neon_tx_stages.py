@@ -82,7 +82,7 @@ class NeonCreateAccountTxStage(NeonTxStage):
 
     def _create_account(self) -> SolTxIx:
         assert self.has_balance()
-        return self._ix_builder.make_create_eth_account_ix(self._address)
+        return self._ix_builder.make_create_neon_account_ix(self._address)
 
     def build(self) -> None:
         assert self._is_empty()

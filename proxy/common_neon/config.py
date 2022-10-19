@@ -53,6 +53,9 @@ class Config:
         self._indexer_log_skip_cnt = self._env_int("INDEXER_LOG_SKIP_COUNT", 1, 1000)
         self._gather_statistics = self._env_bool("GATHER_STATISTICS", False)
         self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 15 * 60)
+        self._hvac_url = os.environ.get('HVAC_URL', None)
+        self._hvac_token = os.environ.get('HVAC_TOKEN', None)
+        self._hvac_path = os.environ.get('HVAC_PATH', '')
 
         pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
         self._pyth_mapping_account = SolPubKey(pyth_mapping_account) if pyth_mapping_account is not None else None
@@ -258,6 +261,18 @@ class Config:
     def mempool_cache_life_sec(self) -> int:
         return self._mempool_cache_life_sec
 
+    @property
+    def hvac_url(self) -> Optional[str]:
+        return self._hvac_url
+
+    @property
+    def hvac_token(self) -> Optional[str]:
+        return self._hvac_token
+
+    @property
+    def hvac_path(self) -> str:
+        return self._hvac_path
+
     def __str__(self):
         return '\n        '.join([
             '',
@@ -306,5 +321,8 @@ class Config:
             f"INDEXER_LOG_SKIP_COUNT: {self.indexer_log_skip_cnt}",
             f"GATHER_STATISTICS: {self.gather_statistics}",
             f"MEMPOOL_CACHE_LIFE_SEC: {self.mempool_cache_life_sec}",
+            f"HVAC_URL: {self.hvac_url}",
+            f"HVAC_TOKEN: {self.hvac_token}",
+            f"HVAC_PATH: {self.hvac_path}",
             ""
         ])

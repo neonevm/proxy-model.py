@@ -1,12 +1,13 @@
 from typing import Optional
 
-from .mempool_api import IMPExecutor, MPGasPriceRequest, MPGasPriceResult
+from .executor_mng import MPExecutorMng
+from .mempool_api import MPGasPriceRequest, MPGasPriceResult
 from .mempool_periodic_task import MPPeriodicTaskLoop
 
 
 class MPGasPriceTaskLoop(MPPeriodicTaskLoop[MPGasPriceRequest, MPGasPriceResult]):
-    def __init__(self, executor: IMPExecutor) -> None:
-        super().__init__(name='gas-price', sleep_time=4.0, executor=executor)
+    def __init__(self, executor_mng: MPExecutorMng) -> None:
+        super().__init__(name='gas-price', sleep_time=4.0, executor_mng=executor_mng)
         self._gas_price: Optional[MPGasPriceResult] = None
 
     @property
@@ -20,5 +21,5 @@ class MPGasPriceTaskLoop(MPPeriodicTaskLoop[MPGasPriceRequest, MPGasPriceResult]
     def _process_error(self, _: MPGasPriceRequest) -> None:
         pass
 
-    def _process_result(self, _: MPGasPriceRequest, mp_res: MPGasPriceResult) -> None:
+    async def _process_result(self, _: MPGasPriceRequest, mp_res: MPGasPriceResult) -> None:
         self._gas_price = mp_res

@@ -21,7 +21,7 @@ class MPTxDict:
     def __init__(self, config: Config):
         self._neon_tx_dict: Dict[str, MPTxDict._Item] = {}
         self._neon_tx_queue: Deque[MPTxDict._Item] = deque()
-        self.clear_time_sec = config.mempool_cache_life_sec
+        self.clear_time_sec: int = config.mempool_cache_life_sec
 
     @staticmethod
     def _get_time() -> int:

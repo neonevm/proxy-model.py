@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import time
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, Optional, List, Dict
@@ -19,31 +18,18 @@ class MPTask:
     mp_request: MPRequest
 
 
-class IMPExecutor(ABC):
-    @abstractmethod
-    def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
-        pass
-
-    @abstractmethod
-    def is_available(self) -> bool:
-        pass
-
-    @abstractmethod
-    def release_executor(self, executor_id: int):
-        pass
-
-
 class MPRequestType(IntEnum):
     SendTransaction = 0
     GetLastTxNonce = 1
     GetTxByHash = 2
     GetGasPrice = 3
     GetStateTxCnt = 4
-    InitOperatorResource = 5
-    GetElfParamDict = 6
-    GetALTList = 7
-    DeactivateALTList = 8
-    CloseALTList = 9
+    GetOperatorResourceList = 5
+    InitOperatorResource = 6
+    GetElfParamDict = 7
+    GetALTList = 8
+    DeactivateALTList = 9
+    CloseALTList = 10
     Unspecified = 255
 
 
@@ -79,13 +65,35 @@ class MPTxRequest(MPRequest):
         return self.neon_tx.hasChainId()
 
 
+@dataclass(frozen=True)
+class OpResIdent:
+    public_key: str
+    private_key: bytes
+    res_id: int = -1
+
+    _str = ''
+    _hash = 0
+
+    def __str__(self) -> str:
+        if self._str == '':
+            _str = f'{self.public_key}:{self.res_id}'
+            object.__setattr__(self, '_str', _str)
+        return self._str
+
+    def __hash__(self) -> int:
+        if self._hash == 0:
+            _hash = hash(str(self))
+            object.__setattr__(self, '_hash', _hash)
+        return self._hash
+
+
 @dataclass
 class MPTxExecRequest(MPTxRequest):
     elf_param_dict: Dict[str, str] = None
-    resource_ident: str = None
+    res_ident: OpResIdent = None
 
     @staticmethod
-    def clone(tx: MPTxRequest, resource_ident: str, elf_param_dict: Dict[str, str]):
+    def clone(tx: MPTxRequest, res_ident: OpResIdent, elf_param_dict: Dict[str, str]):
         req = MPTxExecRequest(
             req_id=tx.req_id,
             sig=tx.sig,
@@ -94,7 +102,7 @@ class MPTxExecRequest(MPTxRequest):
             sender_address=tx.sender_address,
             start_time=tx.start_time,
             elf_param_dict=elf_param_dict,
-            resource_ident=resource_ident
+            res_ident=res_ident
         )
         return req
 
@@ -126,6 +134,8 @@ class MPGasPriceRequest(MPRequest):
 
 @dataclass
 class MPElfParamDictRequest(MPRequest):
+    elf_param_dict: Dict[str, str] = None
+
     def __post_init__(self):
         self.type = MPRequestType.GetElfParamDict
 
@@ -139,9 +149,15 @@ class MPSenderTxCntRequest(MPRequest):
 
 
 @dataclass
+class MPOpResGetListRequest(MPRequest):
+    def __post_init__(self):
+        self.type = MPRequestType.GetOperatorResourceList
+
+
+@dataclass
 class MPOpResInitRequest(MPRequest):
     elf_param_dict: Dict[str, str] = None
-    resource_ident: str = ''
+    res_ident: OpResIdent = None
 
     def __post_init__(self):
         self.type = MPRequestType.InitOperatorResource
@@ -149,7 +165,7 @@ class MPOpResInitRequest(MPRequest):
 
 @dataclass
 class MPGetALTList(MPRequest):
-    operator_key_list: List[str] = None
+    secret_list: List[bytes] = None
 
     def __post_init__(self):
         self.type = MPRequestType.GetALTList
@@ -161,7 +177,7 @@ class MPALTInfo:
     deactivation_slot: Optional[int]
     block_height: int
     table_account: str
-    operator_key: str
+    operator_key: bytes
 
     def is_deactivated(self) -> bool:
         return self.deactivation_slot is not None
@@ -193,7 +209,7 @@ class MPTxExecResultCode(IntEnum):
     Unspecified = 255
 
 
-@dataclass
+@dataclass(frozen=True)
 class MPTxExecResult:
     code: MPTxExecResultCode
     data: Any
@@ -207,25 +223,25 @@ class MPTxSendResultCode(IntEnum):
     Unspecified = 255
 
 
-@dataclass
+@dataclass(frozen=True)
 class MPTxSendResult:
     code: MPTxSendResultCode
     state_tx_cnt: Optional[int]
 
 
-@dataclass
+@dataclass(frozen=True)
 class MPGasPriceResult:
     suggested_gas_price: int
     min_gas_price: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class MPSenderTxCntData:
     sender: str
     state_tx_cnt: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class MPSenderTxCntResult:
     sender_tx_cnt_list: List[MPSenderTxCntData]
 
@@ -236,12 +252,17 @@ class MPOpResInitResultCode(IntEnum):
     Unspecified = 255
 
 
-@dataclass
+@dataclass(frozen=True)
+class MPOpResGetListResult:
+    secret_list: List[bytes]
+
+
+@dataclass(frozen=True)
 class MPOpResInitResult:
     code: MPOpResInitResultCode
 
 
-@dataclass
+@dataclass(frozen=True)
 class MPALTListResult:
     block_height: int
     alt_info_list: List[MPALTInfo]

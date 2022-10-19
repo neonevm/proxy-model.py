@@ -130,7 +130,7 @@ class NeonIxBuilder:
             data=EvmInstruction.HolderCreate.value,
         )
 
-    def make_create_eth_account_ix(self, eth_address: NeonAddress) -> SolTxIx:
+    def make_create_neon_account_ix(self, eth_address: NeonAddress) -> SolTxIx:
         if isinstance(eth_address, str):
             eth_address = NeonAddress(eth_address)
         pda_account, nonce = neon_2program(eth_address)

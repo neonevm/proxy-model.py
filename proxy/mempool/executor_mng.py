@@ -4,12 +4,12 @@ import socket
 
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import List, Tuple, Deque, Set
+from typing import Dict, Tuple, Deque, Set
 
 from logged_groups import logged_group, logging_context
 from neon_py.network import PipePickableDataClient
 
-from .mempool_api import MPRequest, IMPExecutor, MPTask
+from .mempool_api import MPRequest, MPTask
 from .mempool_executor import MPExecutor
 from ..common_neon.config import Config
 
@@ -26,27 +26,62 @@ class IMPExecutorMngUser(ABC):
 
 
 @logged_group("neon.MemPool")
-class MPExecutorMng(IMPExecutor):
+class MPExecutorMng:
     @dataclasses.dataclass
     class ExecutorInfo:
         executor: MPExecutor
         client: MPExecutorClient
         id: int
 
-    def __init__(self, config: Config, user: IMPExecutorMngUser, executor_count: int):
-        self.info(f"Initialize executor mng with executor_count: {executor_count}")
+    def __init__(self, config: Config, user: IMPExecutorMngUser):
+        self._config = config
         self._available_executor_pool: Deque[int] = deque()
         self._busy_executor_pool: Set[int] = set()
-        self._executors: List[MPExecutorMng.ExecutorInfo] = list()
+        self._executor_dict: Dict[int, MPExecutorMng.ExecutorInfo] = dict()
+        self._stopped_executor_dict: Dict[int, MPExecutorMng.ExecutorInfo] = dict()
         self._user = user
+        self._last_id = 0
+
+    async def set_executor_cnt(self, executor_count: int) -> None:
+        return await self._set_executor_cnt(executor_count, True)
+
+    async def _set_executor_cnt(self, executor_count: int, do_init: bool) -> None:
+        executor_count = max(executor_count + 1, 3)
+        diff_count = executor_count - len(self._executor_dict)
+        if diff_count > 0:
+            return await self._run_executors(diff_count, do_init)
+        elif diff_count < 0:
+            return self._stop_executors(-diff_count)
+
+    async def _run_executors(self, executor_count: int, do_init: bool) -> None:
+        self.info(f"Run executors +{executor_count} => {len(self._executor_dict) + executor_count}")
         for i in range(executor_count):
-            executor_info = MPExecutorMng._create_executor(config, i)
-            self._executors.append(executor_info)
-            self._available_executor_pool.appendleft(i)
+            executor_id = i + self._last_id
+            self._last_id += 1
+            executor_info = MPExecutorMng._create_executor(self._config, executor_id)
+            self._executor_dict[executor_id] = executor_info
+            self._available_executor_pool.appendleft(executor_id)
             executor_info.executor.start()
+            if do_init:
+                await executor_info.client.async_init()
+
+    def _stop_executors(self, executor_count: int) -> None:
+        self.info(f"Stop executors -{executor_count} => {len(self._executor_dict) - executor_count}")
+        while (executor_count > 0) and self._has_available():
+            executor_id, _ = self._get_executor()
+            self.debug(f"Stop executor: {executor_id}")
+            executor_info = self._executor_dict.pop(executor_id)
+            executor_info.executor.kill()
+            executor_count -= 1
+
+        for i in range(executor_count):
+            executor_id, executor_info = self._executor_dict.popitem()
+            self.debug(f"Mark executor for stop: {executor_id}")
+            self._stopped_executor_dict[executor_id] = executor_info
 
     async def async_init(self):
-        for ex_info in self._executors:
+        await self._set_executor_cnt(0, False)
+        for ex_info in self._executor_dict.values():
             await ex_info.client.async_init()
 
     def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
@@ -65,14 +100,19 @@ class MPExecutorMng(IMPExecutor):
         executor_id = self._available_executor_pool.pop()
         self.debug(f"Acquire executor: {executor_id}")
         self._busy_executor_pool.add(executor_id)
-        executor_info = self._executors[executor_id]
+        executor_info = self._executor_dict.get(executor_id, None)
         return executor_id, executor_info.client
 
     def release_executor(self, executor_id: int):
-        self.debug(f"Release executor: {executor_id}")
         self._busy_executor_pool.remove(executor_id)
-        self._available_executor_pool.appendleft(executor_id)
-        self._user.on_executor_released(executor_id)
+        if executor_id in self._executor_dict:
+            self.debug(f"Release executor: {executor_id}")
+            self._available_executor_pool.appendleft(executor_id)
+            self._user.on_executor_released(executor_id)
+        else:
+            self.debug(f"Stop executor: {executor_id}")
+            executor = self._stopped_executor_dict.pop(executor_id).executor
+            executor.kill()
 
     @staticmethod
     def _create_executor(config: Config, executor_id: int) -> ExecutorInfo:
@@ -82,7 +122,9 @@ class MPExecutorMng(IMPExecutor):
         return MPExecutorMng.ExecutorInfo(executor=executor, client=client, id=executor_id)
 
     def __del__(self):
-        for executor_info in self._executors:
+        for executor_info in self._executor_dict.values():
+            executor_info.executor.kill()
+        for executor_info in self._stopped_executor_dict.values():
             executor_info.executor.kill()
         self._busy_executor_pool.clear()
         self._available_executor_pool.clear()
