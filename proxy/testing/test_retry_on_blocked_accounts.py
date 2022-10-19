@@ -1,23 +1,19 @@
 import datetime
 import multiprocessing
 import unittest
-from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.eth_proto import NeonTx
-from ..common_neon.address import EthereumAddress
-from ..common_neon.config import Config
-from ..common_neon.solana_interactor import SolInteractor
-from ..mempool.operator_resource_mng import OpResInfo, OpResInit
-from .solana_utils import *
-from web3 import Web3
-from .testing_helpers import request_airdrop
-from solcx import compile_source
+from proxy.common_neon.neon_instruction import NeonIxBuilder
+from proxy.common_neon.eth_proto import NeonTx
+from proxy.common_neon.address import NeonAddress
+from proxy.common_neon.config import Config
+from proxy.common_neon.solana_interactor import SolInteractor
+from proxy.common_neon.solana_tx import SolAccountMeta
+from proxy.common_neon.solana_tx_legacy import SolLegacyTx
+from proxy.mempool.operator_resource_mng import OpResInfo, OpResInit
+from proxy.testing.solana_utils import EVM_LOADER, EvmLoader, wallet_path, WalletAccount, client, send_transaction
+from proxy.testing.testing_helpers import Proxy
 
 
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/365'
-proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-proxy = Web3(Web3.HTTPProvider(proxy_url))
-eth_account = proxy.eth.account.create(SEED)
-proxy.eth.default_account = eth_account.address
 
 TEST_RETRY_BLOCKED_365 = '''
 // SPDX-License-Identifier: MIT
@@ -35,28 +31,16 @@ contract BlockForAWhile {
 '''
 
 
-def send_routine(acc_seed, contract_address, abi, loop, return_dict, padding_string):
+def send_routine(acc_seed, storage_contract, loop, return_dict, padding_string):
     print("Send parallel transaction from {}".format(acc_seed))
     print(datetime.datetime.now().time())
-    storage_contract = proxy.eth.contract(
-            address=contract_address,
-            abi=abi
-        )
-    new_eth_account = proxy.eth.account.create(acc_seed)
-    request_airdrop(new_eth_account.address)
-    right_nonce = proxy.eth.get_transaction_count(new_eth_account.address)
-    tx_store = storage_contract.functions.add_some(2, loop, padding_string).buildTransaction(
-        {
-            "chainId": proxy.eth.chain_id,
-            "gas": 987654321,
-            "gasPrice": proxy.eth.gas_price,
-            "nonce": right_nonce,
-        }
-    )
-    tx_store_signed = proxy.eth.account.sign_transaction(tx_store, new_eth_account.key)
-    tx_store_hash = proxy.eth.send_raw_transaction(tx_store_signed.rawTransaction)
-    tx_store_receipt = proxy.eth.wait_for_transaction_receipt(tx_store_hash)
-    return_dict[acc_seed] = tx_store_receipt
+    proxy = Proxy()
+    new_eth_account = proxy.create_signer_account(acc_seed)
+    tx_store = storage_contract.functions.add_some(2, loop, padding_string).build_transaction({
+        'from': new_eth_account.address
+    })
+    tx_store = proxy.sign_send_wait_transaction(new_eth_account, tx_store)
+    return_dict[acc_seed] = tx_store.tx_receipt
 
 
 class FakeConfig(Config):
@@ -72,13 +56,16 @@ class FakeConfig(Config):
 class BlockedTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.proxy = Proxy()
+        cls.eth_account = cls.proxy.create_signer_account(SEED)
+
         print("\ntest_retry_on_blocked_accounts.py setUpClass")
-        request_airdrop(eth_account.address)
 
         wallet = WalletAccount(wallet_path())
         cls.loader = loader = EvmLoader(wallet, EVM_LOADER)
 
-        cls.solana = solana = SolInteractor(Config(), solana_url)
+        cls.config = config = Config()
+        cls.solana = solana = SolInteractor(config, config.solana_url)
 
         cls.resource_iter = resource = OpResInfo(wallet.get_acc(), 365)
         OpResInit(FakeConfig(), solana).init_resource(resource)
@@ -86,76 +73,44 @@ class BlockedTest(unittest.TestCase):
         cls.resource_single = resource = OpResInfo(wallet.get_acc(), 366)
         OpResInit(FakeConfig(), solana).init_resource(resource)
 
-        tx_deploy_receipt, storage = cls.deploy_contract()
-        cls.contractAddress = tx_deploy_receipt.contractAddress
-        cls.abi = storage.abi
+        deployed_info = cls.proxy.compile_and_deploy_contract(cls.eth_account, TEST_RETRY_BLOCKED_365)
+        cls.storage_contract = deployed_info.contract
 
-        storage_contract = proxy.eth.contract(
-            address=tx_deploy_receipt.contractAddress,
-            abi=storage.abi
-        )
-        cls.storage_contract = storage_contract
+        print(deployed_info.contract.address)
 
-        print(storage_contract.address)
-
-        reid_eth = storage_contract.address.lower()
+        reid_eth = deployed_info.contract.address.lower()
         print('contract_eth', reid_eth)
         cls.re_id, _ = re_id, _ = loader.ether2program(reid_eth)
         print('contract', re_id)
 
-        cls.caller, _ = loader.ether2program(proxy.eth.default_account)
-
-    @staticmethod
-    def deploy_contract():
-        compiled_sol = compile_source(TEST_RETRY_BLOCKED_365)
-        contract_id, contract_interface = compiled_sol.popitem()
-        storage = proxy.eth.contract(abi=contract_interface['abi'], bytecode=contract_interface['bin'])
-        tx_deploy = proxy.eth.account.sign_transaction(
-            dict(
-                nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
-                chainId=proxy.eth.chain_id,
-                gas=987654321,
-                gasPrice=proxy.eth.gas_price,
-                to='',
-                value=0,
-                data=storage.bytecode
-            ),
-            eth_account.key
-        )
-        tx_deploy_hash = proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
-        print('tx_deploy_hash:', tx_deploy_hash.hex())
-        tx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
-        print('tx_deploy_receipt:', tx_deploy_receipt)
-
-        return tx_deploy_receipt, storage
+        cls.caller, _ = loader.ether2program(cls.eth_account.address)
 
     def create_blocked_transaction(self, resource):
         print("\ncreate_blocked_transaction")
-        right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        tx_store = self.storage_contract.functions.add_some(1, 30, "").buildTransaction({
-            'nonce': right_nonce,
-            'gasPrice': proxy.eth.gas_price
+        tx_store = self.storage_contract.functions.add_some(1, 30, "").build_transaction({
+            'from': self.eth_account.address
         })
-        tx_store_signed = proxy.eth.account.sign_transaction(tx_store, eth_account.key)
-        print(f'blocked tx hash: {tx_store_signed.hash.hex()}')
+        tx_store = self.proxy.sign_transaction(self.eth_account, tx_store)
+        print(f'blocked tx hash: {tx_store.tx_signed.hash.hex()}')
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
-        neon_ix_builder.init_operator_neon(EthereumAddress.from_private_key(resource.secret_key))
+        neon_ix_builder.init_operator_neon(NeonAddress.from_private_key(resource.secret_key))
 
-        neon_tx = NeonTx.fromString(tx_store_signed.rawTransaction)
+        neon_tx = NeonTx.from_string(tx_store.tx_signed.rawTransaction)
         neon_ix_builder.init_neon_tx(neon_tx)
         neon_ix_builder.init_neon_account_list([
-            AccountMeta(pubkey=self.re_id, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True)
+            SolAccountMeta(pubkey=self.re_id, is_signer=False, is_writable=True),
+            SolAccountMeta(pubkey=self.caller, is_signer=False, is_writable=True)
         ])
 
         neon_ix_builder.init_iterative(resource.holder)
 
-        solana_tx = Transaction().add(
+        solana_tx = SolLegacyTx(instructions=[
             neon_ix_builder.make_compute_budget_heap_ix(),
             neon_ix_builder.make_compute_budget_cu_ix(),
             neon_ix_builder.make_tx_step_from_data_ix(500, 1)
-        )
+        ])
+
         send_transaction(client, solana_tx, resource.signer)
         return solana_tx
 
@@ -172,7 +127,7 @@ class BlockedTest(unittest.TestCase):
         p2 = multiprocessing.Process(
             target=send_routine,
             args=(
-                caller_seed, self.contractAddress, self.abi, 50, return_dict,
+                caller_seed, self.storage_contract, 50, return_dict,
                 """
                 1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
                 1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
@@ -199,7 +154,7 @@ class BlockedTest(unittest.TestCase):
         return_dict = manager.dict()
         p2 = multiprocessing.Process(
             target=send_routine,
-            args=(caller_seed, self.contractAddress, self.abi, 10, return_dict, ""))
+            args=(caller_seed, self.storage_contract, 10, return_dict, ""))
         p2.start()
         self.finish_blocker_transaction(solana_tx, self.resource_single)
         p2.join()

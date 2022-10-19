@@ -1,14 +1,11 @@
 import unittest
 from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.account_whitelist import AccountWhitelist
-from proxy.common_neon.solana_transaction import SolAccount
+from proxy.common_neon.solana_tx import SolAccount
 from proxy.common_neon.config import Config
 from solana.rpc.api import Client as SolanaClient
-from solana.rpc.commitment import Commitment
+from solana.rpc.commitment import Confirmed
 from unittest.mock import Mock, MagicMock, patch, call
-
-
-Confirmed = Commitment('confirmed')
 
 
 class FakeConfig(Config):
@@ -25,7 +22,7 @@ class TestAccountWhitelist(unittest.TestCase):
         cls.mint_authority_file = "/spl/bin/evm_loader-keypair.json"
         cls.payer = payer = SolAccount()
         client = SolanaClient(config.solana_url)
-        client.request_airdrop(payer.public_key(), 1000_000_000_000, Confirmed)
+        client.request_airdrop(payer.public_key, 1000_000_000_000, Confirmed)
 
         cls.testee = testee = AccountWhitelist(config, solana)
 

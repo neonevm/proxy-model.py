@@ -1,34 +1,32 @@
 from __future__ import annotations
 
 import time
-
-from typing import List, Optional, Dict, Deque, Type
 from collections import deque
+from typing import List, Optional, Dict, Deque, Type
+
 from logged_groups import logged_group, logging_context
 
-from ..common_neon.solana_transaction import SolPubKey
-from ..common_neon.data import NeonTxStatData
-from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_tx_error_parser import SolTxErrorParser
-from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo, SolNeonIxReceiptInfo
-from ..common_neon.constants import ACTIVE_HOLDER_TAG
-from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.config import Config
-from ..common_neon.environment_data import CANCEL_TIMEOUT
+from ..common_neon.constants import ACTIVE_HOLDER_TAG
+from ..common_neon.data import NeonTxStatData
+from ..common_neon.environment_utils import get_solana_accounts
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo
+from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.solana_tx_error_parser import SolTxErrorParser
+from ..common_neon.utils import SolanaBlockInfo
 
 from ..indexer.i_indexer_stat_exporter import IIndexerStatExporter
+from ..indexer.indexed_objects import NeonIndexedBlockInfo, NeonIndexedBlockDict, SolNeonTxDecoderState
+from ..indexer.indexed_objects import NeonIndexedTxInfo
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
-from ..indexer.solana_tx_meta_collector import SolTxMetaDict, SolHistoryNotFound
-from ..indexer.solana_tx_meta_collector import FinalizedSolTxMetaCollector, ConfirmedSolTxMetaCollector
-from ..indexer.utils import MetricsToLogger
-from ..indexer.indexed_objects import NeonIndexedTxInfo
-from ..indexer.indexed_objects import NeonIndexedBlockInfo, NeonIndexedBlockDict, SolNeonTxDecoderState
-
 from ..indexer.neon_ix_decoder import DummyIxDecoder, get_neon_ix_decoder_list
 from ..indexer.neon_ix_decoder_deprecate import get_neon_ix_decoder_deprecated_list
+from ..indexer.solana_tx_meta_collector import FinalizedSolTxMetaCollector, ConfirmedSolTxMetaCollector
+from ..indexer.solana_tx_meta_collector import SolTxMetaDict, SolHistoryNotFound
+from ..indexer.utils import MetricsToLogger
 
 
 @logged_group("neon.Indexer")
@@ -38,7 +36,7 @@ class Indexer(IndexerBase):
         self._db = IndexerDB()
         last_known_slot = self._db.get_min_receipt_block_slot()
         super().__init__(config, solana, last_known_slot)
-        self._cancel_tx_executor = CancelTxExecutor(config, solana, get_solana_accounts()[0])
+        self._cancel_tx_executor = CancelTxExecutor(config, solana, get_solana_accounts(config)[0])
         self._counted_logger = MetricsToLogger()
         self._stat_exporter = indexer_stat_exporter
         self._last_stat_time = 0.0
@@ -62,7 +60,7 @@ class Indexer(IndexerBase):
 
     def _cancel_old_neon_txs(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> None:
         for tx in state.neon_block.iter_neon_tx():
-            if (tx.storage_account != '') and (state.stop_block_slot - tx.block_slot > CANCEL_TIMEOUT):
+            if (tx.storage_account != '') and (state.stop_block_slot - tx.block_slot > self._config.cancel_timeout):
                 self._cancel_neon_tx(tx, sol_tx_meta)
 
         try:
@@ -111,7 +109,7 @@ class Indexer(IndexerBase):
             return False
 
         self.debug(f'Neon tx is blocked: storage {holder_account}, {tx.neon_tx}, {holder_info.account_list}')
-        tx.set_status(NeonIndexedTxInfo.Status.CANCELED, SolNeonIxReceiptInfo.from_tx(sol_tx_meta))
+        tx.set_status(NeonIndexedTxInfo.Status.CANCELED, sol_tx_meta.block_slot)
         return True
 
     def _save_checkpoint(self) -> None:
@@ -132,7 +130,7 @@ class Indexer(IndexerBase):
             neon_block.set_finalized(is_finalized)
             if not neon_block.is_completed:
                 self._db.submit_block(neon_block)
-                neon_block.complete_block()
+                neon_block.complete_block(self._config)
             elif is_finalized:
                 # the confirmed block becomes finalized
                 self._db.finalize_block(neon_block)
@@ -238,7 +236,7 @@ class Indexer(IndexerBase):
                     # self.debug(f'ignore parsed tx {sol_tx_meta}')
                     continue
 
-                neon_block.add_sol_tx_cost(SolTxCostInfo(sol_tx_meta))
+                neon_block.add_sol_tx_cost(SolTxCostInfo.from_tx_meta(sol_tx_meta))
 
                 if SolTxErrorParser(sol_tx_meta.tx).check_if_error():
                     # self.debug(f'ignore failed tx {sol_tx_meta}')
@@ -307,6 +305,7 @@ class Indexer(IndexerBase):
 
         with logging_context(ident='stat'):
             self._counted_logger.print(
+                self._config,
                 self.debug,
                 list_value_dict={
                     'receipts processing ms': state.process_time_ms,

@@ -1,18 +1,19 @@
 from logged_groups import logged_group
 
-from ..common_neon.config import Config
-from ..common_neon.environment_data import GATHER_STATISTICS
-from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
-from ..common_neon.data import NeonTxStatData
-from .indexer import Indexer
 from .i_indexer_stat_exporter import IIndexerStatExporter
+from .indexer import Indexer
+
+from ..common_neon.config import Config
+from ..common_neon.data import NeonTxStatData
+
+from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
 
 
 @logged_group("neon.Indexer")
 class IndexerApp(IIndexerStatExporter):
 
     def __init__(self, config: Config):
-        self.neon_statistics = IndexerStatistics(GATHER_STATISTICS)
+        self.neon_statistics = IndexerStatistics(config.gather_statistics)
         indexer = Indexer(config, self)
         indexer.run()
 

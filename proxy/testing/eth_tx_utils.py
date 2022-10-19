@@ -1,8 +1,7 @@
 from sha3 import keccak_256
 import json
-from web3.auto import w3
-from eth_keys import keys
-import struct
+from eth_account import Account as NeonAccount
+from eth_keys import keys as neon_keys
 
 
 def unpack(data):
@@ -151,7 +150,7 @@ class Trx:
 
     def sender(self):
         msgHash = self.hash()
-        sig = keys.Signature(vrs=[1 if self.v % 2 == 0 else 0, self.r, self.s])
+        sig = neon_keys.Signature(vrs=[1 if self.v % 2 == 0 else 0, self.r, self.s])
         pub = sig.recover_public_key_from_msg_hash(msgHash)
         return pub.to_canonical_address().hex()
 
@@ -165,18 +164,18 @@ class JsonEncoder(json.JSONEncoder):
 
 def make_instruction_data_from_tx(instruction, private_key=None):
     if isinstance(instruction, dict):
-        if instruction['chainId'] == None:
+        if instruction['chainId'] is None:
             raise Exception("chainId value is needed in input dict")
-        if private_key == None:
+        if private_key is None:
             raise Exception("Needed private key for transaction creation from fields")
 
-        signed_tx = w3.eth.account.sign_transaction(instruction, private_key)
+        signed_tx = NeonAccount().sign_transaction(instruction, private_key)
         # print(signed_tx.rawTransaction.hex())
         _trx = Trx.fromString(signed_tx.rawTransaction)
         # print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))
 
         raw_msg = _trx.get_msg(instruction['chainId'])
-        sig = keys.Signature(vrs=[1 if _trx.v % 2 == 0 else 0, _trx.r, _trx.s])
+        sig = neon_keys.Signature(vrs=[1 if _trx.v % 2 == 0 else 0, _trx.r, _trx.s])
         pub = sig.recover_public_key_from_msg_hash(_trx.hash())
 
         # print(pub.to_hex())
@@ -190,7 +189,7 @@ def make_instruction_data_from_tx(instruction, private_key=None):
         # print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))
 
         raw_msg = _trx.get_msg()
-        sig = keys.Signature(vrs=[1 if _trx.v % 2 == 0 else 0, _trx.r, _trx.s])
+        sig = neon_keys.Signature(vrs=[1 if _trx.v % 2 == 0 else 0, _trx.r, _trx.s])
         pub = sig.recover_public_key_from_msg_hash(_trx.hash())
 
         data = pub.to_canonical_address()
@@ -211,7 +210,7 @@ def make_instruction_data_from_tx(instruction, private_key=None):
 #     'chainId': 1
 # }
 # trx = "0xf86c018522ecb25c0082520894a090e606e30bd747d4e6245a1517ebe430f0057e880340c0086a5cbe008025a0e213a2a87b050644f9c982144fa762132bbc00b9ac63d168d68146e300de6b4ba059dbbae6d190d820ddde818a98204232194eb6d27226190b4c0be82480d6a735"
-# signed = w3.eth.account.sign_transaction(tx_1, '0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff')
+# signed = NeonAccount().sign_transaction(tx_1, '0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff')
 
 # _trx = Trx.fromString(signed.rawTransaction)
 # _trx = Trx.fromString(bytearray.fromhex(trx[2:]))
@@ -222,7 +221,7 @@ def make_instruction_data_from_tx(instruction, private_key=None):
 # msgHash = _trx.hash()
 # print(_trx.get_msg().hex())
 
-# sig = keys.Signature(vrs=[1 if _trx.v%2==0 else 0, _trx.r, _trx.s])
+# sig = neon_keys.Signature(vrs=[1 if _trx.v%2==0 else 0, _trx.r, _trx.s])
 # pub = sig.recover_public_key_from_msg_hash(msgHash)
 # print('SENDER', pub.to_canonical_address().hex())
 # print("VERIFY", sig.verify_msg_hash(msgHash, pub))

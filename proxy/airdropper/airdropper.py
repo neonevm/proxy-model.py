@@ -10,7 +10,7 @@ from ..common_neon.config import Config
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.eth_proto import NeonTx
-from ..common_neon.solana_transaction import SolPubKey
+from ..common_neon.solana_tx import SolPubKey
 
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
@@ -142,7 +142,7 @@ class Airdropper(IndexerBase):
 
         data = base58.b58decode(call['data'])
         try:
-            tx = NeonTx.fromString(data[5:])
+            tx = NeonTx.from_string(data[5:])
         except (Exception, ):
             self.debug('bad transaction')
             return False

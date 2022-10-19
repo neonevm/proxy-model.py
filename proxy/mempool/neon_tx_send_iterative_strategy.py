@@ -1,23 +1,19 @@
 from __future__ import annotations
 
 from typing import List, cast
-from logged_groups import logged_group
-from dataclasses import dataclass
 
-from ..common_neon.solana_transaction import SolTx, SolLegacyTx, SolWrappedTx, SolTxReceipt
-from ..common_neon.solana_tx_list_sender import SolTxSendState
+from logged_groups import logged_group
+
 from ..common_neon.errors import NoMoreRetriesError
+from ..common_neon.solana_tx import SolTxReceipt, SolTx
+from ..common_neon.solana_tx_legacy import SolLegacyTx
+from ..common_neon.solana_tx_list_sender import SolTxSendState
 from ..common_neon.utils import NeonTxResultInfo
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_simple_strategy import SimpleNeonTxSender
 from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
-
-
-@dataclass
-class SolIterativeTx(SolWrappedTx):
-    evm_step_cnt: int
 
 
 class IterativeNeonTxSender(SimpleNeonTxSender):
@@ -30,7 +26,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             return
         elif self._is_canceled:
             # Transaction with cancel is confirmed
-            self._neon_tx_res.fill_result(status="0x0", gas_used='0x0', return_value='')
+            self._neon_tx_res.set_result(status=0, gas_used=0, return_value=b'')
             self.debug(f'Got Neon tx cancel: {self._neon_tx_res}')
         else:
             super()._decode_neon_tx_result(tx, tx_receipt)
@@ -70,13 +66,14 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         self.debug(f'Cancel the transaction')
         self.clear()
         self._is_canceled = True
-        return [SolWrappedTx(name='CancelWithHash', tx=self._strategy.build_cancel_tx())]
+        return [self._strategy.build_cancel_tx()]
 
     def _decrease_evm_step_cnt(self, tx_state_list: List[SolTxSendState]) -> List[SolTx]:
         if not self._strategy.decrease_evm_step_cnt():
             raise NoMoreRetriesError()
 
-        total_evm_step_cnt = sum([cast(SolIterativeTx, tx_state.tx).evm_step_cnt for tx_state in tx_state_list])
+        total_evm_step_cnt = sum([getattr(tx_state.tx, 'evm_step_cnt') for tx_state in tx_state_list])
+        self.debug('No receipt -> execute additional iteration')
         return self._strategy.build_tx_list(total_evm_step_cnt, 0)
 
 
@@ -90,40 +87,29 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         self._evm_step_cnt = self._start_evm_step_cnt
 
     def _validate(self) -> bool:
-        return (
-            self._validate_notdeploy_tx() and
-            self._validate_tx_has_chainid()
-        )
+        return self._validate_tx_has_chainid()
 
     def build_cancel_tx(self) -> SolLegacyTx:
         return self._build_cancel_tx()
 
     def decrease_evm_step_cnt(self) -> bool:
-        if self._evm_step_cnt == 10:
+        if self._evm_step_cnt <= self._base_evm_step_cnt:
             return False
 
         prev_evm_step_cnt = self._evm_step_cnt
-        if self._evm_step_cnt > 170:
-            self._evm_step_cnt -= 150
-        else:
-            self._evm_step_cnt = 10
+        self._evm_step_cnt -= 150
         self.debug(f'Decrease EVM steps from {prev_evm_step_cnt} to {self._evm_step_cnt}')
-
-        if (self._evm_step_cnt < self._base_evm_step_cnt) and (self._bpf_cycle_cnt is None):
-            self._bpf_cycle_cnt = 1_400_000
-            self.debug(f'Increase BPF cycles to {self._bpf_cycle_cnt}.')
-
         return True
 
     def _build_tx(self) -> SolLegacyTx:
         self._uniq_idx += 1
-        return BaseNeonTxStrategy._build_tx(self).add(
-            self._ctx.ix_builder.make_tx_step_from_data_ix(self._evm_step_cnt, self._uniq_idx)
-        )
+        return self._build_cu_tx(self._ctx.ix_builder.make_tx_step_from_data_ix(self._evm_step_cnt, self._uniq_idx))
 
     def build_tx_list(self, total_evm_step_cnt: int, add_iter_cnt: int) -> List[SolTx]:
-        def build_tx(step_cnt: int):
-            return SolIterativeTx(name=self.name, tx=self._build_tx(), evm_step_cnt=step_cnt)
+        def build_tx(step_cnt: int) -> SolTx:
+            tx = self._build_tx()
+            setattr(tx, 'evm_step_cnt', step_cnt)
+            return tx
 
         tx_list: List[SolTx] = []
         save_evm_step_cnt = total_evm_step_cnt
@@ -144,7 +130,9 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         assert self.is_valid()
 
         emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._start_evm_step_cnt)
-        tx_list = self.build_tx_list(emulated_step_cnt, self._ctx.neon_tx_exec_cfg.resize_iter_cnt)
+        additional_iter_cnt = self._ctx.neon_tx_exec_cfg.resize_iter_cnt
+        additional_iter_cnt += 2  # begin + finalization
+        tx_list = self.build_tx_list(emulated_step_cnt, additional_iter_cnt)
         tx_sender = IterativeNeonTxSender(self, self._ctx.solana, self._ctx.signer)
         tx_sender.send(tx_list)
         if not tx_sender.neon_tx_res.is_valid():

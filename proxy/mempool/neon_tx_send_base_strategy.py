@@ -3,7 +3,8 @@ import abc
 from logged_groups import logged_group
 from typing import Optional, List, cast
 
-from ..common_neon.solana_transaction import SolLegacyTx, SolTx, SolBlockhash
+from ..common_neon.solana_tx import SolBlockhash, SolTx, SolTxIx
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.utils import NeonTxResultInfo
@@ -30,7 +31,6 @@ class BaseNeonTxStrategy(abc.ABC):
     name = 'UNKNOWN STRATEGY'
 
     def __init__(self, ctx: NeonTxSendCtx):
-        self._bpf_cycle_cnt: Optional[int] = None
         self._validation_error_msg: Optional[str] = None
         self._prep_stage_list: List[BaseNeonTxPrepStage] = []
         self._ctx = ctx
@@ -55,7 +55,7 @@ class BaseNeonTxStrategy(abc.ABC):
             result = self._validate()
             if result:
                 result = self._validate_tx_size()
-            assert result != (self._validation_error_msg is not None)
+            assert result == (self._validation_error_msg is None)
 
             return result
         except Exception as e:
@@ -110,17 +110,25 @@ class BaseNeonTxStrategy(abc.ABC):
         for stage in self._prep_stage_list:
             stage.update_after_emulate()
 
-    def _build_cancel_tx(self) -> SolLegacyTx:
-        return BaseNeonTxStrategy._build_tx(self).add(
-            self._ctx.ix_builder.make_cancel_ix()
+    def _build_cu_tx(self, ix: SolTxIx, name: str = '') -> SolLegacyTx:
+        if len(name) == 0:
+            name = self.name
+
+        return SolLegacyTx(
+            name=name,
+            instructions=[
+                self._ctx.ix_builder.make_compute_budget_heap_ix(),
+                self._ctx.ix_builder.make_compute_budget_cu_ix(),
+                ix
+            ]
         )
+
+    def _build_cancel_tx(self) -> SolLegacyTx:
+        return self._build_cu_tx(name='CancelWithHash', ix=self._ctx.ix_builder.make_cancel_ix())
 
     @abc.abstractmethod
     def _build_tx(self) -> SolLegacyTx:
-        return SolLegacyTx().add(
-            self._ctx.ix_builder.make_compute_budget_heap_ix(),
-            self._ctx.ix_builder.make_compute_budget_cu_ix(self._bpf_cycle_cnt)
-        )
+        pass
 
     @abc.abstractmethod
     def _validate(self) -> bool:

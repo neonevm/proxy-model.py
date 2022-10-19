@@ -1,13 +1,11 @@
-import asyncio
-import time
-import math
 import abc
+import asyncio
+
 from typing import Optional, TypeVar, Generic
 
 from logged_groups import logged_group, logging_context
 
 from ..mempool.mempool_api import MPTask, IMPExecutor
-
 
 MPPeriodicTaskRequest = TypeVar('MPPeriodicTaskRequest')
 MPPeriodicTaskResult = TypeVar('MPPeriodicTaskResult')
@@ -21,16 +19,16 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
         self._name = name
         self._sleep_time = sleep_time
         self._executor = executor
+        self._task_idx = 0
         self._task: Optional[MPTask] = None
         self._task_loop = asyncio.get_event_loop().create_task(self._process_task_loop())
 
     def _generate_req_id(self, name: Optional[str] = None) -> str:
-        now = time.time()
-        now_sec = math.ceil(now)
-        now_msec = math.ceil(now * 1000 % 1000)
         if name is None:
             name = self._name
-        return f'{name}-{now_sec}.{now_msec:03d}'
+        req_id = f'{name}-{self._task_idx}'
+        self._task_idx += 1
+        return req_id
 
     def _try_to_submit_request(self) -> None:
         if not self._executor.is_available():

@@ -2,8 +2,8 @@ from typing import Optional, List, Any, Iterator
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo
 
-from ..indexer.indexed_objects import NeonIndexedTxInfo
 from ..indexer.base_db import BaseDB
+from ..indexer.indexed_objects import NeonIndexedTxInfo
 
 
 class NeonTxsDB(BaseDB):
@@ -39,15 +39,13 @@ class NeonTxsDB(BaseDB):
 
         for idx, column in enumerate(self._column_list):
             if column == 'logs':
-                neon_tx_res.log_list = self._decode_list(value_list[idx])
-            elif column == 'block_slot':
-                neon_tx_res._block_slot = value_list[idx]
+                neon_tx_res.log_list.extend(self._decode_list(value_list[idx]))
             elif hasattr(neon_tx_res, column):
-                setattr(neon_tx_res, '_' + column, value_list[idx])
+                object.__setattr__(neon_tx_res, column, value_list[idx])
             else:
                 pass
 
-        neon_tx_res._block_hash = value_list[-1]
+        object.__setattr__(neon_tx_res, 'block_hash', value_list[-1])
         return NeonTxReceiptInfo(neon_tx=neon_tx, neon_tx_res=neon_tx_res)
 
     def set_tx_list(self, cursor: BaseDB.Cursor, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
@@ -61,8 +59,6 @@ class NeonTxsDB(BaseDB):
                     value_list.append(tx.neon_tx.addr)
                 elif column == 'logs':
                     value_list.append(self._encode_list(tx.neon_tx_res.log_list))
-                elif column == 'block_slot':
-                    value_list.append(tx.neon_tx_res.block_slot)
                 elif hasattr(tx.neon_tx, column):
                     value_list.append(getattr(tx.neon_tx, column))
                 elif hasattr(tx.neon_tx_res, column):

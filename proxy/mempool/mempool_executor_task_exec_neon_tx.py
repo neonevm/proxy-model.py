@@ -1,12 +1,12 @@
-from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError, NonceTooLowError
-from ..common_neon.errors import BadResourceError
 from ..common_neon.elf_params import ElfParams
+from ..common_neon.errors import BadResourceError
+from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError, NonceTooLowError
 
 from ..mempool.mempool_api import MPTxExecRequest, MPTxExecResult, MPTxExecResultCode
 from ..mempool.mempool_executor_task_base import MPExecutorBaseTask
-from ..mempool.operator_resource_mng import OpResInfo
-from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 from ..mempool.neon_tx_sender import NeonTxSendStrategyExecutor
+from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
+from ..mempool.operator_resource_mng import OpResInfo
 
 
 class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
@@ -32,7 +32,7 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
             return MPTxExecResult(MPTxExecResultCode.BadResource, neon_tx_exec_cfg)
         except BaseException as exc:
             self.error(f'Failed to execute tx {mp_tx_req.sig}.', exc_info=exc)
-            return MPTxExecResult(MPTxExecResultCode.Unspecified, neon_tx_exec_cfg)
+            return MPTxExecResult(MPTxExecResultCode.Unspecified, exc)
         return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)
 
     def execute_neon_tx_impl(self, mp_tx_req: MPTxExecRequest):

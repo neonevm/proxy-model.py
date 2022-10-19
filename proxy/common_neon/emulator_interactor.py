@@ -1,29 +1,30 @@
 import json
 import subprocess
-from logged_groups import logged_group
 
 from typing import Optional, Dict, Any
-from ..common_neon.eth_proto import NeonTx
+from logged_groups import logged_group
 
+from ..common_neon.data import NeonEmulatedResult
+from ..common_neon.environment_utils import NeonCli
+from ..common_neon.errors import EthereumError
+from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.environment_data import MAX_EVM_STEPS_TO_EXECUTE, RETRY_ON_FAIL
-
-from .environment_utils import neon_cli
-from .errors import EthereumError
-from .data import NeonEmulatedResult
+from ..common_neon.eth_proto import NeonTx
 
 
 @logged_group("neon.Proxy")
-def call_emulated(contract_id, caller_id, data=None, value=None, *, logger) -> NeonEmulatedResult:
-    output = emulator(contract_id, caller_id, data, value)
-    logger.debug(f"Call emulated. contract_id: {contract_id}, caller_id: {caller_id}, data: {data}, value: {value}, return: {output}")
+def call_emulated(config: Config, contract_id, caller_id, data=None, value=None, *, logger) -> NeonEmulatedResult:
+    output = emulator(config, contract_id, caller_id, data, value)
+    logger.debug(
+        f'Call emulated. contract_id: {contract_id}, caller_id: {caller_id}, '
+        f'data: {data}, value: {value}, return: {output}'
+    )
     result = json.loads(output)
-    check_emulated_exit_status(result)
     return result
 
 
 @logged_group("neon.Proxy")
-def call_trx_emulated(neon_tx: NeonTx, *, logger) -> NeonEmulatedResult:
+def call_tx_emulated(config: Config, neon_tx: NeonTx, *, logger) -> NeonEmulatedResult:
     neon_sender_acc = neon_tx.sender()
     contract = neon_tx.contract()
     logger.debug(f'sender address: 0x{neon_sender_acc}')
@@ -34,7 +35,7 @@ def call_trx_emulated(neon_tx: NeonTx, *, logger) -> NeonEmulatedResult:
         dst = neon_tx.toAddress.hex()
         logger.debug(f'destination address {dst}')
     logger.debug(f"Calling data: {(dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))}")
-    emulator_json = call_emulated(dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))
+    emulator_json = call_emulated(config, dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))
     logger.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
     return emulator_json
 
@@ -68,7 +69,7 @@ def check_emulated_exit_status(result: Dict[str, Any], *, logger):
 
 
 def decode_error_message(reason: str) -> Optional[str]:
-    ERROR_DICT = {
+    error_dict = {
         'StackUnderflow': 'trying to pop from an empty stack',
         'StackOverflow': 'trying to push into a stack over stack limit',
         'InvalidJump': 'jump destination is invalid',
@@ -84,16 +85,16 @@ def decode_error_message(reason: str) -> Optional[str]:
         'CreateEmpty': 'attempt to create an empty account (runtime, unused)',
         'StaticModeViolation': 'STATICCALL tried to change state',
     }
-    return ERROR_DICT.get(reason)
+    return error_dict.get(reason)
 
 
 def decode_fatal_message(reason: str) -> Optional[str]:
-    FATAL_DICT = {
+    fatal_dict = {
         'NotSupported': 'the operation is not supported',
         'UnhandledInterrupt': 'the trap (interrupt) is unhandled',
         'CallErrorAsFatal': 'the environment explicitly set call errors as fatal error'
     }
-    return FATAL_DICT.get(reason)
+    return fatal_dict.get(reason)
 
 
 @logged_group("neon.Proxy")
@@ -219,7 +220,8 @@ class FindAccount(BaseNeonCliErrorParser):
                 account = line[pos + len(hdr):]
                 pos = account.find(',')
                 account = account[:pos]
-                hdr = ' => ' + account  # Not found account for 0x1c074b10a40b95d1cfad9da99a59fb6aab20b694 => kNEjs3pevk1fdhkQDUDc1E9eEj4V5puXAwLgMuf5KAE
+                # Not found account for 0x1c074b10a40b95d1c....9a59fb6aab20b694 => kNEjs3pevk1fdhkQDUDc...wLgMuf5KAE
+                hdr = ' => ' + account
             else:
                 account = line[:pos]
                 pos = account.rfind(' ')
@@ -289,29 +291,28 @@ class NeonCliErrorParser:
         return parser.execute(err)
 
 
-def emulator(contract, sender, data, value):
-    data = data or "none"
+def emulator(config: Config, contract, sender, data, value):
     value = value or ""
     try:
         neon_token_mint = ElfParams().neon_token_mint
         chain_id = ElfParams().chain_id
-        max_evm_steps_to_execute = MAX_EVM_STEPS_TO_EXECUTE
+        max_evm_steps_to_execute = config.max_evm_step_cnt_emulate
         retry_cnt = 0
         while True:
             try:
-                return neon_cli().call(
+                return NeonCli(config).call(
                     "emulate",
                     "--token_mint", str(neon_token_mint),
                     "--chain_id", str(chain_id),
                     "--max_steps_to_execute", str(max_evm_steps_to_execute),
                     sender,
                     contract,
-                    data,
-                    value
+                    value,
+                    data=data
                 )
             except subprocess.TimeoutExpired:
                 retry_cnt += 1
-                if retry_cnt > RETRY_ON_FAIL:
+                if retry_cnt > config.retry_on_fail:
                     raise
     except subprocess.CalledProcessError as err:
         msg, code = NeonCliErrorParser().execute('emulator', err)

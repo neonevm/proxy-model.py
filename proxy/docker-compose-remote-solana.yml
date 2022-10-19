@@ -69,10 +69,9 @@ services:
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
       SOLANA_URL: ${SOLANA_URL}
-      EXTRA_GAS: 5000
       EVM_LOADER: ${EVM_LOADER}
       CONFIG: devnet
-      LOG_NEON_CLI_DEBUG: "YES"
+      NEON_CLI_DEBUG_LOG: "YES"
       USE_COMBINED_START_CONTINUE: "yes"
       NEON_CLI_TIMEOUT: 60
       NEW_USER_AIRDROP_AMOUNT: 0

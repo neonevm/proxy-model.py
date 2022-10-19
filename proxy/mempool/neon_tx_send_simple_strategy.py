@@ -1,13 +1,13 @@
 from typing import List
 from logged_groups import logged_group
 
-from ..common_neon.solana_transaction import SolTx, SolLegacyTx, SolWrappedTx, SolTxReceipt
+from ..common_neon.solana_tx import SolTxReceipt, SolTx
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender, SolTxSendState
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
-from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxReceiptInfo
+from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo
 from ..common_neon.errors import BudgetExceededError
 from ..common_neon.utils import NeonTxResultInfo
-from ..common_neon.evm_log_decoder import decode_neon_tx_result
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
@@ -31,15 +31,15 @@ class SimpleNeonTxSender(SolTxListSender):
             self._decode_neon_tx_result(tx, tx_error_parser.receipt)
         return tx_status
 
-    def _decode_neon_tx_result(self, tx: SolTx, tx_receipt: SolTxReceipt) -> None:
+    def _decode_neon_tx_result(self, _: SolTx, tx_receipt: SolTxReceipt) -> None:
         if self._neon_tx_res.is_valid():
             return
 
-        block_slot = tx_receipt['slot']
-        tx_sig = SolTxSendState.decode_tx_sig(tx)
-        tx_receipt_info = SolTxReceiptInfo(SolTxMetaInfo(block_slot, tx_sig, tx_receipt))
+        tx_receipt_info = SolTxReceiptInfo.from_tx(tx_receipt)
         for sol_neon_ix in tx_receipt_info.iter_sol_neon_ix():
-            if decode_neon_tx_result(sol_neon_ix.iter_log(), self._strategy.ctx.neon_sig, self._neon_tx_res):
+            res = sol_neon_ix.neon_tx_return
+            if res is not None:
+                self._neon_tx_res.set_result(status=res.status, gas_used=res.gas_used, return_value=res.return_value)
                 self.debug(f'Got Neon tx result: {self._neon_tx_res}')
                 break
 
@@ -67,7 +67,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     def _validate_evm_step_cnt(self) -> bool:
         if self._ctx.emulated_evm_step_cnt < self._start_evm_step_cnt:
             return True
-        self._validation_error = 'Too lot of EVM steps'
+        self._validation_error_msg = 'Too lot of EVM steps'
         return False
 
     def _validate_no_resize_iter_cnt(self) -> bool:
@@ -77,16 +77,13 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         return False
 
     def _build_tx(self) -> SolLegacyTx:
-        return BaseNeonTxStrategy._build_tx(self).add(
-            self._ctx.ix_builder.make_tx_exec_from_data_ix()
-        )
+        return self._build_cu_tx(self._ctx.ix_builder.make_tx_exec_from_data_ix())
 
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
 
-        tx_list = [SolWrappedTx(name=self.name, tx=self._build_tx())]
         tx_sender = SimpleNeonTxSender(self, self._ctx.solana, self._ctx.signer)
-        tx_sender.send(tx_list)
+        tx_sender.send([self._build_tx()])
         if not tx_sender.neon_tx_res.is_valid():
             raise BudgetExceededError()
         return tx_sender.neon_tx_res

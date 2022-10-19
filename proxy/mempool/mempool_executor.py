@@ -26,7 +26,6 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._id = executor_id
         self._srv_sock = srv_sock
         self._config = config
-        self.info(f"Config: {self._config}")
         self._event_loop: asyncio.BaseEventLoop
 
         self._solana: Optional[SolInteractor] = None
@@ -42,7 +41,6 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         mp.Process.__init__(self)
 
     def _init_in_proc(self):
-        self.info(f"Config: {self._config}")
         self._event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._event_loop)
 

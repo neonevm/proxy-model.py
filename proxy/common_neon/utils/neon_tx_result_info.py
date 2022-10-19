@@ -1,88 +1,75 @@
 from typing import List, Dict, Any, Optional
+from dataclasses import dataclass
 
-from .utils import str_fmt_object
 from .solana_block import SolanaBlockInfo
+from .utils import str_fmt_object
 
 
+@dataclass(frozen=True)
 class NeonTxResultInfo:
-    def __init__(self):
-        self.log_list: List[Dict[str, Any]] = []
-        self._status = ''
-        self._gas_used = ''
-        self._return_value = ''
-        self._sol_sig: Optional[str] = None
-        self._tx_idx: Optional[int] = None
-        self._block_slot: Optional[int] = None
-        self._block_hash: Optional[str] = None
-        self._sol_ix_idx: Optional[int] = None
-        self._sol_ix_inner_idx: Optional[int] = None
+    block_slot: Optional[int] = None
+    block_hash: Optional[str] = None
+    tx_idx: Optional[int] = None
 
-    @property
-    def block_slot(self) -> Optional[int]:
-        return self._block_slot
+    sol_sig: Optional[str] = None
+    sol_ix_idx: Optional[int] = None
+    sol_ix_inner_idx: Optional[int] = None
 
-    @property
-    def block_hash(self) -> Optional[str]:
-        return self._block_hash
+    neon_sig: str = ''
+    gas_used: str = ''
+    status: str = ''
+    return_value: str = ''
 
-    @property
-    def tx_idx(self) -> Optional[int]:
-        return self._tx_idx
+    log_list: List[Dict[str, Any]] = None
 
-    @property
-    def status(self) -> str:
-        return self._status
+    _str = ''
 
-    @property
-    def gas_used(self) -> str:
-        return self._gas_used
-
-    @property
-    def return_value(self) -> str:
-        return self._return_value
-
-    @property
-    def sol_sig(self) -> Optional[str]:
-        return self._sol_sig
-
-    @property
-    def sol_ix_idx(self) -> Optional[int]:
-        return self._sol_ix_idx
-
-    @property
-    def sol_ix_inner_idx(self) -> Optional[int]:
-        return self._sol_ix_inner_idx
+    def __post_init__(self):
+        object.__setattr__(self, 'log_list', [])
 
     def __str__(self) -> str:
-        return str_fmt_object(self)
+        if self._str == '':
+            object.__setattr__(self, '_str', str_fmt_object(self))
+        return self._str
 
-    def __getstate__(self) -> Dict[str, Any]:
-        return self.__dict__
+    def add_event(self, address: bytes, topic_list: List[bytes], log_data: bytes) -> None:
+        rec = {
+            'address': '0x' + address.hex(),
+            'topics': ['0x' + topic.hex() for topic in topic_list],
+            'data': '0x' + log_data.hex(),
+            'transactionLogIndex': hex(len(self.log_list)),
+            # 'logIndex': hex(tx_log_idx), # set when transaction found
+            # 'transactionIndex': hex(ix.idx), # set when transaction found
+            # 'blockNumber': block_number, # set when transaction found
+            # 'blockHash': block_hash # set when transaction found
+        }
 
-    def __setstate__(self, src) -> None:
-        self.__dict__ = src
-
-    def append_record(self, rec: Dict[str, Any]) -> None:
         self.log_list.append(rec)
+        object.__setattr__(self, '_str', '')
 
-    def fill_result(self, status: str, gas_used: str, return_value: str) -> None:
-        self._status = status
-        self._gas_used = gas_used
-        self._return_value = return_value
+    def set_result(self, status: int, gas_used: int, return_value: bytes) -> None:
+        object.__setattr__(self, 'status', hex(status))
+        object.__setattr__(self, 'gas_used', hex(gas_used))
+        object.__setattr__(self, 'return_value', '0x' + return_value.hex())
+        object.__setattr__(self, '_str', '')
 
-    def fill_sol_sig_info(self, sol_sig: str, sol_ix_idx: int, sol_ix_inner_idx: Optional[int]) -> None:
-        self._sol_sig = sol_sig
-        self._sol_ix_idx = sol_ix_idx
-        self._sol_ix_inner_idx = sol_ix_inner_idx
+    def set_sol_sig_info(self, sol_sig: str, sol_ix_idx: int, sol_ix_inner_idx: Optional[int]) -> None:
+        object.__setattr__(self, 'sol_sig', sol_sig)
+        object.__setattr__(self, 'sol_ix_idx', sol_ix_idx)
+        object.__setattr__(self, 'sol_ix_inner_idx', sol_ix_inner_idx)
+        object.__setattr__(self, '_str', '')
 
-    def fill_block_info(self, block: SolanaBlockInfo, tx_idx: int, log_idx: int) -> None:
+    def set_block_info(self, block: SolanaBlockInfo, neon_sig: str, tx_idx: int, log_idx: int) -> None:
         hex_block_slot = hex(block.block_slot)
         hex_tx_idx = hex(tx_idx)
 
-        self._block_slot = block.block_slot
-        self._block_hash = block.block_hash
-        self._tx_idx = tx_idx
+        object.__setattr__(self, 'block_slot', block.block_slot)
+        object.__setattr__(self, 'block_hash', block.block_hash)
+        object.__setattr__(self, 'tx_idx', tx_idx)
+        object.__setattr__(self, '_str', '')
+
         for rec in self.log_list:
+            rec['transactionHash'] = neon_sig
             rec['blockHash'] = block.block_hash
             rec['blockNumber'] = hex_block_slot
             rec['transactionIndex'] = hex_tx_idx
@@ -90,4 +77,4 @@ class NeonTxResultInfo:
             log_idx += 1
 
     def is_valid(self) -> bool:
-        return self._gas_used != ''
+        return self.gas_used != ''

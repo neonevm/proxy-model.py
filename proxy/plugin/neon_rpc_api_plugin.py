@@ -81,7 +81,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             response['error'] = {'code': -32000, 'message': err.error}
         except EthereumError as err:
             # traceback.print_exc()
-            response['error'] = err.getError()
+            response['error'] = err.get_error()
         except BaseException as exc:
             self.debug('Exception on process request', exc_info=exc)
             response['error'] = {'code': -32000, 'message': str(exc)}
@@ -97,7 +97,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
     def handle_request_impl(self, request: HttpParser) -> None:
         if request.method == b'OPTIONS':
             self.client.queue(memoryview(build_http_response(
-                httpStatusCodes.OK, body=None,
+                httpStatusCodes.OK, reason=b'OK', body=None,
                 headers={
                     b'Access-Control-Allow-Origin': b'*',
                     b'Access-Control-Allow-Methods': b'POST, GET, OPTIONS',
@@ -139,7 +139,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                   resp_time_ms)
 
         self.client.queue(memoryview(build_http_response(
-            httpStatusCodes.OK, body=json.dumps(response).encode('utf8'),
+            httpStatusCodes.OK, reason=b'OK', body=json.dumps(response).encode('utf8'),
             headers={
                 b'Content-Type': b'application/json',
                 b'Access-Control-Allow-Origin': b'*',
