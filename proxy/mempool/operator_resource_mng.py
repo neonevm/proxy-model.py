@@ -180,6 +180,27 @@ class OpResUsedTime:
         object.__setattr__(self, 'used_cnt', 0)
 
 
+class OpResIdentListBuilder:
+    def __init__(self, config: Config):
+        self._config = config
+
+    def build_resource_list(self, secret_list: List[bytes]) -> List[OpResIdent]:
+        ident_set: Set[OpResIdent] = set()
+
+        stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
+        for res_id in range(self._config.perm_account_id, stop_perm_account_id):
+            for ident in secret_list:
+                sol_account = SolAccount.from_secret_key(ident)
+                ident = OpResIdent(
+                    public_key=str(sol_account.public_key),
+                    private_key=sol_account.secret_key,
+                    res_id=res_id
+                )
+                ident_set.add(ident)
+
+        return list(ident_set)
+
+
 @logged_group("neon.MemPool")
 class OpResMng:
     def __init__(self, config: Config):
@@ -192,34 +213,26 @@ class OpResMng:
         self._config = config
         self._last_check_time = 0
 
-    def init_resource_list(self, res_ident_list: List[Union[OpResIdent, bytes]]) -> None:
+    def init_resource_list(self, res_ident_list: List[OpResIdent]) -> None:
         old_res_cnt = self.resource_cnt
 
-        self._ident_set.clear()
-        stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
-        for res_id in range(self._config.perm_account_id, stop_perm_account_id):
-            for ident in res_ident_list:
-                if isinstance(ident, bytes):
-                    sol_account = SolAccount.from_secret_key(ident)
-                    ident = OpResIdent(public_key=str(sol_account.public_key), private_key=sol_account.secret_key)
-                assert ident.res_id == -1
-                self._ident_set.add(dataclasses.replace(ident, res_id=res_id))
+        new_ident_set: Set[OpResIdent] = set(res_ident_list)
+        rm_ident_set: Set[OpResIdent] = self._ident_set.difference(new_ident_set)
+        add_ident_set: Set[OpResIdent] = new_ident_set.difference(self._ident_set)
 
-        self._free_res_ident_list = deque([res for res in self._free_res_ident_list if res.ident in self._ident_set])
-        self._disabled_res_ident_list = deque([res for res in self._disabled_res_ident_list if res in self._ident_set])
-        self._checked_res_ident_set = {res for res in self._checked_res_ident_set if res in self._ident_set}
+        if (len(rm_ident_set) == 0) and (len(add_ident_set) == 0):
+            self.debug(f'Same resource list')
+            return
 
-        not_used_ident_set = {ident for ident in self._ident_set}
-        for res in self._free_res_ident_list:
-            not_used_ident_set.discard(res.ident)
-        for res in self._disabled_res_ident_list:
-            not_used_ident_set.discard(res)
-        for res in self._checked_res_ident_set:
-            not_used_ident_set.discard(res)
-        for res in self._used_res_ident_dict.values():
-            not_used_ident_set.discard(res.ident)
+        self._ident_set = new_ident_set
+        self._free_res_ident_list = deque([res for res in self._free_res_ident_list if res.ident not in rm_ident_set])
+        self._disabled_res_ident_list = deque([res for res in self._disabled_res_ident_list if res not in rm_ident_set])
+        self._checked_res_ident_set = {res for res in self._checked_res_ident_set if res not in rm_ident_set}
 
-        for res in not_used_ident_set:
+        for res in rm_ident_set:
+            self.debug(f'Remove resource {res}')
+        for res in add_ident_set:
+            self.debug(f'Add resource {res}')
             self._disabled_res_ident_list.append(res)
 
         self._secret_list: List[bytes] = [pk for pk in {res.private_key for res in self._ident_set}]
@@ -286,7 +299,7 @@ class OpResMng:
             self.debug(f'Recheck resource {res_used_time} by counter')
             self._disabled_res_ident_list.append(res_used_time.ident)
         else:
-            self.debug(f'Enable resource {res_used_time}')
+            self.debug(f'Release resource {res_used_time}')
             self._free_res_ident_list.append(res_used_time)
 
     def disable_resource(self, ident_or_sig: Union[OpResIdent, str]) -> None:

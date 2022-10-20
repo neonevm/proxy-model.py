@@ -17,7 +17,7 @@ source .buildkite/steps/revision.sh
 function cleanup_docker {
     echo
     echo "Cleanup docker-compose..."
-    docker-compose -f proxy/docker-compose-test.yml down -t 1
+    docker-compose -f proxy/docker-compose-test.yml down --remove-orphans -t 1
     echo "Cleanup docker-compose done."
 
     echo

@@ -9,7 +9,7 @@ from ..common_neon.errors import BadResourceError
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.operator_secret_mng import OpSecretMng
 
-from ..mempool.operator_resource_mng import OpResMng, OpResInit, OpResInfo
+from ..mempool.operator_resource_mng import OpResMng, OpResInit, OpResInfo, OpResIdentListBuilder
 
 
 class FakeConfig(Config):
@@ -53,7 +53,8 @@ class TestNeonTxSender(unittest.TestCase):
 
         self._resource_list = OpResMng(self._config)
         secret_list = OpSecretMng(self._config).read_secret_list()
-        self._resource_list.init_resource_list(secret_list)
+        res_ident_list = OpResIdentListBuilder(self._config).build_resource_list(secret_list)
+        self._resource_list.init_resource_list(res_ident_list)
         while True:
             res_ident = self._resource_list.get_disabled_resource()
             if res_ident is None:

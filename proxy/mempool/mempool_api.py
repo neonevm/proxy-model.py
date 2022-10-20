@@ -254,7 +254,7 @@ class MPOpResInitResultCode(IntEnum):
 
 @dataclass(frozen=True)
 class MPOpResGetListResult:
-    secret_list: List[bytes]
+    res_ident_list: List[OpResIdent]
 
 
 @dataclass(frozen=True)

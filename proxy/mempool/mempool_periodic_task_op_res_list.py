@@ -20,8 +20,8 @@ class MPOpResGetListTaskLoop(MPPeriodicTaskLoop[MPOpResGetListRequest, MPOpResGe
         self._sleep_time = self._bad_recheck_sleep_time
 
     async def _process_result(self, mp_req: MPOpResGetListRequest, mp_res: MPOpResGetListResult) -> None:
-        self._op_res_mng.init_resource_list(mp_res.secret_list)
-        if len(mp_res.secret_list) == 0:
+        self._op_res_mng.init_resource_list(mp_res.res_ident_list)
+        if len(mp_res.res_ident_list) == 0:
             self._sleep_time = self._bad_recheck_sleep_time
         else:
             self._sleep_time = self._normal_recheck_sleep_time

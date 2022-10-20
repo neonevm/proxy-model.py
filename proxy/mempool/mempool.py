@@ -151,6 +151,9 @@ class MemPool:
                     while self._executor_mng.is_available():
                         if not await self._enqueue_tx_request():
                             break
+            except asyncio.exceptions.CancelledError:
+                self.debug(f'Normal exit')
+                break
             except BaseException as exc:
                 self.error(f'Fail on process schedule', exc_info=exc)
 
