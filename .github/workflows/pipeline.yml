@@ -23,7 +23,7 @@ env:
 
 jobs:
   build-image:
-    runs-on: ubuntu-latest
+    runs-on: build-runner
     outputs:
       proxy_tag: ${{ steps.tags.outputs.proxy }}
       neon_evm_tag: ${{ steps.tags.outputs.neon_evm }}
@@ -34,8 +34,6 @@ jobs:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-      - name: install python libs
-        run: pip install docker python_terraform scp paramiko
       - name: Define images tags
         id: tags
         run: |
@@ -54,33 +52,31 @@ jobs:
       - name: Build docker image
         if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags') }}
         run: |
-          python ./.github/workflows/deploy.py build_docker_image \
+          python3 ./.github/workflows/deploy.py build_docker_image \
           --github_sha=${GITHUB_SHA} \
           --neon_evm_tag=${{ steps.tags.outputs.neon_evm }} \
           --proxy_tag=${{ steps.tags.outputs.proxy }}
       - name: Publish image
         if: ${{ !startsWith(github.event.inputs.neon_evm_branch, 'refs/tags/') }}
         run: |
-          python ./.github/workflows/deploy.py publish_image \
+          python3 ./.github/workflows/deploy.py publish_image \
           --github_sha=${GITHUB_SHA}
   deploy-check:
     needs:
       - build-image
-    runs-on: ubuntu-latest
+    runs-on: build-runner
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: "true"
-      - name: Install python libs
-        run: pip install docker python_terraform scp paramiko
       - name: deploy_check
         run: |
-          python ./.github/workflows/deploy.py deploy_check \
+          python3 ./.github/workflows/deploy.py deploy_check \
           --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
           --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }}
       - name: Dump docker logs
         if: always()
-        run: python ./.github/workflows/deploy.py dump_apps_logs
+        run: python3 ./.github/workflows/deploy.py dump_apps_logs
       - uses: actions/upload-artifact@v3
         if: always()
         with:
@@ -90,7 +86,7 @@ jobs:
     if: ${{ (github.base_ref =='develop' && ! github.event.pull_request.draft) || github.event.inputs.full_test_suite }}
     needs:
       - build-image
-    runs-on: test-label
+    runs-on: test-runner
     steps:
       - uses: actions/checkout@v3
         with:
@@ -98,8 +94,6 @@ jobs:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-      - name: Install python libs
-        run: pip install docker python_terraform scp paramiko
       - name: Add private key
         run: |
           echo "${{ secrets.CI_STANDS_KEY }}" > ${HOME}/.ssh/ci-stands
@@ -117,7 +111,7 @@ jobs:
         run: python3 ./.github/workflows/deploy.py openzeppelin --run_number=${GITHUB_RUN_NUMBER}
 
       - name: Destroy terraform infrastructure
-        if: always()
+        if: ${{always() && ((github.base_ref =='develop' && ! github.event.pull_request.draft) || github.event.inputs.full_test_suite)}}
         run: |
           python3 ./.github/workflows/deploy.py destroy_terraform \
           --run_number=${GITHUB_RUN_NUMBER} \
@@ -134,34 +128,34 @@ jobs:
           name: FTS docker logs
           path: ./logs/*
   finalize-image:
-    runs-on: ubuntu-latest
+    runs-on: build-runner
     needs:
       - openzeppelin-tests
       - deploy-check
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: "true"
-
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-
-      - name: install python libs
-        run: pip install docker python_terraform scp paramiko
-
       - name: Tag published image
         if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/') }}
         run: |
-          python ./.github/workflows/deploy.py finalize_image \
+          python3 ./.github/workflows/deploy.py finalize_image \
           --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
           --github_ref=${GITHUB_REF} \
           --base_ref_branch=${{ steps.branch-name.outputs.base_ref_branch }} \
           --github_sha=${GITHUB_SHA}
-
+  notification:
+    runs-on: build-runner
+    if: failure()
+    needs:
+      - finalize-image
+      - openzeppelin-tests
+      - deploy-check
+    steps:
+      - uses: actions/checkout@v3
       - name: Send notification to slack
-        if: failure()
         run: |
-          python ./.github/workflows/deploy.py send_notification \
+          python3 ./.github/workflows/deploy.py send_notification \
           --url=${{secrets.SLACK_PROXY_CHANNEL_URL}} \
           --build_url=${BUILD_URL}
