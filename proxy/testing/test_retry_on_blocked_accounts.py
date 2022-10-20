@@ -8,9 +8,9 @@ from proxy.common_neon.config import Config
 from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.solana_tx import SolAccountMeta
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
-from proxy.mempool.operator_resource_mng import OpResInfo, OpResInit
+from proxy.mempool.operator_resource_mng import OpResInfo, OpResInit, OpResIdent
 from proxy.testing.solana_utils import EVM_LOADER, EvmLoader, wallet_path, WalletAccount, client, send_transaction
-from proxy.testing.testing_helpers import Proxy
+from proxy.testing.testing_helpers import Proxy, NeonLocalAccount
 
 
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/365'
@@ -54,6 +54,9 @@ class FakeConfig(Config):
 
 
 class BlockedTest(unittest.TestCase):
+    proxy: Proxy
+    eth_account: NeonLocalAccount
+
     @classmethod
     def setUpClass(cls):
         cls.proxy = Proxy()
@@ -67,10 +70,20 @@ class BlockedTest(unittest.TestCase):
         cls.config = config = Config()
         cls.solana = solana = SolInteractor(config, config.solana_url)
 
-        cls.resource_iter = resource = OpResInfo(wallet.get_acc(), 365)
+        res_acct = wallet.get_acc()
+        cls.resource_iter = resource = OpResInfo.from_ident(OpResIdent(
+            public_key=str(res_acct.public_key),
+            private_key=res_acct.secret_key,
+            res_id=365
+        ))
         OpResInit(FakeConfig(), solana).init_resource(resource)
 
-        cls.resource_single = resource = OpResInfo(wallet.get_acc(), 366)
+        res_single_acct = wallet.get_acc()
+        cls.resource_single = resource = OpResInfo.from_ident(OpResIdent(
+            public_key=str(res_single_acct.public_key),
+            private_key=res_single_acct.secret_key,
+            res_id=366
+        ))
         OpResInit(FakeConfig(), solana).init_resource(resource)
 
         deployed_info = cls.proxy.compile_and_deploy_contract(cls.eth_account, TEST_RETRY_BLOCKED_365)

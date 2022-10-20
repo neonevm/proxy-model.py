@@ -93,5 +93,5 @@ class MemPoolClient:
     @_guard_conn
     @_reconnecting
     def get_elf_param_dict(self, req_id: str) -> Optional[Dict[str, Any]]:
-        elf_param_dict_req = MPElfParamDictRequest(req_id=req_id)
+        elf_param_dict_req = MPElfParamDictRequest(req_id=req_id, elf_param_dict={})
         return self._pickable_data_client.send_data(elf_param_dict_req)

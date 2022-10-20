@@ -7,9 +7,9 @@ from ..common_neon.solana_tx import SolAccount, SolPubKey, SolTxIx, SolTx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
-from ..mempool.mempool_api import MPALTListResult
-from ..mempool.mempool_api import MPGetALTList, MPALTInfo, MPDeactivateALTListRequest, MPCloseALTListRequest
-from ..mempool.mempool_executor_task_base import MPExecutorBaseTask
+from .mempool_api import MPALTListResult
+from .mempool_api import MPGetALTList, MPALTInfo, MPDeactivateALTListRequest, MPCloseALTListRequest
+from .mempool_executor_task_base import MPExecutorBaseTask
 
 
 class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
@@ -27,8 +27,8 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
     def get_alt_list(self, mp_req: MPGetALTList) -> MPALTListResult:
         alt_info_list: List[MPALTInfo] = []
 
-        for operator_key in mp_req.operator_key_list:
-            operator_account = SolAccount.from_secret_key(bytes.fromhex(operator_key))
+        for secret in mp_req.secret_list:
+            operator_account = SolAccount.from_secret_key(secret)
 
             account_info_list = self._solana.get_program_account_info_list(
                 program=ADDRESS_LOOKUP_TABLE_ID,
@@ -55,12 +55,12 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
                         deactivation_slot=alt_info.deactivation_slot,
                         block_height=block_height,
                         table_account=str(account_info.address),
-                        operator_key=operator_key
+                        operator_key=secret
                     )
 
                     alt_info_list.append(mp_alt_info)
                 except BaseException as exc:
-                    self.error('Cannot decode ALT.', exc_info=exc)
+                    self.error('Cannot decode ALT', exc_info=exc)
 
         block_height = self._get_block_height()
         return MPALTListResult(block_height=block_height, alt_info_list=alt_info_list)
@@ -86,7 +86,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
         block_height: Optional[int] = None
 
         for alt_info in alt_info_list:
-            operator_key = bytes.fromhex(alt_info.operator_key)
+            operator_key = alt_info.operator_key
 
             if (signer is not None) and (signer.secret_key != operator_key):
                 _send_tx_list()

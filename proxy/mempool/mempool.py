@@ -1,28 +1,29 @@
 import asyncio
 import time
-
 from typing import List, Tuple, Optional, Any, Dict, cast, Iterator, Union
+
 from logged_groups import logged_group, logging_context
 from neon_py.data import Result
 
+from .executor_mng import MPExecutorMng
 from .mempool_api import MPGasPriceResult
-from .mempool_api import MPRequest, MPRequestType, IMPExecutor, MPTask, MPTxRequestList
+from .mempool_api import MPRequest, MPRequestType, MPTask, MPTxRequestList
 from .mempool_api import MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest
 from .mempool_api import MPTxSendResult, MPTxSendResultCode
-
 from .mempool_neon_tx_dict import MPTxDict
 from .mempool_periodic_task_elf_params import MPElfParamDictTaskLoop
 from .mempool_periodic_task_free_alt_queue import MPFreeALTQueueTaskLoop
 from .mempool_periodic_task_gas_price import MPGasPriceTaskLoop
 from .mempool_periodic_task_op_res import MPInitOpResTaskLoop
+from .mempool_periodic_task_op_res_list import MPOpResGetListTaskLoop
 from .mempool_periodic_task_sender_tx_cnt import MPSenderTxCntTaskLoop
 from .mempool_schedule import MPTxSchedule
 from .operator_resource_mng import OpResMng
 
-from ..common_neon.errors import EthereumError
 from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
+from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import NeonTx
 
 
@@ -31,7 +32,7 @@ class MemPool:
     check_task_timeout_sec = 0.01
     reschedule_timeout_sec = 0.4
 
-    def __init__(self, config: Config, op_res_mng: OpResMng, executor: IMPExecutor):
+    def __init__(self, config: Config, op_res_mng: OpResMng, executor_mng: MPExecutorMng):
         capacity = config.mempool_capacity
         self.info(f"Init mempool schedule with capacity: {capacity}")
         self.info(f"Config: {config}")
@@ -39,15 +40,16 @@ class MemPool:
         self._schedule_cond = asyncio.Condition()
         self._processing_task_list: List[MPTask] = []
         self._is_active: bool = True
-        self._executor = executor
+        self._executor_mng = executor_mng
         self._op_res_mng = op_res_mng
         self._completed_tx_dict = MPTxDict(config)
 
-        self._elf_param_dict_task_loop = MPElfParamDictTaskLoop(executor)
-        self._gas_price_task_loop = MPGasPriceTaskLoop(executor)
-        self._state_tx_cnt_task_loop = MPSenderTxCntTaskLoop(executor, self._tx_schedule)
-        self._op_res_init_task_loop = MPInitOpResTaskLoop(executor, self._op_res_mng)
-        self._free_alt_queue_task_loop = MPFreeALTQueueTaskLoop(executor, self._op_res_mng)
+        self._elf_param_dict_task_loop = MPElfParamDictTaskLoop(executor_mng)
+        self._gas_price_task_loop = MPGasPriceTaskLoop(executor_mng)
+        self._op_res_get_list_task_loop = MPOpResGetListTaskLoop(executor_mng, self._op_res_mng)
+        self._op_res_init_task_loop = MPInitOpResTaskLoop(executor_mng, self._op_res_mng)
+        self._state_tx_cnt_task_loop = MPSenderTxCntTaskLoop(executor_mng, self._tx_schedule)
+        self._free_alt_queue_task_loop = MPFreeALTQueueTaskLoop(executor_mng, self._op_res_mng)
 
         self._process_tx_result_task_loop = asyncio.get_event_loop().create_task(self._process_tx_result_loop())
         self._process_tx_schedule_task_loop = asyncio.get_event_loop().create_task(self._process_tx_schedule_loop())
@@ -107,7 +109,7 @@ class MemPool:
             return None
         return elf_params.elf_param_dict
 
-    def _enqueue_tx_request(self) -> bool:
+    async def _enqueue_tx_request(self) -> bool:
         try:
             tx = self._tx_schedule.peek_tx()
             if (tx is None) or (tx.gas_price < self._gas_price.min_gas_price):
@@ -120,7 +122,7 @@ class MemPool:
 
             tx = self._tx_schedule.acquire_tx()
         except BaseException as exc:
-            self.error('Failed to get tx for execution.', exc_info=exc)
+            self.error('Failed to get tx for execution', exc_info=exc)
             return False
 
         with logging_context(req_id=tx.req_id):
@@ -128,11 +130,12 @@ class MemPool:
                 self.debug(f"Got tx {tx.sig} from schedule.")
                 tx = MPTxExecRequest.clone(tx, resource, ElfParams().elf_param_dict)
 
-                mp_task = self._executor.submit_mp_request(tx)
+                mp_task = self._executor_mng.submit_mp_request(tx)
                 self._processing_task_list.append(mp_task)
                 return True
             except BaseException as exc:
-                self.error(f'Failed to enqueue to execute {tx.sig}.', exc_info=exc)
+                self.error(f'Failed to enqueue to execute {tx.sig}', exc_info=exc)
+                await self._reschedule_tx(tx)
                 return False
 
     async def _process_tx_schedule_loop(self):
@@ -140,13 +143,19 @@ class MemPool:
             await asyncio.sleep(self.check_task_timeout_sec)
 
         while True:
-            async with self._schedule_cond:
-                await self._schedule_cond.wait()
-                await self._schedule_cond.wait_for(self.is_active)
-                # self.debug(f"Schedule processing got awake, condition: {self._schedule_cond.__repr__()}")
-                while self._executor.is_available():
-                    if not self._enqueue_tx_request():
-                        break
+            try:
+                async with self._schedule_cond:
+                    await self._schedule_cond.wait()
+                    await self._schedule_cond.wait_for(self.is_active)
+                    # self.debug(f"Schedule processing got awake, condition: {self._schedule_cond.__repr__()}")
+                    while self._executor_mng.is_available():
+                        if not await self._enqueue_tx_request():
+                            break
+            except asyncio.exceptions.CancelledError:
+                self.debug(f'Normal exit')
+                break
+            except BaseException as exc:
+                self.error(f'Fail on process schedule', exc_info=exc)
 
     async def _process_tx_result_loop(self):
         while True:
@@ -155,6 +164,8 @@ class MemPool:
                 with logging_context(req_id=mp_task.mp_request.req_id):
                     if not self._complete_task(mp_task):
                         not_finished_task_list.append(mp_task)
+                    else:
+                        self._executor_mng.release_executor(mp_task.executor_id)
             self._processing_task_list = not_finished_task_list
 
             await asyncio.sleep(self.check_task_timeout_sec)
@@ -164,27 +175,25 @@ class MemPool:
             if not mp_task.aio_task.done():
                 return False
 
-            self._executor.release_executor(mp_task.executor_id)
-
             if mp_task.mp_request.type != MPRequestType.SendTransaction:
                 self.error(f"Got unexpected request: {mp_task.mp_request}")
                 return True  # skip task
         except BaseException as exc:
-            self.error('Exception on checking type of request.', exc_info=exc)
+            self.error('Exception on checking type of request', exc_info=exc)
             return True
 
         tx = cast(MPTxRequest, mp_task.mp_request)
         try:
             exc = mp_task.aio_task.exception()
             if exc is not None:
-                self.error(f'Exception during processing tx {tx.sig} on executor.', exc_info=exc)
+                self.error(f'Exception during processing tx {tx.sig} on executor', exc_info=exc)
                 self._on_fail_tx(tx, exc)
                 return True
 
             mp_result = mp_task.aio_task.result()
             self._process_mp_tx_result(tx, mp_result)
         except BaseException as exc:
-            self.error(f'Exception on the result processing of tx {tx.sig}.', exc_info=exc)
+            self.error(f'Exception on the result processing of tx {tx.sig}', exc_info=exc)
         return True
 
     def _process_mp_tx_result(self, tx: MPTxRequest, mp_res: Any):
@@ -232,7 +241,7 @@ class MemPool:
                 self._op_res_mng.update_resource(tx.sig)
                 self._tx_schedule.reschedule_tx(tx)
             except BaseException as exc:
-                self.error(f'Exception on the result processing of tx {tx.sig}.', exc_info=exc)
+                self.error(f'Exception on the result processing of tx {tx.sig}', exc_info=exc)
                 return
 
     def _on_bad_resource(self, tx: MPTxRequest):
