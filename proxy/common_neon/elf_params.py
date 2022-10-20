@@ -110,12 +110,13 @@ class ElfParams:
             if param.startswith('NEON_') and '=' in param:
                 v = param.split('=')
                 elf_param_dict.setdefault(v[0], v[1])
+
+        for param, value in elf_param_dict.items():
+            if self._elf_param_dict.get(param) != value:
+                self.debug(f"new ELF param: {param}: {value}")
         self.set_elf_param_dict(elf_param_dict)
         return self
 
     def set_elf_param_dict(self, elf_param_dict: Dict[str, str]) -> ElfParams:
-        for param, value in elf_param_dict.items():
-            if self._elf_param_dict.get(param) != value:
-                self.debug(f"new ELF param: {param}: {value}")
         self._elf_param_dict = elf_param_dict
         return self

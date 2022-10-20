@@ -43,48 +43,6 @@ class SolanaCli(CliBase):
             raise
 
 
-@logged_group("neon.Proxy")
-def get_solana_accounts(config, *, logger) -> List[SolAccount]:
-    def read_sol_account(name) -> Optional[SolAccount]:
-        if not os.path.isfile(name):
-            return None
-        logger.debug(f"Open a sol_account file: {name}")
-        with open(name.strip(), mode='r') as d:
-            pkey = (d.read())
-            num_list = [int(v) for v in pkey.strip("[] \n").split(',')]
-            value_list = bytes(num_list[0:32])
-            return SolAccount.from_secret_key(value_list)
-
-    res = SolanaCli(config).call('config', 'get')
-    logger.debug(f"Got solana config: {res}")
-    substr = "Keypair Path: "
-    path = ""
-    for line in res.splitlines():
-        if line.startswith(substr):
-            path = line[len(substr):].strip()
-    if path == "":
-        raise Exception("cannot get keypair path")
-
-    path = path.strip()
-
-    signer_list = []
-    (file_name, file_ext) = os.path.splitext(path)
-    i = 0
-    while True:
-        i += 1
-        full_path = file_name + (str(i) if i > 1 else '') + file_ext
-        signer = read_sol_account(full_path)
-        if not signer:
-            break
-        signer_list.append(signer)
-        logger.debug(f'Add signer: {signer.public_key}')
-
-    if not len(signer_list):
-        raise Exception("No keypairs")
-    logger.debug(f"Got signer list of: {len(signer_list)} - keys")
-    return signer_list
-
-
 class NeonCli(CliBase):
     EMULATOR_LOGLEVEL = {
         logging.CRITICAL: "off",

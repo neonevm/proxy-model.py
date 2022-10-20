@@ -1,18 +1,19 @@
 from typing import List, Type, Callable, cast
 
-from ..common_neon.sorted_queue import SortedQueue
+from .executor_mng import MPExecutorMng
+from .mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
+from .mempool_api import MPRequest, MPRequestType, MPALTInfo, MPALTListResult
+from .mempool_periodic_task import MPPeriodicTaskLoop
+from .operator_resource_mng import OpResMng
 
-from ..mempool.mempool_api import IMPExecutor, MPRequest, MPRequestType, MPALTInfo, MPALTListResult
-from ..mempool.mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
-from ..mempool.mempool_periodic_task import MPPeriodicTaskLoop
-from ..mempool.operator_resource_mng import OpResMng
+from ..common_neon.sorted_queue import SortedQueue
 
 
 class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
     _freeing_depth = 512 + 32
 
-    def __init__(self, executor: IMPExecutor, op_res_mng: OpResMng) -> None:
-        super().__init__(name='alt', sleep_time=30, executor=executor)
+    def __init__(self, executor_mng: MPExecutorMng, op_res_mng: OpResMng) -> None:
+        super().__init__(name='alt', sleep_time=30, executor_mng=executor_mng)
         self._op_res_mng = op_res_mng
         self._iteration = 0
         self._block_height = 0
@@ -34,8 +35,8 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
         self._iteration += 1
 
     def _submit_get_list_request(self) -> None:
-        op_key_list = self._op_res_mng.get_signer_list()
-        mp_req = MPGetALTList(req_id=self._generate_req_id('get-alt'), operator_key_list=op_key_list)
+        secret_list = self._op_res_mng.get_secret_list()
+        mp_req = MPGetALTList(req_id=self._generate_req_id('get-alt'), secret_list=secret_list)
         self._submit_request_to_executor(mp_req)
 
     def _submit_free_list_request(self, queue, mp_req_type: Type) -> None:
@@ -61,7 +62,7 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
     def _process_error(self, _: MPALTListResult) -> None:
         pass
 
-    def _process_result(self, mp_req: MPRequest, mp_res: MPALTListResult) -> None:
+    async def _process_result(self, mp_req: MPRequest, mp_res: MPALTListResult) -> None:
         self._block_height = mp_res.block_height
         if mp_req.type == MPRequestType.GetALTList:
             self._process_get_list_result(mp_res)

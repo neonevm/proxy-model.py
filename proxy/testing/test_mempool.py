@@ -14,8 +14,9 @@ from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.solana_tx import SolPubKey
 
-from ..mempool.mempool import MemPool, IMPExecutor, MPTask, MPTxRequestList
-from ..mempool.mempool_api import MPRequest, MPRequestType
+from ..mempool.executor_mng import MPExecutorMng
+from ..mempool.mempool import MemPool, MPTask, MPTxRequestList
+from ..mempool.mempool_api import MPRequest, MPRequestType, OpResIdent
 from ..mempool.mempool_api import MPTxExecRequest, MPTxExecResult, MPTxExecResultCode
 from ..mempool.mempool_api import MPGasPriceResult, MPSenderTxCntData
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
@@ -47,7 +48,7 @@ def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: int
         sig=neon_sig,
         neon_tx=neon_tx,
         neon_tx_exec_cfg=neon_tx_exec_cfg,
-        resource_ident='test',
+        res_ident=OpResIdent(public_key='test', private_key=b'test'),
         elf_param_dict=ElfParams().elf_param_dict
     )
     return mp_tx_request
@@ -69,7 +70,10 @@ class MockTask:
         return self._exception
 
 
-class MockMPExecutor(IMPExecutor):
+class MockMPExecutor(MPExecutorMng):
+    def __init__(self, *args, **kwargs):
+        pass
+
     def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
         return MPTask(1, MockTask(MPTxExecResult(MPTxExecResultCode.Done, None)), mp_request)
 
@@ -79,19 +83,31 @@ class MockMPExecutor(IMPExecutor):
     def release_executor(self, executor_id: int):
         pass
 
+    def __del__(self):
+        pass
+
 
 class MockResourceManager(OpResMng):
     def __init__(self, _):
         pass
 
-    def get_resource(self, ident: str) -> Optional[str]:
-        return 'test'
+    def init_resource_list(self, res_ident_list: List[Union[OpResIdent, bytes]]) -> None:
+        pass
+
+    def get_resource(self, ident: str) -> OpResIdent:
+        return OpResIdent(public_key='test', private_key=b'test')
+
+    def enable_resource(self, ident: OpResIdent) -> None:
+        pass
 
     def release_resource(self, ident: str) -> None:
         pass
 
-    def get_disabled_resource_list(self) -> List[str]:
-        return []
+    def update_resource(self, neon_sig: str) -> None:
+        pass
+
+    def get_disabled_resource(self) -> Optional[OpResIdent]:
+        return None
 
 
 class FakeConfig(Config):
@@ -131,6 +147,13 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         price_result = MPGasPriceResult(suggested_gas_price=1, min_gas_price=1)
         self._mempool._gas_price_task_loop._task = MockTask(None, False)
         self._mempool._gas_price_task_loop._gas_price = price_result
+
+        self._mempool._op_res_init_task_loop.task = MockTask(None, False)
+        self._mempool._op_res_get_list_task_loop.task = MockTask(None, False)
+
+        self._mempool._elf_param_dict_task_loop.task = MockTask(None, False)
+        self._mempool._state_tx_cnt_task_loop.task = MockTask(None, False)
+        self._mempool._free_alt_queue_task_loop.task = MockTask(None, False)
 
     @patch.object(MockMPExecutor, "submit_mp_request")
     @patch.object(MockMPExecutor, "is_available", return_value=True)
