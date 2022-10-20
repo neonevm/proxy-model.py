@@ -12,7 +12,7 @@ from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolPubKey
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.eth_proto import NeonTx
-from proxy.mempool.operator_resource_mng import OpResInfo, OpResInit
+from proxy.mempool.operator_resource_mng import OpResInfo, OpResInit, OpResIdent
 
 from proxy.testing.testing_helpers import Proxy
 
@@ -68,6 +68,8 @@ class FakeConfig(Config):
 
 
 class CancelTest(unittest.TestCase):
+    proxy: Proxy
+
     @classmethod
     def setUpClass(cls):
         print("\ntest_indexer_work.py setUpClass")
@@ -114,7 +116,11 @@ class CancelTest(unittest.TestCase):
         cls.create_invoked_transaction_combined(cls)
 
     def create_neon_ix_builder(self, raw_tx, neon_account_list):
-        resource = OpResInfo(self.signer, int.from_bytes(raw_tx[:8], byteorder="little"))
+        resource = OpResInfo.from_ident(OpResIdent(
+            public_key=str(self.signer.public_key),
+            private_key=self.signer.secret_key,
+            res_id=int.from_bytes(raw_tx[:8], byteorder="little")
+        ))
         config = FakeConfig()
         OpResInit(config, SolInteractor(config, config.solana_url)).init_resource(resource)
 

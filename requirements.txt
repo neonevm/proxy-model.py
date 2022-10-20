@@ -10,6 +10,7 @@ ethereum
 py-solc-x==1.1.1
 flask==2.2.2
 prometheus_client==0.15.0
+hvac==1.0.2
 requests
 base58
 pysha3

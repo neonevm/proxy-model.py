@@ -38,7 +38,7 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
     def execute_neon_tx_impl(self, mp_tx_req: MPTxExecRequest):
         ElfParams().set_elf_param_dict(mp_tx_req.elf_param_dict)
 
-        resource = OpResInfo.from_ident(mp_tx_req.resource_ident)
+        resource = OpResInfo.from_ident(mp_tx_req.res_ident)
 
         neon_tx = mp_tx_req.neon_tx
         neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg

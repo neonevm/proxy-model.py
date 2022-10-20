@@ -213,7 +213,7 @@ class SolTxListSender:
             return SolTxSendState.Status.BadNonceError
         elif tx_error_parser.check_if_alt_uses_invalid_index():
             return SolTxSendState.Status.AltInvalidIndexError
-        elif tx_error_parser.check_if_account_already_exists():
+        elif tx_error_parser.check_if_already_finalized():
             return SolTxSendState.Status.AlreadyFinalizedError
         elif tx_error_parser.check_if_blockhash_notfound():
             if tx.recent_blockhash == self._blockhash:
