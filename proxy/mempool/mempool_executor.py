@@ -9,14 +9,16 @@ from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
 
-from ..mempool.mempool_api import MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPOpResInitRequest
-from ..mempool.mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
-from ..mempool.mempool_executor_task_gas_price import MPExecutorGasPriceTask
-from ..mempool.mempool_executor_task_op_res import MPExecutorOpResTask
-from ..mempool.mempool_executor_task_elf_params import MPExecutorElfParamsTask
-from ..mempool.mempool_executor_task_state_tx_cnt import MPExecutorStateTxCntTask
-from ..mempool.mempool_executor_task_exec_neon_tx import MPExecutorExecNeonTxTask
-from ..mempool.mempool_executor_task_free_alt_queue import MPExecutorFreeALTQueueTask
+from .mempool_api import MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPElfParamDictRequest
+from .mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
+from .mempool_api import MPOpResInitRequest, MPOpResGetListRequest
+
+from .mempool_executor_task_gas_price import MPExecutorGasPriceTask
+from .mempool_executor_task_op_res import MPExecutorOpResTask
+from .mempool_executor_task_elf_params import MPExecutorElfParamsTask
+from .mempool_executor_task_state_tx_cnt import MPExecutorStateTxCntTask
+from .mempool_executor_task_exec_neon_tx import MPExecutorExecNeonTxTask
+from .mempool_executor_task_free_alt_queue import MPExecutorFreeALTQueueTask
 
 
 @logged_group("neon.MemPool")
@@ -70,10 +72,13 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         elif mp_req.type == MPRequestType.GetGasPrice:
             return self._gas_price_task.calc_gas_price()
         elif mp_req.type == MPRequestType.GetElfParamDict:
-            return self._elf_params_task.read_elf_param_dict()
+            mp_elf_req = cast(MPElfParamDictRequest, mp_req)
+            return self._elf_params_task.read_elf_param_dict(mp_elf_req)
         elif mp_req.type == MPRequestType.GetStateTxCnt:
             mp_state_req = cast(MPSenderTxCntRequest, mp_req)
             return self._state_tx_cnt_task.read_state_tx_cnt(mp_state_req)
+        elif mp_req.type == MPRequestType.GetOperatorResourceList:
+            return self._op_res_task.get_op_res_list()
         elif mp_req.type == MPRequestType.InitOperatorResource:
             mp_op_res_req = cast(MPOpResInitRequest, mp_req)
             return self._op_res_task.init_op_res(mp_op_res_req)

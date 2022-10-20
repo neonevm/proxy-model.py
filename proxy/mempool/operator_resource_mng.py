@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import math
+import dataclasses
+
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Deque, Set, Union, cast
+from collections import deque
 
 from logged_groups import logged_group
 
@@ -13,60 +16,46 @@ from ..common_neon.address import NeonAddress, neon_2program, perm_account_seed,
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.config import Config
 from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
-from ..common_neon.environment_utils import get_solana_accounts
 from ..common_neon.errors import BadResourceError
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolPubKey, SolAccount
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
+from ..mempool.mempool_api import OpResIdent
 
-@logged_group("neon.MemPool")
+
+@dataclasses.dataclass(frozen=True)
 class OpResInfo:
-    def __init__(self, signer: SolAccount, resource_id: int):
-        self._signer = signer
-        self._resource_id = resource_id
+    ident: OpResIdent
+    signer: SolAccount
 
-        self._holder_seed = perm_account_seed(b'holder-', resource_id)
-        self._holder = account_with_seed(self.public_key, self._holder_seed)
+    holder: SolPubKey
+    holder_seed: bytes
 
-        self._ether = NeonAddress.from_private_key(self.secret_key)
+    neon_address: NeonAddress
 
     @staticmethod
-    def from_ident(ident: str) -> OpResInfo:
-        key, rid = ident.split(':')
-        return OpResInfo(signer=SolAccount.from_secret_key(bytes.fromhex(key)), resource_id=int(rid, 16))
+    def from_ident(ident: OpResIdent) -> OpResInfo:
+        signer = SolAccount.from_secret_key(ident.private_key)
+        assert ident.public_key == str(signer.public_key)
+
+        holder_seed = perm_account_seed(b'holder-', ident.res_id)
+        holder = account_with_seed(signer.public_key, holder_seed)
+        neon_address = NeonAddress.from_private_key(signer.secret_key)
+
+        return OpResInfo(ident=ident, signer=signer, holder=holder, holder_seed=holder_seed, neon_address=neon_address)
 
     def __str__(self) -> str:
-        return f'{str(self.public_key)}:{self._resource_id}'
-
-    @property
-    def holder(self) -> SolPubKey:
-        return self._holder
-
-    @property
-    def holder_seed(self) -> bytes:
-        return self._holder_seed
-
-    @property
-    def ether(self) -> NeonAddress:
-        return self._ether
-
-    @property
-    def signer(self) -> SolAccount:
-        return self._signer
+        return str(self.ident)
 
     @property
     def public_key(self) -> SolPubKey:
-        return self._signer.public_key
+        return self.signer.public_key
 
     @property
     def secret_key(self) -> bytes:
-        return self._signer.secret_key
-
-    @property
-    def resource_id(self) -> int:
-        return self._resource_id
+        return self.signer.secret_key
 
 
 @logged_group("neon.MemPool")
@@ -83,7 +72,7 @@ class OpResInit:
 
             builder = NeonIxBuilder(resource.public_key)
             self._create_holder_account(builder, resource)
-            self._create_ether_account(builder, resource)
+            self._create_neon_account(builder, resource)
         except BadResourceError:
             raise
         except BaseException as exc:
@@ -114,185 +103,246 @@ class OpResInit:
         tx_sender = SolTxListSender(self._config, self._solana, resource.signer)
         tx_sender.send([stage.tx])
 
-    def _create_ether_account(self, builder: NeonIxBuilder, resource: OpResInfo):
-        solana_address = neon_2program(resource.ether)[0]
+    def _create_neon_account(self, builder: NeonIxBuilder, resource: OpResInfo):
+        solana_address = neon_2program(resource.neon_address)[0]
 
         account_info = self._solana.get_account_info(solana_address)
         if account_info is not None:
-            self.debug(f"Use ether account {str(solana_address)}({str(resource.ether)}) for resource {resource}")
+            self.debug(f"Use neon account {str(solana_address)}({str(resource.neon_address)}) for resource {resource}")
             return []
 
-        self.debug(f"Create ether account {str(solana_address)}({str(resource.ether)}) for resource {resource}")
-        stage = NeonCreateAccountTxStage(builder, {"address": resource.ether})
+        self.debug(f"Create neon account {str(solana_address)}({str(resource.neon_address)}) for resource {resource}")
+        stage = NeonCreateAccountTxStage(builder, {"address": resource.neon_address})
         stage.set_balance(self._solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0])
         self._execute_stage(stage, resource)
 
     def _create_holder_account(self, builder: NeonIxBuilder, resource: OpResInfo) -> None:
         holder_address = str(resource.holder)
-        holder_seed = resource.holder_seed
         holder_info = self._solana.get_account_info(resource.holder)
         size = self._config.holder_size
         balance = self._solana.get_multiple_rent_exempt_balances_for_size([size])[0]
 
         if holder_info is None:
             self.debug(f"Create account {holder_address} for resource {resource}")
-            self._execute_stage(NeonCreateHolderAccountStage(builder, holder_seed, size, balance), resource)
+            self._execute_stage(NeonCreateHolderAccountStage(builder, resource.holder_seed, size, balance), resource)
         elif holder_info.lamports < balance:
             self.debug(f"Resize account {holder_address} for resource {resource}")
-            self._execute_stage(NeonDeleteHolderAccountStage(builder, resource.holder_seed), resource)
-            self._execute_stage(NeonCreateHolderAccountStage(builder, holder_seed, size, balance), resource)
+            self._recreate_holder(builder, resource, balance)
         elif holder_info.owner != self._config.evm_loader_id:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
         elif holder_info.tag == ACTIVE_HOLDER_TAG:
+            self.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
             self._unlock_storage_account(resource)
         elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG):
-            raise BadResourceError(f'Holder {holder_address} for resource {resource} has bad tag {holder_info.tag}')
+            self.debug(f"Wrong tag {holder_info.tag} of {holder_address} for resource {resource}")
+            self._recreate_holder(builder, resource, size)
         else:
             self.debug(f"Use account {str(holder_info.owner)} for resource {resource}")
 
+    def _recreate_holder(self, builder: NeonIxBuilder, resource: OpResInfo, balance: int) -> None:
+        size = self._config.holder_size
+        self._execute_stage(NeonDeleteHolderAccountStage(builder, resource.holder_seed), resource)
+        self._execute_stage(NeonCreateHolderAccountStage(builder, resource.holder_seed, size, balance), resource)
+
     def _unlock_storage_account(self, resource: OpResInfo) -> None:
-        self.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
         holder_info = self._solana.get_holder_account_info(resource.holder)
         cancel_tx_executor = CancelTxExecutor(self._config, self._solana, resource.signer)
         cancel_tx_executor.add_blocked_holder_account(holder_info)
         cancel_tx_executor.execute_tx_list()
 
 
-class OpResIdent:
-    def __init__(self, signer: SolAccount, resource_id: int):
-        self._signer = signer
-        self._resource_id = resource_id
+@dataclasses.dataclass(frozen=True)
+class OpResUsedTime:
+    ident: OpResIdent
 
-        self._last_used_time = 0
-        self._used_cnt = 0
+    last_used_time: int = 0
+    used_cnt: int = 0
+    neon_sig: str = ''
 
-    @property
-    def ident(self) -> str:
-        return f'{self._signer.secret_key.hex()}:{hex(self._resource_id)}'
+    def __str__(self) -> str:
+        return str(self.ident)
 
-    @property
-    def last_used_time(self) -> int:
-        return self._last_used_time
-
-    @property
-    def used_cnt(self) -> int:
-        return self._used_cnt
+    def __hash__(self) -> int:
+        return hash(self.ident)
 
     def set_last_used_time(self, value: int) -> None:
-        self._used_cnt += 1
-        self._last_used_time = value
+        object.__setattr__(self, 'used_cnt', self.used_cnt + 1)
+        object.__setattr__(self, 'last_used_time', value)
+
+    def set_neon_sig(self, value: str) -> None:
+        assert len(value) > 0
+        object.__setattr__(self, 'neon_sig', value)
+
+    def reset_neon_sig(self) -> None:
+        object.__setattr__(self, 'neon_sig', '')
 
     def reset_used_cnt(self) -> None:
-        self._used_cnt = 0
+        object.__setattr__(self, 'used_cnt', 0)
+
+
+class OpResIdentListBuilder:
+    def __init__(self, config: Config):
+        self._config = config
+
+    def build_resource_list(self, secret_list: List[bytes]) -> List[OpResIdent]:
+        ident_set: Set[OpResIdent] = set()
+
+        stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
+        for res_id in range(self._config.perm_account_id, stop_perm_account_id):
+            for ident in secret_list:
+                sol_account = SolAccount.from_secret_key(ident)
+                ident = OpResIdent(
+                    public_key=str(sol_account.public_key),
+                    private_key=sol_account.secret_key,
+                    res_id=res_id
+                )
+                ident_set.add(ident)
+
+        return list(ident_set)
 
 
 @logged_group("neon.MemPool")
 class OpResMng:
     def __init__(self, config: Config):
-        self._free_resource_list: List[OpResIdent] = []
-        self._signer_list: List[SolAccount] = []
-        self._used_resource_dict: Dict[str, OpResIdent] = {}
-        self._disabled_resource_list: List[OpResIdent] = []
+        self._secret_list: List[bytes] = []
+        self._ident_set: Set[OpResIdent] = set()
+        self._free_res_ident_list: Deque[OpResUsedTime] = deque()
+        self._used_res_ident_dict: Dict[str, OpResUsedTime] = dict()
+        self._disabled_res_ident_list: Deque[OpResIdent] = deque()
+        self._checked_res_ident_set: Set[OpResIdent] = set()
         self._config = config
-        self._resource_cnt = 0
-        self._init_resource_list()
+        self._last_check_time = 0
 
-    def _init_resource_list(self):
-        self._signer_list: List[SolAccount] = self._get_solana_accounts()
+    def init_resource_list(self, res_ident_list: List[OpResIdent]) -> None:
+        old_res_cnt = self.resource_cnt
 
-        stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
-        for resource_id in range(self._config.perm_account_id, stop_perm_account_id):
-            for signer in self._signer_list:
-                info = OpResIdent(signer=signer, resource_id=resource_id)
-                self._disabled_resource_list.append(info)
-        self._resource_cnt = len(self._disabled_resource_list)
-        assert self.resource_cnt != 0, 'Operator has NO resources!'
+        new_ident_set: Set[OpResIdent] = set(res_ident_list)
+        rm_ident_set: Set[OpResIdent] = self._ident_set.difference(new_ident_set)
+        add_ident_set: Set[OpResIdent] = new_ident_set.difference(self._ident_set)
 
-    def _get_solana_accounts(self) -> List[SolAccount]:
-        return get_solana_accounts(self._config)
+        if (len(rm_ident_set) == 0) and (len(add_ident_set) == 0):
+            self.debug(f'Same resource list')
+            return
+
+        self._ident_set = new_ident_set
+        self._free_res_ident_list = deque([res for res in self._free_res_ident_list if res.ident not in rm_ident_set])
+        self._disabled_res_ident_list = deque([res for res in self._disabled_res_ident_list if res not in rm_ident_set])
+        self._checked_res_ident_set = {res for res in self._checked_res_ident_set if res not in rm_ident_set}
+
+        for res in rm_ident_set:
+            self.debug(f'Remove resource {res}')
+        for res in add_ident_set:
+            self.debug(f'Add resource {res}')
+            self._disabled_res_ident_list.append(res)
+
+        self._secret_list: List[bytes] = [pk for pk in {res.private_key for res in self._ident_set}]
+
+        if old_res_cnt != self.resource_cnt != 0:
+            self.debug(f'Change number of resources from {old_res_cnt} to {self.resource_cnt}')
 
     @property
     def resource_cnt(self) -> int:
-        return self._resource_cnt
+        return len(self._ident_set)
 
     @staticmethod
     def _get_current_time() -> int:
         return math.ceil(datetime.now().timestamp())
 
-    def _get_resource_impl(self, neon_sig: str) -> Optional[OpResIdent]:
-        resource = self._used_resource_dict.get(neon_sig, None)
-        if resource is not None:
-            return resource
+    def _get_resource_impl(self, neon_sig: str) -> Optional[OpResUsedTime]:
+        res_used_time = self._used_res_ident_dict.get(neon_sig, None)
+        if res_used_time is not None:
+            self.debug(f'Reuse resource {res_used_time} for tx {neon_sig}')
+            return res_used_time
 
-        if len(self._free_resource_list):
-            resource = self._free_resource_list.pop(0)
-            self._used_resource_dict[neon_sig] = resource
-            return resource
+        if len(self._free_res_ident_list) > 0:
+            res_used_time = self._free_res_ident_list.popleft()
+            self._used_res_ident_dict[neon_sig] = res_used_time
+            res_used_time.set_neon_sig(neon_sig)
+            self.debug(f'Use resource {res_used_time} for tx {neon_sig}')
+            return res_used_time
 
         return None
 
-    def get_resource(self, neon_sig: str) -> Optional[str]:
-        resource = self._get_resource_impl(neon_sig)
-        if resource is None:
+    def _pop_used_resource(self, neon_sig: str) -> Optional[OpResUsedTime]:
+        res_used_time = self._used_res_ident_dict.pop(neon_sig, None)
+        if (res_used_time is None) or (res_used_time.ident not in self._ident_set):
+            self.debug(f'Skip resource {str(res_used_time)} for tx {neon_sig}')
             return None
 
-        current_time = self._get_current_time()
-        resource.set_last_used_time(current_time)
+        res_used_time.reset_neon_sig()
+        return res_used_time
 
-        resource_info = OpResInfo.from_ident(resource.ident)
-        self.debug(
-            f'Resource is selected: {str(resource_info)}, ' +
-            f'holder: {str(resource_info.holder)}, ' +
-            f'ether: {str(resource_info.ether)}'
-        )
-        return resource.ident
+    def get_resource(self, neon_sig: str) -> Optional[OpResIdent]:
+        res_used_time = self._get_resource_impl(neon_sig)
+        if res_used_time is None:
+            return None
+
+        now = self._get_current_time()
+        res_used_time.set_last_used_time(now)
+
+        return res_used_time.ident
 
     def update_resource(self, neon_sig: str) -> None:
-        resource = self._used_resource_dict.get(neon_sig, None)
-        if resource is not None:
-            current_time = self._get_current_time()
-            resource.set_last_used_time(current_time)
+        res_used_time = self._used_res_ident_dict.get(neon_sig, None)
+        if res_used_time is not None:
+            self.debug(f'Update time for resource {res_used_time}')
+            now = self._get_current_time()
+            res_used_time.set_last_used_time(now)
 
     def release_resource(self, neon_sig: str) -> None:
-        resource = self._used_resource_dict.pop(neon_sig, None)
-        if resource is None:
+        res_used_time = self._pop_used_resource(neon_sig)
+        if res_used_time is None:
             return
 
         recheck_cnt = self._config.recheck_resource_after_uses_cnt
-        if resource.used_cnt > recheck_cnt:
-            self._disabled_resource_list.append(resource)
+        if res_used_time.used_cnt > recheck_cnt:
+            self.debug(f'Recheck resource {res_used_time} by counter')
+            self._disabled_res_ident_list.append(res_used_time.ident)
         else:
-            self._free_resource_list.append(resource)
+            self.debug(f'Release resource {res_used_time}')
+            self._free_res_ident_list.append(res_used_time)
 
-    def disable_resource(self, neon_sig: str) -> None:
-        resource = self._used_resource_dict.pop(neon_sig, None)
-        if resource is None:
+    def disable_resource(self, ident_or_sig: Union[OpResIdent, str]) -> None:
+        if isinstance(ident_or_sig, str):
+            ident_or_sig = self._pop_used_resource(cast(str, ident_or_sig))
+        if ident_or_sig is None:
             return
 
-        self._disabled_resource_list.append(resource)
+        ident = cast(OpResIdent, ident_or_sig)
+        self.debug(f'Disable resource {ident}')
+        self._checked_res_ident_set.discard(ident)
+        self._disabled_res_ident_list.append(ident)
 
-    def enable_resource(self, ident: str) -> None:
-        for i, resource in enumerate(self._disabled_resource_list):
-            if resource.ident == ident:
-                self._disabled_resource_list.pop(i)
-                resource.reset_used_cnt()
-                self._free_resource_list.append(resource)
-                break
+    def enable_resource(self, ident: OpResIdent) -> None:
+        if ident not in self._ident_set:
+            self.debug(f'Skip resource {ident}')
+            return
 
-    def get_signer_list(self) -> List[str]:
-        return [signer.secret_key.hex() for signer in self._signer_list]
+        self.debug(f'Enable resource {ident}')
+        self._checked_res_ident_set.discard(ident)
+        self._free_res_ident_list.append(OpResUsedTime(ident=ident))
 
-    def get_disabled_resource_list(self) -> List[str]:
-        current_time = self._get_current_time()
+    def get_secret_list(self) -> List[bytes]:
+        return self._secret_list
 
+    def get_disabled_resource(self) -> Optional[OpResIdent]:
+        now = self._get_current_time()
         recheck_sec = self._config.recheck_used_resource_sec
-        check_time = current_time - recheck_sec
-        old_resource_list: List[str, OpResIdent] = []
-        for neon_sig, resource in self._used_resource_dict.items():
-            if resource.last_used_time < check_time:
-                self._disabled_resource_list.append(resource)
-                old_resource_list.append(neon_sig)
-        for neon_sig in old_resource_list:
-            self._used_resource_dict.pop(neon_sig)
+        check_time = now - recheck_sec
 
-        return [resource.ident for resource in self._disabled_resource_list]
+        if self._last_check_time < check_time:
+            self._last_check_time = now
+            for neon_sig, res_used_time in list(self._used_res_ident_dict.items()):
+                if res_used_time.last_used_time < check_time:
+                    res_used_time = self._pop_used_resource(neon_sig)
+                    if res_used_time is not None:
+                        self.debug(f'Recheck resource {res_used_time} by time usage')
+                        self._disabled_res_ident_list.append(res_used_time.ident)
+
+        if len(self._disabled_res_ident_list) == 0:
+            return None
+
+        ident = self._disabled_res_ident_list.popleft()
+        self.debug(f'Recheck resource {ident}')
+        self._checked_res_ident_set.add(ident)
+        return ident
