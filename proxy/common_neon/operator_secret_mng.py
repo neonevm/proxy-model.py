@@ -1,14 +1,16 @@
-import hvac
-import os
 import base64
+import os
 
 from typing import List, Optional
+
+import hvac
+from hvac.api.secrets_engines.kv_v2 import DEFAULT_MOUNT_POINT
 
 from logged_groups import logged_group
 
 from ..common_neon.config import Config
-from ..common_neon.solana_tx import SolAccount
 from ..common_neon.environment_utils import SolanaCli
+from ..common_neon.solana_tx import SolAccount
 
 
 @logged_group("neon.Decorder")
@@ -18,37 +20,53 @@ class OpSecretMng:
 
     def read_secret_list(self) -> List[bytes]:
         if self._config.hvac_url is not None:
-            return self._read_secret_list_from_hvac()
-        return self._read_secret_list_from_fs()
+            secret_list = self._read_secret_list_from_hvac()
+        else:
+            secret_list = self._read_secret_list_from_fs()
+
+        if len(secret_list) == 0:
+            self.warning("No secrets")
+        else:
+            self.debug(f"Got secret list of: {len(secret_list)} - keys")
+
+        return secret_list
 
     def _read_secret_list_from_hvac(self) -> List[bytes]:
+        self.debug('Read secret keys from HashiCorp Vault...')
+
         client = hvac.Client(url=self._config.hvac_url, token=self._config.hvac_token)
         if not client.is_authenticated():
-            self.warning('Cannot connect to hashicorp vault!')
+            self.warning('Cannot connect to HashiCorp Vault!')
             return []
 
         secret_list: List[bytes] = []
 
+        mount = self._config.hvac_mount if self._config.hvac_mount is not None else DEFAULT_MOUNT_POINT
+
         base_path = self._config.hvac_path
-        response_list = client.secrets.kv.v2.list_secrets(path=base_path)
+        try:
+            response_list = client.secrets.kv.v2.list_secrets(path=base_path, mount_point=mount)
+        except BaseException as exc:
+            self.warning(f'Fail to read secret list from {base_path}')
+            return []
 
         for key_name in response_list.get('data', {}).get('keys', []):
             key_path = os.path.join(base_path, key_name)
             try:
-                data = client.secrets.kv.v2.read_secret(key_path)
-                secret = data.get('data', {}).data('data', {}).get('secret_key', None)
+                data = client.secrets.kv.v2.read_secret(path=key_path, mount_point=mount)
+                secret = data.get('data', {}).get('data', {}).get('secret_key', None)
                 if secret is None:
                     self.warning(f'No secret_key in the path {key_path}')
                     continue
 
                 sol_account = SolAccount.from_secret_key(base64.b64decode(secret))
                 secret_list.append(sol_account.secret_key)
-                self.debug(f'Get secret: {str(secret.public_key)}')
+                self.debug(f'Get secret: {str(sol_account.public_key)}')
 
-            except Exception as exc:
-                self.warning(f'Fail to read secret from {key_path}', exc_info=exc)
+            except (Exception, ):
+                self.warning(f'Fail to read secret from {key_path}')
 
-        return self._read_secret_list_from_fs()
+        return secret_list
 
     def _read_secret_file(self, name: str) -> Optional[SolAccount]:
         self.debug(f"Open a secret file: {name}")
@@ -61,6 +79,8 @@ class OpSecretMng:
             return SolAccount.from_secret_key(bytes(num_list[:32]))
 
     def _read_secret_list_from_fs(self) -> List[bytes]:
+        self.debug('Read secret keys from filesystem...')
+
         res = SolanaCli(self._config).call('config', 'get')
         self.debug(f"Got solana config: {res}")
         substr = "Keypair Path: "
@@ -90,9 +110,4 @@ class OpSecretMng:
             secret_list.append(secret.secret_key)
             self.debug(f'Get secret: {str(secret.public_key)}')
 
-        if len(secret_list) == 0:
-            self.warning("No secrets")
-
-        self.debug(f"Got secret list of: {len(secret_list)} - keys")
         return secret_list
-

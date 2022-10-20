@@ -65,13 +65,19 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
         self._task = None
         with logging_context(req_id=task.mp_request.req_id):
             try:
+                while True:
+                    if not task.aio_task.done():
+                        await asyncio.sleep(0.1)
+                    else:
+                        break
+
                 await self._check_request_status_impl(task)
             except BaseException as exc:
                 self.error(f'Error during processing {self._name} on mempool.', exc_info=exc)
+            finally:
+                self._executor_mng.release_executor(task.executor_id)
 
     async def _check_request_status_impl(self, task: MPTask) -> None:
-        self._executor_mng.release_executor(task.executor_id)
-
         exc = task.aio_task.exception()
         if exc is not None:
             self.error(f'Error during processing {self._name} on executor.', exc_info=exc)

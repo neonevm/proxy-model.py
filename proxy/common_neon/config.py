@@ -55,6 +55,7 @@ class Config:
         self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 15 * 60)
         self._hvac_url = os.environ.get('HVAC_URL', None)
         self._hvac_token = os.environ.get('HVAC_TOKEN', None)
+        self._hvac_mount = os.environ.get('HVAC_MOUNT', None)
         self._hvac_path = os.environ.get('HVAC_PATH', '')
 
         pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
@@ -270,6 +271,10 @@ class Config:
         return self._hvac_token
 
     @property
+    def hvac_mount(self) -> Optional[str]:
+        return self._hvac_mount
+
+    @property
     def hvac_path(self) -> str:
         return self._hvac_path
 
@@ -324,5 +329,6 @@ class Config:
             f"HVAC_URL: {self.hvac_url}",
             f"HVAC_TOKEN: {self.hvac_token}",
             f"HVAC_PATH: {self.hvac_path}",
+            f"HVAC_MOUNT: {self.hvac_mount}",
             ""
         ])

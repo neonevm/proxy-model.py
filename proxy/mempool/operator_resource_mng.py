@@ -183,11 +183,12 @@ class OpResUsedTime:
 @logged_group("neon.MemPool")
 class OpResMng:
     def __init__(self, config: Config):
-        self._ident_set: Set[OpResIdent] = set()
         self._secret_list: List[bytes] = []
+        self._ident_set: Set[OpResIdent] = set()
         self._free_res_ident_list: Deque[OpResUsedTime] = deque()
         self._used_res_ident_dict: Dict[str, OpResUsedTime] = dict()
         self._disabled_res_ident_list: Deque[OpResIdent] = deque()
+        self._checked_res_ident_set: Set[OpResIdent] = set()
         self._config = config
         self._last_check_time = 0
 
@@ -206,14 +207,17 @@ class OpResMng:
 
         self._free_res_ident_list = deque([res for res in self._free_res_ident_list if res.ident in self._ident_set])
         self._disabled_res_ident_list = deque([res for res in self._disabled_res_ident_list if res in self._ident_set])
+        self._checked_res_ident_set = {res for res in self._checked_res_ident_set if res in self._ident_set}
 
         not_used_ident_set = {ident for ident in self._ident_set}
         for res in self._free_res_ident_list:
-            not_used_ident_set.remove(res.ident)
+            not_used_ident_set.discard(res.ident)
         for res in self._disabled_res_ident_list:
-            not_used_ident_set.remove(res)
+            not_used_ident_set.discard(res)
+        for res in self._checked_res_ident_set:
+            not_used_ident_set.discard(res)
         for res in self._used_res_ident_dict.values():
-            not_used_ident_set.remove(res.ident)
+            not_used_ident_set.discard(res.ident)
 
         for res in not_used_ident_set:
             self._disabled_res_ident_list.append(res)
@@ -221,7 +225,7 @@ class OpResMng:
         self._secret_list: List[bytes] = [pk for pk in {res.private_key for res in self._ident_set}]
 
         if old_res_cnt != self.resource_cnt != 0:
-            self.debug(f'Number of operator resources are changed from {old_res_cnt} to {self.resource_cnt}')
+            self.debug(f'Change number of resources from {old_res_cnt} to {self.resource_cnt}')
 
     @property
     def resource_cnt(self) -> int:
@@ -234,12 +238,14 @@ class OpResMng:
     def _get_resource_impl(self, neon_sig: str) -> Optional[OpResUsedTime]:
         res_used_time = self._used_res_ident_dict.get(neon_sig, None)
         if res_used_time is not None:
+            self.debug(f'Reuse resource {res_used_time} for tx {neon_sig}')
             return res_used_time
 
         if len(self._free_res_ident_list) > 0:
             res_used_time = self._free_res_ident_list.popleft()
             self._used_res_ident_dict[neon_sig] = res_used_time
             res_used_time.set_neon_sig(neon_sig)
+            self.debug(f'Use resource {res_used_time} for tx {neon_sig}')
             return res_used_time
 
         return None
@@ -247,6 +253,7 @@ class OpResMng:
     def _pop_used_resource(self, neon_sig: str) -> Optional[OpResUsedTime]:
         res_used_time = self._used_res_ident_dict.pop(neon_sig, None)
         if (res_used_time is None) or (res_used_time.ident not in self._ident_set):
+            self.debug(f'Skip resource {str(res_used_time)} for tx {neon_sig}')
             return None
 
         res_used_time.reset_neon_sig()
@@ -260,12 +267,12 @@ class OpResMng:
         now = self._get_current_time()
         res_used_time.set_last_used_time(now)
 
-        self.debug(f'Resource is selected: {str(res_used_time)}')
         return res_used_time.ident
 
     def update_resource(self, neon_sig: str) -> None:
         res_used_time = self._used_res_ident_dict.get(neon_sig, None)
         if res_used_time is not None:
+            self.debug(f'Update time for resource {res_used_time}')
             now = self._get_current_time()
             res_used_time.set_last_used_time(now)
 
@@ -276,8 +283,10 @@ class OpResMng:
 
         recheck_cnt = self._config.recheck_resource_after_uses_cnt
         if res_used_time.used_cnt > recheck_cnt:
+            self.debug(f'Recheck resource {res_used_time} by counter')
             self._disabled_res_ident_list.append(res_used_time.ident)
         else:
+            self.debug(f'Enable resource {res_used_time}')
             self._free_res_ident_list.append(res_used_time)
 
     def disable_resource(self, ident_or_sig: Union[OpResIdent, str]) -> None:
@@ -286,11 +295,19 @@ class OpResMng:
         if ident_or_sig is None:
             return
 
-        self._disabled_res_ident_list.append(cast(OpResIdent, ident_or_sig))
+        ident = cast(OpResIdent, ident_or_sig)
+        self.debug(f'Disable resource {ident}')
+        self._checked_res_ident_set.discard(ident)
+        self._disabled_res_ident_list.append(ident)
 
     def enable_resource(self, ident: OpResIdent) -> None:
-        if ident in self._ident_set:
-            self._free_res_ident_list.append(OpResUsedTime(ident=ident))
+        if ident not in self._ident_set:
+            self.debug(f'Skip resource {ident}')
+            return
+
+        self.debug(f'Enable resource {ident}')
+        self._checked_res_ident_set.discard(ident)
+        self._free_res_ident_list.append(OpResUsedTime(ident=ident))
 
     def get_secret_list(self) -> List[bytes]:
         return self._secret_list
@@ -301,13 +318,18 @@ class OpResMng:
         check_time = now - recheck_sec
 
         if self._last_check_time < check_time:
+            self._last_check_time = now
             for neon_sig, res_used_time in list(self._used_res_ident_dict.items()):
                 if res_used_time.last_used_time < check_time:
                     res_used_time = self._pop_used_resource(neon_sig)
                     if res_used_time is not None:
+                        self.debug(f'Recheck resource {res_used_time} by time usage')
                         self._disabled_res_ident_list.append(res_used_time.ident)
-            self._last_check_time = now
 
         if len(self._disabled_res_ident_list) == 0:
             return None
-        return self._disabled_res_ident_list.popleft()
+
+        ident = self._disabled_res_ident_list.popleft()
+        self.debug(f'Recheck resource {ident}')
+        self._checked_res_ident_set.add(ident)
+        return ident

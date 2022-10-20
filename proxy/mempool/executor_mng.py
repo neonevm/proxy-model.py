@@ -43,27 +43,23 @@ class MPExecutorMng:
         self._last_id = 0
 
     async def set_executor_cnt(self, executor_count: int) -> None:
-        return await self._set_executor_cnt(executor_count, True)
-
-    async def _set_executor_cnt(self, executor_count: int, do_init: bool) -> None:
         executor_count = max(executor_count + 1, 3)
         diff_count = executor_count - len(self._executor_dict)
         if diff_count > 0:
-            return await self._run_executors(diff_count, do_init)
+            return await self._run_executors(diff_count)
         elif diff_count < 0:
             return self._stop_executors(-diff_count)
 
-    async def _run_executors(self, executor_count: int, do_init: bool) -> None:
+    async def _run_executors(self, executor_count: int) -> None:
         self.info(f"Run executors +{executor_count} => {len(self._executor_dict) + executor_count}")
         for i in range(executor_count):
-            executor_id = i + self._last_id
+            executor_id = self._last_id
             self._last_id += 1
-            executor_info = MPExecutorMng._create_executor(self._config, executor_id)
+            executor_info = self._create_executor(executor_id)
             self._executor_dict[executor_id] = executor_info
             self._available_executor_pool.appendleft(executor_id)
             executor_info.executor.start()
-            if do_init:
-                await executor_info.client.async_init()
+            await executor_info.client.async_init()
 
     def _stop_executors(self, executor_count: int) -> None:
         self.info(f"Stop executors -{executor_count} => {len(self._executor_dict) - executor_count}")
@@ -76,13 +72,11 @@ class MPExecutorMng:
 
         for i in range(executor_count):
             executor_id, executor_info = self._executor_dict.popitem()
-            self.debug(f"Mark executor for stop: {executor_id}")
+            self.debug(f"Mark to stop executor: {executor_id}")
             self._stopped_executor_dict[executor_id] = executor_info
 
     async def async_init(self):
-        await self._set_executor_cnt(0, False)
-        for ex_info in self._executor_dict.values():
-            await ex_info.client.async_init()
+        await self.set_executor_cnt(0)
 
     def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
         with logging_context(req_id=mp_request.req_id):
@@ -114,10 +108,10 @@ class MPExecutorMng:
             executor = self._stopped_executor_dict.pop(executor_id).executor
             executor.kill()
 
-    @staticmethod
-    def _create_executor(config: Config, executor_id: int) -> ExecutorInfo:
+    def _create_executor(self, executor_id: int) -> ExecutorInfo:
+        self.debug(f'Create executor: {executor_id}')
         client_sock, srv_sock = socket.socketpair()
-        executor = MPExecutor(config, executor_id, srv_sock)
+        executor = MPExecutor(self._config, executor_id, srv_sock)
         client = MPExecutorClient(client_sock)
         return MPExecutorMng.ExecutorInfo(executor=executor, client=client, id=executor_id)
 
