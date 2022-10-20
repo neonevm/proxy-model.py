@@ -23,7 +23,7 @@ env:
 
 jobs:
   build-image:
-    runs-on: ubuntu-latest
+    runs-on: build-runner
     outputs:
       proxy_tag: ${{ steps.tags.outputs.proxy }}
       neon_evm_tag: ${{ steps.tags.outputs.neon_evm }}
@@ -66,7 +66,7 @@ jobs:
   deploy-check:
     needs:
       - build-image
-    runs-on: ubuntu-latest
+    runs-on: build-runner
     steps:
       - uses: actions/checkout@v3
         with:
@@ -90,7 +90,7 @@ jobs:
     if: ${{ (github.base_ref =='develop' && ! github.event.pull_request.draft) || github.event.inputs.full_test_suite }}
     needs:
       - build-image
-    runs-on: test-label
+    runs-on: test-runner
     steps:
       - uses: actions/checkout@v3
         with:
@@ -134,7 +134,7 @@ jobs:
           name: FTS docker logs
           path: ./logs/*
   finalize-image:
-    runs-on: ubuntu-latest
+    runs-on: build-runner
     needs:
       - openzeppelin-tests
       - deploy-check
