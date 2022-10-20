@@ -122,6 +122,7 @@ class TestAirdropperIntegration(TestCase):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
         from_spl_token_acc = self.create_token_account(from_owner.public_key, mint_amount)
+        signer_account = self.create_eth_account()
         to_neon_acc = self.create_eth_account()
 
         print(f'        OWNER {from_owner.public_key}')
@@ -132,23 +133,25 @@ class TestAirdropperIntegration(TestCase):
 
         transfer_amount = 123456
         tx = SolLegacyTx()
+        tx.add(self.create_account_instruction(signer_account.address, from_owner.public_key))
         tx.add(self.create_account_instruction(to_neon_acc.address, from_owner.public_key))
         tx.add(
             SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
                 program_id=self.token.program_id,
                 source=from_spl_token_acc,
-                delegate=self.wrapper.get_neon_account_address(to_neon_acc.address),
+                delegate=self.wrapper.get_neon_account_address(signer_account.address),
                 owner=from_owner.public_key,
                 amount=transfer_amount,
                 signers=[],
             ))
         )
         tx.add(
-            self.wrapper.create_claim_instruction(
+            self.wrapper.create_claim_to_instruction(
                 owner=from_owner.public_key,
                 from_acc=from_spl_token_acc,
                 to_acc=to_neon_acc,
                 amount=transfer_amount,
+                signer_acc=signer_account,
             ).make_tx_exec_from_data_ix()
         )
 
