@@ -12,7 +12,6 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.rpc.types import TxOpts
 from solana.rpc.commitment import Confirmed
 
-from eth_account.signers.local import LocalAccount as NeonAccount
 from logged_groups import logged_group
 from solcx import install_solc
 
@@ -55,6 +54,7 @@ interface IERC20ForSpl {
     function approveSolana(bytes32 spender, uint64 amount) external returns (bool);
     function transferSolana(bytes32 to, uint64 amount) external returns (bool);
     function claim(bytes32 from, uint64 amount) external returns (bool);
+    function claimTo(bytes32 from, address to, uint64 amount) external returns (bool);
 }
 
 '''
@@ -178,6 +178,34 @@ class ERC20Wrapper:
         neon.init_neon_tx(NeonTx.from_string(neon_tx))
         neon.init_neon_account_list(neon_account_dict)
         return neon
+
+    
+    def create_claim_to_instruction(self, owner: SolPubKey, from_acc: SolPubKey, to_acc: NeonAccount, amount: int, signer_acc: NeonAccount):
+        erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
+        nonce = self.proxy.eth.get_transaction_count(signer_acc.address)
+        claim_tx = erc20.functions.claimTo(bytes(from_acc), to_acc.address, amount).build_transaction({'nonce': nonce, 'gasPrice': 0})
+        claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, signer_acc.key)
+
+        neon_tx = bytearray.fromhex(claim_tx.rawTransaction.hex()[2:])
+        emulating_result = self.proxy.neon.emulate(neon_tx)
+
+        neon_account_dict = dict()
+        for account in emulating_result['accounts']:
+            key = account['account']
+            neon_account_dict[key] = SolAccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
+
+        for account in emulating_result['solana_accounts']:
+            key = account['pubkey']
+            neon_account_dict[key] = SolAccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
+
+        neon_account_dict = list(neon_account_dict.values())
+
+        neon = NeonIxBuilder(owner)
+        neon.init_operator_neon(NeonAddress(signer_acc.address))
+        neon.init_neon_tx(NeonTx.from_string(neon_tx))
+        neon.init_neon_account_list(neon_account_dict)
+        return neon
+    
 
     def create_input_liquidity_instruction(self, payer: SolPubKey,
                                            from_address: SolPubKey,
