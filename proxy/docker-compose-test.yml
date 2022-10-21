@@ -27,8 +27,7 @@ services:
 
   proxy_program_loader:
     container_name: proxy_program_loader
-    image: neonlabsorg/proxy:${REVISION}
-#    image: neonlabsorg/evm_loader:ci-proxy-caller-program
+    image: neonlabsorg/neon_test_invoke_program:develop
     environment:
       SOLANA_URL: http://solana:8899
     networks:
