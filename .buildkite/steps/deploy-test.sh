@@ -29,12 +29,11 @@ function cleanup_docker {
 function dump_docker_logs {
     if docker logs proxy >proxy.log 2>&1; then echo "proxy logs saved"; fi
     if docker logs solana >solana.log 2>&1; then echo "solana logs saved"; fi
-    if docker logs proxy_program_loader >proxy_program_loader.log 2>&1; then echo "proxy_program_loader logs saved"; fi
+    if docker logs neon_test_invoke_program_loader >neon_test_invoke_program_loader.log 2>&1; then echo "neon_test_invoke_program_loader logs saved"; fi
     if docker logs dbcreation >dbcreation.log 2>&1; then echo "dbcreation logs saved"; fi
     if docker logs faucet >faucet.log 2>&1; then echo "faucet logs saved"; fi
     if docker logs airdropper >airdropper.log 2>&1; then echo "airdropper logs saved"; fi
     if docker logs indexer >indexer.log 2>&1; then echo "indexer logs saved"; fi
-    if docker logs proxy_program_loader >proxy_program_loader.log 2>&1; then echo "proxy_program_loader.log logs saved"; fi
     cleanup_docker
 }
 
