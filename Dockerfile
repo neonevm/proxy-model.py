@@ -34,7 +34,7 @@ COPY --from=spl /opt/spl-token \
 COPY --from=spl /opt/contracts/contracts/ /opt/contracts/
 
 COPY --from=spl /opt/neon-cli /spl/bin/emulator
-COPY --from=neon_test_invoke_program neon-test-invoke-program-keypair.json /spl/bin/
+COPY --from=neon_test_invoke_program /opt/neon-test-invoke-program-keypair.json /spl/bin/
 
 COPY proxy/operator-keypairs/id.json /root/.config/solana/
 
