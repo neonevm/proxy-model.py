@@ -1,7 +1,8 @@
 import json
 import math
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+
 from logged_groups import logged_group
 
 from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status
@@ -58,6 +59,7 @@ class _GasTxBuilder:
 
 @logged_group("neon.Proxy")
 class GasEstimate:
+    _small_gas_limit = 30_000  # openzeppelin size check
     _tx_builder = _GasTxBuilder()
     _u256_max = int.from_bytes(bytes([0xFF] * 32), "big")
 
@@ -78,6 +80,11 @@ class GasEstimate:
 
         self._solana = solana
         self._config = config
+        self._elf_params = ElfParams()
+
+        self._cached_tx_cost_size: Optional[int] = None
+        self._cached_overhead_cost: Optional[int] = None
+        self._cached_alt_cost: Optional[int] = None
 
         self._account_list: List[SolAccountMeta] = []
         self.emulator_json = {}
@@ -90,39 +97,75 @@ class GasEstimate:
         self.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
 
     def _tx_size_cost(self) -> int:
-        tx = NeonTx(
+        if self._cached_tx_cost_size is not None:
+            return self._cached_tx_cost_size
+
+        neon_tx = NeonTx(
             nonce=self._u256_max,
             gasPrice=self._u256_max,
             gasLimit=self._u256_max,
             toAddress=bytes.fromhex(self._contract),
             value=int(self._value, 16),
             callData=bytes.fromhex(self._data),
-            v=ElfParams().chain_id * 2 + 35,
+            v=self._elf_params.chain_id * 2 + 35,
             r=0x1820182018201820182018201820182018201820182018201820182018201820,
             s=0x1820182018201820182018201820182018201820182018201820182018201820
         )
 
+        self._cached_tx_cost_size = 0
         try:
-            sol_tx = self._tx_builder.build_tx(tx, self._account_list)
-            sol_tx.serialize()  # <- there will be exception
-            return 0
+            sol_tx = self._tx_builder.build_tx(neon_tx, self._account_list)
+            sol_tx.serialize()  # <- there will be exception about size
+
+            if not self._contract:  # deploy case
+                pass
+            elif self._execution_cost() < self._small_gas_limit:
+                return self._cached_tx_cost_size
         except (Exception, ):
-            return ((self._tx_builder.neon_tx_len() // ElfParams().holder_msg_size) + 1) * 5000
+            pass
 
-    @staticmethod
-    def _iterative_overhead_cost() -> int:
-        last_iteration_cost = 5000
-        cancel_cost = 5000
+        self._cached_tx_cost_size = self._holder_tx_cost(self._tx_builder.neon_tx_len())
+        return self._cached_tx_cost_size
 
-        return last_iteration_cost + cancel_cost
+    def _holder_tx_cost(self, neon_tx_len: int) -> int:
+        return ((neon_tx_len // self._elf_params.holder_msg_size) + 1) * 5000
+
+    def _execution_cost(self) -> int:
+        return self.emulator_json.get('used_gas', 0)
+
+    def _emulated_step_cnt(self) -> int:
+        return self.emulator_json.get('steps_executed', 0)
+
+    def _iterative_overhead_cost(self) -> int:
+        if self._cached_overhead_cost is not None:
+            return self._cached_tx_cost_size
+
+        execution_cost = self._execution_cost()
+        tx_size_cost = self._tx_size_cost()
+        step_cnt = self._emulated_step_cnt()
+        limit_step_cnt = self._elf_params.neon_evm_steps
+
+        if (tx_size_cost > 0) or (execution_cost > self._small_gas_limit) or (step_cnt > limit_step_cnt):
+            last_iteration_cost = 5000
+            cancel_cost = 5000
+            self._cached_overhead_cost = last_iteration_cost + cancel_cost
+        else:
+            self._cached_overhead_cost = 0
+
+        return self._cached_overhead_cost
 
     def _alt_cost(self) -> int:
+        if self._cached_alt_cost is not None:
+            return self._cached_alt_cost
+
         # ALT used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
         acc_cnt = len(self._account_list) + 6
         if acc_cnt > ALTTxBuilder.tx_account_cnt:
-            return 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
+            self._cached_alt_cost = 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
         else:
-            return 0
+            self._cached_alt_cost = 0
+
+        return self._cached_alt_cost
 
     def _build_account_list(self):
         self._account_list.clear()
@@ -133,15 +176,18 @@ class GasEstimate:
             self._account_list.append(SolAccountMeta(SolPubKey(account['pubkey']), False, True))
 
     def estimate(self):
+        self._cached_tx_cost_size = None
+        self._cached_overhead_cost = None
+        self._cached_alt_cost = None
+
         self._build_account_list()
 
-        execution_cost = self.emulator_json.get('used_gas', 0)
-
+        execution_cost = self._execution_cost()
         tx_size_cost = self._tx_size_cost()
-        overhead = self._iterative_overhead_cost()
+        overhead_cost = self._iterative_overhead_cost()
         alt_cost = self._alt_cost()
 
-        gas = execution_cost + tx_size_cost + overhead + alt_cost
+        gas = execution_cost + tx_size_cost + overhead_cost + alt_cost
         extra_gas_pct = self._config.extra_gas_pct
         if extra_gas_pct > 0:
             gas = math.ceil(gas * (1 + extra_gas_pct))
@@ -151,7 +197,7 @@ class GasEstimate:
         self.debug(
             f'execution_cost: {execution_cost}, '
             f'tx_size_cost: {tx_size_cost}, '
-            f'iterative_overhead: {overhead}, '
+            f'iterative_overhead_cost: {overhead_cost}, '
             f'alt_cost: {alt_cost}, '
             f'extra_gas_pct: {extra_gas_pct}, '
             f'estimated gas: {gas}'
