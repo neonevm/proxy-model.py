@@ -1,5 +1,6 @@
 import json
 import struct
+from eth_account.signers.local import LocalAccount as NeonAccount
 from typing import Union, Dict, Any
 
 import spl.token.instructions as spl_token
