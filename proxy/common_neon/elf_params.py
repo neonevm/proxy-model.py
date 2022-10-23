@@ -19,7 +19,7 @@ class ElfParams:
 
     @property
     def treasury_pool_max(self) -> int:
-        return int(self._elf_param_dict.get("NEON_TREASURY_COUNT"))
+        return int(self._elf_param_dict.get("NEON_POOL_COUNT"))
 
     @property
     def neon_heap_frame(self) -> int:
