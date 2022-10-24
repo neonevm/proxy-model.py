@@ -34,7 +34,7 @@ jobs:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-      - name: print branch names
+      - name: Print base branch names
         run: echo ${{github.base_ref}}
       - name: install python libs
         run: pip install docker python_terraform scp paramiko
@@ -101,7 +101,7 @@ jobs:
         id: branch-name
         uses: tj-actions/branch-names@v6
       - name: Install python libs
-        run: pip install docker python_terraform scp paramiko
+        run: pip3 install docker python_terraform scp paramiko
       - name: Add private key
         run: |
           echo "${{ secrets.CI_STANDS_KEY }}" > ${HOME}/.ssh/ci-stands
