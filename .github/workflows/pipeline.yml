@@ -34,6 +34,8 @@ jobs:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
+      - name: print branch names
+        run: echo {{github.base_ref}}
       - name: install python libs
         run: pip install docker python_terraform scp paramiko
       - name: Define images tags
@@ -117,7 +119,7 @@ jobs:
         run: python3 ./.github/workflows/deploy.py openzeppelin --run_number=${GITHUB_RUN_NUMBER}
 
       - name: Destroy terraform infrastructure
-        if: always()
+        if: ${{always() && ((github.base_ref =='develop' && ! github.event.pull_request.draft) || github.event.inputs.full_test_suite)}}
         run: |
           python3 ./.github/workflows/deploy.py destroy_terraform \
           --run_number=${GITHUB_RUN_NUMBER} \
