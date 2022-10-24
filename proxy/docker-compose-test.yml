@@ -35,7 +35,7 @@ services:
     depends_on:
       solana:
         condition: service_healthy
-    entrypoint: /opt/neon-test-invoke-program.sh
+    entrypoint: bash -c "/opt/neon-test-invoke-program.sh"
 
   postgres:
     container_name: postgres
