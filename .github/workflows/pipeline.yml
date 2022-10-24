@@ -54,14 +54,14 @@ jobs:
       - name: Build docker image
         if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags') }}
         run: |
-          python ./.github/workflows/deploy.py build_docker_image \
+          python3 ./.github/workflows/deploy.py build_docker_image \
           --github_sha=${GITHUB_SHA} \
           --neon_evm_tag=${{ steps.tags.outputs.neon_evm }} \
           --proxy_tag=${{ steps.tags.outputs.proxy }}
       - name: Publish image
         if: ${{ !startsWith(github.event.inputs.neon_evm_branch, 'refs/tags/') }}
         run: |
-          python ./.github/workflows/deploy.py publish_image \
+          python3 ./.github/workflows/deploy.py publish_image \
           --github_sha=${GITHUB_SHA}
   deploy-check:
     needs:
@@ -75,12 +75,12 @@ jobs:
         run: pip install docker python_terraform scp paramiko
       - name: deploy_check
         run: |
-          python ./.github/workflows/deploy.py deploy_check \
+          python3 ./.github/workflows/deploy.py deploy_check \
           --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
           --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }}
       - name: Dump docker logs
         if: always()
-        run: python ./.github/workflows/deploy.py dump_apps_logs
+        run: python3 ./.github/workflows/deploy.py dump_apps_logs
       - uses: actions/upload-artifact@v3
         if: always()
         with:
@@ -153,7 +153,7 @@ jobs:
       - name: Tag published image
         if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/') }}
         run: |
-          python ./.github/workflows/deploy.py finalize_image \
+          python3 ./.github/workflows/deploy.py finalize_image \
           --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
           --github_ref=${GITHUB_REF} \
           --base_ref_branch=${{ steps.branch-name.outputs.base_ref_branch }} \
@@ -162,6 +162,6 @@ jobs:
       - name: Send notification to slack
         if: failure()
         run: |
-          python ./.github/workflows/deploy.py send_notification \
+          python3 ./.github/workflows/deploy.py send_notification \
           --url=${{secrets.SLACK_PROXY_CHANNEL_URL}} \
           --build_url=${BUILD_URL}
