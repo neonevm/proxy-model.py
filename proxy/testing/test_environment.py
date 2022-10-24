@@ -23,10 +23,6 @@ class TestEnvironment(unittest.TestCase):
         self.assertTrue(neon_token_mint is not None)
         self.assertEqual(neon_token_mint, os.environ.get('NEON_TOKEN_MINT', None))
 
-        neon_pool_base = elf_params.get('NEON_POOL_BASE', None)
-        self.assertTrue(neon_pool_base is not None)
-        self.assertEqual(neon_pool_base, os.environ.get('NEON_POOL_BASE', None))
-
     def test_neon_chain_id(self):
         print("\n\nhttps://github.com/neonlabsorg/neon-evm/issues/347")
         neon_chain_id = os.environ.get('NEON_CHAIN_ID', None)

@@ -73,7 +73,10 @@ class NeonIxBuilder:
         keccak_result = self._neon_tx.hash_signed()
         treasury_pool_index = int().from_bytes(keccak_result[:4], "little") % ElfParams().treasury_pool_max
         self._treasury_pool_index_buf = treasury_pool_index.to_bytes(4, 'little')
-        self._treasury_pool_address = self._create_treasury_pool_address(treasury_pool_index)
+        self._treasury_pool_address = SolPubKey.find_program_address(
+            [b'treasury_pool', self._treasury_pool_index_buf],
+            self._evm_program_id
+        )[0]
 
         return self
 
@@ -84,13 +87,6 @@ class NeonIxBuilder:
     def init_iterative(self, holder: SolPubKey):
         self._holder = holder
         return self
-
-    @staticmethod
-    def _create_treasury_pool_address(treasury_pool_index):
-        treasury_seed_prefix = "collateral_seed_"
-        seed = treasury_seed_prefix + str(treasury_pool_index)
-        treasury_pool_base = SolPubKey(ElfParams().treasury_pool_base)
-        return account_with_seed(treasury_pool_base, str.encode(seed))
 
     def make_create_account_with_seed_ix(self, account: SolPubKey, seed: bytes, lamports: int, space: int) -> SolTxIx:
         seed_str = str(seed, 'utf8')
