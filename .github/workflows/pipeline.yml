@@ -35,7 +35,7 @@ jobs:
         id: branch-name
         uses: tj-actions/branch-names@v6
       - name: print branch names
-        run: echo {{github.base_ref}}
+        run: echo ${{github.base_ref}}
       - name: install python libs
         run: pip install docker python_terraform scp paramiko
       - name: Define images tags
