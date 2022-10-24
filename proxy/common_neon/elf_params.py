@@ -18,10 +18,6 @@ class ElfParams:
         self._elf_param_dict: Dict[str, any] = {}
 
     @property
-    def treasury_pool_base(self) -> Optional[str]:
-        return self._elf_param_dict.get("NEON_POOL_BASE")
-
-    @property
     def treasury_pool_max(self) -> int:
         return int(self._elf_param_dict.get("NEON_POOL_COUNT"))
 
