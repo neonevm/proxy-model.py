@@ -34,10 +34,6 @@ jobs:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-      - name: Print base branch names
-        run: echo ${{github.base_ref}}
-      - name: install python libs
-        run: pip install docker python_terraform scp paramiko
       - name: Define images tags
         id: tags
         run: |
@@ -73,8 +69,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: "true"
-      - name: Install python libs
-        run: pip install docker python_terraform scp paramiko
       - name: deploy_check
         run: |
           python3 ./.github/workflows/deploy.py deploy_check \
@@ -100,8 +94,6 @@ jobs:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-      - name: Install python libs
-        run: /usr/bin/pip install docker python_terraform scp paramiko
       - name: Add private key
         run: |
           echo "${{ secrets.CI_STANDS_KEY }}" > ${HOME}/.ssh/ci-stands
@@ -144,14 +136,9 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: "true"
-
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-
-      - name: install python libs
-        run: pip install docker python_terraform scp paramiko
-
       - name: Tag published image
         if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/') }}
         run: |
@@ -160,7 +147,6 @@ jobs:
           --github_ref=${GITHUB_REF} \
           --base_ref_branch=${{ steps.branch-name.outputs.base_ref_branch }} \
           --github_sha=${GITHUB_SHA}
-
       - name: Send notification to slack
         if: failure()
         run: |
