@@ -14,6 +14,8 @@ class Config:
         self._evm_loader_id = SolPubKey(EVM_LOADER_ID)
         self._evm_step_cnt_inc_pct = self._env_decimal("EVM_STEP_COUNT_INC_PCT", "0.9")
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
+        self._mempool_executor_limit_cnt = self._env_int('MEMPOOL_EXECUTOR_LIMIT_CNT', 4, 1024)
+        self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 15 * 60)
         self._holder_size = self._env_int("HOLDER_SIZE", 1024, 131072)  # 128*1024
         self._min_op_balance_to_warn = self._env_int("MIN_OPERATOR_BALANCE_TO_WARN", 9000000000, 9000000000)
         self._min_op_balance_to_err = self._env_int("MIN_OPERATOR_BALANCE_TO_ERR", 1000000000, 1000000000)
@@ -26,7 +28,6 @@ class Config:
         self._use_earliest_block_if_0_passed = self._env_bool("USE_EARLIEST_BLOCK_IF_0_PASSED", False)
         self._account_permission_update_int = self._env_int("ACCOUNT_PERMISSION_UPDATE_INT", 10, 60 * 5)
         self._allow_underpriced_tx_wo_chainid = self._env_bool("ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID", False)
-        self._contract_extra_space = self._env_int("CONTRACT_EXTRA_SPACE", 0, 2048)
         self._extra_gas_pct = self._env_decimal("EXTRA_GAS_PCT", "0.0")
         self._operator_fee = self._env_decimal("OPERATOR_FEE", "0.1")
         self._gas_price_suggested_pct = self._env_decimal("GAS_PRICE_SUGGEST_PCT", "0.01")
@@ -52,7 +53,6 @@ class Config:
         self._holder_timeout = self._env_int("HOLDER_TIMEOUT", 1, 216000)  # 1 day by default
         self._indexer_log_skip_cnt = self._env_int("INDEXER_LOG_SKIP_COUNT", 1, 1000)
         self._gather_statistics = self._env_bool("GATHER_STATISTICS", False)
-        self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 15 * 60)
         self._hvac_url = os.environ.get('HVAC_URL', None)
         self._hvac_token = os.environ.get('HVAC_TOKEN', None)
         self._hvac_mount = os.environ.get('HVAC_MOUNT', None)
@@ -91,6 +91,14 @@ class Config:
     @property
     def mempool_capacity(self) -> int:
         return self._mempool_capacity
+
+    @property
+    def mempool_executor_limit_cnt(self) -> int:
+        return self._mempool_executor_limit_cnt
+
+    @property
+    def mempool_cache_life_sec(self) -> int:
+        return self._mempool_cache_life_sec
 
     @property
     def pyth_mapping_account(self) -> Optional[SolPubKey]:
@@ -155,10 +163,6 @@ class Config:
     @property
     def extra_gas_pct(self) -> Decimal:
         return self._extra_gas_pct
-
-    @property
-    def contract_extra_space(self) -> int:
-        return self._contract_extra_space
 
     @property
     def operator_fee(self) -> Decimal:
@@ -259,10 +263,6 @@ class Config:
         return self._gather_statistics
 
     @property
-    def mempool_cache_life_sec(self) -> int:
-        return self._mempool_cache_life_sec
-
-    @property
     def hvac_url(self) -> Optional[str]:
         return self._hvac_url
 
@@ -286,7 +286,9 @@ class Config:
             f"PP_SOLANA_URL: {self.pyth_solana_url}",
             f"PYTH_MAPPING_ACCOUNT: {self.pyth_mapping_account}",
             f"EVM_STEP_COUNT_INC_PCT: {self._evm_step_cnt_inc_pct},",
-            f"MP_CAPACITY: {self.mempool_capacity}",
+            f"MEMPOOL_CAPACITY: {self.mempool_capacity}",
+            f"MEMPOOL_EXECUTOR_LIMIT_CNT: {self.mempool_executor_limit_cnt}",
+            f"MEMPOOL_CACHE_LIFE_SEC: {self.mempool_cache_life_sec}",
             f"HOLDER_SIZE: {self.holder_size}",
             f"MIN_OPERATOR_BALANCE_TO_WARN: {self.min_operator_balance_to_warn}",
             f"MIN_OPERATOR_BALANCE_TO_ERR: {self.min_operator_balance_to_err}",
@@ -299,7 +301,6 @@ class Config:
             f"USE_EARLIEST_BLOCK_IF_0_PASSED: {self.use_earliest_block_if_0_passed}",
             f"ACCOUNT_PERMISSION_UPDATE_INT: {self.account_permission_update_int}",
             f"ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID: {self.allow_underpriced_tx_wo_chainid}",
-            f"CONTRACT_EXTRA_SPACE: {self.contract_extra_space}",
             f"EXTRA_GAS_PCT: {self.extra_gas_pct}",
             f"OPERATOR_FEE: {self.operator_fee}",
             f"GAS_PRICE_SUGGEST_PCT: {self.gas_price_suggested_pct}",
@@ -325,7 +326,6 @@ class Config:
             f"HOLDER_TIMOUT: {self.holder_timeout}",
             f"INDEXER_LOG_SKIP_COUNT: {self.indexer_log_skip_cnt}",
             f"GATHER_STATISTICS: {self.gather_statistics}",
-            f"MEMPOOL_CACHE_LIFE_SEC: {self.mempool_cache_life_sec}",
             f"HVAC_URL: {self.hvac_url}",
             f"HVAC_TOKEN: {self.hvac_token}",
             f"HVAC_PATH: {self.hvac_path}",
