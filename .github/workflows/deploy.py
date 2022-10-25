@@ -71,10 +71,10 @@ def get_neon_evm_tag(proxy_tag):
     return evm_tag
 
 
-@ cli.command(name="build_docker_image")
-@ click.option('--neon_evm_tag')
-@ click.option('--proxy_tag')
-@ click.option('--github_sha')
+@cli.command(name="build_docker_image")
+@click.option('--neon_evm_tag')
+@click.option('--proxy_tag')
+@click.option('--github_sha')
 def build_docker_image(neon_evm_tag, proxy_tag, github_sha):
     if re.match(r"v\d{1,2}\.\d{1,2}\.\d{1,2}\.*", proxy_tag):
         neon_evm_tag = get_neon_evm_tag(proxy_tag)
@@ -94,8 +94,8 @@ def build_docker_image(neon_evm_tag, proxy_tag, github_sha):
             click.echo(str(line).strip('\n'))
 
 
-@ cli.command(name="publish_image")
-@ click.option('--github_sha')
+@cli.command(name="publish_image")
+@click.option('--github_sha')
 def publish_image(github_sha):
     docker_client.login(username=DOCKER_USERNAME, password=DOCKER_PASSWORD)
     out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
@@ -104,11 +104,11 @@ def publish_image(github_sha):
             f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
 
 
-@ cli.command(name="finalize_image")
-@ click.option('--head_ref_branch')
-@ click.option('--base_ref_branch')
-@ click.option('--github_ref')
-@ click.option('--github_sha')
+@cli.command(name="finalize_image")
+@click.option('--head_ref_branch')
+@click.option('--base_ref_branch')
+@click.option('--github_ref')
+@click.option('--github_sha')
 def finalize_image(head_ref_branch, base_ref_branch, github_ref, github_sha):
     if 'refs/tags/' in github_ref:
         tag = github_ref.replace("refs/tags/", "")
@@ -132,12 +132,12 @@ def finalize_image(head_ref_branch, base_ref_branch, github_ref, github_sha):
             f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
 
 
-@ cli.command(name="terraform_infrastructure")
-@ click.option('--branch')
-@ click.option('--github_sha')
-@ click.option('--neon_evm_tag')
-@ click.option('--proxy_tag')
-@ click.option('--run_number')
+@cli.command(name="terraform_infrastructure")
+@click.option('--branch')
+@click.option('--github_sha')
+@click.option('--neon_evm_tag')
+@click.option('--proxy_tag')
+@click.option('--run_number')
 def terraform_build_infrastructure(branch, github_sha, proxy_tag, neon_evm_tag, run_number):
 
     os.environ["TF_VAR_branch"] = branch
@@ -155,9 +155,9 @@ def terraform_build_infrastructure(branch, github_sha, proxy_tag, neon_evm_tag, 
     click.echo(f"stderr: {stderr}")
 
 
-@ cli.command(name="destroy_terraform")
-@ click.option('--github_sha')
-@ click.option('--run_number')
+@cli.command(name="destroy_terraform")
+@click.option('--github_sha')
+@click.option('--run_number')
 def destroy_terraform(github_sha, run_number):
     thstate_key = f'{TFSTATE_KEY_PREFIX}{github_sha}-{run_number}'
 
@@ -167,8 +167,8 @@ def destroy_terraform(github_sha, run_number):
     terraform.destroy()
 
 
-@ cli.command(name="openzeppelin")
-@ click.option('--run_number')
+@cli.command(name="openzeppelin")
+@click.option('--run_number')
 def openzeppelin_test(run_number):
     container_name = f'fts_{run_number}'
     fts_threshold = 1920
@@ -254,9 +254,9 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
     scp_client.get(f'/tmp/{service}.log.bz2', artifact_logs)
 
 
-@ cli.command(name="deploy_check")
-@ click.option('--proxy_tag')
-@ click.option('--neon_evm_tag')
+@cli.command(name="deploy_check")
+@click.option('--proxy_tag')
+@click.option('--neon_evm_tag')
 def deploy_check(proxy_tag, neon_evm_tag):
     os.environ["REVISION"] = proxy_tag
     os.environ["NEON_EVM_COMMIT"] = neon_evm_tag
@@ -296,7 +296,7 @@ def run_test(file_name):
     click.echo(out)
 
 
-@ cli.command(name="dump_apps_logs")
+@cli.command(name="dump_apps_logs")
 def dump_apps_logs():
     containers = ['proxy', 'solana', 'proxy_program_loader',
                   'dbcreation', 'faucet', 'airdropper', 'indexer']
@@ -367,9 +367,9 @@ def run_uniswap_test():
     subprocess.run(command, shell=True)
 
 
-@ cli.command(name="send_notification", help="Send notification to slack")
-@ click.option("-u", "--url", help="slack app endpoint url.")
-@ click.option("-b", "--build_url", help="github action test build url.")
+@cli.command(name="send_notification", help="Send notification to slack")
+@click.option("-u", "--url", help="slack app endpoint url.")
+@click.option("-b", "--build_url", help="github action test build url.")
 def send_notification(url, build_url):
     tpl = ERR_MSG_TPL.copy()
 
