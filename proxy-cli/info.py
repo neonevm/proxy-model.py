@@ -1,17 +1,18 @@
 from __future__ import annotations
-from argparse import _SubParsersAction, ArgumentParser
+from argparse import ArgumentParser
 from decimal import Decimal
 
 import sys
 import json
-from typing import Any
+from typing import Any, List
 from coincurve import PublicKey
 
 import logging
 
 from proxy.common_neon.address import NeonAddress, account_with_seed, perm_account_seed
 from proxy.common_neon.solana_interactor import SolInteractor
-from proxy.common_neon.environment_utils import get_solana_accounts
+from proxy.common_neon.operator_secret_mng import OpSecretMng
+from proxy.common_neon.solana_tx import SolAccount
 from proxy.common_neon.config import Config
 
 
@@ -34,11 +35,12 @@ class InfoHandler:
         self._storage = None
         self.print_stdout = True
 
-    def _get_solana_accounts(self):
-        return get_solana_accounts(self._config)
+    def _get_solana_accounts(self) -> List[SolAccount]:
+        secret_list = OpSecretMng(self._config).read_secret_list()
+        return [SolAccount.from_secret_key(secret) for secret in secret_list]
 
     @staticmethod
-    def init_args_parser(parsers: _SubParsersAction[ArgumentParser]) -> InfoHandler:
+    def init_args_parser(parsers) -> InfoHandler:
         h = InfoHandler()
         h.root_parser = parsers.add_parser(h.command)
         h.subparsers = h.root_parser.add_subparsers(title='command', dest='subcommand', description='valid commands')
@@ -216,7 +218,7 @@ class InfoHandler:
             0: 'EMPTY',
             11: 'NEON_ACCOUNT',
             21: 'ACTIVE_HOLDER_ACCOUNT',
-            31: 'FINALIZED_HOLDER_ACCOUNT'
+            31: 'FINALIZED_HOLDER_ACCOUNT',
             4: 'ERC20_ALLOWANCE',
         }
 
