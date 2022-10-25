@@ -1,19 +1,7 @@
 ARG NEON_EVM_COMMIT
 
 FROM neonlabsorg/evm_loader:${NEON_EVM_COMMIT} AS spl
-# FROM neonlabsorg/evm_loader:ci-proxy-caller-program AS proxy_program
-
-FROM solanalabs/rust:1.61.0 AS builder
-RUN rustup toolchain install nightly
-RUN rustup component add clippy --toolchain nightly
-WORKDIR /opt
-RUN sh -c "$(curl -sSfL https://release.solana.com/stable/install)" && \
-    /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
-ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-
-COPY ./proxy_program/ /opt/proxy_program/
-WORKDIR /opt/proxy_program
-RUN cargo +nightly clippy &&  cargo build-bpf
+FROM neonlabsorg/neon_test_invoke_program:develop AS neon_test_invoke_program
 
 FROM ubuntu:20.04
 
@@ -46,10 +34,7 @@ COPY --from=spl /opt/spl-token \
 COPY --from=spl /opt/contracts/contracts/ /opt/contracts/
 
 COPY --from=spl /opt/neon-cli /spl/bin/emulator
-COPY --from=builder /opt/proxy_program/proxy_program-keypair.json /spl/bin/
-COPY --from=builder /opt/proxy_program/proxy_program-keypair.json /opt
-COPY --from=builder /opt/proxy_program/target/deploy/proxy_program.so /opt
-COPY --from=builder /opt/proxy_program/deploy-proxy_program.sh /opt
+COPY --from=neon_test_invoke_program /opt/neon_test_invoke_program-keypair.json /spl/bin/
 
 COPY proxy/operator-keypairs/id.json /root/.config/solana/
 

@@ -26,4 +26,3 @@ htmlcov
 dist
 build
 proxy/public
-proxy_program/target
