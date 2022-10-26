@@ -86,6 +86,9 @@ class Airdropper(IndexerBase):
         self.failed_attempts = FailedAttempts()
         self.airdrop_scheduled = SQLDict(tablename="airdrop_scheduled")
         self.wrapper_whitelist = wrapper_whitelist
+        if isinstance(self.wrapper_whitelist, list):
+            self.wrapper_whitelist = [str(entry).lower() for entry in self.wrapper_whitelist] 
+
         self.faucet_url = faucet_url
         self.recent_price = None
 
@@ -119,10 +122,10 @@ class Airdropper(IndexerBase):
         return True
 
     # helper function checking if given contract address is in whitelist
-    def is_allowed_wrapper_contract(self, contract_addr):
+    def is_allowed_wrapper_contract(self, contract_addr: str):
         if self.wrapper_whitelist == 'ANY':
             return True
-        return contract_addr in self.wrapper_whitelist
+        return contract_addr.lower() in self.wrapper_whitelist
     
 
     # helper function checking if given 'approve' corresponds to 'call' instruction
