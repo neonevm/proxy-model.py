@@ -25,10 +25,9 @@ services:
       start_period: 5s
     entrypoint: /opt/solana/bin/solana-run-neon.sh
 
-  proxy_program_loader:
-    container_name: proxy_program_loader
-    image: neonlabsorg/proxy:${REVISION}
-#    image: neonlabsorg/evm_loader:ci-proxy-caller-program
+  neon_test_invoke_program_loader:
+    container_name: neon_test_invoke_program_loader
+    image: neonlabsorg/neon_test_invoke_program:develop
     environment:
       SOLANA_URL: http://solana:8899
     networks:
@@ -36,7 +35,7 @@ services:
     depends_on:
       solana:
         condition: service_healthy
-    entrypoint: bash -c "/opt/deploy-proxy_program.sh"
+    entrypoint: /opt/neon-test-invoke-program.sh
 
   postgres:
     container_name: postgres
@@ -105,7 +104,8 @@ services:
       LOG_FULL_OBJECT_INFO: "NO"
       EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
       RUST_BACKTRACE: ${RUST_BACKTRACE:-0}
-      # An example of HashiCorp configuration, operator key lies in the secret_key field
+      # An example of HashiCorp configuration, operator key in base64 lies in the secret_key field
+      #   vault kv put -mount=secret neon-proxy/operator-key-2 secret_key=bdSWJ+WwVWdk2XMoxX25monC....A7g+IyA==
 #      HVAC_URL: http://vault:8200
 #      HVAC_TOKEN: local-test-hvac-token
 #      HVAC_MOUNT: secret
