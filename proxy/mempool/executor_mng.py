@@ -43,7 +43,7 @@ class MPExecutorMng:
         self._last_id = 0
 
     async def set_executor_cnt(self, executor_count: int) -> None:
-        executor_count = max(executor_count + 1, 3)
+        executor_count = min(max(executor_count + 1, 3), self._config.mempool_executor_limit_cnt)
         diff_count = executor_count - len(self._executor_dict)
         if diff_count > 0:
             return await self._run_executors(diff_count)

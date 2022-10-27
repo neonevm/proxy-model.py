@@ -20,6 +20,10 @@ SolPubKey = solana.publickey.PublicKey
 SolTxReceipt = Dict[str, Any]
 
 
+class SolTxSizeError(Exception):
+    pass
+
+
 class SolTx(abc.ABC):
     _empty_blockhash = SolBlockhash(str(solders.hash.Hash.default()))
 
@@ -65,7 +69,7 @@ class SolTx(abc.ABC):
         assert self._is_signed, "transaction has not been signed"
         result = self._serialize()
         if len(result) > solana.transaction.PACKET_DATA_SIZE:
-            raise ValueError('Transaction too big')
+            raise SolTxSizeError('Transaction too big')
         return result
 
     def sign(self, signer: SolAccount) -> None:
