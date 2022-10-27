@@ -25,6 +25,7 @@ class Config:
         self._recheck_resource_after_uses_cnt = self._env_int("RECHECK_RESOURCE_AFTER_USES_CNT", 10, 60)
         self._retry_on_fail = self._env_int("RETRY_ON_FAIL", 1, 10)
         self._enable_private_api = self._env_bool("ENABLE_PRIVATE_API", False)
+        self._enable_send_tx_api = self._env_bool("ENABLE_SEND_TX_API", True)
         self._use_earliest_block_if_0_passed = self._env_bool("USE_EARLIEST_BLOCK_IF_0_PASSED", False)
         self._account_permission_update_int = self._env_int("ACCOUNT_PERMISSION_UPDATE_INT", 10, 60 * 5)
         self._allow_underpriced_tx_wo_chainid = self._env_bool("ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID", False)
@@ -147,6 +148,10 @@ class Config:
     @property
     def enable_private_api(self) -> bool:
         return self._enable_private_api
+
+    @property
+    def enable_send_tx_api(self) -> bool:
+        return self._enable_send_tx_api
 
     @property
     def use_earliest_block_if_0_passed(self) -> bool:
@@ -298,6 +303,7 @@ class Config:
             f"RECHECK_RESOURCE_AFTER_USES_CNT: {self.recheck_resource_after_uses_cnt}",
             f"RETRY_ON_FAIL: {self.retry_on_fail}",
             f"ENABLE_PRIVATE_API: {self.enable_private_api}",
+            f"ENABLE_SEND_TX_API: {self.enable_send_tx_api}",
             f"USE_EARLIEST_BLOCK_IF_0_PASSED: {self.use_earliest_block_if_0_passed}",
             f"ACCOUNT_PERMISSION_UPDATE_INT: {self.account_permission_update_int}",
             f"ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID: {self.allow_underpriced_tx_wo_chainid}",
