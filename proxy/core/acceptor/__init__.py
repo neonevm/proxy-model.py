@@ -7,9 +7,14 @@
 
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
+
+    .. spelling::
+
+       pre
 """
-from .acceptor import Acceptor
 from .pool import AcceptorPool
+from .acceptor import Acceptor
+
 
 __all__ = [
     'Acceptor',

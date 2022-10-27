@@ -56,9 +56,7 @@ class SolTxErrorParser:
         f'Program log: {EVM_LOADER_ID}' + r':\d+ : Invalid Ethereum transaction nonce: acc (\d+), trx (\d+)'
     )
 
-    _already_finalized_re = re.compile(
-        r'Program log: program/src/instruction/transaction_step_from_account.rs:\d+ : Transaction already finalized'
-    )
+    _already_finalized = f'Program {EVM_LOADER_ID} failed: custom program error: 0x4'
 
     def __init__(self, receipt: Union[SolTxReceipt, BaseException, str]):
         assert isinstance(receipt, dict) or isinstance(receipt, BaseException) or isinstance(receipt, str)
@@ -227,8 +225,7 @@ class SolTxErrorParser:
     def check_if_already_finalized(self) -> bool:
         log_list = self.get_log_list()
         for log in log_list:
-            m = self._already_finalized_re.search(log)
-            if m is not None:
+            if log == self._already_finalized:
                 return True
         return False
 
