@@ -7,10 +7,18 @@
 
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
+
+    .. spelling::
+
+       reusability
+       Submodules
 """
-from .connection import TcpConnection, TcpConnectionUninitializedException, tcpConnectionTypes
+from .pool import UpstreamConnectionPool
+from .types import tcpConnectionTypes
 from .client import TcpClientConnection
 from .server import TcpServerConnection
+from .connection import TcpConnection, TcpConnectionUninitializedException
+
 
 __all__ = [
     'TcpConnection',
@@ -18,4 +26,5 @@ __all__ = [
     'TcpServerConnection',
     'TcpClientConnection',
     'tcpConnectionTypes',
+    'UpstreamConnectionPool',
 ]
