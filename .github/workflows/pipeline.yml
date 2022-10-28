@@ -104,7 +104,7 @@ jobs:
       - name: Terraform build infra structure
         run: |
           python3 ./.github/workflows/deploy.py terraform_infrastructure \
-            --branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+            --branch=${{ github.ref_name }} \
             --github_sha=${GITHUB_SHA} \
             --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
             --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
