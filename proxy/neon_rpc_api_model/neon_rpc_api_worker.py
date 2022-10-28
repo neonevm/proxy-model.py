@@ -785,16 +785,18 @@ class NeonRpcApiWorker:
                 f'Neon EVM {self.web3_clientVersion()}'
             )
 
-        if self._config.enable_private_api:
-            return True
+        if method_name == 'eth_sendRawTransaction':
+            return self._config.enable_send_tx_api
 
-        private_method_list = (
+        private_method_set = {
             "eth_accounts",
             "eth_sign",
             "eth_sendTransaction",
             "eth_signTransaction",
-        )
+        }
 
-        if method_name in private_method_list:
-            return False
+        if method_name in private_method_set:
+            if (not self._config.enable_send_tx_api) or (not self._config.enable_private_api):
+                return False
+
         return True

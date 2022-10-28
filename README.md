@@ -85,7 +85,6 @@ Table of Contents
         * [Man-In-The-Middle Plugin](#maninthemiddleplugin)
         * [Proxy Pool Plugin](#proxypoolplugin)
     * [HTTP Web Server Plugins](#http-web-server-plugins)
-        * [Reverse Proxy](#reverse-proxy)
         * [Web Server Route](#web-server-route)
     * [Plugin Ordering](#plugin-ordering)
 * [End-to-End Encryption](#end-to-end-encryption)
@@ -1610,9 +1609,8 @@ usage: proxy [-h] [--backlog BACKLOG] [--basic-auth BASIC_AUTH]
              [--ca-signing-key-file CA_SIGNING_KEY_FILE]
              [--cert-file CERT_FILE]
              [--client-recvbuf-size CLIENT_RECVBUF_SIZE]
-             [--devtools-ws-path DEVTOOLS_WS_PATH]
              [--disable-headers DISABLE_HEADERS] [--disable-http-proxy]
-             [--enable-devtools] [--enable-events]
+             [--enable-events]
              [--enable-static-server] [--enable-web-server]
              [--hostname HOSTNAME] [--key-file KEY_FILE]
              [--log-level LOG_LEVEL] [--log-file LOG_FILE]
@@ -1660,9 +1658,6 @@ optional arguments:
                         the client in a single recv() operation. Bump this
                         value for faster uploads at the expense of increased
                         RAM.
-  --devtools-ws-path DEVTOOLS_WS_PATH
-                        Default: /devtools. Only applicable if --enable-
-                        devtools is used.
   --disable-headers DISABLE_HEADERS
                         Default: None. Comma separated list of headers to
                         remove before dispatching client request to upstream

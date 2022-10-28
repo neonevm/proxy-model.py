@@ -7,127 +7,148 @@
 
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
+
+    .. spelling::
+
+       acceptor
+       acceptors
+       pre
 """
 import logging
+import argparse
 import multiprocessing
-import socket
-import threading
-# import time
+from typing import TYPE_CHECKING, Any, List, Optional
 from multiprocessing import connection
 from multiprocessing.reduction import send_handle
-from typing import List, Optional, Type
 
 from .acceptor import Acceptor
-from ..threadless import ThreadlessWork
-from ..event import EventQueue, EventDispatcher
-from ...common.flags import Flags
+from ..listener import ListenerPool
+from ...common.flag import flags
+from ...common.constants import DEFAULT_NUM_ACCEPTORS
+
+
+if TYPE_CHECKING:   # pragma: no cover
+    from ..event import EventQueue
 
 logger = logging.getLogger(__name__)
 
-LOCK = multiprocessing.Lock()
+
+flags.add_argument(
+    '--num-acceptors',
+    type=int,
+    default=DEFAULT_NUM_ACCEPTORS,
+    help='Defaults to number of CPU cores.',
+)
 
 
 class AcceptorPool:
-    """AcceptorPool.
+    """AcceptorPool is a helper class which pre-spawns
+    :py:class:`~proxy.core.acceptor.acceptor.Acceptor` processes to
+    utilize all available CPU cores for accepting new work.
 
-    Pre-spawns worker processes to utilize all cores available on the system.  Server socket connection is
-    dispatched over a pipe to workers.  Each worker accepts incoming client request and spawns a
-    separate thread to handle the client request.
+    A file descriptor to consume work from is shared with
+    :py:class:`~proxy.core.acceptor.acceptor.Acceptor` processes over a
+    pipe.  Each :py:class:`~proxy.core.acceptor.acceptor.Acceptor`
+    process then concurrently accepts new work over the shared file
+    descriptor.
+
+    Example usage:
+
+        with AcceptorPool(flags=...) as pool:
+            while True:
+                time.sleep(1)
+
+    `flags.work_klass` must implement :py:class:`~proxy.core.work.Work` class.
     """
 
-    def __init__(self, flags: Flags, work_klass: Type[ThreadlessWork]) -> None:
+    def __init__(
+            self,
+            flags: argparse.Namespace,
+            listeners: ListenerPool,
+            executor_queues: List[connection.Connection],
+            executor_pids: List[int],
+            executor_locks: List['multiprocessing.synchronize.Lock'],
+            event_queue: Optional['EventQueue'] = None,
+    ) -> None:
         self.flags = flags
-        self.socket: Optional[socket.socket] = None
+        # File descriptor to use for accepting new work
+        self.listeners: ListenerPool = listeners
+        # Available executors
+        self.executor_queues: List[connection.Connection] = executor_queues
+        self.executor_pids: List[int] = executor_pids
+        self.executor_locks: List['multiprocessing.synchronize.Lock'] = executor_locks
+        # Eventing core queue
+        self.event_queue: Optional['EventQueue'] = event_queue
+        # Acceptor process instances
         self.acceptors: List[Acceptor] = []
-        self.work_queues: List[connection.Connection] = []
-        self.work_klass = work_klass
+        # Fd queues used to share file descriptor with acceptor processes
+        self.fd_queues: List[connection.Connection] = []
+        # Internals
+        self.lock = multiprocessing.Lock()
+        # self.semaphore = multiprocessing.Semaphore(0)
 
-        self.event_queue: Optional[EventQueue] = None
-        self.event_dispatcher: Optional[EventDispatcher] = None
-        self.event_dispatcher_thread: Optional[threading.Thread] = None
-        self.event_dispatcher_shutdown: Optional[threading.Event] = None
-        self.manager: Optional[multiprocessing.managers.SyncManager] = None
+    def __enter__(self) -> 'AcceptorPool':
+        self.setup()
+        return self
 
-        if self.flags.enable_events:
-            self.manager = multiprocessing.Manager()
-            self.event_queue = EventQueue(self.manager.Queue())
+    def __exit__(self, *args: Any) -> None:
+        self.shutdown()
 
-    def listen(self) -> None:
-        self.socket = socket.socket(self.flags.family, socket.SOCK_STREAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind((str(self.flags.hostname), self.flags.port))
-        self.socket.listen(self.flags.backlog)
-        self.socket.setblocking(False)
+    def setup(self) -> None:
+        """Setup acceptors."""
+        self._start()
+        execution_mode = (
+            'threadless (local)'
+            if self.flags.local_executor
+            else 'threadless (remote)'
+        ) if self.flags.threadless else 'threaded'
         logger.info(
-            'Listening on %s:%d' %
-            (self.flags.hostname, self.flags.port))
+            'Started %d acceptors in %s mode' % (
+                self.flags.num_acceptors,
+                execution_mode,
+            ),
+        )
+        # Send file descriptor to all acceptor processes.
+        for index in range(self.flags.num_acceptors):
+            self.fd_queues[index].send(len(self.listeners.pool))
+            for listener in self.listeners.pool:
+                fd = listener.fileno()
+                assert fd is not None
+                send_handle(
+                    self.fd_queues[index],
+                    fd,
+                    self.acceptors[index].pid,
+                )
+            self.fd_queues[index].close()
 
-    def start_workers(self) -> None:
-        """Start worker processes."""
-        for acceptor_id in range(self.flags.num_workers):
+    def shutdown(self) -> None:
+        logger.info('Shutting down %d acceptors' % self.flags.num_acceptors)
+        for acceptor in self.acceptors:
+            acceptor.running.set()
+        for acceptor in self.acceptors:
+            acceptor.join()
+        logger.debug('Acceptors shutdown')
+
+    def _start(self) -> None:
+        """Start acceptor processes."""
+        for acceptor_id in range(self.flags.num_acceptors):
             work_queue = multiprocessing.Pipe()
             acceptor = Acceptor(
                 idd=acceptor_id,
-                work_queue=work_queue[1],
+                fd_queue=work_queue[1],
                 flags=self.flags,
-                work_klass=self.work_klass,
-                lock=LOCK,
+                lock=self.lock,
+                # semaphore=self.semaphore,
                 event_queue=self.event_queue,
+                executor_queues=self.executor_queues,
+                executor_pids=self.executor_pids,
+                executor_locks=self.executor_locks,
             )
             acceptor.start()
             logger.debug(
                 'Started acceptor#%d process %d',
                 acceptor_id,
-                acceptor.pid)
-            self.acceptors.append(acceptor)
-            self.work_queues.append(work_queue[0])
-        logger.info('Started %d workers' % self.flags.num_workers)
-
-    def start_event_dispatcher(self) -> None:
-        self.event_dispatcher_shutdown = threading.Event()
-        assert self.event_dispatcher_shutdown
-        assert self.event_queue
-        self.event_dispatcher = EventDispatcher(
-            shutdown=self.event_dispatcher_shutdown,
-            event_queue=self.event_queue
-        )
-        self.event_dispatcher_thread = threading.Thread(
-            target=self.event_dispatcher.run
-        )
-        self.event_dispatcher_thread.start()
-        logger.debug('Thread ID: %d', self.event_dispatcher_thread.ident)
-
-    def shutdown(self) -> None:
-        logger.info('Shutting down %d workers' % self.flags.num_workers)
-        for acceptor in self.acceptors:
-            acceptor.running.set()
-        if self.flags.enable_events:
-            assert self.event_dispatcher_shutdown
-            assert self.event_dispatcher_thread
-            self.event_dispatcher_shutdown.set()
-            self.event_dispatcher_thread.join()
-            logger.debug(
-                'Shutdown of global event dispatcher thread %d successful',
-                self.event_dispatcher_thread.ident)
-        for acceptor in self.acceptors:
-            acceptor.join()
-        logger.debug('Acceptors shutdown')
-
-    def setup(self) -> None:
-        """Listen on port, setup workers and pass server socket to workers."""
-        self.listen()
-        if self.flags.enable_events:
-            logger.info('Core Event enabled')
-            self.start_event_dispatcher()
-        self.start_workers()
-
-        # Send server socket to all acceptor processes.
-        assert self.socket is not None
-        for index in range(self.flags.num_workers):
-            send_handle(
-                self.work_queues[index],
-                self.socket.fileno(),
-                self.acceptors[index].pid
+                acceptor.pid,
             )
-            self.work_queues[index].close()
-        self.socket.close()
+            self.acceptors.append(acceptor)
+            self.fd_queues.append(work_queue[0])
