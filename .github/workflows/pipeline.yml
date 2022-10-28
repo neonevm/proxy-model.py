@@ -11,6 +11,9 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
   push:
+    branches:
+      - master
+      - develop
     tags:
       - "*"
 env:
@@ -143,11 +146,10 @@ jobs:
           python3 ./.github/workflows/deploy.py finalize_image \
           --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
           --github_ref=${GITHUB_REF} \
-          --base_ref_branch=${{ steps.branch-name.outputs.base_ref_branch }} \
           --github_sha=${GITHUB_SHA}
   notification:
     runs-on: build-runner
-    if: failure()
+    if: ${{ failure() && (github.ref_name == 'develop' || github.ref_name == 'master') }}
     needs:
       - finalize-image
       - openzeppelin-tests

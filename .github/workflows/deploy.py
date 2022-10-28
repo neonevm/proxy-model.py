@@ -107,15 +107,14 @@ def publish_image(github_sha):
 
 @cli.command(name="finalize_image")
 @click.option('--head_ref_branch')
-@click.option('--base_ref_branch')
 @click.option('--github_ref')
 @click.option('--github_sha')
-def finalize_image(head_ref_branch, base_ref_branch, github_ref, github_sha):
+def finalize_image(head_ref_branch, github_ref, github_sha):
     if 'refs/tags/' in github_ref:
         tag = github_ref.replace("refs/tags/", "")
-    elif base_ref_branch == 'master':
+    elif github_ref == 'refs/heads/master':
         tag = 'stable'
-    elif base_ref_branch == 'develop':
+    elif github_ref == 'refs/heads/develop':
         tag = 'latest'
     else:
         tag = head_ref_branch.split('/')[-1]
