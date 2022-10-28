@@ -6,6 +6,8 @@ on:
         required: true
       neon_evm_commit:
         required: true
+      neon_evm_ref:
+        required: true
       neon_evm_branch:
         required: true
   pull_request:
@@ -30,6 +32,7 @@ jobs:
     outputs:
       proxy_tag: ${{ steps.tags.outputs.proxy }}
       neon_evm_tag: ${{ steps.tags.outputs.neon_evm }}
+      neon_evm_branch: ${{ steps.tags.outputs.neon_evm_branch }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -37,11 +40,11 @@ jobs:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-      - name: Define images tags
+      - name: Define images tags and neon_evm branch
         id: tags
         run: |
-          if [[ "${{ github.event.inputs.neon_evm_branch }}" =~ "refs/tags/".* ]]; then
-            neon_evm_tag=`echo "${{ github.event.inputs.neon_evm_branch }}" | sed 's/refs\/tags\///g'` 
+          if [[ "${{ github.event.inputs.neon_evm_ref }}" =~ "refs/tags/".* ]]; then
+            neon_evm_tag=`echo "${{ github.event.inputs.neon_evm_ref }}" | sed 's/refs\/tags\///g'` 
           else
             neon_evm_tag=${{ github.event.inputs.neon_evm_commit }}
           fi;
@@ -52,15 +55,17 @@ jobs:
             proxy_tag=${GITHUB_SHA}
           fi;
           echo "proxy=$proxy_tag" >> $GITHUB_OUTPUT
+          neon_evm_branch=`echo "${{ github.event.inputs.neon_evm_branch }}"`
+          echo "neon_evm_branch=${neon_evm_branch:-'develop'}" >> $GITHUB_OUTPUT
       - name: Build docker image
-        if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags') }}
+        if: ${{ !startsWith(github.event.inputs.neon_evm_ref , 'refs/tags') }}
         run: |
           python3 ./.github/workflows/deploy.py build_docker_image \
           --github_sha=${GITHUB_SHA} \
           --neon_evm_tag=${{ steps.tags.outputs.neon_evm }} \
           --proxy_tag=${{ steps.tags.outputs.proxy }}
       - name: Publish image
-        if: ${{ !startsWith(github.event.inputs.neon_evm_branch, 'refs/tags/') }}
+        if: ${{ !startsWith(github.event.inputs.neon_evm_ref, 'refs/tags/') }}
         run: |
           python3 ./.github/workflows/deploy.py publish_image \
           --github_sha=${GITHUB_SHA}
@@ -104,7 +109,7 @@ jobs:
       - name: Terraform build infra structure
         run: |
           python3 ./.github/workflows/deploy.py terraform_infrastructure \
-            --branch=${{ github.ref_name }} \
+            --branch=${{ needs.build-image.outputs.neon_evm_branch }} \
             --github_sha=${GITHUB_SHA} \
             --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
             --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
@@ -141,7 +146,7 @@ jobs:
         id: branch-name
         uses: tj-actions/branch-names@v6
       - name: Tag published image
-        if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/') }}
+        if: ${{ !startsWith(github.event.inputs.neon_evm_ref , 'refs/tags/') }}
         run: |
           python3 ./.github/workflows/deploy.py finalize_image \
           --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
