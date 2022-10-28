@@ -81,7 +81,9 @@ def build_docker_image(neon_evm_tag, proxy_tag, github_sha):
         neon_evm_tag = get_neon_evm_tag(proxy_tag)
 
     neon_evm_image = f'neonlabsorg/evm_loader:{neon_evm_tag}'
+    neon_test_invoke_program_image = "neonlabsorg/neon_test_invoke_program:develop"
     docker_client.pull(neon_evm_image)
+    docker_client.pull(neon_test_invoke_program_image)
 
     buildargs = {"NEON_EVM_COMMIT": neon_evm_tag,
                  "PROXY_REVISION": github_sha,
@@ -298,7 +300,7 @@ def run_test(file_name):
 
 @cli.command(name="dump_apps_logs")
 def dump_apps_logs():
-    containers = ['proxy', 'solana', 'proxy_program_loader',
+    containers = ['proxy', 'solana', 'neon_test_invoke_program_loader',
                   'dbcreation', 'faucet', 'airdropper', 'indexer']
     for container in containers:
         dump_docker_logs(container)
