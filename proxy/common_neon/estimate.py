@@ -13,7 +13,7 @@ from ..common_neon.eth_proto import NeonTx
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_alt_builder import ALTTxBuilder
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockhash
+from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockhash, SolTxSizeError
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.address import NeonAddress
 
@@ -121,8 +121,10 @@ class GasEstimate:
                 pass
             elif self._execution_cost() < self._small_gas_limit:
                 return self._cached_tx_cost_size
-        except (Exception, ):
+        except SolTxSizeError:
             pass
+        except BaseException as exc:
+            self.debug('Error during pack solana tx', exc_info=exc)
 
         self._cached_tx_cost_size = self._holder_tx_cost(self._tx_builder.neon_tx_len())
         return self._cached_tx_cost_size
@@ -138,7 +140,7 @@ class GasEstimate:
 
     def _iterative_overhead_cost(self) -> int:
         if self._cached_overhead_cost is not None:
-            return self._cached_tx_cost_size
+            return self._cached_overhead_cost
 
         execution_cost = self._execution_cost()
         tx_size_cost = self._tx_size_cost()

@@ -25,10 +25,9 @@ services:
       start_period: 5s
     entrypoint: /opt/solana/bin/solana-run-neon.sh
 
-  proxy_program_loader:
-    container_name: proxy_program_loader
-    image: neonlabsorg/proxy:${REVISION}
-#    image: neonlabsorg/evm_loader:ci-proxy-caller-program
+  neon_test_invoke_program_loader:
+    container_name: neon_test_invoke_program_loader
+    image: neonlabsorg/neon_test_invoke_program:develop
     environment:
       SOLANA_URL: http://solana:8899
     networks:
@@ -36,7 +35,7 @@ services:
     depends_on:
       solana:
         condition: service_healthy
-    entrypoint: bash -c "/opt/deploy-proxy_program.sh"
+    entrypoint: /opt/neon-test-invoke-program.sh
 
   postgres:
     container_name: postgres

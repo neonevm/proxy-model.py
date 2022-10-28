@@ -462,7 +462,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
         _ix_list = msg['instructions']
 
         meta = tx_meta.tx['meta']
-        log_msg_list = meta['logMessages']
+        log_msg_list = meta.get('logMessages', [])
         _inner_ix_list = meta['innerInstructions']
 
         _account_key_list: List[str] = msg['accountKeys']

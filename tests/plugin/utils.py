@@ -12,7 +12,7 @@ from typing import Type
 from proxy.http.proxy import HttpProxyBasePlugin
 
 from proxy.plugin import ModifyPostDataPlugin, ProposedRestApiPlugin, RedirectToCustomServerPlugin, \
-    FilterByUpstreamHostPlugin, CacheResponsesPlugin, ManInTheMiddlePlugin
+    CacheResponsesPlugin, ManInTheMiddlePlugin
 
 
 def get_plugin_by_test_name(test_name: str) -> Type[HttpProxyBasePlugin]:
@@ -23,8 +23,6 @@ def get_plugin_by_test_name(test_name: str) -> Type[HttpProxyBasePlugin]:
         plugin = ProposedRestApiPlugin
     elif test_name == 'test_redirect_to_custom_server_plugin':
         plugin = RedirectToCustomServerPlugin
-    elif test_name == 'test_filter_by_upstream_host_plugin':
-        plugin = FilterByUpstreamHostPlugin
     elif test_name == 'test_cache_responses_plugin':
         plugin = CacheResponsesPlugin
     elif test_name == 'test_man_in_the_middle_plugin':
