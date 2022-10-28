@@ -67,7 +67,7 @@ jobs:
   deploy-check:
     needs:
       - build-image
-    runs-on: build-runner
+    runs-on: test-runner
     steps:
       - uses: actions/checkout@v3
         with:
