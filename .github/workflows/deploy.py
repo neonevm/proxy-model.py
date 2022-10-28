@@ -81,7 +81,9 @@ def build_docker_image(neon_evm_tag, proxy_tag, github_sha):
         neon_evm_tag = get_neon_evm_tag(proxy_tag)
 
     neon_evm_image = f'neonlabsorg/evm_loader:{neon_evm_tag}'
+    neon_test_invoke_program_image = "neonlabsorg/neon_test_invoke_program:develop"
     docker_client.pull(neon_evm_image)
+    docker_client.pull(neon_test_invoke_program_image)
 
     buildargs = {"NEON_EVM_COMMIT": neon_evm_tag,
                  "PROXY_REVISION": github_sha,
@@ -107,15 +109,14 @@ def publish_image(github_sha):
 
 @cli.command(name="finalize_image")
 @click.option('--head_ref_branch')
-@click.option('--base_ref_branch')
 @click.option('--github_ref')
 @click.option('--github_sha')
-def finalize_image(head_ref_branch, base_ref_branch, github_ref, github_sha):
+def finalize_image(head_ref_branch, github_ref, github_sha):
     if 'refs/tags/' in github_ref:
         tag = github_ref.replace("refs/tags/", "")
-    elif base_ref_branch == 'master':
+    elif github_ref == 'refs/heads/master':
         tag = 'stable'
-    elif base_ref_branch == 'develop':
+    elif github_ref == 'refs/heads/develop':
         tag = 'latest'
     else:
         tag = head_ref_branch.split('/')[-1]
@@ -134,13 +135,15 @@ def finalize_image(head_ref_branch, base_ref_branch, github_ref, github_sha):
 
 
 @cli.command(name="terraform_infrastructure")
-@click.option('--branch')
+@click.option('--head_ref_branch')
+@click.option('--github_ref_name')
 @click.option('--github_sha')
 @click.option('--neon_evm_tag')
 @click.option('--proxy_tag')
 @click.option('--run_number')
-def terraform_build_infrastructure(branch, github_sha, proxy_tag, neon_evm_tag, run_number):
+def terraform_build_infrastructure(head_ref_branch, github_ref_name, github_sha, proxy_tag, neon_evm_tag, run_number):
 
+    branch = head_ref_branch if head_ref_branch is not None else github_ref_name
     os.environ["TF_VAR_branch"] = branch
     os.environ["TF_VAR_proxy_model_commit"] = proxy_tag
     os.environ["TF_VAR_neon_evm_commit"] = neon_evm_tag
@@ -299,7 +302,7 @@ def run_test(file_name):
 
 @cli.command(name="dump_apps_logs")
 def dump_apps_logs():
-    containers = ['proxy', 'solana', 'proxy_program_loader',
+    containers = ['proxy', 'solana', 'neon_test_invoke_program_loader',
                   'dbcreation', 'faucet', 'airdropper', 'indexer']
     for container in containers:
         dump_docker_logs(container)

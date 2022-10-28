@@ -11,6 +11,9 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
   push:
+    branches:
+      - master
+      - develop
     tags:
       - "*"
 env:
@@ -64,7 +67,7 @@ jobs:
   deploy-check:
     needs:
       - build-image
-    runs-on: build-runner
+    runs-on: test-runner
     steps:
       - uses: actions/checkout@v3
         with:
@@ -101,7 +104,8 @@ jobs:
       - name: Terraform build infra structure
         run: |
           python3 ./.github/workflows/deploy.py terraform_infrastructure \
-            --branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+            --github_ref_name=${{ github.ref_name }} \
+            --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
             --github_sha=${GITHUB_SHA} \
             --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
             --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
@@ -143,11 +147,10 @@ jobs:
           python3 ./.github/workflows/deploy.py finalize_image \
           --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
           --github_ref=${GITHUB_REF} \
-          --base_ref_branch=${{ steps.branch-name.outputs.base_ref_branch }} \
           --github_sha=${GITHUB_SHA}
   notification:
     runs-on: build-runner
-    if: failure()
+    if: ${{ failure() && (github.ref_name == 'develop' || github.ref_name == 'master') }}
     needs:
       - finalize-image
       - openzeppelin-tests

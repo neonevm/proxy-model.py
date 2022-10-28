@@ -39,8 +39,6 @@ services:
     healthcheck:
       test: [ CMD-SHELL, "/echo done" ]
     entrypoint: "/usr/bin/sleep 10000"
-
-services:
   proxy:
     environment:
       - SOLANA_URL=$SOLANA_URL
@@ -58,6 +56,7 @@ EOF
 # Get list of services
 SERVICES=$(docker-compose -f docker-compose-test.yml config --services | grep -vP "solana|airdropper|prometheus|neon_test_invoke_program_loader")
 
+echo $SERVICES
 
 # Pull latest versions
 docker-compose -f docker-compose-test.yml -f docker-compose-test.override.yml pull $SERVICES
