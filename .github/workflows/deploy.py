@@ -61,7 +61,8 @@ def docker_compose(args: str):
 
 
 def get_neon_evm_tag(proxy_tag):
-    evm_tag = re.sub('\d{1,2}$', 'x', proxy_tag)
+    proxy_tag_withot_prefix = re.sub('-.*', '', proxy_tag)
+    evm_tag = re.sub('\d{1,2}$', 'x', proxy_tag_withot_prefix)
     response = requests.get(
         url=f"https://registry.hub.docker.com/v2/repositories/neonlabsorg/evm_loader/tags/{evm_tag}")
     if response.status_code != 200:
