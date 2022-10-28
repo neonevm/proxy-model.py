@@ -79,7 +79,7 @@ jobs:
           submodules: "true"
       - name: deploy_check
         run: |
-          python3 ./.github/workflows/deploy.py deploy_check \
+          true || python3 ./.github/workflows/deploy.py deploy_check \
           --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
           --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }}
       - name: Dump docker logs
