@@ -220,18 +220,16 @@ def openzeppelin_test(run_number):
     ssh_client.connect(solana_ip, username='ubuntu',
                        key_filename=ssh_key, timeout=120)
     stdin, stdout, stderr = ssh_client.exec_command(f'sudo docker ps -a')
-    print(f'STDIN: {stdin}')
-    print(f'STDOUT: {stdout}')
-    print(f'STDERR: {stderr}')
+    print(f'STDOUT: {}', stdout.readlines())
+    print(f'STDERR: {}', stderr.readlines())
 
     upload_remote_logs(ssh_client, "solana", artifact_logs)
 
     ssh_client.connect(proxy_ip, username='ubuntu',
                        key_filename=ssh_key, timeout=120)
     stdin, stdout, stderr = ssh_client.exec_command(f'sudo docker ps -a')
-    print(f'STDIN: {stdin}')
-    print(f'STDOUT: {stdout}')
-    print(f'STDERR: {stderr}')
+    print(f'STDOUT: {}', stdout.readlines())
+    print(f'STDERR: {}', stderr.readlines())
     services = ["postgres", "dbcreation", "indexer", "proxy", "faucet"]
     for service in services:
         upload_remote_logs(ssh_client, service, artifact_logs)
