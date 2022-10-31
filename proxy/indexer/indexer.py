@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import base64
 import time
-from abc import ABC, abstractmethod
 
 from collections import deque
 from typing import List, Optional, Dict, Deque, Type
@@ -12,7 +10,6 @@ from logged_groups import logged_group, logging_context
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.config import Config
 from ..common_neon.constants import ACTIVE_HOLDER_TAG
-from ..common_neon.data import NeonTxStatData
 from ..common_neon.operator_secret_mng import OpSecretMng
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo
@@ -20,7 +17,9 @@ from ..common_neon.solana_tx import SolPubKey, SolAccount
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.utils import SolanaBlockInfo
 
-from ..indexer.i_indexer_stat_exporter import IIndexerStatExporter
+from ..statistic import IndexerStatClient
+from ..statistic.data import NeonTxStatData
+
 from ..indexer.indexed_objects import NeonIndexedBlockInfo, NeonIndexedBlockDict, SolNeonTxDecoderState
 from ..indexer.indexed_objects import NeonIndexedTxInfo
 from ..indexer.indexer_base import IndexerBase
@@ -32,24 +31,9 @@ from ..indexer.solana_tx_meta_collector import SolTxMetaDict, SolHistoryNotFound
 from ..indexer.utils import MetricsToLogger
 
 
-class IIndexerUser(ABC):
-
-    @abstractmethod
-    def on_neon_tx_result(self, result: NeonTxStatData):
-        """On Neon transaction result """
-
-    @abstractmethod
-    def on_solana_rpc_status(self, status):
-        """On Solana status"""
-
-    @abstractmethod
-    def on_db_status(self, status):
-        """On Neon database status"""
-
-
 @logged_group("neon.Indexer")
 class Indexer(IndexerBase):
-    def __init__(self, config: Config, indexer_stat_exporter: IIndexerUser):
+    def __init__(self, config: Config):
         solana = SolInteractor(config, config.solana_url)
         self._db = IndexerDB()
         last_known_slot = self._db.get_min_receipt_block_slot()
@@ -61,7 +45,7 @@ class Indexer(IndexerBase):
         self._cancel_tx_executor = CancelTxExecutor(config, solana, sol_account)
 
         self._counted_logger = MetricsToLogger()
-        self._stat_exporter = indexer_stat_exporter
+        self._stat_client = IndexerStatClient(config)
         self._last_stat_time = 0.0
 
         sol_tx_meta_dict = SolTxMetaDict()
@@ -182,28 +166,30 @@ class Indexer(IndexerBase):
         now = time.time()
         if abs(now - self._last_stat_time) < 1:
             return
+
         self._last_stat_time = now
-        self._stat_exporter.on_db_status(self._db.status())
-        self._stat_exporter.on_solana_rpc_status(self._solana.is_healthy())
+        self._stat_client.commit_db_health(self._db.is_healthy())
+        self._stat_client.commit_solana_rpc_health(self._solana.is_healthy())
 
     def _submit_neon_tx_status(self, tx: NeonIndexedTxInfo) -> None:
-        neon_tx_sig = tx.neon_tx.sig
-        neon_income = int(tx.neon_tx_res.gas_used, 0) * int(tx.neon_tx.gas_price, 0)  # TODO: get gas usage from ixs
-        if tx.holder_account != '':
-            tx_type = 'holder'
-        elif tx.storage_account != '':
-            tx_type = 'iterative'
-        else:
-            tx_type = 'single'
-        is_canceled = tx.neon_tx_res.status == '0x0'
-        sol_spent = tx.sol_spent
-        neon_tx_stat_data = NeonTxStatData(neon_tx_sig, sol_spent, neon_income, tx_type, is_canceled)
-        neon_tx_stat_data.sol_tx_cnt = tx.sol_tx_cnt
-        for ix in tx.iter_sol_neon_ix():
-            neon_tx_stat_data.neon_step_cnt += ix.neon_step_cnt
-            neon_tx_stat_data.bpf_cycle_cnt += ix.used_bpf_cycle_cnt
-
-        self._stat_exporter.on_neon_tx_result(neon_tx_stat_data)
+        pass
+        # neon_tx_sig = tx.neon_tx.sig
+        # neon_income = int(tx.neon_tx_res.gas_used, 0) * int(tx.neon_tx.gas_price, 0)  # TODO: get gas usage from ixs
+        # if tx.holder_account != '':
+        #     tx_type = 'holder'
+        # elif tx.storage_account != '':
+        #     tx_type = 'iterative'
+        # else:
+        #     tx_type = 'single'
+        # is_canceled = tx.
+        # sol_spent = tx.sol_spent
+        # neon_tx_stat_data = NeonTxStatData(neon_tx_sig, sol_spent, neon_income, tx_type, is_canceled)
+        # neon_tx_stat_data.sol_tx_cnt = tx.sol_tx_cnt
+        # for ix in tx.iter_sol_neon_ix():
+        #     neon_tx_stat_data.neon_step_cnt += ix.neon_step_cnt
+        #     neon_tx_stat_data.bpf_cycle_cnt += ix.used_bpf_cycle_cnt
+        #
+        # self._stat_exporter.on_neon_tx_result(neon_tx_stat_data)
 
     def _get_sol_block_deque(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> Deque[SolanaBlockInfo]:
         if not state.has_neon_block():

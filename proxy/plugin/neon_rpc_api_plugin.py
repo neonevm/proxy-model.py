@@ -11,22 +11,23 @@
 import json
 import threading
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 
 from logged_groups import logged_group, logging_context
 from neon_py.utils import gen_unique_id
 
+from ..common.utils import build_http_response
+from ..common_neon.errors import EthereumError
+from ..common_neon.solana_tx_error_parser import SolTxError
+from ..common_neon.config import Config
+
 from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
-from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-
-from ..common.utils import build_http_response
-from ..common_neon.solana_tx_error_parser import SolTxError
-from ..common_neon.errors import EthereumError
+from ..http.websocket import WebsocketFrame
 
 from ..neon_rpc_api_model import NeonRpcApiWorker
-from ..common_neon.statistic import StatisticMiddlewareClient
+from ..statistic import ProxyStatClient, NeonMethodData
 
 modelInstanceLock = threading.Lock()
 modelInstance = None
@@ -44,17 +45,17 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
 
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
-        self._stat_middleware = StatisticMiddlewareClient()
-        self.model = NeonRpcApiPlugin.getModel()
-        self.model.set_stat_exporter(self._stat_middleware)
+        self._config = Config()
+        self._stat_client = ProxyStatClient(self._config)
+        self.model = NeonRpcApiPlugin.getModel(self._config)
 
     @classmethod
-    def getModel(cls):
+    def getModel(cls, config: Config):
         global modelInstanceLock
         global modelInstance
         with modelInstanceLock:
             if modelInstance is None:
-                modelInstance = NeonRpcApiWorker()
+                modelInstance = NeonRpcApiWorker(config)
             return modelInstance
 
     def routes(self) -> List[Tuple[int, str]]:
@@ -63,7 +64,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             (httpProtocolTypes.HTTPS, NeonRpcApiPlugin.SOLANA_PROXY_LOCATION)
         ]
 
-    def process_request(self, request):
+    def process_request(self, request) -> Dict[str, Any]:
         response = {
             'jsonrpc': '2.0',
             'id': request.get('id', None),
@@ -107,9 +108,13 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             return
         start_time = time.time()
 
+        is_error_resp = False
+        method = '---'
         try:
-            self.info('handle_request <<< %s 0x%x %s', threading.get_ident(), id(self.model),
-                      request.body.decode('utf8'))
+            self.info(
+                'handle_request <<< %s 0x%x %s', threading.get_ident(), id(self.model),
+                request.body.decode('utf8')
+            )
             request = json.loads(request.body)
             if isinstance(request, list):
                 response = []
@@ -119,24 +124,25 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                     response.append(self.process_request(r))
             elif isinstance(request, dict):
                 response = self.process_request(request)
+                method = request.get('method', '---')
+                is_error_resp = 'error' in response
             else:
                 raise Exception("Invalid request")
         except Exception as err:
             # traceback.print_exc()
             response = {'jsonrpc': '2.0', 'error': {'code': -32000, 'message': str(err)}}
+            is_error_resp = True
 
         resp_time_ms = (time.time() - start_time)*1000  # convert this into milliseconds
 
-        method = '---'
-        if isinstance(request, dict):
-            method = request.get('method', '---')
-
-        self.info('handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
-                  threading.get_ident(),
-                  id(self.model),
-                  json.dumps(response),
-                  method,
-                  resp_time_ms)
+        self.info(
+            'handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
+            threading.get_ident(),
+            id(self.model),
+            json.dumps(response),
+            method,
+            resp_time_ms
+        )
 
         self.client.queue(memoryview(build_http_response(
             httpStatusCodes.OK, reason=b'OK', body=json.dumps(response).encode('utf8'),
@@ -144,7 +150,9 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 b'Content-Type': b'application/json',
                 b'Access-Control-Allow-Origin': b'*',
             })))
-        self._stat_middleware.stat_commit_request_and_timeout(method, resp_time_ms)
+
+        stat = NeonMethodData(name=method, is_error=is_error_resp, latency=resp_time_ms)
+        self._stat_client.commit_request_and_timeout(stat)
 
     def on_websocket_open(self) -> None:
         pass

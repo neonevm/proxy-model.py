@@ -29,8 +29,6 @@ from ..indexer.indexer_db import IndexerDB
 
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
 
-from ..common_neon.statistic import IStatisticsExporter
-
 NEON_PROXY_PKG_VERSION = '0.13.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 
@@ -39,11 +37,10 @@ NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 class NeonRpcApiWorker:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
-    def __init__(self):
-        self._config = Config()
+    def __init__(self, config: Config):
+        self._config = config
         self._solana = SolInteractor(self._config, self._config.solana_url)
         self._db = IndexerDB()
-        self._stat_exporter: Optional[IStatisticsExporter] = None
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price_value: Optional[MPGasPriceResult] = None
@@ -58,9 +55,6 @@ class NeonRpcApiWorker:
         if self.proxy_id == 0:
             self.debug(f'Neon Proxy version: {self.neon_proxy_version()}')
         self.debug(f"Worker id {self.proxy_id}")
-
-    def set_stat_exporter(self, stat_exporter: IStatisticsExporter):
-        self._stat_exporter = stat_exporter
 
     @property
     def _gas_price(self) -> MPGasPriceResult:
@@ -516,7 +510,6 @@ class NeonRpcApiWorker:
         neon_sig = '0x' + neon_tx.hash_signed().hex()
         self.debug(f"sendRawTransaction {neon_sig}: {json.dumps(neon_tx.as_dict(), cls=JsonBytesEncoder)}")
 
-        self._stat_tx_begin()
         try:
             neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_sig)
             if neon_tx_receipt is not None:
@@ -533,35 +526,19 @@ class NeonRpcApiWorker:
             )
 
             if result.code in (MPTxSendResultCode.Success, MPTxSendResultCode.AlreadyKnown):
-                self._stat_tx_success()
                 return neon_sig
             elif result.code == MPTxSendResultCode.Underprice:
                 raise EthereumError(message='replacement transaction underpriced')
             elif result.code == MPTxSendResultCode.NonceTooLow:
                 neon_tx_validator.raise_nonce_error(result.state_tx_cnt, neon_tx.nonce)
-                self._stat_tx_failed()
             else:
                 raise EthereumError(message='unknown error')
         except EthereumError:
-            self._stat_tx_failed()
             raise
 
         except BaseException as exc:
             self.error('Failed to process eth_sendRawTransaction.', exc_info=exc)
-            self._stat_tx_failed()
             raise
-
-    def _stat_tx_begin(self):
-        if self._stat_exporter is not None:
-            self._stat_exporter.stat_commit_tx_begin()
-
-    def _stat_tx_success(self):
-        if self._stat_exporter is not None:
-            self._stat_exporter.stat_commit_tx_end_success()
-
-    def _stat_tx_failed(self):
-        if self._stat_exporter is not None:
-            self._stat_exporter.stat_commit_tx_end_failed()
 
     def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: Union[str, int]) -> Optional[Dict[str, Any]]:
         try:

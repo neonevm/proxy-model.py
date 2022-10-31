@@ -9,7 +9,7 @@ if [ "${SKIP_DOCKER_PULL}" != "YES" ]; then
     docker pull neonlabsorg/neon_test_invoke_program:develop
 fi
 
-docker build -t neonlabsorg/proxy:${REVISION} \
+docker build --network=host -t neonlabsorg/proxy:${REVISION} \
     --build-arg NEON_EVM_COMMIT=${NEON_EVM_COMMIT} \
     --build-arg PROXY_REVISION=${REVISION} \
     --build-arg PROXY_LOG_CFG=${PROXY_LOG_CFG} \

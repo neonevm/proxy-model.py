@@ -88,11 +88,12 @@ services:
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
       NEON_CLI_DEBUG_LOG: "YES"
-      FUZZING_BLOCKHASH: "NO"
+      FUZZING_BLOCKHASH: "YES"
+      GATHER_STATISTICS: "YES"
       CONFIG: ci
       # Comment next two lines, if you want local stand without real gas-price
-      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
-      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
+#      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
+#      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
       #
       MIN_OPERATOR_BALANCE_TO_WARN: 4565760000 # = 913152000 * 5 (5 storage accounts) = 4.56576 SOL
       MIN_OPERATOR_BALANCE_TO_ERR: 913152000 # = solana rent 131072 (= Rent-exempt minimum: 0.913152 SOL) SOLs to create a storage
@@ -119,6 +120,7 @@ services:
         condition: service_completed_successfully
     ports:
       - 9090:9090
+      - 8881:8888
     expose:
       - "8888"
       - "9090"
@@ -216,6 +218,8 @@ services:
         condition: service_completed_successfully
     expose:
       - "8887"
+    ports:
+      - 8882:8888
     networks:
       - net
     entrypoint: proxy/run-indexer.sh
