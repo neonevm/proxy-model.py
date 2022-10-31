@@ -2,7 +2,14 @@ name: Dummy workflow
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-
+  workflow_dispatch:
+    inputs:
+      full_test_suite:
+        required: true
+      neon_evm_commit:
+        required: true
+      neon_evm_branch:
+        required: true
 jobs:
   build-image:
     runs-on: build-runner
