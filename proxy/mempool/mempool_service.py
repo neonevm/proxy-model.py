@@ -13,7 +13,10 @@ from .mempool import MemPool
 from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest
 from .mempool_replicator import MemPoolReplicator
 from .operator_resource_mng import OpResMng
+
 from ..common_neon.config import Config
+
+from ..statistic.proxy_client import ProxyStatClient
 
 
 @logged_group("neon.MemPool")
@@ -27,6 +30,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         self._mempool_srv: Optional[AddrPickableDataSrv] = None
         self._mempool_maintenance_srv: Optional[AddrPickableDataSrv] = None
         self._mempool: Optional[MemPool] = None
+        self._stat_client: Optional[ProxyStatClient] = None
         self._op_res_mng: Optional[OpResMng] = None
         self._mp_executor_mng: Optional[MPExecutorMng] = None
         self._replicator: Optional[MemPoolReplicator] = None
@@ -88,10 +92,11 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         try:
             self._mempool_srv = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
             self._mempool_maintenance_srv = AddrPickableDataSrv(user=self, address=self.MP_MAINTENANCE_ADDR)
-            self._op_res_mng = OpResMng(self._config)
-            self._mp_executor_mng = MPExecutorMng(self._config, self)
+            self._stat_client = ProxyStatClient(self._config)
+            self._mp_executor_mng = MPExecutorMng(self._config, self, self._stat_client)
             self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
-            self._mempool = MemPool(self._config, self._op_res_mng, self._mp_executor_mng)
+            self._op_res_mng = OpResMng(self._config, self._stat_client)
+            self._mempool = MemPool(self._config, self._stat_client, self._op_res_mng, self._mp_executor_mng)
             self._replicator = MemPoolReplicator(self._mempool)
             self.event_loop.run_forever()
         except BaseException as exc:

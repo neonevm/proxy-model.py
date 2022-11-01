@@ -16,4 +16,4 @@ pysha3
 construct
 git+https://github.com/ethereum/web3.py.git@v6.0.0-beta.6
 git+https://github.com/neonlabsorg/neon.py.git@0.1.7
-aioprometheus==18.1.3
+aioprometheus==22.5.0

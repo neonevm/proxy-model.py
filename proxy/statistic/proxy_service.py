@@ -9,7 +9,8 @@ from aioprometheus import Counter, Histogram, Gauge
 from logged_groups import logged_group
 
 from .middleware import StatService
-from .data import NeonGasPriceData, NeonMethodData, NeonOpListData
+from .data import NeonMethodData, NeonGasPriceData, NeonTxBeginData, NeonTxEndData
+from .data import NeonOpResStatData, NeonOpResListData, NeonExecutorStatData
 
 from ..indexer.indexer_db import IndexerDB
 from ..common_neon.config import Config
@@ -27,7 +28,7 @@ class ProxyStatDataPeeker:
         self._sol_account_list: List[str] = []
         self._neon_account_list: List[str] = []
 
-    def set_op_account_list(self, op_list: NeonOpListData) -> None:
+    def set_op_account_list(self, op_list: NeonOpResListData) -> None:
         self._sol_account_list = op_list.sol_account_list
         self._neon_account_list = op_list.neon_account_list
 
@@ -66,10 +67,11 @@ class ProxyStatService(StatService):
 
     def _init_metric_list(self) -> None:
         self._metr_req_count = Counter('request_count', 'App Request Count', registry=self._registry)
-        self._metr_error_count = Counter('error_count', 'App Error Answer Count', registry=self._registry)
+        self._metr_req_error_count = Counter('error_count', 'App Error Answer Count', registry=self._registry)
         self._metr_req_latency = Histogram('request_latency_seconds', 'Request latency', registry=self._registry)
 
         self._metr_tx_total = Counter('tx_total', 'Incoming TX Count', registry=self._registry)
+        self._metr_tx_in_mempool = Gauge('tx_in_mempool', 'Count of Txs in mempool', registry=self._registry)
         self._metr_tx_in_progress = Gauge('tx_in_progress', 'Count Of Txs Currently Processed', registry=self._registry)
         self._metr_tx_success = Counter('tx_success_count', 'Count Of Succeeded Txs', registry=self._registry)
         self._metr_tx_failed = Counter('tx_failed_count', 'Count Of Failed Txs', registry=self._registry)
@@ -80,6 +82,22 @@ class ProxyStatService(StatService):
         self._metr_op_neon_balance = Gauge(
             'operator_neon_balance', 'Operator Balance in Neon\'s', registry=self._registry
         )
+        self._metr_key_total = Gauge('operator_key_count', 'Operator Keys count', registry=self._registry)
+        self._metr_res_total = Gauge('operator_resource_count', 'Operator Resource count', registry=self._registry)
+        self._metr_res_free = Gauge(
+            'operator_resource_free_count', 'Count of free operator resources', registry=self._registry
+        )
+        self._metr_res_used = Gauge(
+            'operator_resource_used_count', 'Count of used operator resources', registry=self._registry
+        )
+        self._metr_res_disabled = Gauge(
+            'operator_resource_disabled_count', 'Count of disabled operator resources', registry=self._registry
+        )
+
+        self._metr_exec_total = Gauge('executor_total', 'Executors count', registry=self._registry)
+        self._metr_exec_free = Gauge('executor_free_count', 'Count of free executors', registry=self._registry)
+        self._metr_exec_used = Gauge('executor_used_count', 'Count of used executors', registry=self._registry)
+        self._metr_exec_stopped = Gauge('executor_stopped_count', 'Count of stopped executors', registry=self._registry)
 
         self._metr_gas_price = Gauge('gas_price', 'Gas Price', registry=self._registry)
         self._metr_usd_price_sol = Gauge('usd_price_sol', 'Sol Price USD', registry=self._registry)
@@ -87,7 +105,7 @@ class ProxyStatService(StatService):
         self._metr_operator_fee = Gauge('operator_fee', 'Operator Fee', registry=self._registry)
         self._metr_suggested_pct = Gauge('suggested_pct', 'Suggested Percent', registry=self._registry)
 
-        self._metr_db_health = Gauge('postgres_availability', 'Postgres availability', registry=self._registry)
+        self._metr_db_health = Gauge('db_health', 'DB status', registry=self._registry)
         self._metr_solana_rpc_health = Gauge('solana_rpc_health', 'Solana Node status', registry=self._registry)
 
     def _process_init(self) -> None:
@@ -97,46 +115,52 @@ class ProxyStatService(StatService):
         self._metr_req_count.inc({"method": method.name})
         self._metr_req_latency.observe({"method": method.name}, method.latency)
         if method.is_error:
-            self._metr_error_count.inc({"method": method.name})
+            self._metr_req_error_count.inc({"method": method.name})
 
-    def commit_tx_begin(self) -> None:
-        pass
-        # self.metr_tx_total.inc({})
-        # self.metr_tx_in_progress.inc({})
+    def commit_tx_add(self) -> None:
+        self._metr_tx_total.inc({})
+        self._metr_tx_in_mempool.inc({})
 
-    def commit_tx_end_success(self) -> None:
-        pass
-        # self.metr_tx_success.inc({})
-        # self.metr_tx_in_progress.dec({})
+    def commit_tx_begin(self, begin_stat: NeonTxBeginData) -> None:
+        self._metr_tx_in_progress.add({}, begin_stat.begin_cnt)
 
-    def commit_tx_end_failed(self) -> None:
-        pass
-        # self.metr_tx_failed.inc({})
-        # self.metr_tx_in_progress.dec({})
-
-    def commit_tx_end_reschedule(self) -> None:
-        pass
-        # self.metr_tx_failed.inc({})
-        # self.metr_tx_in_progress.dec({})
+    def commit_tx_end(self, end_stat: NeonTxEndData) -> None:
+        total_done_cnt = end_stat.failed_cnt + end_stat.done_cnt
+        self._metr_tx_in_progress.sub({}, total_done_cnt + end_stat.rescheduled_cnt)
+        self._metr_tx_in_mempool.sub({}, total_done_cnt)
+        self._metr_tx_failed.add({}, end_stat.failed_cnt)
+        self._metr_tx_success.add({}, end_stat.done_cnt)
 
     def commit_db_health(self, status: bool) -> None:
-        self._metr_db_health.set({'db': 'health'}, 1 if status else 0)
+        self._metr_db_health.set({}, 1 if status else 0)
 
     def commit_solana_rpc_health(self, status: bool) -> None:
-        self._metr_solana_rpc_health.set({'solana': 'health'}, 1 if status else 0)
+        self._metr_solana_rpc_health.set({}, 1 if status else 0)
 
     def commit_gas_price(self, gas_price: NeonGasPriceData) -> None:
-        self._metr_gas_price.set({}, gas_price.gas_price)
+        self._metr_gas_price.set({}, gas_price.min_gas_price)
         self._metr_usd_price_neon.set({}, float(gas_price.neon_price_usd))
         self._metr_usd_price_sol.set({}, float(gas_price.sol_price_usd))
         self._metr_operator_fee.set({}, float(gas_price.operator_fee))
-        self._metr_suggested_pct.set({}, float(gas_price.suggested_pct))
 
-    def commit_op_list(self, op_list: NeonOpListData) -> None:
+    def commit_op_res_list(self, op_list: NeonOpResListData) -> None:
         self._data_peeker.set_op_account_list(op_list)
 
-    def commit_operator_sol_balance(self, sol_account: str, sol_balance: Decimal) -> None:
+    def commit_op_sol_balance(self, sol_account: str, sol_balance: Decimal) -> None:
         self._metr_op_sol_balance.set({"operator_sol_wallet": sol_account}, float(sol_balance))
 
-    def commit_operator_neon_balance(self, neon_account: str, neon_balance: Decimal) -> None:
+    def commit_op_neon_balance(self, neon_account: str, neon_balance: Decimal) -> None:
         self._metr_op_neon_balance.set({'operator_neon_wallet': neon_account}, float(neon_balance))
+
+    def commit_op_res_stat(self, res_stat: NeonOpResStatData) -> None:
+        self._metr_key_total.set({}, res_stat.secret_cnt)
+        self._metr_res_total.set({}, res_stat.total_res_cnt)
+        self._metr_res_free.set({}, res_stat.free_res_cnt)
+        self._metr_res_used.set({}, res_stat.used_res_cnt)
+        self._metr_res_disabled.set({}, res_stat.disabled_res_cnt)
+
+    def commit_executor_stat(self, exec_stat: NeonExecutorStatData) -> None:
+        self._metr_exec_total.set({}, exec_stat.total_cnt)
+        self._metr_exec_free.set({}, exec_stat.free_cnt)
+        self._metr_exec_used.set({}, exec_stat.used_cnt)
+        self._metr_exec_stopped.set({}, exec_stat.stopped_cnt)

@@ -35,7 +35,7 @@ def _reconnecting(method: Callable) -> Callable:
 
 @logged_group("neon.Proxy")
 class MemPoolClient:
-    RECONNECT_MP_TIME_SEC = 5
+    _reconnect_mp_time_sec = 1
 
     def __init__(self, address):
         self.debug("Init MemPoolClient")
@@ -48,8 +48,8 @@ class MemPoolClient:
         if self._is_connecting.is_set():
             return
         self._is_connecting.set()
-        self.debug(f"Reconnecting MemPool in: {MemPoolClient.RECONNECT_MP_TIME_SEC} sec.")
-        threading.Timer(MemPoolClient.RECONNECT_MP_TIME_SEC, self._connect_mp).start()
+        self.debug(f"Reconnecting MemPool in: {self._reconnect_mp_time_sec} sec")
+        threading.Timer(self._reconnect_mp_time_sec, self._connect_mp).start()
 
     @_guard_conn
     def _connect_mp(self):

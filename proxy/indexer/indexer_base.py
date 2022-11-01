@@ -11,9 +11,9 @@ class IndexerBase:
     def __init__(self, config: Config, solana: SolInteractor, last_slot: int):
         self._solana = solana
         self._config = config
-        self._last_slot = self._init_last_slot('receipt', last_slot)
+        self._start_slot = self._init_start_slot('receipt', last_slot)
 
-    def _init_last_slot(self, name: str, last_known_slot: int) -> int:
+    def _init_start_slot(self, name: str, last_known_slot: int) -> int:
         """
         This function allow to skip some part of history.
         - LATEST - start from the last block slot from Solana
@@ -26,7 +26,9 @@ class IndexerBase:
         name = f'{name} slot'
 
         start_slot = self._config.start_slot
-        if start_slot not in ['CONTINUE', 'LATEST']:
+        self.info(f'Starting {name} with LATEST_KNOWN_LOST={last_known_slot} and START_SLOT={start_slot}')
+
+        if start_slot not in {'CONTINUE', 'LATEST'}:
             try:
                 start_int_slot = min(int(start_slot), latest_slot)
             except (Exception,):
@@ -45,8 +47,10 @@ class IndexerBase:
             return latest_slot
 
         if start_int_slot < last_known_slot:
-            self.info(f'START_SLOT={start_slot}: started the {name} from previous run, ' +
-                      f'because {start_int_slot} < {last_known_slot}')
+            self.info(
+                f'START_SLOT={start_slot}: started the {name} from previous run, ' +
+                f'because {start_int_slot} < {last_known_slot}'
+            )
             return last_known_slot
 
         self.info(f'START_SLOT={start_slot}: started the {name} from {start_int_slot}')

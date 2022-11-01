@@ -24,6 +24,9 @@ from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 from ..mempool.mempool_api import OpResIdent
 
+from ..statistic.data import NeonOpResStatData
+from ..statistic.proxy_client import ProxyStatClient
+
 
 @dataclasses.dataclass(frozen=True)
 class OpResInfo:
@@ -203,13 +206,14 @@ class OpResIdentListBuilder:
 
 @logged_group("neon.MemPool")
 class OpResMng:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, stat_client: ProxyStatClient):
         self._secret_list: List[bytes] = []
-        self._ident_set: Set[OpResIdent] = set()
+        self._res_ident_set: Set[OpResIdent] = set()
         self._free_res_ident_list: Deque[OpResUsedTime] = deque()
         self._used_res_ident_dict: Dict[str, OpResUsedTime] = dict()
         self._disabled_res_ident_list: Deque[OpResIdent] = deque()
         self._checked_res_ident_set: Set[OpResIdent] = set()
+        self._stat_client = stat_client
         self._config = config
         self._last_check_time = 0
 
@@ -217,14 +221,14 @@ class OpResMng:
         old_res_cnt = self.resource_cnt
 
         new_ident_set: Set[OpResIdent] = set(res_ident_list)
-        rm_ident_set: Set[OpResIdent] = self._ident_set.difference(new_ident_set)
-        add_ident_set: Set[OpResIdent] = new_ident_set.difference(self._ident_set)
+        rm_ident_set: Set[OpResIdent] = self._res_ident_set.difference(new_ident_set)
+        add_ident_set: Set[OpResIdent] = new_ident_set.difference(self._res_ident_set)
 
         if (len(rm_ident_set) == 0) and (len(add_ident_set) == 0):
             self.debug(f'Same resource list')
             return
 
-        self._ident_set = new_ident_set
+        self._res_ident_set = new_ident_set
         self._free_res_ident_list = deque([res for res in self._free_res_ident_list if res.ident not in rm_ident_set])
         self._disabled_res_ident_list = deque([res for res in self._disabled_res_ident_list if res not in rm_ident_set])
         self._checked_res_ident_set = {res for res in self._checked_res_ident_set if res not in rm_ident_set}
@@ -235,14 +239,15 @@ class OpResMng:
             self.debug(f'Add resource {res}')
             self._disabled_res_ident_list.append(res)
 
-        self._secret_list: List[bytes] = [pk for pk in {res.private_key for res in self._ident_set}]
+        self._secret_list: List[bytes] = [pk for pk in {res.private_key for res in self._res_ident_set}]
 
         if old_res_cnt != self.resource_cnt != 0:
             self.debug(f'Change number of resources from {old_res_cnt} to {self.resource_cnt}')
+        self._commit_stat()
 
     @property
     def resource_cnt(self) -> int:
-        return len(self._ident_set)
+        return len(self._res_ident_set)
 
     @staticmethod
     def _get_current_time() -> int:
@@ -259,15 +264,18 @@ class OpResMng:
             self._used_res_ident_dict[neon_sig] = res_used_time
             res_used_time.set_neon_sig(neon_sig)
             self.debug(f'Use resource {res_used_time} for tx {neon_sig}')
+            self._commit_stat()
             return res_used_time
 
         return None
 
     def _pop_used_resource(self, neon_sig: str) -> Optional[OpResUsedTime]:
         res_used_time = self._used_res_ident_dict.pop(neon_sig, None)
-        if (res_used_time is None) or (res_used_time.ident not in self._ident_set):
+        if (res_used_time is None) or (res_used_time.ident not in self._res_ident_set):
             self.debug(f'Skip resource {str(res_used_time)} for tx {neon_sig}')
             return None
+
+        self._commit_stat()
 
         res_used_time.reset_neon_sig()
         return res_used_time
@@ -301,6 +309,7 @@ class OpResMng:
         else:
             self.debug(f'Release resource {res_used_time}')
             self._free_res_ident_list.append(res_used_time)
+        self._commit_stat()
 
     def disable_resource(self, ident_or_sig: Union[OpResIdent, str]) -> None:
         if isinstance(ident_or_sig, str):
@@ -312,15 +321,17 @@ class OpResMng:
         self.debug(f'Disable resource {ident}')
         self._checked_res_ident_set.discard(ident)
         self._disabled_res_ident_list.append(ident)
+        self._commit_stat()
 
     def enable_resource(self, ident: OpResIdent) -> None:
-        if ident not in self._ident_set:
+        if ident not in self._res_ident_set:
             self.debug(f'Skip resource {ident}')
             return
 
         self.debug(f'Enable resource {ident}')
         self._checked_res_ident_set.discard(ident)
         self._free_res_ident_list.append(OpResUsedTime(ident=ident))
+        self._commit_stat()
 
     def get_secret_list(self) -> List[bytes]:
         return self._secret_list
@@ -345,4 +356,16 @@ class OpResMng:
         ident = self._disabled_res_ident_list.popleft()
         self.debug(f'Recheck resource {ident}')
         self._checked_res_ident_set.add(ident)
+
+        self._commit_stat()
         return ident
+
+    def _commit_stat(self) -> None:
+        stat = NeonOpResStatData(
+            secret_cnt=len(self._secret_list),
+            total_res_cnt=len(self._res_ident_set),
+            free_res_cnt=len(self._free_res_ident_list),
+            used_res_cnt=len(self._used_res_ident_dict),
+            disabled_res_cnt=len(self._disabled_res_ident_list)
+        )
+        self._stat_client.commit_op_res_stat(stat)

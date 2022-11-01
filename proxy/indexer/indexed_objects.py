@@ -16,6 +16,8 @@ from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolNeonIxReceipt
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolanaBlockInfo, str_fmt_object
 from ..indexer.solana_tx_meta_collector import SolTxMetaCollector
 
+from ..statistic.data import NeonTxStatData
+
 
 class BaseNeonIndexedObjInfo:
     def __init__(self):
@@ -24,22 +26,11 @@ class BaseNeonIndexedObjInfo:
         self._sol_tx_cost_set: Set[SolTxCostInfo] = set()
 
     def __str__(self) -> str:
-        return str_fmt_object(self)
+        return str_fmt_object(self, False)
 
     @property
     def block_slot(self) -> int:
         return self._block_slot
-
-    @property
-    def sol_spent(self) -> int:
-        sol_spent = 0
-        for tx_cost in self._sol_tx_cost_set:
-            sol_spent += tx_cost.sol_spent
-        return sol_spent
-
-    @property
-    def sol_tx_cnt(self) -> int:
-        return len(self._sol_tx_cost_set)
 
     def add_sol_neon_ix(self, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
         self._block_slot = max(self._block_slot, sol_neon_ix.block_slot)
@@ -147,7 +138,8 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
 
         @staticmethod
         def from_neon_tx_sig(neon_tx_sig: str,
-                             storage_account: str, iter_blocked_account: Iterator[str]) -> NeonIndexedTxInfo.Key:
+                             storage_account: str,
+                             iter_blocked_account: Iterator[str]) -> NeonIndexedTxInfo.Key:
             if neon_tx_sig[:2] == '0x':
                 neon_tx_sig = neon_tx_sig[2:]
             key = NeonIndexedTxInfo.Key()
@@ -157,7 +149,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
             return key
 
         def __str__(self) -> str:
-            return str_fmt_object(self)
+            return str_fmt_object(self, False)
 
         def is_empty(self) -> bool:
             return self._value == ''
@@ -181,6 +173,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         self._holder_account = ''
         self._status = NeonIndexedTxInfo.Status.IN_PROGRESS
         self._cancel_retry = 0
+        self._is_canceled = False
 
     @property
     def storage_account(self) -> str:
@@ -213,6 +206,49 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
     def status(self) -> NeonIndexedTxInfo.Status:
         return self._status
 
+    def calc_stat(self, op_account_set: Set[str]) -> NeonTxStatData:
+        if self._holder_account != '':
+            tx_type = 'holder'
+        elif self._key.storage_account != '':
+            tx_type = 'iterative'
+        else:
+            tx_type = 'single'
+
+        sol_spent = 0
+        op_sol_spent = 0
+        for tx_cost in self._sol_tx_cost_set:
+            sol_spent += tx_cost.sol_spent
+            if tx_cost.operator in op_account_set:
+                op_sol_spent += tx_cost.sol_spent
+
+        neon_step_cnt = 0
+        bpf_cycle_cnt = 0
+        op_gas_used = 0
+        for ix in self._sol_neon_ix_list:
+            neon_step_cnt += ix.neon_step_cnt
+            bpf_cycle_cnt += ix.used_bpf_cycle_cnt
+            if ix.sol_tx_cost.operator in op_account_set:
+                op_gas_used += ix.neon_gas_used
+
+        gas_price = int(self.neon_tx.gas_price, 16)
+        neon_income = int(self.neon_tx_res.gas_used, 16) * gas_price
+        op_neon_income = op_gas_used * gas_price
+
+        return NeonTxStatData(
+            op_sol_spent=op_sol_spent,
+            sol_spent=sol_spent,
+            neon_income=neon_income,
+            op_neon_income=op_neon_income,
+            tx_type=tx_type,
+            is_canceled=self._is_canceled,
+            neon_step_cnt=neon_step_cnt,
+            bpf_cycle_cnt=bpf_cycle_cnt,
+            sol_tx_cnt=len(self._sol_tx_cost_set)
+        )
+
+    def set_canceled(self, value: bool) -> None:
+        self._is_canceled = value
+
     def set_holder_account(self, holder: NeonIndexedHolderInfo) -> None:
         assert self._holder_account == ''
         self._holder_account = holder.account
@@ -243,10 +279,12 @@ class NeonIndexedBlockInfo:
 
         self._sol_tx_cost_list: List[SolTxCostInfo] = []
 
+        self._stat_neon_tx_list: List[NeonTxStatData] = []
+
         self._log_idx = 0
 
     def __str__(self) -> str:
-        return str_fmt_object(self)
+        return str_fmt_object(self, False)
 
     def clone(self, history_block_deque: Deque[SolanaBlockInfo]) -> NeonIndexedBlockInfo:
         sol_block = history_block_deque[-1]
@@ -439,8 +477,13 @@ class NeonIndexedBlockInfo:
     def iter_done_neon_tx(self) -> Iterator[NeonIndexedTxInfo]:
         return iter(self._done_neon_tx_list)
 
-    def complete_block(self, config: Config) -> None:
+    def iter_stat_neon_tx(self) -> Iterator[NeonTxStatData]:
+        return iter(self._stat_neon_tx_list)
+
+    def complete_block(self, config: Config, op_account_set: Set[str]) -> None:
         for tx in self._done_neon_tx_list:
+            if config.gather_statistics:
+                self._stat_neon_tx_list.append(tx.calc_stat(op_account_set))
             self._del_neon_tx(tx)
 
         self._is_completed = True
@@ -470,7 +513,7 @@ class NeonIndexedBlockDict:
             self._min_block_slot = 0
 
         def __str__(self) -> str:
-            return str_fmt_object(self)
+            return str_fmt_object(self, False)
 
         @staticmethod
         def init_empty() -> NeonIndexedBlockDict.Stat:

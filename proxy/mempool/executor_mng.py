@@ -11,7 +11,11 @@ from neon_py.network import PipePickableDataClient
 
 from .mempool_api import MPRequest, MPTask
 from .mempool_executor import MPExecutor
+
 from ..common_neon.config import Config
+
+from ..statistic.data import NeonExecutorStatData
+from ..statistic.proxy_client import ProxyStatClient
 
 
 class MPExecutorClient(PipePickableDataClient):
@@ -33,8 +37,9 @@ class MPExecutorMng:
         client: MPExecutorClient
         id: int
 
-    def __init__(self, config: Config, user: IMPExecutorMngUser):
+    def __init__(self, config: Config, user: IMPExecutorMngUser, stat_client: ProxyStatClient):
         self._config = config
+        self._stat_client = stat_client
         self._available_executor_pool: Deque[int] = deque()
         self._busy_executor_pool: Set[int] = set()
         self._executor_dict: Dict[int, MPExecutorMng.ExecutorInfo] = dict()
@@ -61,6 +66,8 @@ class MPExecutorMng:
             executor_info.executor.start()
             await executor_info.client.async_init()
 
+        self._commit_stat()
+
     def _stop_executors(self, executor_count: int) -> None:
         self.info(f"Stop executors -{executor_count} => {len(self._executor_dict) - executor_count}")
         while (executor_count > 0) and self._has_available():
@@ -74,6 +81,8 @@ class MPExecutorMng:
             executor_id, executor_info = self._executor_dict.popitem()
             self.debug(f"Mark to stop executor: {executor_id}")
             self._stopped_executor_dict[executor_id] = executor_info
+
+        self._commit_stat()
 
     async def async_init(self):
         await self.set_executor_cnt(0)
@@ -94,6 +103,8 @@ class MPExecutorMng:
         executor_id = self._available_executor_pool.pop()
         self.debug(f"Acquire executor: {executor_id}")
         self._busy_executor_pool.add(executor_id)
+        self._commit_stat()
+
         executor_info = self._executor_dict.get(executor_id, None)
         return executor_id, executor_info.client
 
@@ -107,6 +118,8 @@ class MPExecutorMng:
             self.debug(f"Stop executor: {executor_id}")
             executor = self._stopped_executor_dict.pop(executor_id).executor
             executor.kill()
+
+        self._commit_stat()
 
     def _create_executor(self, executor_id: int) -> ExecutorInfo:
         self.debug(f'Create executor: {executor_id}')
@@ -122,3 +135,12 @@ class MPExecutorMng:
             executor_info.executor.kill()
         self._busy_executor_pool.clear()
         self._available_executor_pool.clear()
+
+    def _commit_stat(self) -> None:
+        stat = NeonExecutorStatData(
+            total_cnt=len(self._executor_dict),
+            free_cnt=len(self._available_executor_pool),
+            used_cnt=len(self._busy_executor_pool),
+            stopped_cnt=len(self._stopped_executor_dict)
+        )
+        self._stat_client.commit_executor_stat(stat)
