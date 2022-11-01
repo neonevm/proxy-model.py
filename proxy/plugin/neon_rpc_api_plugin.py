@@ -8,10 +8,12 @@
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
 """
+from __future__ import annotations
+
 import json
 import threading
 import time
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 
 from logged_groups import logged_group, logging_context
 from neon_py.utils import gen_unique_id
@@ -30,33 +32,34 @@ from ..neon_rpc_api_model import NeonRpcApiWorker
 from ..statistic import ProxyStatClient, NeonMethodData
 
 modelInstanceLock = threading.Lock()
-modelInstance = None
+configInstance: Optional[Config] = None
+statInstance: Optional[ProxyStatClient] = None
+modelInstance: Optional[NeonRpcApiWorker] = None
 
 
 @logged_group("neon.Proxy")
 class NeonRpcApiPlugin(HttpWebServerBasePlugin):
     """Extend in-built Web Server to add Reverse Proxy capabilities.
     """
-
     SOLANA_PROXY_LOCATION: str = r'/solana$'
-    SOLANA_PROXY_PASS = [
-        b'http://localhost:8545/'
-    ]
 
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
-        self._config = Config()
-        self._stat_client = ProxyStatClient(self._config)
-        self.model = NeonRpcApiPlugin.getModel(self._config)
+        self._config, self._stat_client, self.model = NeonRpcApiPlugin.getModel()
 
     @classmethod
-    def getModel(cls, config: Config):
+    def getModel(cls) -> Tuple[Config, ProxyStatClient, NeonRpcApiWorker]:
         global modelInstanceLock
+        global configInstance
+        global statInstance
         global modelInstance
+
         with modelInstanceLock:
             if modelInstance is None:
-                modelInstance = NeonRpcApiWorker(config)
-            return modelInstance
+                configInstance = Config()
+                statInstance = ProxyStatClient(configInstance)
+                modelInstance = NeonRpcApiWorker(configInstance)
+            return configInstance, statInstance, modelInstance
 
     def routes(self) -> List[Tuple[int, str]]:
         return [

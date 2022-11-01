@@ -10,7 +10,8 @@ from neon_py.network import AddrPickableDataSrv, IPickableDataServerUser
 
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 from .mempool import MemPool
-from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest
+from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest
+from .mempool_api import MPPendingTxNonceRequest, MPMempoolTxNonceRequest
 from .mempool_replicator import MemPoolReplicator
 from .operator_resource_mng import OpResMng
 
@@ -56,20 +57,24 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         return Result("Unexpected problem")
 
     async def process_mp_request(self, mp_request: MPRequest) -> Any:
-        if mp_request.type == MPRequestType.SendTransaction:
-            tx_request = cast(MPTxRequest, mp_request)
-            return await self._mempool.schedule_mp_tx_request(tx_request)
-        elif mp_request.type == MPRequestType.GetLastTxNonce:
-            pending_nonce_req = cast(MPPendingTxNonceRequest, mp_request)
-            return self._mempool.get_pending_tx_nonce(pending_nonce_req.sender)
-        elif mp_request.type == MPRequestType.GetTxByHash:
-            pending_tx_by_hash_req = cast(MPPendingTxByHashRequest, mp_request)
-            return self._mempool.get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
-        elif mp_request.type == MPRequestType.GetGasPrice:
-            return self._mempool.get_gas_price()
-        elif mp_request.type == MPRequestType.GetElfParamDict:
-            return self._mempool.get_elf_param_dict()
-        self.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
+        with logging_context(req_id=mp_request.req_id):
+            if mp_request.type == MPRequestType.SendTransaction:
+                tx_request = cast(MPTxRequest, mp_request)
+                return await self._mempool.schedule_mp_tx_request(tx_request)
+            elif mp_request.type == MPRequestType.GetPendingTxNonce:
+                pending_nonce_req = cast(MPPendingTxNonceRequest, mp_request)
+                return self._mempool.get_pending_tx_nonce(pending_nonce_req.sender)
+            elif mp_request.type == MPRequestType.GetMempoolTxNonce:
+                mempool_nonce_req = cast(MPMempoolTxNonceRequest, mp_request)
+                return self._mempool.get_last_tx_nonce(mempool_nonce_req.sender)
+            elif mp_request.type == MPRequestType.GetTxByHash:
+                pending_tx_by_hash_req = cast(MPPendingTxByHashRequest, mp_request)
+                return self._mempool.get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
+            elif mp_request.type == MPRequestType.GetGasPrice:
+                return self._mempool.get_gas_price()
+            elif mp_request.type == MPRequestType.GetElfParamDict:
+                return self._mempool.get_elf_param_dict()
+            self.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
 
     def process_maintenance_request(self, request: MaintenanceRequest) -> Result:
         if request.command == MaintenanceCommand.SuspendMemPool:

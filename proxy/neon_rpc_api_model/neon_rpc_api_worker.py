@@ -387,14 +387,17 @@ class NeonRpcApiWorker:
         try:
             self.debug(f"Get transaction count. Account: {account}, tag: {tag}")
 
-            if tag == "pending":
+            if tag in {"pending", "mempool"}:
                 req_id = LogMng.get_logging_context().get("req_id")
-                pending_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
-                self.debug(f"Pending tx count for: {account} - is: {pending_tx_nonce}")
+                if tag == 'pending':
+                    pending_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
+                    self.debug(f"Pending tx count for: {account} - is: {pending_tx_nonce}")
+                else:
+                    pending_tx_nonce = self._mempool_client.get_mempool_tx_nonce(req_id=req_id, sender=account)
+                    self.debug(f"Mempool tx count for: {account} - is: {pending_tx_nonce}")
+
                 if pending_tx_nonce is None:
                     pending_tx_nonce = 0
-                else:
-                    pending_tx_nonce += 1
 
                 neon_account_info = self._solana.get_neon_account_info(account, 'processed')
                 tx_count = max(neon_account_info.tx_count, pending_tx_nonce)

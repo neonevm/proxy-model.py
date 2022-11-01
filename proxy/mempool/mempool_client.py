@@ -6,8 +6,8 @@ from typing import Callable, Optional, Dict, Any, Union
 from logged_groups import logged_group
 from neon_py.network import AddrPickableDataClient
 
-from .mempool_api import MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest
-from .mempool_api import MPTxRequest, MPPendingTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
+from .mempool_api import MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPTxRequest
+from .mempool_api import MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
 
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.errors import EthereumError
@@ -77,6 +77,12 @@ class MemPoolClient:
     def get_pending_tx_nonce(self, req_id: str, sender: str) -> int:
         mempool_pending_tx_nonce_req = MPPendingTxNonceRequest(req_id=req_id, sender=sender)
         return self._pickable_data_client.send_data(mempool_pending_tx_nonce_req)
+
+    @_guard_conn
+    @_reconnecting
+    def get_mempool_tx_nonce(self, req_id: str, sender: str) -> int:
+        mempool_tx_nonce_req = MPMempoolTxNonceRequest(req_id=req_id, sender=sender)
+        return self._pickable_data_client.send_data(mempool_tx_nonce_req)
 
     @_guard_conn
     @_reconnecting

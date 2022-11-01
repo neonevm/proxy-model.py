@@ -86,31 +86,33 @@ class MemPool:
         return await self.schedule_mp_tx_request(tx_request)
 
     async def schedule_mp_tx_request(self, tx: MPTxRequest) -> MPTxSendResult:
-        with logging_context(req_id=tx.req_id):
-            try:
-                if not tx.has_chain_id():
-                    if not self.has_gas_price():
-                        self.debug("Mempool doesn't have gas price information")
-                        return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
-                    self.debug(f'Increase gas-price for wo-chain-id tx {tx.sig}')
-                    tx.gas_price = self._gas_price.suggested_gas_price * 2
+        try:
+            if not tx.has_chain_id():
+                if not self.has_gas_price():
+                    self.debug("Mempool doesn't have gas price information")
+                    return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
+                self.debug(f'Increase gas-price for wo-chain-id tx {tx.sig}')
+                tx.gas_price = self._gas_price.suggested_gas_price * 2
 
-                result: MPTxSendResult = self._tx_schedule.add_tx(tx)
-                if result.code == MPTxSendResultCode.Success:
-                    self._stat_client.commit_tx_add()
-                self.debug(f"Got tx {tx.sig} and scheduled request")
-                return result
-            except BaseException as exc:
-                self.error(f"Failed to schedule tx {tx.sig}.", exc_info=exc)
-                return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
-            finally:
-                await self._kick_tx_schedule()
+            result: MPTxSendResult = self._tx_schedule.add_tx(tx)
+            if result.code == MPTxSendResultCode.Success:
+                self._stat_client.commit_tx_add()
+            self.debug(f"Got tx {tx.sig} and scheduled request")
+            return result
+        except BaseException as exc:
+            self.error(f"Failed to schedule tx {tx.sig}.", exc_info=exc)
+            return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
+        finally:
+            await self._kick_tx_schedule()
 
     def get_pending_tx_count(self, sender_addr: str) -> int:
         return self._tx_schedule.get_pending_tx_count(sender_addr)
 
     def get_pending_tx_nonce(self, sender_addr: str) -> int:
         return self._tx_schedule.get_pending_tx_nonce(sender_addr)
+
+    def get_last_tx_nonce(self, sender_addr: str) -> int:
+        return self._tx_schedule.get_last_tx_nonce(sender_addr)
 
     def get_pending_tx_by_hash(self, tx_hash: str) -> Union[NeonTx, EthereumError, None]:
         neon_tx = self._tx_schedule.get_pending_tx_by_hash(tx_hash)

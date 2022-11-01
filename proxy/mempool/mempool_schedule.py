@@ -103,7 +103,19 @@ class MPSenderTxPool:
         self._processing_tx = self.get_top_tx()
         return self._processing_tx
 
+    def get_pending_nonce(self) -> Optional[int]:
+        if self.is_empty() or self.is_paused():
+            return None
+
+        pending_nonce = self._state_tx_cnt
+        for tx in reversed(self._tx_nonce_queue):
+            if tx.nonce != pending_nonce:
+                break
+            pending_nonce += 1
+        return pending_nonce
+
     def get_last_nonce(self) -> Optional[int]:
+        self.debug(f'-> last NONCE {self._sender_address}')
         return self._tx_nonce_queue[self._bottom_index].nonce if not self.is_empty() else None
 
     def get_gas_price(self) -> int:
@@ -344,6 +356,10 @@ class MPTxSchedule:
         return 0 if sender_pool is None else sender_pool.get_queue_len()
 
     def get_pending_tx_nonce(self, sender_address: str) -> Optional[int]:
+        sender_pool = self._find_sender_pool(sender_address)
+        return None if sender_pool is None else sender_pool.get_pending_nonce()
+
+    def get_last_tx_nonce(self, sender_address: str) -> Optional[int]:
         sender_pool = self._find_sender_pool(sender_address)
         return None if sender_pool is None else sender_pool.get_last_nonce()
 
