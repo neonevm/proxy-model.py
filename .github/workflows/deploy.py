@@ -103,7 +103,7 @@ def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch):
                  "PROXY_LOG_CFG": "log_cfg.json"}
 
     click.echo("Start build")
-    output = docker_client.build(tag=f"{IMAGE_NAME}:{proxy_tag}", buildargs=buildargs, path="./")
+    output = docker_client.build(tag=f"{IMAGE_NAME}:{proxy_tag}", buildargs=buildargs, path="./", decode=True)
     for line in output:
         if list(line.keys())[0] in ('stream', 'error', 'status'):
             value = list(line.values())[0].strip()
