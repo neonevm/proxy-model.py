@@ -4,7 +4,7 @@ pysha3==1.0.2
 eth-keys==0.4.0
 rlp
 solana==0.27.2
-solders==0.9.3
+solders==0.10.0
 psycopg2-binary
 ethereum
 py-solc-x==1.1.1
