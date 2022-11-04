@@ -55,6 +55,11 @@
             "handlers": ["standard"],
             "propagate": false
         },
+        "neon.Statistic": {
+            "level": "DEBUG",
+            "handlers": ["standard"],
+            "propagate": false
+        },
         "": {
             "level": "ERROR",
             "handlers": ["root"],

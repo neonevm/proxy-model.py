@@ -20,16 +20,17 @@ class MPTask:
 
 class MPRequestType(IntEnum):
     SendTransaction = 0
-    GetLastTxNonce = 1
-    GetTxByHash = 2
-    GetGasPrice = 3
-    GetStateTxCnt = 4
-    GetOperatorResourceList = 5
-    InitOperatorResource = 6
-    GetElfParamDict = 7
-    GetALTList = 8
-    DeactivateALTList = 9
-    CloseALTList = 10
+    GetPendingTxNonce = 1
+    GetMempoolTxNonce = 2
+    GetTxByHash = 3
+    GetGasPrice = 4
+    GetStateTxCnt = 5
+    GetOperatorResourceList = 6
+    InitOperatorResource = 7
+    GetElfParamDict = 8
+    GetALTList = 9
+    DeactivateALTList = 10
+    CloseALTList = 11
     Unspecified = 255
 
 
@@ -115,7 +116,15 @@ class MPPendingTxNonceRequest(MPRequest):
     sender: str = None
 
     def __post_init__(self):
-        self.type = MPRequestType.GetLastTxNonce
+        self.type = MPRequestType.GetPendingTxNonce
+
+
+@dataclass
+class MPMempoolTxNonceRequest(MPRequest):
+    sender: str = None
+
+    def __post_init__(self):
+        self.type = MPRequestType.GetMempoolTxNonce
 
 
 @dataclass

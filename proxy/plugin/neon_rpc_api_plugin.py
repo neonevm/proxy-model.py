@@ -8,54 +8,58 @@
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
 """
+from __future__ import annotations
+
 import json
 import threading
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any, Optional
 
 from logged_groups import logged_group, logging_context
 from neon_py.utils import gen_unique_id
 
+from ..common.utils import build_http_response
+from ..common_neon.errors import EthereumError
+from ..common_neon.solana_tx_error_parser import SolTxError
+from ..common_neon.config import Config
+
 from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
-from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-
-from ..common.utils import build_http_response
-from ..common_neon.solana_tx_error_parser import SolTxError
-from ..common_neon.errors import EthereumError
+from ..http.websocket import WebsocketFrame
 
 from ..neon_rpc_api_model import NeonRpcApiWorker
-from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
+from ..statistic import ProxyStatClient, NeonMethodData
 
 modelInstanceLock = threading.Lock()
-modelInstance = None
+configInstance: Optional[Config] = None
+statInstance: Optional[ProxyStatClient] = None
+modelInstance: Optional[NeonRpcApiWorker] = None
 
 
 @logged_group("neon.Proxy")
 class NeonRpcApiPlugin(HttpWebServerBasePlugin):
     """Extend in-built Web Server to add Reverse Proxy capabilities.
     """
-
     SOLANA_PROXY_LOCATION: str = r'/solana$'
-    SOLANA_PROXY_PASS = [
-        b'http://localhost:8545/'
-    ]
 
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
-        self._stat_exporter = PrometheusExporter()
-        self.model = NeonRpcApiPlugin.getModel()
-        self.model.set_stat_exporter(self._stat_exporter)
+        self._config, self._stat_client, self.model = NeonRpcApiPlugin.getModel()
 
     @classmethod
-    def getModel(cls):
+    def getModel(cls) -> Tuple[Config, ProxyStatClient, NeonRpcApiWorker]:
         global modelInstanceLock
+        global configInstance
+        global statInstance
         global modelInstance
+
         with modelInstanceLock:
             if modelInstance is None:
-                modelInstance = NeonRpcApiWorker()
-            return modelInstance
+                configInstance = Config()
+                statInstance = ProxyStatClient(configInstance)
+                modelInstance = NeonRpcApiWorker(configInstance)
+            return configInstance, statInstance, modelInstance
 
     def routes(self) -> List[Tuple[int, str]]:
         return [
@@ -63,7 +67,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             (httpProtocolTypes.HTTPS, NeonRpcApiPlugin.SOLANA_PROXY_LOCATION)
         ]
 
-    def process_request(self, request):
+    def process_request(self, request) -> Dict[str, Any]:
         response = {
             'jsonrpc': '2.0',
             'id': request.get('id', None),
@@ -107,9 +111,13 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             return
         start_time = time.time()
 
+        is_error_resp = False
+        method = '---'
         try:
-            self.info('handle_request <<< %s 0x%x %s', threading.get_ident(), id(self.model),
-                      request.body.decode('utf8'))
+            self.info(
+                'handle_request <<< %s 0x%x %s', threading.get_ident(), id(self.model),
+                request.body.decode('utf8')
+            )
             request = json.loads(request.body)
             if isinstance(request, list):
                 response = []
@@ -119,24 +127,25 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                     response.append(self.process_request(r))
             elif isinstance(request, dict):
                 response = self.process_request(request)
+                method = request.get('method', '---')
+                is_error_resp = 'error' in response
             else:
                 raise Exception("Invalid request")
         except Exception as err:
             # traceback.print_exc()
             response = {'jsonrpc': '2.0', 'error': {'code': -32000, 'message': str(err)}}
+            is_error_resp = True
 
         resp_time_ms = (time.time() - start_time)*1000  # convert this into milliseconds
 
-        method = '---'
-        if isinstance(request, dict):
-            method = request.get('method', '---')
-
-        self.info('handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
-                  threading.get_ident(),
-                  id(self.model),
-                  json.dumps(response),
-                  method,
-                  resp_time_ms)
+        self.info(
+            'handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
+            threading.get_ident(),
+            id(self.model),
+            json.dumps(response),
+            method,
+            resp_time_ms
+        )
 
         self.client.queue(memoryview(build_http_response(
             httpStatusCodes.OK, reason=b'OK', body=json.dumps(response).encode('utf8'),
@@ -145,7 +154,8 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 b'Access-Control-Allow-Origin': b'*',
             })))
 
-        self._stat_exporter.stat_commit_request_and_timeout(method, resp_time_ms)
+        stat = NeonMethodData(name=method, is_error=is_error_resp, latency=resp_time_ms)
+        self._stat_client.commit_request_and_timeout(stat)
 
     def on_websocket_open(self) -> None:
         pass

@@ -11,6 +11,8 @@ from ..common_neon.operator_secret_mng import OpSecretMng
 
 from ..mempool.operator_resource_mng import OpResMng, OpResInit, OpResInfo, OpResIdentListBuilder
 
+from ..statistic.proxy_client import ProxyStatClient
+
 
 class FakeConfig(Config):
     def __init__(self):
@@ -40,6 +42,10 @@ class FakeConfig(Config):
             value = self._err_list[0]
         return value
 
+    @property
+    def gather_statistics(self) -> False:
+        return False
+
 
 @logged_groups.logged_group("neon.TestCases")
 class TestNeonTxSender(unittest.TestCase):
@@ -51,7 +57,8 @@ class TestNeonTxSender(unittest.TestCase):
     def setUp(self) -> None:
         self._config = FakeConfig()
 
-        self._resource_list = OpResMng(self._config)
+        self._stat_client = ProxyStatClient(self._config)
+        self._resource_list = OpResMng(self._config, self._stat_client)
         secret_list = OpSecretMng(self._config).read_secret_list()
         res_ident_list = OpResIdentListBuilder(self._config).build_resource_list(secret_list)
         self._resource_list.init_resource_list(res_ident_list)

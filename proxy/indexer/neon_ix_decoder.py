@@ -286,6 +286,7 @@ class CancelWithHashIxDecoder(DummyIxDecoder):
 
         res = self.state.sol_neon_ix.neon_tx_return
         if res is not None:
+            tx.set_canceled(True)
             tx.neon_tx_res.set_result(status=res.status, gas_used=res.gas_used, return_value=res.return_value)
             tx.neon_tx_res.set_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
         return self._decode_tx(tx, 'cancel Neon tx')

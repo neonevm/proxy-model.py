@@ -17,7 +17,7 @@ class JsonBytesEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def str_fmt_object(obj: Any) -> str:
+def str_fmt_object(obj: Any, skip_prefix=True) -> str:
     type_name = 'Type'
     class_prefix = "<class '"
 
@@ -70,15 +70,15 @@ def str_fmt_object(obj: Any) -> str:
         result: Dict[str, Any] = {}
         for key, value in d.items():
             if not isinstance(key, str):
-                continue
-            if key.startswith('_'):
+                key = str(key)
+            if skip_prefix and key.startswith('_'):
                 continue
 
             has_value, value = decode_value(value)
             if not has_value:
                 continue
 
-            result[key] = value
+            result[key.strip('_')] = value
         return result
 
     name = f'{type(obj)}'

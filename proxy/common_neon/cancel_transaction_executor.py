@@ -14,7 +14,7 @@ from ..common_neon.solana_tx_v0 import SolV0Tx
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 
-@logged_group("Neon.Canceler")
+@logged_group("neon.Indexer")
 class CancelTxExecutor:
     def __init__(self, config: Config, solana: SolInteractor, signer: SolAccount) -> None:
         self._ix_builder = NeonIxBuilder(signer.public_key)

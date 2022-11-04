@@ -38,7 +38,6 @@ class SolInteractor:
         self._request_counter = itertools.count()
         self._endpoint_uri = solana_url
         self._session = requests.sessions.Session()
-        self._fuzzing_hash_cycle = False
 
     def _send_post_request(self, request) -> requests.Response:
         """This method is used to make retries to send request to Solana"""
@@ -317,10 +316,11 @@ class SolInteractor:
             return None
         return NeonAccountInfo.from_account_info(info)
 
-    def get_neon_account_info_list(self, eth_accounts: List[NeonAddress]) -> List[Optional[NeonAccountInfo]]:
+    def get_neon_account_info_list(self,
+                                   neon_account_list: List[Union[NeonAddress, str]]) -> List[Optional[NeonAccountInfo]]:
         requests_list = []
-        for eth_account in eth_accounts:
-            account_sol, _nonce = neon_2program(eth_account)
+        for neon_account in neon_account_list:
+            account_sol, _nonce = neon_2program(neon_account)
             requests_list.append(account_sol)
         responses_list = self.get_account_info_list(requests_list)
         accounts_list = []

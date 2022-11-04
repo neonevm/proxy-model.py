@@ -212,7 +212,7 @@ class SolIxMetaInfo:
     used_bpf_cycle_cnt: int
 
     neon_tx_sig: str
-    neon_income: int
+    neon_gas_used: int
 
     neon_tx_return: Optional[NeonLogTxReturn]
     neon_tx_event_list: List[NeonLogTxEvent]
@@ -260,7 +260,7 @@ class SolIxMetaInfo:
             heap_size=heap_size,
 
             neon_tx_sig=neon_tx_sig,
-            neon_income=neon_ix_gas_usage,
+            neon_gas_used=neon_ix_gas_usage,
             neon_tx_return=log_info.neon_tx_return,
             neon_tx_event_list=log_info.neon_tx_event_list
         )
@@ -376,7 +376,7 @@ class SolNeonIxReceiptInfo(SolIxMetaInfo):
             sol_tx_cost=tx_cost,
 
             neon_tx_sig=ix_meta.neon_tx_sig,
-            neon_income=ix_meta.neon_income,
+            neon_gas_used=ix_meta.neon_gas_used,
             neon_tx_return=ix_meta.neon_tx_return,
             neon_tx_event_list=ix_meta.neon_tx_event_list,
             neon_step_cnt=0,
