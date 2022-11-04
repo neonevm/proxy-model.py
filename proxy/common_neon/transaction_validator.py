@@ -4,7 +4,6 @@ from typing import Dict, Any
 
 from logged_groups import logged_group
 
-from ..common_neon.account_whitelist import AccountWhitelist
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg, NeonEmulatedResult
@@ -73,7 +72,6 @@ class NeonTxValidator:
             raise
 
     def _prevalidate_tx(self):
-        self._prevalidate_whitelist()
         self._prevalidate_tx_nonce()
         self._prevalidate_sender_eoa()
         self._prevalidate_tx_gas()
@@ -93,16 +91,6 @@ class NeonTxValidator:
         state_tx_cnt, tx_nonce = receipt_parser.get_nonce_error()
         if state_tx_cnt is not None:
             self.raise_nonce_error(state_tx_cnt, tx_nonce)
-
-    def _prevalidate_whitelist(self):
-        w = AccountWhitelist(self._config, self._solana)
-        if not w.has_client_permission(self._sender[2:]):
-            self.warning(f'Sender account {self._sender} is not allowed to execute transactions')
-            raise EthereumError(message=f'Sender account {self._sender} is not allowed to execute transactions')
-
-        if (self._deployed_contract is not None) and (not w.has_contract_permission(self._deployed_contract[2:])):
-            self.warning(f'Contract account {self._deployed_contract} is not allowed for deployment')
-            raise EthereumError(message=f'Contract account {self._deployed_contract} is not allowed for deployment')
 
     def _prevalidate_tx_gas(self):
         if self._tx_gas_limit > self.max_u64:
