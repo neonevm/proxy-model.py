@@ -30,6 +30,7 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 
 CLAIM_TO_METHOD_ID = bytes.fromhex('67d1c218')
 
+
 class FailedAttempts(BaseDB):
     def __init__(self) -> None:
         super().__init__('failed_airdrop_attempts', [])
@@ -39,8 +40,8 @@ class FailedAttempts(BaseDB):
         with self._conn.cursor() as cur:
             cur.execute(f'''
             INSERT INTO {self._table_name} (attempt_time, eth_address, reason)
-            VALUES ({datetime.now().timestamp()}, '{eth_address}', '{reason}')
-            ''')
+            VALUES (%s, %s, %s)''',
+            (datetime.now().timestamp(), eth_address, reason))
 
 
 class AirdropReadySet(BaseDB):
@@ -54,12 +55,12 @@ class AirdropReadySet(BaseDB):
         with self._conn.cursor() as cur:
             cur.execute(f'''
             INSERT INTO {self._table_name} (eth_address, scheduled_ts, finished_ts, duration, amount_galans)
-            VALUES ('{eth_address}', {airdrop_info['scheduled']}, {finished}, {duration}, {airdrop_info['amount']})
-            ''')
+            VALUES (%s, %s, %s, %s, %s)''',
+            (eth_address, airdrop_info['scheduled'], finished, duration, airdrop_info['amount']))
 
     def is_airdrop_ready(self, eth_address):
         with self._conn.cursor() as cur:
-            cur.execute(f"SELECT 1 FROM {self._table_name} WHERE eth_address = '{eth_address}'")
+            cur.execute(f"SELECT 1 FROM {self._table_name} WHERE eth_address = %s", (eth_address,))
             return cur.fetchone() is not None
 
 
@@ -111,7 +112,7 @@ class Airdropper(IndexerBase):
 
     def try_update_pyth_mapping(self):
         current_time = self.get_current_time()
-        if self.last_update_pyth_mapping is None or self.last_update_pyth_mapping - current_time > self.max_update_pyth_mapping_int:
+        if self.last_update_pyth_mapping is None or abs(current_time - self.last_update_pyth_mapping) > self.max_update_pyth_mapping_int:
             try:
                 self.pyth_client.update_mapping(self._config.pyth_mapping_account)
                 self.last_update_pyth_mapping = current_time
