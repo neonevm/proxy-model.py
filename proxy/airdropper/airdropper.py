@@ -111,7 +111,7 @@ class Airdropper(IndexerBase):
 
     def try_update_pyth_mapping(self):
         current_time = self.get_current_time()
-        if self.last_update_pyth_mapping is None or self.last_update_pyth_mapping - current_time > self.max_update_pyth_mapping_int:
+        if self.last_update_pyth_mapping is None or abs(current_time - self.last_update_pyth_mapping) > self.max_update_pyth_mapping_int:
             try:
                 self.pyth_client.update_mapping(self._config.pyth_mapping_account)
                 self.last_update_pyth_mapping = current_time
