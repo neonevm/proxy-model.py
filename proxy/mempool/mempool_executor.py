@@ -1,24 +1,25 @@
 import asyncio
 import multiprocessing as mp
 import socket
+from typing import Optional, Any, cast
 
 from logged_groups import logged_group, logging_context
-from typing import Optional, Any, cast
 from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.config import Config
-
-from .mempool_api import MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPElfParamDictRequest
 from .mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
-from .mempool_api import MPOpResInitRequest, MPOpResGetListRequest
-
-from .mempool_executor_task_gas_price import MPExecutorGasPriceTask
-from .mempool_executor_task_op_res import MPExecutorOpResTask
+from .mempool_api import MPOpResInitRequest
+from .mempool_api import MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPElfParamDictRequest
 from .mempool_executor_task_elf_params import MPExecutorElfParamsTask
-from .mempool_executor_task_state_tx_cnt import MPExecutorStateTxCntTask
 from .mempool_executor_task_exec_neon_tx import MPExecutorExecNeonTxTask
 from .mempool_executor_task_free_alt_queue import MPExecutorFreeALTQueueTask
+from .mempool_executor_task_gas_price import MPExecutorGasPriceTask
+from .mempool_executor_task_op_res import MPExecutorOpResTask
+from .mempool_executor_task_state_tx_cnt import MPExecutorStateTxCntTask
+
+from ..common_neon.config import Config
+from ..common_neon.solana_interactor import SolInteractor
+
+from ..statistic.proxy_client import ProxyStatClient
 
 
 @logged_group("neon.MemPool")
@@ -32,6 +33,8 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
         self._solana: Optional[SolInteractor] = None
         self._pickable_data_srv: Optional[PipePickableDataSrv] = None
+
+        self._stat_client: Optional[ProxyStatClient] = None
 
         self._gas_price_task: Optional[MPExecutorGasPriceTask] = None
         self._op_res_task: Optional[MPExecutorOpResTask] = None
@@ -49,8 +52,10 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._pickable_data_srv = PipePickableDataSrv(user=self, srv_sock=self._srv_sock)
         self._solana = SolInteractor(self._config, self._config.solana_url)
 
-        self._gas_price_task = MPExecutorGasPriceTask(self._config, self._solana)
-        self._op_res_task = MPExecutorOpResTask(self._config, self._solana)
+        self._stat_client = ProxyStatClient(self._config)
+
+        self._gas_price_task = MPExecutorGasPriceTask(self._config, self._solana, self._stat_client)
+        self._op_res_task = MPExecutorOpResTask(self._config, self._solana, self._stat_client)
         self._elf_params_task = MPExecutorElfParamsTask(self._config, self._solana)
         self._state_tx_cnt_task = MPExecutorStateTxCntTask(self._config, self._solana)
         self._exec_neon_tx_task = MPExecutorExecNeonTxTask(self._config, self._solana)

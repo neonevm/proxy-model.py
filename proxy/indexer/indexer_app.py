@@ -1,30 +1,19 @@
+import time
+
 from logged_groups import logged_group
 
-from .i_indexer_stat_exporter import IIndexerStatExporter
 from .indexer import Indexer
-
 from ..common_neon.config import Config
-from ..common_neon.data import NeonTxStatData
-
-from ..statistics_exporter.prometheus_indexer_exporter import IndexerStatistics
+from ..statistic import IndexerStatService
 
 
 @logged_group("neon.Indexer")
-class IndexerApp(IIndexerStatExporter):
-
+class IndexerApp:
     def __init__(self, config: Config):
-        self.neon_statistics = IndexerStatistics(config.gather_statistics)
-        indexer = Indexer(config, self)
+        self._indexer_stat_service = IndexerStatService(config)
+        self._indexer_stat_service.start()
+        indexer = Indexer(config)
         indexer.run()
-
-    def on_neon_tx_result(self, tx_stat: NeonTxStatData):
-        self.neon_statistics.on_neon_tx_result(tx_stat)
-
-    def on_db_status(self, neon_db_status: bool):
-        self.neon_statistics.stat_commit_postgres_availability(neon_db_status)
-
-    def on_solana_rpc_status(self, solana_status: bool):
-        self.neon_statistics.stat_commit_solana_rpc_health(solana_status)
 
 
 @logged_group("neon.Indexer")

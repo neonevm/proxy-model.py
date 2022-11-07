@@ -8,54 +8,59 @@
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
 """
+from __future__ import annotations
+
 import json
 import threading
 import time
-from typing import List, Tuple
+import urllib
+from typing import List, Tuple, Dict, Any, Optional
 
 from logged_groups import logged_group, logging_context
 from neon_py.utils import gen_unique_id
 
+from ..common.utils import build_http_response
+from ..common_neon.errors import EthereumError
+from ..common_neon.solana_tx_error_parser import SolTxError
+from ..common_neon.config import Config
+
 from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
-from ..http.websocket import WebsocketFrame
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
-
-from ..common.utils import build_http_response
-from ..common_neon.solana_tx_error_parser import SolTxError
-from ..common_neon.errors import EthereumError
+from ..http.websocket import WebsocketFrame
 
 from ..neon_rpc_api_model import NeonRpcApiWorker
-from ..statistics_exporter.prometheus_proxy_exporter import PrometheusExporter
+from ..statistic import ProxyStatClient, NeonMethodData
 
 modelInstanceLock = threading.Lock()
-modelInstance = None
+configInstance: Optional[Config] = None
+statInstance: Optional[ProxyStatClient] = None
+modelInstance: Optional[NeonRpcApiWorker] = None
 
 
 @logged_group("neon.Proxy")
 class NeonRpcApiPlugin(HttpWebServerBasePlugin):
     """Extend in-built Web Server to add Reverse Proxy capabilities.
     """
-
     SOLANA_PROXY_LOCATION: str = r'/solana$'
-    SOLANA_PROXY_PASS = [
-        b'http://localhost:8545/'
-    ]
 
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
-        self._stat_exporter = PrometheusExporter()
-        self.model = NeonRpcApiPlugin.getModel()
-        self.model.set_stat_exporter(self._stat_exporter)
+        self._config, self._stat_client, self._model = NeonRpcApiPlugin.getModel()
 
     @classmethod
-    def getModel(cls):
+    def getModel(cls) -> Tuple[Config, ProxyStatClient, NeonRpcApiWorker]:
         global modelInstanceLock
+        global configInstance
+        global statInstance
         global modelInstance
+
         with modelInstanceLock:
             if modelInstance is None:
-                modelInstance = NeonRpcApiWorker()
-            return modelInstance
+                configInstance = Config()
+                statInstance = ProxyStatClient(configInstance)
+                modelInstance = NeonRpcApiWorker(configInstance)
+            return configInstance, statInstance, modelInstance
 
     def routes(self) -> List[Tuple[int, str]]:
         return [
@@ -63,19 +68,33 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             (httpProtocolTypes.HTTPS, NeonRpcApiPlugin.SOLANA_PROXY_LOCATION)
         ]
 
-    def process_request(self, request):
+    @staticmethod
+    def _sanitize_value(value: Any) -> Any:
+        if isinstance(value, str) or isinstance(value, bytes):
+            value = urllib.parse.quote_plus(value)
+        return value
+
+    def _get_request_value(self, request: Dict[str, Any], name: str) -> Any:
+        rpc_value = request.get(name, None)
+        return self._sanitize_value(rpc_value)
+
+    def _process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         response = {
             'jsonrpc': '2.0',
-            'id': request.get('id', None),
+            'id': self._get_request_value(request, 'id')
         }
 
+        start_time = time.time()
+        rpc_method: Optional[str] = None
+
         try:
-            if (not hasattr(self.model, request['method'])) or (not self.model.is_allowed_api(request["method"])):
-                response['error'] = {'code': -32601, 'message': f'method {request["method"]} is not supported'}
+            rpc_method = self._get_request_value(request, 'method')
+            if (not hasattr(self._model, rpc_method)) or (not self._model.is_allowed_api(rpc_method)):
+                response['error'] = {'code': -32601, 'message': f'method {rpc_method} is not supported'}
             else:
-                method = getattr(self.model, request['method'])
-                params = request.get('params', [])
-                response['result'] = method(*params)
+                method = getattr(self._model, rpc_method)
+                param_list = [self._sanitize_value(param) for param in request.get('params', [])]
+                response['result'] = method(*param_list)
         except SolTxError as err:
             # traceback.print_exc()
             response['error'] = {'code': -32000, 'message': err.error}
@@ -86,15 +105,30 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             self.debug('Exception on process request', exc_info=exc)
             response['error'] = {'code': -32000, 'message': str(exc)}
 
+        resp_time_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
+
+        self.info(
+            'handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
+            threading.get_ident(),
+            id(self._model),
+            json.dumps(response),
+            rpc_method,
+            resp_time_ms
+        )
+
+        is_error_resp = 'error' in response
+        stat = NeonMethodData(name=rpc_method, is_error=is_error_resp, latency=resp_time_ms)
+        self._stat_client.commit_request_and_timeout(stat)
+
         return response
 
     def handle_request(self, request: HttpParser) -> None:
         req_id = gen_unique_id()
         with logging_context(req_id=req_id):
-            self.handle_request_impl(request)
+            self._handle_request_impl(request)
             self.info("Request processed")
 
-    def handle_request_impl(self, request: HttpParser) -> None:
+    def _handle_request_impl(self, request: HttpParser) -> None:
         if request.method == b'OPTIONS':
             self.client.queue(memoryview(build_http_response(
                 httpStatusCodes.OK, reason=b'OK', body=None,
@@ -105,38 +139,25 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                     b'Access-Control-Max-Age': b'86400'
                 })))
             return
-        start_time = time.time()
 
         try:
-            self.info('handle_request <<< %s 0x%x %s', threading.get_ident(), id(self.model),
-                      request.body.decode('utf8'))
+            self.info(
+                'handle_request <<< %s 0x%x %s', threading.get_ident(), id(self._model),
+                request.body.decode('utf8')
+            )
             request = json.loads(request.body)
             if isinstance(request, list):
                 response = []
                 if len(request) == 0:
                     raise Exception("Empty batch request")
                 for r in request:
-                    response.append(self.process_request(r))
+                    response.append(self._process_request(r))
             elif isinstance(request, dict):
-                response = self.process_request(request)
+                response = self._process_request(request)
             else:
                 raise Exception("Invalid request")
         except Exception as err:
-            # traceback.print_exc()
             response = {'jsonrpc': '2.0', 'error': {'code': -32000, 'message': str(err)}}
-
-        resp_time_ms = (time.time() - start_time)*1000  # convert this into milliseconds
-
-        method = '---'
-        if isinstance(request, dict):
-            method = request.get('method', '---')
-
-        self.info('handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
-                  threading.get_ident(),
-                  id(self.model),
-                  json.dumps(response),
-                  method,
-                  resp_time_ms)
 
         self.client.queue(memoryview(build_http_response(
             httpStatusCodes.OK, reason=b'OK', body=json.dumps(response).encode('utf8'),
@@ -144,8 +165,6 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 b'Content-Type': b'application/json',
                 b'Access-Control-Allow-Origin': b'*',
             })))
-
-        self._stat_exporter.stat_commit_request_and_timeout(method, resp_time_ms)
 
     def on_websocket_open(self) -> None:
         pass

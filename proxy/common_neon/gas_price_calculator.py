@@ -19,7 +19,7 @@ class GasPriceCalculator:
         self._config = config
         self._pyth_network_client = PythNetworkClient(solana)
         self._sol_price_usd: Optional[Decimal] = None
-        self._neon_price_usd: Optional[Decimal] = None
+        self._neon_price_usd = self._config.neon_price_usd
         self._min_gas_price: Optional[int] = None
         self._suggested_gas_price: Optional[int] = None
 

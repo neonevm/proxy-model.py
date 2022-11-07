@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import random
 
-from typing import Tuple
+from typing import Tuple, Union
 
 import sha3
 
@@ -34,12 +34,13 @@ class NeonAddress:
         return NeonAddress(pk.public_key.to_canonical_address(), pk)
 
     def __str__(self):
-        return '0x'+self.data.hex()
+        return '0x' + self.data.hex()
 
     def __repr__(self):
         return self.__str__()
 
-    def __bytes__(self): return self.data
+    def __bytes__(self):
+        return self.data
 
 
 def account_with_seed(base_address: SolPubKey, seed: bytes) -> SolPubKey:
@@ -55,7 +56,7 @@ def perm_account_seed(prefix: bytes, resource_id: int) -> bytes:
     return bytes(seed, 'utf8')
 
 
-def neon_2program(neon) -> Tuple[SolPubKey, int]:
+def neon_2program(neon: Union[NeonAddress, str, bytes]) -> Tuple[SolPubKey, int]:
     if isinstance(neon, NeonAddress):
         neon = bytes(neon)
     elif isinstance(neon, str):

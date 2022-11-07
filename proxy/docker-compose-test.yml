@@ -89,6 +89,7 @@ services:
       POSTGRES_HOST: postgres
       NEON_CLI_DEBUG_LOG: "YES"
       FUZZING_BLOCKHASH: "NO"
+      GATHER_STATISTICS: "NO"
       CONFIG: ci
       # Comment next two lines, if you want local stand without real gas-price
       PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
@@ -119,6 +120,7 @@ services:
         condition: service_completed_successfully
     ports:
       - 9090:9090
+      - 8881:8888
     expose:
       - "8888"
       - "9090"
@@ -204,7 +206,7 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
-      GATHER_STATISTICS: "YES"
+      GATHER_STATISTICS: "NO"
       LOG_FULL_OBJECT_INFO: "NO"
       CONFIG: ci
       EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
@@ -216,6 +218,8 @@ services:
         condition: service_completed_successfully
     expose:
       - "8887"
+    ports:
+      - 8882:8888
     networks:
       - net
     entrypoint: proxy/run-indexer.sh

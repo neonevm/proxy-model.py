@@ -3,16 +3,8 @@ from __future__ import annotations
 from typing import Dict, List, Any
 
 
-class NeonTxStatData:
-    def __init__(self, neon_tx_sig: str, sol_spent: int, neon_income: int, tx_type: str, is_canceled: bool):
-        self.neon_tx_sig = neon_tx_sig
-        self.neon_income = neon_income
-        self.tx_type = tx_type
-        self.is_canceled = is_canceled
-        self.sol_spent = sol_spent
-        self.neon_step_cnt = 0
-        self.bpf_cycle_cnt = 0
-        self.sol_tx_cnt = 0
+NeonEmulatedResult = Dict[str, Any]
+NeonAccountDict = Dict[str, Any]
 
 
 class NeonTxExecCfg:
@@ -58,6 +50,3 @@ class NeonTxExecCfg:
         self._state_tx_cnt = value
         return self
 
-
-NeonEmulatedResult = Dict[str, Any]
-NeonAccountDict = Dict[str, Any]

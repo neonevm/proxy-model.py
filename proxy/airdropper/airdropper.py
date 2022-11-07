@@ -30,6 +30,7 @@ AIRDROP_AMOUNT_SOL = ACCOUNT_CREATION_PRICE_SOL / 2
 
 CLAIM_TO_METHOD_ID = bytes.fromhex('67d1c218')
 
+
 class FailedAttempts(BaseDB):
     def __init__(self) -> None:
         super().__init__('failed_airdrop_attempts', [])
@@ -39,8 +40,8 @@ class FailedAttempts(BaseDB):
         with self._conn.cursor() as cur:
             cur.execute(f'''
             INSERT INTO {self._table_name} (attempt_time, eth_address, reason)
-            VALUES ({datetime.now().timestamp()}, '{eth_address}', '{reason}')
-            ''')
+            VALUES (%s, %s, %s)''',
+            (datetime.now().timestamp(), eth_address, reason))
 
 
 class AirdropReadySet(BaseDB):
@@ -54,12 +55,12 @@ class AirdropReadySet(BaseDB):
         with self._conn.cursor() as cur:
             cur.execute(f'''
             INSERT INTO {self._table_name} (eth_address, scheduled_ts, finished_ts, duration, amount_galans)
-            VALUES ('{eth_address}', {airdrop_info['scheduled']}, {finished}, {duration}, {airdrop_info['amount']})
-            ''')
+            VALUES (%s, %s, %s, %s, %s)''',
+            (eth_address, airdrop_info['scheduled'], finished, duration, airdrop_info['amount']))
 
     def is_airdrop_ready(self, eth_address):
         with self._conn.cursor() as cur:
-            cur.execute(f"SELECT 1 FROM {self._table_name} WHERE eth_address = '{eth_address}'")
+            cur.execute(f"SELECT 1 FROM {self._table_name} WHERE eth_address = %s", (eth_address,))
             return cur.fetchone() is not None
 
 
@@ -75,10 +76,10 @@ class Airdropper(IndexerBase):
         solana = SolInteractor(config, config.solana_url)
         last_known_slot = self._constants.get('latest_processed_slot', None)
         super().__init__(config, solana, last_known_slot)
-        self.latest_processed_slot = self._last_slot
+        self.latest_processed_slot = self._start_slot
         self.current_slot = 0
         sol_tx_meta_dict = SolTxMetaDict()
-        self._sol_tx_collector = FinalizedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict, self._last_slot)
+        self._sol_tx_collector = FinalizedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict, self._start_slot)
 
         # collection of eth-address-to-create-accout-trx mappings
         # for every addresses that was already funded with airdrop
@@ -87,7 +88,7 @@ class Airdropper(IndexerBase):
         self.airdrop_scheduled = SQLDict(tablename="airdrop_scheduled")
         self.wrapper_whitelist = wrapper_whitelist
         if isinstance(self.wrapper_whitelist, list):
-            self.wrapper_whitelist = [str(entry).lower() for entry in self.wrapper_whitelist] 
+            self.wrapper_whitelist = [str(entry).lower() for entry in self.wrapper_whitelist]
 
         self.faucet_url = faucet_url
         self.recent_price = None
@@ -111,7 +112,7 @@ class Airdropper(IndexerBase):
 
     def try_update_pyth_mapping(self):
         current_time = self.get_current_time()
-        if self.last_update_pyth_mapping is None or self.last_update_pyth_mapping - current_time > self.max_update_pyth_mapping_int:
+        if self.last_update_pyth_mapping is None or abs(current_time - self.last_update_pyth_mapping) > self.max_update_pyth_mapping_int:
             try:
                 self.pyth_client.update_mapping(self._config.pyth_mapping_account)
                 self.last_update_pyth_mapping = current_time
@@ -126,7 +127,6 @@ class Airdropper(IndexerBase):
         if self.wrapper_whitelist == 'ANY':
             return True
         return contract_addr.lower() in self.wrapper_whitelist
-    
 
     # helper function checking if given 'approve' corresponds to 'call' instruction
     def check_create_approve_call_instr(self, account_keys, create_acc, approve, call):
@@ -174,9 +174,9 @@ class Airdropper(IndexerBase):
         return True
 
     def check_inittoken2_transfer_instr(
-        self, 
-        account_keys, 
-        init_token2_instr, 
+        self,
+        account_keys,
+        init_token2_instr,
         transfer_instr
     ):
         created_account = account_keys[init_token2_instr['accounts'][0]]
@@ -281,8 +281,8 @@ class Airdropper(IndexerBase):
                     init_token2 = init_token2_list[0]
                     token_transfer = token_transfer_list[0]
                     check_res = self.check_inittoken2_transfer_instr(
-                        account_keys, 
-                        init_token2, 
+                        account_keys,
+                        init_token2,
                         token_transfer
                     )
 

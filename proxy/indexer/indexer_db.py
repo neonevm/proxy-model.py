@@ -41,7 +41,7 @@ class IndexerDB:
         self._finalized_block_slot = self.get_finalized_block_slot()
         self._min_receipt_block_slot = self.get_min_receipt_block_slot()
 
-    def status(self) -> bool:
+    def is_healthy(self) -> bool:
         return self._neon_tx_logs_db.is_connected()
 
     def submit_block(self, neon_block: NeonIndexedBlockInfo) -> None:

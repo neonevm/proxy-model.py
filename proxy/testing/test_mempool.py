@@ -25,6 +25,8 @@ from ..common_neon.elf_params import ElfParams
 
 from ..mempool.operator_resource_mng import OpResMng
 
+from ..statistic.proxy_client import ProxyStatClient
+
 
 def get_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: int,
                             from_acc: Union[NeonAccount, NeonLocalAccount, None] = None,
@@ -88,7 +90,7 @@ class MockMPExecutor(MPExecutorMng):
 
 
 class MockResourceManager(OpResMng):
-    def __init__(self, _):
+    def __init__(self, *args):
         pass
 
     def init_resource_list(self, res_ident_list: List[Union[OpResIdent, bytes]]) -> None:
@@ -127,6 +129,10 @@ class FakeConfig(Config):
     def recheck_resource_after_uses_cnt(self) -> int:
         return 1000
 
+    @property
+    def gather_statistics(self) -> bool:
+        return False
+
 
 class TestMemPool(unittest.IsolatedAsyncioTestCase):
     @classmethod
@@ -141,8 +147,9 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self._executor = MockMPExecutor()
         self._config = FakeConfig()
+        self._stat_client = ProxyStatClient(self._config)
         self._op_res_mng = MockResourceManager(self._config)
-        self._mempool = MemPool(self._config, self._op_res_mng, self._executor)
+        self._mempool = MemPool(self._config, self._stat_client, self._op_res_mng, self._executor)
 
         price_result = MPGasPriceResult(suggested_gas_price=1, min_gas_price=1)
         self._mempool._gas_price_task_loop._task = MockTask(None, False)
@@ -348,7 +355,6 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
 
 
 class TestMPSchedule(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls) -> None:
         cls.turn_logger_off()

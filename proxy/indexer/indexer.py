@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import base64
 import time
+
 from collections import deque
-from typing import List, Optional, Dict, Deque, Type
+from typing import List, Optional, Dict, Deque, Type, Set
 
 from logged_groups import logged_group, logging_context
 
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.config import Config
 from ..common_neon.constants import ACTIVE_HOLDER_TAG
-from ..common_neon.data import NeonTxStatData
 from ..common_neon.operator_secret_mng import OpSecretMng
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo
@@ -18,7 +17,9 @@ from ..common_neon.solana_tx import SolPubKey, SolAccount
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.utils import SolanaBlockInfo
 
-from ..indexer.i_indexer_stat_exporter import IIndexerStatExporter
+from ..statistic.data import NeonBlockStatData
+from ..statistic.indexer_client import IndexerStatClient
+
 from ..indexer.indexed_objects import NeonIndexedBlockInfo, NeonIndexedBlockDict, SolNeonTxDecoderState
 from ..indexer.indexed_objects import NeonIndexedTxInfo
 from ..indexer.indexer_base import IndexerBase
@@ -32,29 +33,33 @@ from ..indexer.utils import MetricsToLogger
 
 @logged_group("neon.Indexer")
 class Indexer(IndexerBase):
-    def __init__(self, config: Config, indexer_stat_exporter: IIndexerStatExporter):
+    def __init__(self, config: Config):
         solana = SolInteractor(config, config.solana_url)
         self._db = IndexerDB()
         last_known_slot = self._db.get_min_receipt_block_slot()
         super().__init__(config, solana, last_known_slot)
 
-        op_secret_mng = OpSecretMng(self._config)
-        secret_list = op_secret_mng.read_secret_list()
-        sol_account = SolAccount.from_secret_key(secret_list[0]) if len(secret_list) > 0 else SolAccount()
-        self._cancel_tx_executor = CancelTxExecutor(config, solana, sol_account)
+        self._last_op_account_update_time = 0.0
+        self._op_account_set: Set[str] = set()
+
+        self._cancel_tx_executor: Optional[CancelTxExecutor] = None
+        self._refresh_op_account_list()
 
         self._counted_logger = MetricsToLogger()
-        self._stat_exporter = indexer_stat_exporter
+        self._stat_client = IndexerStatClient(config)
         self._last_stat_time = 0.0
 
         sol_tx_meta_dict = SolTxMetaDict()
-        collector = FinalizedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict, self._last_slot)
+        collector = FinalizedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict, self._start_slot)
         self._finalized_sol_tx_collector = collector
 
         collector = ConfirmedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict)
         self._confirmed_sol_tx_collector = collector
 
         self._confirmed_block_slot: Optional[int] = None
+
+        self._last_confirmed_block_slot = 0
+        self._last_finalized_block_slot = 0
         self._neon_block_dict = NeonIndexedBlockDict()
 
         sol_neon_ix_decoder_list: List[Type[DummyIxDecoder]] = []
@@ -67,7 +72,27 @@ class Indexer(IndexerBase):
             assert ix_code not in self._sol_neon_ix_decoder_dict
             self._sol_neon_ix_decoder_dict[ix_code] = decoder
 
+    def _refresh_op_account_list(self) -> None:
+        now = time.time()
+        if abs(now - self._last_op_account_update_time) < 5 * 60:
+            return
+        self._last_op_account_update_time = now
+
+        op_secret_mng = OpSecretMng(self._config)
+        secret_list = op_secret_mng.read_secret_list()
+        if len(secret_list) == 0:
+            return
+
+        if self._cancel_tx_executor is None:
+            signer = SolAccount.from_secret_key(secret_list[0])
+            self._cancel_tx_executor = CancelTxExecutor(self._config, self._solana, signer)
+
+        self._op_account_set: Set[str] = {str(SolAccount.from_secret_key(k).public_key) for k in secret_list}
+
     def _cancel_old_neon_txs(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> None:
+        if self._cancel_tx_executor is None:
+            return
+
         for tx in state.neon_block.iter_neon_tx():
             if (tx.storage_account != '') and (state.stop_block_slot - tx.block_slot > self._config.cancel_timeout):
                 self._cancel_neon_tx(tx, sol_tx_meta)
@@ -138,7 +163,7 @@ class Indexer(IndexerBase):
             neon_block.set_finalized(is_finalized)
             if not neon_block.is_completed:
                 self._db.submit_block(neon_block)
-                neon_block.complete_block(self._config)
+                neon_block.complete_block(self._config, self._op_account_set)
             elif is_finalized:
                 # the confirmed block becomes finalized
                 self._db.finalize_block(neon_block)
@@ -147,46 +172,37 @@ class Indexer(IndexerBase):
             self._neon_block_dict.add_neon_block(neon_block)
             if is_finalized:
                 self._neon_block_dict.finalize_neon_block(neon_block)
-                self._submit_block_status(neon_block)
+                self._commit_tx_stat(neon_block)
                 self._save_checkpoint()
 
-            self._submit_status()
+            self._commit_block_stat(neon_block)
+            self._commit_status_stat()
         except (Exception,):
             # Revert finalized status
             neon_block.set_finalized(backup_is_finalized)
             raise
 
-    def _submit_block_status(self, neon_block: NeonIndexedBlockInfo) -> None:
-        for tx in neon_block.iter_done_neon_tx():
-            # TODO: check operator of tx
-            self._submit_neon_tx_status(tx)
+    def _commit_tx_stat(self, neon_block: NeonIndexedBlockInfo) -> None:
+        for tx_stat in neon_block.iter_stat_neon_tx():
+            self._stat_client.commit_neon_tx_result(tx_stat)
 
-    def _submit_status(self) -> None:
+    def _commit_block_stat(self, neon_block: NeonIndexedBlockInfo) -> None:
+        stat = NeonBlockStatData(
+            start_block=self._start_slot,
+            parsed_block=neon_block.block_slot,
+            finalized_block=self._last_finalized_block_slot,
+            confirmed_block=self._last_confirmed_block_slot
+        )
+        self._stat_client.commit_block_stat(stat)
+
+    def _commit_status_stat(self) -> None:
         now = time.time()
         if abs(now - self._last_stat_time) < 1:
             return
+
         self._last_stat_time = now
-        self._stat_exporter.on_db_status(self._db.status())
-        self._stat_exporter.on_solana_rpc_status(self._solana.is_healthy())
-
-    def _submit_neon_tx_status(self, tx: NeonIndexedTxInfo) -> None:
-        neon_tx_sig = tx.neon_tx.sig
-        neon_income = int(tx.neon_tx_res.gas_used, 0) * int(tx.neon_tx.gas_price, 0)  # TODO: get gas usage from ixs
-        if tx.holder_account != '':
-            tx_type = 'holder'
-        elif tx.storage_account != '':
-            tx_type = 'iterative'
-        else:
-            tx_type = 'single'
-        is_canceled = tx.neon_tx_res.status == '0x0'
-        sol_spent = tx.sol_spent
-        neon_tx_stat_data = NeonTxStatData(neon_tx_sig, sol_spent, neon_income, tx_type, is_canceled)
-        neon_tx_stat_data.sol_tx_cnt = tx.sol_tx_cnt
-        for ix in tx.iter_sol_neon_ix():
-            neon_tx_stat_data.neon_step_cnt += ix.neon_step_cnt
-            neon_tx_stat_data.bpf_cycle_cnt += ix.used_bpf_cycle_cnt
-
-        self._stat_exporter.on_neon_tx_result(neon_tx_stat_data)
+        self._stat_client.commit_db_health(self._db.is_healthy())
+        self._stat_client.commit_solana_rpc_health(self._solana.is_healthy())
 
     def _get_sol_block_deque(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> Deque[SolanaBlockInfo]:
         if not state.has_neon_block():
@@ -262,13 +278,18 @@ class Indexer(IndexerBase):
 
             self._complete_neon_block(state)
 
+    def _refresh_block_slots(self) -> None:
+        self._last_confirmed_block_slot = self._solana.get_block_slot(self._confirmed_sol_tx_collector.commitment)
+        self._last_finalized_block_slot = self._solana.get_block_slot(self._finalized_sol_tx_collector.commitment)
+
     def _has_new_blocks(self) -> bool:
         if self._confirmed_block_slot is None:
             return True
-        confirmed_block_slot = self._solana.get_block_slot(self._confirmed_sol_tx_collector.commitment)
-        return self._confirmed_block_slot != confirmed_block_slot
+
+        return self._confirmed_block_slot != self._last_confirmed_block_slot
 
     def process_functions(self):
+        self._refresh_block_slots()
         if not self._has_new_blocks():
             return
 
@@ -306,7 +327,8 @@ class Indexer(IndexerBase):
                     self._confirmed_block_slot = state.stop_block_slot
 
         self._print_stat(state)
-        self._submit_status()
+        self._commit_status_stat()
+        self._refresh_op_account_list()
 
     def _print_stat(self, state: SolNeonTxDecoderState) -> None:
         cache_stat = self._neon_block_dict.stat
