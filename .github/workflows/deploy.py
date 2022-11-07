@@ -49,8 +49,6 @@ FAUCET_COMMIT = 'latest'
 
 FTS_NAME = "neonlabsorg/full_test_suite:develop"
 
-VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x"
-
 CONTAINERS = ['proxy', 'solana', 'neon_test_invoke_program_loader',
               'dbcreation', 'faucet', 'airdropper', 'indexer']
 
@@ -129,32 +127,29 @@ def publish_image(proxy_tag):
 @click.option('--proxy_tag')
 def finalize_image(head_ref_branch, github_ref, proxy_tag):
     branch = github_ref.replace("refs/heads/", "")
-    if re.match(VERSION_BRANCH_TEMPLATE, branch) is None:
-        if 'refs/tags/' in branch:
-            tag = branch.replace("refs/tags/", "")
-        elif branch == 'master':
-            tag = 'stable'
-        elif branch == 'develop':
-            tag = 'latest'
-        elif head_ref_branch != "":
-            tag = head_ref_branch.split('/')[-1]
-        else:
-            tag = branch.split('/')[-1]
-
-        click.echo(f"The tag for publishing: {tag}")
-        docker_client.login(username=DOCKER_USERNAME, password=DOCKER_PASSWORD)
-        out = docker_client.pull(f"{IMAGE_NAME}:{proxy_tag}")
-        if "error" in out:
-            raise RuntimeError(
-                f"Pull {IMAGE_NAME}:{proxy_tag} finished with error: {out}")
-
-        docker_client.tag(f"{IMAGE_NAME}:{proxy_tag}", f"{IMAGE_NAME}:{tag}")
-        out = docker_client.push(f"{IMAGE_NAME}:{tag}")
-        if "error" in out:
-            raise RuntimeError(
-                f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
+    if 'refs/tags/' in branch:
+        tag = branch.replace("refs/tags/", "")
+    elif branch == 'master':
+        tag = 'stable'
+    elif branch == 'develop':
+        tag = 'latest'
+    elif head_ref_branch != "":
+        tag = head_ref_branch.split('/')[-1]
     else:
-        click.echo("The image is not published, please create tag for publishing version image")
+        tag = branch.split('/')[-1]
+
+    click.echo(f"The tag for publishing: {tag}")
+    docker_client.login(username=DOCKER_USERNAME, password=DOCKER_PASSWORD)
+    out = docker_client.pull(f"{IMAGE_NAME}:{proxy_tag}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Pull {IMAGE_NAME}:{proxy_tag} finished with error: {out}")
+
+    docker_client.tag(f"{IMAGE_NAME}:{proxy_tag}", f"{IMAGE_NAME}:{tag}")
+    out = docker_client.push(f"{IMAGE_NAME}:{tag}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
 
 
 @cli.command(name="terraform_infrastructure")

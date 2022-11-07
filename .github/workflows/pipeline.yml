@@ -60,7 +60,8 @@ jobs:
           echo "neon_evm=${neon_evm_tag}" >> $GITHUB_OUTPUT
 
           if [[ "${{ github.event.inputs.neon_evm_commit }}" != "" ]]; then
-            proxy_tag="${{ github.sha }}${{ github.event.inputs.neon_evm_commit }}"
+            evm_short_commit=`git rev-parse --short ${{ github.event.inputs.neon_evm_commit }}`
+            proxy_tag="${{ github.sha }}-${evm_short_commit}"
           else
             proxy_tag="${{ github.sha }}"
           fi;
@@ -160,7 +161,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Tag published image
-        if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/') }}
+        if: !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/')  &&
+            needs.build-image.outputs.is_version_proxy_branch == 'false'
         run: |
           python3 ./.github/workflows/deploy.py finalize_image \
           --head_ref_branch=${{ github.head_ref }} \
