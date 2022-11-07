@@ -161,8 +161,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Tag published image
-        if: !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/')  &&
-            needs.build-image.outputs.is_version_proxy_branch == 'false'
+        if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/')  &&
+            needs.build-image.outputs.is_version_proxy_branch == 'false' }}
         run: |
           python3 ./.github/workflows/deploy.py finalize_image \
           --head_ref_branch=${{ github.head_ref }} \
