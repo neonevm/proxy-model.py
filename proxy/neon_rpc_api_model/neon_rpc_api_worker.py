@@ -123,8 +123,18 @@ class NeonRpcApiWorker:
             or ((tag == '0x0' or str(tag) == '0') and self._config.use_earliest_block_if_0_passed)
 
     def _process_block_tag(self, tag: Union[str, int]) -> SolanaBlockInfo:
-        if tag in ("latest", "pending"):
+        if tag == 'latest':
             block = self._db.get_latest_block()
+        elif tag == 'pending':
+            latest_block = self._db.get_latest_block()
+            block = SolanaBlockInfo(
+                block_slot=latest_block.block_slot + 1,
+                block_time=latest_block.block_time,
+                parent_block_hash=latest_block.block_hash,
+                parent_block_slot=latest_block.block_slot
+            )
+        elif tag in {'finalized', 'safe'}:
+            block = self._db.get_finalized_block()
         elif self._should_return_starting_block(tag):
             block = self._db.get_starting_block()
         elif isinstance(tag, str):
@@ -155,16 +165,12 @@ class NeonRpcApiWorker:
 
     @staticmethod
     def _validate_block_tag(tag: Union[int, str]) -> None:
-        # if tag not in ("latest", "pending"):
-        #     self.debug(f"Block type '{tag}' is not supported yet")
-        #     raise EthereumError(message=f"Not supported block identifier: {tag}")
-
         if isinstance(tag, int):
             return
 
         try:
             tag.strip().lower()
-            if tag in ('latest', 'pending', 'earliest'):
+            if tag in {'latest', 'pending', 'earliest', 'finalized', 'safe'}:
                 return
 
             assert tag[:2] == '0x'
@@ -201,14 +207,20 @@ class NeonRpcApiWorker:
 
     def eth_getBalance(self, account: str, tag: Union[int, str]) -> str:
         """account - address to check for balance.
-           tag - integer block number, or the string "latest", "earliest" or "pending"
+           tag - integer block number, or the string "finalized", "safe", "latest", "earliest" or "pending"
         """
 
         self._validate_block_tag(tag)
         account = self._normalize_account(account)
 
         try:
-            commitment = 'processed' if tag == 'pending' else 'confirmed'
+            if tag == 'pending':
+                commitment = 'processed'
+            elif tag in {'finalized', 'safe'}:
+                commitment = 'finalized'
+            else:
+                commitment = 'confirmed'
+
             neon_account_info = self._solana.get_neon_account_info(NeonAddress(account), commitment)
             if neon_account_info is None:
                 return hex(0)
@@ -234,7 +246,7 @@ class NeonRpcApiWorker:
 
         if 'fromBlock' in obj and obj['fromBlock'] != '0':
             from_block = self._process_block_tag(obj['fromBlock']).block_slot
-        if 'toBlock' in obj and obj['toBlock'] not in ('latest', 'pending'):
+        if 'toBlock' in obj and obj['toBlock'] not in {'latest', 'pending', 'finalized', 'safe'}:
             to_block = self._process_block_tag(obj['toBlock']).block_slot
         if 'address' in obj:
             addresses = to_list(obj['address'])
@@ -268,8 +280,8 @@ class NeonRpcApiWorker:
                 sig_list.append(tx.neon_tx.sig)
 
         result = {
-            "difficulty": '0x20000',
-            "totalDifficulty": '0x20000',
+            "difficulty": '0x0',
+            "totalDifficulty": '0x0',
             "extraData": "0x" + '0' * 63 + '1',
             "logsBloom": '0x' + '0' * 512,
             "gasLimit": '0xec8563e271ac',
@@ -280,7 +292,7 @@ class NeonRpcApiWorker:
             "uncles": [],
             "sha3Uncles": '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347',
 
-            "miner": '0x' + '0' * 40,
+            "miner": '0x0',
             # 8 byte nonce
             "nonce": '0x0000000000000000',
             "mixHash": '0x' + '0' * 63 + '1',
@@ -340,11 +352,16 @@ class NeonRpcApiWorker:
 
     def eth_getBlockByNumber(self, tag: Union[int, str], full: bool) -> Optional[dict]:
         """Returns information about a block by block number.
-            tag - integer of a block number, or the string "earliest", "latest" or "pending", as in the default block parameter.
+            tag - integer of a block number, or the string "finalized", "safe", "earliest", "latest" or "pending", as in the default block parameter.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
+        is_pending = tag == 'pending'
         block = self._process_block_tag(tag)
-        ret = self._get_block_by_slot(block, full, tag in ('latest', 'pending'))
+        ret = self._get_block_by_slot(block, full, is_pending)
+        if is_pending:
+            ret['miner'] = None
+            ret['hash'] = None
+            ret['nonce'] = None
         return ret
 
     def eth_call(self, obj: dict, tag: Union[int, str]) -> str:
@@ -357,7 +374,7 @@ class NeonRpcApiWorker:
                 gasPrice: QUANTITY - (optional) Integer of the gasPrice used for each paid gas
                 value: QUANTITY - (optional) Integer of the value sent with this transaction
                 data: DATA - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
-            tag - integer block number, or the string "latest", "earliest" or "pending", see the default block parameter
+            tag - integer block number, or the string "finalized", "safe", "latest", "earliest" or "pending", see the default block parameter
         """
         self._validate_block_tag(tag)
         if not isinstance(obj, dict):
@@ -385,25 +402,31 @@ class NeonRpcApiWorker:
         account = self._normalize_account(account).lower()
 
         try:
-            self.debug(f"Get transaction count. Account: {account}, tag: {tag}")
+            self.debug(f'Get transaction count. Account: {account}, tag: {tag}')
 
-            if tag in {"pending", "mempool"}:
-                req_id = LogMng.get_logging_context().get("req_id")
-                if tag == 'pending':
-                    pending_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
-                    self.debug(f"Pending tx count for: {account} - is: {pending_tx_nonce}")
-                else:
-                    pending_tx_nonce = self._mempool_client.get_mempool_tx_nonce(req_id=req_id, sender=account)
-                    self.debug(f"Mempool tx count for: {account} - is: {pending_tx_nonce}")
+            pending_tx_nonce: Optional[int] = None
+            commitment = 'confirmed'
 
-                if pending_tx_nonce is None:
-                    pending_tx_nonce = 0
+            if tag == 'pending':
+                commitment = 'processed'
 
-                neon_account_info = self._solana.get_neon_account_info(account, 'processed')
-                tx_count = max(neon_account_info.tx_count, pending_tx_nonce)
-            else:
-                neon_account_info = self._solana.get_neon_account_info(account, 'confirmed')
-                tx_count = neon_account_info.tx_count
+                req_id = LogMng.get_logging_context().get('req_id')
+                pending_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
+                self.debug(f'Pending tx count for: {account} - is: {pending_tx_nonce}')
+            elif tag == 'latest':
+                commitment = 'processed'
+
+                req_id = LogMng.get_logging_context().get('req_id')
+                pending_tx_nonce = self._mempool_client.get_mempool_tx_nonce(req_id=req_id, sender=account)
+                self.debug(f'Mempool tx count for: {account} - is: {pending_tx_nonce}')
+            elif tag in {'finalized', 'safe'}:
+                commitment = 'finalized'
+
+            if pending_tx_nonce is None:
+                pending_tx_nonce = 0
+
+            neon_account_info = self._solana.get_neon_account_info(account, commitment)
+            tx_count = max(neon_account_info.tx_count, pending_tx_nonce)
 
             return hex(tx_count)
         except (Exception,):
