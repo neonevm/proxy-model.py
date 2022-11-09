@@ -23,7 +23,7 @@ class ProxyStatDataPeeker:
         self._stat_service = stat_srv
         self._config = config
         self._solana = SolInteractor(config, config.solana_url)
-        self._db = IndexerDB()
+        self._db = IndexerDB(config)
 
         self._sol_account_list: List[str] = []
         self._neon_account_list: List[str] = []
