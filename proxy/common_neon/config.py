@@ -58,7 +58,7 @@ class Config:
         self._hvac_token = os.environ.get('HVAC_TOKEN', None)
         self._hvac_mount = os.environ.get('HVAC_MOUNT', None)
         self._hvac_path = os.environ.get('HVAC_PATH', '')
-        self._genesis_timestamp = os.environ.get('GENESIS_BLOCK_TIMESTAMP', 0)
+        self._genesis_timestamp = os.environ['GENESIS_BLOCK_TIMESTAMP'] # Drop service if not specified
 
         pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
         self._pyth_mapping_account = SolPubKey(pyth_mapping_account) if pyth_mapping_account is not None else None
