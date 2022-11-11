@@ -85,11 +85,12 @@ def update_neon_evm_tag_if_same_branch_exists(branch, neon_evm_tag):
 
 
 @cli.command(name="build_docker_image")
-@click.option('--neon_evm_tag')
-@click.option('--proxy_tag')
+@click.option('--neon_evm_tag', help="the neonlabsorg/evm_loader image tag that will be used for the build")
+@click.option('--proxy_tag', help="a tag to be generated for the proxy image")
 @click.option('--head_ref_branch')
 def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch):
-    neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
+    if head_ref_branch is not None:
+        neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
     neon_evm_image = f'neonlabsorg/evm_loader:{neon_evm_tag}'
     click.echo(f"neon-evm image: {neon_evm_image}")
     neon_test_invoke_program_image = "neonlabsorg/neon_test_invoke_program:develop"
@@ -277,11 +278,14 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
 
 
 @cli.command(name="deploy_check")
-@click.option('--proxy_tag')
-@click.option('--neon_evm_tag')
+@click.option('--proxy_tag', help="the neonlabsorg/proxy image tag")
+@click.option('--neon_evm_tag', help="the neonlabsorg/evm_loader image tag")
 @click.option('--head_ref_branch')
-def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch):
-    neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
+@click.option('--skip_uniswap', is_flag=True, show_default=True, default=False)
+def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap):
+    if head_ref_branch is not None:
+        neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
+
     os.environ["REVISION"] = proxy_tag
     os.environ["NEON_EVM_COMMIT"] = neon_evm_tag
     os.environ["FAUCET_COMMIT"] = FAUCET_COMMIT
@@ -298,7 +302,9 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch):
     click.echo(f"Running containers: {containers}")
 
     wait_for_faucet()
-    run_uniswap_test()
+
+    if not skip_uniswap:
+        run_uniswap_test()
 
     for file in get_test_list():
         run_test(file)
