@@ -281,8 +281,9 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
 @click.option('--proxy_tag', help="the neonlabsorg/proxy image tag")
 @click.option('--neon_evm_tag', help="the neonlabsorg/evm_loader image tag")
 @click.option('--head_ref_branch')
-@click.option('--skip_uniswap', is_flag=True, show_default=True, default=False)
-def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap):
+@click.option('--skip_uniswap', is_flag=True, show_default=True, default=False, help="flag for skipping uniswap tests")
+@click.option('--test_files', help="comma-separated file names if you want to run a specific list of tests")
+def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_files):
     if head_ref_branch is not None:
         neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
 
@@ -306,8 +307,17 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap):
     if not skip_uniswap:
         run_uniswap_test()
 
-    for file in get_test_list():
-        run_test(file)
+    if test_files is None:
+        test_list = get_test_list()
+    else:
+        test_list = test_files.split(',')
+
+    errors_count = 0
+    for file in test_list:
+        errors_count += run_test(file)
+
+    if errors_count > 0:
+        raise RuntimeError(f"Tests failed! Errors count: {errors_count}")
 
 
 def get_test_list():
@@ -320,11 +330,18 @@ def get_test_list():
 
 def run_test(file_name):
     click.echo(f"Running {file_name} tests")
-    env = {"SKIP_PREPARE_DEPLOY_TEST": "YES", "TESTNAME": file_name}
+    env = {"SKIP_PREPARE_DEPLOY_TEST": "NO", "TESTNAME": file_name}
     inst = docker_client.exec_create(
         "proxy", './proxy/deploy-test.sh', environment=env)
-    out = docker_client.exec_start(inst['Id'])
+    out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
+    test_logs = test_logs.decode('utf-8')
     click.echo(out)
+    click.echo(test_logs)
+    errors_count = 0
+    for line in test_logs.split('\n'):
+        if re.match(r"FAILED \(errors=\d+\)", line):
+            errors_count += int(re.search(r"\d+", line).group(0))
+    return errors_count
 
 
 @cli.command(name="dump_apps_logs")
@@ -378,7 +395,7 @@ def wait_for_faucet():
     start_time = time.time()
     while True:
         if time.time() - start_time > timeout_sec:
-            raise f'Faucet {faucet_url} is unavailable - time is over'
+            raise RuntimeError(f'Faucet {faucet_url} is unavailable - time is over')
         try:
             if subprocess.run(
                 command, shell=True, capture_output=True, text=True).returncode == 0:
@@ -387,7 +404,7 @@ def wait_for_faucet():
             else:
                 click.echo(f"Faucet {faucet_url} is unavailable - sleeping")
         except:
-            raise f"Error during run command {command}"
+            raise RuntimeError(f"Error during run command {command}")
         time.sleep(1)
 
 

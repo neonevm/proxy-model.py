@@ -113,6 +113,12 @@ class IndexerDB:
     def get_finalized_block_slot(self) -> int:
         return self._constants_db['finalized_block_slot']
 
+    def get_finalized_block(self) -> SolanaBlockInfo:
+        block_slot = self.get_finalized_block_slot()
+        if block_slot == 0:
+            return SolanaBlockInfo(block_slot=0)
+        return self.get_block_by_slot(block_slot)
+
     def get_starting_block(self) -> SolanaBlockInfo:
         if self._starting_block.block_slot != 0:
             return self._starting_block

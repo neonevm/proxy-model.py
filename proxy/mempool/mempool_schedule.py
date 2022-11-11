@@ -136,8 +136,6 @@ class MPSenderTxPool:
 
     def set_state_tx_cnt(self, value: int) -> None:
         assert not self.is_empty()
-        assert self._state_tx_cnt <= value
-        assert self.get_top_tx().nonce >= value
 
         self._state_tx_cnt = value
 
