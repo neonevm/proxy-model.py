@@ -85,11 +85,12 @@ def update_neon_evm_tag_if_same_branch_exists(branch, neon_evm_tag):
 
 
 @cli.command(name="build_docker_image")
-@click.option('--neon_evm_tag')
-@click.option('--proxy_tag')
+@click.option('--neon_evm_tag', help="the neonlabsorg/evm_loader image tag that will be used for the build")
+@click.option('--proxy_tag', help="a tag to be generated for the proxy image")
 @click.option('--head_ref_branch')
 def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch):
-    neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
+    if head_ref_branch is not None:
+        neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
     neon_evm_image = f'neonlabsorg/evm_loader:{neon_evm_tag}'
     click.echo(f"neon-evm image: {neon_evm_image}")
     neon_test_invoke_program_image = "neonlabsorg/neon_test_invoke_program:develop"
@@ -277,11 +278,15 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
 
 
 @cli.command(name="deploy_check")
-@click.option('--proxy_tag')
-@click.option('--neon_evm_tag')
+@click.option('--proxy_tag', help="the neonlabsorg/proxy image tag")
+@click.option('--neon_evm_tag', help="the neonlabsorg/evm_loader image tag")
 @click.option('--head_ref_branch')
-def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch):
-    neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
+@click.option('--skip_uniswap', is_flag=True, show_default=True, default=False, help="flag for skipping uniswap tests")
+@click.option('--test_files', help="comma-separated file names if you want to run a specific list of tests")
+def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_files):
+    if head_ref_branch is not None:
+        neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
+
     os.environ["REVISION"] = proxy_tag
     os.environ["NEON_EVM_COMMIT"] = neon_evm_tag
     os.environ["FAUCET_COMMIT"] = FAUCET_COMMIT
@@ -298,10 +303,21 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch):
     click.echo(f"Running containers: {containers}")
 
     wait_for_faucet()
-    run_uniswap_test()
 
-    for file in get_test_list():
-        run_test(file)
+    if not skip_uniswap:
+        run_uniswap_test()
+
+    if test_files is None:
+        test_list = get_test_list()
+    else:
+        test_list = test_files.split(',')
+
+    errors_count = 0
+    for file in test_list:
+        errors_count += run_test(file)
+
+    if errors_count > 0:
+        raise RuntimeError(f"Tests failed! Errors count: {errors_count}")
 
 
 def get_test_list():
@@ -314,11 +330,18 @@ def get_test_list():
 
 def run_test(file_name):
     click.echo(f"Running {file_name} tests")
-    env = {"SKIP_PREPARE_DEPLOY_TEST": "YES", "TESTNAME": file_name}
+    env = {"SKIP_PREPARE_DEPLOY_TEST": "NO", "TESTNAME": file_name}
     inst = docker_client.exec_create(
         "proxy", './proxy/deploy-test.sh', environment=env)
-    out = docker_client.exec_start(inst['Id'])
+    out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
+    test_logs = test_logs.decode('utf-8')
     click.echo(out)
+    click.echo(test_logs)
+    errors_count = 0
+    for line in test_logs.split('\n'):
+        if re.match(r"FAILED \(errors=\d+\)", line):
+            errors_count += int(re.search(r"\d+", line).group(0))
+    return errors_count
 
 
 @cli.command(name="dump_apps_logs")
@@ -372,7 +395,7 @@ def wait_for_faucet():
     start_time = time.time()
     while True:
         if time.time() - start_time > timeout_sec:
-            raise f'Faucet {faucet_url} is unavailable - time is over'
+            raise RuntimeError(f'Faucet {faucet_url} is unavailable - time is over')
         try:
             if subprocess.run(
                 command, shell=True, capture_output=True, text=True).returncode == 0:
@@ -381,7 +404,7 @@ def wait_for_faucet():
             else:
                 click.echo(f"Faucet {faucet_url} is unavailable - sleeping")
         except:
-            raise f"Error during run command {command}"
+            raise RuntimeError(f"Error during run command {command}")
         time.sleep(1)
 
 

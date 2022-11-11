@@ -37,6 +37,10 @@ jobs:
       is_version_proxy_branch: ${{ steps.is_version_proxy_branch.outputs.value }}
     steps:
       - uses: actions/checkout@v3
+      - name: output branches name
+        run: |
+          echo "neon_evm_branch = ${{ github.event.inputs.neon_evm_branch }}"
+          echo "proxy_branch = ${{ github.ref }}"
       - name: Check if proxy branch is version branch
         id: is_version_proxy_branch
         run: |
@@ -84,6 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: deploy_check
+        timeout-minutes: 60
         run: |
           python3 ./.github/workflows/deploy.py deploy_check \
           --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
@@ -161,8 +166,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Tag published image
-        if: ${{ !startsWith(github.event.inputs.neon_evm_branch , 'refs/tags/')  &&
-            needs.build-image.outputs.is_version_proxy_branch == 'false' }}
+        if: ${{ (github.event.inputs.neon_evm_commit == ''  &&
+            needs.build-image.outputs.is_version_proxy_branch == 'false') ||
+            github.event.inputs.neon_evm_branch == 'refs/head/develop' ||
+            github.event.inputs.neon_evm_branch == 'refs/head/master'  }}
         run: |
           python3 ./.github/workflows/deploy.py finalize_image \
           --head_ref_branch=${{ github.head_ref }} \
