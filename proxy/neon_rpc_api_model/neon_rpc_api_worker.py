@@ -292,7 +292,7 @@ class NeonRpcApiWorker:
             "uncles": [],
             "sha3Uncles": '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347',
 
-            "miner": '0x0',
+            "miner": '0x' + '0' * 40,
             # 8 byte nonce
             "nonce": '0x0000000000000000',
             "mixHash": '0x' + '0' * 63 + '1',
