@@ -59,6 +59,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             if modelInstance is None:
                 configInstance = Config()
                 statInstance = ProxyStatClient(configInstance)
+                statInstance.start()
                 modelInstance = NeonRpcApiWorker(configInstance)
             return configInstance, statInstance, modelInstance
 
