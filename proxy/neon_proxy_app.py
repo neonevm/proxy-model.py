@@ -12,6 +12,6 @@ class NeonProxyApp:
         self._proxy_stat_service = ProxyStatService(self._config)
 
     def start(self) -> None:
-        self._mempool_service.start()
         self._proxy_stat_service.start()
+        self._mempool_service.start()
         entry_point()

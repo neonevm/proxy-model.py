@@ -26,8 +26,8 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
     MP_MAINTENANCE_ADDR = ("0.0.0.0", 9092)
 
     def __init__(self, config: Config):
-        self.event_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.event_loop)
+        self._event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._event_loop)
         self._mempool_srv: Optional[AddrPickableDataSrv] = None
         self._mempool_maintenance_srv: Optional[AddrPickableDataSrv] = None
         self._mempool: Optional[MemPool] = None
@@ -98,12 +98,13 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             self._mempool_srv = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
             self._mempool_maintenance_srv = AddrPickableDataSrv(user=self, address=self.MP_MAINTENANCE_ADDR)
             self._stat_client = ProxyStatClient(self._config)
+            self._stat_client.start()
             self._mp_executor_mng = MPExecutorMng(self._config, self, self._stat_client)
-            self.event_loop.run_until_complete(self._mp_executor_mng.async_init())
+            self._event_loop.run_until_complete(self._mp_executor_mng.async_init())
             self._op_res_mng = OpResMng(self._config, self._stat_client)
             self._mempool = MemPool(self._config, self._stat_client, self._op_res_mng, self._mp_executor_mng)
             self._replicator = MemPoolReplicator(self._mempool)
-            self.event_loop.run_forever()
+            self._event_loop.run_forever()
         except BaseException as exc:
             self.error('Failed to run mempool_service.', exc_info=exc)
 
