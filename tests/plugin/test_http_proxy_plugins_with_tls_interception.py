@@ -17,13 +17,11 @@ from unittest import mock
 from typing import Any, cast
 
 from proxy.common.utils import bytes_
-from proxy.common.flags import Flags
 from proxy.common.utils import build_http_request, build_http_response
 from proxy.core.connection import TcpClientConnection
 from proxy.http.codes import httpStatusCodes
 from proxy.http.methods import httpMethods
 from proxy.http.handler import HttpProtocolHandler
-from proxy.http.proxy import HttpProxyPlugin
 
 from .utils import get_plugin_by_test_name
 
@@ -62,16 +60,11 @@ class TestHttpProxyPluginExamplesWithTlsInterception(unittest.TestCase):
 
         self.fileno = 10
         self._addr = ('127.0.0.1', 54382)
-        self.flags = Flags(
-            ca_cert_file='ca-cert.pem',
-            ca_key_file='ca-key.pem',
-            ca_signing_key_file='ca-signing-key.pem',)
         self.plugin = mock.MagicMock()
 
         plugin = get_plugin_by_test_name(self._testMethodName)
 
         self.flags.plugins = {
-            b'HttpProtocolHandlerPlugin': [HttpProxyPlugin],
             b'HttpProxyBasePlugin': [plugin],
         }
         self._conn = mock.MagicMock(spec=socket.socket)

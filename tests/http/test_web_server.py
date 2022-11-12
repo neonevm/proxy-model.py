@@ -144,7 +144,6 @@ class TestWebServerPlugin(unittest.TestCase):
                 data=None), selectors.EVENT_WRITE)], ]
 
         flags = Flags(
-            enable_static_server=True,
             static_server_dir=static_server_dir)
         flags.plugins = Flags.load_plugins(
             b'proxy.http.proxy.HttpProxyPlugin,proxy.http.server.HttpWebServerPlugin')
@@ -193,7 +192,6 @@ class TestWebServerPlugin(unittest.TestCase):
                 events=selectors.EVENT_WRITE,
                 data=None), selectors.EVENT_WRITE)], ]
 
-        flags = Flags(enable_static_server=True)
         flags.plugins = Flags.load_plugins(
             b'proxy.http.proxy.HttpProxyPlugin,proxy.http.server.HttpWebServerPlugin')
 

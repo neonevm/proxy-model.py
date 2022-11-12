@@ -16,15 +16,11 @@ from urllib import parse as urlparse
 from unittest import mock
 from typing import cast
 
-from proxy.common.flags import Flags
 from proxy.core.connection import TcpClientConnection
 from proxy.http.handler import HttpProtocolHandler
-from proxy.http.proxy import HttpProxyPlugin
 from proxy.common.utils import build_http_request, bytes_, build_http_response
 from proxy.common.constants import PROXY_AGENT_HEADER_VALUE, DEFAULT_HTTP_PORT
 from proxy.http.codes import httpStatusCodes
-
-from proxy.plugin import ProposedRestApiPlugin, RedirectToCustomServerPlugin
 
 from .utils import get_plugin_by_test_name
 

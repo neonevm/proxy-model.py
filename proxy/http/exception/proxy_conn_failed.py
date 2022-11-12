@@ -23,7 +23,6 @@ if TYPE_CHECKING:   # pragma: no cover
 
 
 class ProxyConnectionFailed(HttpProtocolException):
-    """Exception raised when ``HttpProxyPlugin`` is unable to establish connection to upstream server."""
 
     def __init__(self, host: str, port: int, reason: str, **kwargs: Any):
         self.host: str = host

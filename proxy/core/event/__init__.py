@@ -10,7 +10,6 @@
 """
 from .names import EventNames, eventNames
 from .queue import EventQueue
-from .manager import EventManager
 from .dispatcher import EventDispatcher
 from .subscriber import EventSubscriber
 

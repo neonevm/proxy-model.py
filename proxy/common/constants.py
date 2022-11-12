@@ -86,10 +86,7 @@ DEFAULT_CA_FILE = pathlib.Path(
 ) / 'certifi' / 'cacert.pem'
 DEFAULT_CLIENT_RECVBUF_SIZE = DEFAULT_BUFFER_SIZE
 DEFAULT_DISABLE_HEADERS: List[bytes] = []
-DEFAULT_ENABLE_SSH_TUNNEL = False
-DEFAULT_ENABLE_EVENTS = False
 DEFAULT_EVENTS_QUEUE = None
-DEFAULT_ENABLE_STATIC_SERVER = False
 DEFAULT_ENABLE_WEB_SERVER = False
 DEFAULT_ALLOWED_URL_SCHEMES = [HTTP_PROTO, HTTPS_PROTO]
 DEFAULT_IPV4_HOSTNAME = ipaddress.IPv4Address('127.0.0.1')
@@ -110,8 +107,6 @@ DEFAULT_HTTPS_PROXY_ACCESS_LOG_FORMAT = '{client_ip}:{client_port} - ' + \
 DEFAULT_NUM_ACCEPTORS = 0
 DEFAULT_NUM_WORKERS = 0
 DEFAULT_OPEN_FILE_LIMIT = 1024
-DEFAULT_PAC_FILE = None
-DEFAULT_PAC_FILE_URL_PATH = b'/'
 DEFAULT_PID_FILE = None
 DEFAULT_PORT_FILE = None
 DEFAULT_PLUGINS: List[Any] = []
@@ -127,18 +122,13 @@ DEFAULT_HTTP_PORT = 80
 DEFAULT_HTTPS_PORT = 443
 DEFAULT_WORK_KLASS = 'proxy.http.HttpProtocolHandler'
 DEFAULT_ENABLE_PROXY_PROTOCOL = False
-# 25 milliseconds to keep the loops hot
+# 10 milliseconds to keep the loops hot
 # Will consume ~0.3-0.6% CPU when idle.
-DEFAULT_SELECTOR_SELECT_TIMEOUT = 25 / 1000
+DEFAULT_SELECTOR_SELECT_TIMEOUT = 10 / 1000
 DEFAULT_WAIT_FOR_TASKS_TIMEOUT = 1 / 1000
 DEFAULT_INACTIVE_CONN_CLEANUP_TIMEOUT = 1   # in seconds
 
 DEFAULT_DATA_DIRECTORY_PATH = os.path.join(str(pathlib.Path.home()), '.proxy')
-DEFAULT_CACHE_DIRECTORY_PATH = os.path.join(
-    DEFAULT_DATA_DIRECTORY_PATH, 'cache',
-)
-DEFAULT_CACHE_REQUESTS = False
-DEFAULT_CACHE_BY_CONTENT_TYPE = False
 
 # Cor plugins enabled by default or via flags
 DEFAULT_ABC_PLUGINS = [
@@ -147,7 +137,6 @@ DEFAULT_ABC_PLUGINS = [
     'HttpWebServerBasePlugin',
     'WebSocketTransportBasePlugin',
 ]
-PLUGIN_HTTP_PROXY = 'proxy.http.proxy.HttpProxyPlugin'
 PLUGIN_WEB_SERVER = 'proxy.http.server.HttpWebServerPlugin'
 PLUGIN_PAC_FILE = 'proxy.http.server.HttpWebServerPacFilePlugin'
 PLUGIN_WEBSOCKET_TRANSPORT = 'proxy.http.websocket.transport.WebSocketTransport'
