@@ -258,17 +258,16 @@ class Indexer(IndexerBase):
             with logging_context(ident=sol_tx_meta.req_id):
                 neon_block = self._locate_neon_block(state, sol_tx_meta)
                 if neon_block.is_completed:
-                    # self.debug(f'ignore parsed tx {sol_tx_meta}')
+                    # self.debug('ignore parsed tx')
                     continue
 
                 neon_block.add_sol_tx_cost(SolTxCostInfo.from_tx_meta(sol_tx_meta))
-
-                if SolTxErrorParser(sol_tx_meta.tx).check_if_error():
-                    # self.debug(f'ignore failed tx {sol_tx_meta}')
-                    continue
+                is_error = SolTxErrorParser(sol_tx_meta.tx).check_if_error()
 
             for sol_neon_ix in state.iter_sol_neon_ix():
                 with logging_context(sol_neon_ix=sol_neon_ix.req_id):
+                    if is_error:
+                        self.debug('failed tx')
                     SolNeonIxDecoder = self._sol_neon_ix_decoder_dict.get(sol_neon_ix.program_ix, DummyIxDecoder)
                     SolNeonIxDecoder(state).execute()
 

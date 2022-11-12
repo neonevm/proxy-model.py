@@ -21,6 +21,14 @@ class DummyIxDecoder:
     def ix_code(cls) -> int:
         return cls._ix_code
 
+    @classmethod
+    def is_deprecated(cls) -> bool:
+        return cls._is_deprecated
+
+    @classmethod
+    def name(cls) -> str:
+        return cls._name
+
     def __str__(self):
         if self._is_deprecated:
             return f'DEPRECATED 0x{self._ix_code:02x}:{self._name} {self.state.sol_neon_ix}'
@@ -338,7 +346,7 @@ class WriteHolderAccountIx(DummyIxDecoder):
         account = ix.get_account(0)
 
         key = NeonIndexedTxInfo.Key.from_neon_tx_sig(neon_tx_sig, account, [])
-        tx = block.find_neon_tx(key, ix)
+        tx: Optional[NeonIndexedTxInfo] = block.find_neon_tx(key, ix)
         if (tx is not None) and tx.neon_tx.is_valid():
             tx.add_sol_neon_ix(ix)
             return self._decoding_success(tx, f'add Neon tx data chunk {chunk}')
@@ -363,7 +371,7 @@ class Deposit3IxDecoder(DummyIxDecoder):
 
 
 def get_neon_ix_decoder_list() -> List[Type[DummyIxDecoder]]:
-    return [
+    ix_decoder_list = [
         CreateAccount3IxDecoder,
         CollectTreasureIxDecoder,
         TxExecFromDataIxDecoder,
@@ -376,3 +384,8 @@ def get_neon_ix_decoder_list() -> List[Type[DummyIxDecoder]]:
         WriteHolderAccountIx,
         Deposit3IxDecoder,
     ]
+
+    for IxDecoder in ix_decoder_list:
+        assert not IxDecoder.is_deprecated(), f"{IxDecoder.name()} is deprecated!"
+
+    return ix_decoder_list
