@@ -88,14 +88,22 @@ def update_neon_evm_tag_if_same_branch_exists(branch, neon_evm_tag):
 @click.option('--neon_evm_tag', help="the neonlabsorg/evm_loader image tag that will be used for the build")
 @click.option('--proxy_tag', help="a tag to be generated for the proxy image")
 @click.option('--head_ref_branch')
-def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch):
+@click.option('--skip_pull', is_flag=True, default=False, help="skip pulling of docker images from the docker-hub")
+def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch, skip_pull):
     if head_ref_branch is not None:
         neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
     neon_evm_image = f'neonlabsorg/evm_loader:{neon_evm_tag}'
     click.echo(f"neon-evm image: {neon_evm_image}")
     neon_test_invoke_program_image = "neonlabsorg/neon_test_invoke_program:develop"
-    docker_client.pull(neon_evm_image)
-    docker_client.pull(neon_test_invoke_program_image)
+    if not skip_pull:
+        click.echo('pull docker images...')
+        out = docker_client.pull(neon_evm_image)
+        click.echo(out)
+
+        out = docker_client.pull(neon_test_invoke_program_image)
+        click.echo(out)
+    else:
+        click.echo('skip pulling of docker images')
 
     buildargs = {"NEON_EVM_COMMIT": neon_evm_tag,
                  "PROXY_REVISION": proxy_tag,
@@ -284,7 +292,8 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
 @click.option('--head_ref_branch')
 @click.option('--skip_uniswap', is_flag=True, show_default=True, default=False, help="flag for skipping uniswap tests")
 @click.option('--test_files', help="comma-separated file names if you want to run a specific list of tests")
-def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_files):
+@click.option('--skip_pull', is_flag=True, default=False, help="skip pulling of docker images from the docker-hub")
+def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_files, skip_pull):
     if head_ref_branch is not None:
         neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
 
@@ -293,6 +302,13 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
     os.environ["FAUCET_COMMIT"] = FAUCET_COMMIT
 
     cleanup_docker()
+
+    if not skip_pull:
+        click.echo('pull docker images...')
+        out = docker_compose(f"-f proxy/docker-compose-test.yml pull")
+        click.echo(out)
+    else:
+        click.echo('skip pulling of docker images')
 
     try:
         docker_compose(f"-f proxy/docker-compose-test.yml up -d")
