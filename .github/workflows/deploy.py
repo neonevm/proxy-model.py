@@ -102,7 +102,8 @@ def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch):
                  "PROXY_LOG_CFG": "log_cfg.json"}
 
     click.echo("Start build")
-    output = docker_client.build(tag=f"{IMAGE_NAME}:{proxy_tag}", buildargs=buildargs, path="./", decode=True)
+    output = docker_client.build(
+        tag=f"{IMAGE_NAME}:{proxy_tag}", buildargs=buildargs, path="./", decode=True, network_mode='host')
     for line in output:
         if list(line.keys())[0] in ('stream', 'error', 'status'):
             value = list(line.values())[0].strip()
@@ -312,6 +313,8 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
     else:
         test_list = test_files.split(',')
 
+    prepare_run_test()
+
     errors_count = 0
     for file in test_list:
         errors_count += run_test(file)
@@ -328,9 +331,18 @@ def get_test_list():
     return test_list
 
 
+def prepare_run_test():
+    inst = docker_client.exec_create(
+        "proxy", './proxy/prepare-deploy-test.sh')
+    out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
+    test_logs = test_logs.decode('utf-8')
+    click.echo(out)
+    click.echo(test_logs)
+
+
 def run_test(file_name):
     click.echo(f"Running {file_name} tests")
-    env = {"SKIP_PREPARE_DEPLOY_TEST": "NO", "TESTNAME": file_name}
+    env = {"SKIP_PREPARE_DEPLOY_TEST": "YES", "TESTNAME": file_name}
     inst = docker_client.exec_create(
         "proxy", './proxy/deploy-test.sh', environment=env)
     out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
@@ -366,7 +378,7 @@ def stop_containers():
 
 def cleanup_docker():
     click.echo(f"Cleanup docker-compose...")
-    docker_compose("-f proxy/docker-compose-test.yml down")
+    docker_compose("-f proxy/docker-compose-test.yml down -t 1")
     click.echo(f"Cleanup docker-compose done.")
     click.echo(f"Removing temporary data volumes...")
     command = "docker volume prune -f"
