@@ -53,6 +53,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._solana = SolInteractor(self._config, self._config.solana_url)
 
         self._stat_client = ProxyStatClient(self._config)
+        self._stat_client.start()
 
         self._gas_price_task = MPExecutorGasPriceTask(self._config, self._solana, self._stat_client)
         self._op_res_task = MPExecutorOpResTask(self._config, self._solana, self._stat_client)

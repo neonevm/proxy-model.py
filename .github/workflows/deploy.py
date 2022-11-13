@@ -88,21 +88,30 @@ def update_neon_evm_tag_if_same_branch_exists(branch, neon_evm_tag):
 @click.option('--neon_evm_tag', help="the neonlabsorg/evm_loader image tag that will be used for the build")
 @click.option('--proxy_tag', help="a tag to be generated for the proxy image")
 @click.option('--head_ref_branch')
-def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch):
+@click.option('--skip_pull', is_flag=True, default=False, help="skip pulling of docker images from the docker-hub")
+def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch, skip_pull):
     if head_ref_branch is not None:
         neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
     neon_evm_image = f'neonlabsorg/evm_loader:{neon_evm_tag}'
     click.echo(f"neon-evm image: {neon_evm_image}")
     neon_test_invoke_program_image = "neonlabsorg/neon_test_invoke_program:develop"
-    docker_client.pull(neon_evm_image)
-    docker_client.pull(neon_test_invoke_program_image)
+    if not skip_pull:
+        click.echo('pull docker images...')
+        out = docker_client.pull(neon_evm_image)
+        click.echo(out)
+
+        out = docker_client.pull(neon_test_invoke_program_image)
+        click.echo(out)
+    else:
+        click.echo('skip pulling of docker images')
 
     buildargs = {"NEON_EVM_COMMIT": neon_evm_tag,
                  "PROXY_REVISION": proxy_tag,
                  "PROXY_LOG_CFG": "log_cfg.json"}
 
     click.echo("Start build")
-    output = docker_client.build(tag=f"{IMAGE_NAME}:{proxy_tag}", buildargs=buildargs, path="./", decode=True)
+    output = docker_client.build(
+        tag=f"{IMAGE_NAME}:{proxy_tag}", buildargs=buildargs, path="./", decode=True, network_mode='host')
     for line in output:
         if list(line.keys())[0] in ('stream', 'error', 'status'):
             value = list(line.values())[0].strip()
@@ -283,7 +292,8 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
 @click.option('--head_ref_branch')
 @click.option('--skip_uniswap', is_flag=True, show_default=True, default=False, help="flag for skipping uniswap tests")
 @click.option('--test_files', help="comma-separated file names if you want to run a specific list of tests")
-def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_files):
+@click.option('--skip_pull', is_flag=True, default=False, help="skip pulling of docker images from the docker-hub")
+def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_files, skip_pull):
     if head_ref_branch is not None:
         neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
 
@@ -292,6 +302,13 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
     os.environ["FAUCET_COMMIT"] = FAUCET_COMMIT
 
     cleanup_docker()
+
+    if not skip_pull:
+        click.echo('pull docker images...')
+        out = docker_compose(f"-f proxy/docker-compose-test.yml pull")
+        click.echo(out)
+    else:
+        click.echo('skip pulling of docker images')
 
     try:
         docker_compose(f"-f proxy/docker-compose-test.yml up -d")
@@ -312,6 +329,8 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
     else:
         test_list = test_files.split(',')
 
+    prepare_run_test()
+
     errors_count = 0
     for file in test_list:
         errors_count += run_test(file)
@@ -328,9 +347,18 @@ def get_test_list():
     return test_list
 
 
+def prepare_run_test():
+    inst = docker_client.exec_create(
+        "proxy", './proxy/prepare-deploy-test.sh')
+    out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
+    test_logs = test_logs.decode('utf-8')
+    click.echo(out)
+    click.echo(test_logs)
+
+
 def run_test(file_name):
     click.echo(f"Running {file_name} tests")
-    env = {"SKIP_PREPARE_DEPLOY_TEST": "NO", "TESTNAME": file_name}
+    env = {"SKIP_PREPARE_DEPLOY_TEST": "YES", "TESTNAME": file_name}
     inst = docker_client.exec_create(
         "proxy", './proxy/deploy-test.sh', environment=env)
     out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
@@ -366,7 +394,7 @@ def stop_containers():
 
 def cleanup_docker():
     click.echo(f"Cleanup docker-compose...")
-    docker_compose("-f proxy/docker-compose-test.yml down")
+    docker_compose("-f proxy/docker-compose-test.yml down -t 1")
     click.echo(f"Cleanup docker-compose done.")
     click.echo(f"Removing temporary data volumes...")
     command = "docker volume prune -f"
