@@ -4,7 +4,7 @@
         "standard": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
-            "formatter": "standard",
+            "formatter": "json",
             "filters": ["context_filter", "neon_prefix_dropper"]
         },
         "root": {
@@ -23,6 +23,10 @@
         }
     },
     "formatters": {
+        "json": {
+          "format": "%(message)s",
+          "class": "proxy.common_neon.utils.json_logger.JSONFormatter"
+        },
         "standard": {
             "format": "%(asctime)s.%(msecs)03d %(levelname)-.1s %(filename)s:%(lineno)d %(process)d %(name)s:%(class)s %(context)s %(message)s",
             "style": "%",

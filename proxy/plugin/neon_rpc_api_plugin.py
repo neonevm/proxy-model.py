@@ -134,9 +134,17 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 httpStatusCodes.OK, reason=b'OK', body=None,
                 headers={
                     b'Access-Control-Allow-Origin': b'*',
-                    b'Access-Control-Allow-Methods': b'POST, GET, OPTIONS',
+                    b'Access-Control-Allow-Methods': b'POST, OPTIONS',
                     b'Access-Control-Allow-Headers': b'Content-Type',
                     b'Access-Control-Max-Age': b'86400'
+                })))
+            return
+
+        if request.method != b"POST":
+            self.client.queue(memoryview(build_http_response(
+                httpStatusCodes.BAD_REQUEST, reason=b'OK', body=b'Only POST requests are allowed',
+                headers={
+                    b'Access-Control-Allow-Origin': b'*',
                 })))
             return
 
