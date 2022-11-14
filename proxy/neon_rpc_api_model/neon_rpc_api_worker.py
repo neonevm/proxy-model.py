@@ -40,7 +40,7 @@ class NeonRpcApiWorker:
     def __init__(self, config: Config):
         self._config = config
         self._solana = SolInteractor(self._config, self._config.solana_url)
-        self._db = IndexerDB()
+        self._db = IndexerDB(config)
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price_value: Optional[MPGasPriceResult] = None

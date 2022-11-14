@@ -105,6 +105,7 @@ services:
       LOG_FULL_OBJECT_INFO: "NO"
       EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
       RUST_BACKTRACE: ${RUST_BACKTRACE:-0}
+      GENESIS_BLOCK_TIMESTAMP: 0
       # An example of HashiCorp configuration, operator key in base64 lies in the secret_key field
       #   vault kv put -mount=secret neon-proxy/operator-key-2 secret_key=bdSWJ+WwVWdk2XMoxX25monC....A7g+IyA==
 #      HVAC_URL: http://vault:8200
@@ -210,6 +211,7 @@ services:
       LOG_FULL_OBJECT_INFO: "NO"
       CONFIG: ci
       EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
+      GENESIS_BLOCK_TIMESTAMP: 0
     hostname: indexer
     depends_on:
       solana:
