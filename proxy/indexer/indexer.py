@@ -47,6 +47,7 @@ class Indexer(IndexerBase):
 
         self._counted_logger = MetricsToLogger()
         self._stat_client = IndexerStatClient(config)
+        self._stat_client.start()
         self._last_stat_time = 0.0
 
         sol_tx_meta_dict = SolTxMetaDict()

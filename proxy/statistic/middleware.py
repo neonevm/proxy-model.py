@@ -3,27 +3,48 @@ from __future__ import annotations
 import asyncio
 import abc
 import threading
+import time
+import math
 
-from typing import Any, Tuple, Optional
+from typing import Tuple, Optional
 from multiprocessing import Process
 
 from aioprometheus.service import Service, Registry
 
 from logged_groups import logged_group
 from neon_py.network import IPickableDataServerUser, AddrPickableDataSrv, AddrPickableDataClient
+from neon_py.network.pickable_data_server import encode_pickable
 
 from ..common_neon.config import Config
 
 
+class StatDataSrv(AddrPickableDataSrv):
+    async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        while True:
+            try:
+                self.debug("Got incoming connection. Waiting for pickable data")
+                data = await self._recv_pickable_data(reader)
+                await self._user.on_data_received(data)
+            except ConnectionResetError as err:
+                self.warning(f"Connection reset error: {err}")
+                break
+            except asyncio.exceptions.IncompleteReadError as err:
+                self.error(f"Incomplete read error: {err}")
+                break
+            except Exception as err:
+                self.error(f"Failed to receive data err: {err}")
+                break
+
+
 @logged_group("neon.Statistic")
 class StatMiddlewareServer(IPickableDataServerUser):
-    _stat_middleware_address = ('0.0.0.0', 9093)
+    _stat_address = ('0.0.0.0', 9093)
 
     def __init__(self, stat_exporter: StatService):
-        self._stat_srv = AddrPickableDataSrv(user=self, address=self._stat_middleware_address)
+        self._stat_srv = StatDataSrv(user=self, address=self._stat_address)
         self._stat_exporter = stat_exporter
 
-    async def on_data_received(self, data: Tuple[str, ...]) -> Any:
+    async def on_data_received(self, data: Tuple[str, ...]) -> None:
         try:
             if hasattr(self._stat_exporter, data[0]):
                 m = getattr(self._stat_exporter, data[0])
@@ -79,18 +100,23 @@ class StatService(abc.ABC):
 
 
 def stat_method(method):
-    def wrapper(self, *args):
-        if not self._enabled:
+    def wrapper(self: StatClient, *args):
+        if not self._is_enabled:
             return
 
-        if self._stat_mng_client is None:
+        if (not self._is_connected()) and (not self._is_time_for_connect()):
             return
 
-        with self._middleware_conn_lock:
+        with self._conn_lock:
             try:
-                self._stat_mng_client.send_data((method.__name__, *args))
-            except (InterruptedError, Exception) as err:
-                self.error(f'Failed to transfer data', exc_info=err)
+                self._connect_middleware()
+                if not self._is_connected():
+                    return
+
+                payload: bytes = encode_pickable((method.__name__, *args), self)
+                self._stat_mng_client._client_sock.sendall(payload)
+            except (InterruptedError, Exception) as exc:
+                self.error(f'Failed to transfer data', exc_info=exc)
                 self._reconnect_middleware()
 
     return wrapper
@@ -98,47 +124,56 @@ def stat_method(method):
 
 @logged_group("neon.Statistic")
 class StatClient:
-    _reconnect_middleware_time_sec = 1
-    _stat_middleware_address = ("127.0.0.1", 9093)
+    _reconnect_time_sec = 1
+    _stat_address = ("127.0.0.1", 9093)
 
     def __init__(self, config: Config):
         self.info(f'Init statistic middleware client, enabled: {config.gather_statistics}')
-        self._enabled = config.gather_statistics
-        if not self._enabled:
+        self._is_enabled = config.gather_statistics
+        if not self._is_enabled:
             return
 
         self._stat_mng_client: Optional[AddrPickableDataClient] = None
-        self._middleware_conn_lock = threading.Lock()
-        self._is_connecting = threading.Event()
-        self._connect_middleware()
+        self._conn_lock = threading.Lock()
+        self._last_connect_time_sec = 0
+
+    @staticmethod
+    def _current_time() -> int:
+        return math.ceil(time.time())
+
+    def _is_connected(self) -> bool:
+        return self._stat_mng_client is not None
+
+    def _is_time_for_connect(self) -> bool:
+        if self._is_connected():
+            return False
+
+        now = self._current_time()
+        if abs(self._last_connect_time_sec - now) > self._reconnect_time_sec:
+            return False
+
+        self._last_connect_time_sec = now
+        return True
+
+    def start(self) -> None:
+        if self._is_enabled:
+            self._connect_middleware()
 
     def _reconnect_middleware(self):
-        if self._is_connecting.is_set():
-            return
-
-        self._is_connecting.set()
         self.debug(f'Reconnecting statistic middleware server in: {self._reconnect_middleware_time_sec} sec')
-        threading.Timer(self._reconnect_middleware_time_sec, self._connect_middleware).start()
+        self._stat_mng_client: Optional[AddrPickableDataClient] = None
 
-    def _connect_middleware(self):
+    def _connect_middleware(self) -> bool:
+        if self._is_connected():
+            return True
+
         try:
-            self.debug(f'Connect statistic middleware server: {self._stat_middleware_address}')
-            self._stat_mng_client = AddrPickableDataClient(self._stat_middleware_address)
-        except ConnectionRefusedError:
-            self._is_connecting.clear()
-            self._reconnect_middleware()
+            self.debug(f'Connect statistic middleware server: {self._stat_address}')
+            self._stat_mng_client = AddrPickableDataClient(self._stat_address)
+            return True
         except BaseException as exc:
             if not isinstance(exc, ConnectionRefusedError):
-                self.error(
-                    f'Failed to connect statistic middleware server: {self._stat_middleware_address}',
-                    exc_info=exc
-                )
+                self.error(f'Failed to connect statistic middleware server: {self._stat_address}', exc_info=exc)
             else:
-                self.debug(
-                    f'Failed to connect statistic middleware server: {self._stat_middleware_address}, '
-                    f'error: {str(exc)}'
-                )
-            self._is_connecting.clear()
-            self._reconnect_middleware()
-        finally:
-            self._is_connecting.clear()
+                self.debug(f'Failed to connect statistic middleware server: {self._stat_address}, error: {str(exc)}')
+            return False
