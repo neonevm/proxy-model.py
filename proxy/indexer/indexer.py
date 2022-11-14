@@ -35,7 +35,7 @@ from ..indexer.utils import MetricsToLogger
 class Indexer(IndexerBase):
     def __init__(self, config: Config):
         solana = SolInteractor(config, config.solana_url)
-        self._db = IndexerDB()
+        self._db = IndexerDB(config)
         last_known_slot = self._db.get_min_receipt_block_slot()
         super().__init__(config, solana, last_known_slot)
 
