@@ -31,30 +31,43 @@ class SolBlocksDB(BaseDB):
         return block_hash or self._generate_fake_block_hash(block_slot)
 
     def _generate_fake_block_time(self, block_slot: int) -> int:
-        # Search nearest block before requested block
-        query = f"select block_slot, block_time from solana_blocks where block_slot <= {block_slot} order by block_slot desc limit 1;"
-        with self._conn.cursor() as cursor:
-            cursor.execute(query)
-            entry = cursor.fetchone()
+        # Search the nearest block before requested block
+        request = f'''
+           (SELECT block_slot AS b_block_slot,
+                   block_time AS b_block_time,
+                   NULL AS n_block_slot,
+                   NULL AS n_block_time
+              FROM {self._table_name}
+             WHERE block_slot <= %s
+          ORDER BY block_slot DESC LIMIT 1)
 
-        if entry:
-            nearest_block_slot = entry[0]
-            nearest_block_time = entry[1]
+          UNION DISTINCT
+
+          (SELECT NULL AS b_block_slot,
+                  NULL AS b_block_time,
+                  block_slot AS n_block_slot,
+                  block_time AS n_block_time
+              FROM {self._table_name}
+             WHERE block_slot >= %s
+          ORDER BY block_slot LIMIT 1)
+        '''
+
+        with self._conn.cursor() as cursor:
+            cursor.execute(request, (block_slot, block_slot))
+            value_list = cursor.fetchone()
+
+        if value_list is None:
+            self.warning(f'Failed to get nearest blocks for block {block_slot}. Calculate based on genesis')
+            return math.ceil(block_slot * 0.4) + self._config.genesis_timestamp
+
+        nearest_block_slot = value_list[0]
+        if nearest_block_slot is not None:
+            nearest_block_time = value_list[1]
             return nearest_block_time + math.ceil((block_slot - nearest_block_slot) * 0.4)
-    
-        # Search nearest block after requested block
-        query = f"select block_slot, block_time from solana_blocks where block_slot >= {block_slot} order by block_slot limit 1;"
-        with self._conn.cursor() as cursor:
-            cursor.execute(query)
-            entry = cursor.fetchone()
 
-        if entry:
-            nearest_block_slot = entry[0]
-            nearest_block_time = entry[1]
-            return nearest_block_time - math.ceil((nearest_block_slot - block_slot) * 0.4)
-
-        self.warning(f'Failed to get nearest blocks for block {block_slot}. Calculate based on genesis')
-        return math.ceil(block_slot * 0.4) + self._config.genesis_timestamp
+        nearest_block_slot = value_list[2]
+        nearest_block_time = value_list[3]
+        return nearest_block_time - math.ceil((nearest_block_slot - block_slot) * 0.4)
 
     def _check_block_time(self, block_slot: int, block_time: Optional[int]) -> int:
         return block_time or self._generate_fake_block_time(block_slot)

@@ -153,7 +153,7 @@ class _NeonLogDecoder:
         bs = base64.b64decode(data_list[0])
         gas_used = int.from_bytes(bs, "little")
 
-        return NeonLogTxReturn(gas_used=gas_used, status=1, return_value=bytes())
+        return NeonLogTxReturn(gas_used=gas_used, status=0, return_value=bytes())
 
     def _decode_neon_tx_ix(self, data_list: List[str]) -> Optional[NeonLogTxIx]:
         """Extracts gas_used of the """
