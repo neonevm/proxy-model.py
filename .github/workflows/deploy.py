@@ -367,7 +367,7 @@ def run_test(file_name):
     click.echo(test_logs)
     errors_count = 0
     for line in test_logs.split('\n'):
-        if re.match(r"FAILED \(errors=\d+\)", line):
+        if re.match(r"FAILED \(.+=\d+", line):
             errors_count += int(re.search(r"\d+", line).group(0))
     return errors_count
 

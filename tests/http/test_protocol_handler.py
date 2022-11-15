@@ -16,12 +16,10 @@ from typing import cast
 from unittest import mock
 
 from proxy.common.version import __version__
-from proxy.common.flags import Flags
 from proxy.common.utils import bytes_
 from proxy.common.constants import CRLF
 from proxy.core.connection import TcpClientConnection
 from proxy.http.parser import HttpParser
-from proxy.http.proxy import HttpProxyPlugin
 from proxy.http.parser import httpParserStates, httpParserTypes
 from proxy.http.exception import ProxyAuthenticationFailed, ProxyConnectionFailed
 from proxy.http.handler import HttpProtocolHandler

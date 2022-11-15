@@ -100,12 +100,3 @@ class Work(ABC, Generic[T]):
             publisher_id: Optional[str] = None,
     ) -> None:
         """Convenience method provided to publish events into the global event queue."""
-        if not self.flags.enable_events:
-            return
-        assert self.event_queue
-        self.event_queue.publish(
-            self.uid,
-            event_name,
-            event_payload,
-            publisher_id,
-        )

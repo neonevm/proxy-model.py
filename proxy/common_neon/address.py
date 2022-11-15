@@ -24,7 +24,7 @@ class NeonAddress:
     @staticmethod
     def random() -> NeonAddress:
         letters = '0123456789abcdef'
-        data = bytearray.fromhex(''.join([random.choice(letters) for _ in range(32)]))
+        data = bytearray.fromhex(''.join([random.choice(letters) for _ in range(64)]))
         pk = neon_keys.PrivateKey(data)
         return NeonAddress(pk.public_key.to_canonical_address(), pk)
 
