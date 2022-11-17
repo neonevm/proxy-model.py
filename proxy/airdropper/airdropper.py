@@ -1,10 +1,10 @@
 import requests
 import base58
+import logging
 import psycopg2.extensions
 
 from datetime import datetime
 from decimal import Decimal
-from logged_groups import logged_group
 
 from ..common_neon.config import Config
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
@@ -18,6 +18,9 @@ from ..indexer.pythnetwork import PythNetworkClient
 from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
 from ..indexer.sql_dict import SQLDict
+
+
+LOG = logging.getLogger(__name__)
 
 EVM_LOADER_CREATE_ACC           = 0x28
 SPL_TOKEN_APPROVE               = 0x04
@@ -64,11 +67,10 @@ class AirdropReadySet(BaseDB):
             return cur.fetchone() is not None
 
 
-@logged_group("neon.Airdropper")
 class Airdropper(IndexerBase):
     def __init__(self,
                  config: Config,
-                 faucet_url = '',
+                 faucet_url='',
                  wrapper_whitelist = 'ANY',
                  max_conf = 0.1): # maximum confidence interval deviation related to price
         self._constants = SQLDict(tablename="constants")
@@ -117,7 +119,7 @@ class Airdropper(IndexerBase):
                 self.pyth_client.update_mapping(self._config.pyth_mapping_account)
                 self.last_update_pyth_mapping = current_time
             except BaseException as exc:
-                self.error('Failed to update pyth.network mapping account data', exc_info=exc)
+                LOG.error('Failed to update pyth.network mapping account data', exc_info=exc)
                 return False
 
         return True
@@ -138,7 +140,7 @@ class Airdropper(IndexerBase):
         try:
             tx = NeonTx.from_string(data[5:])
         except (Exception, ):
-            self.debug('bad transaction')
+            LOG.debug('bad transaction')
             return False
 
         caller = bytes.fromhex(tx.sender())
@@ -149,26 +151,26 @@ class Airdropper(IndexerBase):
 
         created_account = base58.b58decode(create_acc['data'])[1:][:20]
         if created_account != target_neon_acc:
-            self.debug(f"Created account {created_account.hex()} and target {target_neon_acc.hex()} are different")
+            LOG.debug(f"Created account {created_account.hex()} and target {target_neon_acc.hex()} are different")
             return False
 
         sol_caller, _ = SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, caller], self._config.evm_loader_id)
         if SolPubKey(account_keys[approve['accounts'][1]]) != sol_caller:
-            self.debug(f"account_keys[approve['accounts'][1]] != sol_caller")
+            LOG.debug(f"account_keys[approve['accounts'][1]] != sol_caller")
             return False
 
         # CreateERC20TokenAccount instruction must use ERC20-wrapper from whitelist
         if not self.is_allowed_wrapper_contract("0x" + erc20.hex()):
-            self.debug(f"{erc20.hex()} Is not whitelisted ERC20 contract")
+            LOG.debug(f"{erc20.hex()} Is not whitelisted ERC20 contract")
             return False
 
         if method_id != CLAIM_TO_METHOD_ID:
-            self.debug(f'bad method: {method_id}')
+            LOG.debug(f'bad method: {method_id}')
             return False
 
         claim_key = base58.b58decode(account_keys[approve['accounts'][0]])
         if claim_key != source_token:
-            self.debug(f"Claim token account {claim_key.hex()} != approve token account {source_token.hex()}")
+            LOG.debug(f"Claim token account {claim_key.hex()} != approve token account {source_token.hex()}")
             return False
 
         return True
@@ -183,17 +185,17 @@ class Airdropper(IndexerBase):
         transfer_target_acc = account_keys[transfer_instr['accounts'][1]]
 
         if created_account != transfer_target_acc:
-            self.debug(f"created_account [{created_account}] != transfer_target_acc [{transfer_target_acc}]")
+            LOG.debug(f"created_account [{created_account}] != transfer_target_acc [{transfer_target_acc}]")
             return False
 
         return True
 
     def airdrop_to(self, eth_address, airdrop_galans):
-        self.info(f"Airdrop {airdrop_galans} Galans to address: {eth_address}")
-        json_data = { 'wallet': eth_address, 'amount': airdrop_galans }
+        LOG.info(f"Airdrop {airdrop_galans} Galans to address: {eth_address}")
+        json_data = {'wallet': eth_address, 'amount': airdrop_galans}
         resp = self.session.post(self.faucet_url + '/request_neon_in_galans', json=json_data)
         if not resp.ok:
-            self.warning(f'Failed to airdrop: {resp.status_code}')
+            LOG.warning(f'Failed to airdrop: {resp.status_code}')
             return False
 
         return True
@@ -202,7 +204,7 @@ class Airdropper(IndexerBase):
         if check_error(trx):
             return
 
-        self.debug(f"Processing transaction: {trx}")
+        LOG.debug(f"Processing transaction: {trx}")
 
         # helper function finding all instructions that satisfies predicate
         def find_instructions(instructions, predicate):
@@ -216,7 +218,7 @@ class Airdropper(IndexerBase):
                     break
 
             if inner_instructions is None:
-                self.debug(f'Inner instructions for instruction {instr_idx} not found')
+                LOG.debug(f'Inner instructions for instruction {instr_idx} not found')
                 return []
 
             return [instruction for instruction in inner_instructions if predicate(instruction)]
@@ -242,40 +244,40 @@ class Airdropper(IndexerBase):
         # First: select all instructions that can form such chains
         predicate = lambda instr: isRequiredInstruction(instr, self._config.evm_loader_id, EVM_LOADER_CREATE_ACC)
         create_acc_list = find_instructions(instructions, predicate)
-        self.debug(f'create_acc_list: {create_acc_list}')
+        LOG.debug(f'create_acc_list: {create_acc_list}')
 
         predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SPL_TOKEN_APPROVE)
         approve_list = find_instructions(instructions, predicate)
-        self.debug(f'approve_list: {approve_list}')
+        LOG.debug(f'approve_list: {approve_list}')
 
         predicate = lambda  instr: isRequiredInstruction(instr, self._config.evm_loader_id, EVM_LOADER_CALL_FROM_RAW_TRX)
         call_list = find_instructions(instructions, predicate)
-        self.debug(f'call_list: {call_list}')
+        LOG.debug(f'call_list: {call_list}')
 
         # Second: Find exact chains of instructions in sets created previously
         for create_acc_idx, create_acc in create_acc_list:
-            self.debug(f"Processing create_acc[{create_acc_idx}]")
+            LOG.debug(f"Processing create_acc[{create_acc_idx}]")
             for approve_idx, approve in approve_list:
-                self.debug(f"Processing approve[{approve_idx}]")
+                LOG.debug(f"Processing approve[{approve_idx}]")
                 for call_idx, call in call_list:
-                    self.debug(f"Processing call[{call_idx}]")
+                    LOG.debug(f"Processing call[{call_idx}]")
                     if not self.check_create_approve_call_instr(account_keys, create_acc, approve, call):
                         continue
 
                     predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SPL_TOKEN_INIT_ACC_2)
                     init_token2_list = find_inner_instructions(trx, call_idx, predicate)
 
-                    self.debug(f'init_token2_list = {init_token2_list}')
+                    LOG.debug(f'init_token2_list = {init_token2_list}')
                     if len(init_token2_list) != 1:
-                        self.debug(f"Expected exactly one inner inittoken2 instruction")
+                        LOG.debug(f"Expected exactly one inner inittoken2 instruction")
                         continue
 
                     predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SPL_TOKEN_TRANSFER)
                     token_transfer_list = find_inner_instructions(trx, call_idx, predicate)
 
-                    self.debug(f'token_transfer_list = {token_transfer_list}')
+                    LOG.debug(f'token_transfer_list = {token_transfer_list}')
                     if len(token_transfer_list) != 1:
-                        self.debug(f"expected exactly one inner transfer instruction")
+                        LOG.debug(f"expected exactly one inner transfer instruction")
                         continue
 
                     init_token2 = init_token2_list[0]
@@ -301,7 +303,7 @@ class Airdropper(IndexerBase):
             try:
                 self.recent_price = self.pyth_client.get_price('Crypto.SOL/USD')
             except BaseException as exc:
-                self.error('Exception occurred when reading price', exc_info=exc)
+                LOG.error('Exception occurred when reading price', exc_info=exc)
                 return None
 
         return self.recent_price
@@ -309,21 +311,21 @@ class Airdropper(IndexerBase):
     def get_airdrop_amount_galans(self):
         self.sol_price_usd = self.get_sol_usd_price()
         if self.sol_price_usd is None:
-            self.warning("Failed to get SOL/USD price")
+            LOG.warning("Failed to get SOL/USD price")
             return None
 
         neon_price_usd = self._config.neon_price_usd
-        self.info(f"NEON price: ${neon_price_usd}")
-        self.info(f"Price valid slot: {self.sol_price_usd['valid_slot']}")
-        self.info(f"Price confidence interval: ${self.sol_price_usd['conf']}")
-        self.info(f"SOL/USD = ${self.sol_price_usd['price']}")
+        LOG.info(f"NEON price: ${neon_price_usd}")
+        LOG.info(f"Price valid slot: {self.sol_price_usd['valid_slot']}")
+        LOG.info(f"Price confidence interval: ${self.sol_price_usd['conf']}")
+        LOG.info(f"SOL/USD = ${self.sol_price_usd['price']}")
         if self.sol_price_usd['conf'] / self.sol_price_usd['price'] > self.max_conf:
-            self.warning(f"Confidence interval too large. Airdrops will deferred.")
+            LOG.warning(f"Confidence interval too large. Airdrops will deferred.")
             return None
 
         self.airdrop_amount_usd = AIRDROP_AMOUNT_SOL * self.sol_price_usd['price']
         self.airdrop_amount_neon = self.airdrop_amount_usd / neon_price_usd
-        self.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
+        LOG.info(f"Airdrop amount: ${self.airdrop_amount_usd} ({self.airdrop_amount_neon} NEONs)\n")
         return int(self.airdrop_amount_neon * pow(Decimal(10), self._config.neon_decimals))
 
     def schedule_airdrop(self, create_acc):
@@ -331,7 +333,7 @@ class Airdropper(IndexerBase):
         if self.airdrop_ready.is_airdrop_ready(eth_address) or eth_address in self.airdrop_scheduled:
             # Target account already supplied with airdrop or airdrop already scheduled
             return
-        self.info(f'Scheduling airdrop for {eth_address}')
+        LOG.info(f'Scheduling airdrop for {eth_address}')
         self.airdrop_scheduled[eth_address] = { 'scheduled': self.get_current_time() }
 
     def process_scheduled_trxs(self):
@@ -342,7 +344,7 @@ class Airdropper(IndexerBase):
 
         airdrop_galans = self.get_airdrop_amount_galans()
         if airdrop_galans is None:
-            self.warning('Failed to estimate airdrop amount. Defer scheduled airdrops.')
+            LOG.warning('Failed to estimate airdrop amount. Defer scheduled airdrops.')
             self.failed_attempts.airdrop_failed('ALL', 'fail to estimate amount')
             return
 
@@ -367,7 +369,7 @@ class Airdropper(IndexerBase):
         Overrides IndexerBase.process_functions
         """
         IndexerBase.process_functions(self)
-        self.debug("Process receipts")
+        LOG.debug("Process receipts")
         self.process_receipts()
         self.process_scheduled_trxs()
 

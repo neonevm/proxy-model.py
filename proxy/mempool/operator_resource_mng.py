@@ -3,11 +3,10 @@ from __future__ import annotations
 import math
 import dataclasses
 
+import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Deque, Set, Union, cast
 from collections import deque
-
-from logged_groups import logged_group
 
 from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
 from .neon_tx_stages import NeonTxStage
@@ -26,6 +25,9 @@ from ..mempool.mempool_api import OpResIdent
 
 from ..statistic.data import NeonOpResStatData
 from ..statistic.proxy_client import ProxyStatClient
+
+
+LOG = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -61,14 +63,13 @@ class OpResInfo:
         return self.signer.secret_key
 
 
-@logged_group("neon.MemPool")
 class OpResInit:
     def __init__(self, config: Config, solana: SolInteractor):
         self._config = config
         self._solana = solana
 
     def init_resource(self, resource: OpResInfo):
-        self.debug(f'Rechecking of accounts for resource {resource}')
+        LOG.debug(f'Rechecking of accounts for resource {resource}')
 
         try:
             self._validate_operator_balance(resource)
@@ -79,7 +80,7 @@ class OpResInit:
         except BadResourceError:
             raise
         except BaseException as exc:
-            self.error(f'Fail to init accounts for resource {resource}.', exc_info=exc)
+            LOG.error(f'Fail to init accounts for resource {resource}.', exc_info=exc)
             raise BadResourceError(exc)
 
     def _validate_operator_balance(self, resource: OpResInfo) -> None:
@@ -87,7 +88,7 @@ class OpResInit:
         sol_balance = self._solana.get_sol_balance(resource.public_key)
         min_operator_balance_to_err = self._config.min_operator_balance_to_err
         if sol_balance <= min_operator_balance_to_err:
-            self.error(
+            LOG.error(
                 f'Operator account {resource} has NOT enough SOLs; balance = {sol_balance}; ' +
                 f'min_operator_balance_to_err = {min_operator_balance_to_err}'
             )
@@ -95,7 +96,7 @@ class OpResInit:
 
         min_operator_balance_to_warn = self._config.min_operator_balance_to_warn
         if sol_balance <= min_operator_balance_to_warn:
-            self.warning(
+            LOG.warning(
                 f'Operator account {resource} SOLs are running out; balance = {sol_balance}; ' +
                 f'min_operator_balance_to_warn = {min_operator_balance_to_warn}; ' +
                 f'min_operator_balance_to_err = {min_operator_balance_to_err}; '
@@ -111,10 +112,10 @@ class OpResInit:
 
         account_info = self._solana.get_account_info(solana_address)
         if account_info is not None:
-            self.debug(f"Use neon account {str(solana_address)}({str(resource.neon_address)}) for resource {resource}")
+            LOG.debug(f"Use neon account {str(solana_address)}({str(resource.neon_address)}) for resource {resource}")
             return []
 
-        self.debug(f"Create neon account {str(solana_address)}({str(resource.neon_address)}) for resource {resource}")
+        LOG.debug(f"Create neon account {str(solana_address)}({str(resource.neon_address)}) for resource {resource}")
         stage = NeonCreateAccountTxStage(builder, {"address": resource.neon_address})
         stage.set_balance(self._solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0])
         self._execute_stage(stage, resource)
@@ -126,21 +127,21 @@ class OpResInit:
         balance = self._solana.get_multiple_rent_exempt_balances_for_size([size])[0]
 
         if holder_info is None:
-            self.debug(f"Create account {holder_address} for resource {resource}")
+            LOG.debug(f"Create account {holder_address} for resource {resource}")
             self._execute_stage(NeonCreateHolderAccountStage(builder, resource.holder_seed, size, balance), resource)
         elif holder_info.lamports < balance:
-            self.debug(f"Resize account {holder_address} for resource {resource}")
+            LOG.debug(f"Resize account {holder_address} for resource {resource}")
             self._recreate_holder(builder, resource, balance)
         elif holder_info.owner != self._config.evm_loader_id:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
         elif holder_info.tag == ACTIVE_HOLDER_TAG:
-            self.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
+            LOG.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
             self._unlock_storage_account(resource)
         elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG):
-            self.debug(f"Wrong tag {holder_info.tag} of {holder_address} for resource {resource}")
+            LOG.debug(f"Wrong tag {holder_info.tag} of {holder_address} for resource {resource}")
             self._recreate_holder(builder, resource, size)
         else:
-            self.debug(f"Use account {str(holder_info.owner)} for resource {resource}")
+            LOG.debug(f"Use account {str(holder_info.owner)} for resource {resource}")
 
     def _recreate_holder(self, builder: NeonIxBuilder, resource: OpResInfo, balance: int) -> None:
         size = self._config.holder_size
@@ -204,7 +205,6 @@ class OpResIdentListBuilder:
         return list(ident_set)
 
 
-@logged_group("neon.MemPool")
 class OpResMng:
     def __init__(self, config: Config, stat_client: ProxyStatClient):
         self._secret_list: List[bytes] = []
@@ -225,7 +225,7 @@ class OpResMng:
         add_ident_set: Set[OpResIdent] = new_ident_set.difference(self._res_ident_set)
 
         if (len(rm_ident_set) == 0) and (len(add_ident_set) == 0):
-            self.debug(f'Same resource list')
+            LOG.debug(f'Same resource list')
             return
 
         self._res_ident_set = new_ident_set
@@ -234,15 +234,15 @@ class OpResMng:
         self._checked_res_ident_set = {res for res in self._checked_res_ident_set if res not in rm_ident_set}
 
         for res in rm_ident_set:
-            self.debug(f'Remove resource {res}')
+            LOG.debug(f'Remove resource {res}')
         for res in add_ident_set:
-            self.debug(f'Add resource {res}')
+            LOG.debug(f'Add resource {res}')
             self._disabled_res_ident_list.append(res)
 
         self._secret_list: List[bytes] = [pk for pk in {res.private_key for res in self._res_ident_set}]
 
         if old_res_cnt != self.resource_cnt != 0:
-            self.debug(f'Change number of resources from {old_res_cnt} to {self.resource_cnt}')
+            LOG.debug(f'Change number of resources from {old_res_cnt} to {self.resource_cnt}')
         self._commit_stat()
 
     @property
@@ -256,14 +256,14 @@ class OpResMng:
     def _get_resource_impl(self, neon_sig: str) -> Optional[OpResUsedTime]:
         res_used_time = self._used_res_ident_dict.get(neon_sig, None)
         if res_used_time is not None:
-            self.debug(f'Reuse resource {res_used_time} for tx {neon_sig}')
+            LOG.debug(f'Reuse resource {res_used_time} for tx {neon_sig}')
             return res_used_time
 
         if len(self._free_res_ident_list) > 0:
             res_used_time = self._free_res_ident_list.popleft()
             self._used_res_ident_dict[neon_sig] = res_used_time
             res_used_time.set_neon_sig(neon_sig)
-            self.debug(f'Use resource {res_used_time} for tx {neon_sig}')
+            LOG.debug(f'Use resource {res_used_time} for tx {neon_sig}')
             self._commit_stat()
             return res_used_time
 
@@ -272,7 +272,7 @@ class OpResMng:
     def _pop_used_resource(self, neon_sig: str) -> Optional[OpResUsedTime]:
         res_used_time = self._used_res_ident_dict.pop(neon_sig, None)
         if (res_used_time is None) or (res_used_time.ident not in self._res_ident_set):
-            self.debug(f'Skip resource {str(res_used_time)} for tx {neon_sig}')
+            LOG.debug(f'Skip resource {str(res_used_time)} for tx {neon_sig}')
             return None
 
         self._commit_stat()
@@ -293,7 +293,7 @@ class OpResMng:
     def update_resource(self, neon_sig: str) -> None:
         res_used_time = self._used_res_ident_dict.get(neon_sig, None)
         if res_used_time is not None:
-            self.debug(f'Update time for resource {res_used_time}')
+            LOG.debug(f'Update time for resource {res_used_time}')
             now = self._get_current_time()
             res_used_time.set_last_used_time(now)
 
@@ -304,10 +304,10 @@ class OpResMng:
 
         recheck_cnt = self._config.recheck_resource_after_uses_cnt
         if res_used_time.used_cnt > recheck_cnt:
-            self.debug(f'Recheck resource {res_used_time} by counter')
+            LOG.debug(f'Recheck resource {res_used_time} by counter')
             self._disabled_res_ident_list.append(res_used_time.ident)
         else:
-            self.debug(f'Release resource {res_used_time}')
+            LOG.debug(f'Release resource {res_used_time}')
             self._free_res_ident_list.append(res_used_time)
         self._commit_stat()
 
@@ -318,17 +318,17 @@ class OpResMng:
             return
 
         ident = cast(OpResIdent, ident_or_sig)
-        self.debug(f'Disable resource {ident}')
+        LOG.debug(f'Disable resource {ident}')
         self._checked_res_ident_set.discard(ident)
         self._disabled_res_ident_list.append(ident)
         self._commit_stat()
 
     def enable_resource(self, ident: OpResIdent) -> None:
         if ident not in self._res_ident_set:
-            self.debug(f'Skip resource {ident}')
+            LOG.debug(f'Skip resource {ident}')
             return
 
-        self.debug(f'Enable resource {ident}')
+        LOG.debug(f'Enable resource {ident}')
         self._checked_res_ident_set.discard(ident)
         self._free_res_ident_list.append(OpResUsedTime(ident=ident))
         self._commit_stat()
@@ -347,14 +347,14 @@ class OpResMng:
                 if res_used_time.last_used_time < check_time:
                     res_used_time = self._pop_used_resource(neon_sig)
                     if res_used_time is not None:
-                        self.debug(f'Recheck resource {res_used_time} by time usage')
+                        LOG.debug(f'Recheck resource {res_used_time} by time usage')
                         self._disabled_res_ident_list.append(res_used_time.ident)
 
         if len(self._disabled_res_ident_list) == 0:
             return None
 
         ident = self._disabled_res_ident_list.popleft()
-        self.debug(f'Recheck resource {ident}')
+        LOG.debug(f'Recheck resource {ident}')
         self._checked_res_ident_set.add(ident)
 
         self._commit_stat()

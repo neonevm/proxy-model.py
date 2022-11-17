@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+import logging
 from typing import Dict, Any
-
-from logged_groups import logged_group
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
@@ -16,7 +15,9 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 
 
-@logged_group("neon.Proxy")
+LOG = logging.getLogger(__name__)
+
+
 class NeonTxValidator:
     max_u64 = 2 ** 64 - 1
     max_u256 = 2 ** 256 - 1

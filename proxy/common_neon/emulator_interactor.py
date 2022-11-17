@@ -1,8 +1,7 @@
 import json
 import subprocess
-
+import logging
 from typing import Optional, Dict, Any
-from logged_groups import logged_group
 
 from ..common_neon.data import NeonEmulatedResult
 from ..common_neon.environment_utils import NeonCli
@@ -12,7 +11,9 @@ from ..common_neon.elf_params import ElfParams
 from ..common_neon.eth_proto import NeonTx
 
 
-@logged_group("neon.Proxy")
+LOG = logging.getLogger(__name__)
+
+
 def call_emulated(config: Config, contract_id, caller_id, data=None, value=None, *, logger) -> NeonEmulatedResult:
     output = emulator(config, contract_id, caller_id, data, value)
     logger.debug(
@@ -23,7 +24,6 @@ def call_emulated(config: Config, contract_id, caller_id, data=None, value=None,
     return result
 
 
-@logged_group("neon.Proxy")
 def call_tx_emulated(config: Config, neon_tx: NeonTx, *, logger) -> NeonEmulatedResult:
     neon_sender_acc = neon_tx.sender()
     contract = neon_tx.contract()
@@ -40,7 +40,6 @@ def call_tx_emulated(config: Config, neon_tx: NeonTx, *, logger) -> NeonEmulated
     return emulator_json
 
 
-@logged_group("neon.Proxy")
 def check_emulated_exit_status(result: Dict[str, Any], *, logger):
     exit_status = result['exit_status']
     if exit_status == 'revert':
@@ -97,7 +96,6 @@ def decode_fatal_message(reason: str) -> Optional[str]:
     return fatal_dict.get(reason)
 
 
-@logged_group("neon.Proxy")
 def decode_revert_message(data: str, *, logger) -> Optional[str]:
     data_len = len(data)
     if data_len == 0:
@@ -160,7 +158,6 @@ class StorageErrorParser(BaseNeonCliErrorParser):
         return f'error on reading storage of contract: {self._msg}', self._code
 
 
-@logged_group("neon.Proxy")
 class ProgramErrorParser(BaseNeonCliErrorParser):
     def __init__(self, msg: str):
         BaseNeonCliErrorParser.__init__(self, msg)
@@ -285,7 +282,7 @@ class NeonCliErrorParser:
     }
 
     def execute(self, caption: str, err: subprocess.CalledProcessError) -> (str, int):
-        parser = self.ERROR_PARSER_DICT.get(err.returncode)
+        parser = LOG.ERROR_PARSER_DICT.get(err.returncode)
         if not parser:
             return f'Unknown {caption} error: {err.returncode}', 3
         return parser.execute(err)

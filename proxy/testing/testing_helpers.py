@@ -164,10 +164,10 @@ class test_timeout:
         if error_message is None:
             error_message = 'test timed out after {}s.'.format(seconds)
         self.seconds = seconds
-        self.error_message = error_message
+        LOG.error_message = error_message
 
     def handle_timeout(self, signum, frame):
-        raise TestTimeout(self.error_message)
+        raise TestTimeout(LOG.error_message)
 
     def __enter__(self):
         signal.signal(signal.SIGALRM, self.handle_timeout)

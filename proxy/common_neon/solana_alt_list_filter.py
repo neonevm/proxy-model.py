@@ -1,13 +1,14 @@
+import logging
 from typing import Set, List, Tuple
-
-from logged_groups import logged_group
 
 from ..common_neon.errors import ALTError
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.solana_tx_legacy import SolLegacyMsg
 
 
-@logged_group('neon.Proxy')
+LOG = logging.getLogger(__name__)
+
+
 class ALTListFilter:
     _max_required_sig_cnt = 19
     _max_tx_account_cnt = 27

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import threading
-
+import logging
 from typing import Callable, Optional, Dict, Any, Union
-from logged_groups import logged_group
+
 from neon_py.network import AddrPickableDataClient
 
 from .mempool_api import MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPTxRequest
@@ -12,6 +12,9 @@ from .mempool_api import MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPen
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import NeonTx
+
+
+LOG = logging.getLogger(__name__)
 
 
 def _guard_conn(method: Callable) -> Callable:
@@ -27,18 +30,17 @@ def _reconnecting(method: Callable) -> Callable:
         try:
             return method(self, *args, **kwargs)
         except (InterruptedError, Exception) as err:
-            self.error(f"Failed to transfer data, unexpected err: {err}")
+            LOG.error(f"Failed to transfer data, unexpected err: {err}")
             self._reconnect_mp()
             raise
     return wrapper
 
 
-@logged_group("neon.Proxy")
 class MemPoolClient:
     _reconnect_mp_time_sec = 1
 
     def __init__(self, address):
-        self.debug("Init MemPoolClient")
+        LOG.debug("Init MemPoolClient")
         self._mp_conn_lock = threading.Lock()
         self._address = address
         self._is_connecting = threading.Event()
@@ -48,16 +50,16 @@ class MemPoolClient:
         if self._is_connecting.is_set():
             return
         self._is_connecting.set()
-        self.debug(f"Reconnecting MemPool in: {self._reconnect_mp_time_sec} sec")
+        LOG.debug(f"Reconnecting MemPool in: {self._reconnect_mp_time_sec} sec")
         threading.Timer(self._reconnect_mp_time_sec, self._connect_mp).start()
 
     @_guard_conn
     def _connect_mp(self):
         try:
-            self.debug(f"Connect MemPool: {self._address}")
+            LOG.debug(f"Connect MemPool: {self._address}")
             self._pickable_data_client = AddrPickableDataClient(self._address)
         except BaseException as exc:
-            self.error(f'Failed to connect MemPool: {self._address}.', exc_info=exc)
+            LOG.error(f'Failed to connect MemPool: {self._address}.', exc_info=exc)
             self._is_connecting.clear()
             self._reconnect_mp()
         finally:

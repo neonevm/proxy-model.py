@@ -1,21 +1,24 @@
 import asyncio
 import dataclasses
 import socket
-
+import logging
 from abc import ABC, abstractmethod
 from collections import deque
 from typing import Dict, Tuple, Deque, Set
 
-from logged_groups import logged_group, logging_context
 from neon_py.network import PipePickableDataClient
 
 from .mempool_api import MPRequest, MPTask
 from .mempool_executor import MPExecutor
 
 from ..common_neon.config import Config
+from ..common_neon.utils.json_logger import logging_context
 
 from ..statistic.data import NeonExecutorStatData
 from ..statistic.proxy_client import ProxyStatClient
+
+
+LOG = logging.getLogger(__name__)
 
 
 class MPExecutorClient(PipePickableDataClient):
@@ -29,7 +32,6 @@ class IMPExecutorMngUser(ABC):
         assert False
 
 
-@logged_group("neon.MemPool")
 class MPExecutorMng:
     @dataclasses.dataclass
     class ExecutorInfo:
@@ -56,7 +58,7 @@ class MPExecutorMng:
             return self._stop_executors(-diff_count)
 
     async def _run_executors(self, executor_count: int) -> None:
-        self.info(f"Run executors +{executor_count} => {len(self._executor_dict) + executor_count}")
+        LOG.info(f"Run executors +{executor_count} => {len(self._executor_dict) + executor_count}")
         for i in range(executor_count):
             executor_id = self._last_id
             self._last_id += 1
@@ -69,17 +71,17 @@ class MPExecutorMng:
         self._commit_stat()
 
     def _stop_executors(self, executor_count: int) -> None:
-        self.info(f"Stop executors -{executor_count} => {len(self._executor_dict) - executor_count}")
+        LOG.info(f"Stop executors -{executor_count} => {len(self._executor_dict) - executor_count}")
         while (executor_count > 0) and self._has_available():
             executor_id, _ = self._get_executor()
-            self.debug(f"Stop executor: {executor_id}")
+            LOG.debug(f"Stop executor: {executor_id}")
             executor_info = self._executor_dict.pop(executor_id)
             executor_info.executor.kill()
             executor_count -= 1
 
         for i in range(executor_count):
             executor_id, executor_info = self._executor_dict.popitem()
-            self.debug(f"Mark to stop executor: {executor_id}")
+            LOG.debug(f"Mark to stop executor: {executor_id}")
             self._stopped_executor_dict[executor_id] = executor_info
 
         self._commit_stat()
@@ -101,7 +103,7 @@ class MPExecutorMng:
 
     def _get_executor(self) -> Tuple[int, MPExecutorClient]:
         executor_id = self._available_executor_pool.pop()
-        self.debug(f"Acquire executor: {executor_id}")
+        LOG.debug(f"Acquire executor: {executor_id}")
         self._busy_executor_pool.add(executor_id)
         self._commit_stat()
 
@@ -111,18 +113,18 @@ class MPExecutorMng:
     def release_executor(self, executor_id: int):
         self._busy_executor_pool.remove(executor_id)
         if executor_id in self._executor_dict:
-            self.debug(f"Release executor: {executor_id}")
+            LOG.debug(f"Release executor: {executor_id}")
             self._available_executor_pool.appendleft(executor_id)
             self._user.on_executor_released(executor_id)
         else:
-            self.debug(f"Stop executor: {executor_id}")
+            LOG.debug(f"Stop executor: {executor_id}")
             executor = self._stopped_executor_dict.pop(executor_id).executor
             executor.kill()
 
         self._commit_stat()
 
     def _create_executor(self, executor_id: int) -> ExecutorInfo:
-        self.debug(f'Create executor: {executor_id}')
+        LOG.debug(f'Create executor: {executor_id}')
         client_sock, srv_sock = socket.socketpair()
         executor = MPExecutor(self._config, executor_id, srv_sock)
         client = MPExecutorClient(client_sock)

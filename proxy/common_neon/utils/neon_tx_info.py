@@ -86,4 +86,4 @@ class NeonTxInfo:
         return NeonTxInfo(sig=neon_sig)
 
     def is_valid(self):
-        return (self.addr is not None) and (self.error is None)
+        return (self.addr is not None) and (LOG.error is None)

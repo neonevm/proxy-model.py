@@ -39,5 +39,5 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
             suggested_gas_price=self._gas_price_calculator.suggested_gas_price,
             min_gas_price=self._gas_price_calculator.min_gas_price
         )
-        self.debug(f'{gas_price}')
+        LOG.debug(f'{gas_price}')
         return gas_price

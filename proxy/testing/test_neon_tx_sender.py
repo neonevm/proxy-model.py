@@ -1,6 +1,5 @@
 import unittest
 
-import logged_groups
 from typing import List
 
 from ..common_neon.config import Config
@@ -47,7 +46,6 @@ class FakeConfig(Config):
         return False
 
 
-@logged_groups.logged_group("neon.TestCases")
 class TestNeonTxSender(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

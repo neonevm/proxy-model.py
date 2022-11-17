@@ -1,6 +1,5 @@
 from typing import List, Set
-
-from logged_groups import logged_group
+import logging
 
 from ..common_neon.config import Config
 from ..common_neon.layouts import HolderAccountInfo
@@ -14,7 +13,9 @@ from ..common_neon.solana_tx_v0 import SolV0Tx
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 
-@logged_group("neon.Indexer")
+LOG = logging.getLogger(__name__)
+
+
 class CancelTxExecutor:
     def __init__(self, config: Config, solana: SolInteractor, signer: SolAccount) -> None:
         self._ix_builder = NeonIxBuilder(signer.public_key)
@@ -83,7 +84,7 @@ class CancelTxExecutor:
         try:
             tx_sender.send(self._cancel_tx_list)
         except BaseException as exc:
-            self.warning('Failed to cancel tx', exc_info=exc)
+            LOG.warning('Failed to cancel tx', exc_info=exc)
 
     def clear(self) -> None:
         self._alt_info_list.clear()

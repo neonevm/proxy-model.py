@@ -1,4 +1,4 @@
-from logged_groups import logged_group
+import logging
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.data import NeonEmulatedResult
@@ -14,7 +14,9 @@ from .neon_tx_send_simple_strategy import SimpleNeonTxStrategy, ALTSimpleNeonTxS
 from .neon_tx_sender_ctx import NeonTxSendCtx
 
 
-@logged_group("neon.MemPool")
+LOG = logging.getLogger(__name__)
+
+
 class NeonTxSendStrategyExecutor:
     _strategy_list = [
         SimpleNeonTxStrategy, ALTSimpleNeonTxStrategy,
@@ -50,9 +52,9 @@ class NeonTxSendStrategyExecutor:
             try:
                 strategy: BaseNeonTxStrategy = Strategy(self._ctx)
                 if not strategy.validate():
-                    self.debug(f'Skip strategy {Strategy.name}: {strategy.validation_error_msg}')
+                    LOG.debug(f'Skip strategy {Strategy.name}: {strategy.validation_error_msg}')
                     continue
-                self.debug(f'Use strategy {Strategy.name}')
+                LOG.debug(f'Use strategy {Strategy.name}')
 
                 for retry in range(self._ctx.config.retry_on_fail):
                     has_changes = strategy.prep_before_emulate()

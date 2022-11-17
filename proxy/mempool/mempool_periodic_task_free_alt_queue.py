@@ -81,7 +81,7 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
                 self._deactivate_alt_queue.add(alt_info)
 
         if (len(self._close_alt_queue) > 0) or (len(self._deactivate_alt_queue) > 0):
-            self.debug(
+            LOG.debug(
                 f'deactivate ALT queue: {len(self._deactivate_alt_queue)}, '
                 f'close ALT queue: {len(self._close_alt_queue)}'
             )

@@ -1,10 +1,12 @@
-from logged_groups import logged_group
+import logging
 
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 
 
-@logged_group("neon.MemPool")
+LOG = logging.getLogger(__name__)
+
+
 class MPExecutorBaseTask:
     def __init__(self, config: Config, solana: SolInteractor):
         self._config = config

@@ -60,7 +60,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
 
                     alt_info_list.append(mp_alt_info)
                 except BaseException as exc:
-                    self.error('Cannot decode ALT', exc_info=exc)
+                    LOG.error('Cannot decode ALT', exc_info=exc)
 
         block_height = self._get_block_height()
         return MPALTListResult(block_height=block_height, alt_info_list=alt_info_list)
@@ -75,7 +75,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             try:
                 tx_sender.send(tx_list)
             except BaseException as exc:
-                self.debug('Failed to execute.', exc_info=exc)
+                LOG.debug('Failed to execute.', exc_info=exc)
             tx_list.clear()
 
         tx_list: List[SolTx] = []

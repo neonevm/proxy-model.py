@@ -1,13 +1,15 @@
 import argparse
+import logging
 
 from neon_py.network import AddrPickableDataClient
 from neon_py.maintenance_api import MaintenanceCommand, MaintenanceRequest, ReplicationRequest, Peer
 from neon_py.utils import gen_unique_id
-from logged_groups import logged_group
 from typing import List
 
 
-@logged_group("neon.Maintenance")
+LOG = logging.getLogger(__name__)
+
+
 class MaintenanceClient:
 
     def __init__(self, address):
@@ -16,16 +18,16 @@ class MaintenanceClient:
 
     def suspend(self):
         result = self._client.send_data(MaintenanceRequest(req_id=gen_unique_id(), command=MaintenanceCommand.SuspendMemPool))
-        self.info(f"The suspend command has been sent to the MemPool: {self.address}, result: {result}")
+        LOG.info(f"The suspend command has been sent to the MemPool: {self.address}, result: {result}")
 
     def resume(self):
         result = self._client.send_data(MaintenanceRequest(req_id=gen_unique_id(), command=MaintenanceCommand.ResumeMemPool))
-        self.info(f"The resume command has been sent to the MemPool: {self.address}, result: {result}")
+        LOG.info(f"The resume command has been sent to the MemPool: {self.address}, result: {result}")
 
     def replicate(self, peers: List[Peer]):
         request = ReplicationRequest(peers=peers)
         result = self._client.send_data(request)
-        self.info(f"The replicate command has been sent to the MemPool: {self.address}, result: {result}")
+        LOG.info(f"The replicate command has been sent to the MemPool: {self.address}, result: {result}")
 
 
 def main():

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 from typing import Optional, Dict
 
-from logged_groups import logged_group
 from singleton_decorator import singleton
 
 from ..common_neon.solana_tx import SolPubKey
@@ -11,8 +11,10 @@ from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.config import Config
 
 
+LOG = logging.getLogger(__name__)
+
+
 @singleton
-@logged_group("neon.Proxy")
 class ElfParams:
     def __init__(self):
         self._elf_param_dict: Dict[str, any] = {}
@@ -92,7 +94,7 @@ class ElfParams:
             major_proxy_version, minor_proxy_version, _ = proxy_version.split('.')
             return (major_evm_version == major_proxy_version) and (minor_evm_version == minor_proxy_version)
         except BaseException as exc:
-            self.error(f'Cannot compare evm version {evm_version} with proxy version {proxy_version}.', exc_info=exc)
+            LOG.error(f'Cannot compare evm version {evm_version} with proxy version {proxy_version}.', exc_info=exc)
             return False
 
     @property
@@ -101,7 +103,7 @@ class ElfParams:
 
     def read_elf_param_dict_from_net(self, config: Config) -> ElfParams:
         if not self.has_params():
-            self.debug("Read ELF params")
+            LOG.debug("Read ELF params")
         elf_param_dict: Dict[str, str] = {}
         for param in NeonCli(config).call("neon-elf-params").splitlines():
             if param.startswith('NEON_') and '=' in param:
@@ -110,7 +112,7 @@ class ElfParams:
 
         for param, value in elf_param_dict.items():
             if self._elf_param_dict.get(param) != value:
-                self.debug(f"new ELF param: {param}: {value}")
+                LOG.debug(f"new ELF param: {param}: {value}")
         self.set_elf_param_dict(elf_param_dict)
         return self
 

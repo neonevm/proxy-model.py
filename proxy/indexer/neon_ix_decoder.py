@@ -1,13 +1,14 @@
+import logging
 from typing import Any, List, Type, Optional, Iterator
-
-from logged_groups import logged_group
 
 from ..common_neon.utils import NeonTxInfo
 
 from ..indexer.indexed_objects import NeonIndexedTxInfo, NeonIndexedHolderInfo, NeonAccountInfo, SolNeonTxDecoderState
 
 
-@logged_group("neon.Indexer")
+LOG = logging.getLogger(__name__)
+
+
 class DummyIxDecoder:
     _name = 'Unknown'
     _ix_code = 0xFF
@@ -15,7 +16,7 @@ class DummyIxDecoder:
 
     def __init__(self, state: SolNeonTxDecoderState):
         self._state = state
-        self.debug(f'{self} ...')
+        LOG.debug(f'{self} ...')
 
     @classmethod
     def ix_code(cls) -> int:
@@ -41,7 +42,7 @@ class DummyIxDecoder:
         - Mark the instruction as used;
         - log the success message.
         """
-        self.debug(f'decoding success: {msg} - {indexed_obj}')
+        LOG.debug(f'decoding success: {msg} - {indexed_obj}')
         return True
 
     def _decoding_done(self, indexed_obj: Any, msg: str) -> bool:
@@ -54,12 +55,12 @@ class DummyIxDecoder:
             block.done_neon_tx(indexed_obj, ix)
         elif isinstance(indexed_obj, NeonIndexedHolderInfo):
             block.done_neon_holder(indexed_obj)
-        self.debug(f'decoding done: {msg} - {indexed_obj}')
+        LOG.debug(f'decoding done: {msg} - {indexed_obj}')
         return True
 
     def _decoding_skip(self, reason: str) -> bool:
         """Skip decoding of the instruction"""
-        self.debug(f'decoding skip: {reason}')
+        LOG.debug(f'decoding skip: {reason}')
         return False
 
     def _decoding_fail(self, indexed_obj: Any, reason: str) -> bool:
@@ -75,15 +76,15 @@ class DummyIxDecoder:
             block.fail_neon_tx(indexed_obj)
         elif isinstance(indexed_obj, NeonIndexedHolderInfo):
             block.fail_neon_holder(indexed_obj)
-        self.warning(f'decoding fail: {reason} - {indexed_obj}')
+        LOG.warning(f'decoding fail: {reason} - {indexed_obj}')
         return False
 
     def _decode_neon_tx_from_holder(self, tx: NeonIndexedTxInfo, holder: NeonIndexedHolderInfo) -> None:
         neon_tx = NeonTxInfo.from_sig_data(holder.data)
         if not neon_tx.is_valid():
-            self.warning(f'Neon tx rlp error: {neon_tx.error}')
+            LOG.warning(f'Neon tx rlp error: {neon_tx.error}')
         elif neon_tx.sig != tx.neon_tx.sig:
-            self.warning(f'Neon tx hash {neon_tx.sig} != {tx.neon_tx.sig}')
+            LOG.warning(f'Neon tx hash {neon_tx.sig} != {tx.neon_tx.sig}')
         else:
             tx.set_neon_tx(neon_tx)
             tx.set_holder_account(holder)

@@ -6,10 +6,9 @@ import itertools
 import json
 import time
 from typing import Dict, Union, Any, List, Optional, Tuple, cast
-
+import logging
 import base58
 import requests
-from logged_groups import logged_group
 
 from ..common_neon.address import NeonAddress, neon_2program
 from ..common_neon.config import Config
@@ -22,6 +21,7 @@ from ..common_neon.utils import SolanaBlockInfo
 from ..common_neon.layouts import HolderAccountInfo, AccountInfo, NeonAccountInfo, ALTAccountInfo
 
 
+LOG = logging.getLogger(__name__)
 RPCResponse = Dict[str, Any]
 
 
@@ -31,7 +31,6 @@ class SolSendResult:
     result: Optional[str]
 
 
-@logged_group("neon.Proxy")
 class SolInteractor:
     def __init__(self, config: Config, solana_url: str) -> None:
         self._config = config
@@ -59,19 +58,19 @@ class SolInteractor:
                 str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
 
                 if retry <= self._config.retry_on_fail:
-                    self.debug(
+                    LOG.debug(
                         f'Receive connection error {str_err} on connection to Solana. '
                         f'Attempt {retry + 1} to send the request to Solana node...'
                     )
                     time.sleep(1)
                     continue
 
-                self.warning(f'Connection exception on send request to Solana. Retry {retry}: {str_err}.')
+                LOG.warning(f'Connection exception on send request to Solana. Retry {retry}: {str_err}.')
                 raise SolanaUnavailableError(str_err)
 
             except BaseException as exc:
                 str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
-                self.error(f'Unknown exception on send request to Solana: {str_err}.')
+                LOG.error(f'Unknown exception on send request to Solana: {str_err}.')
                 raise
 
     def _send_rpc_request(self, method: str, *params: Any) -> RPCResponse:
@@ -111,8 +110,8 @@ class SolInteractor:
         full_response_list.sort(key=lambda r: r["id"])
 
         for request, response in itertools.zip_longest(full_request_list, full_response_list):
-            # self.debug(f'Request: {request}')
-            # self.debug(f'Response: {response}')
+            # LOG.debug(f'Request: {request}')
+            # LOG.debug(f'Response: {response}')
             if request["id"] != response["id"]:
                 raise RuntimeError(f"Invalid RPC response: request {request} response {response}")
 
@@ -149,7 +148,7 @@ class SolInteractor:
 
         error = response.get('error')
         if error:
-            self.warning(f'fail to get solana signatures: {error}')
+            LOG.warning(f'fail to get solana signatures: {error}')
 
         return response.get('result', [])
 
@@ -180,15 +179,15 @@ class SolInteractor:
             }
 
         result = self._send_rpc_request('getAccountInfo', str(pubkey), opts)
-        # self.debug(f"{json.dumps(result, sort_keys=True)}")
+        # LOG.debug(f"{json.dumps(result, sort_keys=True)}")
         error = result.get('error')
         if error is not None:
-            self.debug(f"Can't get information about account {str(pubkey)}: {error}")
+            LOG.debug(f"Can't get information about account {str(pubkey)}: {error}")
             return None
 
         raw_account = result.get('result', {}).get('value', None)
         if raw_account is None:
-            self.debug(f"Can't get information about {str(pubkey)}")
+            LOG.debug(f"Can't get information about {str(pubkey)}")
             return None
 
         return self._decode_account_info(pubkey, raw_account)
@@ -214,7 +213,7 @@ class SolInteractor:
 
             error = result.get('error', None)
             if error:
-                self.debug(f"Can't get information about accounts {account_list}: {error}")
+                LOG.debug(f"Can't get information about accounts {account_list}: {error}")
                 return account_info_list
 
             for pubkey, info in zip(account_list, result.get('result', {}).get('value', None)):
@@ -245,7 +244,7 @@ class SolInteractor:
         response = self._send_rpc_request("getProgramAccounts", str(program), opts)
         error = response.get('error')
         if error is not None:
-            self.debug(f'fail to get program accounts: {error}')
+            LOG.debug(f'fail to get program accounts: {error}')
             return []
 
         raw_account_list = response.get('result', [])
@@ -411,7 +410,7 @@ class SolInteractor:
         if result is None:
             if default:
                 return default
-            self.debug(f'{blockhash_resp}')
+            LOG.debug(f'{blockhash_resp}')
             raise RuntimeError("failed to get latest blockhash")
         return result.get('context', {}).get('slot', 0)
 
@@ -466,22 +465,22 @@ class SolInteractor:
 
             result = None
             if isinstance(raw_result, dict):
-                self.debug(f'Got strange result on transaction execution: {json.dumps(raw_result)}')
+                LOG.debug(f'Got strange result on transaction execution: {json.dumps(raw_result)}')
             elif isinstance(raw_result, str):
                 result = base58.b58encode(base58.b58decode(raw_result)).decode("utf-8")
             elif isinstance(raw_result, bytes):
                 result = base58.b58encode(raw_result).decode("utf-8")
             elif raw_result is not None:
-                self.debug(f'Got strange result on transaction execution: {str(raw_result)}')
+                LOG.debug(f'Got strange result on transaction execution: {str(raw_result)}')
 
             error = response.get('error')
             if error:
                 if SolTxErrorParser(error).check_if_already_processed():
                     result = str(tx.signature)
-                    self.debug(f'Transaction is already processed: {str(result)}')
+                    LOG.debug(f'Transaction is already processed: {str(result)}')
                     error = None
                 else:
-                    # self.debug(f'Got error on transaction execution: {json.dumps(error)}')
+                    # LOG.debug(f'Got error on transaction execution: {json.dumps(error)}')
                     result = None
 
             result_list.append(SolSendResult(result=result, error=error))

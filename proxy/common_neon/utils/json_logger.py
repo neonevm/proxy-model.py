@@ -1,6 +1,8 @@
 import json
 import logging
-from logging import LogRecord
+import threading
+import contextlib
+from logging import LogRecord, Filter
 from datetime import datetime
 
 
@@ -32,3 +34,23 @@ class JSONFormatter(logging.Formatter):
             message_dict["exc_text"] = record.exc_text
 
         return json.dumps(message_dict)
+
+
+class ContextFilter(Filter):
+    def filter(self, record: LogRecord) -> bool:
+        thread = threading.current_thread()
+        log_context = {}
+        if hasattr(thread, "log_context"):
+            log_context = thread.log_context
+        record.context = log_context
+        return True
+
+
+@contextlib.contextmanager
+def logging_context(**kwargs):
+    thread = threading.current_thread()
+    if not hasattr(thread, "log_context"):
+        thread.log_context = {}
+    thread.log_context.update(kwargs)
+    yield
+    thread.log_context = {}

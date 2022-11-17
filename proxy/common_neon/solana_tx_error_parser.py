@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import re
-
+import logging
 from typing import Union, Optional, Any, Tuple
-from logged_groups import logged_group
 
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.solana_tx import SolTxReceipt
 from ..common_neon.utils import get_from_dict
+
+
+LOG = logging.getLogger(__name__)
 
 
 class SolTxError(Exception):
@@ -16,11 +18,11 @@ class SolTxError(Exception):
         self.result = receipt
 
         log_list = SolTxErrorParser(receipt).get_log_list()
-        self.error = '. '.join([log for log in log_list if self._is_program_log(log)])
-        if not len(self.error):
-            self.error = json.dumps(receipt)
+        LOG.error = '. '.join([log for log in log_list if self._is_program_log(log)])
+        if not len(LOG.error):
+            LOG.error = json.dumps(receipt)
 
-        super().__init__(self.error)
+        super().__init__(LOG.error)
 
     @staticmethod
     def _is_program_log(log: str) -> bool:
@@ -37,7 +39,6 @@ class SolTxError(Exception):
         return False
 
 
-@logged_group("neon.Proxy")
 class SolTxErrorParser:
     _computation_budget_exceeded = 'ComputationalBudgetExceeded'
     _program_failed_to_complete = 'ProgramFailedToComplete'
@@ -181,7 +182,7 @@ class SolTxErrorParser:
             self._log_list = self._get_log_list()
 
             if len(self._log_list) == 0:
-                self.error(f"Can't get logs from receipt: {json.dumps(self._receipt, sort_keys=True)}")
+                LOG.error(f"Can't get logs from receipt: {json.dumps(self._receipt, sort_keys=True)}")
 
         return self._log_list
 

@@ -14,15 +14,16 @@ import json
 import threading
 import time
 import urllib
+import logging
 from typing import List, Tuple, Dict, Any, Optional
 
-from logged_groups import logged_group, logging_context
 from neon_py.utils import gen_unique_id
 
 from ..common.utils import build_http_response
 from ..common_neon.errors import EthereumError
 from ..common_neon.solana_tx_error_parser import SolTxError
 from ..common_neon.config import Config
+from ..common_neon.utils.json_logger import logging_context
 
 from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser
@@ -38,7 +39,9 @@ statInstance: Optional[ProxyStatClient] = None
 modelInstance: Optional[NeonRpcApiWorker] = None
 
 
-@logged_group("neon.Proxy")
+LOG = logging.getLogger(__name__)
+
+
 class NeonRpcApiPlugin(HttpWebServerBasePlugin):
     """Extend in-built Web Server to add Reverse Proxy capabilities.
     """
@@ -103,12 +106,12 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             # traceback.print_exc()
             response['error'] = err.get_error()
         except BaseException as exc:
-            self.debug('Exception on process request', exc_info=exc)
+            LOG.debug('Exception on process request', exc_info=exc)
             response['error'] = {'code': -32000, 'message': str(exc)}
 
         resp_time_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
 
-        self.info(
+        LOG.info(
             'handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
             threading.get_ident(),
             id(self._model),
@@ -127,7 +130,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         req_id = gen_unique_id()
         with logging_context(req_id=req_id):
             self._handle_request_impl(request)
-            self.info("Request processed")
+            LOG.info("Request processed")
 
     def _handle_request_impl(self, request: HttpParser) -> None:
         if request.method == b'OPTIONS':
@@ -150,7 +153,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             return
 
         try:
-            self.info(
+            LOG.info(
                 'handle_request <<< %s 0x%x %s', threading.get_ident(), id(self._model),
                 request.body.decode('utf8')
             )

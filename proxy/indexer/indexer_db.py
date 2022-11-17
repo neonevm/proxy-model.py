@@ -1,6 +1,5 @@
+import logging
 from typing import Optional, List, Iterator
-
-from logged_groups import logged_group
 
 from ..common_neon.utils import NeonTxReceiptInfo
 
@@ -14,7 +13,9 @@ from ..indexer.solana_tx_costs_db import SolTxCostsDB
 from ..indexer.sql_dict import SQLDict
 
 
-@logged_group("neon.Indexer")
+LOG = logging.getLogger(__name__)
+
+
 class IndexerDB:
     def __init__(self):
         self._sol_blocks_db = SolBlocksDB()

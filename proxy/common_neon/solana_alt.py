@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 from typing import List, Tuple, Set
 
-from logged_groups import logged_group
 
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.solana_tx_legacy import SolLegacyTx
@@ -12,7 +12,9 @@ from ..common_neon.solana_alt_list_filter import ALTListFilter
 from ..common_neon.layouts import ALTAccountInfo
 
 
-@logged_group('neon.Proxy')
+LOG = logging.getLogger(__name__)
+
+
 class ALTInfo:
     def __init__(self, table_account: SolPubKey, recent_block_slot: int, nonce: int):
         self._table_acct = table_account
