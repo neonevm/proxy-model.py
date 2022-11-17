@@ -1,9 +1,13 @@
+import logging
 from typing import Optional, Dict
 
 from ..common_neon.elf_params import ElfParams
 
 from .mempool_api import MPElfParamDictRequest
 from .mempool_executor_task_base import MPExecutorBaseTask
+
+
+LOG = logging.getLogger(__name__)
 
 
 class MPExecutorElfParamsTask(MPExecutorBaseTask):

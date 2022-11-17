@@ -10,7 +10,7 @@
         "root": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
-            "formatter": "root",
+            "formatter": "json",
             "filters": ["context_filter"]
         }
     },

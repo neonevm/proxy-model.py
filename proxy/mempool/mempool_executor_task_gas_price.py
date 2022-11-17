@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from .mempool_api import MPGasPriceResult
@@ -9,6 +10,9 @@ from ..common_neon.solana_interactor import SolInteractor
 
 from ..statistic.data import NeonGasPriceData
 from ..statistic.proxy_client import ProxyStatClient
+
+
+LOG = logging.getLogger(__name__)
 
 
 class MPExecutorGasPriceTask(MPExecutorBaseTask):

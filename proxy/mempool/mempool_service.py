@@ -15,6 +15,7 @@ from .mempool_replicator import MemPoolReplicator
 from .operator_resource_mng import OpResMng
 
 from ..common_neon.config import Config
+from ..common_neon.utils.json_logger import logging_context
 
 from ..statistic.proxy_client import ProxyStatClient
 
