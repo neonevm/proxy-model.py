@@ -9,6 +9,7 @@ from typing import Any, Optional, List, Dict
 
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.eth_proto import NeonTx
+from ..common_neon.solana_tx import SolPubKey
 
 
 @dataclass
@@ -137,6 +138,10 @@ class MPPendingTxByHashRequest(MPRequest):
 
 @dataclass
 class MPGasPriceRequest(MPRequest):
+    last_update_mapping_sec: int = 0
+    sol_price_account: Optional[SolPubKey] = None
+    neon_price_account: Optional[SolPubKey] = None
+
     def __post_init__(self):
         self.type = MPRequestType.GetGasPrice
 
@@ -242,6 +247,9 @@ class MPTxSendResult:
 class MPGasPriceResult:
     suggested_gas_price: int
     min_gas_price: int
+    last_update_mapping_sec: int
+    sol_price_account: SolPubKey
+    neon_price_account: SolPubKey
 
 
 @dataclass(frozen=True)

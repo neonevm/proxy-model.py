@@ -194,7 +194,7 @@ class SolInteractor:
         return self._decode_account_info(pubkey, raw_account)
 
     def get_account_info_list(self, src_account_list: List[SolPubKey], length=None,
-                              commitment='processed') -> List[AccountInfo]:
+                              commitment='processed') -> List[Optional[AccountInfo]]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
@@ -206,7 +206,7 @@ class SolInteractor:
                 'length': length
             }
 
-        account_info_list = []
+        account_info_list: List[Optional[AccountInfo]] = []
         while len(src_account_list) > 0:
             account_list = [str(a) for a in src_account_list[:50]]
             src_account_list = src_account_list[50:]
