@@ -37,7 +37,7 @@ jobs:
       is_version_proxy_branch: ${{ steps.is_version_proxy_branch.outputs.value }}
     steps:
       - uses: actions/checkout@v3
-      - name: output branches name
+      - name: Output branches name
         run: |
           echo "neon_evm_branch = ${{ github.event.inputs.neon_evm_branch }}"
           echo "proxy_branch = ${{ github.ref }}"
