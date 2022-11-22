@@ -1,11 +1,12 @@
 import unittest
 
-from ..indexer.pythnetwork import PythNetworkClient
+from ..common_neon.pythnetwork import PythNetworkClient
 
 from ..common_neon.solana_tx import SolPubKey
-from ..common_neon.gas_price_calculator import GasPriceCalculator
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
+
+from ..mempool.gas_price_calculator import GasPriceCalculator
 
 from unittest.mock import patch, call
 from decimal import Decimal

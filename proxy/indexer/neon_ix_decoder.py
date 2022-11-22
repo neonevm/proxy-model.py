@@ -163,7 +163,8 @@ class TxExecFromDataIxDecoder(DummyIxDecoder):
             return self._decoding_skip(f'Neon tx hash {neon_tx.sig} != {neon_tx_sig}')
 
         key = NeonIndexedTxInfo.Key.from_neon_tx_sig(neon_tx_sig, '', [])
-        tx = self.state.neon_block.add_neon_tx(key, neon_tx, ix)
+        block = self.state.neon_block
+        tx = block.find_neon_tx(key, ix) or block.add_neon_tx(key, neon_tx, ix)
         return self._decode_tx(tx, 'Neon tx exec from data')
 
 
@@ -196,8 +197,8 @@ class BaseTxStepIxDecoder(DummyIxDecoder):
             self._decoding_skip('no Neon tx hash in logs')
             return None
 
-        key = NeonIndexedTxInfo.Key.from_neon_tx_sig(neon_tx_sig, storage_account, iter_blocked_account)
         block = self.state.neon_block
+        key = NeonIndexedTxInfo.Key.from_neon_tx_sig(neon_tx_sig, storage_account, iter_blocked_account)
         return block.find_neon_tx(key, ix) or block.add_neon_tx(key, NeonTxInfo.from_neon_sig(neon_tx_sig), ix)
 
 
