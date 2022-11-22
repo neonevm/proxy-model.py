@@ -17,13 +17,12 @@ import urllib
 import logging
 from typing import List, Tuple, Dict, Any, Optional
 
-from neon_py.utils import gen_unique_id
-
 from ..common.utils import build_http_response
 from ..common_neon.errors import EthereumError
 from ..common_neon.solana_tx_error_parser import SolTxError
 from ..common_neon.config import Config
 from ..common_neon.utils.json_logger import logging_context
+from ..common_neon.utils.utils import gen_unique_id
 
 from ..http.codes import httpStatusCodes
 from ..http.parser import HttpParser

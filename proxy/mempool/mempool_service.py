@@ -3,10 +3,6 @@ import logging
 from multiprocessing import Process
 from typing import Any, Optional, cast, Union
 
-from neon_py.data import Result
-from neon_py.maintenance_api import MaintenanceRequest, MaintenanceCommand, ReplicationRequest, ReplicationBunch
-from neon_py.network import AddrPickableDataSrv, IPickableDataServerUser
-
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 from .mempool import MemPool
 from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest
@@ -15,7 +11,10 @@ from .mempool_replicator import MemPoolReplicator
 from .operator_resource_mng import OpResMng
 
 from ..common_neon.config import Config
+from ..common_neon.data import Result
 from ..common_neon.utils.json_logger import logging_context
+from ..common_neon.maintenance_api import MaintenanceRequest, MaintenanceCommand, ReplicationRequest, ReplicationBunch
+from ..common_neon.pickable_data_server import AddrPickableDataSrv, IPickableDataServerUser
 
 from ..statistic.proxy_client import ProxyStatClient
 

@@ -4,8 +4,6 @@ import socket
 import logging
 from typing import Optional, Any, cast
 
-from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
-
 from .mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
 from .mempool_api import MPOpResInitRequest
 from .mempool_api import MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPElfParamDictRequest
@@ -19,6 +17,7 @@ from .mempool_executor_task_state_tx_cnt import MPExecutorStateTxCntTask
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.utils.json_logger import logging_context
+from ..common_neon.pickable_data_server import PipePickableDataSrv, IPickableDataServerUser
 
 from ..statistic.proxy_client import ProxyStatClient
 

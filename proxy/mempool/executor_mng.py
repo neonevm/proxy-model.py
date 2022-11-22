@@ -6,13 +6,12 @@ from abc import ABC, abstractmethod
 from collections import deque
 from typing import Dict, Tuple, Deque, Set
 
-from neon_py.network import PipePickableDataClient
-
 from .mempool_api import MPRequest, MPTask
 from .mempool_executor import MPExecutor
 
 from ..common_neon.config import Config
 from ..common_neon.utils.json_logger import logging_context
+from ..common_neon.pickable_data_server import PipePickableDataClient
 
 from ..statistic.data import NeonExecutorStatData
 from ..statistic.proxy_client import ProxyStatClient

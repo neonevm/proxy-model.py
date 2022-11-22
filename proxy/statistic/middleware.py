@@ -11,10 +11,9 @@ from multiprocessing import Process
 
 from aioprometheus.service import Service, Registry
 
-from neon_py.network import IPickableDataServerUser, AddrPickableDataSrv, AddrPickableDataClient
-from neon_py.network.pickable_data_server import encode_pickable
-
 from ..common_neon.config import Config
+from ..common_neon.pickable_data_server import encode_pickable
+from ..common_neon.pickable_data_server import IPickableDataServerUser, AddrPickableDataSrv, AddrPickableDataClient
 
 
 LOG = logging.getLogger(__name__)

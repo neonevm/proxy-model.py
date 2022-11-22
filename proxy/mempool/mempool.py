@@ -4,8 +4,6 @@ import enum
 import logging
 from typing import List, Tuple, Optional, Any, Dict, cast, Iterator, Union
 
-from neon_py.data import Result
-
 from .executor_mng import MPExecutorMng
 from .mempool_api import MPGasPriceResult
 from .mempool_api import MPRequest, MPRequestType, MPTask, MPTxRequestList
@@ -26,6 +24,7 @@ from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import NeonTx
+from ..common_neon.data import Result
 from ..common_neon.utils.json_logger import logging_context
 
 from ..statistic.data import NeonTxBeginData, NeonTxEndData

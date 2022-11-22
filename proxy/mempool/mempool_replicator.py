@@ -1,13 +1,14 @@
 import logging
 from typing import List
 
-from neon_py.maintenance_api import Peer, ReplicationBunch
-from neon_py.network import AddrPickableDataClient
-from neon_py.data import Result
 from itertools import cycle
 
 from .mempool_api import MPTxRequestList
 from .mempool import MemPool
+
+from ..common_neon.data import Result
+from ..common_neon.maintenance_api import Peer, ReplicationBunch
+from ..common_neon.pickable_data_server import AddrPickableDataClient
 
 
 LOG = logging.getLogger(__name__)

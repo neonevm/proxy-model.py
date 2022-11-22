@@ -4,14 +4,13 @@ import threading
 import logging
 from typing import Callable, Optional, Dict, Any, Union
 
-from neon_py.network import AddrPickableDataClient
-
 from .mempool_api import MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPTxRequest
 from .mempool_api import MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
 
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import NeonTx
+from ..common_neon.pickable_data_server import AddrPickableDataClient
 
 
 LOG = logging.getLogger(__name__)

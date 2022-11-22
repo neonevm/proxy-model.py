@@ -1,11 +1,11 @@
 import argparse
 import logging
 
-from neon_py.network import AddrPickableDataClient
-from neon_py.maintenance_api import MaintenanceCommand, MaintenanceRequest, ReplicationRequest, Peer
-from neon_py.utils import gen_unique_id
 from typing import List
 
+from proxy.common_neon.maintenance_api import MaintenanceCommand, MaintenanceRequest, ReplicationRequest, Peer
+from proxy.common_neon.utils.utils import gen_unique_id
+from proxy.common_neon.pickable_data_server import AddrPickableDataClient
 
 LOG = logging.getLogger(__name__)
 
