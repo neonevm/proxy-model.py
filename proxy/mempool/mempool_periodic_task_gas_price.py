@@ -15,7 +15,16 @@ class MPGasPriceTaskLoop(MPPeriodicTaskLoop[MPGasPriceRequest, MPGasPriceResult]
         return self._gas_price
 
     def _submit_request(self) -> None:
-        mp_req = MPGasPriceRequest(req_id=self._generate_req_id())
+        req_id = self._generate_req_id()
+        if self._gas_price is None:
+            mp_req = MPGasPriceRequest(req_id=req_id)
+        else:
+            mp_req = MPGasPriceRequest(
+                req_id=req_id,
+                last_update_mapping_sec=self._gas_price.last_update_mapping_sec,
+                sol_price_account=self._gas_price.sol_price_account,
+                neon_price_account=self._gas_price.neon_price_account
+            )
         self._submit_request_to_executor(mp_req)
 
     def _process_error(self, _: MPGasPriceRequest) -> None:

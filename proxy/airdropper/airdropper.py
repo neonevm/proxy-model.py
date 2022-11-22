@@ -11,10 +11,10 @@ from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.pythnetwork import PythNetworkClient
 
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
-from ..indexer.pythnetwork import PythNetworkClient
 from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
 from ..indexer.sql_dict import SQLDict

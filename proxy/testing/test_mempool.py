@@ -151,7 +151,13 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self._op_res_mng = MockResourceManager(self._config)
         self._mempool = MemPool(self._config, self._stat_client, self._op_res_mng, self._executor)
 
-        price_result = MPGasPriceResult(suggested_gas_price=1, min_gas_price=1)
+        price_result = MPGasPriceResult(
+            suggested_gas_price=1,
+            min_gas_price=1,
+            last_update_mapping_sec=0,
+            sol_price_account=SolPubKey(1),
+            neon_price_account=SolPubKey(2)
+        )
         self._mempool._gas_price_task_loop._task = MockTask(None, False)
         self._mempool._gas_price_task_loop._gas_price = price_result
 

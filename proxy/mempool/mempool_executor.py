@@ -7,7 +7,7 @@ from logged_groups import logged_group, logging_context
 from neon_py.network import PipePickableDataSrv, IPickableDataServerUser
 
 from .mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
-from .mempool_api import MPOpResInitRequest
+from .mempool_api import MPOpResInitRequest, MPGasPriceRequest
 from .mempool_api import MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPElfParamDictRequest
 from .mempool_executor_task_elf_params import MPExecutorElfParamsTask
 from .mempool_executor_task_exec_neon_tx import MPExecutorExecNeonTxTask
@@ -76,7 +76,8 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             mp_tx_req = cast(MPTxExecRequest, mp_req)
             return self._exec_neon_tx_task.execute_neon_tx(mp_tx_req)
         elif mp_req.type == MPRequestType.GetGasPrice:
-            return self._gas_price_task.calc_gas_price()
+            mp_gas_price_req = cast(MPGasPriceRequest, mp_req)
+            return self._gas_price_task.calc_gas_price(mp_gas_price_req)
         elif mp_req.type == MPRequestType.GetElfParamDict:
             mp_elf_req = cast(MPElfParamDictRequest, mp_req)
             return self._elf_params_task.read_elf_param_dict(mp_elf_req)

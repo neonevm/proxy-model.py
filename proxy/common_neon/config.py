@@ -60,8 +60,9 @@ class Config:
         self._hvac_path = os.environ.get('HVAC_PATH', '')
         self._genesis_timestamp = self._env_int('GENESIS_BLOCK_TIMESTAMP', 0, 0)
 
-        pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
+        pyth_mapping_account = os.environ.get('PYTH_MAPPING_ACCOUNT', None)
         self._pyth_mapping_account = SolPubKey(pyth_mapping_account) if pyth_mapping_account is not None else None
+        self._update_pyth_mapping_period_sec = self._env_int('UPDATE_PYTH_MAPPING_PERIOD_SEC', 10, 60 * 60)
 
         self._validate()
 
@@ -105,6 +106,10 @@ class Config:
     @property
     def pyth_mapping_account(self) -> Optional[SolPubKey]:
         return self._pyth_mapping_account
+
+    @property
+    def update_pyth_mapping_period_sec(self) -> int:
+        return self._update_pyth_mapping_period_sec
 
     @property
     def pyth_solana_url(self) -> str:
@@ -295,6 +300,7 @@ class Config:
             f"EVM_LOADER_ID: {self.evm_loader_id},",
             f"PP_SOLANA_URL: {self.pyth_solana_url}",
             f"PYTH_MAPPING_ACCOUNT: {self.pyth_mapping_account}",
+            f"UPDATE_PYTH_MAPPING_PERIOD_SEC: {self.update_pyth_mapping_period_sec}"
             f"EVM_STEP_COUNT_INC_PCT: {self._evm_step_cnt_inc_pct},",
             f"MEMPOOL_CAPACITY: {self.mempool_capacity}",
             f"MEMPOOL_EXECUTOR_LIMIT_CNT: {self.mempool_executor_limit_cnt}",
