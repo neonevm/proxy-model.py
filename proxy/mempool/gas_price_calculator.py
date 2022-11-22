@@ -3,10 +3,10 @@ import math
 import logging
 from typing import Optional
 
-from ..indexer.pythnetwork import PythNetworkClient
-
+from ..common_neon.pythnetwork import PythNetworkClient
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
+from ..common_neon.solana_tx import SolPubKey
 
 
 LOG = logging.getLogger(__name__)
@@ -23,6 +23,13 @@ class GasPriceCalculator:
         self._neon_price_usd = self._config.neon_price_usd
         self._min_gas_price: Optional[int] = None
         self._suggested_gas_price: Optional[int] = None
+
+    def set_price_account(self, sol_price_account: Optional[SolPubKey], neon_price_account: Optional[SolPubKey]):
+        if sol_price_account is None:
+            return
+
+        self._pyth_network_client.set_price_account(self._sol_price_symbol, sol_price_account)
+        self._pyth_network_client.set_price_account(self._neon_price_symbol, neon_price_account)
 
     def is_valid(self) -> bool:
         return (self._min_gas_price is not None) and (self._suggested_gas_price is not None)
@@ -98,6 +105,14 @@ class GasPriceCalculator:
     @property
     def gas_price_suggested_pct(self) -> Decimal:
         return self._config.operator_fee + self._config.gas_price_suggested_pct
+
+    @property
+    def sol_price_account(self) -> Optional[SolPubKey]:
+        return self._pyth_network_client.get_price_account(self._sol_price_symbol)
+
+    @property
+    def neon_price_account(self) -> Optional[SolPubKey]:
+        return self._pyth_network_client.get_price_account(self._neon_price_symbol)
 
     @property
     def sol_price_usd(self) -> Decimal:

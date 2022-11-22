@@ -177,7 +177,7 @@ class ProgramErrorParser(BaseNeonCliErrorParser):
                 continue
 
             if is_first_hdr:
-                msg = line[pos + len(hdr):]
+                msg = 'insufficient funds for transfer'
                 if line.find(funds_hdr) == -1:
                     break
 
