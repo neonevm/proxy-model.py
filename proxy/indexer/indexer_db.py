@@ -11,14 +11,15 @@ from ..indexer.solana_blocks_db import SolBlocksDB, SolanaBlockInfo
 from ..indexer.solana_neon_txs_db import SolNeonTxsDB
 from ..indexer.solana_tx_costs_db import SolTxCostsDB
 from ..indexer.sql_dict import SQLDict
+from ..common_neon.config import Config
 
 
 LOG = logging.getLogger(__name__)
 
 
 class IndexerDB:
-    def __init__(self):
-        self._sol_blocks_db = SolBlocksDB()
+    def __init__(self, config: Config):
+        self._sol_blocks_db = SolBlocksDB(config)
         self._sol_tx_costs_db = SolTxCostsDB()
         self._neon_txs_db = NeonTxsDB()
         self._sol_neon_txs_db = SolNeonTxsDB()

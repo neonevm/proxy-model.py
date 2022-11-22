@@ -29,7 +29,7 @@ from ..indexer.indexer_db import IndexerDB
 
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
 
-NEON_PROXY_PKG_VERSION = '0.13.0-dev'
+NEON_PROXY_PKG_VERSION = '0.14.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 LOG = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class NeonRpcApiWorker:
     def __init__(self, config: Config):
         self._config = config
         self._solana = SolInteractor(self._config, self._config.solana_url)
-        self._db = IndexerDB()
+        self._db = IndexerDB(config)
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price_value: Optional[MPGasPriceResult] = None

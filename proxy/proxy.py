@@ -17,9 +17,7 @@ import logging
 import threading
 from typing import TYPE_CHECKING, Any, List, Optional, cast
 
-from .core.ssh import SshTunnelListener, SshHttpProtocolHandler
 from .core.work import ThreadlessPool
-from .core.event import EventManager
 from .common.flag import FlagParser, flags
 from .common.utils import bytes_
 from .core.work.fd import RemoteFdExecutor
@@ -27,9 +25,8 @@ from .core.acceptor import AcceptorPool
 from .core.listener import ListenerPool
 from .common.constants import (
     IS_WINDOWS, DEFAULT_PLUGINS, DEFAULT_VERSION, DEFAULT_LOG_FILE,
-    DEFAULT_PID_FILE, DEFAULT_LOG_LEVEL, DEFAULT_BASIC_AUTH,
+    DEFAULT_PID_FILE, DEFAULT_LOG_LEVEL,
     DEFAULT_LOG_FORMAT, DEFAULT_WORK_KLASS, DEFAULT_OPEN_FILE_LIMIT,
-    DEFAULT_ENABLE_SSH_TUNNEL,
 )
 
 
@@ -92,13 +89,6 @@ flags.add_argument(
 )
 
 flags.add_argument(
-    '--enable-ssh-tunnel',
-    action='store_true',
-    default=DEFAULT_ENABLE_SSH_TUNNEL,
-    help='Default: False.  Enable SSH tunnel.',
-)
-
-flags.add_argument(
     '--work-klass',
     type=str,
     default=DEFAULT_WORK_KLASS,
@@ -148,9 +138,6 @@ class Proxy:
         self.listeners: Optional[ListenerPool] = None
         self.executors: Optional[ThreadlessPool] = None
         self.acceptors: Optional[AcceptorPool] = None
-        self.event_manager: Optional[EventManager] = None
-        self.ssh_http_protocol_handler: Optional[SshHttpProtocolHandler] = None
-        self.ssh_tunnel_listener: Optional[SshTunnelListener] = None
 
     def __enter__(self) -> 'Proxy':
         self.setup()
@@ -199,20 +186,12 @@ class Proxy:
         self.flags.ports = ports
         # Write ports to port file
         self._write_port_file()
-        # Setup EventManager
-        if self.flags.enable_events:
-            logger.info('Core Event enabled')
-            self.event_manager = EventManager()
-            self.event_manager.setup()
-        event_queue = self.event_manager.queue \
-            if self.event_manager is not None \
-            else None
         # Setup remote executors only if
         # --local-executor mode isn't enabled.
         if self.remote_executors_enabled:
             self.executors = ThreadlessPool(
                 flags=self.flags,
-                event_queue=event_queue,
+                event_queue=None,
                 executor_klass=RemoteFdExecutor,
             )
             self.executors.setup()
@@ -223,38 +202,19 @@ class Proxy:
             executor_queues=self.executors.work_queues if self.executors else [],
             executor_pids=self.executors.work_pids if self.executors else [],
             executor_locks=self.executors.work_locks if self.executors else [],
-            event_queue=event_queue,
+            event_queue=None,
         )
         self.acceptors.setup()
-        # Start SSH tunnel acceptor if enabled
-        if self.flags.enable_ssh_tunnel:
-            self.ssh_http_protocol_handler = SshHttpProtocolHandler(
-                flags=self.flags,
-            )
-            self.ssh_tunnel_listener = SshTunnelListener(
-                flags=self.flags,
-                on_connection_callback=self.ssh_http_protocol_handler.on_connection,
-            )
-            self.ssh_tunnel_listener.setup()
-            self.ssh_tunnel_listener.start_port_forward(
-                ('', self.flags.tunnel_remote_port),
-            )
         # TODO: May be close listener fd as we don't need it now
         if threading.current_thread() == threading.main_thread():
             self._register_signals()
 
     def shutdown(self) -> None:
-        if self.flags.enable_ssh_tunnel:
-            assert self.ssh_tunnel_listener is not None
-            self.ssh_tunnel_listener.shutdown()
         assert self.acceptors
         self.acceptors.shutdown()
         if self.remote_executors_enabled:
             assert self.executors
             self.executors.shutdown()
-        if self.flags.enable_events:
-            assert self.event_manager is not None
-            self.event_manager.shutdown()
         if self.listeners:
             self.listeners.shutdown()
             self._delete_port_file()

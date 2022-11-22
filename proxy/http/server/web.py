@@ -27,7 +27,6 @@ from ...common.types import Readables, Writables, Descriptors
 from ...common.utils import text_, build_websocket_handshake_response
 from ...common.constants import (
     DEFAULT_ENABLE_WEB_SERVER, DEFAULT_STATIC_SERVER_DIR,
-    DEFAULT_ENABLE_STATIC_SERVER,
     DEFAULT_WEB_ACCESS_LOG_FORMAT, DEFAULT_MIN_COMPRESSION_LENGTH,
 )
 
@@ -40,16 +39,6 @@ flags.add_argument(
     action='store_true',
     default=DEFAULT_ENABLE_WEB_SERVER,
     help='Default: False.  Whether to enable proxy.HttpWebServerPlugin.',
-)
-
-flags.add_argument(
-    '--enable-static-server',
-    action='store_true',
-    default=DEFAULT_ENABLE_STATIC_SERVER,
-    help='Default: False.  Enable inbuilt static file server. '
-    'Optionally, also use --static-server-dir to serve static content '
-    'from custom directory.  By default, static file server serves '
-    'out of installed proxy.py python module folder.',
 )
 
 flags.add_argument(
@@ -135,10 +124,6 @@ class HttpWebServerPlugin(HttpProtocolHandlerPlugin):
         # or if it did find a valid route
         if teardown or self.route is not None:
             return teardown
-        # No-route found, try static serving if enabled
-        if self.flags.enable_static_server:
-            self._try_static_or_404(path)
-            return True
         # Catch all unhandled web server requests, return 404
         self.client.queue(NOT_FOUND_RESPONSE_PKT)
         return True

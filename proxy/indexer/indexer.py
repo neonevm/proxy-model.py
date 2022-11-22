@@ -36,7 +36,7 @@ LOG = logging.getLogger(__name__)
 class Indexer(IndexerBase):
     def __init__(self, config: Config):
         solana = SolInteractor(config, config.solana_url)
-        self._db = IndexerDB()
+        self._db = IndexerDB(config)
         last_known_slot = self._db.get_min_receipt_block_slot()
         super().__init__(config, solana, last_known_slot)
 
@@ -259,17 +259,15 @@ class Indexer(IndexerBase):
             with logging_context(ident=sol_tx_meta.req_id):
                 neon_block = self._locate_neon_block(state, sol_tx_meta)
                 if neon_block.is_completed:
-                    # LOG.debug(f'ignore parsed tx {sol_tx_meta}')
                     continue
 
                 neon_block.add_sol_tx_cost(SolTxCostInfo.from_tx_meta(sol_tx_meta))
-
-                if SolTxErrorParser(sol_tx_meta.tx).check_if_error():
-                    # LOG.debug(f'ignore failed tx {sol_tx_meta}')
-                    continue
+                is_error = SolTxErrorParser(sol_tx_meta.tx).check_if_error()
 
             for sol_neon_ix in state.iter_sol_neon_ix():
                 with logging_context(sol_neon_ix=sol_neon_ix.req_id):
+                    if is_error:
+                        LOG.debug('failed tx')
                     SolNeonIxDecoder = self._sol_neon_ix_decoder_dict.get(sol_neon_ix.program_ix, DummyIxDecoder)
                     SolNeonIxDecoder(state).execute()
 

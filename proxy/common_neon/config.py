@@ -58,6 +58,7 @@ class Config:
         self._hvac_token = os.environ.get('HVAC_TOKEN', None)
         self._hvac_mount = os.environ.get('HVAC_MOUNT', None)
         self._hvac_path = os.environ.get('HVAC_PATH', '')
+        self._genesis_timestamp = self._env_int('GENESIS_BLOCK_TIMESTAMP', 0, 0)
 
         pyth_mapping_account = os.environ.get("PYTH_MAPPING_ACCOUNT", None)
         self._pyth_mapping_account = SolPubKey(pyth_mapping_account) if pyth_mapping_account is not None else None
@@ -283,6 +284,10 @@ class Config:
     def hvac_path(self) -> str:
         return self._hvac_path
 
+    @property
+    def genesis_timestamp(self) -> int:
+        return self._genesis_timestamp
+
     def __str__(self):
         return '\n        '.join([
             '',
@@ -336,5 +341,6 @@ class Config:
             f"HVAC_TOKEN: {self.hvac_token}",
             f"HVAC_PATH: {self.hvac_path}",
             f"HVAC_MOUNT: {self.hvac_mount}",
+            f"GENESIS_BLOCK_TIMESTAMP: {self.genesis_timestamp}",
             ""
         ])
