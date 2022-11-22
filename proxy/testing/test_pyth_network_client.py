@@ -63,10 +63,10 @@ class TestPythNetworkClient(unittest.TestCase):
     def update_mapping(self):
         self.testee.update_mapping(mapping_account)
 
-    @patch.object(PythNetworkClient, 'read_pyth_acct_data')
-    @patch.object(PythNetworkClient, 'parse_mapping_account')
-    @patch.object(PythNetworkClient, 'parse_prod_account')
-    @patch.object(PythNetworkClient, 'parse_price_account')
+    @patch.object(PythNetworkClient, '_read_pyth_acct_data')
+    @patch.object(PythNetworkClient, '_parse_mapping_account')
+    @patch.object(PythNetworkClient, '_parse_prod_account')
+    @patch.object(PythNetworkClient, '_parse_price_account')
     def test_success_update_mapping(self,
                                     mock_parse_price_account,
                                     mock_parse_prod_account,
@@ -92,10 +92,10 @@ class TestPythNetworkClient(unittest.TestCase):
         except Exception as err:
             self.fail(f"Expected not throws exception but it does: {err}")
 
-    @patch.object(PythNetworkClient, 'read_pyth_acct_data')
-    @patch.object(PythNetworkClient, 'parse_mapping_account')
-    @patch.object(PythNetworkClient, 'parse_prod_account')
-    @patch.object(PythNetworkClient, 'parse_price_account')
+    @patch.object(PythNetworkClient, '_read_pyth_acct_data')
+    @patch.object(PythNetworkClient, '_parse_mapping_account')
+    @patch.object(PythNetworkClient, '_parse_prod_account')
+    @patch.object(PythNetworkClient, '_parse_price_account')
     def test_continue_when_failed_prod_account(self,
                                                mock_parse_price_account,
                                                mock_parse_prod_account,
