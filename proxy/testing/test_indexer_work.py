@@ -156,7 +156,6 @@ class CancelTest(unittest.TestCase):
         tx_store = self.proxy.sign_transaction(self.eth_account, tx_store)
 
         neon_ix_builder, signer = self.create_neon_ix_builder(
-            self,
             tx_store.tx_signed.rawTransaction,
             [
                 SolAccountMeta(pubkey=self.re_id, is_signer=False, is_writable=True),
@@ -190,7 +189,6 @@ class CancelTest(unittest.TestCase):
         print(f'tx_hash_invoked: {tx_hash.hex}')
 
         neon_ix_builder, signer = self.create_neon_ix_builder(
-            self,
             tx_transfer.tx_signed.rawTransaction,
             [
                 SolAccountMeta(pubkey=self.caller_getter, is_signer=False, is_writable=True),
@@ -228,7 +226,6 @@ class CancelTest(unittest.TestCase):
         print(f'tx_hash_invoked_combined: {tx_hash.hex()}')
 
         neon_ix_builder, signer = self.create_neon_ix_builder(
-            self,
             tx_transfer.tx_signed.rawTransaction,
             [
                 SolAccountMeta(pubkey=self.caller_getter, is_signer=False, is_writable=True),

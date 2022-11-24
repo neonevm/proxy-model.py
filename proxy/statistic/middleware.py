@@ -112,7 +112,7 @@ def stat_method(method):
                 if not self._is_connected():
                     return
 
-                payload: bytes = encode_pickable((method.__name__, *args), self)
+                payload: bytes = encode_pickable((method.__name__, *args))
                 self._stat_mng_client._client_sock.sendall(payload)
             except (InterruptedError, Exception) as exc:
                 LOG.error(f'Failed to transfer data', exc_info=exc)
@@ -158,7 +158,7 @@ class StatClient:
             self._connect_middleware()
 
     def _reconnect_middleware(self):
-        LOG.debug(f'Reconnecting statistic middleware server in: {self._reconnect_middleware_time_sec} sec')
+        LOG.debug(f'Reconnecting statistic middleware server in: {self._reconnect_time_sec} sec')
         self._stat_mng_client: Optional[AddrPickableDataClient] = None
 
     def _connect_middleware(self) -> bool:

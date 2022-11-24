@@ -72,12 +72,12 @@ class TestEthGetLogs(unittest.TestCase):
         self.storage_contract = deployed_info.contract
 
     def commit_transactions(self):
-        self.commit_one_event_trx(self, 1, 2)
-        self.commit_one_event_trx(self, 2, 3)
-        self.commit_two_event_trx(self, 3, 4)
-        self.commit_two_event_trx(self, 5, 6)
-        self.commit_no_event_trx(self, 7, 8)
-        self.commit_no_event_trx(self, 9, 0)
+        self.commit_one_event_trx(1, 2)
+        self.commit_one_event_trx(2, 3)
+        self.commit_two_event_trx(3, 4)
+        self.commit_two_event_trx(5, 6)
+        self.commit_no_event_trx(7, 8)
+        self.commit_no_event_trx(9, 0)
 
     def commit_one_event_trx(self, x, y) -> None:
         print(f"\ncommit_one_event_trx. x: {x}, y: {y}")
