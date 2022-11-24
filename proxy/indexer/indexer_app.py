@@ -1,4 +1,3 @@
-import time
 import logging
 
 from .indexer import Indexer
@@ -17,9 +16,9 @@ class IndexerApp:
         indexer.run()
 
 
-def run_indexer(*, logger):
+def run_indexer():
     config = Config()
-    logger.info(f"Running indexer with params: {str(config)}")
+    LOG.info(f"Running indexer with params: {str(config)}")
     IndexerApp(config)
 
 

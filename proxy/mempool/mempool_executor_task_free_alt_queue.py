@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional, Callable, cast
 
 from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
@@ -10,6 +11,9 @@ from ..common_neon.solana_tx_list_sender import SolTxListSender
 from .mempool_api import MPALTListResult
 from .mempool_api import MPGetALTList, MPALTInfo, MPDeactivateALTListRequest, MPCloseALTListRequest
 from .mempool_executor_task_base import MPExecutorBaseTask
+
+
+LOG = logging.getLogger(__name__)
 
 
 class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):

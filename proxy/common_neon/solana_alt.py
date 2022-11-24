@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import List, Tuple, Set
 
 
@@ -10,9 +9,6 @@ from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
 from ..common_neon.errors import ALTError
 from ..common_neon.solana_alt_list_filter import ALTListFilter
 from ..common_neon.layouts import ALTAccountInfo
-
-
-LOG = logging.getLogger(__name__)
 
 
 class ALTInfo:

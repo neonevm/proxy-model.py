@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Dict, Any
 
 from ..common_neon.address import NeonAddress
@@ -13,9 +12,6 @@ from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
-
-
-LOG = logging.getLogger(__name__)
 
 
 class NeonTxValidator:

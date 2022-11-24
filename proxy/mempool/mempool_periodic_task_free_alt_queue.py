@@ -1,3 +1,4 @@
+import logging
 from typing import List, Type, Callable, cast
 
 from .executor_mng import MPExecutorMng
@@ -7,6 +8,9 @@ from .mempool_periodic_task import MPPeriodicTaskLoop
 from .operator_resource_mng import OpResMng
 
 from ..common_neon.sorted_queue import SortedQueue
+
+
+LOG = logging.getLogger(__name__)
 
 
 class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):

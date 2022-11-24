@@ -121,7 +121,7 @@ class _SolIxLogList:
         elif isinstance(status, _SolIxFailedLog):
             assert status.program == self.program
             self.status = self.Status.FAILED
-            LOG.error = status.error
+            self.error = status.error
         else:
             assert False, f'unknown status {status}'
 

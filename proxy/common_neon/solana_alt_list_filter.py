@@ -1,12 +1,8 @@
-import logging
 from typing import Set, List, Tuple
 
 from ..common_neon.errors import ALTError
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.solana_tx_legacy import SolLegacyMsg
-
-
-LOG = logging.getLogger(__name__)
 
 
 class ALTListFilter:

@@ -20,7 +20,7 @@ class SolTxError(Exception):
         log_list = SolTxErrorParser(receipt).get_log_list()
         LOG.error = '. '.join([log for log in log_list if self._is_program_log(log)])
         if not len(LOG.error):
-            LOG.error = json.dumps(receipt)
+            self.error = json.dumps(receipt)
 
         super().__init__(LOG.error)
 

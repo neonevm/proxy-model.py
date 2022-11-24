@@ -1,5 +1,4 @@
 import abc
-import logging
 from typing import Optional, List, cast
 
 from ..common_neon.solana_tx import SolBlockhash, SolTx, SolTxIx
@@ -9,9 +8,6 @@ from ..common_neon.elf_params import ElfParams
 from ..common_neon.utils import NeonTxResultInfo
 
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
-
-
-LOG = logging.getLogger(__name__)
 
 
 class BaseNeonTxPrepStage(abc.ABC):

@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 from .mempool_api import MPOpResGetListResult, MPOpResInitRequest, MPOpResInitResult, MPOpResInitResultCode
@@ -11,6 +12,9 @@ from ..common_neon.solana_interactor import SolInteractor
 
 from ..statistic.data import NeonOpResListData
 from ..statistic.proxy_client import ProxyStatClient
+
+
+LOG = logging.getLogger(__name__)
 
 
 class MPExecutorOpResTask(MPExecutorBaseTask):

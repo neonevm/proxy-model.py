@@ -1,4 +1,3 @@
-import logging
 from typing import Optional, List, Iterator
 
 from ..common_neon.utils import NeonTxReceiptInfo
@@ -12,9 +11,6 @@ from ..indexer.solana_neon_txs_db import SolNeonTxsDB
 from ..indexer.solana_tx_costs_db import SolTxCostsDB
 from ..indexer.sql_dict import SQLDict
 from ..common_neon.config import Config
-
-
-LOG = logging.getLogger(__name__)
 
 
 class IndexerDB:
