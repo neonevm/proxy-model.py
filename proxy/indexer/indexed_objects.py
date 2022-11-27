@@ -230,8 +230,14 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
             if ix.sol_tx_cost.operator in op_account_set:
                 op_gas_used += ix.neon_gas_used
 
-        gas_price = int(self.neon_tx.gas_price, 16)
-        neon_income = int(self.neon_tx_res.gas_used, 16) * gas_price
+        def _safe_int(value: str, base: int) -> int:
+            try:
+                return int(value, base)
+            except ValueError:
+                return 0
+
+        gas_price = _safe_int(self.neon_tx.gas_price, 16)
+        neon_income = _safe_int(self.neon_tx_res.gas_used, 16) * gas_price
         op_neon_income = op_gas_used * gas_price
 
         return NeonTxStatData(
