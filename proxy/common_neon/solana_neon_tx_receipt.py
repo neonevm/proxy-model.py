@@ -506,7 +506,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
         result_log_list_list: List[_SolIxLogList] = []
 
         log_iter = iter(log_list_list)
-        log = next(log_iter)
+        log = next(log_iter) if len(log_list_list) > 0 else None
         for idx, ix in enumerate(ix_list):
             ix_program_key = self._get_program_key(ix)
             if (log is None) or (log.program != ix_program_key):
