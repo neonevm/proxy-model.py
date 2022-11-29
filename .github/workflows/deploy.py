@@ -202,7 +202,7 @@ def destroy_terraform(proxy_tag, run_number):
 @click.option('--run_number')
 def openzeppelin_test(run_number):
     container_name = f'fts_{run_number}'
-    fts_threshold = 1920
+    fts_threshold = 2370
     os.environ["FTS_CONTAINER_NAME"] = container_name
     os.environ["FTS_IMAGE"] = FTS_NAME
     os.environ["FTS_USERS_NUMBER"] = '15'
