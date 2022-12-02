@@ -137,6 +137,7 @@ class TestAirdropperIntegration(TestCase):
         print(f"NEON account created: {account.address}")
         return account
 
+    @unittest.skip('Confidence interval too large')
     def test_success_airdrop_simple_case(self):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
