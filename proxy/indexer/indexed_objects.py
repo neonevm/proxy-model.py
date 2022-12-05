@@ -116,39 +116,14 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         DONE = 4
 
     class Key:
-        def __init__(self):
-            self._storage_account = ''
-            self._blocked_account_list = []
-            self._value = ''
-
-        @staticmethod
-        def from_storage_account(storage_account: str, iter_blocked_account: Iterator[str]) -> NeonIndexedTxInfo.Key:
-            key = NeonIndexedTxInfo.Key()
-
-            key._storage_account = storage_account
-            key._blocked_account_list = list(iter_blocked_account)
-
-            key_data = ':'.join([storage_account] + key._blocked_account_list)
-            key._value = hashlib.sha1(key_data.encode('utf-8')).digest().hex()
-            return key
-
-        @staticmethod
-        def from_ix(sol_neon_ix: SolNeonIxReceiptInfo) -> NeonIndexedTxInfo.Key:
-            key = NeonIndexedTxInfo.Key()
-            key._value = str(sol_neon_ix)
-            return key
-
-        @staticmethod
-        def from_neon_tx_sig(neon_tx_sig: str,
-                             storage_account: str,
-                             iter_blocked_account: Iterator[str]) -> NeonIndexedTxInfo.Key:
+        def __init__(self, neon_tx_sig: str,
+                     storage_account: str,
+                     iter_blocked_account: Iterator[str]) -> NeonIndexedTxInfo.Key:
             if neon_tx_sig[:2] == '0x':
                 neon_tx_sig = neon_tx_sig[2:]
-            key = NeonIndexedTxInfo.Key()
-            key._storage_account = storage_account
-            key._blocked_account_list = list(iter_blocked_account)
-            key._value = neon_tx_sig
-            return key
+            self._storage_account = storage_account
+            self._blocked_account_list = list(iter_blocked_account)
+            self._value = neon_tx_sig
 
         def __str__(self) -> str:
             return str_fmt_object(self, False)
@@ -170,6 +145,8 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
 
     def __init__(self, key: NeonIndexedTxInfo.Key, neon_tx: NeonTxInfo):
         super().__init__()
+        assert not key.is_empty()
+
         self._key = key
         self._neon_receipt = NeonTxReceiptInfo(neon_tx, NeonTxResultInfo())
         self._holder_account = ''
@@ -232,8 +209,14 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
             if ix.sol_tx_cost.operator in op_account_set:
                 op_gas_used += ix.neon_gas_used
 
-        gas_price = int(self.neon_tx.gas_price, 16)
-        neon_income = int(self.neon_tx_res.gas_used, 16) * gas_price
+        def _safe_int(value: str, base: int) -> int:
+            try:
+                return int(value, base)
+            except ValueError:
+                return 0
+
+        gas_price = _safe_int(self.neon_tx.gas_price, 16)
+        neon_income = _safe_int(self.neon_tx_res.gas_used, 16) * gas_price
         op_neon_income = op_gas_used * gas_price
 
         return NeonTxStatData(
@@ -346,12 +329,6 @@ class NeonIndexedBlockInfo:
     def add_sol_tx_cost(self, sol_tx_cost: SolTxCostInfo) -> None:
         self._sol_tx_cost_list.append(sol_tx_cost)
 
-    def find_neon_holder(self, account: str, sol_neon_ix: SolNeonIxReceiptInfo) -> Optional[NeonIndexedHolderInfo]:
-        holder = self._neon_holder_dict.get(account)
-        if holder:
-            self._add_sol_neon_ix(holder, sol_neon_ix)
-        return holder
-
     def find_neon_tx_holder(self, account: str, neon_tx_sig: str,
                             sol_neon_ix: SolNeonIxReceiptInfo) -> Optional[NeonIndexedHolderInfo]:
         if neon_tx_sig[:2] == '0x':
@@ -360,14 +337,6 @@ class NeonIndexedBlockInfo:
         holder = self._neon_holder_dict.get(key)
         if holder:
             self._add_sol_neon_ix(holder, sol_neon_ix)
-        return holder
-
-    def add_neon_holder(self, account: str, sol_neon_ix: SolNeonIxReceiptInfo) -> NeonIndexedHolderInfo:
-        assert account not in self._neon_holder_dict, f'the holder {account} already in use!'
-
-        holder = NeonIndexedHolderInfo(account=account)
-        self._add_sol_neon_ix(holder, sol_neon_ix)
-        self._neon_holder_dict[account] = holder
         return holder
 
     def add_neon_tx_holder(self, account: str, neon_tx_sig: str,
@@ -413,9 +382,7 @@ class NeonIndexedBlockInfo:
         return tx
 
     def _del_neon_tx(self, tx: NeonIndexedTxInfo) -> None:
-        if tx.key.is_empty():
-            pass
-        elif not self._neon_tx_dict.pop(tx.key.value, None):
+        if not self._neon_tx_dict.pop(tx.key.value, None):
             LOG.warning(f'attempt to remove the not-existent {tx}')
         else:
             self._del_sol_neon_ix(tx)

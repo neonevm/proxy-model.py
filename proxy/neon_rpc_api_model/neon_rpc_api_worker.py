@@ -276,7 +276,10 @@ class NeonRpcApiWorker:
             tx_list = self._db.get_tx_list_by_block_slot(block.block_slot)
 
         for tx in tx_list:
-            gas_used += int(tx.neon_tx_res.gas_used, 16)
+            try:
+                gas_used += int(tx.neon_tx_res.gas_used, 16)
+            except ValueError:
+                pass
 
             if full:
                 receipt = self._get_transaction(tx)
