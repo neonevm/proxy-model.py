@@ -92,8 +92,8 @@ services:
       GATHER_STATISTICS: "YES"
       CONFIG: ci
       # Comment next two lines, if you want local stand without real gas-price
-      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.testnet.solana.com}
-      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-AFmdnt9ng1uVxqCmqwQJDAYC5cKTkw8gJKSM5PnzuF6z}
+      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
+      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
       #
       MIN_OPERATOR_BALANCE_TO_WARN: 4565760000 # = 913152000 * 5 (5 storage accounts) = 4.56576 SOL
       MIN_OPERATOR_BALANCE_TO_ERR: 913152000 # = solana rent 131072 (= Rent-exempt minimum: 0.913152 SOL) SOLs to create a storage
@@ -184,7 +184,7 @@ services:
       START_SLOT: LATEST
       PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.testnet.solana.com}
       PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-AFmdnt9ng1uVxqCmqwQJDAYC5cKTkw8gJKSM5PnzuF6z}
-      MAX_CONFIDENCE_INTERVAL: 0.01
+      MAX_CONFIDENCE_INTERVAL: 0.1
     hostname: airdropper
     entrypoint: ./run-airdropper.sh
     networks:
