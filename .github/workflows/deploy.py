@@ -184,6 +184,12 @@ def terraform_build_infrastructure(head_ref_branch, github_ref_name, proxy_tag, 
     click.echo(f"code: {return_code}")
     click.echo(f"stdout: {stdout}")
     click.echo(f"stderr: {stderr}")
+    with open(f"terraform.log", "w") as file:
+        file.write(stdout)
+        file.write(stderr)
+    if return_code != 0:
+        print("Terraform infrastructure is not built correctly")
+        sys.exit(1)
 
 
 @cli.command(name="destroy_terraform")

@@ -153,6 +153,11 @@ jobs:
         with:
           name: FTS docker logs
           path: ./logs/*
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Terraform infrastructure logs
+          path: ./terraform.log
   finalize-image:
     runs-on: build-runner
     needs:
