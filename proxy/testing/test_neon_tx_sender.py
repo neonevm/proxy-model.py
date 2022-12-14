@@ -86,7 +86,7 @@ class TestNeonTxSender(unittest.TestCase):
                 self._resource_initializer.init_resource(self._resource)
             self.assertTrue('Not enough SOLs on the resource' in str(context.exception))
             print('logs.output:', str(logs.output))
-            self.assertRegex(str(logs.output), 'ERROR:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
+            self.assertRegex(str(logs.output), 'Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
 
     # @unittest.skip("a.i.")
     def test_02_validate_warning_when_little_sols(self):
@@ -101,7 +101,7 @@ class TestNeonTxSender(unittest.TestCase):
         with self.assertLogs('neon.MemPool', level='WARNING') as logs:
             self._resource_initializer.init_resource(self._resource)
             print('logs.output:', str(logs.output))
-            self.assertRegex(str(logs.output), 'WARNING:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
+            self.assertRegex(str(logs.output), 'MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
 
     # @unittest.skip("a.i.")
     def test_03_validate_execution_when_not_enough_sols_for_all_operator_accounts(self):
@@ -120,5 +120,4 @@ class TestNeonTxSender(unittest.TestCase):
                 self._resource_initializer.init_resource(self._resource)
             self.assertTrue('Not enough SOLs on the resource' in str(context.exception))
             print('logs.output:', str(logs.output))
-            self.assertRegex(str(logs.output), 'ERROR:neon.MemPool:Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
-
+            self.assertRegex(str(logs.output), 'Operator account [A-Za-z0-9]{40,}:[0-9]+ has NOT enough SOLs; balance = [0-9]+; min_operator_balance_to_err = 1049000000000000000000000000')
