@@ -6,12 +6,6 @@
             "level": "DEBUG",
             "formatter": "json",
             "filters": ["context_filter"]
-        },
-        "root": {
-            "class": "logging.StreamHandler",
-            "level": "DEBUG",
-            "formatter": "json",
-            "filters": ["context_filter"]
         }
     },
     "filters": {
@@ -36,34 +30,9 @@
         }
     },
     "loggers": {
-        "neon": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "neon.Proxy": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "neon.MemPool": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "neon.Network": {
-            "level": "ERROR",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "neon.Statistic": {
-            "level": "ERROR",
-            "handlers": ["standard"],
-            "propagate": false
-        },
         "": {
-            "level": "ERROR",
-            "handlers": ["root"],
+            "level": "DEBUG",
+            "handlers": ["standard"],
             "propagate": false
         }
     }

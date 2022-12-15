@@ -8,8 +8,12 @@
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
 """
+import json
+import pathlib
 import logging
+import logging.config
 from typing import Any, Optional
+import pathlib
 
 from .constants import DEFAULT_LOG_FILE, DEFAULT_LOG_LEVEL, DEFAULT_LOG_FORMAT
 
@@ -48,3 +52,10 @@ class Logger:
                 level=single_char_to_level(log_level),
                 format=log_format,
             )
+        log_cfg_path = pathlib.Path("log_cfg.json")
+        if log_cfg_path.exists() and log_cfg_path.is_file():
+            with open(log_cfg_path, "r") as log_cfg_file:
+                data = json.load(log_cfg_file)
+                logging.config.dictConfig(
+                    data
+                )
