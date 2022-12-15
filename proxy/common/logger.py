@@ -9,7 +9,6 @@
     :license: BSD, see LICENSE for more details.
 """
 import json
-import pathlib
 import logging
 import logging.config
 from typing import Any, Optional

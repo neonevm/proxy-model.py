@@ -81,7 +81,7 @@ class TestNeonTxSender(unittest.TestCase):
         self._config.set_min_operator_balance_to_warn([1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2, 1_000_000_000 * 2])
         self._config.set_min_operator_balance_to_err([1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000])
 
-        with self.assertLogs('neon.MemPool', level='ERROR') as logs:
+        with self.assertLogs(level='ERROR') as logs:
             with self.assertRaises(BadResourceError) as context:
                 self._resource_initializer.init_resource(self._resource)
             self.assertTrue('Not enough SOLs on the resource' in str(context.exception))
@@ -98,7 +98,7 @@ class TestNeonTxSender(unittest.TestCase):
         self._config.set_min_operator_balance_to_warn([1_049_000_000 * 1_000_000_000 * 1_000_000_000, 1_000_000_000 * 2])
         self._config.set_min_operator_balance_to_err([1_049_049_000, 1_000_000_000])
 
-        with self.assertLogs('neon.MemPool', level='WARNING') as logs:
+        with self.assertLogs(level='WARNING') as logs:
             self._resource_initializer.init_resource(self._resource)
             print('logs.output:', str(logs.output))
             self.assertRegex(str(logs.output), 'Operator account [A-Za-z0-9]{40,}:[0-9]+ SOLs are running out; balance = [0-9]+; min_operator_balance_to_warn = 1049000000000000000000000000; min_operator_balance_to_err = 1049049000;')
@@ -115,7 +115,7 @@ class TestNeonTxSender(unittest.TestCase):
         self._config.set_min_operator_balance_to_warn([1_049_000_000 * 1_000_000_000 * 1_000_000_000 * 2])
         self._config.set_min_operator_balance_to_err([1_049_000_000 * 1_000_000_000 * 1_000_000_000])
 
-        with self.assertLogs('neon.MemPool', level='ERROR') as logs:
+        with self.assertLogs(level='ERROR') as logs:
             with self.assertRaises(BadResourceError) as context:
                 self._resource_initializer.init_resource(self._resource)
             self.assertTrue('Not enough SOLs on the resource' in str(context.exception))
