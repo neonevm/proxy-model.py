@@ -262,6 +262,7 @@ class Airdropper(IndexerBase):
                 for call_idx, call in call_list:
                     LOG.debug(f"Processing call[{call_idx}]")
                     if not self.check_create_approve_call_instr(account_keys, create_acc, approve, call):
+                        LOG.info("NOT CHECK CREATE APPROVE CALL INSTR")
                         continue
 
                     predicate = lambda  instr: isRequiredInstruction(instr, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SPL_TOKEN_INIT_ACC_2)

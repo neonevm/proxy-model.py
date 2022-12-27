@@ -30,8 +30,13 @@
         }
     },
     "loggers": {
-        "": {
+      "proxy": {
             "level": "DEBUG",
+            "handlers": ["standard"],
+            "propagate": false
+        },
+        "": {
+            "level": "INFO",
             "handlers": ["standard"],
             "propagate": false
         }

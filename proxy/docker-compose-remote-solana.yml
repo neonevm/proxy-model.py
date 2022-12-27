@@ -88,6 +88,10 @@ services:
       - "9090"
     networks:
       - net
+    volumes:
+      - "/Users/gigimon/workspaces/neon/proxy-model.py/log_cfg.json:/opt/log_cfg.json"
+      - "/Users/gigimon/workspaces/neon/proxy-model.py/proxy:/opt/proxy"
+
     entrypoint: proxy/run-test-proxy.sh
     healthcheck:
       test: [ CMD-SHELL, "/opt/health_check_proxy.sh" ]
