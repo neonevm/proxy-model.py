@@ -1,7 +1,5 @@
 import unittest
 import time
-import sys
-import logging
 import itertools
 
 from flask import request, Response
@@ -17,10 +15,6 @@ from ..indexer.sql_dict import SQLDict
 from ..common_neon.solana_interactor import SolInteractor
 from ..testing.transactions import pre_token_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address
 
-
-logging.basicConfig(level=logging.DEBUG, handlers=[
-    logging.StreamHandler(stream=sys.stdout)
-])
 
 class MockFaucet(MockServer):
     def __init__(self, port):
