@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional, Dict
 
@@ -105,10 +106,10 @@ class ElfParams:
         if not self.has_params():
             LOG.debug("Read ELF params")
         elf_param_dict: Dict[str, str] = {}
-        for param in NeonCli(config).call("neon-elf-params").splitlines():
-            if param.startswith('NEON_') and '=' in param:
-                v = param.split('=')
-                elf_param_dict.setdefault(v[0], v[1])
+        params = NeonCli(config).call("neon-elf-params")
+        for param in params:
+            if param.startswith('NEON_'):
+                elf_param_dict.setdefault(param, params[param])
 
         for param, value in elf_param_dict.items():
             if self._elf_param_dict.get(param) != value:

@@ -55,19 +55,18 @@ class NeonCli(CliBase):
 
     def call(self, *args, data=None):
         try:
-            th = threading.current_thread()
-            ctx = json.dumps(getattr(th, "log_context", {}))
-
             cmd = ["neon-cli",
                    "--commitment=recent",
                    "--url", self._config.solana_url,
                    f"--evm_loader={str(self._config.evm_loader_id)}",
-                   f"--logging_ctx={ctx}",
                    f"--loglevel={self._emulator_logging_level}"
                    ]\
                   + (["-vvv"] if self._config.neon_cli_debug_log else [])\
                   + list(args)
-            return self.run_cli(cmd, data, timeout=self._config.neon_cli_timeout, universal_newlines=True)
+            output = json.loads(self.run_cli(cmd, data, timeout=self._config.neon_cli_timeout, universal_newlines=True))
+            for log in output["logs"]:
+                LOG.debug(log)
+            return output["value"]
         except subprocess.CalledProcessError as err:
             LOG.error("ERR: neon-cli error {}".format(err))
             raise

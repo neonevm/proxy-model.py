@@ -20,8 +20,7 @@ def call_emulated(config: Config, contract_id, caller_id, data=None, value=None)
         f'Call emulated. contract_id: {contract_id}, caller_id: {caller_id}, '
         f'data: {data}, value: {value}, return: {output}'
     )
-    result = json.loads(output)
-    return result
+    return output
 
 
 def call_tx_emulated(config: Config, neon_tx: NeonTx) -> NeonEmulatedResult:
