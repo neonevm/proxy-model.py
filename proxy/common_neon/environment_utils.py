@@ -66,7 +66,7 @@ class NeonCli(CliBase):
             output = json.loads(self.run_cli(cmd, data, timeout=self._config.neon_cli_timeout, universal_newlines=True))
             for log in output["logs"]:
                 LOG.debug(log)
-            return output["value"]
+            return output.get("value", "")
         except subprocess.CalledProcessError as err:
             LOG.error("ERR: neon-cli error {}".format(err))
             raise

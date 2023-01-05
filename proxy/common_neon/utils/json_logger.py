@@ -30,7 +30,7 @@ class JSONFormatter(logging.Formatter):
             message_dict.update(context)
 
         if record.exc_info:
-            message_dict["exc_info"] = record.exc_info
+            message_dict["exc_info"] = str(record.exc_info)
             message_dict["exc_text"] = record.exc_text
 
         return json.dumps(message_dict)
