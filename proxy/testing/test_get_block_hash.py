@@ -2,6 +2,7 @@ from typing import List
 import unittest
 
 from proxy.testing.testing_helpers import Proxy, TransactionSended, HexBytes
+from proxy.indexer.solana_blocks_db import SolBlocksDB
 
 
 BLOCK_HASH_SOLIDITY_SOURCE = '''
@@ -80,6 +81,16 @@ class Test_get_block_hash(unittest.TestCase):
         print(block_hash_history)
         print(logs)
         self.assertEqual(logs[0], block_hash_history)
+
+    def test_get_fake_block_by_hash(self):
+        current_block = self.proxy.conn.block_number
+        print(f"Current block number: {current_block}")
+        req_block_hash = SolBlocksDB._generate_fake_block_hash(current_block - 1)
+        fake_block = self.proxy.conn.get_block(req_block_hash, full_transactions=False)
+        print(f"Fake block: {fake_block}")
+        prev_block = self.proxy.conn.get_block(current_block - 2, full_transactions=False)
+        print(f"Prev block: {prev_block}")
+        self.assertTrue(fake_block['timestamp'] - prev_block['timestamp'] <= 1)
 
 
 if __name__ == '__main__':
