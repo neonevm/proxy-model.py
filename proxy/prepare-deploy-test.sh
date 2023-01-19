@@ -11,7 +11,7 @@ solana airdrop 1000
 solana balance
 
 echo "Get ELF params"
-python3 deploy-get-elf.py
+python3 proxy/deploy-get-elf.py
 ls -la
 cp .test-env ../
 ls -la ../
