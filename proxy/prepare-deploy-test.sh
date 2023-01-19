@@ -12,7 +12,9 @@ solana balance
 
 echo "Get ELF params"
 python3 deploy-get-elf.py
-mv .test-env ../
+ls -la
+cp .test-env ../
+ls -la ../
 echo "TEST_PROGRAM=$(solana address -k /spl/bin/neon_test_invoke_program-keypair.json)" >> .test-env
 
 export $(cat .test-env | xargs)
