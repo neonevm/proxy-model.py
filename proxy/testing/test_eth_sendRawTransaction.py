@@ -318,22 +318,22 @@ class TestEthSendRawTransaction(unittest.TestCase):
         print(f'tx_store: {tx_store}')
 
         number_pos = 0
-        value_received = self.proxy.conn.get_storage_at(self.storage_contract.address, number_pos, "latest")
+        value_received = self.proxy.conn.get_storage_at(self.storage_contract.address, number_pos, "latest")["value"]
         print('eth_getStorageAt existing address and index => ', value_received.hex())
         self.assertEqual(int.from_bytes(value_received, byteorder='big'), value_to_store)
 
         non_existing_pos = 12
-        value_received = self.proxy.conn.get_storage_at(self.storage_contract.address, non_existing_pos, "latest")
+        value_received = self.proxy.conn.get_storage_at(self.storage_contract.address, non_existing_pos, "latest")["value"]
         print('eth_getStorageAt existing address and non-existing index => ', value_received.hex())
         self.assertEqual(int.from_bytes(value_received, byteorder='big'), 0)
 
         non_exising_address = b'\xe1\xda\xb7\xa6\x17\x6f\x87\x68\xF5\x3a\x42\x5f\x29\x61\x73\x60\x5e\xd5\x08\x32'
-        value_received = self.proxy.conn.get_storage_at(non_exising_address, non_existing_pos, "latest")
+        value_received = self.proxy.conn.get_storage_at(non_exising_address, non_existing_pos, "latest")["value"]
         print('eth_getStorageAt non-existing address => ', value_received.hex())
         self.assertEqual(int.from_bytes(value_received, byteorder='big'), 0)
 
         not_a_contract_address = self.eth_account
-        value_received = self.proxy.conn.get_storage_at(not_a_contract_address.address, 0, "latest")
+        value_received = self.proxy.conn.get_storage_at(not_a_contract_address.address, 0, "latest")["value"]
         print('eth_getStorageAt not_a_contract_address address => ', value_received.hex())
         self.assertEqual(int.from_bytes(value_received, byteorder='big'), 0)
 
