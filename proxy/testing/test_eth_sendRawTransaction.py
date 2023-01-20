@@ -318,12 +318,12 @@ class TestEthSendRawTransaction(unittest.TestCase):
         print(f'tx_store: {tx_store}')
 
         number_pos = 0
-        value_received = self.proxy.conn.get_storage_at(self.storage_contract.address["value"], number_pos, "latest")
+        value_received = self.proxy.conn.get_storage_at(self.storage_contract.address, number_pos, "latest")
         print('eth_getStorageAt existing address and index => ', value_received.hex())
         self.assertEqual(int.from_bytes(value_received, byteorder='big'), value_to_store)
 
         non_existing_pos = 12
-        value_received = self.proxy.conn.get_storage_at(self.storage_contract.address["value"], non_existing_pos, "latest")
+        value_received = self.proxy.conn.get_storage_at(self.storage_contract.address, non_existing_pos, "latest")
         print('eth_getStorageAt existing address and non-existing index => ', value_received.hex())
         self.assertEqual(int.from_bytes(value_received, byteorder='big'), 0)
 
