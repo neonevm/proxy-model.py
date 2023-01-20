@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 import time
 import math
@@ -11,6 +12,9 @@ from ..common_neon.solana_interactor import SolInteractor
 
 from ..statistic.data import NeonGasPriceData
 from ..statistic.proxy_client import ProxyStatClient
+
+
+LOG = logging.getLogger(__name__)
 
 
 class MPExecutorGasPriceTask(MPExecutorBaseTask):
@@ -54,5 +58,5 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
             sol_price_account=self._gas_price_calculator.sol_price_account,
             neon_price_account=self._gas_price_calculator.neon_price_account
         )
-        self.debug(f'{gas_price}')
+        LOG.debug(f'{gas_price}')
         return gas_price

@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-
 from typing import Union, Optional, Any, Tuple
-from logged_groups import logged_group
 
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.solana_tx import SolTxReceipt
@@ -37,7 +35,6 @@ class SolTxError(Exception):
         return False
 
 
-@logged_group("neon.Proxy")
 class SolTxErrorParser:
     _computation_budget_exceeded = 'ComputationalBudgetExceeded'
     _program_failed_to_complete = 'ProgramFailedToComplete'

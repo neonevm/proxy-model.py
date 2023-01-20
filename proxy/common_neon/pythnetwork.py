@@ -1,15 +1,15 @@
 import struct
-
+import logging
 from decimal import Decimal
 from typing import List, Union, Dict, Any, Optional, Tuple
-
-from logged_groups import logged_group
 
 from ..common_neon.constants import SYS_PROGRAM_ID
 from ..common_neon.layouts import AccountInfo
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolPubKey
 
+
+LOG = logging.getLogger(__name__)
 
 def read_str(pos: int, data: bytes) -> Tuple[bytes, int]:
     length = data[pos]
@@ -60,7 +60,6 @@ def unpack(layout_descriptor: Dict[str, Any],
     return struct.unpack(field['format'], raw_data[start_idx:stop_idx])[0]
 
 
-@logged_group("neon.Airdropper")
 class PythNetworkClient:
     _PYTH_MAGIC = 0xa1b2c3d4
     _PROD_ACCT_SIZE = 512
@@ -180,22 +179,22 @@ class PythNetworkClient:
         Reads pyth.network mapping account and prepares mapping
         symbol -> price_acc_addr
         """
-        self.info('Start updating Pyth.Network mapping data...')
+        LOG.info('Start updating Pyth.Network mapping data...')
         product_acct_list: List[SolPubKey] = self._parse_mapping_account(mapping_acc)
         product_dict: Dict[str, bytes] = self._read_pyth_acct_data(product_acct_list)
         for acct_addr, product_data in product_dict.items():
             if product_data is None:
-                self.warning(f'Failed to read product account: {acct_addr}')
+                LOG.warning(f'Failed to read product account: {acct_addr}')
                 continue
 
             try:
                 product: Dict[str, Any] = self._parse_prod_account(product_data)
                 symbol: str = product['attrs']['symbol']
-                self.info(f'Product account {acct_addr}: {symbol}')
+                LOG.info(f'Product account {acct_addr}: {symbol}')
                 self.set_price_account(symbol, SolPubKey(product['price_acc']))
             except BaseException as exc:
-                self.error(f'Failed to parse product account data {acct_addr}', exc_info=exc)
-        self.info('Pyth.Network update finished.\n\n\n')
+                LOG.error(f'Failed to parse product account data {acct_addr}', exc_info=exc)
+        LOG.info('Pyth.Network update finished.\n\n\n')
 
     def set_price_account(self, symbol: str, price_account: SolPubKey) -> None:
         self._price_account_dict[symbol] = price_account

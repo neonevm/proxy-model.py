@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, List, Any
+from dataclasses import dataclass
+from typing import Dict, List, Any, Optional
 
 
 NeonEmulatedResult = Dict[str, Any]
@@ -50,3 +51,16 @@ class NeonTxExecCfg:
         self._state_tx_cnt = value
         return self
 
+
+@dataclass
+class Result:
+    error: Optional[str] = None
+
+    def __bool__(self):
+        return self.error is None
+
+    def __str__(self):
+        return "ok" if self.__bool__() else self.error
+
+    def __repr__(self):
+        return f"""Result({'' if self.error is None else '"' + self.error + '"'})"""

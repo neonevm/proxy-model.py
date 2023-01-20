@@ -1,12 +1,13 @@
 import base64
 import re
-
+import logging
 from dataclasses import dataclass
 from typing import List, Iterator, Optional, Tuple
 
-from logged_groups import logged_group
-
 from ..common_neon.environment_data import EVM_LOADER_ID
+
+
+LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -60,7 +61,6 @@ class NeonLogInfo:
     neon_tx_event_list: List[NeonLogTxEvent]
 
 
-@logged_group('neon.decoder')
 class _NeonLogDecoder:
     _re_data = re.compile(r'^Program data: (.+)$')
     _bpf_cycle_cnt_re = re.compile(f'^Program {EVM_LOADER_ID}' + r' consumed (\d+) of (\d+) compute units$')
@@ -96,7 +96,7 @@ class _NeonLogDecoder:
     def _decode_neon_tx_return(self, data_list: List[str]) -> Optional[NeonLogTxReturn]:
         """Unpacks base64-encoded return data"""
         if len(data_list) < 2:
-            self.error(f'Failed to decode return data: less then 2 elements in {data_list}')
+            LOG.error(f'Failed to decode return data: less then 2 elements in {data_list}')
             return None
 
         bs = base64.b64decode(data_list[0])
@@ -113,13 +113,13 @@ class _NeonLogDecoder:
     def _decode_neon_tx_event(self, data_list: List[str]) -> Optional[NeonLogTxEvent]:
         """Unpacks base64-encoded event data"""
         if len(data_list) < 3:
-            self.error(f'Failed to decode events data: less then 3 elements in {data_list}')
+            LOG.error(f'Failed to decode events data: less then 3 elements in {data_list}')
             return None
 
         bs = base64.b64decode(data_list[1])
         topic_cnt = int.from_bytes(bs, 'little')
         if topic_cnt > 4:
-            self.error(f'Failed to decode events data: count of topics more than 4 = {topic_cnt}')
+            LOG.error(f'Failed to decode events data: count of topics more than 4 = {topic_cnt}')
             return None
 
         address = base64.b64decode(data_list[0])
@@ -133,12 +133,12 @@ class _NeonLogDecoder:
     def _decode_neon_tx_sig(self, data_list: List[str]) -> Optional[NeonLogTxSig]:
         """Extracts Neon transaction hash"""
         if len(data_list) != 1:
-            self.error(f'Failed to decode neon tx hash: should be 1 element in {data_list}')
+            LOG.error(f'Failed to decode neon tx hash: should be 1 element in {data_list}')
             return None
 
         tx_sig = base64.b64decode(data_list[0])
         if len(tx_sig) != 32:
-            self.error(f'Failed to decode neon tx hash: wrong hash length in {data_list}')
+            LOG.error(f'Failed to decode neon tx hash: wrong hash length in {data_list}')
             return None
 
         return NeonLogTxSig(neon_sig=tx_sig)
@@ -147,7 +147,7 @@ class _NeonLogDecoder:
         """Extracts gas_used of the canceled transaction"""
 
         if len(data_list) != 1:
-            self.error(f'Failed to decode neon tx cancel: should be 1 element in {data_list}')
+            LOG.error(f'Failed to decode neon tx cancel: should be 1 element in {data_list}')
             return None
 
         bs = base64.b64decode(data_list[0])
@@ -159,7 +159,7 @@ class _NeonLogDecoder:
         """Extracts gas_used of the """
 
         if len(data_list) != 1:
-            self.error(f'Failed to decode neon tx cancel: should be 1 element in {data_list}')
+            LOG.error(f'Failed to decode neon tx cancel: should be 1 element in {data_list}')
             return None
 
         bs = base64.b64decode(data_list[0])

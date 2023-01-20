@@ -307,10 +307,11 @@ class EvmLoader:
         return acc, 255
 
     def ether2program(self, ether: Union[str, bytes]):
-        output = NeonCli().call(
-            "create-program-address --evm_loader {} {}".format(self.loader_id, self.ether2hex(ether)))
-        items = output.rstrip().split(' ')
-        return PublicKey(items[0]), int(items[1])
+        if isinstance(ether, str):
+            if ether.startswith('0x'):
+                ether = ether[2:]
+            ether = bytes.fromhex(ether)
+        return PublicKey.find_program_address([ACCOUNT_SEED_VERSION, ether], PublicKey(EVM_LOADER))
 
     def checkAccount(self, solana):
         info = client.get_account_info(solana)

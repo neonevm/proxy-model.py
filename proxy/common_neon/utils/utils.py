@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-
+import hashlib
+import time
 from enum import Enum
 from typing import Dict, Any, List, Tuple
 
@@ -107,3 +108,6 @@ def get_from_dict(src: Dict, *path) -> Any:
             return None
     return val
 
+
+def gen_unique_id():
+    return hashlib.md5((time.time_ns()).to_bytes(16, 'big')).hexdigest()[:7]

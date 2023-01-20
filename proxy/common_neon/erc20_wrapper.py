@@ -1,5 +1,6 @@
 import json
 import struct
+import logging
 from typing import Union, Dict, Any, Tuple
 
 from solcx import install_solc
@@ -12,7 +13,6 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from solana.rpc.types import TxOpts
 from solana.rpc.commitment import Confirmed
 
-from logged_groups import logged_group
 from solcx import install_solc
 
 from ..common_neon.solana_tx import SolTxIx, SolAccountMeta, SolAccount, SolPubKey
@@ -25,6 +25,9 @@ from ..common_neon.web3 import NeonWeb3, ChecksumAddress
 
 install_solc(version='0.7.6')
 from solcx import compile_source
+
+
+LOG = logging.getLogger(__name__)
 
 
 # Standard interface of ERC20 contract to generate ABI for wrapper
@@ -63,7 +66,6 @@ interface IERC20ForSpl {
 RPCResponse = Dict[str, Any]
 
 
-@logged_group("neon.Proxy")
 class ERC20Wrapper:
     proxy: NeonWeb3
     name: str
@@ -113,10 +115,10 @@ class ERC20Wrapper:
         tx_constructor = erc20.constructor(*init_args).build_transaction(tx)
         tx_deploy = self.proxy.eth.account.sign_transaction(tx_constructor, self.admin.key)
         tx_deploy_hash = self.proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
-        self.debug(f'tx_deploy_hash: {tx_deploy_hash.hex()}')
+        LOG.debug(f'tx_deploy_hash: {tx_deploy_hash.hex()}')
         tx_deploy_receipt = self.proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
-        self.debug(f'tx_deploy_receipt: {tx_deploy_receipt}')
-        self.debug(f'deploy status: {tx_deploy_receipt.status}')
+        LOG.debug(f'tx_deploy_receipt: {tx_deploy_receipt}')
+        LOG.debug(f'deploy status: {tx_deploy_receipt.status}')
         self.neon_contract_address = ChecksumAddress(tx_deploy_receipt.contractAddress)
         self.solana_contract_address = self.get_neon_account_address(self.neon_contract_address)
 
@@ -179,7 +181,6 @@ class ERC20Wrapper:
         neon.init_neon_account_list(neon_account_dict)
         return neon
 
-    
     def create_claim_to_instruction(self, owner: SolPubKey, from_acc: SolPubKey, to_acc: NeonAccount, amount: int, signer_acc: NeonAccount):
         erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
         nonce = self.proxy.eth.get_transaction_count(signer_acc.address)
@@ -205,7 +206,6 @@ class ERC20Wrapper:
         neon.init_neon_tx(NeonTx.from_string(neon_tx))
         neon.init_neon_account_list(neon_account_dict)
         return neon
-    
 
     def create_input_liquidity_instruction(self, payer: SolPubKey,
                                            from_address: SolPubKey,

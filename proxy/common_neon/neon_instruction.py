@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import logging
 from enum import Enum
 from typing import Optional, List, cast
 
 import rlp
 
-from logged_groups import logged_group
 from sha3 import keccak_256
 
 from solana.system_program import CreateAccountWithSeedParams, create_account_with_seed
@@ -17,6 +17,9 @@ from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.layouts import CREATE_ACCOUNT_LAYOUT
 from ..common_neon.solana_tx import SolTxIx, SolPubKey, SolAccountMeta
+
+
+LOG = logging.getLogger(__name__)
 
 
 class EvmInstruction(Enum):
@@ -36,7 +39,6 @@ def create_account_layout(ether):
     return EvmInstruction.CreateAccountV03.value + CREATE_ACCOUNT_LAYOUT.build(dict(ether=ether))
 
 
-@logged_group("neon.Proxy")
 class NeonIxBuilder:
     def __init__(self, operator: SolPubKey):
         self._evm_program_id = SolPubKey(EVM_LOADER_ID)
@@ -90,7 +92,7 @@ class NeonIxBuilder:
 
     def make_create_account_with_seed_ix(self, account: SolPubKey, seed: bytes, lamports: int, space: int) -> SolTxIx:
         seed_str = str(seed, 'utf8')
-        self.debug(f"createAccountWithSeedIx {self._operator_account} account({account} seed({seed_str})")
+        LOG.debug(f"createAccountWithSeedIx {self._operator_account} account({account} seed({seed_str})")
 
         return create_account_with_seed(
             CreateAccountWithSeedParams(
@@ -105,7 +107,7 @@ class NeonIxBuilder:
         )
 
     def make_delete_holder_ix(self, holder_account: SolPubKey) -> SolTxIx:
-        self.debug(f"deleteHolderIx {self._operator_account} refunded account({holder_account})")
+        LOG.debug(f"deleteHolderIx {self._operator_account} refunded account({holder_account})")
         return SolTxIx(
             keys=[
                 SolAccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
@@ -116,7 +118,7 @@ class NeonIxBuilder:
         )
 
     def create_holder_ix(self, holder: SolPubKey) -> SolTxIx:
-        self.debug(f"createHolderIx {self._operator_account} account({holder})")
+        LOG.debug(f"createHolderIx {self._operator_account} account({holder})")
         return SolTxIx(
             keys=[
                 SolAccountMeta(pubkey=holder, is_signer=False, is_writable=True),
@@ -130,7 +132,7 @@ class NeonIxBuilder:
         if isinstance(eth_address, str):
             eth_address = NeonAddress(eth_address)
         pda_account, nonce = neon_2program(eth_address)
-        self.debug(f'Create eth account: {str(eth_address)}, sol account: {pda_account}, nonce: {nonce}')
+        LOG.debug(f'Create eth account: {str(eth_address)}, sol account: {pda_account}, nonce: {nonce}')
 
         data = create_account_layout(bytes(eth_address))
         return SolTxIx(

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import abc
+import logging
 from typing import Optional, Dict, Any
 
 import base58
-from logged_groups import logged_group
 
 from ..common_neon.address import account_with_seed
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
@@ -13,7 +13,9 @@ from ..common_neon.solana_tx import SolTxIx, SolPubKey
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 
 
-@logged_group("neon.MemPool")
+LOG = logging.getLogger(__name__)
+
+
 class NeonTxStage(abc.ABC):
     name = 'UNKNOWN'
 
@@ -86,7 +88,7 @@ class NeonCreateAccountTxStage(NeonTxStage):
 
     def build(self) -> None:
         assert self._is_empty()
-        self.debug(f'Create user account {self._address}')
+        LOG.debug(f'Create user account {self._address}')
         self.tx.add(self._create_account())
 
 
@@ -107,7 +109,7 @@ class NeonCreateHolderAccountStage(NeonCreateAccountWithSeedStage):
     def build(self):
         assert self._is_empty()
 
-        self.debug(f'Create perm account {self.sol_account}')
+        LOG.debug(f'Create perm account {self.sol_account}')
         self.tx.add(self._create_account_with_seed())
         self.tx.add(self._ix_builder.create_holder_ix(self.sol_account))
 
@@ -131,5 +133,5 @@ class NeonDeleteHolderAccountStage(NeonTxStage):
     def build(self):
         assert self._is_empty()
 
-        self.debug(f'Delete holder account {self._sol_account}')
+        LOG.debug(f'Delete holder account {self._sol_account}')
         self.tx.add(self._delete_account())

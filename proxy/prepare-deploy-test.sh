@@ -10,7 +10,11 @@ solana address || solana-keygen new --no-passphrase
 solana airdrop 1000
 solana balance
 
-neon-cli --commitment confirmed --url "${SOLANA_URL}" --evm_loader "${EVM_LOADER}" neon-elf-params > .test-env
+echo "Get ELF params"
+python3 proxy/deploy-get-elf.py
+ls -la
+cp .test-env ../
+ls -la ../
 echo "TEST_PROGRAM=$(solana address -k /spl/bin/neon_test_invoke_program-keypair.json)" >> .test-env
 
 export $(cat .test-env | xargs)

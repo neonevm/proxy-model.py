@@ -1,7 +1,5 @@
 from typing import Optional, List, Iterator
 
-from logged_groups import logged_group
-
 from ..common_neon.utils import NeonTxReceiptInfo
 
 from ..indexer.base_db import BaseDB
@@ -15,7 +13,6 @@ from ..indexer.sql_dict import SQLDict
 from ..common_neon.config import Config
 
 
-@logged_group("neon.Indexer")
 class IndexerDB:
     def __init__(self, config: Config):
         self._sol_blocks_db = SolBlocksDB(config)

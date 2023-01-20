@@ -1,13 +1,13 @@
-import time
-
-from logged_groups import logged_group
+import logging
 
 from .indexer import Indexer
 from ..common_neon.config import Config
 from ..statistic import IndexerStatService
 
 
-@logged_group("neon.Indexer")
+LOG = logging.getLogger(__name__)
+
+
 class IndexerApp:
     def __init__(self, config: Config):
         self._indexer_stat_service = IndexerStatService(config)
@@ -16,10 +16,9 @@ class IndexerApp:
         indexer.run()
 
 
-@logged_group("neon.Indexer")
-def run_indexer(*, logger):
+def run_indexer():
     config = Config()
-    logger.info(f"Running indexer with params: {str(config)}")
+    LOG.info(f"Running indexer with params: {str(config)}")
     IndexerApp(config)
 
 

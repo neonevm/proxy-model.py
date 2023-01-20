@@ -1,12 +1,7 @@
 import asyncio
-
+import logging
 from multiprocessing import Process
 from typing import Any, Optional, cast, Union
-
-from logged_groups import logged_group, logging_context
-from neon_py.data import Result
-from neon_py.maintenance_api import MaintenanceRequest, MaintenanceCommand, ReplicationRequest, ReplicationBunch
-from neon_py.network import AddrPickableDataSrv, IPickableDataServerUser
 
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 from .mempool import MemPool
@@ -16,11 +11,17 @@ from .mempool_replicator import MemPoolReplicator
 from .operator_resource_mng import OpResMng
 
 from ..common_neon.config import Config
+from ..common_neon.data import Result
+from ..common_neon.utils.json_logger import logging_context
+from ..common_neon.maintenance_api import MaintenanceRequest, MaintenanceCommand, ReplicationRequest, ReplicationBunch
+from ..common_neon.pickable_data_server import AddrPickableDataSrv, IPickableDataServerUser
 
 from ..statistic.proxy_client import ProxyStatClient
 
 
-@logged_group("neon.MemPool")
+LOG = logging.getLogger(__name__)
+
+
 class MPService(IPickableDataServerUser, IMPExecutorMngUser):
     MP_SERVICE_ADDR = ("0.0.0.0", 9091)
     MP_MAINTENANCE_ADDR = ("0.0.0.0", 9092)
@@ -39,7 +40,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         self._config = config
 
     def start(self):
-        self.info("Run until complete")
+        LOG.info("Run until complete")
         self._process.start()
 
     async def on_data_received(self, mp_request: Union[MPRequest, MaintenanceRequest]) -> Any:
@@ -48,10 +49,10 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
                 return await self.process_mp_request(cast(MPRequest, mp_request))
             elif issubclass(type(mp_request), (MaintenanceRequest,)):
                 return self.process_maintenance_request(cast(MaintenanceRequest, mp_request))
-            self.error(f"Failed to process mp_request, unknown type: {type(mp_request)}")
+            LOG.error(f"Failed to process mp_request, unknown type: {type(mp_request)}")
         except BaseException as exc:
             with logging_context(req_id=mp_request.req_id):
-                self.error(f"Failed to process maintenance request: {mp_request.command}.", exc_info=exc)
+                LOG.error(f"Failed to process maintenance request: {mp_request.command}.", exc_info=exc)
                 return Result("Request failed")
 
         return Result("Unexpected problem")
@@ -74,7 +75,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
                 return self._mempool.get_gas_price()
             elif mp_request.type == MPRequestType.GetElfParamDict:
                 return self._mempool.get_elf_param_dict()
-            self.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
+            LOG.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
 
     def process_maintenance_request(self, request: MaintenanceRequest) -> Result:
         if request.command == MaintenanceCommand.SuspendMemPool:
@@ -86,12 +87,12 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             return self._replicator.replicate(repl_req.peers)
         elif request.command == MaintenanceCommand.ReplicateTxsBunch:
             mp_tx_bunch: ReplicationBunch = cast(ReplicationBunch, request)
-            self.info(
+            LOG.info(
                 f"Got replication txs bunch, sender: {mp_tx_bunch.sender_addr}, "
                 f"txs: {len(mp_tx_bunch.mp_tx_requests)}"
             )
             return self._replicator.on_mp_tx_bunch(mp_tx_bunch.sender_addr, mp_tx_bunch.mp_tx_requests)
-        self.error(f"Failed to process maintenance mp_reqeust, unknown command: {request.command}")
+        LOG.error(f"Failed to process maintenance mp_reqeust, unknown command: {request.command}")
 
     def run(self):
         try:
@@ -106,7 +107,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             self._replicator = MemPoolReplicator(self._mempool)
             self._event_loop.run_forever()
         except BaseException as exc:
-            self.error('Failed to run mempool_service.', exc_info=exc)
+            LOG.error('Failed to run mempool_service.', exc_info=exc)
 
     def on_executor_released(self, executor_id: int):
         self._mempool.on_executor_got_available(executor_id)

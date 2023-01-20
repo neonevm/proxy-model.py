@@ -1,5 +1,5 @@
+import logging
 from typing import List
-from logged_groups import logged_group
 
 from ..common_neon.solana_tx import SolTxReceipt, SolTx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
@@ -14,7 +14,9 @@ from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 
 
-@logged_group("neon.MemPool")
+LOG = logging.getLogger(__name__)
+
+
 class SimpleNeonTxSender(SolTxListSender):
     def __init__(self, strategy: BaseNeonTxStrategy, *args, **kwargs):
         super().__init__(strategy.ctx.config, *args, **kwargs)
@@ -40,7 +42,7 @@ class SimpleNeonTxSender(SolTxListSender):
             res = sol_neon_ix.neon_tx_return
             if res is not None:
                 self._neon_tx_res.set_result(status=res.status, gas_used=res.gas_used, return_value=res.return_value)
-                self.debug(f'Got Neon tx result: {self._neon_tx_res}')
+                LOG.debug(f'Got Neon tx result: {self._neon_tx_res}')
                 break
 
     def _convert_state_to_tx_list(self, tx_status: SolTxSendState.Status,

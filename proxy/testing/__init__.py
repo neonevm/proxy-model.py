@@ -8,6 +8,11 @@
     :copyright: (c) 2013-present by Abhinav Singh and contributors.
     :license: BSD, see LICENSE for more details.
 """
+import sys
+import logging
+
+logging.basicConfig(handlers=[logging.StreamHandler(sys.stdout)], level=logging.DEBUG)
+
 from solcx import install_solc
 install_solc(version='0.7.6')
 

@@ -1,7 +1,6 @@
 from decimal import Decimal
 import math
-
-from logged_groups import logged_group
+import logging
 from typing import Optional
 
 from ..common_neon.pythnetwork import PythNetworkClient
@@ -10,7 +9,9 @@ from ..common_neon.config import Config
 from ..common_neon.solana_tx import SolPubKey
 
 
-@logged_group("neon.gas_price_calculator")
+LOG = logging.getLogger(__name__)
+
+
 class GasPriceCalculator:
     _sol_price_symbol = 'Crypto.SOL/USD'
     _neon_price_symbol = 'Crypto.NEON/USD'
@@ -43,7 +44,7 @@ class GasPriceCalculator:
             self._pyth_network_client.update_mapping(self._config.pyth_mapping_account)
             return self.has_price()
         except BaseException as exc:
-            self.debug('Failed to update pyth.network mapping', exc_info=exc)
+            LOG.debug('Failed to update pyth.network mapping', exc_info=exc)
             return False
 
     @property
@@ -94,7 +95,7 @@ class GasPriceCalculator:
 
             return (self._sol_price_usd / self._neon_price_usd) * pow(Decimal(10), 9)
         except BaseException as exc:
-            self.error('Failed to retrieve SOL price', exc_info=exc)
+            LOG.error('Failed to retrieve SOL price.', exc_info=exc)
             return None
 
     @property

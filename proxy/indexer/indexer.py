@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import time
-
+import logging
 from collections import deque
 from typing import List, Optional, Dict, Deque, Type, Set
-
-from logged_groups import logged_group, logging_context
 
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.config import Config
@@ -16,6 +14,7 @@ from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo
 from ..common_neon.solana_tx import SolPubKey, SolAccount
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.utils import SolanaBlockInfo
+from ..common_neon.utils.json_logger import logging_context
 
 from ..statistic.data import NeonBlockStatData
 from ..statistic.indexer_client import IndexerStatClient
@@ -31,7 +30,9 @@ from ..indexer.solana_tx_meta_collector import SolTxMetaDict, SolHistoryNotFound
 from ..indexer.utils import MetricsToLogger
 
 
-@logged_group("neon.Indexer")
+LOG = logging.getLogger(__name__)
+
+
 class Indexer(IndexerBase):
     def __init__(self, config: Config):
         solana = SolInteractor(config, config.solana_url)
@@ -101,7 +102,7 @@ class Indexer(IndexerBase):
         try:
             self._cancel_tx_executor.execute_tx_list()
         except BaseException as exc:
-            self.warning('Failed to cancel neon txs.', exc_info=exc)
+            LOG.warning('Failed to cancel neon txs.', exc_info=exc)
         finally:
             self._cancel_tx_executor.clear()
 
@@ -115,34 +116,34 @@ class Indexer(IndexerBase):
             return True
 
         if not tx.blocked_account_cnt:
-            self.warning(f"neon tx {tx.neon_tx} hasn't blocked accounts.")
+            LOG.warning(f"neon tx {tx.neon_tx} hasn't blocked accounts.")
             return False
 
         holder_account = tx.storage_account
         holder_info = self._solana.get_holder_account_info(SolPubKey(holder_account))
         if not holder_info:
-            self.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} is empty')
+            LOG.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} is empty')
             return False
 
         if holder_info.tag != ACTIVE_HOLDER_TAG:
-            self.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} has bad tag: {holder_info.tag}')
+            LOG.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} has bad tag: {holder_info.tag}')
             return False
 
         if holder_info.neon_tx_sig != tx.neon_tx.sig:
-            self.warning(
+            LOG.warning(
                 f'storage {holder_account} has another neon tx hash: '
                 f'{holder_info.neon_tx_sig} != {tx.neon_tx.sig}'
             )
             return False
 
         if not self._cancel_tx_executor.add_blocked_holder_account(holder_info):
-            self.warning(
+            LOG.warning(
                 f'neon tx {tx.neon_tx} uses the storage account {holder_account} '
                 'which is already in the list on unlock'
             )
             return False
 
-        self.debug(f'Neon tx is blocked: storage {holder_account}, {tx.neon_tx}, {holder_info.account_list}')
+        LOG.debug(f'Neon tx is blocked: storage {holder_account}, {tx.neon_tx}, {holder_info.account_list}')
         tx.set_status(NeonIndexedTxInfo.Status.CANCELED, sol_tx_meta.block_slot)
         return True
 
@@ -258,7 +259,6 @@ class Indexer(IndexerBase):
             with logging_context(ident=sol_tx_meta.req_id):
                 neon_block = self._locate_neon_block(state, sol_tx_meta)
                 if neon_block.is_completed:
-                    # self.debug('ignore parsed tx')
                     continue
 
                 neon_block.add_sol_tx_cost(SolTxCostInfo.from_tx_meta(sol_tx_meta))
@@ -267,7 +267,7 @@ class Indexer(IndexerBase):
             for sol_neon_ix in state.iter_sol_neon_ix():
                 with logging_context(sol_neon_ix=sol_neon_ix.req_id):
                     if is_error:
-                        self.debug('failed tx')
+                        LOG.debug('failed tx')
                     SolNeonIxDecoder = self._sol_neon_ix_decoder_dict.get(sol_neon_ix.program_ix, DummyIxDecoder)
                     SolNeonIxDecoder(state).execute()
 
@@ -302,7 +302,7 @@ class Indexer(IndexerBase):
             state = SolNeonTxDecoderState(self._finalized_sol_tx_collector, start_block_slot, finalized_neon_block)
             self._run_sol_tx_collector(state)
         except SolHistoryNotFound as err:
-            self.debug(f'skip parsing of finalized history: {str(err)}')
+            LOG.debug(f'skip parsing of finalized history: {str(err)}')
             return
 
         # If there were a lot of transactions in the finalized state,
@@ -315,7 +315,7 @@ class Indexer(IndexerBase):
             try:
                 self._run_sol_tx_collector(state)
             except SolHistoryNotFound as err:
-                self.debug(f'skip parsing of confirmed history: {str(err)}')
+                LOG.debug(f'skip parsing of confirmed history: {str(err)}')
             else:
                 sol_tx_meta = state.end_range
                 with logging_context(ident=sol_tx_meta.req_id):
@@ -336,7 +336,7 @@ class Indexer(IndexerBase):
         with logging_context(ident='stat'):
             self._counted_logger.print(
                 self._config,
-                self.debug,
+                LOG.debug,
                 list_value_dict={
                     'receipts processing ms': state.process_time_ms,
                     'processed neon blocks': state.neon_block_cnt,
