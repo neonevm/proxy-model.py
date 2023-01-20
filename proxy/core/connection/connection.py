@@ -59,10 +59,10 @@ class TcpConnection(ABC):
         data: bytes = self.connection.recv(buffer_size)
         if len(data) == 0:
             return None
-        logger.debug(
-            'received %d bytes from %s' %
-            (len(data), self.tag),
-        )
+        # logger.debug(
+        #     'received %d bytes from %s' %
+        #     (len(data), self.tag),
+        # )
         # logger.info(data)
         return memoryview(data)
 
@@ -94,7 +94,7 @@ class TcpConnection(ABC):
         else:
             self.buffer[0] = mv[sent:]
         del mv
-        logger.debug('flushed %d bytes to %s' % (sent, self.tag))
+        # logger.debug('flushed %d bytes to %s' % (sent, self.tag))
         return sent
 
     def is_reusable(self) -> bool:

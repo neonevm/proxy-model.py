@@ -23,7 +23,7 @@ class StatDataSrv(AddrPickableDataSrv):
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         while True:
             try:
-                LOG.debug("Got incoming connection. Waiting for pickable data")
+                # LOG.debug("Got incoming connection. Waiting for pickable data")
                 data = await self._recv_pickable_data(reader)
                 await self._user.on_data_received(data)
             except ConnectionResetError as err:

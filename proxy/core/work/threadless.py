@@ -163,11 +163,11 @@ class Threadless(ABC, Generic[T]):
                         data=work_id,
                     )
                     self.registered_events_by_work_ids[work_id][fileno] = mask
-                    logger.debug(
-                        'fd#{0} modified for mask#{1} by work#{2}'.format(
-                            fileno, mask, work_id,
-                        ),
-                    )
+                    # logger.debug(
+                    #     'fd#{0} modified for mask#{1} by work#{2}'.format(
+                    #         fileno, mask, work_id,
+                    #     ),
+                    # )
                 # else:
                 #     logger.info(
                 #         'fd#{0} by work#{1} not modified'.format(fileno, work_id))
@@ -177,11 +177,11 @@ class Threadless(ABC, Generic[T]):
                 self.selector.modify(fileno, events=mask, data=work_id)
                 self.registered_events_by_work_ids[work_id][fileno] = mask
                 self._upstream_conn_filenos.remove(fileno)
-                logger.debug(
-                    'fd#{0} borrowed with mask#{1} by work#{2}'.format(
-                        fileno, mask, work_id,
-                    ),
-                )
+                # logger.debug(
+                #     'fd#{0} borrowed with mask#{1} by work#{2}'.format(
+                #         fileno, mask, work_id,
+                #     ),
+                # )
             # Can throw ValueError: Invalid file descriptor: -1
             #
             # A guard within Work classes may not help here due to
@@ -193,11 +193,11 @@ class Threadless(ABC, Generic[T]):
             elif fileno != -1:
                 self.selector.register(fileno, events=mask, data=work_id)
                 self.registered_events_by_work_ids[work_id][fileno] = mask
-                logger.debug(
-                    'fd#{0} registered for mask#{1} by work#{2}'.format(
-                        fileno, mask, work_id,
-                    ),
-                )
+                # logger.debug(
+                #     'fd#{0} registered for mask#{1} by work#{2}'.format(
+                #         fileno, mask, work_id,
+                #     ),
+                # )
 
     async def _update_conn_pool_events(self) -> None:
         if not self._upstream_conn_pool:
@@ -300,11 +300,11 @@ class Threadless(ABC, Generic[T]):
         if work_id in self.registered_events_by_work_ids:
             assert self.selector
             for fileno in self.registered_events_by_work_ids[work_id]:
-                logger.debug(
-                    'fd#{0} unregistered by work#{1}'.format(
-                        fileno, work_id,
-                    ),
-                )
+                # logger.debug(
+                #     'fd#{0} unregistered by work#{1}'.format(
+                #         fileno, work_id,
+                #     ),
+                # )
                 self.selector.unregister(fileno)
             self.registered_events_by_work_ids[work_id].clear()
             del self.registered_events_by_work_ids[work_id]
@@ -409,7 +409,7 @@ class Threadless(ABC, Generic[T]):
                     data=wqfileno,
                 )
             assert self.loop
-            logger.debug('Working on {0} works'.format(len(self.works)))
+            # logger.debug('Working on {0} works'.format(len(self.works)))
             self.loop.create_task(self._run_forever())
             self.loop.run_forever()
         except KeyboardInterrupt:

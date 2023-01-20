@@ -1,4 +1,3 @@
-import json
 import math
 import logging
 from typing import Dict, Any, List, Optional
@@ -91,10 +90,10 @@ class GasEstimate:
 
     def execute(self):
         emulator_json = call_emulated(self._config, self._contract or "deploy", self._sender, self._data, self._value)
+        LOG.debug(f'emulator returns: {emulator_json}')
         check_emulated_exit_status(emulator_json)
 
         self.emulator_json = emulator_json
-        LOG.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
 
     def _tx_size_cost(self) -> int:
         if self._cached_tx_cost_size is not None:

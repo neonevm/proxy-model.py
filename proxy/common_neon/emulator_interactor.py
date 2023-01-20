@@ -1,4 +1,3 @@
-import json
 import subprocess
 import logging
 from typing import Optional, Dict, Any
@@ -35,7 +34,7 @@ def call_tx_emulated(config: Config, neon_tx: NeonTx) -> NeonEmulatedResult:
         LOG.debug(f'destination address {dst}')
     LOG.debug(f"Calling data: {(dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))}")
     emulator_json = call_emulated(config, dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))
-    LOG.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
+    LOG.debug(f'emulator returns: {emulator_json}')
     return emulator_json
 
 

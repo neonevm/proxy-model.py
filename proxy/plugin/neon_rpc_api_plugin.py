@@ -114,7 +114,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             'handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
             threading.get_ident(),
             id(self._model),
-            json.dumps(response),
+            response,
             rpc_method,
             resp_time_ms
         )
@@ -152,11 +152,11 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             return
 
         try:
-            LOG.info(
-                'handle_request <<< %s 0x%x %s', threading.get_ident(), id(self._model),
-                request.body.decode('utf8')
-            )
             request = json.loads(request.body)
+            LOG.info(
+                'handle_request <<< %s 0x%x %s', threading.get_ident(), id(self._model), request
+            )
+            # request = json.loads(request.body)
             if isinstance(request, list):
                 response = []
                 if len(request) == 0:

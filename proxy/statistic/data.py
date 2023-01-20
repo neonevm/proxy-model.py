@@ -10,17 +10,20 @@ class NeonMethodData:
     latency: float
 
 
-@dataclass(frozen=True)
 class NeonTxStatData:
-    op_sol_spent: int
-    sol_spent: int
-    op_neon_income: int
-    neon_income: int
     tx_type: str
-    is_canceled: bool
-    neon_step_cnt: int
-    bpf_cycle_cnt: int
-    sol_tx_cnt: int
+    completed_neon_tx_cnt: int = 0
+    canceled_neon_tx_cnt: int = 0
+    sol_tx_cnt: int = 0
+    sol_spent: int = 0
+    neon_income: int = 0
+    neon_step_cnt: int = 0
+    bpf_cycle_cnt: int = 0
+
+    op_sol_spent: int = 0
+    op_neon_income: int = 0
+    op_completed_neon_tx_cnt: int = 0
+    op_canceled_neon_tx_cnt: int = 0
 
 
 @dataclass(frozen=True)

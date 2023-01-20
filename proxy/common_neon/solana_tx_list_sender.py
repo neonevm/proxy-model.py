@@ -1,5 +1,4 @@
 import enum
-import json
 import random
 import time
 import logging
@@ -228,7 +227,7 @@ class SolTxListSender:
         elif tx_error_parser.check_if_budget_exceeded():
             return SolTxSendState.Status.BudgetExceededError
         elif tx_error_parser.check_if_error():
-            LOG.debug(f'unknown_error_receipt: {json.dumps(tx_error_parser.receipt)}')
+            LOG.debug(f'unknown_error_receipt: {tx_error_parser.receipt}')
             return SolTxSendState.Status.UnknownError
 
         # store the latest successfully used blockhash
