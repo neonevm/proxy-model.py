@@ -173,8 +173,8 @@ jobs:
       - name: Tag published image
         if: ${{ (github.event.inputs.neon_evm_commit == ''  &&
             needs.build-image.outputs.is_version_proxy_branch == 'false') ||
-            github.event.inputs.neon_evm_branch == 'refs/head/develop' ||
-            github.event.inputs.neon_evm_branch == 'refs/head/master'  }}
+            github.event.inputs.neon_evm_branch == 'refs/heads/develop' ||
+            github.event.inputs.neon_evm_branch == 'refs/heads/master'  }}
         run: |
           python3 ./.github/workflows/deploy.py finalize_image \
           --head_ref_branch=${{ github.head_ref }} \
