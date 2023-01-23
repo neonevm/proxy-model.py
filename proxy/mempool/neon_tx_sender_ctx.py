@@ -1,6 +1,5 @@
+import logging
 from typing import Dict
-
-from logged_groups import logged_group
 
 from .operator_resource_mng import OpResInfo
 
@@ -14,7 +13,9 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolPubKey, SolAccountMeta, SolAccount
 
 
-@logged_group("neon.MemPool")
+LOG = logging.getLogger(__name__)
+
+
 class NeonTxSendCtx:
     def __init__(self, config: Config, solana: SolInteractor, resource: OpResInfo,
                  neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg):
@@ -77,14 +78,14 @@ class NeonTxSendCtx:
             self._add_meta(SolPubKey(account_desc['pubkey']), account_desc['is_writable'])
 
         neon_meta_list = list(self._neon_meta_dict.values())
-        self.debug(
+        LOG.debug(
             f'metas ({len(neon_meta_list)}): ' +
             ', '.join([f'{m.pubkey, m.is_signer, m.is_writable}' for m in neon_meta_list])
         )
 
         contract = self._neon_tx.contract()
         if contract is not None:
-            self.debug(f'contract 0x{contract}: {len(neon_meta_list) + 6} accounts')
+            LOG.debug(f'contract 0x{contract}: {len(neon_meta_list) + 6} accounts')
 
         self._ix_builder.init_neon_account_list(neon_meta_list)
 

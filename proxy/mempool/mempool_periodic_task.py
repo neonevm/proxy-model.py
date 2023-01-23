@@ -1,18 +1,19 @@
 import abc
 import asyncio
-
+import logging
 from typing import Optional, TypeVar, Generic
-
-from logged_groups import logged_group, logging_context
 
 from .mempool_api import MPTask
 from .executor_mng import MPExecutorMng
+from ..common_neon.utils.json_logger import logging_context
 
 MPPeriodicTaskRequest = TypeVar('MPPeriodicTaskRequest')
 MPPeriodicTaskResult = TypeVar('MPPeriodicTaskResult')
 
 
-@logged_group("neon.MemPool")
+LOG = logging.getLogger(__name__)
+
+
 class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.ABC):
     _check_sleep_time = 0.01
 
@@ -37,7 +38,7 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
         try:
             self._submit_request()
         except BaseException as exc:
-            self.error(f'Error during submitting {self._name} to executor.', exc_info=exc)
+            LOG.error(f'Error during submitting {self._name} to executor.', exc_info=exc)
 
     @abc.abstractmethod
     def _submit_request(self) -> None:
@@ -73,20 +74,20 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
 
                 await self._check_request_status_impl(task)
             except BaseException as exc:
-                self.error(f'Error during processing {self._name} on mempool.', exc_info=exc)
+                LOG.error(f'Error during processing {self._name} on mempool.', exc_info=exc)
             finally:
                 self._executor_mng.release_executor(task.executor_id)
 
     async def _check_request_status_impl(self, task: MPTask) -> None:
         exc = task.aio_task.exception()
         if exc is not None:
-            self.error(f'Error during processing {self._name} on executor.', exc_info=exc)
+            LOG.error(f'Error during processing {self._name} on executor.', exc_info=exc)
             self._process_error(task.mp_request)
             return
 
         mp_result = task.aio_task.result()
         if mp_result is None:
-            self.error(f'Empty result from the executor')
+            LOG.error(f'Empty result from the executor')
             self._process_error(task.mp_request)
             return
 

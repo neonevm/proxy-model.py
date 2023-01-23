@@ -1,8 +1,7 @@
 import json
 import subprocess
-
+import logging
 from typing import Optional, Dict, Any
-from logged_groups import logged_group
 
 from ..common_neon.data import NeonEmulatedResult
 from ..common_neon.environment_utils import NeonCli
@@ -12,40 +11,39 @@ from ..common_neon.elf_params import ElfParams
 from ..common_neon.eth_proto import NeonTx
 
 
-@logged_group("neon.Proxy")
-def call_emulated(config: Config, contract_id, caller_id, data=None, value=None, *, logger) -> NeonEmulatedResult:
+LOG = logging.getLogger(__name__)
+
+
+def call_emulated(config: Config, contract_id, caller_id, data=None, value=None) -> NeonEmulatedResult:
     output = emulator(config, contract_id, caller_id, data, value)
-    logger.debug(
+    LOG.debug(
         f'Call emulated. contract_id: {contract_id}, caller_id: {caller_id}, '
         f'data: {data}, value: {value}, return: {output}'
     )
-    result = json.loads(output)
-    return result
+    return output
 
 
-@logged_group("neon.Proxy")
-def call_tx_emulated(config: Config, neon_tx: NeonTx, *, logger) -> NeonEmulatedResult:
+def call_tx_emulated(config: Config, neon_tx: NeonTx) -> NeonEmulatedResult:
     neon_sender_acc = neon_tx.sender()
     contract = neon_tx.contract()
-    logger.debug(f'sender address: 0x{neon_sender_acc}')
+    LOG.debug(f'sender address: 0x{neon_sender_acc}')
     if contract:
         dst = 'deploy'
-        logger.debug(f'deploy contract: {contract}')
+        LOG.debug(f'deploy contract: {contract}')
     else:
         dst = neon_tx.toAddress.hex()
-        logger.debug(f'destination address {dst}')
-    logger.debug(f"Calling data: {(dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))}")
+        LOG.debug(f'destination address {dst}')
+    LOG.debug(f"Calling data: {(dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))}")
     emulator_json = call_emulated(config, dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))
-    logger.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
+    LOG.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
     return emulator_json
 
 
-@logged_group("neon.Proxy")
-def check_emulated_exit_status(result: Dict[str, Any], *, logger):
+def check_emulated_exit_status(result: Dict[str, Any]):
     exit_status = result['exit_status']
     if exit_status == 'revert':
         revert_data = result.get('result')
-        logger.debug(f"Got revert call emulated result with data: {revert_data}")
+        LOG.debug(f"Got revert call emulated result with data: {revert_data}")
         result_value = decode_revert_message(revert_data)
         if result_value is None:
             raise EthereumError(code=3, message='execution reverted', data='0x' + revert_data)
@@ -53,7 +51,7 @@ def check_emulated_exit_status(result: Dict[str, Any], *, logger):
             raise EthereumError(code=3, message='execution reverted: ' + result_value, data='0x' + revert_data)
 
     if exit_status != "succeed":
-        logger.debug(f"Got not succeed emulate exit_status: {exit_status}")
+        LOG.debug(f"Got not succeed emulate exit_status: {exit_status}")
         reason = result.get('exit_reason')
         if isinstance(reason, str):
             raise EthereumError(code=3, message=f'execution finished with error: {reason}')
@@ -97,8 +95,7 @@ def decode_fatal_message(reason: str) -> Optional[str]:
     return fatal_dict.get(reason)
 
 
-@logged_group("neon.Proxy")
-def decode_revert_message(data: str, *, logger) -> Optional[str]:
+def decode_revert_message(data: str) -> Optional[str]:
     data_len = len(data)
     if data_len == 0:
         return None
@@ -110,7 +107,7 @@ def decode_revert_message(data: str, *, logger) -> Optional[str]:
         return None
 
     if data[:8] != '08c379a0':  # keccak256("Error(string)")
-        logger.debug(f"Failed to decode revert_message, unknown revert signature: {data[:8]}")
+        LOG.debug(f"Failed to decode revert_message, unknown revert signature: {data[:8]}")
         return None
 
     if data_len < 8 + 64:
@@ -160,7 +157,6 @@ class StorageErrorParser(BaseNeonCliErrorParser):
         return f'error on reading storage of contract: {self._msg}', self._code
 
 
-@logged_group("neon.Proxy")
 class ProgramErrorParser(BaseNeonCliErrorParser):
     def __init__(self, msg: str):
         BaseNeonCliErrorParser.__init__(self, msg)
@@ -180,7 +176,7 @@ class ProgramErrorParser(BaseNeonCliErrorParser):
                 continue
 
             if is_first_hdr:
-                msg = line[pos + len(hdr):]
+                msg = 'insufficient funds for transfer'
                 if line.find(funds_hdr) == -1:
                     break
 

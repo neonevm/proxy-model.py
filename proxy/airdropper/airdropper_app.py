@@ -1,16 +1,18 @@
 import os
-from logged_groups import logged_group
+import logging
 
 from ..common_neon.config import Config
 
 from .airdropper import Airdropper
 
 
-@logged_group("neon.Airdropper")
+LOG = logging.getLogger(__name__)
+
+
 class AirdropperApp:
 
     def __init__(self):
-        self.info("Airdropper application is starting ...")
+        LOG.info("Airdropper application is starting ...")
         config = Config()
         faucet_url = os.environ['FAUCET_URL']
         wrapper_whitelist = os.environ['INDEXER_ERC20_WRAPPER_WHITELIST']
@@ -19,7 +21,7 @@ class AirdropperApp:
 
         max_conf = float(os.environ.get('MAX_CONFIDENCE_INTERVAL', 0.02))
 
-        self.info(f"""Construct Airdropper with params: {str(config)}
+        LOG.info(f"""Construct Airdropper with params: {str(config)}
                   faucet_url: {faucet_url},
                   wrapper_whitelist: {wrapper_whitelist},
                   Max confidence interval: {max_conf}""")
@@ -30,6 +32,6 @@ class AirdropperApp:
         try:
             self._airdropper.run()
         except BaseException as exc:
-            self.error('Failed to start Airdropper', exc_info=exc)
+            LOG.error('Failed to start Airdropper', exc_info=exc)
             return 1
         return 0

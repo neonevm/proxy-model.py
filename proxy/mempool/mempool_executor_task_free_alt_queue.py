@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional, Callable, cast
 
 from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
@@ -10,6 +11,9 @@ from ..common_neon.solana_tx_list_sender import SolTxListSender
 from .mempool_api import MPALTListResult
 from .mempool_api import MPGetALTList, MPALTInfo, MPDeactivateALTListRequest, MPCloseALTListRequest
 from .mempool_executor_task_base import MPExecutorBaseTask
+
+
+LOG = logging.getLogger(__name__)
 
 
 class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
@@ -60,7 +64,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
 
                     alt_info_list.append(mp_alt_info)
                 except BaseException as exc:
-                    self.error('Cannot decode ALT', exc_info=exc)
+                    LOG.error('Cannot decode ALT', exc_info=exc)
 
         block_height = self._get_block_height()
         return MPALTListResult(block_height=block_height, alt_info_list=alt_info_list)
@@ -75,7 +79,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             try:
                 tx_sender.send(tx_list)
             except BaseException as exc:
-                self.debug('Failed to execute.', exc_info=exc)
+                LOG.debug('Failed to execute.', exc_info=exc)
             tx_list.clear()
 
         tx_list: List[SolTx] = []

@@ -184,6 +184,12 @@ def terraform_build_infrastructure(head_ref_branch, github_ref_name, proxy_tag, 
     click.echo(f"code: {return_code}")
     click.echo(f"stdout: {stdout}")
     click.echo(f"stderr: {stderr}")
+    with open(f"terraform.log", "w") as file:
+        file.write(stdout)
+        file.write(stderr)
+    if return_code != 0:
+        print("Terraform infrastructure is not built correctly")
+        sys.exit(1)
 
 
 @cli.command(name="destroy_terraform")
@@ -202,7 +208,7 @@ def destroy_terraform(proxy_tag, run_number):
 @click.option('--run_number')
 def openzeppelin_test(run_number):
     container_name = f'fts_{run_number}'
-    fts_threshold = 1920
+    fts_threshold = 2370
     os.environ["FTS_CONTAINER_NAME"] = container_name
     os.environ["FTS_IMAGE"] = FTS_NAME
     os.environ["FTS_USERS_NUMBER"] = '15'
@@ -367,7 +373,7 @@ def run_test(file_name):
     click.echo(test_logs)
     errors_count = 0
     for line in test_logs.split('\n'):
-        if re.match(r"FAILED \(errors=\d+\)", line):
+        if re.match(r"FAILED \(.+=\d+", line):
             errors_count += int(re.search(r"\d+", line).group(0))
     return errors_count
 

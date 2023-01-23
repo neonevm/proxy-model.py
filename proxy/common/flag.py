@@ -25,7 +25,7 @@ from .logger import Logger
 from .plugins import Plugins
 from .version import __version__
 from .constants import (
-    COMMA, IS_WINDOWS, PLUGIN_PAC_FILE, PLUGIN_HTTP_PROXY,
+    COMMA, IS_WINDOWS,
     PLUGIN_WEB_SERVER, DEFAULT_NUM_WORKERS,
     DEFAULT_NUM_ACCEPTORS,
     DEFAULT_DISABLE_HEADERS, PY2_DEPRECATION_MESSAGE,
@@ -146,20 +146,6 @@ class FlagParser:
                 args.enable_web_server,
             ),
         )
-        args.enable_static_server = cast(
-            bool,
-            opts.get(
-                'enable_static_server',
-                args.enable_static_server,
-            ),
-        )
-        args.enable_events = cast(
-            bool,
-            opts.get(
-                'enable_events',
-                args.enable_events,
-            ),
-        )
 
         # Load default plugins along with user provided --plugins
         default_plugins = [
@@ -191,20 +177,6 @@ class FlagParser:
             opts.get(
                 'client_recvbuf_size',
                 args.client_recvbuf_size,
-            ),
-        )
-        args.pac_file = cast(
-            Optional[str], opts.get(
-                'pac_file', bytes_(
-                    args.pac_file,
-                ),
-            ),
-        )
-        args.pac_file_url_path = cast(
-            Optional[bytes], opts.get(
-                'pac_file_url_path', bytes_(
-                    args.pac_file_url_path,
-                ),
             ),
         )
         disabled_headers = cast(
@@ -382,13 +354,8 @@ class FlagParser:
         --enable-* and --disable-* flags.
         """
         default_plugins: List[str] = []
-        default_plugins.append(PLUGIN_HTTP_PROXY)
-        if args.enable_web_server or \
-                args.pac_file is not None or \
-                args.enable_static_server:
+        if args.enable_web_server:
             default_plugins.append(PLUGIN_WEB_SERVER)
-        if args.pac_file is not None:
-            default_plugins.append(PLUGIN_PAC_FILE)
         return list(collections.OrderedDict.fromkeys(default_plugins).keys())
 
 

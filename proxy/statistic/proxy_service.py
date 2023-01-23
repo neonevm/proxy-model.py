@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-
+import logging
 from decimal import Decimal
 from typing import List
 
 from aioprometheus import Counter, Histogram, Gauge
-from logged_groups import logged_group
 
 from .middleware import StatService
 from .data import NeonMethodData, NeonGasPriceData, NeonTxBeginData, NeonTxEndData
@@ -17,13 +16,15 @@ from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 
 
-@logged_group("neon.Statistic")
+LOG = logging.getLogger(__name__)
+
+
 class ProxyStatDataPeeker:
     def __init__(self, config: Config, stat_srv: ProxyStatService):
         self._stat_service = stat_srv
         self._config = config
         self._solana = SolInteractor(config, config.solana_url)
-        self._db = IndexerDB()
+        self._db = IndexerDB(config)
 
         self._sol_account_list: List[str] = []
         self._neon_account_list: List[str] = []
@@ -40,7 +41,7 @@ class ProxyStatDataPeeker:
                 self._stat_solana_rpc_health()
                 self._stat_db_health()
             except Exception as err:
-                self.warning('Exception on transactions processing', exc_info=err)
+                LOG.warning('Exception on transactions processing', exc_info=err)
 
     def _stat_operator_balance(self) -> None:
         sol_balance_list = self._solana.get_sol_balance_list(self._sol_account_list)

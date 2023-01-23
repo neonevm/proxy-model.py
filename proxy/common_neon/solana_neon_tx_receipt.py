@@ -5,14 +5,15 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, cast
-
+import logging
 import base58
-
-from logged_groups import logged_group
 
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.evm_log_decoder import decode_log_list, NeonLogTxReturn, NeonLogTxEvent
 from ..common_neon.utils import str_fmt_object
+
+
+LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -309,11 +310,6 @@ class _SolIxData:
     ix_data: bytes
 
 
-@logged_group('neon.Parser')
-def _warning(*args, logger) -> None:
-    logger.warning(*args)
-
-
 @dataclass(frozen=True)
 class SolNeonIxReceiptInfo(SolIxMetaInfo):
     sol_sig: str
@@ -408,7 +404,7 @@ class SolNeonIxReceiptInfo(SolIxMetaInfo):
             ix_data = base58.b58decode(ix['data'])
             return _SolIxData(program_ix=int(ix_data[0]), ix_data=ix_data)
         except BaseException as exc:
-            _warning(f'Fail to get a program instruction', exc_info=exc)
+            LOG.warning(f'Fail to get a program instruction', exc_info=exc)
             return _SolIxData(program_ix=None, ix_data=b'')
 
     def set_neon_step_cnt(self, value: int) -> None:
@@ -506,7 +502,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
         result_log_list_list: List[_SolIxLogList] = []
 
         log_iter = iter(log_list_list)
-        log = next(log_iter)
+        log = next(log_iter) if len(log_list_list) > 0 else None
         for idx, ix in enumerate(ix_list):
             ix_program_key = self._get_program_key(ix)
             if (log is None) or (log.program != ix_program_key):
@@ -535,10 +531,10 @@ class SolTxReceiptInfo(SolTxMetaInfo):
     def _get_program_key(self, ix: Dict[str, Any]) -> str:
         program_idx = ix.get('programIdIndex', None)
         if program_idx is None:
-            _warning(f'{self} error: fail to get program id')
+            LOG.warning(f'{self} error: fail to get program id')
             return ''
         elif program_idx > len(self._account_key_list):
-            _warning(f'{self} error: program index greater than list of accounts')
+            LOG.warning(f'{self} error: program index greater than list of accounts')
             return ''
 
         return self._account_key_list[program_idx]
@@ -548,7 +544,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
 
     def _get_log_list(self, ix_idx: int, inner_ix_idx: Optional[int]) -> Optional[_SolIxLogList]:
         if ix_idx >= len(self._ix_log_msg_list):
-            _warning(f'{self} error: cannot find logs for instruction {ix_idx} > {len(self._ix_log_msg_list)}')
+            LOG.warning(f'{self} error: cannot find logs for instruction {ix_idx} > {len(self._ix_log_msg_list)}')
             return None
 
         ix_log_list = self._ix_log_msg_list[ix_idx]
@@ -556,7 +552,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
             return ix_log_list
 
         if inner_ix_idx >= len(ix_log_list.inner_log_list):
-            _warning(
+            LOG.warning(
                 f'{self} error: cannot find logs for instruction'
                 f' {ix_idx}:{inner_ix_idx} > {len(ix_log_list.inner_log_list)}'
             )

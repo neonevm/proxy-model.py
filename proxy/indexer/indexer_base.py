@@ -1,12 +1,13 @@
 import time
-
-from logged_groups import logged_group
+import logging
 
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 
 
-@logged_group("neon.Indexer")
+LOG = logging.getLogger(__name__)
+
+
 class IndexerBase:
     def __init__(self, config: Config, solana: SolInteractor, last_slot: int):
         self._solana = solana
@@ -26,7 +27,7 @@ class IndexerBase:
         name = f'{name} slot'
 
         start_slot = self._config.start_slot
-        self.info(f'Starting {name} with LATEST_KNOWN_LOST={last_known_slot} and START_SLOT={start_slot}')
+        LOG.info(f'Starting {name} with LATEST_KNOWN_LOST={last_known_slot} and START_SLOT={start_slot}')
 
         if start_slot not in {'CONTINUE', 'LATEST'}:
             try:
@@ -36,24 +37,24 @@ class IndexerBase:
 
         if start_slot == 'CONTINUE':
             if last_known_slot > 0:
-                self.info(f'START_SLOT={start_slot}: started the {name} from previous run {last_known_slot}')
+                LOG.info(f'START_SLOT={start_slot}: started the {name} from previous run {last_known_slot}')
                 return last_known_slot
             else:
-                self.info(f'START_SLOT={start_slot}: forced the {name} from the latest Solana slot')
+                LOG.info(f'START_SLOT={start_slot}: forced the {name} from the latest Solana slot')
                 start_slot = 'LATEST'
 
         if start_slot == 'LATEST':
-            self.info(f'START_SLOT={start_slot}: started the {name} from the latest Solana slot {latest_slot}')
+            LOG.info(f'START_SLOT={start_slot}: started the {name} from the latest Solana slot {latest_slot}')
             return latest_slot
 
         if start_int_slot < last_known_slot:
-            self.info(
+            LOG.info(
                 f'START_SLOT={start_slot}: started the {name} from previous run, ' +
                 f'because {start_int_slot} < {last_known_slot}'
             )
             return last_known_slot
 
-        self.info(f'START_SLOT={start_slot}: started the {name} from {start_int_slot}')
+        LOG.info(f'START_SLOT={start_slot}: started the {name} from {start_int_slot}')
         return start_int_slot
 
     def run(self):
@@ -61,7 +62,7 @@ class IndexerBase:
             try:
                 self.process_functions()
             except BaseException as exc:
-                self.debug('Exception on transactions processing.', exc_info=exc)
+                LOG.debug('Exception on transactions processing.', exc_info=exc)
             time.sleep(0.05)
 
     def process_functions(self) -> None:

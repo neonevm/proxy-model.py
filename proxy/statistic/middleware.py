@@ -5,38 +5,38 @@ import abc
 import threading
 import time
 import math
-
+import logging
 from typing import Tuple, Optional
 from multiprocessing import Process
 
 from aioprometheus.service import Service, Registry
 
-from logged_groups import logged_group
-from neon_py.network import IPickableDataServerUser, AddrPickableDataSrv, AddrPickableDataClient
-from neon_py.network.pickable_data_server import encode_pickable
-
 from ..common_neon.config import Config
+from ..common_neon.pickable_data_server import encode_pickable
+from ..common_neon.pickable_data_server import IPickableDataServerUser, AddrPickableDataSrv, AddrPickableDataClient
+
+
+LOG = logging.getLogger(__name__)
 
 
 class StatDataSrv(AddrPickableDataSrv):
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         while True:
             try:
-                self.debug("Got incoming connection. Waiting for pickable data")
+                LOG.debug("Got incoming connection. Waiting for pickable data")
                 data = await self._recv_pickable_data(reader)
                 await self._user.on_data_received(data)
             except ConnectionResetError as err:
-                self.warning(f"Connection reset error: {err}")
+                LOG.warning(f"Connection reset error: {err}")
                 break
             except asyncio.exceptions.IncompleteReadError as err:
-                self.error(f"Incomplete read error: {err}")
+                LOG.error(f"Incomplete read error: {err}")
                 break
             except Exception as err:
-                self.error(f"Failed to receive data err: {err}")
+                LOG.error(f"Failed to receive data err: {err}")
                 break
 
 
-@logged_group("neon.Statistic")
 class StatMiddlewareServer(IPickableDataServerUser):
     _stat_address = ('0.0.0.0', 9093)
 
@@ -50,13 +50,12 @@ class StatMiddlewareServer(IPickableDataServerUser):
                 m = getattr(self._stat_exporter, data[0])
                 m(*data[1:])
         except Exception as err:
-            self.error(f'Failed to process statistic data: {data}', exc_info=err)
+            LOG.error(f'Failed to process statistic data: {data}', exc_info=err)
 
     async def start(self):
         await self._stat_srv.run_server()
 
 
-@logged_group("neon.Statistic")
 class StatService(abc.ABC):
     _prometheus_srv_address = ("0.0.0.0", 8888)
 
@@ -87,13 +86,13 @@ class StatService(abc.ABC):
             self._init_metric_list()
 
             self._event_loop.run_until_complete(self._prometheus_srv.start(*self._prometheus_srv_address))
-            self.debug(f"Serving prometheus metrics on: {self._prometheus_srv.metrics_url}")
+            LOG.debug(f"Serving prometheus metrics on: {self._prometheus_srv.metrics_url}")
 
             self._event_loop.run_until_complete(self._stat_middleware_srv.start())
             self._process_init()
             self._event_loop.run_forever()
         except Exception as err:
-            self.error('Failed to process statistic service', exc_info=err)
+            LOG.error('Failed to process statistic service', exc_info=err)
 
     def _process_init(self) -> None:
         pass
@@ -113,22 +112,21 @@ def stat_method(method):
                 if not self._is_connected():
                     return
 
-                payload: bytes = encode_pickable((method.__name__, *args), self)
+                payload: bytes = encode_pickable((method.__name__, *args))
                 self._stat_mng_client._client_sock.sendall(payload)
             except (InterruptedError, Exception) as exc:
-                self.error(f'Failed to transfer data', exc_info=exc)
+                LOG.error(f'Failed to transfer data', exc_info=exc)
                 self._reconnect_middleware()
 
     return wrapper
 
 
-@logged_group("neon.Statistic")
 class StatClient:
     _reconnect_time_sec = 1
     _stat_address = ("127.0.0.1", 9093)
 
     def __init__(self, config: Config):
-        self.info(f'Init statistic middleware client, enabled: {config.gather_statistics}')
+        LOG.info(f'Init statistic middleware client, enabled: {config.gather_statistics}')
         self._is_enabled = config.gather_statistics
         if not self._is_enabled:
             return
@@ -160,7 +158,7 @@ class StatClient:
             self._connect_middleware()
 
     def _reconnect_middleware(self):
-        self.debug(f'Reconnecting statistic middleware server in: {self._reconnect_middleware_time_sec} sec')
+        LOG.debug(f'Reconnecting statistic middleware server in: {self._reconnect_time_sec} sec')
         self._stat_mng_client: Optional[AddrPickableDataClient] = None
 
     def _connect_middleware(self) -> bool:
@@ -168,12 +166,12 @@ class StatClient:
             return True
 
         try:
-            self.debug(f'Connect statistic middleware server: {self._stat_address}')
+            LOG.debug(f'Connect statistic middleware server: {self._stat_address}')
             self._stat_mng_client = AddrPickableDataClient(self._stat_address)
             return True
         except BaseException as exc:
             if not isinstance(exc, ConnectionRefusedError):
-                self.error(f'Failed to connect statistic middleware server: {self._stat_address}', exc_info=exc)
+                LOG.error(f'Failed to connect statistic middleware server: {self._stat_address}', exc_info=exc)
             else:
-                self.debug(f'Failed to connect statistic middleware server: {self._stat_address}, error: {str(exc)}')
+                LOG.debug(f'Failed to connect statistic middleware server: {self._stat_address}, error: {str(exc)}')
             return False

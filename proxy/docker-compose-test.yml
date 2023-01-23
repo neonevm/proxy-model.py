@@ -182,9 +182,9 @@ services:
       INDEXER_ERC20_WRAPPER_WHITELIST: ANY
       PRICE_UPDATE_INTERVAL: 10
       START_SLOT: LATEST
-      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
-      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
-      MAX_CONFIDENCE_INTERVAL: 0.01
+      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.testnet.solana.com}
+      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-AFmdnt9ng1uVxqCmqwQJDAYC5cKTkw8gJKSM5PnzuF6z}
+      MAX_CONFIDENCE_INTERVAL: 0.1
     hostname: airdropper
     entrypoint: ./run-airdropper.sh
     networks:

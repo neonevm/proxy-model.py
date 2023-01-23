@@ -4,25 +4,20 @@
         "standard": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
-            "formatter": "standard",
-            "filters": ["context_filter", "neon_prefix_dropper"]
-        },
-        "root": {
-            "class": "logging.StreamHandler",
-            "level": "DEBUG",
-            "formatter": "root",
+            "formatter": "json",
             "filters": ["context_filter"]
         }
     },
     "filters": {
         "context_filter": {
-            "()": "logged_groups.ContextFilter"
-        },
-        "neon_prefix_dropper": {
-            "()": "neon_py.logging.NeonPrefixDropper"
+            "()": "proxy.common_neon.utils.json_logger.ContextFilter"
         }
     },
     "formatters": {
+        "json": {
+          "format": "%(message)s",
+          "class": "proxy.common_neon.utils.json_logger.JSONFormatter"
+        },
         "standard": {
             "format": "%(asctime)s.%(msecs)03d %(levelname)-.1s %(filename)s:%(lineno)d %(process)d %(name)s:%(class)s %(context)s %(message)s",
             "style": "%",
@@ -35,34 +30,14 @@
         }
     },
     "loggers": {
-        "neon": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "neon.Proxy": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "neon.MemPool": {
-            "level": "DEBUG",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "neon.Network": {
-            "level": "ERROR",
-            "handlers": ["standard"],
-            "propagate": false
-        },
-        "neon.Statistic": {
+      "proxy": {
             "level": "DEBUG",
             "handlers": ["standard"],
             "propagate": false
         },
         "": {
-            "level": "ERROR",
-            "handlers": ["root"],
+            "level": "INFO",
+            "handlers": ["standard"],
             "propagate": false
         }
     }

@@ -1,3 +1,5 @@
+import logging
+
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import BadResourceError
 from ..common_neon.errors import BlockedAccountsError, NodeBehindError, SolanaUnavailableError, NonceTooLowError
@@ -9,6 +11,9 @@ from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 from ..mempool.operator_resource_mng import OpResInfo
 
 
+LOG = logging.getLogger(__name__)
+
+
 class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
     def execute_neon_tx(self, mp_tx_req: MPTxExecRequest):
         neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
@@ -16,22 +21,22 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
             assert neon_tx_exec_cfg is not None
             self.execute_neon_tx_impl(mp_tx_req)
         except BlockedAccountsError:
-            self.debug(f"Failed to execute tx {mp_tx_req.sig}, got blocked accounts result")
+            LOG.debug(f"Failed to execute tx {mp_tx_req.sig}, got blocked accounts result")
             return MPTxExecResult(MPTxExecResultCode.BlockedAccount, neon_tx_exec_cfg)
         except NodeBehindError:
-            self.debug(f"Failed to execute tx {mp_tx_req.sig}, got node behind error")
+            LOG.debug(f"Failed to execute tx {mp_tx_req.sig}, got node behind error")
             return MPTxExecResult(MPTxExecResultCode.NodeBehind, neon_tx_exec_cfg)
         except SolanaUnavailableError:
-            self.debug(f"Failed to execute tx {mp_tx_req.sig}, got solana unavailable error")
+            LOG.debug(f"Failed to execute tx {mp_tx_req.sig}, got solana unavailable error")
             return MPTxExecResult(MPTxExecResultCode.SolanaUnavailable, neon_tx_exec_cfg)
         except NonceTooLowError:
-            self.debug(f"Failed to execute tx {mp_tx_req.sig}, got nonce too low error")
+            LOG.debug(f"Failed to execute tx {mp_tx_req.sig}, got nonce too low error")
             return MPTxExecResult(MPTxExecResultCode.NonceTooLow, neon_tx_exec_cfg)
         except BadResourceError as e:
-            self.debug(f"Failed to execute tx {mp_tx_req.sig}, got bad resource error {str(e)}")
+            LOG.debug(f"Failed to execute tx {mp_tx_req.sig}, got bad resource error {str(e)}")
             return MPTxExecResult(MPTxExecResultCode.BadResource, neon_tx_exec_cfg)
         except BaseException as exc:
-            self.error(f'Failed to execute tx {mp_tx_req.sig}.', exc_info=exc)
+            LOG.error(f'Failed to execute tx {mp_tx_req.sig}.', exc_info=exc)
             return MPTxExecResult(MPTxExecResultCode.Unspecified, exc)
         return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)
 

@@ -1,9 +1,7 @@
 import json
 import math
-
+import logging
 from typing import Dict, Any, List, Optional
-
-from logged_groups import logged_group
 
 from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status
 from ..common_neon.elf_params import ElfParams
@@ -16,6 +14,9 @@ from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockhash, SolTxSizeError
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.address import NeonAddress
+
+
+LOG = logging.getLogger(__name__)
 
 
 class _GasTxBuilder:
@@ -57,7 +58,6 @@ class _GasTxBuilder:
         return len(self._neon_ix_builder.holder_msg)
 
 
-@logged_group("neon.Proxy")
 class GasEstimate:
     _small_gas_limit = 30_000  # openzeppelin size check
     _tx_builder = _GasTxBuilder()
@@ -94,7 +94,7 @@ class GasEstimate:
         check_emulated_exit_status(emulator_json)
 
         self.emulator_json = emulator_json
-        self.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
+        LOG.debug(f'emulator returns: {json.dumps(emulator_json, sort_keys=True)}')
 
     def _tx_size_cost(self) -> int:
         if self._cached_tx_cost_size is not None:
@@ -124,7 +124,7 @@ class GasEstimate:
         except SolTxSizeError:
             pass
         except BaseException as exc:
-            self.debug('Error during pack solana tx', exc_info=exc)
+            LOG.debug('Error during pack solana tx', exc_info=exc)
 
         self._cached_tx_cost_size = self._holder_tx_cost(self._tx_builder.neon_tx_len())
         return self._cached_tx_cost_size
@@ -196,7 +196,7 @@ class GasEstimate:
         if gas < 21000:
             gas = 21000
 
-        self.debug(
+        LOG.debug(
             f'execution_cost: {execution_cost}, '
             f'tx_size_cost: {tx_size_cost}, '
             f'iterative_overhead_cost: {overhead_cost}, '

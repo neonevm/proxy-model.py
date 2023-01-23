@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import List, cast
-
-from logged_groups import logged_group
+import logging
+from typing import List
 
 from ..common_neon.errors import NoMoreRetriesError
 from ..common_neon.solana_tx import SolTxReceipt, SolTx
@@ -16,6 +15,9 @@ from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 
 
+LOG = logging.getLogger(__name__)
+
+
 class IterativeNeonTxSender(SimpleNeonTxSender):
     def __init__(self, strategy: IterativeNeonTxStrategy, *args, **kwargs):
         super().__init__(strategy, *args, **kwargs)
@@ -27,7 +29,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         elif self._is_canceled:
             # Transaction with cancel is confirmed
             self._neon_tx_res.set_result(status=0, gas_used=0, return_value=b'')
-            self.debug(f'Got Neon tx cancel: {self._neon_tx_res}')
+            LOG.debug(f'Got Neon tx cancel: {self._neon_tx_res}')
         else:
             super()._decode_neon_tx_result(tx, tx_receipt)
 
@@ -63,7 +65,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         if (not self._has_good_receipt_list()) or self._is_canceled:
             raise e
 
-        self.debug(f'Cancel the transaction')
+        LOG.debug(f'Cancel the transaction')
         self.clear()
         self._is_canceled = True
         return [self._strategy.build_cancel_tx()]
@@ -73,11 +75,10 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             raise NoMoreRetriesError()
 
         total_evm_step_cnt = sum([getattr(tx_state.tx, 'evm_step_cnt') for tx_state in tx_state_list])
-        self.debug('No receipt -> execute additional iteration')
+        LOG.debug('No receipt -> execute additional iteration')
         return self._strategy.build_tx_list(total_evm_step_cnt, 0)
 
 
-@logged_group("neon.MemPool")
 class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     name = 'TransactionStepFromInstruction'
 
@@ -98,7 +99,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
         prev_evm_step_cnt = self._evm_step_cnt
         self._evm_step_cnt -= 150
-        self.debug(f'Decrease EVM steps from {prev_evm_step_cnt} to {self._evm_step_cnt}')
+        LOG.debug(f'Decrease EVM steps from {prev_evm_step_cnt} to {self._evm_step_cnt}')
         return True
 
     def _build_tx(self) -> SolLegacyTx:
@@ -123,7 +124,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
             tx_list.append(build_tx(evm_step_cnt))
 
-        self.debug(f'Total iterations {len(tx_list)} for {save_evm_step_cnt} ({self._evm_step_cnt}) EVM steps')
+        LOG.debug(f'Total iterations {len(tx_list)} for {save_evm_step_cnt} ({self._evm_step_cnt}) EVM steps')
         return tx_list
 
     def execute(self) -> NeonTxResultInfo:

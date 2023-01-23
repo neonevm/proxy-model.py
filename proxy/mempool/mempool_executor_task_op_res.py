@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 from .mempool_api import MPOpResGetListResult, MPOpResInitRequest, MPOpResInitResult, MPOpResInitResultCode
@@ -11,6 +12,9 @@ from ..common_neon.solana_interactor import SolInteractor
 
 from ..statistic.data import NeonOpResListData
 from ..statistic.proxy_client import ProxyStatClient
+
+
+LOG = logging.getLogger(__name__)
 
 
 class MPExecutorOpResTask(MPExecutorBaseTask):
@@ -39,7 +43,7 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
 
             return MPOpResGetListResult(res_ident_list=res_ident_list)
         except BaseException as exc:
-            self.error(f'Failed to read secret list', exc_info=exc)
+            LOG.error(f'Failed to read secret list', exc_info=exc)
             return MPOpResGetListResult(res_ident_list=[])
 
     def init_op_res(self, mp_op_res_req: MPOpResInitRequest) -> MPOpResInitResult:
@@ -49,5 +53,5 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
             OpResInit(self._config, self._solana).init_resource(resource)
             return MPOpResInitResult(code=MPOpResInitResultCode.Success)
         except BaseException as exc:
-            self.error(f'Failed to init operator resource tx {resource}.', exc_info=exc)
+            LOG.error(f'Failed to init operator resource tx {resource}.', exc_info=exc)
             return MPOpResInitResult(code=MPOpResInitResultCode.Failed)

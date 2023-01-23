@@ -155,11 +155,11 @@ class Proxy:
         return self.compile_and_deploy_contract(signer, source)
 
 
-class TestTimeout(Exception):
+class TestTimeoutExc(Exception):
     pass
 
 
-class test_timeout:
+class TestTimeout:
     def __init__(self, seconds, error_message=None):
         if error_message is None:
             error_message = 'test timed out after {}s.'.format(seconds)
@@ -167,7 +167,7 @@ class test_timeout:
         self.error_message = error_message
 
     def handle_timeout(self, signum, frame):
-        raise TestTimeout(self.error_message)
+        raise TestTimeoutExc(self.error_message)
 
     def __enter__(self):
         signal.signal(signal.SIGALRM, self.handle_timeout)

@@ -1,19 +1,19 @@
 import base64
 import os
-
+import logging
 from typing import List, Optional
 
 import hvac
 from hvac.api.secrets_engines.kv_v2 import DEFAULT_MOUNT_POINT
-
-from logged_groups import logged_group
 
 from ..common_neon.config import Config
 from ..common_neon.environment_utils import SolanaCli
 from ..common_neon.solana_tx import SolAccount
 
 
-@logged_group("neon.Decorder")
+LOG = logging.getLogger(__name__)
+
+
 class OpSecretMng:
     def __init__(self, config: Config):
         self._config = config
@@ -25,18 +25,18 @@ class OpSecretMng:
             secret_list = self._read_secret_list_from_fs()
 
         if len(secret_list) == 0:
-            self.warning("No secrets")
+            LOG.warning("No secrets")
         else:
-            self.debug(f"Got secret list of: {len(secret_list)} - keys")
+            LOG.debug(f"Got secret list of: {len(secret_list)} - keys")
 
         return secret_list
 
     def _read_secret_list_from_hvac(self) -> List[bytes]:
-        self.debug('Read secret keys from HashiCorp Vault...')
+        LOG.debug('Read secret keys from HashiCorp Vault...')
 
         client = hvac.Client(url=self._config.hvac_url, token=self._config.hvac_token)
         if not client.is_authenticated():
-            self.warning('Cannot connect to HashiCorp Vault!')
+            LOG.warning('Cannot connect to HashiCorp Vault!')
             return []
 
         secret_list: List[bytes] = []
@@ -47,7 +47,7 @@ class OpSecretMng:
         try:
             response_list = client.secrets.kv.v2.list_secrets(path=base_path, mount_point=mount)
         except BaseException as exc:
-            self.warning(f'Fail to read secret list from {base_path}')
+            LOG.warning(f'Fail to read secret list from {base_path}')
             return []
 
         for key_name in response_list.get('data', {}).get('keys', []):
@@ -56,40 +56,40 @@ class OpSecretMng:
                 data = client.secrets.kv.v2.read_secret(path=key_path, mount_point=mount)
                 secret = data.get('data', {}).get('data', {}).get('secret_key', None)
                 if secret is None:
-                    self.warning(f'No secret_key in the path {key_path}')
+                    LOG.warning(f'No secret_key in the path {key_path}')
                     continue
 
                 sol_account = SolAccount.from_secret_key(base64.b64decode(secret))
                 secret_list.append(sol_account.secret_key)
-                self.debug(f'Get secret: {str(sol_account.public_key)}')
+                LOG.debug(f'Get secret: {str(sol_account.public_key)}')
 
             except (Exception, ):
-                self.warning(f'Fail to read secret from {key_path}')
+                LOG.warning(f'Fail to read secret from {key_path}')
 
         return secret_list
 
     def _read_secret_file(self, name: str) -> Optional[SolAccount]:
-        self.debug(f"Open a secret file: {name}")
+        LOG.debug(f"Open a secret file: {name}")
         with open(name.strip(), mode='r') as d:
             pkey = (d.read())
             num_list = [int(v) for v in pkey.strip("[] \n").split(',') if 0 <= int(v) <= 255]
             if len(num_list) < 32:
-                self.debug(f'Wrong content in the file {name}')
+                LOG.debug(f'Wrong content in the file {name}')
                 return None
             return SolAccount.from_secret_key(bytes(num_list[:32]))
 
     def _read_secret_list_from_fs(self) -> List[bytes]:
-        self.debug('Read secret keys from filesystem...')
+        LOG.debug('Read secret keys from filesystem...')
 
         res = SolanaCli(self._config).call('config', 'get')
-        self.debug(f"Got solana config: {res}")
+        LOG.debug(f"Got solana config: {res}")
         substr = "Keypair Path: "
         path = ""
         for line in res.splitlines():
             if line.startswith(substr):
                 path = line[len(substr):].strip()
         if path == "":
-            self.warning("cannot get keypair path")
+            LOG.warning("cannot get keypair path")
             return []
 
         path = path.strip()
@@ -108,6 +108,6 @@ class OpSecretMng:
             if secret is None:
                 continue
             secret_list.append(secret.secret_key)
-            self.debug(f'Get secret: {str(secret.public_key)}')
+            LOG.debug(f'Get secret: {str(secret.public_key)}')
 
         return secret_list

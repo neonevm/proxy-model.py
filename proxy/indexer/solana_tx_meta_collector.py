@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, Iterator, List, Any
-
-from logged_groups import logged_group
 
 from .solana_signatures_db import SolSigsDB
 from ..common_neon.config import Config
@@ -12,11 +11,13 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
 
 
+LOG = logging.getLogger(__name__)
+
+
 class SolHistoryNotFound(RuntimeError):
     pass
 
 
-@logged_group("neon.Indexer")
 class SolTxMetaDict:
     def __init__(self):
         self._tx_meta_dict: Dict[SolTxSigSlotInfo, SolTxMetaInfo] = {}
@@ -47,7 +48,6 @@ class SolTxMetaDict:
         return list(self._tx_meta_dict.keys())
 
 
-@logged_group("neon.Indexer")
 class SolTxMetaCollector(ABC):
     def __init__(self, config: Config,
                  solana: SolInteractor,
@@ -116,11 +116,10 @@ class SolTxMetaCollector(ABC):
                 yield SolTxSigSlotInfo(block_slot=block_slot, sol_sig=response['signature'])
 
 
-@logged_group("neon.Indexer")
 class FinalizedSolTxMetaCollector(SolTxMetaCollector):
     def __init__(self, config: Config, solana: SolInteractor, tx_meta_dict: SolTxMetaDict, stop_slot: int):
         super().__init__(config, solana, tx_meta_dict, commitment=config.finalized_commitment, is_finalized=True)
-        self.debug(f'Finalized commitment: {self._commitment}')
+        LOG.debug(f'Finalized commitment: {self._commitment}')
         self._sigs_db = SolSigsDB()
         self._stop_slot = stop_slot
         self._sig_cnt = 0
@@ -144,7 +143,7 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
         elif self._last_info is None:
             self._last_info = info
         elif self._last_info.block_slot != info.block_slot:
-            self.debug(f'save checkpoint: {info}: {self._sig_cnt}')
+            LOG.debug(f'save checkpoint: {info}: {self._sig_cnt}')
             self._sigs_db.add_sig(info)
             self._reset_checkpoint_cache()
 
@@ -199,11 +198,10 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
                 yield tx_meta
 
 
-@logged_group("neon.Indexer")
 class ConfirmedSolTxMetaCollector(SolTxMetaCollector):
     def __init__(self, config: Config, solana: SolInteractor, tx_meta_dict: SolTxMetaDict):
         super().__init__(config, solana, tx_meta_dict, commitment=config.confirmed_commitment, is_finalized=False)
-        self.debug(f'Confirmed commitment: {self._commitment}')
+        LOG.debug(f'Confirmed commitment: {self._commitment}')
 
     def iter_tx_meta(self, start_slot: int, stop_slot: int) -> Iterator[SolTxMetaInfo]:
         assert start_slot >= stop_slot

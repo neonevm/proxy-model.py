@@ -2,10 +2,9 @@ import enum
 import json
 import random
 import time
-
+import logging
 from dataclasses import dataclass
 from typing import Optional, List, Dict
-from logged_groups import logged_group
 
 from ..common_neon.config import Config
 from ..common_neon.errors import BudgetExceededError
@@ -13,6 +12,9 @@ from ..common_neon.errors import NodeBehindError, NoMoreRetriesError, NonceTooLo
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolBlockhash, SolTxReceipt, SolAccount
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser, SolTxError
+
+
+LOG = logging.getLogger(__name__)
 
 
 @dataclass
@@ -45,7 +47,6 @@ class SolTxSendState:
         return str(self.tx.signature)
 
 
-@logged_group("neon.Proxy")
 class SolTxListSender:
     _one_block_time = 0.4
 
@@ -69,12 +70,12 @@ class SolTxListSender:
         while (self._retry_idx < self._config.retry_on_fail) and (len(tx_list) > 0):
             self._retry_idx += 1
             self._send_tx_list(tx_list)
-            self.debug(f'retry {self._retry_idx} sending stat: {self._fmt_stat()}')
+            LOG.debug(f'retry {self._retry_idx} sending stat: {self._fmt_stat()}')
 
             tx_list = self._get_tx_list_for_send()
             if len(tx_list) == 0:
                 self._wait_for_tx_receipt_list()
-                self.debug(f'retry {self._retry_idx} waiting stat: {self._fmt_stat()}')
+                LOG.debug(f'retry {self._retry_idx} waiting stat: {self._fmt_stat()}')
                 tx_list = self._get_tx_list_for_send()
 
         if len(tx_list) > 0:
@@ -104,7 +105,7 @@ class SolTxListSender:
                 tx.recent_blockhash = self._get_blockhash()
                 tx.sign(self._signer)
 
-        self.debug(f'send transactions: {" + ".join([f"{k}({v})" for k, v in tx_name_dict.items()])}')
+        LOG.debug(f'send transactions: {" + ".join([f"{k}({v})" for k, v in tx_name_dict.items()])}')
         send_result_list = self._solana.send_tx_list(tx_list, self._skip_preflight)
 
         for tx, send_result in zip(tx_list, send_result_list):
@@ -133,7 +134,7 @@ class SolTxListSender:
     def _wait_for_tx_receipt_list(self) -> None:
         tx_state_list = self._tx_state_dict.pop(SolTxSendState.Status.WaitForReceipt, [])
         if len(tx_state_list) == 0:
-            self.debug('No new receipts, because transaction list is empty')
+            LOG.debug('No new receipts, because transaction list is empty')
             return
 
         tx_sig_list = [tx_state.sig for tx_state in tx_state_list]
@@ -186,11 +187,11 @@ class SolTxListSender:
 
             block_slot, is_confirmed = self._solana.get_confirmed_slot_for_tx_sig_list(tx_sig_list)
             if is_confirmed:
-                self.debug(f'Got confirmed status for transactions: {tx_sig_list}')
+                LOG.debug(f'Got confirmed status for transactions: {tx_sig_list}')
                 return
             time.sleep(confirm_check_delay)
 
-        self.warning(f'No confirmed status for transactions: {tx_sig_list}')
+        LOG.warning(f'No confirmed status for transactions: {tx_sig_list}')
 
     def _get_blockhash(self) -> SolBlockhash:
         if self._config.fuzzing_blockhash and (random.randint(0, 3) == 1):
@@ -206,10 +207,10 @@ class SolTxListSender:
         state_tx_cnt, tx_nonce = tx_error_parser.get_nonce_error()
 
         if slots_behind is not None:
-            self.warning(f'Node is behind by {self._slots_behind} slots')
+            LOG.warning(f'Node is behind by {self._slots_behind} slots')
             return SolTxSendState.Status.NodeBehindError
         elif state_tx_cnt is not None:
-            self.debug(f'tx nonce {tx_nonce} != state tx count {state_tx_cnt}')
+            LOG.debug(f'tx nonce {tx_nonce} != state tx count {state_tx_cnt}')
             return SolTxSendState.Status.BadNonceError
         elif tx_error_parser.check_if_alt_uses_invalid_index():
             return SolTxSendState.Status.AltInvalidIndexError
@@ -227,7 +228,7 @@ class SolTxListSender:
         elif tx_error_parser.check_if_budget_exceeded():
             return SolTxSendState.Status.BudgetExceededError
         elif tx_error_parser.check_if_error():
-            self.debug(f'unknown_error_receipt: {json.dumps(tx_error_parser.receipt)}')
+            LOG.debug(f'unknown_error_receipt: {json.dumps(tx_error_parser.receipt)}')
             return SolTxSendState.Status.UnknownError
 
         # store the latest successfully used blockhash

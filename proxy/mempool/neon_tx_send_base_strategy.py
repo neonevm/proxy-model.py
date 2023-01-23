@@ -1,6 +1,4 @@
 import abc
-
-from logged_groups import logged_group
 from typing import Optional, List, cast
 
 from ..common_neon.solana_tx import SolBlockhash, SolTx, SolTxIx
@@ -12,7 +10,6 @@ from ..common_neon.utils import NeonTxResultInfo
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 
 
-@logged_group("neon.MemPool")
 class BaseNeonTxPrepStage(abc.ABC):
     def __init__(self, ctx: NeonTxSendCtx):
         self._ctx = ctx
@@ -26,7 +23,6 @@ class BaseNeonTxPrepStage(abc.ABC):
         pass
 
 
-@logged_group("neon.MemPool")
 class BaseNeonTxStrategy(abc.ABC):
     name = 'UNKNOWN STRATEGY'
 
