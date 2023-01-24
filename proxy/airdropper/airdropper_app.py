@@ -2,6 +2,7 @@ import os
 import logging
 
 from ..common_neon.config import Config
+from ..common.logger import Logger
 
 from .airdropper import Airdropper
 
@@ -29,6 +30,7 @@ class AirdropperApp:
         self._airdropper = Airdropper(config, faucet_url, wrapper_whitelist, max_conf)
 
     def run(self) -> int:
+        Logger.setup()
         try:
             self._airdropper.run()
         except BaseException as exc:
