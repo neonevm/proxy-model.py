@@ -1,4 +1,3 @@
-import json
 import math
 import threading
 import multiprocessing
@@ -22,7 +21,6 @@ from ..common_neon.eth_proto import NeonTx
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.transaction_validator import NeonTxValidator
-from ..common_neon.utils import JsonBytesEncoder
 from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
 
 from ..indexer.indexer_db import IndexerDB
@@ -539,8 +537,17 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message="wrong transaction format")
 
+        def _readable_tx(tx: NeonTx) -> dict:
+            result = dict()
+            for k, v in tx.as_dict().items():
+                if isinstance(v, bytearray) or isinstance(v, bytes):
+                    result[k] = v.hex()
+                else:
+                    result[k] = v
+            return result
+
         neon_sig = '0x' + neon_tx.hash_signed().hex()
-        LOG.debug(f"sendRawTransaction {neon_sig}: {json.dumps(neon_tx.as_dict(), cls=JsonBytesEncoder)}")
+        LOG.debug(f"sendRawTransaction {neon_sig}: {_readable_tx(neon_tx)}")
 
         try:
             neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_sig)

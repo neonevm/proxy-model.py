@@ -21,6 +21,8 @@ class CliBase:
 
         if not data:
             data = ""
+        LOG.debug(f"data: {data}, len: {len(data)}")
+
         result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
         if result.stderr is not None:
             print(result.stderr, file=sys.stderr)

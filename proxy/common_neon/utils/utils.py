@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-import json
 import hashlib
 import time
 from enum import Enum
 from typing import Dict, Any, List, Tuple
 
 from ..environment_data import LOG_FULL_OBJECT_INFO
-
-
-class JsonBytesEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, bytearray):
-            return obj.hex()
-        if isinstance(obj, bytes):
-            return obj.hex()
-        return json.JSONEncoder.default(self, obj)
 
 
 def str_fmt_object(obj: Any, skip_prefix=True) -> str:
@@ -88,9 +78,9 @@ def str_fmt_object(obj: Any, skip_prefix=True) -> str:
         name = name[len(class_prefix):]
 
     if hasattr(obj, '__dict__'):
-        members = json.dumps(lookup_dict(obj.__dict__), skipkeys=True, sort_keys=True)
+        members = lookup_dict(obj.__dict__)
     elif isinstance(obj, dict):
-        members = json.dumps(lookup_dict(obj), skipkeys=True, sort_keys=True)
+        members = lookup_dict(obj)
     else:
         members = None
 

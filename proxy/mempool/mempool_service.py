@@ -10,6 +10,7 @@ from .mempool_api import MPPendingTxNonceRequest, MPMempoolTxNonceRequest
 from .mempool_replicator import MemPoolReplicator
 from .operator_resource_mng import OpResMng
 
+from ..common.logger import Logger
 from ..common_neon.config import Config
 from ..common_neon.data import Result
 from ..common_neon.utils.json_logger import logging_context
@@ -96,6 +97,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
 
     def run(self):
         try:
+            Logger.setup()
             self._mempool_srv = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
             self._mempool_maintenance_srv = AddrPickableDataSrv(user=self, address=self.MP_MAINTENANCE_ADDR)
             self._stat_client = ProxyStatClient(self._config)

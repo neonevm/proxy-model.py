@@ -19,10 +19,12 @@ import spl.token.instructions as SplTokenInstrutions
 from ..common_neon.metaplex import create_metadata_instruction_data,create_metadata_instruction
 
 from proxy.testing.testing_helpers import Proxy
-from proxy.common_neon.solana_tx import SolAccount
+from proxy.common_neon.constants import COMPUTE_BUDGET_ID
+from proxy.common_neon.solana_tx import SolAccount, SolTxIx
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from proxy.common_neon.config import Config
+from proxy.common_neon.elf_params import ElfParams
 
 NAME = 'NEON'
 SYMBOL = 'NEO'
@@ -36,6 +38,7 @@ class Test_erc20ForSpl_contract(unittest.TestCase):
         cls.admin = cls.proxy.create_signer_account('issues/neonlabsorg/proxy-model.py/197/admin')
         cls.user = cls.proxy.create_signer_account('issues/neonlabsorg/proxy-model.py/197/user')
         cls.config = Config()
+        cls.elf_params = ElfParams()
 
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/197")
         print('admin.key:', cls.admin.key.hex())
@@ -113,11 +116,21 @@ class Test_erc20ForSpl_contract(unittest.TestCase):
             self.solana_account.public_key, self.token.pubkey)
         admin_address = self.wrapper.get_neon_account_address(self.admin.address)
 
-        tx = SolLegacyTx()
-
-        tx.add(SplTokenInstrutions.create_associated_token_account(
-            self.solana_account.public_key, self.solana_account.public_key, self.token.pubkey
-        ))
+        tx = SolLegacyTx(instructions=[
+            SolTxIx(
+                program_id=COMPUTE_BUDGET_ID,
+                keys=[],
+                data=bytes.fromhex("01") + self.elf_params.neon_heap_frame.to_bytes(4, "little")
+            ),
+            SolTxIx(
+                program_id=COMPUTE_BUDGET_ID,
+                keys=[],
+                data=bytes.fromhex("02") + self.elf_params.neon_compute_units.to_bytes(4, "little")
+            ),
+            SplTokenInstrutions.create_associated_token_account(
+                self.solana_account.public_key, self.solana_account.public_key, self.token.pubkey
+            )
+        ])
         tx.add(SplTokenInstrutions.mint_to(SplTokenInstrutions.MintToParams(
             program_id=self.token.program_id,
             mint=self.token.pubkey,
@@ -331,7 +344,7 @@ class Test_erc20ForSplMintable_contract(Test_erc20ForSpl_contract):
 
         mint_account = PublicKey(self.wrapper.erc20.functions.findMintAccount().call())
         self.token = SplToken(
-            self.solana_client, 
+            self.solana_client,
             mint_account, TOKEN_PROGRAM_ID,
             self.solana_account
         )

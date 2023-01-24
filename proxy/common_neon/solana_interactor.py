@@ -465,7 +465,7 @@ class SolInteractor:
 
             result = None
             if isinstance(raw_result, dict):
-                LOG.debug(f'Got strange result on transaction execution: {json.dumps(raw_result)}')
+                LOG.debug(f'Got strange result on transaction execution: {raw_result}')
             elif isinstance(raw_result, str):
                 result = base58.b58encode(base58.b58decode(raw_result)).decode("utf-8")
             elif isinstance(raw_result, bytes):
@@ -480,7 +480,7 @@ class SolInteractor:
                     LOG.debug(f'Transaction is already processed: {str(result)}')
                     error = None
                 else:
-                    # LOG.debug(f'Got error on transaction execution: {json.dumps(error)}')
+                    # LOG.debug(f'Got error on transaction execution: {error}')
                     result = None
 
             result_list.append(SolSendResult(result=result, error=error))

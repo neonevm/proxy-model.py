@@ -14,6 +14,7 @@ from .mempool_executor_task_gas_price import MPExecutorGasPriceTask
 from .mempool_executor_task_op_res import MPExecutorOpResTask
 from .mempool_executor_task_state_tx_cnt import MPExecutorStateTxCntTask
 
+from ..common.logger import Logger
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.utils.json_logger import logging_context
@@ -103,6 +104,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         LOG.error(f"Failed to process mp_request, unknown type: {mp_req.type}")
 
     def run(self) -> None:
+        Logger.setup()
         self._config = Config()
         self._init_in_proc()
         self._event_loop.run_forever()

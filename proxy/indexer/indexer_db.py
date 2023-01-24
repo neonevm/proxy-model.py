@@ -49,8 +49,8 @@ class IndexerDB:
                 if neon_block.is_finalized:
                     self._finalize_block(cursor, neon_block)
                 self._neon_txs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
-                self._sol_neon_txs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
                 self._neon_tx_logs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
+                self._sol_neon_txs_db.set_tx_list(cursor, neon_block.iter_sol_neon_ix())
                 self._sol_tx_costs_db.set_cost_list(cursor, neon_block.iter_sol_tx_cost())
 
         if self.get_starting_block().block_slot == 0:

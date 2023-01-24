@@ -33,6 +33,7 @@ from ..statistic.proxy_client import ProxyStatClient
 
 LOG = logging.getLogger(__name__)
 
+
 class MPTxEndCode(enum.Enum):
     Unspecified = enum.auto()
     Unfinished = enum.auto()
@@ -48,7 +49,7 @@ class MemPool:
     def __init__(self, config: Config, stat_client: ProxyStatClient, op_res_mng: OpResMng, executor_mng: MPExecutorMng):
         capacity = config.mempool_capacity
         LOG.info(f"Init mempool schedule with capacity: {capacity}")
-        LOG.info(f"Config: {config}")
+        LOG.info(f"Config: {config.as_dict()}")
         self._tx_schedule = MPTxSchedule(capacity)
         self._schedule_cond = asyncio.Condition()
         self._processing_task_list: List[MPTask] = []
@@ -277,9 +278,7 @@ class MemPool:
         elif mp_tx_res.code == MPTxExecResultCode.Done:
             self._on_done_tx(tx)
             return MPTxEndCode.Done
-        else:
-            assert False, f'Unknown result code {mp_tx_res.code}'
-        return MPTxEndCode.Unspecified  # skip task
+        assert False, f'Unknown result code {mp_tx_res.code}'
 
     def _on_reschedule_tx(self, tx: MPTxRequest) -> None:
         LOG.debug(f"Got reschedule status for tx {tx.sig}.")

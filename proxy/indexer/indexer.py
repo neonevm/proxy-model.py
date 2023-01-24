@@ -64,11 +64,11 @@ class Indexer(IndexerBase):
         self._last_finalized_block_slot = 0
         self._neon_block_dict = NeonIndexedBlockDict()
 
-        sol_neon_ix_decoder_list: List[Type[DummyIxDecoder]] = []
+        sol_neon_ix_decoder_list: List[Type[DummyIxDecoder]] = list()
         sol_neon_ix_decoder_list.extend(get_neon_ix_decoder_list())
         sol_neon_ix_decoder_list.extend(get_neon_ix_decoder_deprecated_list())
 
-        self._sol_neon_ix_decoder_dict: Dict[int, Type[DummyIxDecoder]] = {}
+        self._sol_neon_ix_decoder_dict: Dict[int, Type[DummyIxDecoder]] = dict()
         for decoder in sol_neon_ix_decoder_list:
             ix_code = decoder.ix_code()
             assert ix_code not in self._sol_neon_ix_decoder_dict
@@ -96,7 +96,9 @@ class Indexer(IndexerBase):
             return
 
         for tx in state.neon_block.iter_neon_tx():
-            if (tx.storage_account != '') and (state.stop_block_slot - tx.block_slot > self._config.cancel_timeout):
+            if tx.storage_account == '':
+                continue
+            if state.stop_block_slot - tx.last_block_slot > self._config.cancel_timeout:
                 self._cancel_neon_tx(tx, sol_tx_meta)
 
         try:
@@ -112,7 +114,7 @@ class Indexer(IndexerBase):
             return True
 
         # We've already sent Cancel and are waiting for receipt
-        if tx.status != NeonIndexedTxInfo.Status.IN_PROGRESS:
+        if tx.status != NeonIndexedTxInfo.Status.InProgress:
             return True
 
         if not tx.blocked_account_cnt:
@@ -144,7 +146,7 @@ class Indexer(IndexerBase):
             return False
 
         LOG.debug(f'Neon tx is blocked: storage {holder_account}, {tx.neon_tx}, {holder_info.account_list}')
-        tx.set_status(NeonIndexedTxInfo.Status.CANCELED, sol_tx_meta.block_slot)
+        tx.set_status(NeonIndexedTxInfo.Status.Canceled, sol_tx_meta.block_slot)
         return True
 
     def _save_checkpoint(self) -> None:
@@ -165,7 +167,8 @@ class Indexer(IndexerBase):
             neon_block.set_finalized(is_finalized)
             if not neon_block.is_completed:
                 self._db.submit_block(neon_block)
-                neon_block.complete_block(self._config, self._op_account_set)
+                neon_block.calc_stat(self._config, self._op_account_set)
+                neon_block.complete_block(self._config)
             elif is_finalized:
                 # the confirmed block becomes finalized
                 self._db.finalize_block(neon_block)
@@ -266,10 +269,14 @@ class Indexer(IndexerBase):
 
             for sol_neon_ix in state.iter_sol_neon_ix():
                 with logging_context(sol_neon_ix=sol_neon_ix.req_id):
+                    neon_block.add_sol_neon_ix(sol_neon_ix)
                     if is_error:
-                        LOG.debug('failed tx')
+                        # LOG.debug('failed tx')
+                        continue
+
                     SolNeonIxDecoder = self._sol_neon_ix_decoder_dict.get(sol_neon_ix.program_ix, DummyIxDecoder)
-                    SolNeonIxDecoder(state).execute()
+                    sol_neon_ix_decoder = SolNeonIxDecoder(state)
+                    sol_neon_ix_decoder.execute()
 
         sol_tx_meta = state.end_range
         with logging_context(ident=sol_tx_meta.req_id):
