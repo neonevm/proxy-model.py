@@ -47,7 +47,6 @@ class DummyIxDecoder:
     def _decoding_success(self, indexed_obj: Any, msg: str) -> bool:
         """
         The instruction has been successfully parsed:
-        - Mark the instruction as used;
         - log the success message.
         """
         LOG.debug(f'decoding success: {msg} - {indexed_obj}')
@@ -71,34 +70,52 @@ class DummyIxDecoder:
         LOG.debug(f'decoding skip: {reason}')
         return False
 
-    def _decode_neon_tx_from_holder(self, tx: NeonIndexedTxInfo, holder: NeonIndexedHolderInfo) -> None:
+    def _decode_neon_tx_from_holder(self, tx: NeonIndexedTxInfo) -> None:
+        if tx.neon_tx.is_valid() or (not tx.neon_tx_res.is_valid()):
+            return
+        if tx.tx_type not in {NeonIndexedTxInfo.Type.IterFromAccount, NeonIndexedTxInfo.Type.IterFromAccountWoChainId}:
+            return
+
+        key = NeonIndexedHolderInfo.Key(tx.storage_account, tx.neon_tx.sig)
+        holder = self.state.neon_block.find_neon_tx_holder(key, self.state.sol_neon_ix)
+        if holder is None:
+            return
+
         neon_tx = NeonTxInfo.from_sig_data(holder.data)
         if not neon_tx.is_valid():
-            LOG.warning(f'Neon tx rlp error: {neon_tx.error}')
+            self._decoding_skip(f'Neon tx rlp error: {neon_tx.error}')
+        elif holder.neon_tx_sig != neon_tx.sig[2:]:
+            # failed decoding ...
+            LOG.warning(f'Neon tx hash {neon_tx.sig} != holder hash {holder.neon_tx_sig}')
         elif neon_tx.sig != tx.neon_tx.sig:
-            LOG.warning(f'Neon tx hash {neon_tx.sig} != {tx.neon_tx.sig}')
+            # failed decoding ...
+            LOG.warning(f'Neon tx hash {neon_tx.sig} != tx log hash {tx.neon_tx.sig}')
         else:
-            tx.set_neon_tx(neon_tx)
-            tx.set_holder_account(holder)
+            tx.set_holder_account(holder, neon_tx)
             self._decoding_done(holder, f'init Neon tx {tx.neon_tx} from holder')
 
-    def _decode_tx(self, tx: NeonIndexedTxInfo, msg: str) -> bool:
+    def _decode_neon_tx_return(self, tx: NeonIndexedTxInfo) -> None:
+        if tx.neon_tx_res.is_valid():
+            return
+
         ix = self.state.sol_neon_ix
-        self.state.set_neon_tx(tx)
+        ret = ix.neon_tx_return
+        if ret is None:
+            return
 
-        if not tx.neon_tx.is_valid():
-            holder = self.state.neon_block.find_neon_tx_holder(tx.storage_account, tx.neon_tx.sig, ix)
-            if holder is not None:
-                self._decode_neon_tx_from_holder(tx, holder)
+        tx.neon_tx_res.set_result(status=ret.status, gas_used=ret.gas_used, return_value=ret.return_value)
+        tx.neon_tx_res.set_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
 
-        res = ix.neon_tx_return
-        if (not tx.neon_tx_res.is_valid()) and (res is not None):
-            tx.neon_tx_res.set_result(status=res.status, gas_used=res.gas_used, return_value=res.return_value)
-
-        for event in ix.neon_tx_event_list:
+    def _decode_neon_tx_event_list(self, tx: NeonIndexedTxInfo) -> None:
+        for event in self.state.sol_neon_ix.neon_tx_event_list:
             tx.neon_tx_res.add_event(event.address, event.topic_list, event.data)
 
-        if tx.neon_tx_res.is_valid() and (tx.status != NeonIndexedTxInfo.Status.DONE):
+    def _decode_tx(self, tx: NeonIndexedTxInfo, msg: str) -> bool:
+        self._decode_neon_tx_return(tx)
+        self._decode_neon_tx_event_list(tx)
+        self._decode_neon_tx_from_holder(tx)
+
+        if tx.neon_tx_res.is_valid() and (tx.status != NeonIndexedTxInfo.Status.Done):
             return self._decoding_done(tx, msg)
 
         return self._decoding_success(tx, msg)
@@ -147,16 +164,18 @@ class TxExecFromDataIxDecoder(DummyIxDecoder):
         if neon_tx_sig != neon_tx.sig:
             return self._decoding_skip(f'Neon tx hash {neon_tx.sig} != {neon_tx_sig}')
 
-        key = NeonIndexedTxInfo.Key(neon_tx_sig, '', [])
+        key = NeonIndexedTxInfo.Key(self.state.sol_neon_ix)
         block = self.state.neon_block
-        tx = block.find_neon_tx(key, ix) or block.add_neon_tx(key, neon_tx, ix)
+        tx: Optional[NeonIndexedTxInfo] = block.find_neon_tx(key, ix)
+        if tx is None:
+            tx = block.add_neon_tx(NeonIndexedTxInfo.Type.Single, key, neon_tx, '', iter(()), ix)
         return self._decode_tx(tx, 'Neon tx exec from data')
 
 
 class BaseTxStepIxDecoder(DummyIxDecoder):
     _first_blocked_account_idx = 6
 
-    def _get_neon_tx(self) -> Optional[NeonIndexedTxInfo]:
+    def _get_neon_tx(self, tx_type: NeonIndexedTxInfo.Type) -> Optional[NeonIndexedTxInfo]:
         ix = self.state.sol_neon_ix
 
         # 1 byte  - ix
@@ -174,17 +193,21 @@ class BaseTxStepIxDecoder(DummyIxDecoder):
         neon_step_cnt = int.from_bytes(ix.ix_data[5:9], 'little')
         ix.set_neon_step_cnt(neon_step_cnt)
 
-        storage_account: str = ix.get_account(0)
-        iter_blocked_account: Iterator[str] = ix.iter_account(self._first_blocked_account_idx)
-
         neon_tx_sig = self.state.sol_neon_ix.neon_tx_sig
         if len(neon_tx_sig) == 0:
             self._decoding_skip('no Neon tx hash in logs')
             return None
 
         block = self.state.neon_block
-        key = NeonIndexedTxInfo.Key(neon_tx_sig, storage_account, iter_blocked_account)
-        return block.find_neon_tx(key, ix) or block.add_neon_tx(key, NeonTxInfo.from_neon_sig(neon_tx_sig), ix)
+        key = NeonIndexedTxInfo.Key(self.state.sol_neon_ix)
+        tx: Optional[NeonIndexedTxInfo] = block.find_neon_tx(key, ix)
+        if tx is not None:
+            return tx
+
+        storage_account: str = ix.get_account(0)
+        iter_blocked_account: Iterator[str] = ix.iter_account(self._first_blocked_account_idx)
+        neon_tx = NeonTxInfo.from_neon_sig(neon_tx_sig)
+        return block.add_neon_tx(tx_type, key, neon_tx, storage_account, iter_blocked_account, ix)
 
 
 class TxStepFromDataIxDecoder(BaseTxStepIxDecoder):
@@ -193,9 +216,12 @@ class TxStepFromDataIxDecoder(BaseTxStepIxDecoder):
     _is_deprecated = False
 
     def execute(self) -> bool:
-        tx = self._get_neon_tx()
+        tx = self._get_neon_tx(NeonIndexedTxInfo.Type.IterFromData)
         if tx is None:
             return False
+
+        if tx.neon_tx.is_valid():
+            return self._decode_tx(tx, 'Neon tx continue step from data')
 
         ix = self.state.sol_neon_ix
         if len(ix.ix_data) < 14:
@@ -206,17 +232,15 @@ class TxStepFromDataIxDecoder(BaseTxStepIxDecoder):
         # 4 bytes - neon step cnt
         # 4 bytes - unique index
 
-        if not tx.neon_tx.is_valid():
-            rlp_sig_data = ix.ix_data[13:]
-            neon_tx = NeonTxInfo.from_sig_data(rlp_sig_data)
-            if neon_tx.error:
-                return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
+        rlp_sig_data = ix.ix_data[13:]
+        neon_tx = NeonTxInfo.from_sig_data(rlp_sig_data)
+        if neon_tx.error:
+            return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
 
-            if neon_tx.sig != tx.neon_tx.sig:
-                return self._decoding_skip(f'Neon tx hash {neon_tx.sig} != {tx.neon_tx.sig}')
-            tx.set_neon_tx(neon_tx)
-
-        return self._decode_tx(tx, 'Neon tx step from data')
+        if neon_tx.sig != tx.neon_tx.sig:
+            return self._decoding_skip(f'Neon tx hash {neon_tx.sig} != tx log hash {tx.neon_tx.sig}')
+        tx.set_neon_tx(neon_tx)
+        return self._decode_tx(tx, 'Neon tx init step from data')
 
 
 class TxStepFromAccountIxDecoder(BaseTxStepIxDecoder):
@@ -225,9 +249,10 @@ class TxStepFromAccountIxDecoder(BaseTxStepIxDecoder):
     _is_deprecated = False
 
     def execute(self) -> bool:
-        tx = self._get_neon_tx()
+        tx = self._get_neon_tx(NeonIndexedTxInfo.Type.IterFromAccount)
         if tx is None:
             return False
+
         return self._decode_tx(tx, 'Neon tx step from account')
 
 
@@ -237,9 +262,10 @@ class TxStepFromAccountNoChainIdIxDecoder(BaseTxStepIxDecoder):
     _is_deprecated = False
 
     def execute(self) -> bool:
-        tx = self._get_neon_tx()
+        tx = self._get_neon_tx(NeonIndexedTxInfo.Type.IterFromAccountWoChainId)
         if tx is None:
             return False
+
         return self._decode_tx(tx, 'Neon tx wo chain-id step from account')
 
 
@@ -265,24 +291,19 @@ class CancelWithHashIxDecoder(DummyIxDecoder):
         if len(ix.ix_data) < 33:
             return self._decoding_skip(f'no enough data to get Neon tx hash {len(ix.ix_data)}')
 
-        holder_account = ix.get_account(0)
-        iter_blocked_account = ix.iter_account(self._first_blocked_account_idx)
-
         neon_tx_sig: str = '0x' + ix.ix_data[1:33].hex().lower()
         log_tx_sig = self.state.sol_neon_ix.neon_tx_sig
         if log_tx_sig != neon_tx_sig:
             return self._decoding_skip(f'Neon tx hash "{log_tx_sig}" != "{neon_tx_sig}"')
 
-        key = NeonIndexedTxInfo.Key(neon_tx_sig, holder_account, iter_blocked_account)
+        key = NeonIndexedTxInfo.Key(self.state.sol_neon_ix)
         tx = self.state.neon_block.find_neon_tx(key, ix)
         if not tx:
-            return self._decoding_skip(f'cannot find tx in the holder {holder_account}')
+            return self._decoding_skip(f'cannot find Neon tx {neon_tx_sig}')
 
-        res = self.state.sol_neon_ix.neon_tx_return
-        if res is not None:
+        if self.state.sol_neon_ix.neon_tx_return is not None:
             tx.set_canceled(True)
-            tx.neon_tx_res.set_result(status=res.status, gas_used=res.gas_used, return_value=res.return_value)
-            tx.neon_tx_res.set_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
+
         return self._decode_tx(tx, 'cancel Neon tx')
 
 
@@ -326,25 +347,25 @@ class WriteHolderAccountIx(DummyIxDecoder):
         neon_tx_sig: str = '0x' + ix.ix_data[1:33].hex().lower()
         tx_sig = self.state.sol_neon_ix.neon_tx_sig
         if tx_sig != neon_tx_sig:
-            return self._decoding_skip(f'Neon tx hash "{tx_sig}" != "{neon_tx_sig}"')
+            return self._decoding_skip(f'Neon tx hash "{neon_tx_sig}" != log tx hash "{tx_sig}"')
 
         block = self.state.neon_block
         account = ix.get_account(0)
 
-        key = NeonIndexedTxInfo.Key(neon_tx_sig, account, [])
+        key = NeonIndexedTxInfo.Key(self.state.sol_neon_ix)
         tx: Optional[NeonIndexedTxInfo] = block.find_neon_tx(key, ix)
         if (tx is not None) and tx.neon_tx.is_valid():
             return self._decoding_success(tx, f'add surplus data chunk to tx')
 
-        holder = block.find_neon_tx_holder(account, tx_sig, ix) or block.add_neon_tx_holder(account, tx_sig, ix)
+        key = NeonIndexedHolderInfo.Key(account, neon_tx_sig)
+        holder: NeonIndexedHolderInfo = block.find_neon_tx_holder(key, ix) or block.add_neon_tx_holder(key, ix)
 
         # Write the received chunk into the holder account buffer
         holder.add_data_chunk(chunk)
         self._decoding_success(holder, f'add Neon tx data chunk {chunk}')
 
-        # decode neon tx from holder account
         if tx is not None:
-            self._decode_neon_tx_from_holder(tx, holder)
+            self._decode_neon_tx_from_holder(tx)
 
         return True
 

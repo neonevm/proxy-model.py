@@ -3,6 +3,7 @@ import logging
 from .indexer import Indexer
 from ..common_neon.config import Config
 from ..statistic import IndexerStatService
+from ..common.logger import Logger
 
 
 LOG = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class IndexerApp:
 
 def run_indexer():
     config = Config()
+    Logger.setup()
     LOG.info(f"Running indexer with params: {str(config)}")
     IndexerApp(config)
 

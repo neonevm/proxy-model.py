@@ -15,6 +15,7 @@ class NeonLogTxReturn:
     gas_used: int
     status: int
     return_value: bytes
+    is_canceled: bool
 
 
 @dataclass(frozen=True)
@@ -93,7 +94,8 @@ class _NeonLogDecoder:
         mnemonic = base64.b64decode(data_list[0]).decode('utf-8')
         return mnemonic, data_list[1:]
 
-    def _decode_neon_tx_return(self, data_list: List[str]) -> Optional[NeonLogTxReturn]:
+    @staticmethod
+    def _decode_neon_tx_return(data_list: List[str]) -> Optional[NeonLogTxReturn]:
         """Unpacks base64-encoded return data"""
         if len(data_list) < 2:
             LOG.error(f'Failed to decode return data: less then 2 elements in {data_list}')
@@ -108,9 +110,10 @@ class _NeonLogDecoder:
 
         return_value = base64.b64decode(data_list[2]) if len(data_list) > 2 else b''
 
-        return NeonLogTxReturn(gas_used=gas_used, status=exit_status, return_value=return_value)
+        return NeonLogTxReturn(gas_used=gas_used, status=exit_status, return_value=return_value, is_canceled=False)
 
-    def _decode_neon_tx_event(self, data_list: List[str]) -> Optional[NeonLogTxEvent]:
+    @staticmethod
+    def _decode_neon_tx_event(data_list: List[str]) -> Optional[NeonLogTxEvent]:
         """Unpacks base64-encoded event data"""
         if len(data_list) < 3:
             LOG.error(f'Failed to decode events data: less then 3 elements in {data_list}')
@@ -130,7 +133,8 @@ class _NeonLogDecoder:
 
         return NeonLogTxEvent(address=address, topic_list=topic_list, data=data)
 
-    def _decode_neon_tx_sig(self, data_list: List[str]) -> Optional[NeonLogTxSig]:
+    @staticmethod
+    def _decode_neon_tx_sig(data_list: List[str]) -> Optional[NeonLogTxSig]:
         """Extracts Neon transaction hash"""
         if len(data_list) != 1:
             LOG.error(f'Failed to decode neon tx hash: should be 1 element in {data_list}')
@@ -143,7 +147,8 @@ class _NeonLogDecoder:
 
         return NeonLogTxSig(neon_sig=tx_sig)
 
-    def _decode_neon_tx_cancel(self, data_list: List[str]) -> Optional[NeonLogTxReturn]:
+    @staticmethod
+    def _decode_neon_tx_cancel(data_list: List[str]) -> Optional[NeonLogTxReturn]:
         """Extracts gas_used of the canceled transaction"""
 
         if len(data_list) != 1:
@@ -151,11 +156,12 @@ class _NeonLogDecoder:
             return None
 
         bs = base64.b64decode(data_list[0])
-        gas_used = int.from_bytes(bs, "little")
+        gas_used = int.from_bytes(bs, 'little')
 
-        return NeonLogTxReturn(gas_used=gas_used, status=0, return_value=bytes())
+        return NeonLogTxReturn(gas_used=gas_used, status=0, return_value=bytes(), is_canceled=True)
 
-    def _decode_neon_tx_ix(self, data_list: List[str]) -> Optional[NeonLogTxIx]:
+    @staticmethod
+    def _decode_neon_tx_ix(data_list: List[str]) -> Optional[NeonLogTxIx]:
         """Extracts gas_used of the """
 
         if len(data_list) != 1:

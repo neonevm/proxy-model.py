@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Union, Optional, Any, Tuple
 
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.solana_tx import SolTxReceipt
 from ..common_neon.utils import get_from_dict
+
+
+LOG = logging.getLogger(__name__)
 
 
 class SolTxError(Exception):
@@ -178,7 +182,7 @@ class SolTxErrorParser:
             self._log_list = self._get_log_list()
 
             if len(self._log_list) == 0:
-                self.error(f"Can't get logs from receipt: {json.dumps(self._receipt, sort_keys=True)}")
+                LOG.error(f"Can't get logs from receipt: {self._receipt}")
 
         return self._log_list
 

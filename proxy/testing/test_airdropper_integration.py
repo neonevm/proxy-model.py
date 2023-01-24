@@ -20,9 +20,10 @@ from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolAccount, SolPubKey
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.common_neon.neon_instruction import create_account_layout
-from ..common_neon.neon_instruction import create_account_layout
-from ..common_neon.erc20_wrapper import ERC20Wrapper
-from ..common_neon.config import Config
+from proxy.common_neon.erc20_wrapper import ERC20Wrapper
+from proxy.common_neon.config import Config
+from proxy.common_neon.elf_params import ElfParams
+from proxy.common_neon.constants import COMPUTE_BUDGET_ID
 
 from proxy.testing.testing_helpers import Proxy
 from proxy.testing.solana_utils import EvmLoader, OperatorAccount, wallet_path
@@ -49,6 +50,7 @@ class TestAirdropperIntegration(TestCase):
         cls.deploy_erc20_wrapper_contract(cls)
         cls.acc_num = 0
         cls.config = Config()
+        cls.elf_params = ElfParams()
         cls.loader = EvmLoader(OperatorAccount(wallet_path()), str(cls.config.evm_loader_id))
 
     def create_token_mint(self):
@@ -151,8 +153,19 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(self.wrapper.get_balance(to_neon_acc.address), 0)
 
         transfer_amount = 123456
-        tx = SolLegacyTx()
-        tx.add(self.create_account_instruction(signer_account.address, from_owner.public_key))
+        tx = SolLegacyTx(instructions=[
+            SolTxIx(
+                program_id=COMPUTE_BUDGET_ID,
+                keys=[],
+                data=bytes.fromhex("01") + self.elf_params.neon_heap_frame.to_bytes(4, "little")
+            ),
+            SolTxIx(
+                program_id=COMPUTE_BUDGET_ID,
+                keys=[],
+                data=bytes.fromhex("02") + self.elf_params.neon_compute_units.to_bytes(4, "little")
+            ),
+            self.create_account_instruction(signer_account.address, from_owner.public_key)
+        ])
         tx.add(self.create_account_instruction(to_neon_acc.address, from_owner.public_key))
         tx.add(
             SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
@@ -211,8 +224,19 @@ class TestAirdropperIntegration(TestCase):
 
         transfer_amount1 = 123456
         transfer_amount2 = 654321
-        tx = SolLegacyTx()
-        tx.add(self.create_account_instruction(to_neon_acc1.address, from_owner.public_key))
+        tx = SolLegacyTx(instructions=[
+            SolTxIx(
+                program_id=COMPUTE_BUDGET_ID,
+                keys=[],
+                data=bytes.fromhex("01") + self.elf_params.neon_heap_frame.to_bytes(4, "little")
+            ),
+            SolTxIx(
+                program_id=COMPUTE_BUDGET_ID,
+                keys=[],
+                data=bytes.fromhex("02") + self.elf_params.neon_compute_units.to_bytes(4, "little")
+            ),
+            self.create_account_instruction(to_neon_acc1.address, from_owner.public_key)
+        ])
         tx.add(self.create_account_instruction(to_neon_acc2.address, from_owner.public_key))
         tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
             program_id=self.token.program_id,
@@ -287,15 +311,26 @@ class TestAirdropperIntegration(TestCase):
         self.assertEqual(self.proxy.conn.get_balance(to_neon_acc.address), initial_balance * 10**18)  # Destination-acc Neon balance is initial
 
         transfer_amount = 123456
-        tx = SolLegacyTx()
-        tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
-            program_id=self.token.program_id,
-            source=from_spl_token_acc,
-            delegate=self.wrapper.get_neon_account_address(to_neon_acc.address),
-            owner=from_owner.public_key,
-            amount=transfer_amount,
-            signers=[],
-        )))
+        tx = SolLegacyTx(instructions=[
+            SolTxIx(
+                program_id=COMPUTE_BUDGET_ID,
+                keys=[],
+                data=bytes.fromhex("01") + self.elf_params.neon_heap_frame.to_bytes(4, "little")
+            ),
+            SolTxIx(
+                program_id=COMPUTE_BUDGET_ID,
+                keys=[],
+                data=bytes.fromhex("02") + self.elf_params.neon_compute_units.to_bytes(4, "little")
+            ),
+            SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
+                program_id=self.token.program_id,
+                source=from_spl_token_acc,
+                delegate=self.wrapper.get_neon_account_address(to_neon_acc.address),
+                owner=from_owner.public_key,
+                amount=transfer_amount,
+                signers=[],
+            ))
+        ])
         tx.add(
             self.wrapper.create_claim_instruction(
                 owner=from_owner.public_key,

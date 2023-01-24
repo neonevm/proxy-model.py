@@ -84,17 +84,17 @@ class HttpProtocolHandler(BaseTcpServerHandler[HttpClientConnection]):
             # Invoke plugin.on_client_connection_close
             if self.plugin:
                 self.plugin.on_client_connection_close()
-            logger.debug(
-                'Closing client connection %s has buffer %s' %
-                (self.work.address, self.work.has_buffer()),
-            )
+            # logger.debug(
+            #     'Closing client connection %s has buffer %s' %
+            #     (self.work.address, self.work.has_buffer()),
+            # )
             conn = self.work.connection
             # Unwrap if wrapped before shutdown.
             if self._encryption_enabled() and \
                     isinstance(self.work.connection, ssl.SSLSocket):
                 conn = self.work.connection.unwrap()
             conn.shutdown(socket.SHUT_WR)
-            logger.debug('Client connection shutdown successful')
+            # logger.debug('Client connection shutdown successful')
         except OSError:
             pass
         finally:
@@ -108,7 +108,7 @@ class HttpProtocolHandler(BaseTcpServerHandler[HttpClientConnection]):
             #   show that data was lost."
             #
             self.work.connection.close()
-            logger.debug('Client connection closed')
+            # logger.debug('Client connection closed')
             super().shutdown()
 
     async def get_events(self) -> SelectableEvents:
@@ -159,7 +159,7 @@ class HttpProtocolHandler(BaseTcpServerHandler[HttpClientConnection]):
     def handle_data(self, data: memoryview) -> Optional[bool]:
         """Handles incoming data from client."""
         if data is None:
-            logger.debug('Client closed connection, tearing down...')
+            # logger.debug('Client closed connection, tearing down...')
             self.work.closed = True
             return True
         try:
@@ -176,7 +176,7 @@ class HttpProtocolHandler(BaseTcpServerHandler[HttpClientConnection]):
             elif self.plugin:
                 self.plugin.on_client_data(data)
         except HttpProtocolException as e:
-            logger.info('HttpProtocolException: %s' % e)
+            # logger.info('HttpProtocolException: %s' % e)
             response: Optional[memoryview] = e.response(self.request)
             if response:
                 self.work.queue(response)
@@ -185,7 +185,7 @@ class HttpProtocolHandler(BaseTcpServerHandler[HttpClientConnection]):
 
     async def handle_writables(self, writables: Writables) -> bool:
         if self.work.connection.fileno() in writables and self.work.has_buffer():
-            logger.debug('Client is write ready, flushing...')
+            # logger.debug('Client is write ready, flushing...')
             self.last_activity = time.time()
             # TODO(abhinavsingh): This hook could just reside within server recv block
             # instead of invoking when flushed to client.
@@ -200,42 +200,42 @@ class HttpProtocolHandler(BaseTcpServerHandler[HttpClientConnection]):
                 if teardown:
                     return True
             except BrokenPipeError:
-                logger.warning(     # pragma: no cover
-                    'BrokenPipeError when flushing buffer for client',
-                )
+                # logger.warning(     # pragma: no cover
+                #     'BrokenPipeError when flushing buffer for client',
+                # )
                 return True
             except OSError:
-                logger.warning(     # pragma: no cover
-                    'OSError when flushing buffer to client',
-                )
+                # logger.warning(     # pragma: no cover
+                #     'OSError when flushing buffer to client',
+                # )
                 return True
         return False
 
     async def handle_readables(self, readables: Readables) -> bool:
         if self.work.connection.fileno() in readables:
-            logger.debug('Client is read ready, receiving...')
+            # logger.debug('Client is read ready, receiving...')
             self.last_activity = time.time()
             try:
                 teardown = await super().handle_readables(readables)
                 if teardown:
                     return teardown
             except ssl.SSLWantReadError:    # Try again later
-                logger.warning(
-                    'SSLWantReadError encountered while reading from client, will retry ...',
-                )
+                # logger.warning(
+                #     'SSLWantReadError encountered while reading from client, will retry ...',
+                # )
                 return False
             except socket.error as e:
-                if e.errno == errno.ECONNRESET:
-                    # Most requests for mobile devices will end up
-                    # with client closed connection.  Using `debug`
-                    # here to avoid flooding the logs.
-                    logger.debug('%r' % e)
-                else:
-                    logger.warning(
-                        'Exception when receiving from %s connection#%d with reason %r' %
-                        (self.work.tag, self.work.connection.fileno(), e),
-                        exc_info=True,
-                    )
+                # if e.errno == errno.ECONNRESET:
+                #     # Most requests for mobile devices will end up
+                #     # with client closed connection.  Using `debug`
+                #     # here to avoid flooding the logs.
+                #     logger.debug('%r' % e)
+                # else:
+                #     logger.warning(
+                #         'Exception when receiving from %s connection#%d with reason %r' %
+                #         (self.work.tag, self.work.connection.fileno(), e),
+                #         exc_info=True,
+                #     )
                 return True
         return False
 
@@ -302,9 +302,9 @@ class HttpProtocolHandler(BaseTcpServerHandler[HttpClientConnection]):
         if isinstance(output, bool):
             return output
         assert isinstance(output, ssl.SSLSocket)
-        logger.debug(
-            'Updated client conn to %s', output,
-        )
+        # logger.debug(
+        #     'Updated client conn to %s', output,
+        # )
         self.work._conn = output
         return False
 
@@ -328,22 +328,24 @@ class HttpProtocolHandler(BaseTcpServerHandler[HttpClientConnection]):
             while True:
                 # Tear down if client buffer is empty and connection is inactive
                 if self.is_inactive():
-                    logger.debug(
-                        'Client buffer is empty and maximum inactivity has reached '
-                        'between client and server connection, tearing down...',
-                    )
+                    # logger.debug(
+                    #     'Client buffer is empty and maximum inactivity has reached '
+                    #     'between client and server connection, tearing down...',
+                    # )
                     break
                 if loop.run_until_complete(self._run_once()):
                     break
         except KeyboardInterrupt:  # pragma: no cover
             pass
         except ssl.SSLError as e:
-            logger.exception('ssl.SSLError', exc_info=e)
+            # logger.exception('ssl.SSLError', exc_info=e)
+            pass
         except Exception as e:
-            logger.exception(
-                'Exception while handling connection %r' %
-                self.work.connection, exc_info=e,
-            )
+            # logger.exception(
+            #     'Exception while handling connection %r' %
+            #     self.work.connection, exc_info=e,
+            # )
+            pass
         finally:
             self.shutdown()
             if self.selector:
@@ -381,14 +383,14 @@ class HttpProtocolHandler(BaseTcpServerHandler[HttpClientConnection]):
 
     def _flush(self) -> None:
         assert self.selector
-        logger.debug('Flushing pending data')
+        # logger.debug('Flushing pending data')
         try:
             self.selector.register(
                 self.work.connection,
                 selectors.EVENT_WRITE,
             )
             while self.work.has_buffer():
-                logging.debug('Waiting for client read ready')
+                # logging.debug('Waiting for client read ready')
                 ev: List[
                     Tuple[selectors.SelectorKey, int]
                 ] = self.selector.select(timeout=DEFAULT_SELECTOR_SELECT_TIMEOUT)

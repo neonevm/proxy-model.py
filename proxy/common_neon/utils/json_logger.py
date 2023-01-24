@@ -2,18 +2,20 @@ import json
 import logging
 import threading
 import contextlib
+import traceback
 from logging import LogRecord, Filter
 from datetime import datetime
 
 
 class JSONFormatter(logging.Formatter):
     def format(self, record: LogRecord) -> str:
-        message_dict = {
+        message_dict = dict()
+        message_dict.update({
             "level": record.levelname,
             "date": datetime.fromtimestamp(record.created).isoformat(),
             "module": f"{record.filename}:{record.lineno}",
             "process": record.process
-        }
+        })
         if isinstance(record.msg, dict):
             message_dict.update(record.msg)
         else:
@@ -30,7 +32,15 @@ class JSONFormatter(logging.Formatter):
             message_dict.update(context)
 
         if record.exc_info:
-            message_dict["exc_info"] = str(record.exc_info)
+            message_dict["exc_info"] = {
+                "type": str(record.exc_info[0]),
+                "exception": str(record.exc_info[1]),
+                "traceback": [
+                    line.strip().replace('"', '\'').replace('\n', '')
+                    for line in traceback.format_tb(record.exc_info[2])
+                ]
+            }
+        if record.exc_text:
             message_dict["exc_text"] = record.exc_text
 
         return json.dumps(message_dict)

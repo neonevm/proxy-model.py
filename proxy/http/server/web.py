@@ -230,7 +230,8 @@ class HttpWebServerPlugin(HttpProtocolHandlerPlugin):
             self.access_log(context)
 
     def access_log(self, context: Dict[str, Any]) -> None:
-        logger.info(DEFAULT_WEB_ACCESS_LOG_FORMAT.format_map(context))
+        # logger.info(DEFAULT_WEB_ACCESS_LOG_FORMAT.format_map(context))
+        pass
 
     @property
     def _protocol(self) -> Tuple[bool, int]:

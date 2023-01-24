@@ -116,11 +116,11 @@ class BaseTcpServerHandler(Work[T]):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.must_flush_before_shutdown = False
-        logger.debug(
-            'Work#%d accepted from %s',
-            self.work.connection.fileno(),
-            self.work.address,
-        )
+        # logger.debug(
+        #     'Work#%d accepted from %s',
+        #     self.work.connection.fileno(),
+        #     self.work.address,
+        # )
 
     def initialize(self) -> None:
         """Optionally upgrades connection to HTTPS,
@@ -128,7 +128,7 @@ class BaseTcpServerHandler(Work[T]):
         HTTP protocol plugins."""
         conn = self._optionally_wrap_socket(self.work.connection)
         conn.setblocking(False)
-        logger.debug('Handling connection %s' % self.work.address)
+        # logger.debug('Handling connection %s' % self.work.address)
 
     @abstractmethod
     def handle_data(self, data: memoryview) -> Optional[bool]:
@@ -159,20 +159,20 @@ class BaseTcpServerHandler(Work[T]):
         teardown = await self.handle_writables(
             writables,
         ) or await self.handle_readables(readables)
-        if teardown:
-            logger.debug(
-                'Shutting down client {0} connection'.format(
-                    self.work.address,
-                ),
-            )
+        # if teardown:
+        #     logger.debug(
+        #         'Shutting down client {0} connection'.format(
+        #             self.work.address,
+        #         ),
+        #     )
         return teardown
 
     async def handle_writables(self, writables: Writables) -> bool:
         teardown = False
         if self.work.connection.fileno() in writables and self.work.has_buffer():
-            logger.debug(
-                'Flushing buffer to client {0}'.format(self.work.address),
-            )
+            # logger.debug(
+            #     'Flushing buffer to client {0}'.format(self.work.address),
+            # )
             self.work.flush(self.flags.max_sendbuf_size)
             if self.must_flush_before_shutdown is True and \
                     not self.work.has_buffer():
@@ -186,40 +186,40 @@ class BaseTcpServerHandler(Work[T]):
             try:
                 data = self.work.recv(self.flags.client_recvbuf_size)
             except ConnectionResetError:
-                logger.info(
-                    'Connection reset by client {0}'.format(
-                        self.work.address,
-                    ),
-                )
+                # logger.info(
+                #     'Connection reset by client {0}'.format(
+                #         self.work.address,
+                #     ),
+                # )
                 return True
             except TimeoutError:
-                logger.info(
-                    'Client recv timeout error {0}'.format(
-                        self.work.address,
-                    ),
-                )
+                # logger.info(
+                #     'Client recv timeout error {0}'.format(
+                #         self.work.address,
+                #     ),
+                # )
                 return True
             if data is None:
-                logger.debug(
-                    'Connection closed by client {0}'.format(
-                        self.work.address,
-                    ),
-                )
+                # logger.debug(
+                #     'Connection closed by client {0}'.format(
+                #         self.work.address,
+                #     ),
+                # )
                 teardown = True
             else:
                 r = self.handle_data(data)
                 if isinstance(r, bool) and r is True:
-                    logger.debug(
-                        'Implementation signaled shutdown for client {0}'.format(
-                            self.work.address,
-                        ),
-                    )
+                    # logger.debug(
+                    #     'Implementation signaled shutdown for client {0}'.format(
+                    #         self.work.address,
+                    #     ),
+                    # )
                     if self.work.has_buffer():
-                        logger.debug(
-                            'Client {0} has pending buffer, will be flushed before shutting down'.format(
-                                self.work.address,
-                            ),
-                        )
+                        # logger.debug(
+                        #     'Client {0} has pending buffer, will be flushed before shutting down'.format(
+                        #         self.work.address,
+                        #     ),
+                        # )
                         self.must_flush_before_shutdown = True
                     else:
                         teardown = True
