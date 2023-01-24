@@ -68,7 +68,7 @@ class BaseNeonTxStrategy(abc.ABC):
         tx = self._build_tx()
 
         # Predefined blockhash is used only to check transaction size, the transaction won't be sent to network
-        tx.recent_blockhash = SolBlockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+        tx.recent_blockhash = SolBlockhash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
         tx.sign(self._ctx.signer)
         tx.serialize()  # <- there will be exception
         return True

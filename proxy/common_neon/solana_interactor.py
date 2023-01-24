@@ -163,7 +163,7 @@ class SolInteractor:
         data = base64.b64decode(raw_account.get('data', None)[0])
         account_tag = data[0] if len(data) > 0 else 0
         lamports = raw_account.get('lamports', 0)
-        owner = SolPubKey(raw_account.get('owner', None))
+        owner = SolPubKey.from_string(raw_account.get('owner', None))
         return AccountInfo(address, account_tag, lamports, owner, data)
 
     def get_account_info(self, pubkey: SolPubKey, length=None, commitment='processed') -> Optional[AccountInfo]:
@@ -220,7 +220,7 @@ class SolInteractor:
                 if info is None:
                     account_info_list.append(None)
                 else:
-                    account_info_list.append(self._decode_account_info(SolPubKey(pubkey), info))
+                    account_info_list.append(self._decode_account_info(SolPubKey.from_string(pubkey), info))
         return account_info_list
 
     def get_program_account_info_list(self, program: SolPubKey, offset: int, length: int,
@@ -250,7 +250,7 @@ class SolInteractor:
         raw_account_list = response.get('result', [])
         account_info_list: List[AccountInfo] = []
         for raw_account in raw_account_list:
-            address = SolPubKey(raw_account.get('pubkey'))
+            address = SolPubKey.from_string(raw_account.get('pubkey'))
             account_info = self._decode_account_info(address, raw_account.get('account', {}))
             account_info_list.append(account_info)
         return account_info_list
@@ -425,7 +425,7 @@ class SolInteractor:
         if not blockhash_resp.get("result"):
             raise RuntimeError("failed to get recent blockhash")
         blockhash = blockhash_resp.get("result", {}).get("value", {}).get("blockhash", None)
-        return SolBlockhash(blockhash)
+        return SolBlockhash.from_string(blockhash)
 
     def get_blockhash(self, block_slot: int) -> SolBlockhash:
         block_opts = {
@@ -435,7 +435,7 @@ class SolInteractor:
         }
 
         block = self._send_rpc_request("getBlock", block_slot, block_opts)
-        return SolBlockhash(block.get('result', {}).get('blockhash', None))
+        return SolBlockhash.from_string(block.get('result', {}).get('blockhash', None))
 
     def get_block_height(self, block_slot: Optional[int] = None, commitment='confirmed') -> int:
         opts = {

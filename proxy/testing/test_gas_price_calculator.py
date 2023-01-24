@@ -15,7 +15,7 @@ from decimal import Decimal
 class FakeConfig(Config):
     @property
     def pyth_mapping_account(self) -> SolPubKey:
-        return SolPubKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')  # only for devnet
+        return SolPubKey.from_string('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')  # only for devnet
 
     @property
     def min_gas_price(self) -> int:

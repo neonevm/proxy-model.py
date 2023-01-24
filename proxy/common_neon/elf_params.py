@@ -42,7 +42,7 @@ class ElfParams:
 
     @property
     def neon_token_mint(self) -> SolPubKey:
-        return SolPubKey(self._elf_param_dict.get("NEON_TOKEN_MINT"))
+        return SolPubKey.from_string(self._elf_param_dict.get("NEON_TOKEN_MINT"))
 
     @property
     def chain_id(self) -> int:

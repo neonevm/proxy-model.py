@@ -86,10 +86,10 @@ class Indexer(IndexerBase):
             return
 
         if self._cancel_tx_executor is None:
-            signer = SolAccount.from_secret_key(secret_list[0])
+            signer = SolAccount.from_seed(secret_list[0])
             self._cancel_tx_executor = CancelTxExecutor(self._config, self._solana, signer)
 
-        self._op_account_set: Set[str] = {str(SolAccount.from_secret_key(k).public_key) for k in secret_list}
+        self._op_account_set: Set[str] = {str(SolAccount.from_seed(k).pubkey()) for k in secret_list}
 
     def _cancel_old_neon_txs(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> None:
         if self._cancel_tx_executor is None:
@@ -122,7 +122,7 @@ class Indexer(IndexerBase):
             return False
 
         holder_account = tx.storage_account
-        holder_info = self._solana.get_holder_account_info(SolPubKey(holder_account))
+        holder_info = self._solana.get_holder_account_info(SolPubKey.from_string(holder_account))
         if not holder_info:
             LOG.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} is empty')
             return False

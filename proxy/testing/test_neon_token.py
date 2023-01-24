@@ -37,8 +37,8 @@ class TestNeonToken(unittest.TestCase):
 
     def create_sol_account(self, balance: int = 1000_000_000_000):
         new_sol_acc = SolAccount()
-        print(f"New Solana account {new_sol_acc.public_key} with balance {balance}")
-        self.solana.request_airdrop(new_sol_acc.public_key, balance)
+        print(f"New Solana account {new_sol_acc.pubkey()} with balance {balance}")
+        self.solana.request_airdrop(new_sol_acc.pubkey(), balance)
         return new_sol_acc
 
     def deploy_contract(self):
@@ -50,7 +50,7 @@ class TestNeonToken(unittest.TestCase):
 
     def withdraw(self, source_acc: NeonAccount, dest_acc: SolAccount, withdraw_amount_alan: int):
         tx = {'value': withdraw_amount_alan, 'from': source_acc.address}
-        withdraw_tx = self.neon_contract.functions.withdraw(bytes(dest_acc.public_key)).build_transaction(tx)
+        withdraw_tx = self.neon_contract.functions.withdraw(bytes(dest_acc.pubkey())).build_transaction(tx)
         withdraw_tx = self.proxy.sign_send_wait_transaction(source_acc, withdraw_tx)
         print(f'withdraw_tx_hash: {withdraw_tx.tx_hash.hex()}')
         print(f'withdraw_tx_receipt: {withdraw_tx.tx_receipt}')
@@ -65,7 +65,7 @@ class TestNeonToken(unittest.TestCase):
         source_acc = self.create_eth_account(10)
         dest_acc = self.create_sol_account()
 
-        dest_token_acc = get_associated_token_address(dest_acc.public_key, ElfParams().neon_token_mint)
+        dest_token_acc = get_associated_token_address(dest_acc.pubkey(), ElfParams().neon_token_mint)
         print(f"Destination token account: {dest_token_acc}")
 
         withdraw_amount_alan = pow(10, 18) # 1 NEON
@@ -105,8 +105,8 @@ class TestNeonToken(unittest.TestCase):
         # Creating destination Associated Token Account
         tx = SolLegacyTx(instructions=[
             create_associated_token_account(
-                dest_acc.public_key,
-                dest_acc.public_key,
+                dest_acc.pubkey(),
+                dest_acc.pubkey(),
                 ElfParams().neon_token_mint
             )
         ])
@@ -114,7 +114,7 @@ class TestNeonToken(unittest.TestCase):
         resp = self.solana.send_transaction(tx.low_level_tx, dest_acc, opts=opts)
         print(f'Create account: {resp}')
 
-        dest_token_acc = get_associated_token_address(dest_acc.public_key, ElfParams().neon_token_mint)
+        dest_token_acc = get_associated_token_address(dest_acc.pubkey(), ElfParams().neon_token_mint)
         print(f"Destination token account: {dest_token_acc}")
 
         withdraw_amount_alan = 2_123_000_321_000_000_000
@@ -153,7 +153,7 @@ class TestNeonToken(unittest.TestCase):
         source_acc = self.create_eth_account(10)
         dest_acc = self.create_sol_account()
 
-        dest_token_acc = get_associated_token_address(dest_acc.public_key, ElfParams().neon_token_mint)
+        dest_token_acc = get_associated_token_address(dest_acc.pubkey(), ElfParams().neon_token_mint)
         print(f"Destination token account: {dest_token_acc}")
 
         withdraw_amount_alan = pow(10, 18) + 123 # NEONs
@@ -191,7 +191,7 @@ class TestNeonToken(unittest.TestCase):
         source_acc = self.create_eth_account(1)
         dest_acc = self.create_sol_account()
 
-        dest_token_acc = get_associated_token_address(dest_acc.public_key, ElfParams().neon_token_mint)
+        dest_token_acc = get_associated_token_address(dest_acc.pubkey(), ElfParams().neon_token_mint)
         print(f"Destination token account: {dest_token_acc}")
 
         withdraw_amount_alan = 2 * pow(10, 18) # 2 NEONs
@@ -230,7 +230,7 @@ class TestNeonToken(unittest.TestCase):
         source_acc = self.create_eth_account(1) # 1 NEON
         dest_acc = self.create_sol_account()
 
-        dest_token_acc = get_associated_token_address(dest_acc.public_key, ElfParams().neon_token_mint)
+        dest_token_acc = get_associated_token_address(dest_acc.pubkey(), ElfParams().neon_token_mint)
         print(f"Destination token account: {dest_token_acc}")
 
         withdraw_amount_alan = 1_000_000_000_000_000_000 # 1 NEON

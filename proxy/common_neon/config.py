@@ -11,7 +11,7 @@ class Config:
     def __init__(self):
         self._solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
         self._pp_solana_url = os.environ.get("PP_SOLANA_URL", self._solana_url)
-        self._evm_loader_id = SolPubKey(EVM_LOADER_ID)
+        self._evm_loader_id = SolPubKey.from_string(EVM_LOADER_ID)
         self._evm_step_cnt_inc_pct = self._env_decimal("EVM_STEP_COUNT_INC_PCT", "0.9")
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
         self._mempool_executor_limit_cnt = self._env_int('MEMPOOL_EXECUTOR_LIMIT_CNT', 4, 1024)
@@ -61,7 +61,8 @@ class Config:
         self._genesis_timestamp = self._env_int('GENESIS_BLOCK_TIMESTAMP', 0, 0)
 
         pyth_mapping_account = os.environ.get('PYTH_MAPPING_ACCOUNT', None)
-        self._pyth_mapping_account = SolPubKey(pyth_mapping_account) if pyth_mapping_account is not None else None
+        if pyth_mapping_account is not None:
+            self._pyth_mapping_account = SolPubKey.from_string(pyth_mapping_account)
         self._update_pyth_mapping_period_sec = self._env_int('UPDATE_PYTH_MAPPING_PERIOD_SEC', 10, 60 * 60)
 
         self._validate()

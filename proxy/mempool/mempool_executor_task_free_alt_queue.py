@@ -32,14 +32,14 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
         alt_info_list: List[MPALTInfo] = []
 
         for secret in mp_req.secret_list:
-            operator_account = SolAccount.from_secret_key(secret)
+            operator_account = SolAccount.from_seed(secret)
 
             account_info_list = self._solana.get_program_account_info_list(
                 program=ADDRESS_LOOKUP_TABLE_ID,
                 offset=0,
                 length=ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof(),
                 data_offset=self._auth_offset,
-                data=bytes(operator_account.public_key)
+                data=bytes(operator_account.pubkey())
             )
 
             for account_info in account_info_list:
@@ -92,16 +92,19 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
         for alt_info in alt_info_list:
             operator_key = alt_info.operator_key
 
-            if (signer is not None) and (signer.secret_key != operator_key):
+            if (signer is not None) and (signer.secret() != operator_key):
                 _send_tx_list()
 
             if len(tx_list) == 0:
-                signer = SolAccount.from_secret_key(operator_key)
-                ix_builder = NeonIxBuilder(signer.public_key)
+                signer = SolAccount.from_seed(operator_key)
+                ix_builder = NeonIxBuilder(signer.pubkey())
                 block_height = self._get_block_height()
 
             alt_info.block_height = block_height
-            tx = SolLegacyTx(name=name, instructions=[make_ix(ix_builder, SolPubKey(alt_info.table_account))])
+            tx = SolLegacyTx(
+                name=name,
+                instructions=[make_ix(ix_builder, SolPubKey.from_string(alt_info.table_account))]
+            )
             tx_list.append(tx)
 
         _send_tx_list()

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import solana.message
+import solders.message
 import solana.transaction
 
 from .solana_tx import SolTx, SolAccount, SolSignature
 
 
-SolLegacyMsg = solana.message.Message
+SolLegacyMsg = solders.message.Message
 SolLegacyLowLevelTx = solana.transaction.Transaction
 
 

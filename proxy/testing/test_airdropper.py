@@ -59,9 +59,10 @@ class FakeConfig(Config):
     def __init__(self, start_slot: str):
         super().__init__()
         self._start_slot = start_slot
+        self._pyth_mapping_account = SolPubKey.new_unique()
 
     def pyth_mapping_account(self) -> Optional[SolPubKey]:
-        return SolPubKey(b'TestMappingAccount')
+        return self._pyth_mapping_account
 
 
 class TestAirdropper(unittest.TestCase):
