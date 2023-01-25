@@ -206,8 +206,8 @@ class EvmErrorParser(BaseNeonCliErrorParser):
 
     def execute(self, err: subprocess.CalledProcessError) -> (str, int):
         msg = 'unknown error'
-        if isinstance(err, str):
-            msg = err
+        if isinstance(err.stderr, str):
+            msg = err.stderr
         return msg, self._code
 
 
