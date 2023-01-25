@@ -250,7 +250,6 @@ def openzeppelin_test(run_number):
     services = ["postgres", "dbcreation", "indexer", "proxy", "faucet"]
     for service in services:
         upload_remote_logs(ssh_client, service, artifact_logs)
-    subprocess.run(f"ls -la {artifact_logs}")
     dump_docker_logs(container_name)
     docker_compose(
         "-f docker-compose/docker-compose-full-test-suite.yml rm -f")
