@@ -480,7 +480,7 @@ def process_output(output):
 
                 elif "aux" in line:
                     if "Digest" in line["aux"]:
-                        click.echo("digest: {}".format(line.aux["Digest"]))
+                        click.echo("digest: {}".format(line["aux"]["Digest"]))
 
                     if "ID" in line["aux"]:
                         click.echo("ID: {}".format(line["aux"]["ID"]))
