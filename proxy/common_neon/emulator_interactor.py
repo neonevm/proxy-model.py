@@ -207,7 +207,8 @@ class EvmErrorParser(BaseNeonCliErrorParser):
     def execute(self, err: subprocess.CalledProcessError) -> (str, int):
         msg = 'unknown error'
         if isinstance(err.stderr, str):
-            msg = err.stderr
+            if "Insufficient balance for transfer" in err.stderr:
+                msg = "insufficient funds for transfer"  # like in ethereum
         return msg, self._code
 
 
