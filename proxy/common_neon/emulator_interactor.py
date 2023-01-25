@@ -259,6 +259,7 @@ class NeonCliErrorParser:
         202: ProxyConfigErrorParser('no information about signer'),
 
         111: ProgramErrorParser('ProgramError'),
+        117: ProgramErrorParser('ProgramError'),
 
         205: ElfParamErrorParser('account not found'),
         226: ElfParamErrorParser('account is not BPF compiled'),
