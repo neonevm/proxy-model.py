@@ -166,6 +166,7 @@ class Indexer(IndexerBase):
         try:
             neon_block.set_finalized(is_finalized)
             if not neon_block.is_completed:
+                neon_block.fill_log_info_list()
                 self._db.submit_block(neon_block)
                 neon_block.calc_stat(self._config, self._op_account_set)
                 neon_block.complete_block(self._config)
@@ -270,12 +271,14 @@ class Indexer(IndexerBase):
             for sol_neon_ix in state.iter_sol_neon_ix():
                 with logging_context(sol_neon_ix=sol_neon_ix.req_id):
                     neon_block.add_sol_neon_ix(sol_neon_ix)
+                    SolNeonIxDecoder = self._sol_neon_ix_decoder_dict.get(sol_neon_ix.program_ix, DummyIxDecoder)
+                    sol_neon_ix_decoder = SolNeonIxDecoder(state)
                     if is_error:
+                        if hasattr(sol_neon_ix_decoder, 'decode_failed_neon_tx_event_list'):
+                            sol_neon_ix_decoder.decode_failed_neon_tx_event_list()
                         # LOG.debug('failed tx')
                         continue
 
-                    SolNeonIxDecoder = self._sol_neon_ix_decoder_dict.get(sol_neon_ix.program_ix, DummyIxDecoder)
-                    sol_neon_ix_decoder = SolNeonIxDecoder(state)
                     sol_neon_ix_decoder.execute()
 
         sol_tx_meta = state.end_range
