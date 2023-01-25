@@ -148,6 +148,7 @@ jobs:
         with:
           name: FTS allure report
           path: allure-reports.tar.gz
+      - run:  ls -la ./logs/
       - uses: actions/upload-artifact@v3
         if: always()
         with:

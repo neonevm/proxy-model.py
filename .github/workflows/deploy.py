@@ -97,11 +97,11 @@ def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch, skip_pull):
     neon_test_invoke_program_image = "neonlabsorg/neon_test_invoke_program:develop"
     if not skip_pull:
         click.echo('pull docker images...')
-        out = docker_client.pull(neon_evm_image)
-        click.echo(out)
+        out = docker_client.pull(neon_evm_image, stream=True, decode=True)
+        process_output(out)
 
-        out = docker_client.pull(neon_test_invoke_program_image)
-        click.echo(out)
+        out = docker_client.pull(neon_test_invoke_program_image, stream=True, decode=True)
+        process_output(out)
     else:
         click.echo('skip pulling of docker images')
 
@@ -110,25 +110,18 @@ def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch, skip_pull):
                  "PROXY_LOG_CFG": "log_cfg.json"}
 
     click.echo("Start build")
+
     output = docker_client.build(
         tag=f"{IMAGE_NAME}:{proxy_tag}", buildargs=buildargs, path="./", decode=True, network_mode='host')
-    for line in output:
-        if list(line.keys())[0] in ('stream', 'error', 'status'):
-            value = list(line.values())[0].strip()
-            if value:
-                if "progress" in line.keys():
-                    value += line['progress']
-            click.echo(value)
+    process_output(output)
 
 
 @cli.command(name="publish_image")
 @click.option('--proxy_tag')
 def publish_image(proxy_tag):
     docker_client.login(username=DOCKER_USERNAME, password=DOCKER_PASSWORD)
-    out = docker_client.push(f"{IMAGE_NAME}:{proxy_tag}")
-    if "error" in out:
-        raise RuntimeError(
-            f"Push {IMAGE_NAME}:{proxy_tag} finished with error: {out}")
+    out = docker_client.push(f"{IMAGE_NAME}:{proxy_tag}", decode=True, stream=True)
+    process_output(out)
 
 
 @cli.command(name="finalize_image")
@@ -150,16 +143,11 @@ def finalize_image(head_ref_branch, github_ref, proxy_tag):
 
     click.echo(f"The tag for publishing: {tag}")
     docker_client.login(username=DOCKER_USERNAME, password=DOCKER_PASSWORD)
-    out = docker_client.pull(f"{IMAGE_NAME}:{proxy_tag}")
-    if "error" in out:
-        raise RuntimeError(
-            f"Pull {IMAGE_NAME}:{proxy_tag} finished with error: {out}")
-
+    out = docker_client.pull(f"{IMAGE_NAME}:{proxy_tag}", decode=True, stream=True)
+    process_output(out)
     docker_client.tag(f"{IMAGE_NAME}:{proxy_tag}", f"{IMAGE_NAME}:{tag}")
-    out = docker_client.push(f"{IMAGE_NAME}:{tag}")
-    if "error" in out:
-        raise RuntimeError(
-            f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
+    out = docker_client.push(f"{IMAGE_NAME}:{tag}", decode=True, stream=True)
+    process_output(out)
 
 
 @cli.command(name="terraform_infrastructure")
@@ -287,8 +275,13 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
     scp_client = SCPClient(transport=ssh_client.get_transport())
     click.echo(f"Upload logs for service: {service}")
     ssh_client.exec_command(f"touch /tmp/{service}.log.bz2")
-    ssh_client.exec_command(
+    stdin, stdout, stderr = ssh_client.exec_command(
         f'sudo docker logs {service} 2>&1 | pbzip2 -f > /tmp/{service}.log.bz2')
+    print(stdout.read())
+    print(stderr.read())
+    stdin, stdout, stderr = ssh_client.exec_command(f'ls -lh /tmp/{service}.log.bz2')
+    print(stdout.read())
+    print(stderr.read())
     scp_client.get(f'/tmp/{service}.log.bz2', artifact_logs)
 
 
@@ -467,6 +460,49 @@ def send_notification(url, build_url):
         f"\n<{build_url}|View build details>"
     )
     requests.post(url=url, data=json.dumps(tpl))
+
+
+def process_output(output):
+    for line in output:
+        if line:
+            errors = set()
+            try:
+                if "status" in line:
+                    click.echo(line["status"])
+
+                elif "stream" in line:
+                    stream = re.sub("^\n", "", line["stream"])
+                    stream = re.sub("\n$", "", stream)
+                    stream = re.sub("\n(\x1B\[0m)$", "\\1", stream)
+                    if stream:
+                        click.echo(stream)
+
+                elif "aux" in line:
+                    if "Digest" in line["aux"]:
+                        click.echo("digest: {}".format(line["aux"]["Digest"]))
+
+                    if "ID" in line["aux"]:
+                        click.echo("ID: {}".format(line["aux"]["ID"]))
+
+                else:
+                    click.echo("not recognized (1): {}".format(line))
+
+                if "error" in line:
+                    errors.add(line["error"])
+
+                if "errorDetail" in line:
+                    errors.add(line["errorDetail"]["message"])
+
+                    if "code" in line:
+                        error_code = line["errorDetail"]["code"]
+                        errors.add("Error code: {}".format(error_code))
+
+            except ValueError as e:
+                click.echo("not recognized (2): {}".format(line))
+
+            if errors:
+                message = "problem executing Docker: {}".format(". ".join(errors))
+                raise SystemError(message)
 
 
 if __name__ == "__main__":
