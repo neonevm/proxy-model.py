@@ -78,8 +78,8 @@ class NeonCli(CliBase):
                 LOG.debug(log)
 
             if "error" in output:
-                raise subprocess.CalledProcessError(result.returncode, cmd, output["error"])
-            
+                raise subprocess.CalledProcessError(result.returncode, cmd, stderr=output["error"])
+
             return output.get("value", "")
         except subprocess.CalledProcessError as err:
             LOG.error("ERR: neon-cli error {}".format(err))
