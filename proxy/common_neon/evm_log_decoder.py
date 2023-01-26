@@ -55,9 +55,11 @@ class NeonLogTxEvent:
 
     sol_sig: str
     idx: int = 0
-    inner_idx: int = 0
+    inner_idx: Optional[int] = None
     total_gas_used: int = 0
     is_reverted: bool = False
+    event_level: int = 0
+    event_order: int = 0
 
     def is_exit_event_type(self) -> bool:
         return self.event_type in {
