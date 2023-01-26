@@ -199,6 +199,19 @@ class ProgramErrorParser(BaseNeonCliErrorParser):
         return msg, self._code
 
 
+class EvmErrorParser(BaseNeonCliErrorParser):
+    def __init__(self, msg: str):
+        BaseNeonCliErrorParser.__init__(self, msg)
+        self._code = -32000
+
+    def execute(self, err: subprocess.CalledProcessError) -> (str, int):
+        msg = 'unknown error'
+        if isinstance(err.stderr, str):
+            if "Insufficient balance for transfer" in err.stderr:
+                msg = "insufficient funds for transfer"  # like in ethereum
+        return msg, self._code
+
+
 class FindAccount(BaseNeonCliErrorParser):
     def __init__(self, msg: str):
         BaseNeonCliErrorParser.__init__(self, msg)
@@ -258,7 +271,8 @@ class NeonCliErrorParser:
         201: ProxyConfigErrorParser('evm loader is not specified'),
         202: ProxyConfigErrorParser('no information about signer'),
 
-        111: ProgramErrorParser('ProgramError'),
+        111: ProgramErrorParser('ProgramError'),  # TODO: I think it's obsolete and we should remove it
+        117: EvmErrorParser('EVM error'),
 
         205: ElfParamErrorParser('account not found'),
         226: ElfParamErrorParser('account is not BPF compiled'),

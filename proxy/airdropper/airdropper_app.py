@@ -3,6 +3,7 @@ import logging
 
 from ..common.logger import Logger
 from ..common_neon.config import Config
+from ..common.logger import Logger
 
 from .airdropper import Airdropper
 

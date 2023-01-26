@@ -65,9 +65,22 @@ class NeonCli(CliBase):
                    ]\
                   + (["-vvv"] if self._config.neon_cli_debug_log else [])\
                   + list(args)
-            output = json.loads(self.run_cli(cmd, data, timeout=self._config.neon_cli_timeout, universal_newlines=True))
-            for log in output["logs"]:
+            LOG.info("Calling neon-cli: " + " ".join(cmd))
+
+            if data is None:
+                data = ""
+
+            result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    universal_newlines=True, timeout=self._config.neon_cli_timeout)
+
+            output = json.loads(result.stdout)
+            for log in output.get("logs", []):
                 LOG.debug(log)
+
+            if "error" in output:
+                LOG.error("ERR: neon-cli error value '{}'".format(output["error"]))
+                raise subprocess.CalledProcessError(result.returncode, cmd, stderr=output["error"])
+
             return output.get("value", "")
         except subprocess.CalledProcessError as err:
             LOG.error("ERR: neon-cli error {}".format(err))
