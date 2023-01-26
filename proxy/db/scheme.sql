@@ -1,4 +1,4 @@
-    ---- Prepare stage
+    ---- Prepare stage # TODO: remove
     CREATE OR REPLACE FUNCTION does_table_have_column(t_name TEXT, c_name TEXT)
         RETURNS BOOLEAN
         LANGUAGE plpgsql
@@ -114,6 +114,12 @@
 
         topic_list BYTEA
     );
+    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS event_level INT DEFAULT 0;
+    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS event_order INT DEFAULT 0;
+    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS sol_sig TEXT;
+    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS idx INT;
+    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS inner_idx INT;
+
     CREATE UNIQUE INDEX IF NOT EXISTS idx_neon_transaction_logs_block_tx_log ON neon_transaction_logs(block_slot, tx_hash, tx_log_idx);
     CREATE INDEX IF NOT EXISTS idx_neon_transaction_logs_address ON neon_transaction_logs(address);
     CREATE INDEX IF NOT EXISTS idx_neon_transaction_logs_topic ON neon_transaction_logs(topic);
@@ -189,7 +195,7 @@
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_transaction_signatures_sig ON solana_transaction_signatures(block_slot);
 
-    ---- Upgrade stage
+    ---- Upgrade stage # TODO: remove
     DO $$
     DECLARE
         ----------

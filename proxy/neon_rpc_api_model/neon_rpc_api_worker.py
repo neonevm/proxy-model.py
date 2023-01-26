@@ -233,7 +233,36 @@ class NeonRpcApiWorker:
             # LOG.debug(f"eth_getBalance: Can't get account info: {err}")
             return hex(0)
 
-    def eth_getLogs(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
+    @staticmethod
+    def _update_event_type(log_rec: Dict[str, Any]) -> None:
+        event_type = log_rec.get('eventType', None)
+        if event_type is None:
+            return
+
+        if event_type == 1:
+            log_rec['eventType'] = 'LOG'
+        elif event_type == 101:
+            log_rec['eventType'] = 'ENTER CALL'
+        elif event_type == 102:
+            log_rec['eventType'] = 'ENTER CALL CODE'
+        elif event_type == 103:
+            log_rec['eventType'] = 'ENTER STATICCALL'
+        elif event_type == 104:
+            log_rec['eventType'] = 'ENTER DELEGATECALL'
+        elif event_type == 105:
+            log_rec['eventType'] = 'ENTER CREATE'
+        elif event_type == 106:
+            log_rec['eventType'] = 'ENTER CREATE2'
+        elif event_type == 201:
+            log_rec['eventType'] = 'EXIT STOP'
+        elif event_type == 202:
+            log_rec['eventType'] = 'EXIT RETURN'
+        elif event_type == 203:
+            log_rec['eventType'] = 'EXIT SELFDESTRUCT'
+        elif event_type == 204:
+            log_rec['eventType'] = 'EXIT REVERT'
+
+    def _get_logs(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
         def to_list(items):
             if isinstance(items, str):
                 return [items.lower()]
@@ -241,8 +270,8 @@ class NeonRpcApiWorker:
                 return list(set([item.lower() for item in items if isinstance(item, str)]))
             return []
 
-        from_block = None
-        to_block = None
+        from_block: Optional[int] = None
+        to_block: Optional[int] = None
         addresses = []
         topics = []
         block_hash = None
@@ -259,6 +288,39 @@ class NeonRpcApiWorker:
             block_hash = obj['blockHash']
 
         return self._db.get_logs(from_block, to_block, addresses, topics, block_hash)
+
+    def _filter_log_list(self, log_list: List[Dict[str, Any]], with_hidden) -> List[Dict[str, Any]]:
+        filtered_log_list: List[Dict[str, Any]] = list()
+
+        for log_rec in log_list:
+            if log_rec.get('isHidden', False) and (not with_hidden):
+                continue
+
+            # remove fields available only for neon_getLogs
+            if not with_hidden:
+                log_rec.pop('isHidden', None)
+                log_rec.pop('isReverted', None)
+                log_rec.pop('eventType', None)
+
+                del log_rec['solHash']
+                del log_rec['ixIdx']
+                del log_rec['innerIxIdx']
+
+                del log_rec['eventOrder']
+                del log_rec['eventLevel']
+            else:
+                self._update_event_type(log_rec)
+
+            filtered_log_list.append(log_rec)
+        return filtered_log_list
+
+    def eth_getLogs(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
+        log_list = self._get_logs(obj)
+        return self._filter_log_list(log_list, False)
+
+    def neon_getLogs(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
+        log_list = self._get_logs(obj)
+        return self._filter_log_list(log_list, True)
 
     def _get_block_by_slot(self, block: SolanaBlockInfo, full: bool, skip_transaction: bool) -> Optional[dict]:
         if block.is_empty():
@@ -438,8 +500,9 @@ class NeonRpcApiWorker:
             # LOG.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
 
-    @staticmethod
-    def _get_transaction_receipt(tx: NeonTxReceiptInfo) -> dict:
+    def _fill_transaction_receipt_answer(self, tx: NeonTxReceiptInfo, with_hidden: bool) -> dict:
+        log_list = self._filter_log_list(tx.neon_tx_res.log_list, with_hidden)
+
         result = {
             "transactionHash": tx.neon_tx.sig,
             "transactionIndex": hex(tx.neon_tx_res.tx_idx),
@@ -451,14 +514,14 @@ class NeonRpcApiWorker:
             "gasUsed": tx.neon_tx_res.gas_used,
             "cumulativeGasUsed": tx.neon_tx_res.gas_used,
             "contractAddress": tx.neon_tx.contract,
-            "logs": tx.neon_tx_res.log_list,
+            "logs": log_list,
             "status": tx.neon_tx_res.status,
-            "logsBloom": "0x"+'0'*512
+            "logsBloom": "0x" + '0' * 512
         }
 
         return result
 
-    def eth_getTransactionReceipt(self, neon_tx_sig: str) -> Optional[dict]:
+    def _get_transaction_receipt(self, neon_tx_sig: str) -> Optional[NeonTxReceiptInfo]:
         neon_sig = self._normalize_tx_id(neon_tx_sig)
 
         tx = self._db.get_tx_by_neon_sig(neon_sig)
@@ -467,7 +530,19 @@ class NeonRpcApiWorker:
             if isinstance(neon_tx_or_error, EthereumError):
                 raise neon_tx_or_error
             return None
-        return self._get_transaction_receipt(tx)
+        return tx
+
+    def eth_getTransactionReceipt(self, neon_tx_sig: str) -> Optional[dict]:
+        tx = self._get_transaction_receipt(neon_tx_sig)
+        if tx is None:
+            return None
+        return self._fill_transaction_receipt_answer(tx, False)
+
+    def neon_getTransactionReceipt(self, neon_tx_sig: str) -> Optional[dict]:
+        tx = self._get_transaction_receipt(neon_tx_sig)
+        if tx is None:
+            return None
+        return self._fill_transaction_receipt_answer(tx, True)
 
     @staticmethod
     def _get_transaction(tx: NeonTxReceiptInfo) -> dict:

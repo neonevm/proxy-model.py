@@ -1,4 +1,4 @@
-from typing import Optional, List, Iterator
+from typing import Optional, Iterator, List, Dict, Any
 
 from ..common_neon.utils import NeonTxReceiptInfo
 
@@ -139,7 +139,8 @@ class IndexerDB:
         self._min_receipt_block_slot = block_slot
         self._constants_db['min_receipt_block_slot'] = block_slot
 
-    def get_logs(self, from_block, to_block, addresses, topics, block_hash):
+    def get_logs(self, from_block: Optional[int], to_block: Optional[int],
+                 addresses: List[str], topics: List[str], block_hash: str) -> List[Dict[str, Any]]:
         return self._neon_tx_logs_db.get_logs(from_block, to_block, addresses, topics, block_hash)
 
     def get_tx_list_by_block_slot(self, block_slot: int) -> List[NeonTxReceiptInfo]:

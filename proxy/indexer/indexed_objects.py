@@ -11,6 +11,7 @@ from typing import Iterator, List, Optional, Dict, Set, Deque, Tuple, cast
 
 from ..common_neon.config import Config
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolNeonIxReceiptInfo, SolTxCostInfo, SolTxReceiptInfo
+from ..common_neon.evm_log_decoder import NeonLogTxEvent
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolanaBlockInfo, str_fmt_object
 from ..indexer.solana_tx_meta_collector import SolTxMetaCollector
 
@@ -181,6 +182,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         self._blocked_account_list = list(iter_blocked_account)
         self._status = NeonIndexedTxInfo.Status.InProgress
         self._is_canceled = False
+        self._neon_event_list: List[NeonLogTxEvent] = list()
 
     @property
     def storage_account(self) -> str:
@@ -216,6 +218,10 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
     def set_canceled(self, value: bool) -> None:
         self._is_canceled = value
 
+    @property
+    def is_canceled(self) -> bool:
+        return self._is_canceled
+
     def set_holder_account(self, holder: NeonIndexedHolderInfo, neon_tx: NeonTxInfo) -> None:
         self.set_neon_tx(neon_tx)
         self._set_start_block_slot(holder.start_block_slot)
@@ -229,6 +235,26 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         assert not self._neon_receipt.neon_tx.is_valid()
         assert neon_tx.is_valid()
         self._neon_receipt.set_neon_tx(neon_tx)
+
+    def add_neon_event(self, event: NeonLogTxEvent) -> None:
+        self._neon_event_list.append(event)
+
+    def len_neon_event_list(self) -> int:
+        return len(self._neon_event_list)
+
+    def iter_reversed_neon_event_list(self) -> Iterator[NeonLogTxEvent]:
+        if len(self._neon_event_list) == 0:
+            return  # no events
+
+        # old type of event without enter/exit(revert) information ...
+        if self._neon_event_list[0].total_gas_used == 0:
+            neon_event_list = self._neon_event_list
+        else:
+            # sort events by total_gas_used, because its value increases each iteration
+            neon_event_list = sorted(self._neon_event_list, key=lambda x: x.total_gas_used, reverse=True)
+
+        for event in neon_event_list:
+            yield event
 
 
 class NeonIndexedBlockInfo:
@@ -246,8 +272,6 @@ class NeonIndexedBlockInfo:
         self._sol_tx_cost_list: List[SolTxCostInfo] = list()
 
         self._stat_neon_tx_dict: Dict[NeonIndexedTxInfo.Type, NeonTxStatData] = dict()
-
-        self._log_idx = 0
 
     def __str__(self) -> str:
         return str_fmt_object(self, False)
@@ -355,13 +379,7 @@ class NeonIndexedBlockInfo:
             LOG.warning(f'attempt to done the completed tx {tx}')
             return
 
-        tx_idx = len(self._done_neon_tx_list)
-
         tx.set_status(NeonIndexedTxInfo.Status.Done, sol_neon_ix.block_slot)
-        tx.neon_tx_res.set_block_info(self._sol_block, tx.neon_tx.sig, tx_idx, self._log_idx)
-
-        self._log_idx += len(tx.neon_tx_res.log_list)
-
         self._done_neon_tx_list.append(tx)
 
     def add_neon_account(self, _: NeonAccountInfo, __: SolNeonIxReceiptInfo) -> None:
@@ -457,6 +475,13 @@ class NeonIndexedBlockInfo:
                     stat.completed_neon_tx_cnt += 1
                     if is_op_sol_neon_ix:
                         stat.op_completed_neon_tx_cnt += 1
+
+    def fill_log_info_list(self) -> None:
+        log_idx = 0
+        tx_idx = 0
+        for tx in self._done_neon_tx_list:
+            log_idx = tx.neon_tx_res.set_block_info(self._sol_block, tx.neon_tx.sig, tx_idx, log_idx)
+            tx_idx += 1
 
     def complete_block(self, config: Config) -> None:
         for tx in self._done_neon_tx_list:

@@ -1,7 +1,9 @@
 import logging
+import dataclasses
 from typing import Any, List, Type, Optional, Iterator
 
 from ..common_neon.utils import NeonTxInfo
+from ..common_neon.evm_log_decoder import NeonLogTxEvent, NeonLogTxReturn
 
 from ..indexer.indexed_objects import NeonIndexedTxInfo, NeonIndexedHolderInfo, NeonAccountInfo, SolNeonTxDecoderState
 
@@ -100,19 +102,68 @@ class DummyIxDecoder:
 
         ix = self.state.sol_neon_ix
         ret = ix.neon_tx_return
-        if ret is None:
+        if (ret is None) and tx.is_canceled:
+            ret = NeonLogTxReturn(gas_used=ix.neon_total_gas_used, status=0, is_canceled=True)
+        elif ret is None:
             return
 
-        tx.neon_tx_res.set_result(status=ret.status, gas_used=ret.gas_used, return_value=ret.return_value)
+        tx.neon_tx_res.set_result(status=ret.status, gas_used=ret.gas_used)
         tx.neon_tx_res.set_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
 
     def _decode_neon_tx_event_list(self, tx: NeonIndexedTxInfo) -> None:
+        total_gas_used = self.state.sol_neon_ix.neon_total_gas_used
         for event in self.state.sol_neon_ix.neon_tx_event_list:
-            tx.neon_tx_res.add_event(event.address, event.topic_list, event.data)
+            tx.add_neon_event(dataclasses.replace(
+                event,
+                total_gas_used=total_gas_used,
+                sol_sig=self.state.sol_neon_ix.sol_sig,
+                idx=self.state.sol_neon_ix.idx,
+                inner_idx=self.state.sol_neon_ix.inner_idx
+            ))
+            total_gas_used += 1
+
+    @staticmethod
+    def _complete_neon_tx_event_list(tx: NeonIndexedTxInfo) -> None:
+        if (not tx.neon_tx_res.is_valid()) or (len(tx.neon_tx_res.log_list) > 0):
+            return
+
+        current_level = 1
+        reverted_level = -1
+        current_order = tx.len_neon_event_list()
+
+        for event in tx.iter_reversed_neon_event_list():
+            if event.is_reverted:
+                pass
+            elif event.is_start_event_type():
+                current_level -= 1
+                if (reverted_level != -1) and (current_level < reverted_level):
+                    reverted_level = -1
+            elif event.is_exit_event_type():
+                current_level += 1
+
+            if event.is_reverted:
+                pass
+            elif (event.event_type == NeonLogTxEvent.Type.ExitRevert) and (reverted_level == -1):
+                reverted_level = current_level
+
+            if event.is_reverted:
+                is_reverted = True
+                is_hidden = True
+            else:
+                is_reverted = (reverted_level != -1)
+                is_hidden = (event.is_hidden or is_reverted)
+
+            tx.neon_tx_res.add_event(
+                int(event.event_type), event.address, event.topic_list, event.data,
+                event.sol_sig, event.idx, event.inner_idx,
+                is_hidden, is_reverted, current_level, current_order
+            )
+            current_order -= 1
 
     def _decode_tx(self, tx: NeonIndexedTxInfo, msg: str) -> bool:
         self._decode_neon_tx_return(tx)
         self._decode_neon_tx_event_list(tx)
+        self._complete_neon_tx_event_list(tx)
         self._decode_neon_tx_from_holder(tx)
 
         if tx.neon_tx_res.is_valid() and (tx.status != NeonIndexedTxInfo.Status.Done):
@@ -209,6 +260,25 @@ class BaseTxStepIxDecoder(DummyIxDecoder):
         neon_tx = NeonTxInfo.from_neon_sig(neon_tx_sig)
         return block.add_neon_tx(tx_type, key, neon_tx, storage_account, iter_blocked_account, ix)
 
+    def decode_failed_neon_tx_event_list(self) -> None:
+        ix = self.state.sol_neon_ix
+        block = self.state.neon_block
+        key = NeonIndexedTxInfo.Key(self.state.sol_neon_ix)
+        tx: Optional[NeonIndexedTxInfo] = block.find_neon_tx(key, ix)
+        if tx is None:
+            return
+
+        for event in self.state.sol_neon_ix.neon_tx_event_list:
+            tx.add_neon_event(dataclasses.replace(
+                event,
+                total_gas_used=tx.len_neon_event_list(),
+                is_reverted=True,
+                is_hidden=True,
+                sol_sig=self.state.sol_neon_ix.sol_sig,
+                idx=self.state.sol_neon_ix.idx,
+                inner_idx=self.state.sol_neon_ix.inner_idx
+            ))
+
 
 class TxStepFromDataIxDecoder(BaseTxStepIxDecoder):
     _name = 'TransactionStepFromInstruction'
@@ -301,8 +371,7 @@ class CancelWithHashIxDecoder(DummyIxDecoder):
         if not tx:
             return self._decoding_skip(f'cannot find Neon tx {neon_tx_sig}')
 
-        if self.state.sol_neon_ix.neon_tx_return is not None:
-            tx.set_canceled(True)
+        tx.set_canceled(True)
 
         return self._decode_tx(tx, 'cancel Neon tx')
 
