@@ -1,7 +1,10 @@
+import logging
 from typing import List, Any, Optional, Dict, Iterator, Set
 
 from ..indexer.base_db import BaseDB
 from ..indexer.indexed_objects import NeonIndexedTxInfo
+
+LOG = logging.getLogger(__name__)
 
 
 class NeonTxLogsDB(BaseDB):
@@ -10,7 +13,8 @@ class NeonTxLogsDB(BaseDB):
             table_name='neon_transaction_logs',
             column_list=[
                 'block_slot', 'tx_idx', 'tx_log_idx', 'log_idx',
-                'address', 'log_data', 'tx_hash', 'topic', 'topic_list'
+                'address', 'log_data', 'tx_hash', 'topic', 'topic_list',
+                'event_order', 'event_level', 'sol_sig', 'idx', 'inner_idx'
             ]
         )
 
@@ -22,9 +26,17 @@ class NeonTxLogsDB(BaseDB):
             'tx_idx': 'transactionIndex',
             'tx_log_idx': 'transactionLogIndex',
             'log_idx': 'logIndex',
+            'event_level': 'eventLevel',
+            'event_order': 'eventOrder',
+            'sol_sig': 'solHash',
+            'idx': 'ixIdx',
+            'inner_idx': 'innerIxIdx'
         }
 
-        self._hex_field_dict = ['blockNumber', 'transactionIndex', 'transactionLogIndex', 'logIndex']
+        self._hex_field_dict = {
+            'blockNumber', 'transactionIndex', 'transactionLogIndex', 'logIndex',
+            'ixIdx', 'innerIxIdx', 'eventLevel', 'eventOrder'
+        }
 
     def set_tx_list(self, cursor: BaseDB.Cursor, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
         value_list_list: List[List[Any]] = []
@@ -42,7 +54,7 @@ class NeonTxLogsDB(BaseDB):
                             key = self._column2field_dict.get(column, None)
                             if key in log:
                                 value = log[key]
-                                if key in self._hex_field_dict:
+                                if (value is not None) and (key in self._hex_field_dict):
                                     value = int(value[2:], 16)
                                 value_list.append(value)
                             else:
@@ -51,7 +63,7 @@ class NeonTxLogsDB(BaseDB):
 
         self._insert_batch(cursor, value_list_list)
 
-    def _log_from_value(self, value_list: List[Any]) -> Dict[str, Any]:
+    def _log_from_value(self, value_list: List[Any]) -> Optional[Dict[str, Any]]:
         log: Dict[str, Any] = {}
         for idx, column in enumerate(self._column_list):
             if column == 'topic':
@@ -63,7 +75,7 @@ class NeonTxLogsDB(BaseDB):
                 if key is None:
                     raise RuntimeError(f'Wrong usage {self._table_name}: {idx} -> {column}!')
                 value = value_list[idx]
-                if key in self._hex_field_dict:
+                if (value is not None) and (key in self._hex_field_dict):
                     value = hex(value)
                 log[key] = value
         log['blockHash'] = value_list[-1]
@@ -74,6 +86,7 @@ class NeonTxLogsDB(BaseDB):
                  address_list: List[str],
                  topic_list: List[str],
                  block_hash: Optional[str]) -> List[Dict[str, Any]]:
+
         query_list: List[str] = ['1 = 1']
         param_list: List[Any] = []
 
@@ -127,7 +140,9 @@ class NeonTxLogsDB(BaseDB):
             if ident in unique_log_set:
                 continue
             unique_log_set.add(ident)
-            log_list.append(self._log_from_value(value_list))
+            log_rec = self._log_from_value(value_list)
+            log_list.append(log_rec)
+
         return log_list
 
     def finalize_block_list(self, cursor: BaseDB.Cursor, base_block_slot: int, block_slot_list: List[int]) -> None:

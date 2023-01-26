@@ -13,7 +13,7 @@ class NeonTxsDB(BaseDB):
             column_list=[
                 'neon_sig', 'from_addr', 'sol_sig', 'sol_ix_idx', 'sol_ix_inner_idx', 'block_slot',
                 'tx_idx', 'nonce', 'gas_price', 'gas_limit', 'to_addr', 'contract', 'value',
-                'calldata', 'v', 'r', 's', 'status', 'gas_used', 'return_value', 'logs'
+                'calldata', 'v', 'r', 's', 'status', 'gas_used', 'logs'
             ]
         )
 

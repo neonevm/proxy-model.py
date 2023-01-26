@@ -214,6 +214,7 @@ class SolIxMetaInfo:
 
     neon_tx_sig: str
     neon_gas_used: int
+    neon_total_gas_used: int
 
     neon_tx_return: Optional[NeonLogTxReturn]
     neon_tx_event_list: List[NeonLogTxEvent]
@@ -237,8 +238,10 @@ class SolIxMetaInfo:
             neon_tx_sig = '0x' + log_info.neon_tx_sig.neon_sig.hex()
 
         neon_ix_gas_usage = 0
+        neon_ix_total_gas_usage = 0
         if log_info.neon_tx_ix is not None:
             neon_ix_gas_usage = log_info.neon_tx_ix.gas_used
+            neon_ix_total_gas_usage = log_info.neon_tx_ix.total_gas_used
 
         status = SolIxMetaInfo.Status.UNKNOWN
         if log_list.status == _SolIxLogList.Status.FAILED:
@@ -262,6 +265,7 @@ class SolIxMetaInfo:
 
             neon_tx_sig=neon_tx_sig,
             neon_gas_used=neon_ix_gas_usage,
+            neon_total_gas_used=neon_ix_total_gas_usage,
             neon_tx_return=log_info.neon_tx_return,
             neon_tx_event_list=log_info.neon_tx_event_list
         )
@@ -371,6 +375,7 @@ class SolNeonIxReceiptInfo(SolIxMetaInfo):
 
             neon_tx_sig=ix_meta.neon_tx_sig,
             neon_gas_used=ix_meta.neon_gas_used,
+            neon_total_gas_used=ix_meta.neon_total_gas_used,
             neon_tx_return=ix_meta.neon_tx_return,
             neon_tx_event_list=ix_meta.neon_tx_event_list,
             neon_step_cnt=0,
