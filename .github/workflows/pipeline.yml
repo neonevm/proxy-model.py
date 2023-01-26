@@ -110,7 +110,7 @@ jobs:
     needs:
       - build-image
     if: |
-      (contains(github.event.pull_request.labels.*.name, 'FullTestSuit') && ! github.event.pull_request.draft) ||
+      (contains(github.event.pull_request.labels.*.name, 'FullTestSuite') && ! github.event.pull_request.draft) ||
       (github.ref_name =='develop' && !startsWith(github.event.inputs.neon_evm_branch , 'refs/pull')) ||
       github.ref_name =='master' ||
       startsWith(github.ref , 'refs/tags/') ||

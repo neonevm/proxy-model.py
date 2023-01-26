@@ -122,48 +122,9 @@ class DummyIxDecoder:
             ))
             total_gas_used += 1
 
-    @staticmethod
-    def _complete_neon_tx_event_list(tx: NeonIndexedTxInfo) -> None:
-        if (not tx.neon_tx_res.is_valid()) or (len(tx.neon_tx_res.log_list) > 0):
-            return
-
-        current_level = 1
-        reverted_level = -1
-        current_order = tx.len_neon_event_list()
-
-        for event in tx.iter_reversed_neon_event_list():
-            if event.is_reverted:
-                pass
-            elif event.is_start_event_type():
-                current_level -= 1
-                if (reverted_level != -1) and (current_level < reverted_level):
-                    reverted_level = -1
-            elif event.is_exit_event_type():
-                current_level += 1
-
-            if event.is_reverted:
-                pass
-            elif (event.event_type == NeonLogTxEvent.Type.ExitRevert) and (reverted_level == -1):
-                reverted_level = current_level
-
-            if event.is_reverted:
-                is_reverted = True
-                is_hidden = True
-            else:
-                is_reverted = (reverted_level != -1)
-                is_hidden = (event.is_hidden or is_reverted)
-
-            tx.neon_tx_res.add_event(
-                int(event.event_type), event.address, event.topic_list, event.data,
-                event.sol_sig, event.idx, event.inner_idx,
-                is_hidden, is_reverted, current_level, current_order
-            )
-            current_order -= 1
-
     def _decode_tx(self, tx: NeonIndexedTxInfo, msg: str) -> bool:
         self._decode_neon_tx_return(tx)
         self._decode_neon_tx_event_list(tx)
-        self._complete_neon_tx_event_list(tx)
         self._decode_neon_tx_from_holder(tx)
 
         if tx.neon_tx_res.is_valid() and (tx.status != NeonIndexedTxInfo.Status.Done):

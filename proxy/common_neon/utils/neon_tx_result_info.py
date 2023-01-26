@@ -5,7 +5,7 @@ import logging
 
 from .solana_block import SolanaBlockInfo
 from .utils import str_fmt_object
-
+from ..evm_log_decoder import NeonLogTxEvent
 
 LOG = logging.getLogger(__name__)
 
@@ -38,27 +38,25 @@ class NeonTxResultInfo:
             object.__setattr__(self, '_str', str_fmt_object(self))
         return self._str
 
-    def add_event(self, event_type: int, address: bytes, topic_list: List[bytes], log_data: bytes,
-                  sol_sig: str, idx: int, inner_idx: Optional[int],
-                  is_hidden: bool, is_reverted: bool, event_level: int, event_order: int) -> None:
+    def add_event(self, event: NeonLogTxEvent) -> None:
         if self.block_slot is not None:
             LOG.warning(f'Neon tx {self.neon_sig} has completed event logs')
             return
 
         rec = {
-            'address': '0x' + address.hex() if len(address) > 0 else '',
-            'topics': ['0x' + topic.hex() for topic in topic_list],
-            'data': '0x' + log_data.hex() if len(log_data) > 0 else '',
+            'address': '0x' + event.address.hex() if len(event.address) > 0 else '',
+            'topics': ['0x' + topic.hex() for topic in event.topic_list],
+            'data': '0x' + event.data.hex() if len(event.data) > 0 else '',
             'transactionLogIndex': hex(self._tx_log_idx),
 
-            'solHash': sol_sig,
-            'ixIdx': hex(idx),
-            'innerIxIdx': None if inner_idx is None else hex(inner_idx),
-            'eventType': event_type,
-            'eventLevel': hex(event_level),
-            'eventOrder': hex(event_order),
-            'isHidden': is_hidden,
-            'isReverted': is_reverted,
+            'solHash': event.sol_sig,
+            'ixIdx': hex(event.idx),
+            'innerIxIdx': None if event.inner_idx is None else hex(event.inner_idx),
+            'eventType': int(event.event_type),
+            'eventLevel': hex(event.event_level),
+            'eventOrder': hex(event.event_order),
+            'isHidden': event.is_hidden,
+            'isReverted': event.is_reverted,
 
             # 'logIndex': hex(tx_log_idx), # set when transaction found
             # 'transactionIndex': hex(ix.idx), # set when transaction found
@@ -66,7 +64,7 @@ class NeonTxResultInfo:
             # 'blockHash': block_hash # set when transaction found
         }
 
-        if not is_hidden:
+        if not event.is_hidden:
             object.__setattr__(self, '_tx_log_idx', self._tx_log_idx + 1)
 
         self.log_list.append(rec)

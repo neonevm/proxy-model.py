@@ -55,9 +55,11 @@ class NeonLogTxEvent:
 
     sol_sig: str
     idx: int = 0
-    inner_idx: int = 0
+    inner_idx: Optional[int] = None
     total_gas_used: int = 0
     is_reverted: bool = False
+    event_level: int = 0
+    event_order: int = 0
 
     def is_exit_event_type(self) -> bool:
         return self.event_type in {
@@ -214,6 +216,8 @@ class _NeonLogDecoder:
             return None
 
         type_name = base64.b64decode(data_list[0]).decode('utf-8')
+
+        LOG.debug(f'EXIT {type_name}')
         if type_name == 'STOP':
             event_type = NeonLogTxEvent.Type.ExitStop
         elif type_name == 'RETURN':
@@ -232,37 +236,31 @@ class _NeonLogDecoder:
     def _decode_neon_tx_event(log_num: int, data_list: List[str]) -> Optional[NeonLogTxEvent]:
         """
         Unpacks base64-encoded event data:
-        LOG0 address data
-        LOG1 address topic data
-        LOG2 address topic1 topic2 data
-        LOG3 address topic1 topic2 topic3 data
-        LOG4 address topic1 topic2 topic3 topic4 data
+        LOG0 address [0] data
+        LOG1 address [1] topic data
+        LOG2 address [2] topic1 topic2 data
+        LOG3 address [3] topic1 topic2 topic3 data
+        LOG4 address [4] topic1 topic2 topic3 topic4 data
         """
 
-        if len(data_list) < 2:
-            LOG.error(f'Failed to decode events data: less then 2(3) elements in {data_list}')
+        if len(data_list) < 3:
+            LOG.error(f'Failed to decode events data: less 3 elements in {data_list}')
             return None
 
         if (log_num > 4) or (log_num < 0):
             LOG.error(f'Failed to decode events data: count of topics = {log_num}')
             return None
 
-        if log_num < len(data_list):  # TODO: remove
-            """ old format: LOG0 address TOPIC_CNT topic data """
-            bs = base64.b64decode(data_list[1])
-            topic_cnt = int.from_bytes(bs, 'little')
-            if topic_cnt != log_num > 4:
-                LOG.error(f'Failed to decode events data: log_num ({log_num}) != topic_cnt({topic_cnt})')
-                return None
-            base_topic_index = 2
-        else:
-            topic_cnt = log_num
-            base_topic_index = 1
+        bs = base64.b64decode(data_list[1])
+        topic_cnt = int.from_bytes(bs, 'little')
+        if topic_cnt != log_num:
+            LOG.error(f'Failed to decode events data: log_num ({log_num}) != topic_cnt({topic_cnt})')
+            return None
 
         address = base64.b64decode(data_list[0])
-        topic_list = [base64.b64decode(data_list[base_topic_index + i]) for i in range(topic_cnt)]
+        topic_list = [base64.b64decode(data_list[2 + i]) for i in range(topic_cnt)]
 
-        data_index = base_topic_index + topic_cnt
+        data_index = 2 + topic_cnt
         data = base64.b64decode(data_list[data_index]) if data_index < len(data_list) else b''
 
         event_type = NeonLogTxEvent.Type.Log
