@@ -114,7 +114,6 @@ class Test_erc20ForSpl_contract(unittest.TestCase):
         amount = 10_000_000_000_000
         token_account = SplTokenInstrutions.get_associated_token_address(
             self.solana_account.public_key, self.token.pubkey)
-        admin_address = self.wrapper.get_neon_account_address(self.admin.address)
 
         tx = SolLegacyTx(instructions=[
             SolTxIx(
@@ -142,7 +141,7 @@ class Test_erc20ForSpl_contract(unittest.TestCase):
         tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
             program_id=self.token.program_id,
             source=token_account,
-            delegate=admin_address,
+            delegate=self.wrapper.get_auth_account_address(self.admin.address),
             owner=self.solana_account.public_key,
             amount=amount,
             signers=[],

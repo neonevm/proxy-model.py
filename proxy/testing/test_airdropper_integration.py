@@ -171,7 +171,7 @@ class TestAirdropperIntegration(TestCase):
             SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
                 program_id=self.token.program_id,
                 source=from_spl_token_acc,
-                delegate=self.wrapper.get_neon_account_address(signer_account.address),
+                delegate=self.wrapper.get_auth_account_address(signer_account.address),
                 owner=from_owner.public_key,
                 amount=transfer_amount,
                 signers=[],
@@ -241,7 +241,7 @@ class TestAirdropperIntegration(TestCase):
         tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
             program_id=self.token.program_id,
             source=from_spl_token_acc,
-            delegate=self.wrapper.get_neon_account_address(to_neon_acc1.address),
+            delegate=self.wrapper.get_auth_account_address(to_neon_acc1.address),
             owner=from_owner.public_key,
             amount=transfer_amount1,
             signers=[],
@@ -249,7 +249,7 @@ class TestAirdropperIntegration(TestCase):
         tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
             program_id=self.token.program_id,
             source=from_spl_token_acc,
-            delegate=self.wrapper.get_neon_account_address(to_neon_acc2.address),
+            delegate=self.wrapper.get_auth_account_address(to_neon_acc2.address),
             owner=from_owner.public_key,
             amount=transfer_amount2,
             signers=[],
@@ -325,7 +325,7 @@ class TestAirdropperIntegration(TestCase):
             SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
                 program_id=self.token.program_id,
                 source=from_spl_token_acc,
-                delegate=self.wrapper.get_neon_account_address(to_neon_acc.address),
+                delegate=self.wrapper.get_auth_account_address(to_neon_acc.address),
                 owner=from_owner.public_key,
                 amount=transfer_amount,
                 signers=[],
