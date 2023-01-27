@@ -97,7 +97,7 @@ class ERC20Wrapper:
         neon_account_addressbytes = bytes.fromhex(neon_account_address[2:])
         return SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, neon_account_addressbytes], self.evm_loader_id)[0]
 
-    def get_auth_account_address(self, neon_account_address: str, evm_loader_id) -> SolPubKey:
+    def get_auth_account_address(self, neon_account_address: str) -> SolPubKey:
         neon_account_addressbytes = bytes.fromhex(neon_account_address[2:])
         neon_contract_addressbytes = bytes.fromhex(self.neon_contract_address[2:])
         return SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, b"AUTH", neon_contract_addressbytes, neon_account_addressbytes],
