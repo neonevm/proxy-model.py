@@ -9,16 +9,16 @@ COPY ./requirements.txt /opt
 
 WORKDIR /opt
 
-RUN apt update && \
-    DEBIAN_FRONTEND=noninteractive apt install -y git software-properties-common openssl curl parallel netcat-openbsd \
-                                                  ca-certificates python3-pip python3-venv postgresql-client && \
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y git software-properties-common openssl curl parallel netcat-openbsd \
+                                                      ca-certificates python3-pip python3-venv postgresql-client && \
     python3 -m venv venv && \
     pip3 install --upgrade pip && \
     /bin/bash -c "source venv/bin/activate" && \
     pip install -r requirements.txt && \
     pip3 install py-solc-x && \
     python3 -c "import solcx; solcx.install_solc(version='0.7.6')" && \
-    apt remove -y git && \
+    apt-get remove -y git && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=spl /opt/solana/bin/solana \
