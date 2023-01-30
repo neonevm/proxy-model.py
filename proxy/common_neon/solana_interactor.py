@@ -394,11 +394,14 @@ class SolInteractor:
 
         response_list = self._send_rpc_batch_request('getBlock', request_list)
         for block_slot, response in zip(block_slot_list, response_list):
-            if (not response) or ('result' not in response):
+            if response is None:
                 block = SolanaBlockInfo(block_slot=block_slot)
             else:
                 net_block = response.get('result', None)
-                block = self._decode_block_info(block_slot, net_block)
+                if net_block is None:
+                    block = SolanaBlockInfo(block_slot=block_slot)
+                else:
+                    block = self._decode_block_info(block_slot, net_block)
             block_list.append(block)
         return block_list
 
