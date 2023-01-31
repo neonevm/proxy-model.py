@@ -23,16 +23,16 @@ class NeonTxLogsDB(BaseDB):
             'tx_idx': 'transactionIndex',
             'tx_log_idx': 'transactionLogIndex',
             'log_idx': 'logIndex',
-            'event_level': 'eventLevel',
-            'event_order': 'eventOrder',
-            'sol_sig': 'solHash',
-            'idx': 'ixIdx',
-            'inner_idx': 'innerIxIdx'
+            'event_level': 'neonEventLevel',
+            'event_order': 'neonEventOrder',
+            'sol_sig': 'neonSolHash',
+            'idx': 'neonIxIdx',
+            'inner_idx': 'neonInnerIxIdx'
         }
 
         self._hex_field_dict = {
             'blockNumber', 'transactionIndex', 'transactionLogIndex', 'logIndex',
-            'ixIdx', 'innerIxIdx', 'eventLevel', 'eventOrder'
+            'neonIxIdx', 'neonInnerIxIdx', 'neonEventLevel', 'neonEventOrder'
         }
 
     def set_tx_list(self, cursor: BaseDB.Cursor, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
