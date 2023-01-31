@@ -1,10 +1,7 @@
-import logging
 from typing import List, Any, Optional, Dict, Iterator, Set
 
 from ..indexer.base_db import BaseDB
 from ..indexer.indexed_objects import NeonIndexedTxInfo
-
-LOG = logging.getLogger(__name__)
 
 
 class NeonTxLogsDB(BaseDB):
@@ -58,7 +55,7 @@ class NeonTxLogsDB(BaseDB):
                                     value = int(value[2:], 16)
                                 value_list.append(value)
                             else:
-                                raise RuntimeError(f'Wrong usage {self._table_name}: {idx} -> {column}!')
+                                value_list.append(None)
                     value_list_list.append(value_list)
 
         self._insert_batch(cursor, value_list_list)

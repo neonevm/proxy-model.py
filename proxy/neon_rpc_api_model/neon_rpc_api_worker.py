@@ -261,6 +261,10 @@ class NeonRpcApiWorker:
             log_rec['eventType'] = 'EXIT SELFDESTRUCT'
         elif event_type == 204:
             log_rec['eventType'] = 'EXIT REVERT'
+        elif event_type == 300:
+            log_rec['eventType'] = 'RETURN'
+        elif event_type == 301:
+            log_rec['eventType'] = 'CANCEL'
 
     def _get_logs(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
         def to_list(items):
