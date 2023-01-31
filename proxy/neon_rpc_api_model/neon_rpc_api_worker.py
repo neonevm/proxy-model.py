@@ -235,32 +235,37 @@ class NeonRpcApiWorker:
 
     @staticmethod
     def _update_event_type(log_rec: Dict[str, Any]) -> None:
-        event_type = log_rec.get('eventType', None)
+        key = 'neonEventType'
+        event_type = log_rec.get(key, None)
         if event_type is None:
             return
 
         if event_type == 1:
-            log_rec['eventType'] = 'LOG'
+            log_rec[key] = 'LOG'
         elif event_type == 101:
-            log_rec['eventType'] = 'ENTER CALL'
+            log_rec[key] = 'ENTER CALL'
         elif event_type == 102:
-            log_rec['eventType'] = 'ENTER CALL CODE'
+            log_rec[key] = 'ENTER CALL CODE'
         elif event_type == 103:
-            log_rec['eventType'] = 'ENTER STATICCALL'
+            log_rec[key] = 'ENTER STATICCALL'
         elif event_type == 104:
-            log_rec['eventType'] = 'ENTER DELEGATECALL'
+            log_rec[key] = 'ENTER DELEGATECALL'
         elif event_type == 105:
-            log_rec['eventType'] = 'ENTER CREATE'
+            log_rec[key] = 'ENTER CREATE'
         elif event_type == 106:
-            log_rec['eventType'] = 'ENTER CREATE2'
+            log_rec[key] = 'ENTER CREATE2'
         elif event_type == 201:
-            log_rec['eventType'] = 'EXIT STOP'
+            log_rec[key] = 'EXIT STOP'
         elif event_type == 202:
-            log_rec['eventType'] = 'EXIT RETURN'
+            log_rec[key] = 'EXIT RETURN'
         elif event_type == 203:
-            log_rec['eventType'] = 'EXIT SELFDESTRUCT'
+            log_rec[key] = 'EXIT SELFDESTRUCT'
         elif event_type == 204:
-            log_rec['eventType'] = 'EXIT REVERT'
+            log_rec[key] = 'EXIT REVERT'
+        elif event_type == 300:
+            log_rec[key] = 'RETURN'
+        elif event_type == 301:
+            log_rec[key] = 'CANCEL'
 
     def _get_logs(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
         def to_list(items):
@@ -293,21 +298,21 @@ class NeonRpcApiWorker:
         filtered_log_list: List[Dict[str, Any]] = list()
 
         for log_rec in log_list:
-            if log_rec.get('isHidden', False) and (not with_hidden):
+            if log_rec.get('neonIsHidden', False) and (not with_hidden):
                 continue
+
+            log_rec['removed'] = False
 
             # remove fields available only for neon_getLogs
             if not with_hidden:
-                log_rec.pop('isHidden', None)
-                log_rec.pop('isReverted', None)
-                log_rec.pop('eventType', None)
+                remove_key_list: List[str] = list()
+                for key in log_rec.keys():
+                    if key[:4] == 'neon':
+                        remove_key_list.append(key)
 
-                del log_rec['solHash']
-                del log_rec['ixIdx']
-                del log_rec['innerIxIdx']
+                for key in remove_key_list:
+                    log_rec.pop(key, None)
 
-                del log_rec['eventOrder']
-                del log_rec['eventLevel']
             else:
                 self._update_event_type(log_rec)
 

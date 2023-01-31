@@ -254,6 +254,9 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         for event in reversed(neon_event_list):
             yield event
 
+    def len_neon_event_list(self) -> int:
+        return len(self._neon_event_list)
+
     def complete_event_list(self) -> None:
         event_list_len = len(self._neon_event_list)
         if (not self.neon_tx_res.is_valid()) or (len(self.neon_tx_res.log_list) > 0) or (event_list_len == 0):
@@ -263,27 +266,23 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         current_level = 1
         reverted_level = -1
         current_order = event_list_len
+        is_failed = (self.neon_tx_res.status == '0x0')
 
         for event in self._iter_reversed_neon_event_list():
-            if event.is_reverted:
-                pass
-            elif event.is_start_event_type():
-                current_level -= 1
-                if (reverted_level != -1) and (current_level < reverted_level):
-                    reverted_level = -1
-            elif event.is_exit_event_type():
-                current_level += 1
-
-            if event.is_reverted:
-                pass
-            elif (event.event_type == NeonLogTxEvent.Type.ExitRevert) and (reverted_level == -1):
-                reverted_level = current_level
-
             if event.is_reverted:
                 is_reverted = True
                 is_hidden = True
             else:
-                is_reverted = (reverted_level != -1)
+                if event.is_start_event_type():
+                    current_level -= 1
+                    if (reverted_level != -1) and (current_level < reverted_level):
+                        reverted_level = -1
+                elif event.is_exit_event_type():
+                    current_level += 1
+                    if (event.event_type == NeonLogTxEvent.Type.ExitRevert) and (reverted_level == -1):
+                        reverted_level = current_level
+
+                is_reverted = (reverted_level != -1) or is_failed
                 is_hidden = (event.is_hidden or is_reverted)
 
             neon_event_list.append(dataclasses.replace(

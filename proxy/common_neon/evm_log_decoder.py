@@ -46,6 +46,9 @@ class NeonLogTxEvent:
         ExitSelfDestruct = 203
         ExitRevert = 204
 
+        Return = 300
+        Cancel = 301
+
     event_type: Type
     is_hidden: bool
 
@@ -150,10 +153,7 @@ class _NeonLogDecoder:
         exit_status = int.from_bytes(bs, "little")
         exit_status = 0x1 if exit_status < 0xd0 else 0x0
 
-        if len(data_list) > 1: # TODO: remove
-            bs = base64.b64decode(data_list[1])
-            gas_used = int.from_bytes(bs, "little")
-        elif neon_tx_ix is None:
+        if neon_tx_ix is None:
             LOG.error(f'Failed to get total gas for RETURN')
             return None
         else:
@@ -284,32 +284,6 @@ class _NeonLogDecoder:
         return NeonLogTxSig(neon_sig=tx_sig)
 
     @staticmethod
-    def _decode_neon_tx_cancel(data_list: List[str]) -> Optional[NeonLogTxReturn]:  # TODO: remove
-        """Extracts gas_used of the canceled transaction"""
-
-        if len(data_list) != 1:
-            LOG.error(f'Failed to decode neon tx cancel: should be 1 element in {data_list}')
-            return None
-
-        bs = base64.b64decode(data_list[0])
-        gas_used = int.from_bytes(bs, 'little')
-
-        return NeonLogTxReturn(gas_used=gas_used, status=0, is_canceled=True)
-
-    @staticmethod
-    def _decode_neon_tx_ix(data_list: List[str]) -> Optional[NeonLogTxIx]:  # TODO: remove
-        """Extracts gas_used of a neon iteration"""
-
-        if len(data_list) != 1:
-            LOG.error(f'Failed to decode neon ix gas : should be 1 element in {data_list}')
-            return None
-
-        bs = base64.b64decode(data_list[0])
-        gas_used = int.from_bytes(bs, "little")
-
-        return NeonLogTxIx(gas_used=gas_used, total_gas_used=0)
-
-    @staticmethod
     def _decode_neon_tx_gas(data_list: List[str]) -> Optional[NeonLogTxIx]:
         """
         GAS <32 bytes le iteration gas> <32 bytes le total gas>
@@ -361,7 +335,7 @@ class _NeonLogDecoder:
                 if neon_tx_return is None:
                     neon_tx_return = self._decode_neon_tx_return(neon_tx_ix, data_list)
                 else:
-                    LOG.warning('RETURN/CL_TX_GAS is already exist!')
+                    LOG.warning('RETURN is already exist!')
             elif name.startswith('LOG'):
                 neon_tx_event = self._decode_neon_tx_event(int(name[3:]), data_list)
                 if neon_tx_event is not None:
@@ -378,17 +352,7 @@ class _NeonLogDecoder:
                 if neon_tx_ix is None:
                     neon_tx_ix = self._decode_neon_tx_gas(data_list)
                 else:
-                    LOG.warning('GAS/IX_GAS is already exist!')
-            elif name == 'CL_TX_GAS':  # TODO: remove
-                if neon_tx_return is None:
-                    neon_tx_return = self._decode_neon_tx_cancel(data_list)
-                else:
-                    LOG.warning('CL_TX_GAS/RETURN is already exist!')
-            elif name == 'IX_GAS': # TODO: remove
-                if neon_tx_ix is None:
-                    neon_tx_ix = self._decode_neon_tx_ix(data_list)
-                else:
-                    LOG.warning('IX_GAS/GAS already exist!')
+                    LOG.warning('GAS is already exist!')
 
         return NeonLogInfo(
             sol_bpf_cycle_usage=sol_bpf_cycle_usage,
