@@ -237,7 +237,7 @@ class _NeonLogDecoder:
         """
         Unpacks base64-encoded event data:
         LOG0 address [0] data
-        LOG1 address [1] topic data
+        LOG1 address [1] topic1 data
         LOG2 address [2] topic1 topic2 data
         LOG3 address [3] topic1 topic2 topic3 data
         LOG4 address [4] topic1 topic2 topic3 topic4 data
