@@ -9,7 +9,7 @@ TEST_EVENT_SOURCE_210 = '''
 pragma solidity >=0.5.12;
 
 contract ReturnsEvents {
-    event Added(uint8 sum);
+    event Added(uint256 indexed start_num, uint256 indexed add_num, uint256 indexed result_num);
 
     function addNoReturn(uint8 x, uint8 y) public {
         x + y;
@@ -19,18 +19,18 @@ contract ReturnsEvents {
         return x + y;
     }
 
-    function addReturnEvent(uint8 x, uint8 y) public returns(uint8) {
-        uint8 sum =x+y;
+    function addReturnEvent(uint256 x, uint256 y) public returns(uint256) {
+        uint256 sum =x+y;
 
-        emit Added(sum);
+        emit Added(x, y, sum);
         return sum;
     }
 
-    function addReturnEventTwice(uint8 x, uint8 y) public returns(uint8) {
-        uint8 sum = x + y;
-        emit Added(sum);
-        sum += y;
-        emit Added(sum);
+    function addReturnEventTwice(uint256 x, uint256 y) public returns(uint256) {
+        uint256 sum = x + y;
+        emit Added(x, y, sum);
+        uint256 res = sum + y;
+        emit Added(sum, y, res);
         return sum;
     }
 }
@@ -87,9 +87,6 @@ class TestEthGetLogs(unittest.TestCase):
         print('trx_store_receipt:', tx_store.tx_receipt)
         self.block_hashes.append(tx_store.tx_receipt['blockHash'].hex())
         self.block_numbers.append(hex(tx_store.tx_receipt['blockNumber']))
-        for log in tx_store.tx_receipt['logs']:
-            for topic in log['topics']:
-                self.topics.append(topic.hex())
 
     def commit_two_event_trx(self, x, y) -> None:
         print(f"\ncommit_two_event_trx. x: {x}, y: {y}")
@@ -99,9 +96,12 @@ class TestEthGetLogs(unittest.TestCase):
         print('trx_store_receipt:', tx_store.tx_receipt)
         self.block_hashes.append(tx_store.tx_receipt['blockHash'].hex())
         self.block_numbers.append(hex(tx_store.tx_receipt['blockNumber']))
-        for log in tx_store.tx_receipt['logs']:
-            for topic in log['topics']:
-                self.topics.append(topic.hex())
+
+        # Only one event
+        self.topics.clear()
+        log = tx_store.tx_receipt['logs'][0]
+        for topic in log['topics']:
+            self.topics.append(topic.hex())
 
     def commit_no_event_trx(self, x, y) -> None:
         print("\ncommit_no_event_trx")
@@ -141,6 +141,7 @@ class TestEthGetLogs(unittest.TestCase):
 
     def test_get_logs_complex_request(self):
         print("\ntest_get_logs_complex_request")
+        print(f'topics: {self.topics}')
         receipts = self.proxy.conn.get_logs({
             'fromBlock': 0,
             'toBlock': 'latest',
@@ -148,7 +149,7 @@ class TestEthGetLogs(unittest.TestCase):
             'topics': self.topics
         })
         print('receipts: ', receipts)
-        self.assertEqual(len(receipts), 6)
+        self.assertEqual(len(receipts), 1)
 
     def test_get_logs_by_address(self):
         print("\ntest_get_logs_by_address")

@@ -31,36 +31,6 @@
     END;
     $$;
 
-    DO $$
-    DECLARE
-        ----------
-    BEGIN
-        IF does_table_have_column('solana_block', 'slot') THEN
-            ALTER TABLE solana_block RENAME TO oldv1_solana_blocks;
-        END IF;
-
-        IF does_table_have_column('neon_transactions', 'neon_sign') THEN
-            ALTER TABLE neon_transactions RENAME TO oldv1_neon_transactions;
-        END IF;
-
-        IF does_table_have_column('neon_transaction_logs', 'blocknumber') THEN
-            ALTER TABLE neon_transaction_logs RENAME TO oldv1_neon_transaction_logs;
-        END IF;
-
-        IF does_table_have_column('solana_neon_transactions', 'sol_sign') THEN
-            DROP TABLE solana_neon_transactions;
-        END IF;
-
-        IF does_table_have_column('solana_transaction_signatures', 'slot') THEN
-            DROP TABLE solana_transaction_signatures;
-        END IF;
-    END $$;
-
-    DROP TABLE IF EXISTS neon_accounts;
-    DROP TABLE IF EXISTS solana_neon_transactions_costs;
-    DROP TABLE IF EXISTS solana_transaction_receipts;
-    DROP TABLE IF EXISTS test_storage;
-
     --- Initialize stage
 
     CREATE TABLE IF NOT EXISTS constants (
@@ -109,21 +79,29 @@
         tx_log_idx INT,
         log_idx INT,
 
-        topic TEXT,
-        log_data TEXT,
+        event_level INT,
+        event_order INT,
 
-        topic_list BYTEA
+        sol_sig TEXT,
+        idx INT,
+        inner_idx INT,
+
+        log_topic1 TEXT,
+        log_topic2 TEXT,
+        log_topic3 TEXT,
+        log_topic4 TEXT,
+        log_topic_cnt INT,
+
+        log_data TEXT
     );
-    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS event_level INT DEFAULT 0;
-    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS event_order INT DEFAULT 0;
-    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS sol_sig TEXT;
-    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS idx INT;
-    ALTER TABLE neon_transaction_logs ADD COLUMN IF NOT EXISTS inner_idx INT;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_neon_transaction_logs_block_tx_log ON neon_transaction_logs(block_slot, tx_hash, tx_log_idx);
     CREATE INDEX IF NOT EXISTS idx_neon_transaction_logs_address ON neon_transaction_logs(address);
-    CREATE INDEX IF NOT EXISTS idx_neon_transaction_logs_topic ON neon_transaction_logs(topic);
-    CREATE INDEX IF NOt EXISTS idx_neon_transaction_logs_block_slot ON neon_transaction_logs(block_slot);
+    CREATE INDEX IF NOT EXISTS idx_neon_transaction_logs_block_slot ON neon_transaction_logs(block_slot);
+    CREATE INDEX IF NOT EXISTS idx_neon_transaction_logs_topic1 ON neon_transaction_logs(log_topic1);
+    CREATE INDEX IF NOT EXISTS idx_neon_transaction_logs_topic2 ON neon_transaction_logs(log_topic2);
+    CREATE INDEX IF NOT EXISTS idx_neon_transaction_logs_topic3 ON neon_transaction_logs(log_topic3);
+    CREATE INDEX IF NOT EXISTS idx_neon_transaction_logs_topic4 ON neon_transaction_logs(log_topic4);
 
     CREATE TABLE IF NOT EXISTS solana_neon_transactions (
         sol_sig TEXT,
@@ -194,57 +172,3 @@
         signature   TEXT
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_transaction_signatures_sig ON solana_transaction_signatures(block_slot);
-
-    ---- Upgrade stage # TODO: remove
-    DO $$
-    DECLARE
-        ----------
-    BEGIN
-        IF does_table_exist('oldv1_solana_blocks') THEN
-            INSERT INTO solana_blocks(
-                block_slot, block_hash, block_time,
-                parent_block_slot, is_finalized, is_active)
-            SELECT
-                slot, hash, blocktime,
-                0, TRUE, TRUE
-            FROM oldv1_solana_blocks;
-
-            DROP TABLE oldv1_solana_blocks;
-        END IF;
-
-        IF does_table_exist('oldv1_neon_transactions') THEN
-            INSERT INTO neon_transactions(
-                neon_sig, from_addr,
-                sol_sig, sol_ix_idx, sol_ix_inner_idx,
-                block_slot, tx_idx,
-                nonce, gas_price, gas_limit, value, to_addr, contract, calldata,
-                gas_used, status, return_value, logs,
-                v, r, s
-            )
-            SELECT
-                neon_sign, from_addr,
-                sol_sign, idx, 0,
-                slot, 0,
-                nonce, gas_price, gas_limit, value, to_addr, contract, calldata,
-                gas_used, status, return_value, logs,
-                v, r, s
-            FROM oldv1_neon_transactions;
-
-            DROP TABLE oldv1_neon_transactions;
-        END IF;
-
-        IF does_table_exist('oldv1_neon_transaction_logs') THEN
-            INSERT INTO neon_transaction_logs(
-                address,
-                block_slot, tx_hash, tx_idx, tx_log_idx, log_idx,
-                topic, log_data, topic_list
-            )
-            SELECT
-                address,
-                blockNumber, transactionHash, 0, transactionLogIndex, 0,
-                topic, '', ''
-            FROM oldv1_neon_transaction_logs;
-
-            DROP TABLE oldv1_neon_transaction_logs;
-        END IF;
-    END $$;

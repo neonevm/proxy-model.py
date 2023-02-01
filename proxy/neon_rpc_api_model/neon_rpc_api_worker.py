@@ -103,9 +103,9 @@ class NeonRpcApiWorker:
         if not isinstance(param, dict):
             raise InvalidParamError('invalid param')
         if 'from' in param:
-            param['from'] = self._normalize_account(param['from'])
+            param['from'] = self._normalize_address(param['from'])
         if 'to' in param:
-            param['to'] = self._normalize_account(param['to'])
+            param['to'] = self._normalize_address(param['to'])
 
         try:
             calculator = GasEstimate(self._config, self._solana, param)
@@ -182,18 +182,18 @@ class NeonRpcApiWorker:
             raise InvalidParamError(message=f'invalid block tag {tag}')
 
     @staticmethod
-    def _normalize_account(account: str) -> str:
+    def _normalize_address(raw_address: str, error='bad account') -> str:
         try:
-            sender = account.strip().lower()
-            assert sender[:2] == '0x'
-            sender = sender[2:]
+            address = raw_address.strip().lower()
+            assert address[:2] == '0x'
+            address = address[2:]
 
-            bin_sender = bytes.fromhex(sender)
-            assert len(bin_sender) == 20
+            bin_address = bytes.fromhex(address)
+            assert len(bin_address) == 20
 
-            return eth_utils.to_checksum_address(sender)
+            return eth_utils.to_checksum_address(address)
         except (Exception,):
-            raise InvalidParamError(message='bad account')
+            raise InvalidParamError(message=error)
 
     def _get_full_block_by_number(self, tag: Union[str, int]) -> SolanaBlockInfo:
         block = self._process_block_tag(tag)
@@ -214,7 +214,7 @@ class NeonRpcApiWorker:
         """
 
         self._validate_block_tag(tag)
-        account = self._normalize_account(account)
+        account = self._normalize_address(account)
 
         try:
             if tag == 'pending':
@@ -235,79 +235,115 @@ class NeonRpcApiWorker:
 
     @staticmethod
     def _update_event_type(log_rec: Dict[str, Any]) -> None:
-        event_type = log_rec.get('eventType', None)
+        key = 'neonEventType'
+        event_type = log_rec.get(key, None)
         if event_type is None:
             return
 
         if event_type == 1:
-            log_rec['eventType'] = 'LOG'
+            log_rec[key] = 'LOG'
         elif event_type == 101:
-            log_rec['eventType'] = 'ENTER CALL'
+            log_rec[key] = 'ENTER CALL'
         elif event_type == 102:
-            log_rec['eventType'] = 'ENTER CALL CODE'
+            log_rec[key] = 'ENTER CALL CODE'
         elif event_type == 103:
-            log_rec['eventType'] = 'ENTER STATICCALL'
+            log_rec[key] = 'ENTER STATICCALL'
         elif event_type == 104:
-            log_rec['eventType'] = 'ENTER DELEGATECALL'
+            log_rec[key] = 'ENTER DELEGATECALL'
         elif event_type == 105:
-            log_rec['eventType'] = 'ENTER CREATE'
+            log_rec[key] = 'ENTER CREATE'
         elif event_type == 106:
-            log_rec['eventType'] = 'ENTER CREATE2'
+            log_rec[key] = 'ENTER CREATE2'
         elif event_type == 201:
-            log_rec['eventType'] = 'EXIT STOP'
+            log_rec[key] = 'EXIT STOP'
         elif event_type == 202:
-            log_rec['eventType'] = 'EXIT RETURN'
+            log_rec[key] = 'EXIT RETURN'
         elif event_type == 203:
-            log_rec['eventType'] = 'EXIT SELFDESTRUCT'
+            log_rec[key] = 'EXIT SELFDESTRUCT'
         elif event_type == 204:
-            log_rec['eventType'] = 'EXIT REVERT'
+            log_rec[key] = 'EXIT REVERT'
+        elif event_type == 300:
+            log_rec[key] = 'RETURN'
+        elif event_type == 301:
+            log_rec[key] = 'CANCEL'
+
+    @staticmethod
+    def _normalize_topic(raw_topic: Any) -> str:
+        try:
+            assert isinstance(raw_topic, str)
+
+            topic = raw_topic.strip().lower()
+            assert topic[:2] == '0x'
+            topic = topic[2:]
+
+            bin_topic = bytes.fromhex(topic)
+            assert len(bin_topic) == 32
+
+            return '0x' + bin_topic.hex().lower()
+        except (Exception,):
+            raise InvalidParamError(message=f'bad topic {raw_topic}')
 
     def _get_logs(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
-        def to_list(items):
-            if isinstance(items, str):
-                return [items.lower()]
-            elif isinstance(items, list):
-                return list(set([item.lower() for item in items if isinstance(item, str)]))
-            return []
-
         from_block: Optional[int] = None
         to_block: Optional[int] = None
-        addresses = []
-        topics = []
-        block_hash = None
+        address_list: List[str] = list()
+        topic_list: List[List[str]] = list()
 
         if 'fromBlock' in obj and obj['fromBlock'] != '0':
             from_block = self._process_block_tag(obj['fromBlock']).block_slot
         if 'toBlock' in obj and obj['toBlock'] not in {'latest', 'pending', 'finalized', 'safe'}:
             to_block = self._process_block_tag(obj['toBlock']).block_slot
-        if 'address' in obj:
-            addresses = to_list(obj['address'])
-        if 'topics' in obj:
-            topics = to_list(obj['topics'])
+
         if 'blockHash' in obj:
             block_hash = obj['blockHash']
+            block = self._get_block_by_hash(block_hash)
+            if block.is_empty():
+                raise InvalidParamError(message=f'block hash {block_hash} does not exist')
+            from_block = block.block_slot
+            to_block = block.block_slot
 
-        return self._db.get_logs(from_block, to_block, addresses, topics, block_hash)
+        if 'address' in obj:
+            raw_address_list = obj['address']
+            if isinstance(raw_address_list, str):
+                address_list = [self._normalize_address(raw_address_list, f'bad address {raw_address_list}').lower()]
+            elif isinstance(raw_address_list, list):
+                for raw_address in raw_address_list:
+                    address_list.append(self._normalize_address(raw_address, f'bad address {raw_address}').lower())
+            else:
+                raise InvalidParamError(message=f'bad address {raw_address_list}')
+
+        if 'topics' in obj:
+            raw_topic_list = obj['topics']
+            if not isinstance(raw_topic_list, list):
+                raise InvalidParamError(message=f'bad topics {raw_topic_list}')
+
+            for raw_topic in raw_topic_list:
+                if isinstance(raw_topic, list):
+                    topic_list.append([self._normalize_topic(raw_item) for raw_item in raw_topic])
+                else:
+                    topic_list.append([self._normalize_topic(raw_topic)])
+
+        return self._db.get_log_list(from_block, to_block, address_list, topic_list)
 
     def _filter_log_list(self, log_list: List[Dict[str, Any]], with_hidden) -> List[Dict[str, Any]]:
         filtered_log_list: List[Dict[str, Any]] = list()
 
         for log_rec in log_list:
-            if log_rec.get('isHidden', False) and (not with_hidden):
+            if log_rec.get('neonIsHidden', False) and (not with_hidden):
                 continue
+
+            log_rec['removed'] = False
 
             # remove fields available only for neon_getLogs
             if not with_hidden:
-                log_rec.pop('isHidden', None)
-                log_rec.pop('isReverted', None)
-                log_rec.pop('eventType', None)
+                remove_key_list: List[str] = list()
+                for key in log_rec.keys():
+                    if key[:4] == 'neon':
+                        remove_key_list.append(key)
 
-                del log_rec['solHash']
-                del log_rec['ixIdx']
-                del log_rec['innerIxIdx']
+                for key in remove_key_list:
+                    log_rec.pop(key, None)
 
-                del log_rec['eventOrder']
-                del log_rec['eventLevel']
             else:
                 self._update_event_type(log_rec)
 
@@ -382,7 +418,7 @@ class NeonRpcApiWorker:
         """
 
         self._validate_block_tag(tag)
-        account = self._normalize_account(account)
+        account = self._normalize_address(account)
 
         try:
             value = NeonCli(self._config).call('get-storage-at', account, position)
@@ -467,7 +503,7 @@ class NeonRpcApiWorker:
 
     def eth_getTransactionCount(self, account: str, tag: Union[str, int]) -> str:
         self._validate_block_tag(tag)
-        account = self._normalize_account(account).lower()
+        account = self._normalize_address(account).lower()
 
         try:
             LOG.debug(f'Get transaction count. Account: {account}, tag: {tag}')
@@ -595,7 +631,7 @@ class NeonRpcApiWorker:
 
     def eth_getCode(self, account: str, tag: Union[str, int]) -> str:
         self._validate_block_tag(tag)
-        account = self._normalize_account(account)
+        account = self._normalize_address(account)
 
         try:
             account_info = self._solana.get_neon_account_info(account)
@@ -710,7 +746,7 @@ class NeonRpcApiWorker:
         return [str(a) for a in account_list]
 
     def eth_sign(self, address: str, data: str) -> str:
-        address = self._normalize_account(address)
+        address = self._normalize_address(address)
         try:
             data = bytes.fromhex(data[2:])
         except (Exception,):
@@ -729,10 +765,10 @@ class NeonRpcApiWorker:
 
         sender = tx['from']
         del tx['from']
-        sender = self._normalize_account(sender)
+        sender = self._normalize_address(sender)
 
         if 'to' in tx:
-            tx['to'] = self._normalize_account(tx['to'])
+            tx['to'] = self._normalize_address(tx['to'])
 
         account = KeyStorage().get_key(sender)
         if not account:

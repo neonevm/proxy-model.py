@@ -26,8 +26,6 @@ class NeonTxResultInfo:
 
     log_list: List[Dict[str, Any]] = None
 
-    _tx_log_idx: int = 0
-
     _str = ''
 
     def __post_init__(self):
@@ -47,25 +45,22 @@ class NeonTxResultInfo:
             'address': '0x' + event.address.hex() if len(event.address) > 0 else '',
             'topics': ['0x' + topic.hex() for topic in event.topic_list],
             'data': '0x' + event.data.hex() if len(event.data) > 0 else '',
-            'transactionLogIndex': hex(self._tx_log_idx),
 
-            'solHash': event.sol_sig,
-            'ixIdx': hex(event.idx),
-            'innerIxIdx': None if event.inner_idx is None else hex(event.inner_idx),
-            'eventType': int(event.event_type),
-            'eventLevel': hex(event.event_level),
-            'eventOrder': hex(event.event_order),
-            'isHidden': event.is_hidden,
-            'isReverted': event.is_reverted,
+            'neonSolHash': event.sol_sig,
+            'neonIxIdx': hex(event.idx),
+            'neonInnerIxIdx': None if event.inner_idx is None else hex(event.inner_idx),
+            'neonEventType': int(event.event_type),
+            'neonEventLevel': hex(event.event_level),
+            'neonEventOrder': hex(event.event_order),
+            'neonIsHidden': event.is_hidden,
+            'neonIsReverted': event.is_reverted,
 
-            # 'logIndex': hex(tx_log_idx), # set when transaction found
+            # 'transactionLogIndex': hex(tx_log_idx), # set when transaction found
+            # 'logIndex': hex(log_idx), # set when transaction found
             # 'transactionIndex': hex(ix.idx), # set when transaction found
             # 'blockNumber': block_number, # set when transaction found
             # 'blockHash': block_hash # set when transaction found
         }
-
-        if not event.is_hidden:
-            object.__setattr__(self, '_tx_log_idx', self._tx_log_idx + 1)
 
         self.log_list.append(rec)
         object.__setattr__(self, '_str', '')
@@ -90,15 +85,18 @@ class NeonTxResultInfo:
 
         hex_block_slot = hex(self.block_slot)
         hex_tx_idx = hex(self.tx_idx)
+        tx_log_idx = 0
 
         for rec in self.log_list:
             rec['transactionHash'] = self.neon_sig
             rec['blockHash'] = self.block_hash
             rec['blockNumber'] = hex_block_slot
             rec['transactionIndex'] = hex_tx_idx
-            if not rec['isHidden']:
+            if not rec['neonIsHidden']:
                 rec['logIndex'] = hex(log_idx)
+                rec['transactionLogIndex'] = hex(tx_log_idx)
                 log_idx += 1
+                tx_log_idx += 1
 
         return log_idx
 

@@ -109,6 +109,13 @@ class DummyIxDecoder:
 
         tx.neon_tx_res.set_result(status=ret.status, gas_used=ret.gas_used)
         tx.neon_tx_res.set_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
+        tx.add_neon_event(NeonLogTxEvent(
+            event_type=NeonLogTxEvent.Type.Cancel if tx.is_canceled else NeonLogTxEvent.Type.Return,
+            is_hidden=True, address=b'', topic_list=[],
+            data=ret.status.to_bytes(1, 'little'),
+            total_gas_used=ret.gas_used + 5000,
+            sol_sig=ix.sol_sig, idx=ix.idx, inner_idx=ix.inner_idx
+        ))
 
     def _decode_neon_tx_event_list(self, tx: NeonIndexedTxInfo) -> None:
         total_gas_used = self.state.sol_neon_ix.neon_total_gas_used
