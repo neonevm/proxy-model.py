@@ -154,7 +154,7 @@ class Airdropper(IndexerBase):
             LOG.debug(f"Created account {created_account.hex()} and target {target_neon_acc.hex()} are different")
             return False
 
-        sol_caller, _ = SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, b"AUTH", erc20, caller + bytearray(12)], self._config.evm_loader_id)
+        sol_caller, _ = SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, b"AUTH", erc20, bytes(12) + caller], self._config.evm_loader_id)
         if SolPubKey(account_keys[approve['accounts'][1]]) != sol_caller:
             LOG.debug(f"account_keys[approve['accounts'][1]] != sol_caller")
             return False
