@@ -11,6 +11,7 @@ from ..common_neon.solana_tx import SolPubKey
 
 LOG = logging.getLogger(__name__)
 
+
 def read_str(pos: int, data: bytes) -> Tuple[bytes, int]:
     length = data[pos]
     start = pos + 1
@@ -54,7 +55,7 @@ def unpack(layout_descriptor: Dict[str, Any],
         )
 
     if field['format'] == 'acc':  # special case for Solana account address
-        return SolPubKey(raw_data[start_idx:stop_idx])
+        return SolPubKey.from_bytes(raw_data[start_idx:stop_idx])
     elif field['format'] == 'dict':  # special case for attribute mapping
         return read_dict(raw_data[start_idx:stop_idx])
     return struct.unpack(field['format'], raw_data[start_idx:stop_idx])[0]
@@ -191,7 +192,7 @@ class PythNetworkClient:
                 product: Dict[str, Any] = self._parse_prod_account(product_data)
                 symbol: str = product['attrs']['symbol']
                 LOG.info(f'Product account {acct_addr}: {symbol}')
-                self.set_price_account(symbol, SolPubKey(product['price_acc']))
+                self.set_price_account(symbol, product['price_acc'])
             except BaseException as exc:
                 LOG.error(f'Failed to parse product account data {acct_addr}', exc_info=exc)
         LOG.info('Pyth.Network update finished.\n\n\n')

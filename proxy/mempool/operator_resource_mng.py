@@ -42,12 +42,12 @@ class OpResInfo:
 
     @staticmethod
     def from_ident(ident: OpResIdent) -> OpResInfo:
-        signer = SolAccount.from_secret_key(ident.private_key)
-        assert ident.public_key == str(signer.public_key)
+        signer = SolAccount.from_seed(ident.private_key)
+        assert ident.public_key == str(signer.pubkey())
 
         holder_seed = perm_account_seed(b'holder-', ident.res_id)
-        holder = account_with_seed(signer.public_key, holder_seed)
-        neon_address = NeonAddress.from_private_key(signer.secret_key)
+        holder = account_with_seed(signer.pubkey(), holder_seed)
+        neon_address = NeonAddress.from_private_key(signer.secret())
 
         return OpResInfo(ident=ident, signer=signer, holder=holder, holder_seed=holder_seed, neon_address=neon_address)
 
@@ -56,11 +56,11 @@ class OpResInfo:
 
     @property
     def public_key(self) -> SolPubKey:
-        return self.signer.public_key
+        return self.signer.pubkey()
 
     @property
     def secret_key(self) -> bytes:
-        return self.signer.secret_key
+        return self.signer.secret()
 
 
 class OpResInit:
@@ -194,10 +194,10 @@ class OpResIdentListBuilder:
         stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
         for res_id in range(self._config.perm_account_id, stop_perm_account_id):
             for ident in secret_list:
-                sol_account = SolAccount.from_secret_key(ident)
+                sol_account = SolAccount.from_seed(ident)
                 ident = OpResIdent(
-                    public_key=str(sol_account.public_key),
-                    private_key=sol_account.secret_key,
+                    public_key=str(sol_account.pubkey()),
+                    private_key=sol_account.secret(),
                     res_id=res_id
                 )
                 ident_set.add(ident)

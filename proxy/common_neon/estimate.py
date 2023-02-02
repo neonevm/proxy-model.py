@@ -25,18 +25,18 @@ class _GasTxBuilder:
             61, 147, 166, 57, 23, 88, 41, 136, 224, 223, 120, 142, 155, 123, 221, 134,
             16, 102, 170, 82, 76, 94, 95, 178, 125, 232, 191, 172, 103, 157, 145, 190
         ])
-        holder = SolAccount.from_secret_key(holder_key)
+        holder = SolAccount.from_seed(holder_key)
 
         operator_key = bytes([
             161, 247, 66, 157, 203, 188, 141, 236, 124, 123, 200, 192, 255, 23, 161, 34,
             116, 202, 70, 182, 176, 194, 195, 168, 185, 132, 161, 142, 203, 57, 245, 90
         ])
-        self._signer = SolAccount.from_secret_key(operator_key)
+        self._signer = SolAccount.from_seed(operator_key)
         neon_address = NeonAddress.from_private_key(operator_key)
-        self._blockhash = SolBlockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+        self._blockhash = SolBlockhash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
 
-        self._neon_ix_builder = NeonIxBuilder(self._signer.public_key)
-        self._neon_ix_builder.init_iterative(holder.public_key)
+        self._neon_ix_builder = NeonIxBuilder(self._signer.pubkey())
+        self._neon_ix_builder.init_iterative(holder.pubkey())
         self._neon_ix_builder.init_operator_neon(neon_address)
 
     def build_tx(self, tx: NeonTx, account_list: List[SolAccountMeta]) -> SolLegacyTx:
@@ -171,10 +171,10 @@ class GasEstimate:
     def _build_account_list(self):
         self._account_list.clear()
         for account in self.emulator_json.get('accounts', []):
-            self._account_list.append(SolAccountMeta(SolPubKey(account['account']), False, True))
+            self._account_list.append(SolAccountMeta(SolPubKey.from_string(account['account']), False, True))
 
         for account in self.emulator_json.get('solana_accounts', []):
-            self._account_list.append(SolAccountMeta(SolPubKey(account['pubkey']), False, True))
+            self._account_list.append(SolAccountMeta(SolPubKey.from_string(account['pubkey']), False, True))
 
     def estimate(self):
         self._cached_tx_cost_size = None

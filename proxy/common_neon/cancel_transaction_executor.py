@@ -18,7 +18,7 @@ LOG = logging.getLogger(__name__)
 
 class CancelTxExecutor:
     def __init__(self, config: Config, solana: SolInteractor, signer: SolAccount) -> None:
-        self._ix_builder = NeonIxBuilder(signer.public_key)
+        self._ix_builder = NeonIxBuilder(signer.pubkey())
         self._config = config
         self._solana = solana
         self._signer = signer
@@ -43,7 +43,8 @@ class CancelTxExecutor:
     def _build_cancel_tx(self, holder_info: HolderAccountInfo) -> SolLegacyTx:
         key_list: List[SolAccountMeta] = []
         for is_writable, exists, acct in holder_info.account_list:
-            key_list.append(SolAccountMeta(pubkey=SolPubKey(acct), is_signer=False, is_writable=is_writable))
+            meta = SolAccountMeta(pubkey=SolPubKey.from_string(acct), is_signer=False, is_writable=is_writable)
+            key_list.append(meta)
 
         return SolLegacyTx(
             name='CancelWithHash',

@@ -12,18 +12,18 @@ from decimal import Decimal
 # PythNetworkClient will fail with 'too many requests' if trying to connect
 # it to the same Solana network
 solana_url = "https://api.devnet.solana.com"
-mapping_account = SolPubKey('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
+mapping_account = SolPubKey.from_string('BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
 sol_usd_symbol = 'Crypto.SOL/USD'
 
 
 class TestPythNetworkClient(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.price_acct1_addr = SolPubKey(b'PriceAcct1')
-        cls.price_acct2_addr = SolPubKey(b'PriceAcct2')
+        cls.price_acct1_addr = SolPubKey.new_unique()
+        cls.price_acct2_addr = SolPubKey.new_unique()
 
-        cls.prod_acct1_addr = SolPubKey(b'ProdAcct1')
-        cls.prod_acct2_addr = SolPubKey(b'ProdAcct2')
+        cls.prod_acct1_addr = SolPubKey.new_unique()
+        cls.prod_acct2_addr = SolPubKey.new_unique()
 
         cls.prod_acct1_data = b'Acct1Data'
         cls.prod_acct2_data = b'Acct2Data'

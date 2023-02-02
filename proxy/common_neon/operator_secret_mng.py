@@ -59,9 +59,9 @@ class OpSecretMng:
                     LOG.warning(f'No secret_key in the path {key_path}')
                     continue
 
-                sol_account = SolAccount.from_secret_key(base64.b64decode(secret))
-                secret_list.append(sol_account.secret_key)
-                LOG.debug(f'Get secret: {str(sol_account.public_key)}')
+                sol_account = SolAccount.from_seed(base64.b64decode(secret))
+                secret_list.append(sol_account.secret())
+                LOG.debug(f'Get secret: {str(sol_account.pubkey())}')
 
             except (Exception, ):
                 LOG.warning(f'Fail to read secret from {key_path}')
@@ -76,7 +76,7 @@ class OpSecretMng:
             if len(num_list) < 32:
                 LOG.debug(f'Wrong content in the file {name}')
                 return None
-            return SolAccount.from_secret_key(bytes(num_list[:32]))
+            return SolAccount.from_seed(bytes(num_list[:32]))
 
     def _read_secret_list_from_fs(self) -> List[bytes]:
         LOG.debug('Read secret keys from filesystem...')
@@ -107,7 +107,7 @@ class OpSecretMng:
             secret = self._read_secret_file(full_path)
             if secret is None:
                 continue
-            secret_list.append(secret.secret_key)
-            LOG.debug(f'Get secret: {str(secret.public_key)}')
+            secret_list.append(secret.secret())
+            LOG.debug(f'Get secret: {str(secret.pubkey())}')
 
         return secret_list

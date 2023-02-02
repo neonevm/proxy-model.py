@@ -54,13 +54,13 @@ class TestReadOnlyAccounts(unittest.TestCase):
 
         with open("proxy/operator-keypairs/id.json") as f:
             d = json.load(f)
-        self.solana_account = SolAccount.from_secret_key(bytes(d))
-        print('Account: ', self.solana_account.public_key)
-        self.solana_client.request_airdrop(self.solana_account.public_key, 1000_000_000_000)
+        self.solana_account = SolAccount.from_bytes(bytes(d))
+        print('Account: ', self.solana_account.pubkey())
+        self.solana_client.request_airdrop(self.solana_account.pubkey(), 1000_000_000_000)
 
         for i in range(20):
             sleep(1)
-            balance = self.solana_client.get_balance(self.solana_account.public_key).value
+            balance = self.solana_client.get_balance(self.solana_account.pubkey()).value
             if balance == 0:
                 continue
 
@@ -68,13 +68,13 @@ class TestReadOnlyAccounts(unittest.TestCase):
                 self.token = SplToken.create_mint(
                     self.solana_client,
                     self.solana_account,
-                    self.solana_account.public_key,
+                    self.solana_account.pubkey(),
                     9,
                     TOKEN_PROGRAM_ID,
                 )
                 print(
                     'create_token_mint mint, SolanaAccount: ',
-                    self.solana_client.get_account_info(self.solana_account.public_key)
+                    self.solana_client.get_account_info(self.solana_account.pubkey())
                 )
 
                 print(f'Created new token mint: {self.token.pubkey}')
@@ -84,10 +84,10 @@ class TestReadOnlyAccounts(unittest.TestCase):
                 txn.add(
                     create_metadata_instruction(
                         metadata,
-                        self.solana_account.public_key,
+                        self.solana_account.pubkey(),
                         self.token.pubkey,
-                        self.solana_account.public_key,
-                        self.solana_account.public_key,
+                        self.solana_account.pubkey(),
+                        self.solana_account.pubkey(),
                     )
                 )
                 self.solana_client.send_transaction(txn, self.solana_account, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))

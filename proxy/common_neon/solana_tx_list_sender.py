@@ -206,7 +206,7 @@ class SolTxListSender:
         state_tx_cnt, tx_nonce = tx_error_parser.get_nonce_error()
 
         if slots_behind is not None:
-            LOG.warning(f'Node is behind by {self._slots_behind} slots')
+            LOG.warning(f'Node is behind by {slots_behind} slots')
             return SolTxSendState.Status.NodeBehindError
         elif state_tx_cnt is not None:
             LOG.debug(f'tx nonce {tx_nonce} != state tx count {state_tx_cnt}')

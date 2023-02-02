@@ -45,7 +45,7 @@ class NeonAddress:
 
 def account_with_seed(base_address: SolPubKey, seed: bytes) -> SolPubKey:
     seed_str = str(seed, 'utf8')
-    result = SolPubKey.create_with_seed(base_address, seed_str, SolPubKey(EVM_LOADER_ID))
+    result = SolPubKey.create_with_seed(base_address, seed_str, SolPubKey.from_string(EVM_LOADER_ID))
     return result
 
 
@@ -65,5 +65,5 @@ def neon_2program(neon: Union[NeonAddress, str, bytes]) -> Tuple[SolPubKey, int]
         neon = bytes.fromhex(neon)
 
     seed = [ACCOUNT_SEED_VERSION, neon]
-    (pda, nonce) = SolPubKey.find_program_address(seed, SolPubKey(EVM_LOADER_ID))
+    (pda, nonce) = SolPubKey.find_program_address(seed, SolPubKey.from_string(EVM_LOADER_ID))
     return pda, nonce

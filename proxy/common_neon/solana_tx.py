@@ -5,18 +5,19 @@ from typing import Sequence, Optional, Union, Dict, Any
 import abc
 
 import solana.transaction
-import solana.blockhash
-import solana.keypair
-import solana.publickey
 
 import solders.hash
+import solders.keypair
+import solders.pubkey
+import solders.instruction
+import solders.signature
 
-SolTxIx = solana.transaction.TransactionInstruction
+SolTxIx = solders.instruction.Instruction
 SolAccountMeta = solana.transaction.AccountMeta
-SolBlockhash = solana.blockhash.Blockhash
-SolAccount = solana.keypair.Keypair
-SolSignature = solana.keypair.Signature
-SolPubKey = solana.publickey.PublicKey
+SolBlockhash = solders.hash.Hash
+SolAccount = solders.keypair.Keypair
+SolSignature = solders.signature.Signature
+SolPubKey = solders.pubkey.Pubkey
 SolTxReceipt = Dict[str, Any]
 
 
@@ -25,7 +26,7 @@ class SolTxSizeError(Exception):
 
 
 class SolTx(abc.ABC):
-    _empty_blockhash = SolBlockhash(str(solders.hash.Hash.default()))
+    _empty_blockhash = SolBlockhash.default()
 
     def __init__(self, name: str = '', instructions: Optional[Sequence[SolTxIx]] = None):
         self._name = name

@@ -54,7 +54,7 @@ class ALTInfo:
 
         alt_acct_set = alt_filter.filter_alt_account_key_set()
         self._acct_key_set = alt_acct_set
-        self._acct_key_list = [SolPubKey(key) for key in alt_acct_set]
+        self._acct_key_list = [SolPubKey.from_string(key) for key in alt_acct_set]
         if not self.account_key_list_len:
             raise ALTError(f'No accounts for the lookup table {str(self._table_acct)}')
 

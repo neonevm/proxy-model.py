@@ -2,8 +2,8 @@ import struct
 from enum import IntEnum
 from construct import Bytes, Flag, Int8ul
 from construct import Struct as cStruct  # type: ignore
-from solana.publickey import PublicKey
-from solana.transaction import AccountMeta, TransactionInstruction
+from solders.pubkey import Pubkey
+from solana.transaction import AccountMeta, Instruction
 import base58
 import base64
 
@@ -19,23 +19,23 @@ class InstructionType(IntEnum):
     UPDATE_METADATA = 1
 
 
-METADATA_PROGRAM_ID = PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s')
-SYSTEM_PROGRAM_ID = PublicKey('11111111111111111111111111111111')
-SYSVAR_RENT_PUBKEY = PublicKey('SysvarRent111111111111111111111111111111111')
-ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID = PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
-TOKEN_PROGRAM_ID = PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
+METADATA_PROGRAM_ID = Pubkey.from_string('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s')
+SYSTEM_PROGRAM_ID = Pubkey.from_string('11111111111111111111111111111111')
+SYSVAR_RENT_PUBKEY = Pubkey.from_string('SysvarRent111111111111111111111111111111111')
+ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID = Pubkey.from_string('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+TOKEN_PROGRAM_ID = Pubkey.from_string('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
 
 
-def get_metadata_account(mint_key):
-    return PublicKey.find_program_address(
-        [b'metadata', bytes(METADATA_PROGRAM_ID), bytes(PublicKey(mint_key))],
+def get_metadata_account(mint_key: Pubkey):
+    return Pubkey.find_program_address(
+        [b'metadata', bytes(METADATA_PROGRAM_ID), bytes(mint_key)],
         METADATA_PROGRAM_ID
     )[0]
 
 
-def get_edition(mint_key):
-    return PublicKey.find_program_address(
-        [b'metadata', bytes(METADATA_PROGRAM_ID), bytes(PublicKey(mint_key)), b"edition"],
+def get_edition(mint_key: Pubkey):
+    return Pubkey.find_program_address(
+        [b'metadata', bytes(METADATA_PROGRAM_ID), bytes(mint_key), b"edition"],
         METADATA_PROGRAM_ID
     )[0]
 
@@ -50,7 +50,7 @@ def create_associated_token_account_instruction(associated_token_account, payer,
         AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
     ]
-    return TransactionInstruction(keys=keys, program_id=ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID)
+    return Instruction(accounts=keys, program_id=ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID, data=b'')
 
 
 def _get_data_buffer(name, symbol, uri, fee, creators, verified=None, share=None):
@@ -125,7 +125,7 @@ def create_metadata_instruction(data, update_authority, mint_key, mint_authority
         AccountMeta(pubkey=SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
         AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
     ]
-    return TransactionInstruction(keys=keys, program_id=METADATA_PROGRAM_ID, data=data)
+    return Instruction(accounts=keys, program_id=METADATA_PROGRAM_ID, data=data)
 
 
 def unpack_metadata_account(data):

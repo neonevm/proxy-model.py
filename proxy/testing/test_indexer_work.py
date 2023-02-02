@@ -117,8 +117,8 @@ class CancelTest(unittest.TestCase):
 
     def create_neon_ix_builder(self, raw_tx, neon_account_list):
         resource = OpResInfo.from_ident(OpResIdent(
-            public_key=str(self.signer.public_key),
-            private_key=self.signer.secret_key,
+            public_key=str(self.signer.pubkey()),
+            private_key=self.signer.secret(),
             res_id=int.from_bytes(raw_tx[:8], byteorder="little")
         ))
         config = FakeConfig()
@@ -203,10 +203,10 @@ class CancelTest(unittest.TestCase):
             neon_ix_builder.make_compute_budget_heap_ix(),
             neon_ix_builder.make_compute_budget_cu_ix(),
             SolTxIx(
-                keys=[SolAccountMeta(pubkey=SolPubKey(EVM_LOADER_ID), is_signer=False, is_writable=False)] +
-                     noniterative.keys,
+                accounts=[SolAccountMeta(pubkey=SolPubKey.from_string(EVM_LOADER_ID), is_signer=False, is_writable=False)] +
+                     noniterative.accounts,
                 data=noniterative.data,
-                program_id=SolPubKey(proxy_program)
+                program_id=SolPubKey.from_string(proxy_program)
             )
         ])
 
@@ -241,10 +241,10 @@ class CancelTest(unittest.TestCase):
             neon_ix_builder.make_compute_budget_heap_ix(),
             neon_ix_builder.make_compute_budget_cu_ix(),
             SolTxIx(
-                keys=[SolAccountMeta(pubkey=SolPubKey(EVM_LOADER_ID), is_signer=False, is_writable=False)] +
-                     iterative.keys,
+                accounts=[SolAccountMeta(pubkey=SolPubKey.from_string(EVM_LOADER_ID), is_signer=False, is_writable=False)] +
+                     iterative.accounts,
                 data=b''.join([bytes.fromhex("ef"), iterative.data]),
-                program_id=SolPubKey(proxy_program)
+                program_id=SolPubKey.from_string(proxy_program)
             )
         ])
 
