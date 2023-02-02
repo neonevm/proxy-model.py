@@ -30,8 +30,7 @@ class BaseNeonTxStrategy(abc.ABC):
         self._validation_error_msg: Optional[str] = None
         self._prep_stage_list: List[BaseNeonTxPrepStage] = []
         self._ctx = ctx
-        self._base_evm_step_cnt = ElfParams().neon_evm_steps
-        self._start_evm_step_cnt = int(self._base_evm_step_cnt * (ctx.config.evm_step_cnt_inc_pct + 1))
+        self._evm_step_cnt = ElfParams().neon_evm_steps
 
     @property
     def ctx(self) -> NeonTxSendCtx:
