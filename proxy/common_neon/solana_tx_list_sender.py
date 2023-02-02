@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict
 
 from ..common_neon.config import Config
-from ..common_neon.errors import BudgetExceededError
+from ..common_neon.errors import CUBudgetExceededError
 from ..common_neon.errors import NodeBehindError, NoMoreRetriesError, NonceTooLowError, BlockedAccountsError
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolBlockhash, SolTxReceipt, SolAccount
@@ -28,7 +28,7 @@ class SolTxSendState:
         AltInvalidIndexError = enum.auto()
         AlreadyFinalizedError = enum.auto()
         BlockedAccountError = enum.auto()
-        BudgetExceededError = enum.auto()
+        CUBudgetExceededError = enum.auto()
         BlockhashNotFoundError = enum.auto()
         AccountAlreadyExistsError = enum.auto()
         UnknownError = enum.auto()
@@ -173,8 +173,8 @@ class SolTxListSender:
             raise NonceTooLowError()
         elif tx_status == SolTxSendState.Status.BlockedAccountError:
             raise BlockedAccountsError()
-        elif tx_status == SolTxSendState.Status.BudgetExceededError:
-            raise BudgetExceededError()
+        elif tx_status == SolTxSendState.Status.CUBudgetExceededError:
+            raise CUBudgetExceededError()
         raise SolTxError(tx_state_list[0].receipt)
 
     def _wait_for_confirmation_of_tx_list(self, tx_sig_list: List[str]) -> None:
@@ -225,7 +225,7 @@ class SolTxListSender:
         elif tx_error_parser.check_if_account_already_exists():
             return SolTxSendState.Status.AccountAlreadyExistsError
         elif tx_error_parser.check_if_budget_exceeded():
-            return SolTxSendState.Status.BudgetExceededError
+            return SolTxSendState.Status.CUBudgetExceededError
         elif tx_error_parser.check_if_error():
             LOG.debug(f'unknown_error_receipt: {tx_error_parser.receipt}')
             return SolTxSendState.Status.UnknownError

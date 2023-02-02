@@ -30,7 +30,8 @@ class ElfParams:
 
     @property
     def neon_compute_units(self) -> int:
-        return int(self._elf_param_dict.get("NEON_COMPUTE_UNITS"))
+        return 1_400_000  # <- for mainnet launch
+        # return int(self._elf_param_dict.get("NEON_COMPUTE_UNITS"))
 
     @property
     def neon_evm_steps(self) -> int:
