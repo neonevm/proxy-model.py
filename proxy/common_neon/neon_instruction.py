@@ -4,8 +4,7 @@ import logging
 from enum import Enum
 from typing import Optional, List, cast
 
-import rlp
-
+from rlp import encode as rlp_encode
 from sha3 import keccak_256
 
 from solders.system_program import CreateAccountWithSeedParams, create_account_with_seed
@@ -24,6 +23,7 @@ LOG = logging.getLogger(__name__)
 
 class EvmInstruction(Enum):
     TransactionExecuteFromData = b'\x1f'            # 31,
+    TransactionExecuteFromAccount = b'\x2a'         # 42
     TransactionStepFromData = b'\x20'               # 32
     TransactionStepFromAccount = b'\x21'            # 33
     TransactionStepFromAccountNoChainId = b'\x22'   # 34
@@ -69,7 +69,7 @@ class NeonIxBuilder:
     def init_neon_tx(self, neon_tx: NeonTx) -> NeonIxBuilder:
         self._neon_tx = neon_tx
 
-        self._msg = rlp.encode(self._neon_tx)
+        self._msg = rlp_encode(self._neon_tx)
         self._holder_msg = self._msg
 
         keccak_result = self._neon_tx.hash_signed()
@@ -178,6 +178,13 @@ class NeonIxBuilder:
             ] + self._neon_account_list
         )
 
+    def make_tx_exec_from_account_ix(self) -> SolTxIx:
+        ix_data = b"".join([
+            EvmInstruction.TransactionExecuteFromAccount.value,
+            self._treasury_pool_index_buf,
+        ])
+        return self._make_holder_ix(ix_data)
+
     def make_cancel_ix(self, holder_account: Optional[SolPubKey] = None,
                        neon_tx_sig: Optional[bytes] = None,
                        cancel_key_list: Optional[List[SolAccountMeta]] = None) -> SolTxIx:
@@ -214,6 +221,9 @@ class NeonIxBuilder:
         if data is not None:
             ix_data = ix_data + data
 
+        return self._make_holder_ix(ix_data)
+
+    def _make_holder_ix(self, ix_data: bytes):
         return SolTxIx(
             program_id=self._evm_program_id,
             data=ix_data,

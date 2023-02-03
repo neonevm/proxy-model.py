@@ -6,7 +6,7 @@ from ..mempool.neon_tx_send_strategy_base_stages import WriteHolderNeonTxPrepSta
 
 
 class HolderNeonTxStrategy(IterativeNeonTxStrategy):
-    name = 'TransactionStepFromAccount'
+    name = 'TxStepFromAccount'
 
     def __init__(self, ctx: NeonTxSendCtx) -> None:
         super().__init__(ctx)

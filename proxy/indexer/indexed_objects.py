@@ -150,9 +150,10 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
     class Type(Enum):
         Unknown = 0
         Single = 1
-        IterFromData = 2
-        IterFromAccount = 3
-        IterFromAccountWoChainId = 4
+        SingleFromAccount = 2
+        IterFromData = 3
+        IterFromAccount = 4
+        IterFromAccountWoChainId = 5
 
     class Key:
         def __init__(self, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
@@ -467,6 +468,8 @@ class NeonIndexedBlockInfo:
         def _new_stat(neon_tx_type: NeonIndexedTxInfo.Type) -> NeonTxStatData:
             if neon_tx_type == NeonIndexedTxInfo.Type.Single:
                 type_name = 'single'
+            elif neon_tx_type == NeonIndexedTxInfo.Type.SingleFromAccount:
+                type_name = 'single-holder'
             elif neon_tx_type == NeonIndexedTxInfo.Type.IterFromData:
                 type_name = 'iterative'
             elif neon_tx_type == NeonIndexedTxInfo.Type.IterFromAccount:
