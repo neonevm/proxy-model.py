@@ -27,7 +27,7 @@ from ..indexer.indexer_db import IndexerDB
 
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
 
-NEON_PROXY_PKG_VERSION = '0.15.0'
+NEON_PROXY_PKG_VERSION = '0.15.1'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 LOG = logging.getLogger(__name__)
 
