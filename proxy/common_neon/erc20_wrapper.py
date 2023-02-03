@@ -3,7 +3,6 @@ import struct
 import logging
 from typing import Union, Dict, Any, Tuple
 
-from solcx import install_solc
 from eth_account.signers.local import LocalAccount as NeonAccount
 
 import spl.token.instructions as spl_token
@@ -100,8 +99,9 @@ class ERC20Wrapper:
     def get_auth_account_address(self, neon_account_address: str) -> SolPubKey:
         neon_account_addressbytes = bytes(12) + bytes.fromhex(neon_account_address[2:])
         neon_contract_addressbytes = bytes.fromhex(self.neon_contract_address[2:])
-        return SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, b"AUTH", neon_contract_addressbytes, neon_account_addressbytes],
-                                              self.evm_loader_id)[0]
+        return SolPubKey.find_program_address(
+            [ACCOUNT_SEED_VERSION, b"AUTH", neon_contract_addressbytes, neon_account_addressbytes],
+            self.evm_loader_id)[0]
 
     def _deploy_wrapper(self, contract: str, init_args: Tuple):
         compiled_interface = compile_source(ERC20FORSPL_INTERFACE_SOURCE)
@@ -155,42 +155,31 @@ class ERC20Wrapper:
         # except that skip_preflight is set to True
         tx = SolLegacyTx(instructions=[
             spl_token.create_associated_token_account(
-                payer=payer.public_key, owner=owner, mint=self.token.pubkey
+                payer=payer.pubkey(), owner=owner, mint=self.token.pubkey
             )
         ]).low_level_tx
         self.token._conn.send_transaction(tx, payer, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
-        return tx.instructions[0].keys[1].pubkey
+        return tx.instructions[0].accounts[1].pubkey
 
     def create_claim_instruction(self, owner: SolPubKey, from_acc: SolPubKey, to_acc: NeonAccount, amount: int):
         erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
         nonce = self.proxy.eth.get_transaction_count(to_acc.address)
         claim_tx = erc20.functions.claim(bytes(from_acc), amount).build_transaction({'nonce': nonce, 'gasPrice': 0})
-        claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, to_acc.key)
+        return self._create_builder(claim_tx, owner, to_acc)
 
-        neon_tx = bytearray.fromhex(claim_tx.rawTransaction.hex()[2:])
-        emulating_result = self.proxy.neon.emulate(neon_tx)
-
-        neon_account_dict = dict()
-        for account in emulating_result['accounts']:
-            key = account['account']
-            neon_account_dict[key] = SolAccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
-
-        for account in emulating_result['solana_accounts']:
-            key = account['pubkey']
-            neon_account_dict[key] = SolAccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
-
-        neon_account_dict = list(neon_account_dict.values())
-
-        neon = NeonIxBuilder(owner)
-        neon.init_operator_neon(NeonAddress(to_acc.address))
-        neon.init_neon_tx(NeonTx.from_string(neon_tx))
-        neon.init_neon_account_list(neon_account_dict)
-        return neon
-
-    def create_claim_to_instruction(self, owner: SolPubKey, from_acc: SolPubKey, to_acc: NeonAccount, amount: int, signer_acc: NeonAccount):
+    def create_claim_to_instruction(self, owner: SolPubKey,
+                                    from_acc: SolPubKey,
+                                    to_acc: NeonAccount,
+                                    amount: int,
+                                    signer_acc: NeonAccount):
         erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
         nonce = self.proxy.eth.get_transaction_count(signer_acc.address)
-        claim_tx = erc20.functions.claimTo(bytes(from_acc), to_acc.address, amount).build_transaction({'nonce': nonce, 'gasPrice': 0})
+        claim_tx = erc20.functions.claimTo(bytes(from_acc), to_acc.address, amount).build_transaction(
+            {'nonce': nonce, 'gasPrice': 0}
+        )
+        return self._create_builder(claim_tx, owner, signer_acc)
+
+    def _create_builder(self, claim_tx, owner: SolPubKey, signer_acc: NeonAccount):
         claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, signer_acc.key)
 
         neon_tx = bytearray.fromhex(claim_tx.rawTransaction.hex()[2:])
@@ -199,11 +188,13 @@ class ERC20Wrapper:
         neon_account_dict = dict()
         for account in emulating_result['accounts']:
             key = account['account']
-            neon_account_dict[key] = SolAccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
+            meta = SolAccountMeta(pubkey=SolPubKey.from_string(key), is_signer=False, is_writable=True)
+            neon_account_dict[key] = meta
 
         for account in emulating_result['solana_accounts']:
             key = account['pubkey']
-            neon_account_dict[key] = SolAccountMeta(pubkey=SolPubKey(key), is_signer=False, is_writable=True)
+            meta = SolAccountMeta(pubkey=SolPubKey.from_string(key), is_signer=False, is_writable=True)
+            neon_account_dict[key] = meta
 
         neon_account_dict = list(neon_account_dict.values())
 
@@ -221,7 +212,7 @@ class ERC20Wrapper:
         return SolTxIx(
             program_id=TOKEN_PROGRAM_ID,
             data=b'\3' + struct.pack('<Q', amount),
-            keys=[
+            accounts=[
                 SolAccountMeta(pubkey=from_address, is_signer=False, is_writable=True),
                 SolAccountMeta(pubkey=to_address, is_signer=False, is_writable=True),
                 SolAccountMeta(pubkey=payer, is_signer=True, is_writable=False)

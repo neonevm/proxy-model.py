@@ -3,11 +3,12 @@ import logging
 from ..common_neon.address import NeonAddress
 from ..common_neon.data import NeonEmulatedResult
 from ..common_neon.emulator_interactor import call_tx_emulated
-from ..common_neon.errors import NonceTooLowError, BudgetExceededError, NoMoreRetriesError
+from ..common_neon.errors import NonceTooLowError, CUBudgetExceededError, NoMoreRetriesError
 from ..common_neon.utils import NeonTxResultInfo
 
 from .neon_tx_send_base_strategy import BaseNeonTxStrategy
 from .neon_tx_send_holder_strategy import HolderNeonTxStrategy, ALTHolderNeonTxStrategy
+from .neon_tx_send_simple_holder_strategy import SimpleHolderNeonTxStrategy, ALTSimpleHolderNeonTxStrategy
 from .neon_tx_send_iterative_strategy import IterativeNeonTxStrategy, ALTIterativeNeonTxStrategy
 from .neon_tx_send_nochainid_strategy import NoChainIdNeonTxStrategy, ALTNoChainIdNeonTxStrategy
 from .neon_tx_send_simple_strategy import SimpleNeonTxStrategy, ALTSimpleNeonTxStrategy
@@ -21,6 +22,7 @@ class NeonTxSendStrategyExecutor:
     _strategy_list = [
         SimpleNeonTxStrategy, ALTSimpleNeonTxStrategy,
         IterativeNeonTxStrategy, ALTIterativeNeonTxStrategy,
+        SimpleHolderNeonTxStrategy, ALTSimpleHolderNeonTxStrategy,
         HolderNeonTxStrategy, ALTHolderNeonTxStrategy,
         NoChainIdNeonTxStrategy, ALTNoChainIdNeonTxStrategy
     ]
@@ -68,7 +70,7 @@ class NeonTxSendStrategyExecutor:
 
                 raise NoMoreRetriesError()
 
-            except (BudgetExceededError,):
+            except (CUBudgetExceededError,):
                 continue
             except (Exception,):
                 raise

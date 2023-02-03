@@ -30,8 +30,7 @@ class BaseNeonTxStrategy(abc.ABC):
         self._validation_error_msg: Optional[str] = None
         self._prep_stage_list: List[BaseNeonTxPrepStage] = []
         self._ctx = ctx
-        self._base_evm_step_cnt = ElfParams().neon_evm_steps
-        self._start_evm_step_cnt = int(self._base_evm_step_cnt * (ctx.config.evm_step_cnt_inc_pct + 1))
+        self._evm_step_cnt = ElfParams().neon_evm_steps
 
     @property
     def ctx(self) -> NeonTxSendCtx:
@@ -68,7 +67,7 @@ class BaseNeonTxStrategy(abc.ABC):
         tx = self._build_tx()
 
         # Predefined blockhash is used only to check transaction size, the transaction won't be sent to network
-        tx.recent_blockhash = SolBlockhash('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+        tx.recent_blockhash = SolBlockhash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
         tx.sign(self._ctx.signer)
         tx.serialize()  # <- there will be exception
         return True

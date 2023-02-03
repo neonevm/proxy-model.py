@@ -75,7 +75,7 @@ class SolV0Tx(SolTx):
 
             alt_msg_list.append(
                 _SoldersMsgALT(
-                    account_key=alt_info.table_account.to_solders(),
+                    account_key=alt_info.table_account,
                     writable_indexes=bytes(rw_idx_list),
                     readonly_indexes=bytes(ro_idx_list),
                 )
@@ -94,8 +94,8 @@ class SolV0Tx(SolTx):
             signed_tx_key_list +
             # If the tx has an additional account key, which is not listed in the address_table_lookups
             #   then add it to the static part of the tx account list
-            [SolPubKey(key) for key in rw_key_set] +
-            [SolPubKey(key) for key in ro_key_set] +
+            [SolPubKey.from_string(key) for key in rw_key_set] +
+            [SolPubKey.from_string(key) for key in ro_key_set] +
             ro_tx_key_list
         )
 
@@ -147,10 +147,10 @@ class SolV0Tx(SolTx):
 
         msg = _SoldersMsgV0(
             header=hdr,
-            account_keys=[key.to_solders() for key in tx_key_list],
-            recent_blockhash=_SoldersHash.from_string(legacy_msg.recent_blockhash),
+            account_keys=[key for key in tx_key_list],
+            recent_blockhash=legacy_msg.recent_blockhash,
             instructions=new_ix_list,
             address_table_lookups=alt_msg_list
         )
 
-        self._solders_tx = _SoldersTxV0(msg, [signer.to_solders()])
+        self._solders_tx = _SoldersTxV0(msg, [signer])

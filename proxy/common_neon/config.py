@@ -11,8 +11,7 @@ class Config:
     def __init__(self):
         self._solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
         self._pp_solana_url = os.environ.get("PP_SOLANA_URL", self._solana_url)
-        self._evm_loader_id = SolPubKey(EVM_LOADER_ID)
-        self._evm_step_cnt_inc_pct = self._env_decimal("EVM_STEP_COUNT_INC_PCT", "0.9")
+        self._evm_loader_id = SolPubKey.from_string(EVM_LOADER_ID)
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
         self._mempool_executor_limit_cnt = self._env_int('MEMPOOL_EXECUTOR_LIMIT_CNT', 4, 1024)
         self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 15 * 60)
@@ -61,7 +60,8 @@ class Config:
         self._genesis_timestamp = self._env_int('GENESIS_BLOCK_TIMESTAMP', 0, 0)
 
         pyth_mapping_account = os.environ.get('PYTH_MAPPING_ACCOUNT', None)
-        self._pyth_mapping_account = SolPubKey(pyth_mapping_account) if pyth_mapping_account is not None else None
+        if pyth_mapping_account is not None:
+            self._pyth_mapping_account = SolPubKey.from_string(pyth_mapping_account)
         self._update_pyth_mapping_period_sec = self._env_int('UPDATE_PYTH_MAPPING_PERIOD_SEC', 10, 60 * 60)
 
         self._validate()
@@ -86,10 +86,6 @@ class Config:
     @property
     def solana_url(self) -> str:
         return self._solana_url
-
-    @property
-    def evm_step_cnt_inc_pct(self) -> Decimal:
-        return self._evm_step_cnt_inc_pct
 
     @property
     def mempool_capacity(self) -> int:
@@ -300,7 +296,6 @@ class Config:
             'PP_SOLANA_URL': self.pyth_solana_url,
             'PYTH_MAPPING_ACCOUNT': self.pyth_mapping_account,
             'UPDATE_PYTH_MAPPING_PERIOD_SEC': self.update_pyth_mapping_period_sec,
-            'EVM_STEP_COUNT_INC_PCT': self._evm_step_cnt_inc_pct,
             'MEMPOOL_CAPACITY': self.mempool_capacity,
             'MEMPOOL_EXECUTOR_LIMIT_CNT': self.mempool_executor_limit_cnt,
             'MEMPOOL_CACHE_LIFE_SEC': self.mempool_cache_life_sec,

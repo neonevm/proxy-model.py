@@ -7,7 +7,7 @@ from unittest import TestCase
 from solana.rpc.api import Client as SolanaClient
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
-from solana.system_program import SYS_PROGRAM_ID
+from solders.system_program import ID as SYS_PROGRAM_ID
 from solana.transaction import Transaction
 
 from spl.token.client import Token as SplToken
@@ -30,7 +30,7 @@ from proxy.testing.solana_utils import EvmLoader, OperatorAccount, wallet_path
 
 
 MAX_AIRDROP_WAIT_TIME = 45
-EVM_LOADER_ID = SolPubKey(EVM_LOADER_ID)
+EVM_LOADER_ID = SolPubKey.from_string(EVM_LOADER_ID)
 NAME = 'TestToken'
 SYMBOL = 'TST'
 
@@ -58,13 +58,13 @@ class TestAirdropperIntegration(TestCase):
 
         with open("proxy/operator-keypairs/id2.json") as f:
             d = json.load(f)
-        self.mint_authority = SolAccount.from_secret_key(bytes(d))
-        print('Account: ', self.mint_authority.public_key)
-        self.solana_client.request_airdrop(self.mint_authority.public_key, 1000_000_000_000)
+        self.mint_authority = SolAccount.from_bytes(bytes(d))
+        print('Account: ', self.mint_authority.pubkey())
+        self.solana_client.request_airdrop(self.mint_authority.pubkey(), 1000_000_000_000)
 
         for i in range(20):
             sleep(1)
-            balance = self.solana_client.get_balance(self.mint_authority.public_key).value
+            balance = self.solana_client.get_balance(self.mint_authority.pubkey()).value
             if balance == 0:
                 continue
 
@@ -72,13 +72,13 @@ class TestAirdropperIntegration(TestCase):
                 self.token = SplToken.create_mint(
                     self.solana_client,
                     self.mint_authority,
-                    self.mint_authority.public_key,
+                    self.mint_authority.pubkey(),
                     9,
                     TOKEN_PROGRAM_ID,
                 )
                 print(
                     'create_token_mint mint, SolanaAccount: ',
-                    self.solana_client.get_account_info(self.mint_authority.public_key)
+                    self.solana_client.get_account_info(self.mint_authority.pubkey())
                 )
 
                 print(f'Created new token mint: {self.token.pubkey}')
@@ -88,10 +88,10 @@ class TestAirdropperIntegration(TestCase):
                 txn.add(
                     create_metadata_instruction(
                         metadata,
-                        self.mint_authority.public_key,
+                        self.mint_authority.pubkey(),
                         self.token.pubkey,
-                        self.mint_authority.public_key,
-                        self.mint_authority.public_key,
+                        self.mint_authority.pubkey(),
+                        self.mint_authority.pubkey(),
                     )
                 )
                 self.solana_client.send_transaction(txn, self.mint_authority, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
@@ -116,7 +116,7 @@ class TestAirdropperIntegration(TestCase):
         return SolTxIx(
             program_id=EVM_LOADER_ID,
             data=create_account_layout(bytes.fromhex(eth_address[2:])),
-            keys=[
+            accounts=[
                 SolAccountMeta(pubkey=payer, is_signer=True, is_writable=True),
                 SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
                 SolAccountMeta(pubkey=dest_address_solana, is_signer=False, is_writable=True),
@@ -124,8 +124,8 @@ class TestAirdropperIntegration(TestCase):
 
     def create_sol_account(self):
         account = SolAccount()
-        print(f"New solana account created: {account.public_key.to_base58()}. Airdropping...")
-        self.solana_client.request_airdrop(account.public_key, 1000_000_000_000, Confirmed)
+        print(f"New solana account created: {account.pubkey()}. Airdropping...")
+        self.solana_client.request_airdrop(account.pubkey(), 1000_000_000_000, Confirmed)
         return account
 
     def create_token_account(self, owner: SolPubKey, mint_amount: int):
@@ -142,11 +142,11 @@ class TestAirdropperIntegration(TestCase):
     def test_success_airdrop_simple_case(self):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
-        from_spl_token_acc = self.create_token_account(from_owner.public_key, mint_amount)
+        from_spl_token_acc = self.create_token_account(from_owner.pubkey(), mint_amount)
         signer_account = self.create_eth_account()
         to_neon_acc = self.create_eth_account()
 
-        print(f'        OWNER {from_owner.public_key}')
+        print(f'        OWNER {from_owner.pubkey()}')
         print(f'            SPL TOKEN ACC {from_spl_token_acc}')
 
         self.assertEqual(self.wrapper.get_balance(from_spl_token_acc), mint_amount)
@@ -156,30 +156,30 @@ class TestAirdropperIntegration(TestCase):
         tx = SolLegacyTx(instructions=[
             SolTxIx(
                 program_id=COMPUTE_BUDGET_ID,
-                keys=[],
+                accounts=[],
                 data=bytes.fromhex("01") + self.elf_params.neon_heap_frame.to_bytes(4, "little")
             ),
             SolTxIx(
                 program_id=COMPUTE_BUDGET_ID,
-                keys=[],
+                accounts=[],
                 data=bytes.fromhex("02") + self.elf_params.neon_compute_units.to_bytes(4, "little")
             ),
-            self.create_account_instruction(signer_account.address, from_owner.public_key)
+            self.create_account_instruction(signer_account.address, from_owner.pubkey())
         ])
-        tx.add(self.create_account_instruction(to_neon_acc.address, from_owner.public_key))
+        tx.add(self.create_account_instruction(to_neon_acc.address, from_owner.pubkey()))
         tx.add(
             SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
                 program_id=self.token.program_id,
                 source=from_spl_token_acc,
                 delegate=self.wrapper.get_auth_account_address(signer_account.address),
-                owner=from_owner.public_key,
+                owner=from_owner.pubkey(),
                 amount=transfer_amount,
                 signers=[],
             ))
         )
         tx.add(
             self.wrapper.create_claim_to_instruction(
-                owner=from_owner.public_key,
+                owner=from_owner.pubkey(),
                 from_acc=from_spl_token_acc,
                 to_acc=to_neon_acc,
                 amount=transfer_amount,
@@ -214,7 +214,7 @@ class TestAirdropperIntegration(TestCase):
     def test_success_airdrop_complex_case(self):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
-        from_spl_token_acc = self.create_token_account(from_owner.public_key, mint_amount)
+        from_spl_token_acc = self.create_token_account(from_owner.pubkey(), mint_amount)
         to_neon_acc1 = self.create_eth_account()
         to_neon_acc2 = self.create_eth_account()
 
@@ -227,22 +227,22 @@ class TestAirdropperIntegration(TestCase):
         tx = SolLegacyTx(instructions=[
             SolTxIx(
                 program_id=COMPUTE_BUDGET_ID,
-                keys=[],
+                accounts=[],
                 data=bytes.fromhex("01") + self.elf_params.neon_heap_frame.to_bytes(4, "little")
             ),
             SolTxIx(
                 program_id=COMPUTE_BUDGET_ID,
-                keys=[],
+                accounts=[],
                 data=bytes.fromhex("02") + self.elf_params.neon_compute_units.to_bytes(4, "little")
             ),
-            self.create_account_instruction(to_neon_acc1.address, from_owner.public_key)
+            self.create_account_instruction(to_neon_acc1.address, from_owner.pubkey())
         ])
-        tx.add(self.create_account_instruction(to_neon_acc2.address, from_owner.public_key))
+        tx.add(self.create_account_instruction(to_neon_acc2.address, from_owner.pubkey()))
         tx.add(SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
             program_id=self.token.program_id,
             source=from_spl_token_acc,
             delegate=self.wrapper.get_auth_account_address(to_neon_acc1.address),
-            owner=from_owner.public_key,
+            owner=from_owner.pubkey(),
             amount=transfer_amount1,
             signers=[],
         )))
@@ -250,19 +250,19 @@ class TestAirdropperIntegration(TestCase):
             program_id=self.token.program_id,
             source=from_spl_token_acc,
             delegate=self.wrapper.get_auth_account_address(to_neon_acc2.address),
-            owner=from_owner.public_key,
+            owner=from_owner.pubkey(),
             amount=transfer_amount2,
             signers=[],
         )))
         claim_instr1 = self.wrapper.create_claim_instruction(
-            owner=from_owner.public_key,
+            owner=from_owner.pubkey(),
             from_acc=from_spl_token_acc,
             to_acc=to_neon_acc1,
             amount=transfer_amount1,
         )
         tx.add(claim_instr1.make_tx_exec_from_data_ix())
         claim_instr2 = self.wrapper.create_claim_instruction(
-            owner=from_owner.public_key,
+            owner=from_owner.pubkey(),
             from_acc=from_spl_token_acc,
             to_acc=to_neon_acc2,
             amount=transfer_amount2,
@@ -298,7 +298,7 @@ class TestAirdropperIntegration(TestCase):
     def test_no_airdrop(self):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
-        from_spl_token_acc = self.create_token_account(from_owner.public_key, mint_amount)
+        from_spl_token_acc = self.create_token_account(from_owner.pubkey(), mint_amount)
         to_neon_acc = self.create_eth_account()
 
         initial_balance = 1_000
@@ -314,26 +314,26 @@ class TestAirdropperIntegration(TestCase):
         tx = SolLegacyTx(instructions=[
             SolTxIx(
                 program_id=COMPUTE_BUDGET_ID,
-                keys=[],
+                accounts=[],
                 data=bytes.fromhex("01") + self.elf_params.neon_heap_frame.to_bytes(4, "little")
             ),
             SolTxIx(
                 program_id=COMPUTE_BUDGET_ID,
-                keys=[],
+                accounts=[],
                 data=bytes.fromhex("02") + self.elf_params.neon_compute_units.to_bytes(4, "little")
             ),
             SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
                 program_id=self.token.program_id,
                 source=from_spl_token_acc,
                 delegate=self.wrapper.get_auth_account_address(to_neon_acc.address),
-                owner=from_owner.public_key,
+                owner=from_owner.pubkey(),
                 amount=transfer_amount,
                 signers=[],
             ))
         ])
         tx.add(
             self.wrapper.create_claim_instruction(
-                owner=from_owner.public_key,
+                owner=from_owner.pubkey(),
                 from_acc=from_spl_token_acc,
                 to_acc=to_neon_acc,
                 amount=transfer_amount,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import List
 
-from ..common_neon.errors import NoMoreRetriesError
+from ..common_neon.errors import CUBudgetExceededError, NoMoreRetriesError
 from ..common_neon.solana_tx import SolTxReceipt, SolTx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxSendState
@@ -21,6 +21,7 @@ LOG = logging.getLogger(__name__)
 class IterativeNeonTxSender(SimpleNeonTxSender):
     def __init__(self, strategy: IterativeNeonTxStrategy, *args, **kwargs):
         super().__init__(strategy, *args, **kwargs)
+        self._strategy = strategy
         self._is_canceled = False
 
     def _decode_neon_tx_result(self, tx: SolTx, tx_receipt: SolTxReceipt) -> None:
@@ -39,8 +40,8 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             return []
 
         try:
-            if tx_status == SolTxSendState.Status.BudgetExceededError:
-                return self._decrease_evm_step_cnt(tx_state_list)
+            if tx_status == SolTxSendState.Status.CUBudgetExceededError:
+                raise CUBudgetExceededError()
             elif tx_status == SolTxSendState.Status.BlockedAccountError:
                 if self._has_good_receipt_list():
                     return self._get_tx_list_from_state(tx_state_list)
@@ -57,6 +58,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
             pass
         elif self._has_good_receipt_list() and (len(tx_list) == 0):
             # send additional iteration to complete tx
+            LOG.debug('No receipt -> execute additional iteration')
             return self._strategy.build_tx_list(0, 1)
 
         return tx_list
@@ -65,42 +67,24 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
         if (not self._has_good_receipt_list()) or self._is_canceled:
             raise e
 
-        LOG.debug(f'Cancel the transaction')
+        LOG.debug('Cancel the transaction')
         self.clear()
         self._is_canceled = True
         return [self._strategy.build_cancel_tx()]
 
-    def _decrease_evm_step_cnt(self, tx_state_list: List[SolTxSendState]) -> List[SolTx]:
-        if not self._strategy.decrease_evm_step_cnt():
-            raise NoMoreRetriesError()
-
-        total_evm_step_cnt = sum([getattr(tx_state.tx, 'evm_step_cnt') for tx_state in tx_state_list])
-        LOG.debug('No receipt -> execute additional iteration')
-        return self._strategy.build_tx_list(total_evm_step_cnt, 0)
-
 
 class IterativeNeonTxStrategy(BaseNeonTxStrategy):
-    name = 'TransactionStepFromInstruction'
+    name = 'TxStepFromData'
 
     def __init__(self, ctx: NeonTxSendCtx) -> None:
         super().__init__(ctx)
         self._uniq_idx = 0
-        self._evm_step_cnt = self._start_evm_step_cnt
 
     def _validate(self) -> bool:
         return self._validate_tx_has_chainid()
 
     def build_cancel_tx(self) -> SolLegacyTx:
         return self._build_cancel_tx()
-
-    def decrease_evm_step_cnt(self) -> bool:
-        if self._evm_step_cnt <= self._base_evm_step_cnt:
-            return False
-
-        prev_evm_step_cnt = self._evm_step_cnt
-        self._evm_step_cnt -= 150
-        LOG.debug(f'Decrease EVM steps from {prev_evm_step_cnt} to {self._evm_step_cnt}')
-        return True
 
     def _build_tx(self) -> SolLegacyTx:
         self._uniq_idx += 1
@@ -130,7 +114,7 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
 
-        emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._start_evm_step_cnt)
+        emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._evm_step_cnt)
         additional_iter_cnt = self._ctx.neon_tx_exec_cfg.resize_iter_cnt
         additional_iter_cnt += 2  # begin + finalization
         tx_list = self.build_tx_list(emulated_step_cnt, additional_iter_cnt)

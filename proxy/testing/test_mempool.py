@@ -115,7 +115,7 @@ class MockResourceManager(OpResMng):
 class FakeConfig(Config):
     @property
     def evm_loader_id(self) -> SolPubKey:
-        return SolPubKey('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
+        return SolPubKey.from_string('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
 
     @property
     def mempool_capacity(self) -> int:
@@ -155,8 +155,8 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
             suggested_gas_price=1,
             min_gas_price=1,
             last_update_mapping_sec=0,
-            sol_price_account=SolPubKey(1),
-            neon_price_account=SolPubKey(2)
+            sol_price_account=SolPubKey.new_unique(),
+            neon_price_account=SolPubKey.new_unique()
         )
         self._mempool._gas_price_task_loop._task = MockTask(None, False)
         self._mempool._gas_price_task_loop._gas_price = price_result

@@ -72,16 +72,16 @@ class BlockedTest(unittest.TestCase):
 
         res_acct = wallet.get_acc()
         cls.resource_iter = resource = OpResInfo.from_ident(OpResIdent(
-            public_key=str(res_acct.public_key),
-            private_key=res_acct.secret_key,
+            public_key=str(res_acct.pubkey()),
+            private_key=res_acct.secret(),
             res_id=365
         ))
         OpResInit(FakeConfig(), solana).init_resource(resource)
 
         res_single_acct = wallet.get_acc()
         cls.resource_single = resource = OpResInfo.from_ident(OpResIdent(
-            public_key=str(res_single_acct.public_key),
-            private_key=res_single_acct.secret_key,
+            public_key=str(res_single_acct.pubkey()),
+            private_key=res_single_acct.secret(),
             res_id=366
         ))
         OpResInit(FakeConfig(), solana).init_resource(resource)

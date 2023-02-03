@@ -162,7 +162,7 @@ class HolderAccountInfo:
             exists = (info.data[offset] > 0)
             offset += 1
 
-            some_pubkey = SolPubKey(info.data[offset:offset + SolPubKey.LENGTH])
+            some_pubkey = SolPubKey.from_bytes(info.data[offset:offset + SolPubKey.LENGTH])
             offset += SolPubKey.LENGTH
 
             account_list.append((writable, exists, str(some_pubkey)))
@@ -170,14 +170,14 @@ class HolderAccountInfo:
         return HolderAccountInfo(
             holder_account=info.address,
             tag=storage.tag,
-            owner=SolPubKey(storage.owner),
+            owner=SolPubKey.from_bytes(storage.owner),
             neon_tx_sig='0x' + storage.neon_tx_sig.hex().lower(),
             neon_tx_data=None,
             caller=storage.caller.hex(),
             gas_limit=int.from_bytes(storage.gas_limit, "little"),
             gas_price=int.from_bytes(storage.gas_price, "little"),
             gas_used=int.from_bytes(storage.gas_used, "little"),
-            operator=SolPubKey(storage.operator),
+            operator=SolPubKey.from_bytes(storage.operator),
             block_slot=storage.block_slot,
             account_list_len=storage.account_list_len,
             account_list=account_list
@@ -193,7 +193,7 @@ class HolderAccountInfo:
         return HolderAccountInfo(
             holder_account=info.address,
             tag=storage.tag,
-            owner=SolPubKey(storage.owner),
+            owner=SolPubKey.from_bytes(storage.owner),
             neon_tx_sig='0x' + storage.neon_tx_sig.hex().lower(),
             neon_tx_data=None,
             caller=None,
@@ -219,7 +219,7 @@ class HolderAccountInfo:
         return HolderAccountInfo(
             holder_account=info.address,
             tag=holder.tag,
-            owner=SolPubKey(holder.owner),
+            owner=SolPubKey.from_bytes(holder.owner),
             neon_tx_sig='0x' + holder.neon_tx_sig.hex().lower(),
             neon_tx_data=neon_tx_data,
             caller=None,
@@ -262,11 +262,11 @@ class ALTAccountInfo:
         account_key_list = []
         account_key_list_len = math.ceil((len(info.data) - offset) / SolPubKey.LENGTH)
         for _ in range(account_key_list_len):
-            some_pubkey = SolPubKey(info.data[offset:offset + SolPubKey.LENGTH])
+            some_pubkey = SolPubKey.from_bytes(info.data[offset:offset + SolPubKey.LENGTH])
             offset += SolPubKey.LENGTH
             account_key_list.append(some_pubkey)
 
-        authority = SolPubKey(lookup.authority) if lookup.has_authority else None
+        authority = SolPubKey.from_bytes(lookup.authority) if lookup.has_authority else None
 
         u64_max = 2 ** 64 - 1
 

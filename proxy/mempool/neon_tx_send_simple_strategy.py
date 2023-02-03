@@ -6,7 +6,7 @@ from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender, SolTxSendState
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo
-from ..common_neon.errors import BudgetExceededError
+from ..common_neon.errors import CUBudgetExceededError
 from ..common_neon.utils import NeonTxResultInfo
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
@@ -53,21 +53,21 @@ class SimpleNeonTxSender(SolTxListSender):
 
 
 class SimpleNeonTxStrategy(BaseNeonTxStrategy):
-    name = 'TransactionExecuteFromInstruction'
+    name = 'TxExecFromData'
 
     def __init__(self, ctx: NeonTxSendCtx):
         super().__init__(ctx)
 
     def _validate(self) -> bool:
         return (
-            self._validate_notdeploy_tx() and
+            # self._validate_notdeploy_tx() and
+            # self._validate_evm_step_cnt() and  <- by default, try to execute the neon tx in one solana tx
             self._validate_tx_has_chainid() and
-            self._validate_evm_step_cnt() and
             self._validate_no_resize_iter_cnt()
         )
 
     def _validate_evm_step_cnt(self) -> bool:
-        if self._ctx.emulated_evm_step_cnt < self._start_evm_step_cnt:
+        if self._ctx.emulated_evm_step_cnt < self._evm_step_cnt:
             return True
         self._validation_error_msg = 'Too lot of EVM steps'
         return False
@@ -87,7 +87,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
         tx_sender = SimpleNeonTxSender(self, self._ctx.solana, self._ctx.signer)
         tx_sender.send([self._build_tx()])
         if not tx_sender.neon_tx_res.is_valid():
-            raise BudgetExceededError()
+            raise CUBudgetExceededError()
         return tx_sender.neon_tx_res
 
 

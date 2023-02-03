@@ -5,7 +5,7 @@ from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
 
 
 class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
-    name = 'TransactionStepFromAccountNoChainId'
+    name = 'TxStepFromAccountNoChainId'
 
     def _validate(self) -> bool:
         if self._ctx.neon_tx.hasChainId():

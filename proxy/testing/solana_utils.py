@@ -11,12 +11,12 @@ import solders.transaction_status
 from base58 import b58encode
 from eth_keys import keys as neon_keys
 from sha3 import keccak_256
-from solana.keypair import Keypair
-from solana.publickey import PublicKey
+from solders.keypair import Keypair
+from solders.pubkey import Pubkey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed, Finalized
 from solana.rpc.types import TxOpts
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+from solana.transaction import AccountMeta, Instruction, Transaction
 
 import math
 
@@ -31,11 +31,11 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
-COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
+COMPUTE_BUDGET_ID: Pubkey = Pubkey.from_string("ComputeBudget111111111111111111111111111111")
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
-ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
+ETH_TOKEN_MINT_ID: Pubkey = Pubkey.from_string(os.environ.get("ETH_TOKEN_MINT"))
 
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 client = Client(solana_url)
@@ -137,7 +137,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=0):
 
 def account_with_seed(base, seed, program):
     # print(type(base), type(seed), type(program))
-    return PublicKey(sha256(bytes(base) + bytes(seed, 'utf8') + bytes(program)).digest())
+    return Pubkey.from_bytes(sha256(bytes(base) + bytes(seed, 'utf8') + bytes(program)).digest())
 
 
 class SolanaCli:
@@ -197,8 +197,8 @@ class RandomAccount:
             self.path = path
         self.acc: Optional[Keypair] = None
         self.retrieve_keys()
-        print('New Public key:', self.acc.public_key)
-        print('Private:', self.acc.secret_key)
+        print('New Public key:', self.acc.pubkey())
+        print('Private:', self.acc.secret())
 
     def make_random_path(self):
         self.path = os.urandom(5).hex() + ".json"
@@ -215,7 +215,7 @@ class RandomAccount:
     def retrieve_keys(self):
         with open(self.path) as f:
             d = json.load(f)
-            self.acc = Keypair.from_secret_key(d[0:32])
+            self.acc = Keypair.from_seed(d[0:32])
 
     def get_path(self):
         return self.path
@@ -228,7 +228,7 @@ class WalletAccount(RandomAccount):
     def __init__(self, path):
         self.path = path
         self.retrieve_keys()
-        print('Wallet public key:', self.acc.public_key)
+        print('Wallet public key:', self.acc.pubkey())
 
 
 class OperatorAccount:
@@ -239,13 +239,13 @@ class OperatorAccount:
             self.path = path
         self.acc: Optional[Keypair] = None
         self.retrieve_keys()
-        print('Public key:', self.acc.public_key)
-        print('Private key:', self.acc.secret_key.hex())
+        print('Public key:', self.acc.pubkey())
+        print('Private key:', self.acc.secret().hex())
 
     def retrieve_keys(self):
         with open(self.path) as f:
             d = json.load(f)
-            self.acc = Keypair.from_secret_key(d[0:32])
+            self.acc = Keypair.from_seed(d[0:32])
 
     def get_path(self):
         return self.path
@@ -302,7 +302,7 @@ class EvmLoader:
 
     def ether2seed(self, ether: Union[str, bytes]):
         seed = b58encode(ACCOUNT_SEED_VERSION + self.ether2bytes(ether)).decode('utf8')
-        acc = account_with_seed(self.acc.get_acc().public_key, seed, PublicKey(self.loader_id))
+        acc = account_with_seed(self.acc.get_acc().pubkey(), seed, Pubkey.from_string(self.loader_id))
         print('ether2program: {} {} => {}'.format(self.ether2hex(ether), 255, acc))
         return acc, 255
 
@@ -311,7 +311,7 @@ class EvmLoader:
             if ether.startswith('0x'):
                 ether = ether[2:]
             ether = bytes.fromhex(ether)
-        return PublicKey.find_program_address([ACCOUNT_SEED_VERSION, ether], PublicKey(EVM_LOADER))
+        return Pubkey.find_program_address([ACCOUNT_SEED_VERSION, ether], Pubkey.from_string(EVM_LOADER))
 
     def checkAccount(self, solana):
         info = client.get_account_info(solana)
@@ -322,7 +322,7 @@ class EvmLoader:
         ether = keccak_256(rlp.encode((caller_ether, trx_count))).digest()[-20:]
 
         (program, _) = self.ether2program(ether)
-        info = client.get_account_info(PublicKey(program[0])).value
+        info = client.get_account_info(Pubkey.from_string(program[0])).value
         if info is None:
             res = self.deploy(location)
             return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
@@ -335,18 +335,18 @@ class EvmLoader:
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
 
-        base = self.acc.get_acc().public_key
+        base = self.acc.get_acc().pubkey()
         data = bytes.fromhex('20') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=self.ether2bytes(ether)))
         trx = TransactionWithComputeBudget()
-        trx.add(TransactionInstruction(
+        trx.add(Instruction(
             program_id=self.loader_id,
             data=data,
-            keys=[
+            accounts=[
                 AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=Pubkey.from_string(system), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=sol, is_signer=False, is_writable=True),
             ]))
-        return trx, sol
+        return trx, str(sol)
 
 
 def getBalance(account):
@@ -363,7 +363,7 @@ class AccountInfo(NamedTuple):
         return AccountInfo(cont.ether, cont.tx_count)
 
 
-def getAccountData(client: Client, account: Union[str, PublicKey], expected_length: int) -> bytes:
+def getAccountData(client: Client, account: Union[str, Pubkey], expected_length: int) -> bytes:
     info = client.get_account_info(account, commitment=Confirmed).value
     if info is None:
         raise Exception("Can't get information about {}".format(account))
@@ -375,7 +375,7 @@ def getAccountData(client: Client, account: Union[str, PublicKey], expected_leng
     return data
 
 
-def getTransactionCount(client: Client, sol_account: Union[str, PublicKey]) -> int:
+def getTransactionCount(client: Client, sol_account: Union[str, Pubkey]) -> int:
     info = getAccountData(client, sol_account, ACCOUNT_INFO_LAYOUT.sizeof())
     acc_info = AccountInfo.frombytes(info)
     res = acc_info.tx_count
@@ -383,7 +383,7 @@ def getTransactionCount(client: Client, sol_account: Union[str, PublicKey]) -> i
     return res
 
 
-def getNeonBalance(client: Client, sol_account: Union[str, PublicKey]) -> int:
+def getNeonBalance(client: Client, sol_account: Union[str, Pubkey]) -> int:
     info = getAccountData(client, sol_account, ACCOUNT_INFO_LAYOUT.sizeof())
     account = ACCOUNT_INFO_LAYOUT.parse(info)
     balance = int.from_bytes(account.balance, byteorder="little")
@@ -431,25 +431,25 @@ def evm_step_cost():
 class ComputeBudget():
     @staticmethod
     def requestUnits(units):
-        return TransactionInstruction(
+        return Instruction(
             program_id=COMPUTE_BUDGET_ID,
-            keys=[],
+            accounts=[],
             data=bytes.fromhex("02") + units.to_bytes(4, "little")
         )
 
     @staticmethod
     def setAddtionalFee(additional_fee):
-        return TransactionInstruction(
+        return Instruction(
             program_id=COMPUTE_BUDGET_ID,
-            keys=[],
+            accounts=[],
             data=bytes.fromhex("03") + additional_fee.to_bytes(8, "little")
         )
 
     @staticmethod
     def requestHeapFrame(heapFrame):
-        return TransactionInstruction(
+        return Instruction(
             program_id=COMPUTE_BUDGET_ID,
-            keys=[],
+            accounts=[],
             data=bytes.fromhex("01") + heapFrame.to_bytes(4, "little")
         )
 

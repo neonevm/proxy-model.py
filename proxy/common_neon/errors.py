@@ -29,11 +29,13 @@ class BlockedAccountsError(Exception):
 
 
 class NodeBehindError(Exception):
-    pass
+    def __int__(self):
+        super().__init__('The Solana node is not synchronized with a Solana cluster.')
 
 
 class SolanaUnavailableError(Exception):
-    pass
+    def __int__(self):
+        super().__init__('The Solana node is unavailable.')
 
 
 class NonceTooLowError(Exception):
@@ -41,8 +43,10 @@ class NonceTooLowError(Exception):
 
 
 class NoMoreRetriesError(Exception):
-    pass
+    def __int__(self):
+        super().__init__('The transaction is too complicated. No more retries to complete the Neon transaction.')
 
 
-class BudgetExceededError(Exception):
-    pass
+class CUBudgetExceededError(Exception):
+    def __int__(self):
+        super().__init__('The transaction is too complicated. Solana`s computing budget is exceeded.')
