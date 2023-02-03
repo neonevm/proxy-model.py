@@ -324,8 +324,6 @@ class _NeonLogDecoder:
             if len(name) == 0:
                 continue
 
-            LOG.debug(f' {name}')
-
             if name == 'HASH':
                 if neon_tx_sig is None:
                     neon_tx_sig = self._decode_neon_tx_sig(data_list)

@@ -8,6 +8,7 @@ from ..common_neon.utils import NeonTxResultInfo
 
 from .neon_tx_send_base_strategy import BaseNeonTxStrategy
 from .neon_tx_send_holder_strategy import HolderNeonTxStrategy, ALTHolderNeonTxStrategy
+from .neon_tx_send_simple_holder_strategy import SimpleHolderNeonTxStrategy, ALTSimpleHolderNeonTxStrategy
 from .neon_tx_send_iterative_strategy import IterativeNeonTxStrategy, ALTIterativeNeonTxStrategy
 from .neon_tx_send_nochainid_strategy import NoChainIdNeonTxStrategy, ALTNoChainIdNeonTxStrategy
 from .neon_tx_send_simple_strategy import SimpleNeonTxStrategy, ALTSimpleNeonTxStrategy
@@ -21,6 +22,7 @@ class NeonTxSendStrategyExecutor:
     _strategy_list = [
         SimpleNeonTxStrategy, ALTSimpleNeonTxStrategy,
         IterativeNeonTxStrategy, ALTIterativeNeonTxStrategy,
+        SimpleHolderNeonTxStrategy, ALTSimpleHolderNeonTxStrategy,
         HolderNeonTxStrategy, ALTHolderNeonTxStrategy,
         NoChainIdNeonTxStrategy, ALTNoChainIdNeonTxStrategy
     ]

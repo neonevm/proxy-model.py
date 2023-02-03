@@ -75,7 +75,8 @@ class DummyIxDecoder:
     def _decode_neon_tx_from_holder(self, tx: NeonIndexedTxInfo) -> None:
         if tx.neon_tx.is_valid() or (not tx.neon_tx_res.is_valid()):
             return
-        if tx.tx_type not in {NeonIndexedTxInfo.Type.IterFromAccount, NeonIndexedTxInfo.Type.IterFromAccountWoChainId}:
+        TxType = NeonIndexedTxInfo.Type
+        if tx.tx_type not in {TxType.SingleFromAccount, TxType.IterFromAccount, TxType.IterFromAccountWoChainId}:
             return
 
         key = NeonIndexedHolderInfo.Key(tx.storage_account, tx.neon_tx.sig)
@@ -197,20 +198,24 @@ class BaseTxStepIxDecoder(DummyIxDecoder):
     def _get_neon_tx(self, tx_type: NeonIndexedTxInfo.Type) -> Optional[NeonIndexedTxInfo]:
         ix = self.state.sol_neon_ix
 
-        # 1 byte  - ix
-        # 4 bytes - treasury index
-        # 4 bytes - neon step cnt
-        # 4 bytes - unique index
-
-        if len(ix.ix_data) < 9:
-            self._decoding_skip('no enough data to get Neon step cnt')
-            return None
         if ix.account_cnt < self._first_blocked_account_idx + 1:
             self._decoding_skip('no enough accounts')
             return None
 
-        neon_step_cnt = int.from_bytes(ix.ix_data[5:9], 'little')
-        ix.set_neon_step_cnt(neon_step_cnt)
+        # 1 byte  - ix
+        # 4 bytes - treasury index
+
+        has_evm_step_cnt = (tx_type != NeonIndexedTxInfo.Type.SingleFromAccount)
+        # 4 bytes - neon step cnt
+        # 4 bytes - unique index
+
+        if has_evm_step_cnt:
+            if len(ix.ix_data) < 9:
+                self._decoding_skip('no enough data to get Neon step cnt')
+                return None
+
+            neon_step_cnt = int.from_bytes(ix.ix_data[5:9], 'little')
+            ix.set_neon_step_cnt(neon_step_cnt)
 
         neon_tx_sig = self.state.sol_neon_ix.neon_tx_sig
         if len(neon_tx_sig) == 0:
@@ -279,6 +284,19 @@ class TxStepFromDataIxDecoder(BaseTxStepIxDecoder):
             return self._decoding_skip(f'Neon tx hash {neon_tx.sig} != tx log hash {tx.neon_tx.sig}')
         tx.set_neon_tx(neon_tx)
         return self._decode_tx(tx, 'Neon tx init step from data')
+
+
+class TxExecFromAccountIxDecoder(BaseTxStepIxDecoder):
+    _name = 'TransactionExecFromAccount'
+    _ix_code = 0x2a
+    _is_deprecated = False
+
+    def execute(self) -> bool:
+        tx = self._get_neon_tx(NeonIndexedTxInfo.Type.SingleFromAccount)
+        if tx is None:
+            return False
+
+        return self._decode_tx(tx, 'Neon tx exec from account')
 
 
 class TxStepFromAccountIxDecoder(BaseTxStepIxDecoder):
@@ -418,6 +436,7 @@ def get_neon_ix_decoder_list() -> List[Type[DummyIxDecoder]]:
         CreateAccount3IxDecoder,
         CollectTreasureIxDecoder,
         TxExecFromDataIxDecoder,
+        TxExecFromAccountIxDecoder,
         TxStepFromDataIxDecoder,
         TxStepFromAccountIxDecoder,
         TxStepFromAccountNoChainIdIxDecoder,

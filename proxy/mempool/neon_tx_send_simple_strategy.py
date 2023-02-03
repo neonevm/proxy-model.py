@@ -53,16 +53,16 @@ class SimpleNeonTxSender(SolTxListSender):
 
 
 class SimpleNeonTxStrategy(BaseNeonTxStrategy):
-    name = 'TransactionExecuteFromInstruction'
+    name = 'TxExecFromData'
 
     def __init__(self, ctx: NeonTxSendCtx):
         super().__init__(ctx)
 
     def _validate(self) -> bool:
         return (
-            self._validate_notdeploy_tx() and
-            self._validate_tx_has_chainid() and
+            # self._validate_notdeploy_tx() and
             # self._validate_evm_step_cnt() and  <- by default, try to execute the neon tx in one solana tx
+            self._validate_tx_has_chainid() and
             self._validate_no_resize_iter_cnt()
         )
 

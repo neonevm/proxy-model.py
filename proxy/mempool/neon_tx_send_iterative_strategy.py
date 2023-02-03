@@ -74,7 +74,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
 
 
 class IterativeNeonTxStrategy(BaseNeonTxStrategy):
-    name = 'TransactionStepFromInstruction'
+    name = 'TxStepFromData'
 
     def __init__(self, ctx: NeonTxSendCtx) -> None:
         super().__init__(ctx)
