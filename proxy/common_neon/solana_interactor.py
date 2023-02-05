@@ -38,21 +38,23 @@ class SolInteractor:
         self._endpoint_uri = solana_url
         self._session = requests.sessions.Session()
 
-    def _send_post_request(self, request) -> requests.Response:
-        """This method is used to make retries to send request to Solana"""
-
+    def _simple_send_post_request(self, request) -> requests.Response:
         headers = {
             "Content-Type": "application/json"
         }
+
+        raw_response = self._session.post(self._endpoint_uri, headers=headers, json=request)
+        raw_response.raise_for_status()
+        return raw_response
+
+    def _send_post_request(self, request) -> requests.Response:
+        """This method is used to make retries to send request to Solana"""
 
         retry = 0
         while True:
             try:
                 retry += 1
-                raw_response = self._session.post(self._endpoint_uri, headers=headers, json=request)
-                raw_response.raise_for_status()
-                return raw_response
-
+                return self._simple_send_post_request(request)
             except requests.exceptions.RequestException as exc:
                 # Hide the Solana URL
                 str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
@@ -65,24 +67,32 @@ class SolInteractor:
                     time.sleep(1)
                     continue
 
-                LOG.warning(f'Connection exception on send request to Solana. Retry {retry}: {str_err}.')
+                LOG.warning(f'Connection exception on send request to Solana. Retry {retry}: {str_err}')
                 raise SolanaUnavailableError(str_err)
 
             except BaseException as exc:
                 str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
-                LOG.error(f'Unknown exception on send request to Solana: {str_err}.')
+                LOG.error(f'Unknown exception on send request to Solana: {str_err}')
                 raise
 
-    def _send_rpc_request(self, method: str, *params: Any) -> RPCResponse:
+    def _build_rpc_request(self, method: str, *param_list: Any) -> Dict[str, Any]:
         request_id = next(self._request_counter) + 1
 
-        request = {
+        return {
             "jsonrpc": "2.0",
             "id": request_id,
             "method": method,
-            "params": params
+            "params": param_list
         }
+
+    def _send_rpc_request(self, method: str, *param_list: Any) -> RPCResponse:
+        request = self._build_rpc_request(method, *param_list)
         raw_response = self._send_post_request(request)
+        return cast(RPCResponse, raw_response.json())
+
+    def _simple_send_rpc_request(self, method: str, *param_list: Any) -> RPCResponse:
+        request = self._build_rpc_request(method, *param_list)
+        raw_response = self._simple_send_post_request(request)
         return cast(RPCResponse, raw_response.json())
 
     def _send_rpc_batch_request(self, method: str, params_list: List[Any]) -> List[RPCResponse]:
@@ -236,16 +246,22 @@ class SolInteractor:
             "filters": [{
                 "memcmp": {
                     "offset": data_offset,
-                    "bytes": base58.b58encode(data).decode('utf-8'),  # TODO: replace to base64 for version > 1.11.2
+                    "bytes": base58.b58encode(data).decode('utf-8'),  # TODO: replace to base64 for version >= 1.14
                     "encoding": "base58"
                 }
             }]
         }
-        response = self._send_rpc_request("getProgramAccounts", str(program), opts)
+
+        try:
+            response = self._simple_send_rpc_request("getProgramAccounts", str(program), opts)
+        except (BaseException, ):
+            LOG.debug('error on get program accounts')
+            return list()
+
         error = response.get('error')
         if error is not None:
             LOG.debug(f'fail to get program accounts: {error}')
-            return []
+            return list()
 
         raw_account_list = response.get('result', [])
         account_info_list: List[AccountInfo] = []

@@ -195,7 +195,7 @@ class PythNetworkClient:
                 self.set_price_account(symbol, product['price_acc'])
             except BaseException as exc:
                 LOG.error(f'Failed to parse product account data {acct_addr}', exc_info=exc)
-        LOG.info('Pyth.Network update finished.\n\n\n')
+        LOG.info('Pyth.Network update finished')
 
     def set_price_account(self, symbol: str, price_account: SolPubKey) -> None:
         self._price_account_dict[symbol] = price_account

@@ -6,7 +6,7 @@ from typing import Optional, List
 
 from ..common_neon.errors import ALTError
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_alt import ALTInfo
+from ..common_neon.solana_alt import ALTInfo, ALTAddress
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolAccount
 from ..common_neon.solana_tx_legacy import SolLegacyTx
@@ -52,8 +52,8 @@ class ALTTxBuilder:
     def build_alt_info(self, legacy_tx: SolLegacyTx) -> ALTInfo:
         recent_block_slot = self._get_recent_block_slot()
         signer_key = self._signer.pubkey()
-        acct, nonce = ALTInfo.derive_lookup_table_address(signer_key, recent_block_slot)
-        alt_info = ALTInfo(acct, recent_block_slot, nonce)
+        alt_address = ALTInfo.derive_lookup_table_address(signer_key, recent_block_slot)
+        alt_info = ALTInfo(alt_address)
         alt_info.init_from_legacy_tx(legacy_tx)
         return alt_info
 

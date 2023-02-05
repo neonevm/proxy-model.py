@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, List
+
+from .solana_alt import ALTAddress
 
 
 NeonEmulatedResult = Dict[str, Any]
@@ -12,8 +13,8 @@ class NeonTxExecCfg:
     def __init__(self):
         self._state_tx_cnt = 0
         self._evm_step_cnt = 0
-        self._alt_list: List[str] = []
-        self._account_dict: NeonAccountDict = {}
+        self._alt_address_dict: Dict[str, ALTAddress] = dict()
+        self._account_dict: NeonAccountDict = dict()
         self._resize_iter_cnt = 0
 
     @property
@@ -31,6 +32,10 @@ class NeonTxExecCfg:
     @property
     def resize_iter_cnt(self) -> int:
         return self._resize_iter_cnt
+
+    @property
+    def alt_address_list(self) -> List[ALTAddress]:
+        return list(self._alt_address_dict.values())
 
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
         account_dict = {k: emulated_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
@@ -51,16 +56,5 @@ class NeonTxExecCfg:
         self._state_tx_cnt = value
         return self
 
-
-@dataclass
-class Result:
-    error: Optional[str] = None
-
-    def __bool__(self):
-        return self.error is None
-
-    def __str__(self):
-        return "ok" if self.__bool__() else self.error
-
-    def __repr__(self):
-        return f"""Result({'' if self.error is None else '"' + self.error + '"'})"""
+    def add_alt_address(self, alt_address: ALTAddress) -> None:
+        self._alt_address_dict[alt_address.table_account] = alt_address

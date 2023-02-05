@@ -1,14 +1,13 @@
 import logging
-from typing import List, Type, Callable, cast
+from typing import List, Type, Callable, Dict, cast
 
 from .executor_mng import MPExecutorMng
 from .mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
-from .mempool_api import MPRequest, MPRequestType, MPALTInfo, MPALTListResult
+from .mempool_api import MPRequest, MPRequestType, MPALTAddress, MPALTInfo, MPALTListResult
 from .mempool_periodic_task import MPPeriodicTaskLoop
 from .operator_resource_mng import OpResMng
-
+from ..common_neon.solana_alt import ALTAddress
 from ..common_neon.sorted_queue import SortedQueue
-
 
 LOG = logging.getLogger(__name__)
 
@@ -17,12 +16,20 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
     _freeing_depth = 512 + 32
 
     def __init__(self, executor_mng: MPExecutorMng, op_res_mng: OpResMng) -> None:
-        super().__init__(name='alt', sleep_time=30, executor_mng=executor_mng)
+        super().__init__(name='alt', sleep_time=(5 * 60), executor_mng=executor_mng)
         self._op_res_mng = op_res_mng
         self._iteration = 0
+        self._get_list_iteration = 0
         self._block_height = 0
         self._deactivate_alt_queue = self._new_queue(lambda a: cast(int, a.last_extended_slot))
         self._close_alt_queue = self._new_queue(lambda a: a.deactivation_slot)
+        self._new_alt_address_list: List[MPALTAddress] = list()
+        self._alt_address_dict: Dict[str, bytes] = dict()
+
+    def add_alt_address_list(self, alt_address_list: List[ALTAddress], secret: bytes) -> None:
+        for alt_address in alt_address_list:
+            info = MPALTAddress(alt_address.table_account, secret)
+            self._new_alt_address_list.append(info)
 
     @staticmethod
     def _new_queue(lt_key_func: Callable[[MPALTInfo], int]) -> SortedQueue[MPALTInfo, int, str]:
@@ -39,8 +46,19 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
         self._iteration += 1
 
     def _submit_get_list_request(self) -> None:
-        secret_list = self._op_res_mng.get_secret_list()
-        mp_req = MPGetALTList(req_id=self._generate_req_id('get-alt'), secret_list=secret_list)
+        self._get_list_iteration += 1
+
+        if self._get_list_iteration == 12:
+            secret_list = self._op_res_mng.get_secret_list()
+            self._get_list_iteration = 0
+        else:
+            secret_list = list()
+
+        mp_req = MPGetALTList(
+            req_id=self._generate_req_id('get-alt'),
+            secret_list=secret_list,
+            alt_address_list=[MPALTAddress(key, value) for key, value in self._alt_address_dict.items()]
+        )
         self._submit_request_to_executor(mp_req)
 
     def _submit_free_list_request(self, queue, mp_req_type: Type) -> None:
@@ -78,11 +96,17 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
     def _process_get_list_result(self, mp_res: MPALTListResult) -> None:
         self._deactivate_alt_queue.clear()
         self._close_alt_queue.clear()
+        self._alt_address_dict.clear()
+
         for alt_info in mp_res.alt_info_list:
+            self._alt_address_dict[alt_info.table_account] = alt_info.operator_key
             if alt_info.is_deactivated():
                 self._close_alt_queue.add(alt_info)
             else:
                 self._deactivate_alt_queue.add(alt_info)
+
+        for alt_address in self._new_alt_address_list:
+            self._alt_address_dict[alt_address.table_account] = alt_address.secret
 
         if (len(self._close_alt_queue) > 0) or (len(self._deactivate_alt_queue) > 0):
             LOG.debug(

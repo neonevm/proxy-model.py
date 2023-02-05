@@ -217,7 +217,6 @@ class _NeonLogDecoder:
 
         type_name = base64.b64decode(data_list[0]).decode('utf-8')
 
-        LOG.debug(f'EXIT {type_name}')
         if type_name == 'STOP':
             event_type = NeonLogTxEvent.Type.ExitStop
         elif type_name == 'RETURN':
