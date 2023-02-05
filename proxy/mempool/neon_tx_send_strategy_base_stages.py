@@ -44,32 +44,35 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
 class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
     def __init__(self, ctx: NeonTxSendCtx):
         super().__init__(ctx)
-        self._alt_info: Optional[ALTInfo] = None
-        self._alt_builder: Optional[ALTTxBuilder] = None
-        self._alt_tx_set: Optional[ALTTxSet] = None
+        self._alt_info_list: List[ALTInfo] = list()
+        self._alt_builder = ALTTxBuilder(self._ctx.solana, self._ctx.ix_builder, self._ctx.signer)
+        self._alt_tx_set = ALTTxSet()
 
     def init_alt_info(self, legacy_tx: SolLegacyTx) -> bool:
-        # TODO: if there are a lot of changes in the account list, the alt should be regenerated
-        if self._alt_info is not None:
-            return True
+        actual_alt_info = self._alt_builder.build_alt_info(legacy_tx)
 
-        alt_builder = ALTTxBuilder(self._ctx.solana, self._ctx.ix_builder, self._ctx.signer)
-        alt_info = alt_builder.build_alt_info(legacy_tx)
+        alt_info_list = [ALTInfo(alt_address) for alt_address in self._ctx.alt_address_list]
+        self._alt_builder.update_alt_info_list(alt_info_list)
+        for alt_info in alt_info_list:
+            if actual_alt_info.remove_account_key_list(alt_info.account_key_list):
+                self._alt_info_list.append(alt_info)
 
-        self._alt_info = alt_info
-        self._alt_builder = alt_builder
-        self._alt_tx_set = self._alt_builder.build_alt_tx_set(self._alt_info)
+        if actual_alt_info.account_key_list_len > self._alt_builder.tx_account_cnt:
+            self._alt_tx_set = self._alt_builder.build_alt_tx_set(actual_alt_info)
+            self._alt_info_list.append(actual_alt_info)
+            self._ctx.add_alt_address(actual_alt_info.alt_address)
+
         return True
 
     def build_prep_tx_list_before_emulate(self) -> List[List[SolTx]]:
         return self._alt_builder.build_prep_alt_list(self._alt_tx_set)
 
     def update_after_emulate(self) -> None:
+        self._alt_builder.update_alt_info_list(self._alt_info_list)
         self._alt_tx_set.clear()
-        self._alt_builder.update_alt_info_list([self._alt_info])
 
     def build_tx(self, legacy_tx: SolLegacyTx) -> SolV0Tx:
-        return SolV0Tx(name=legacy_tx.name, address_table_lookups=[self._alt_info]).add(legacy_tx)
+        return SolV0Tx(name=legacy_tx.name, address_table_lookups=self._alt_info_list).add(legacy_tx)
 
 
 def alt_strategy(cls):

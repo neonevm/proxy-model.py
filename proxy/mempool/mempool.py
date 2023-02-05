@@ -5,7 +5,7 @@ import logging
 from typing import List, Tuple, Optional, Any, Dict, cast, Iterator, Union
 
 from .executor_mng import MPExecutorMng
-from .mempool_api import MPGasPriceResult
+from .mempool_api import MPResult, MPGasPriceResult
 from .mempool_api import MPRequest, MPRequestType, MPTask, MPTxRequestList
 from .mempool_api import MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest
 from .mempool_api import MPTxSendResult, MPTxSendResultCode
@@ -24,7 +24,6 @@ from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import EthereumError
 from ..common_neon.eth_proto import NeonTx
-from ..common_neon.data import Result
 from ..common_neon.utils.json_logger import logging_context
 
 from ..statistic.data import NeonTxBeginData, NeonTxEndData
@@ -328,22 +327,22 @@ class MemPool:
     def _create_kick_tx_schedule_task(self):
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
 
-    def suspend_processing(self) -> Result:
+    def suspend_processing(self) -> MPResult:
         if not self._is_active:
             LOG.warning("No need to suspend mempool, already suspended")
-            return Result()
+            return MPResult()
         self._is_active = False
         LOG.info("Transaction processing suspended")
-        return Result()
+        return MPResult()
 
-    def resume_processing(self) -> Result:
+    def resume_processing(self) -> MPResult:
         if self._is_active:
             LOG.warning("No need to resume mempool, not suspended")
-            return Result()
+            return MPResult()
         self._is_active = True
         LOG.info("Transaction processing resumed")
         self._create_kick_tx_schedule_task()
-        return Result()
+        return MPResult()
 
     def is_active(self) -> bool:
         return self._is_active

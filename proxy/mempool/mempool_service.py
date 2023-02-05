@@ -5,14 +5,13 @@ from typing import Any, Optional, cast, Union
 
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 from .mempool import MemPool
-from .mempool_api import MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest
+from .mempool_api import MPResult, MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest
 from .mempool_api import MPPendingTxNonceRequest, MPMempoolTxNonceRequest
 from .mempool_replicator import MemPoolReplicator
 from .operator_resource_mng import OpResMng
 
 from ..common.logger import Logger
 from ..common_neon.config import Config
-from ..common_neon.data import Result
 from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.maintenance_api import MaintenanceRequest, MaintenanceCommand, ReplicationRequest, ReplicationBunch
 from ..common_neon.pickable_data_server import AddrPickableDataSrv, IPickableDataServerUser
@@ -54,9 +53,9 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         except BaseException as exc:
             with logging_context(req_id=mp_request.req_id):
                 LOG.error(f"Failed to process maintenance request: {mp_request.command}.", exc_info=exc)
-                return Result("Request failed")
+                return MPResult("Request failed")
 
-        return Result("Unexpected problem")
+        return MPResult("Unexpected problem")
 
     async def process_mp_request(self, mp_request: MPRequest) -> Any:
         with logging_context(req_id=mp_request.req_id):
@@ -78,7 +77,7 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
                 return self._mempool.get_elf_param_dict()
             LOG.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
 
-    def process_maintenance_request(self, request: MaintenanceRequest) -> Result:
+    def process_maintenance_request(self, request: MaintenanceRequest) -> MPResult:
         if request.command == MaintenanceCommand.SuspendMemPool:
             return self._mempool.suspend_processing()
         elif request.command == MaintenanceCommand.ResumeMemPool:
