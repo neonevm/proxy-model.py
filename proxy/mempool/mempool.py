@@ -305,13 +305,19 @@ class MemPool:
         self._reschedule_tx_impl(tx)
 
     def _on_done_tx(self, tx: MPTxRequest):
-        self._op_res_mng.release_resource(tx.sig)
+        resource = self._op_res_mng.release_resource(tx.sig)
+        if resource is not None:
+            alt_address_list = tx.neon_tx_exec_cfg.alt_address_list
+            self._free_alt_queue_task_loop.add_alt_address_list(alt_address_list, resource.private_key)
         self._tx_schedule.done_tx(tx)
         self._completed_tx_dict.add(tx.sig, tx.neon_tx, None)
         LOG.debug(f"Request {tx.sig} is done")
 
     def _on_fail_tx(self, tx: MPTxRequest, exc: Optional[BaseException]):
-        self._op_res_mng.release_resource(tx.sig)
+        resource = self._op_res_mng.release_resource(tx.sig)
+        if resource is not None:
+            alt_address_list = tx.neon_tx_exec_cfg.alt_address_list
+            self._free_alt_queue_task_loop.add_alt_address_list(alt_address_list, resource.private_key)
         self._tx_schedule.fail_tx(tx)
         self._completed_tx_dict.add(tx.sig, tx.neon_tx, exc)
         LOG.debug(f"Request {tx.sig} is failed - dropped away")
