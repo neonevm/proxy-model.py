@@ -24,22 +24,23 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
         self._last_update_mapping_sec = 0
         self._gas_price_calculator = GasPriceCalculator(config, SolInteractor(config, config.pyth_solana_url))
 
-    def _update_gas_price_calculator(self) -> None:
+    def _update_gas_price_mapping(self) -> None:
         now = math.ceil(time.time())
         period_sec = abs(now - self._last_update_mapping_sec)
 
-        if self._gas_price_calculator.has_price() and period_sec > self._config.update_pyth_mapping_period_sec:
+        if self._gas_price_calculator.has_price() and period_sec < self._config.update_pyth_mapping_period_sec:
             return
 
         self._last_update_mapping_sec = now
         self._gas_price_calculator.update_mapping()
-        self._gas_price_calculator.update_gas_price()
 
     def calc_gas_price(self, mp_req: MPGasPriceRequest) -> Optional[MPGasPriceResult]:
         self._last_update_mapping_sec = mp_req.last_update_mapping_sec
         self._gas_price_calculator.set_price_account(mp_req.sol_price_account, mp_req.neon_price_account)
 
-        self._update_gas_price_calculator()
+        self._update_gas_price_mapping()
+
+        self._gas_price_calculator.update_gas_price()
         if not self._gas_price_calculator.is_valid():
             return None
 
