@@ -178,8 +178,15 @@ class MPOpResInitRequest(MPRequest):
 
 
 @dataclass
+class MPALTAddress:
+    table_account: str
+    secret: bytes
+
+
+@dataclass
 class MPGetALTList(MPRequest):
     secret_list: List[bytes] = None
+    alt_address_list: List[MPALTAddress] = None
 
     def __post_init__(self):
         self.type = MPRequestType.GetALTList
@@ -283,3 +290,17 @@ class MPOpResInitResult:
 class MPALTListResult:
     block_height: int
     alt_info_list: List[MPALTInfo]
+
+
+@dataclass(frozen=True)
+class MPResult:
+    error: Optional[str] = None
+
+    def __bool__(self):
+        return self.error is None
+
+    def __str__(self):
+        return "ok" if self.__bool__() else self.error
+
+    def __repr__(self):
+        return f"""Result({'' if self.error is None else '"' + self.error + '"'})"""

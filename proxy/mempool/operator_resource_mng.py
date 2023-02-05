@@ -297,10 +297,10 @@ class OpResMng:
             now = self._get_current_time()
             res_used_time.set_last_used_time(now)
 
-    def release_resource(self, neon_sig: str) -> None:
+    def release_resource(self, neon_sig: str) -> Optional[OpResIdent]:
         res_used_time = self._pop_used_resource(neon_sig)
         if res_used_time is None:
-            return
+            return None
 
         recheck_cnt = self._config.recheck_resource_after_uses_cnt
         if res_used_time.used_cnt > recheck_cnt:
@@ -310,6 +310,8 @@ class OpResMng:
             LOG.debug(f'Release resource {res_used_time}')
             self._free_res_ident_list.append(res_used_time)
         self._commit_stat()
+
+        return res_used_time.ident
 
     def disable_resource(self, ident_or_sig: Union[OpResIdent, str]) -> None:
         if isinstance(ident_or_sig, str):

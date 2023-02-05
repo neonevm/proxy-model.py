@@ -1,5 +1,5 @@
 import logging
-from typing import Dict
+from typing import Dict, List
 
 from .operator_resource_mng import OpResInfo
 
@@ -11,6 +11,7 @@ from ..common_neon.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolPubKey, SolAccountMeta, SolAccount
+from ..common_neon.solana_alt import ALTAddress
 
 
 LOG = logging.getLogger(__name__)
@@ -149,5 +150,14 @@ class NeonTxSendCtx:
     def is_holder_completed(self) -> bool:
         return self._is_holder_completed
 
+    @property
+    def alt_address_list(self) -> List[ALTAddress]:
+        return self._neon_tx_exec_cfg.alt_address_list
+
     def set_holder_completed(self, value=True) -> None:
         self._is_holder_completed = value
+
+    def add_alt_address(self, alt_address: ALTAddress) -> None:
+        self._neon_tx_exec_cfg.add_alt_address(alt_address)
+
+
