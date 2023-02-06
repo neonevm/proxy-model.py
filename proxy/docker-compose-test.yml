@@ -16,6 +16,8 @@ services:
       - "8001-8009/udp"
     networks:
       - net
+    ports:
+      - 8899:8899
     healthcheck:
       # Must be available from outside (calling without -u causes premature result)
       test: [ CMD-SHELL, "./wait-for-neon.sh" ]
