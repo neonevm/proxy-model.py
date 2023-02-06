@@ -6,7 +6,7 @@ from typing import Optional, List
 
 from ..common_neon.errors import ALTError
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_alt import ALTInfo, ALTAddress
+from ..common_neon.solana_alt import ALTInfo
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolAccount
 from ..common_neon.solana_tx_legacy import SolLegacyTx
