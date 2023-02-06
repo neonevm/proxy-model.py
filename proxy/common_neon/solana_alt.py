@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Set
 
-
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
@@ -96,7 +95,7 @@ class ALTInfo:
                 f'{self._alt_address.table_account} != {str(alt_acct_info.table_account)}'
             )
 
-        if not len(self._acct_key_list):
+        if len(self._acct_key_list) == 0:
             # Init from the scratch
             return
 
@@ -109,9 +108,11 @@ class ALTInfo:
             )
 
         for key in alt_acct_info.account_key_list:
-            if str(key) not in self._acct_key_set:
-                raise ALTError(f'The unknown key {str(key)} in the lookup table {self._alt_address.table_account}')
+            key = str(key)
+            if key not in self._acct_key_set:
+                raise ALTError(f'The unknown key {key} in the lookup table {self._alt_address.table_account}')
 
-    def update_from_account(self, alt_account_info: ALTAccountInfo) -> None:
-        self._validate_alt_info(alt_account_info)
-        self._acct_key_list = alt_account_info.account_key_list
+    def update_from_account(self, alt_acct_info: ALTAccountInfo) -> None:
+        self._validate_alt_info(alt_acct_info)
+        self._acct_key_list = alt_acct_info.account_key_list
+        self._acct_key_set = set([str(key) for key in alt_acct_info.account_key_list])

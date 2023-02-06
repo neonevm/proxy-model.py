@@ -43,6 +43,7 @@ class SolTxErrorParser:
     _computation_budget_exceeded = 'ComputationalBudgetExceeded'
     _program_failed_to_complete = 'ProgramFailedToComplete'
     _program_exceed_instructions = 'Program failed to complete: exceeded maximum number of instructions allowed'
+    _simulation_failed = 'Transaction simulation failed'
     _read_only_blocked = "trying to execute transaction on ro locked account"
     _read_write_blocked = "trying to execute transaction on rw locked account"
     _alt_invalid_index = 'invalid transaction: Transaction address table lookup uses an invalid index'
@@ -209,6 +210,11 @@ class SolTxErrorParser:
         if error_type == self._computation_budget_exceeded:
             return True
         if error_type == self._program_failed_to_complete:
+            message = self._get_value('message')
+            if isinstance(message, str):
+                if message.startswith(self._simulation_failed):
+                    return True
+
             log_list = self.get_log_list()
             for log in log_list:
                 if log.startswith(self._program_exceed_instructions):
