@@ -1,4 +1,5 @@
 import copy
+import logging
 
 from typing import List, Optional
 
@@ -11,6 +12,9 @@ from ..common_neon.elf_params import ElfParams
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxPrepStage
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
+
+
+LOG = logging.getLogger(__name__)
 
 
 class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
@@ -44,6 +48,7 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
 class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
     def __init__(self, ctx: NeonTxSendCtx):
         super().__init__(ctx)
+        self._actual_alt_info: Optional[ALTInfo] = None
         self._alt_info_list: List[ALTInfo] = list()
         self._alt_builder = ALTTxBuilder(self._ctx.solana, self._ctx.ix_builder, self._ctx.signer)
         self._alt_tx_set = ALTTxSet()
@@ -51,25 +56,40 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
     def init_alt_info(self, legacy_tx: SolLegacyTx) -> bool:
         actual_alt_info = self._alt_builder.build_alt_info(legacy_tx)
 
-        alt_info_list = [ALTInfo(alt_address) for alt_address in self._ctx.alt_address_list]
-        self._alt_builder.update_alt_info_list(alt_info_list)
+        alt_info_list: List[ALTInfo] = list()
+        for alt_address in self._ctx.alt_address_list:
+            alt_info = ALTInfo(alt_address)
+            try:
+                self._alt_builder.update_alt_info_list([alt_info])
+                alt_info_list.append(alt_info)
+            except Exception as e:
+                LOG.debug(f'Skip ALT {alt_address.table_account}: {str(e)}')
+
         for alt_info in alt_info_list:
             if actual_alt_info.remove_account_key_list(alt_info.account_key_list):
                 self._alt_info_list.append(alt_info)
 
         if actual_alt_info.account_key_list_len > self._alt_builder.tx_account_cnt:
             self._alt_tx_set = self._alt_builder.build_alt_tx_set(actual_alt_info)
+            self._actual_alt_info = actual_alt_info
             self._alt_info_list.append(actual_alt_info)
-            self._ctx.add_alt_address(actual_alt_info.alt_address)
 
         return True
 
     def build_prep_tx_list_before_emulate(self) -> List[List[SolTx]]:
+        if len(self._alt_tx_set) == 0:
+            return list()
+
+        if self._actual_alt_info is not None:
+            self._ctx.add_alt_address(self._actual_alt_info.alt_address)
+            self._actual_alt_info = None
+
         return self._alt_builder.build_prep_alt_list(self._alt_tx_set)
 
     def update_after_emulate(self) -> None:
         self._alt_builder.update_alt_info_list(self._alt_info_list)
         self._alt_tx_set.clear()
+        self._actual_alt_info = None
 
     def build_tx(self, legacy_tx: SolLegacyTx) -> SolV0Tx:
         return SolV0Tx(name=legacy_tx.name, address_table_lookups=self._alt_info_list).add(legacy_tx)
