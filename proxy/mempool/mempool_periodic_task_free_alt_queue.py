@@ -16,7 +16,7 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
     _freeing_depth = 512 + 32
 
     def __init__(self, executor_mng: MPExecutorMng, op_res_mng: OpResMng) -> None:
-        super().__init__(name='alt', sleep_time=(5 * 60), executor_mng=executor_mng)
+        super().__init__(name='alt', sleep_time=30, executor_mng=executor_mng)
         self._op_res_mng = op_res_mng
         self._iteration = 0
         self._get_list_iteration = 0
@@ -48,7 +48,7 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
     def _submit_get_list_request(self) -> None:
         self._get_list_iteration += 1
 
-        if self._get_list_iteration == 12:
+        if self._get_list_iteration == 60:
             secret_list = self._op_res_mng.get_secret_list()
             self._get_list_iteration = 0
         else:
