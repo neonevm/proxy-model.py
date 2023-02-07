@@ -1,31 +1,20 @@
-import os
 import time
-import traceback
-from multiprocessing.dummy import Pool as ThreadPool
-from logged_groups import logged_group
+import logging
 
-from .trx_receipts_storage import TrxReceiptsStorage
-from .utils import MetricsToLogBuff
-from ..common_neon.solana_interactor import SolanaInteractor
-
-from ..environment import RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION
-from ..environment import HISTORY_START, PARALLEL_REQUESTS, FINALIZED, EVM_LOADER_ID
+from ..common_neon.config import Config
+from ..common_neon.solana_interactor import SolInteractor
 
 
-@logged_group("neon.Indexer")
+LOG = logging.getLogger(__name__)
+
+
 class IndexerBase:
-    def __init__(self,
-                 solana: SolanaInteractor,
-                 last_slot: int):
-        self.solana = solana
-        self.transaction_receipts = TrxReceiptsStorage('transaction_receipts')
-        self.max_known_tx = self.transaction_receipts.max_known_trx()
-        self.last_slot = self._init_last_slot('receipt', last_slot)
-        self.current_slot = 0
-        self.counter_ = 0
-        self.count_log = MetricsToLogBuff()
+    def __init__(self, config: Config, solana: SolInteractor, last_slot: int):
+        self._solana = solana
+        self._config = config
+        self._start_slot = self._init_start_slot('receipt', last_slot)
 
-    def _init_last_slot(self, name: str, last_known_slot: int):
+    def _init_start_slot(self, name: str, last_known_slot: int) -> int:
         """
         This function allow to skip some part of history.
         - LATEST - start from the last block slot from Solana
@@ -33,143 +22,48 @@ class IndexerBase:
         - NUMBER - first start from the number, then continue from last parsed slot
         """
         last_known_slot = 0 if not isinstance(last_known_slot, int) else last_known_slot
-        latest_slot = self.solana.get_slot(FINALIZED)["result"]
+        latest_slot = self._solana.get_block_slot(self._config.finalized_commitment)
         start_int_slot = 0
         name = f'{name} slot'
 
-        START_SLOT = os.environ.get('START_SLOT', 0)
-        start_slot = START_SLOT
-        if start_slot not in ['CONTINUE', 'LATEST']:
+        start_slot = self._config.start_slot
+        LOG.info(f'Starting {name} with LATEST_KNOWN_LOST={last_known_slot} and START_SLOT={start_slot}')
+
+        if start_slot not in {'CONTINUE', 'LATEST'}:
             try:
                 start_int_slot = min(int(start_slot), latest_slot)
-            except Exception:
+            except (Exception,):
                 start_int_slot = 0
 
         if start_slot == 'CONTINUE':
             if last_known_slot > 0:
-                self.info(f'START_SLOT={START_SLOT}: started the {name} from previous run {last_known_slot}')
+                LOG.info(f'START_SLOT={start_slot}: started the {name} from previous run {last_known_slot}')
                 return last_known_slot
             else:
-                self.info(f'START_SLOT={START_SLOT}: forced the {name} from the latest Solana slot')
+                LOG.info(f'START_SLOT={start_slot}: forced the {name} from the latest Solana slot')
                 start_slot = 'LATEST'
 
         if start_slot == 'LATEST':
-            self.info(f'START_SLOT={START_SLOT}: started the {name} from the latest Solana slot {latest_slot}')
+            LOG.info(f'START_SLOT={start_slot}: started the {name} from the latest Solana slot {latest_slot}')
             return latest_slot
 
         if start_int_slot < last_known_slot:
-            self.info(f'START_SLOT={START_SLOT}: started the {name} from previous run, ' +
-                      f'because {start_int_slot} < {last_known_slot}')
+            LOG.info(
+                f'START_SLOT={start_slot}: started the {name} from previous run, ' +
+                f'because {start_int_slot} < {last_known_slot}'
+            )
             return last_known_slot
 
-        self.info(f'START_SLOT={START_SLOT}: started the {name} from {start_int_slot}')
+        LOG.info(f'START_SLOT={start_slot}: started the {name} from {start_int_slot}')
         return start_int_slot
 
     def run(self):
-        while (True):
+        while True:
             try:
                 self.process_functions()
-            except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.warning('Exception on submitting transaction. ' +
-                             f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
-            time.sleep(1.0)
+            except BaseException as exc:
+                LOG.debug('Exception on transactions processing.', exc_info=exc)
+            time.sleep(0.05)
 
-    def process_functions(self):
-        self.gather_unknown_transactions()
-
-    def gather_unknown_transactions(self):
-        start_time = time.time()
-        poll_txs = set()
-
-        minimal_tx = None
-        continue_flag = True
-        current_slot = self.solana.get_slot(commitment=FINALIZED)["result"]
-
-        max_known_tx = self.max_known_tx
-
-        counter = 0
-        gathered_signatures = 0
-        while (continue_flag):
-            results = self._get_signatures(minimal_tx, self.max_known_tx[1])
-
-            if len(results) == 0:
-                break
-
-            minimal_tx = results[-1]["signature"]
-            max_tx = (results[0]["slot"], results[0]["signature"])
-            max_known_tx = max(max_known_tx, max_tx)
-
-            gathered_signatures += len(results)
-            counter += 1
-
-            for tx in results:
-                solana_signature = tx["signature"]
-                slot = tx["slot"]
-
-                if slot < self.last_slot:
-                    continue_flag = False
-                    break
-
-                if solana_signature in HISTORY_START:
-                    self.debug(solana_signature)
-                    continue_flag = False
-                    break
-
-                if not self.transaction_receipts.contains(slot, solana_signature):
-                    poll_txs.add(solana_signature)
-
-        pool = ThreadPool(PARALLEL_REQUESTS)
-        pool.map(self._get_tx_receipts, poll_txs)
-
-        self.current_slot = current_slot
-        self.counter_ = 0
-        self.max_known_tx = max_known_tx
-
-        get_history_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.count_log.print(
-            self.debug,
-            list_params={"get_history_ms": get_history_ms, "gathered_signatures": gathered_signatures, "counter": counter},
-            latest_params={"max_known_tx": max_known_tx}
-        )
-
-    def _get_signatures(self, before, until):
-        response = self.solana.get_signatures_for_address(before, until, FINALIZED)
-        error = response.get('error')
-        result = response.get('result', [])
-        if error:
-            self.warning(f'Fail to get signatures: {error}')
-        return result
-
-    def _get_tx_receipts(self, solana_signature):
-        # trx = None
-        retry = RETRY_ON_FAIL_ON_GETTING_CONFIRMED_TRANSACTION
-
-        while retry > 0:
-            try:
-                trx = self.solana.get_confirmed_transaction(solana_signature)['result']
-                self._add_trx(solana_signature, trx)
-                retry = 0
-            except Exception as err:
-                self.debug(f'Exception on get_confirmed_transaction: "{err}"')
-                time.sleep(1)
-                retry -= 1
-                if retry == 0:
-                    self.error(f'Exception on get_confirmed_transaction: "{err}"')
-
-        self.counter_ += 1
-        if self.counter_ % 100 == 0:
-            self.debug(f"Acquired {self.counter_} receipts")
-
-    def _add_trx(self, solana_signature, trx):
-        if trx is not None:
-            add = False
-            for instruction in trx['transaction']['message']['instructions']:
-                if trx["transaction"]["message"]["accountKeys"][instruction["programIdIndex"]] == EVM_LOADER_ID:
-                    add = True
-            if add:
-                self.debug((trx['slot'], solana_signature))
-                self.transaction_receipts.add_trx(trx['slot'], solana_signature, trx)
-        else:
-            self.debug(f"trx is None {solana_signature}")
-
+    def process_functions(self) -> None:
+        pass

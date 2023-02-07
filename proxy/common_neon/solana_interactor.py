@@ -1,223 +1,299 @@
 from __future__ import annotations
 
-import base58
 import base64
+import dataclasses
+import itertools
 import json
-import re
 import time
-import traceback
+from typing import Dict, Union, Any, List, Optional, Tuple, cast
+import logging
+import base58
 import requests
 
-from typing import Optional
-
-from solana.blockhash import Blockhash
-from solana.publickey import PublicKey
-from solana.rpc.api import Client as SolanaClient
-from solana.account import Account as SolanaAccount
-from solana.rpc.types import RPCResponse
-from solana.transaction import Transaction
-from itertools import zip_longest
-from logged_groups import logged_group
-from typing import Dict, Union, Any, List, NamedTuple, cast
-from base58 import b58decode, b58encode
-
-from .costs import update_transaction_cost
-from .utils import get_from_dict, SolanaBlockInfo
-from ..environment import EVM_LOADER_ID, CONFIRMATION_CHECK_DELAY, WRITE_TRANSACTION_COST_IN_DB, SKIP_PREFLIGHT
-from ..environment import LOG_SENDING_SOLANA_TRANSACTION, FUZZING_BLOCKHASH, CONFIRM_TIMEOUT, FINALIZED
-from ..environment import RETRY_ON_FAIL
-
+from ..common_neon.address import NeonAddress, neon_2program
+from ..common_neon.config import Config
+from ..common_neon.constants import NEON_ACCOUNT_TAG
+from ..common_neon.errors import SolanaUnavailableError
 from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from ..common_neon.address import EthereumAddress, ether2program
-from ..common_neon.address import AccountInfo as NeonAccountInfo
+from ..common_neon.solana_tx import SolTx, SolBlockhash, SolPubKey
+from ..common_neon.solana_tx_error_parser import SolTxErrorParser
+from ..common_neon.utils import SolanaBlockInfo
+from ..common_neon.layouts import HolderAccountInfo, AccountInfo, NeonAccountInfo, ALTAccountInfo
 
 
-class SolTxError(Exception):
-    def __init__(self, receipt):
-        self.result = receipt
-        error = get_error_definition_from_receipt(receipt)
-        if isinstance(error, list) and isinstance(error[1], str):
-            super().__init__(str(error[1]))
-            self.error = str(error[1])
-        else:
-            super().__init__('Unknown error')
-            self.error = json.dumps(receipt)
+LOG = logging.getLogger(__name__)
+RPCResponse = Dict[str, Any]
 
 
-class AccountInfo(NamedTuple):
-    tag: int
-    lamports: int
-    owner: PublicKey
-    data: bytes
+@dataclasses.dataclass
+class SolSendResult:
+    error: Dict[str, Any]
+    result: Optional[str]
 
 
-class SendResult(NamedTuple):
-    error: dict
-    result: dict
+class SolInteractor:
+    def __init__(self, config: Config, solana_url: str) -> None:
+        self._config = config
+        self._request_counter = itertools.count()
+        self._endpoint_uri = solana_url
+        self._session = requests.sessions.Session()
 
-
-@logged_group("neon.Proxy")
-class SolanaInteractor:
-    def __init__(self, solana_url: str) -> None:
-        self._client = SolanaClient(solana_url)._provider
-        self._fuzzing_hash_cycle = False
-
-    def _make_request(self, request) -> RPCResponse:
-        """This method is used to make retries to send request to Solana"""
-
+    def _simple_send_post_request(self, request) -> requests.Response:
         headers = {
             "Content-Type": "application/json"
         }
-        client = self._client
+
+        raw_response = self._session.post(self._endpoint_uri, headers=headers, json=request)
+        raw_response.raise_for_status()
+        return raw_response
+
+    def _send_post_request(self, request) -> requests.Response:
+        """This method is used to make retries to send request to Solana"""
 
         retry = 0
         while True:
             try:
                 retry += 1
-                raw_response = client.session.post(client.endpoint_uri, headers=headers, json=request)
-                raw_response.raise_for_status()
-                return raw_response
+                return self._simple_send_post_request(request)
+            except requests.exceptions.RequestException as exc:
+                # Hide the Solana URL
+                str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
 
-            except requests.exceptions.ConnectionError as err:
-                if retry > RETRY_ON_FAIL:
-                    raise
+                if retry <= self._config.retry_on_fail:
+                    LOG.debug(
+                        f'Receive connection error {str_err} on connection to Solana. '
+                        f'Attempt {retry + 1} to send the request to Solana node...'
+                    )
+                    time.sleep(1)
+                    continue
 
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.error(f'ConnectionError({retry}) on send request to Solana. ' +
-                           f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
-                time.sleep(1)
+                LOG.warning(f'Connection exception on send request to Solana. Retry {retry}: {str_err}')
+                raise SolanaUnavailableError(str_err)
 
-            except Exception as err:
-                err_tb = "".join(traceback.format_tb(err.__traceback__))
-                self.error('Unknown exception on send request to Solana. ' +
-                           f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+            except BaseException as exc:
+                str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
+                LOG.error(f'Unknown exception on send request to Solana: {str_err}')
                 raise
 
-    def _send_rpc_request(self, method: str, *params: Any) -> RPCResponse:
-        request_id = next(self._client._request_counter) + 1
+    def _build_rpc_request(self, method: str, *param_list: Any) -> Dict[str, Any]:
+        request_id = next(self._request_counter) + 1
 
-        request = {
+        return {
             "jsonrpc": "2.0",
             "id": request_id,
             "method": method,
-            "params": params
+            "params": param_list
         }
-        raw_response = self._make_request(request)
+
+    def _send_rpc_request(self, method: str, *param_list: Any) -> RPCResponse:
+        request = self._build_rpc_request(method, *param_list)
+        raw_response = self._send_post_request(request)
+        return cast(RPCResponse, raw_response.json())
+
+    def _simple_send_rpc_request(self, method: str, *param_list: Any) -> RPCResponse:
+        request = self._build_rpc_request(method, *param_list)
+        raw_response = self._simple_send_post_request(request)
         return cast(RPCResponse, raw_response.json())
 
     def _send_rpc_batch_request(self, method: str, params_list: List[Any]) -> List[RPCResponse]:
-        full_request_data = []
-        full_response_data = []
-        request_data = []
-        client = self._client
+        full_request_list = []
+        full_response_list = []
+        request_list = []
+        request_data = ''
 
         for params in params_list:
-            request_id = next(client._request_counter) + 1
+            request_id = next(self._request_counter) + 1
             request = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
-            request_data.append(request)
-            full_request_data.append(request)
+            request_list.append(request)
+            request_data += ', ' + json.dumps(request)
+            full_request_list.append(request)
 
             # Protection from big payload
-            if len(request_data) == 30 or len(full_request_data) == len(params_list):
-                raw_response = self._make_request(request_data)
+            if len(request_data) >= 48 * 1024 or len(full_request_list) == len(params_list):
+                raw_response = self._send_post_request(request_list)
                 response_data = cast(List[RPCResponse], raw_response.json())
 
-                full_response_data += response_data
-                request_data.clear()
+                full_response_list += response_data
+                request_list.clear()
+                request_data = ''
 
-        full_response_data.sort(key=lambda r: r["id"])
+        full_response_list.sort(key=lambda r: r["id"])
 
-        for request, response in zip_longest(full_request_data, full_response_data):
-            # self.debug(f'Request: {request}')
-            # self.debug(f'Response: {response}')
+        for request, response in itertools.zip_longest(full_request_list, full_response_list):
+            # LOG.debug(f'Request: {request}')
+            # LOG.debug(f'Response: {response}')
             if request["id"] != response["id"]:
                 raise RuntimeError(f"Invalid RPC response: request {request} response {response}")
 
-        return full_response_data
+        return full_response_list
 
-    def get_signatures_for_address(self, before, until, commitment='confirmed'):
-        opts: Dict[str, Union[int, str]] = {}
-        if until is not None:
-            opts["until"] = until
-        if before is not None:
+    def get_cluster_nodes(self) -> [dict]:
+        return self._send_rpc_request("getClusterNodes").get('result', [])
+
+    def get_slots_behind(self) -> Optional[int]:
+        response = self._send_rpc_request('getHealth')
+        status = response.get('result')
+        if status == 'ok':
+            return 0
+        slots_behind = SolTxErrorParser(response).get_slots_behind()
+        if slots_behind is not None:
+            return int(slots_behind)
+        return None
+
+    def is_healthy(self) -> bool:
+        status = self._send_rpc_request('getHealth').get('result', 'bad')
+        return status == 'ok'
+
+    def get_sig_list_for_address(self, address: SolPubKey, before: Optional[str], limit: int,
+                                 commitment='confirmed') -> List[Dict[str, Any]]:
+        opts = {
+            "limit": limit,
+            "commitment": commitment
+        }
+
+        if before:
             opts["before"] = before
-        opts["commitment"] = commitment
-        return self._send_rpc_request("getSignaturesForAddress", EVM_LOADER_ID, opts)
 
-    def get_confirmed_transaction(self, sol_sign: str, encoding: str = "json"):
-        return self._send_rpc_request("getConfirmedTransaction", sol_sign, encoding)
+        response = self._send_rpc_request("getSignaturesForAddress", str(address), opts)
 
-    def get_slot(self, commitment='confirmed') -> RPCResponse:
+        error = response.get('error')
+        if error:
+            LOG.warning(f'fail to get solana signatures: {error}')
+
+        return response.get('result', [])
+
+    def get_block_slot(self, commitment='confirmed') -> int:
         opts = {
             'commitment': commitment
         }
-        return self._send_rpc_request('getSlot', opts)
+        return self._send_rpc_request('getSlot', opts).get('result', 0)
 
-    def get_account_info(self, pubkey: PublicKey, length=256, commitment='confirmed') -> Optional[AccountInfo]:
+    @staticmethod
+    def _decode_account_info(address: SolPubKey, raw_account: Dict[str, Any]) -> AccountInfo:
+        data = base64.b64decode(raw_account.get('data', None)[0])
+        account_tag = data[0] if len(data) > 0 else 0
+        lamports = raw_account.get('lamports', 0)
+        owner = SolPubKey.from_string(raw_account.get('owner', None))
+        return AccountInfo(address, account_tag, lamports, owner, data)
+
+    def get_account_info(self, pubkey: SolPubKey, length=None, commitment='processed') -> Optional[AccountInfo]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
         }
 
-        if length != 0:
+        if not (length is None):
             opts['dataSlice'] = {
                 'offset': 0,
                 'length': length
             }
 
         result = self._send_rpc_request('getAccountInfo', str(pubkey), opts)
-        self.debug(f"{json.dumps(result, sort_keys=True)}")
-
-        info = result['result']['value']
-        if info is None:
-            self.debug(f"Can't get information about {str(pubkey)}")
+        # LOG.debug(f"{json.dumps(result, sort_keys=True)}")
+        error = result.get('error')
+        if error is not None:
+            LOG.debug(f"Can't get information about account {str(pubkey)}: {error}")
             return None
 
-        data = base64.b64decode(info['data'][0])
+        raw_account = result.get('result', {}).get('value', None)
+        if raw_account is None:
+            LOG.debug(f"Can't get information about {str(pubkey)}")
+            return None
 
-        account_tag = data[0]
-        lamports = info['lamports']
-        owner = info['owner']
+        return self._decode_account_info(pubkey, raw_account)
 
-        return AccountInfo(account_tag, lamports, owner, data)
-
-    def get_account_info_list(self, accounts: [PublicKey], length=256, commitment='confirmed') -> [AccountInfo]:
+    def get_account_info_list(self, src_account_list: List[SolPubKey], length=None,
+                              commitment='processed') -> List[Optional[AccountInfo]]:
         opts = {
             "encoding": "base64",
             "commitment": commitment,
         }
 
-        if length != 0:
+        if not (length is None):
             opts['dataSlice'] = {
                 'offset': 0,
                 'length': length
             }
 
-        result = self._send_rpc_request("getMultipleAccounts", [str(a) for a in accounts], opts)
-        self.debug(f"{json.dumps(result, sort_keys=True)}")
+        account_info_list: List[Optional[AccountInfo]] = []
+        while len(src_account_list) > 0:
+            account_list = [str(a) for a in src_account_list[:50]]
+            src_account_list = src_account_list[50:]
+            result = self._send_rpc_request("getMultipleAccounts", account_list, opts)
 
-        if result['result']['value'] is None:
-            self.debug(f"Can't get information about {accounts}")
-            return []
+            error = result.get('error', None)
+            if error:
+                LOG.debug(f"Can't get information about accounts {account_list}: {error}")
+                return account_info_list
 
-        accounts_info = []
-        for pubkey, info in zip(accounts, result['result']['value']):
-            if info is None:
-                accounts_info.append(None)
-            else:
-                data = base64.b64decode(info['data'][0])
-                account = AccountInfo(tag=data[0], lamports=info['lamports'], owner=info['owner'], data=data)
-                accounts_info.append(account)
+            for pubkey, info in zip(account_list, result.get('result', {}).get('value', None)):
+                if info is None:
+                    account_info_list.append(None)
+                else:
+                    account_info_list.append(self._decode_account_info(SolPubKey.from_string(pubkey), info))
+        return account_info_list
 
-        return accounts_info
+    def get_program_account_info_list(self, program: SolPubKey, offset: int, length: int,
+                                      data_offset: int, data: bytes,
+                                      commitment='processed') -> List[AccountInfo]:
+        opts = {
+            "encoding": "base64",
+            "commitment": commitment,
+            "dataSlice": {
+                "offset": offset,
+                "length": length
+            },
+            "filters": [{
+                "memcmp": {
+                    "offset": data_offset,
+                    "bytes": base58.b58encode(data).decode('utf-8'),  # TODO: replace to base64 for version >= 1.14
+                    "encoding": "base58"
+                }
+            }]
+        }
 
-    def get_sol_balance(self, account, commitment='confirmed'):
+        try:
+            response = self._simple_send_rpc_request("getProgramAccounts", str(program), opts)
+        except (BaseException, ):
+            LOG.debug('error on get program accounts')
+            return list()
+
+        error = response.get('error')
+        if error is not None:
+            LOG.debug(f'fail to get program accounts: {error}')
+            return list()
+
+        raw_account_list = response.get('result', [])
+        account_info_list: List[AccountInfo] = []
+        for raw_account in raw_account_list:
+            address = SolPubKey.from_string(raw_account.get('pubkey'))
+            account_info = self._decode_account_info(address, raw_account.get('account', {}))
+            account_info_list.append(account_info)
+        return account_info_list
+
+    def get_sol_balance(self, account, commitment='processed') -> int:
         opts = {
             "commitment": commitment
         }
-        return self._send_rpc_request('getBalance', str(account), opts)['result']['value']
+        return self._send_rpc_request('getBalance', str(account), opts).get('result', {}).get('value', 0)
 
-    def get_token_account_balance(self, pubkey: Union[str, PublicKey], commitment='confirmed') -> int:
+    def get_sol_balance_list(self, accounts_list: List[Union[str, SolPubKey]], commitment='processed') -> List[int]:
+        opts = {
+            'commitment': commitment
+        }
+        requests_list = []
+        for account in accounts_list:
+            requests_list.append((str(account), opts))
+
+        balances_list = []
+        response_list = self._send_rpc_batch_request('getBalance', requests_list)
+        for response in response_list:
+            balance = response.get('result', {}).get('value', 0)
+            balances_list.append(balance)
+
+        return balances_list
+
+    def get_token_account_balance(self, pubkey: Union[str, SolPubKey], commitment='processed') -> int:
         opts = {
             "commitment": commitment
         }
@@ -227,7 +303,8 @@ class SolanaInteractor:
             return 0
         return int(result['value']['amount'])
 
-    def get_token_account_balance_list(self, pubkey_list: [Union[str, PublicKey]], commitment: object = 'confirmed') -> [int]:
+    def get_token_account_balance_list(self, pubkey_list: List[Union[str, SolPubKey]],
+                                       commitment: object = 'processed') -> List[int]:
         opts = {
             "commitment": commitment
         }
@@ -244,54 +321,77 @@ class SolanaInteractor:
 
         return balance_list
 
-    def get_neon_account_info(self, eth_account: EthereumAddress) -> Optional[NeonAccountInfo]:
-        account_sol, nonce = ether2program(eth_account)
-        info = self.get_account_info(account_sol)
+    def get_neon_account_info(self, eth_account: Union[str, NeonAddress],
+                              commitment='processed') -> Optional[NeonAccountInfo]:
+        if isinstance(eth_account, str):
+            eth_account = NeonAddress(eth_account)
+        account_sol, nonce = neon_2program(eth_account)
+        info = self.get_account_info(account_sol, commitment=commitment)
         if info is None:
             return None
-        elif len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(f"Wrong data length for account data {account_sol}: " +
-                               f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return NeonAccountInfo.frombytes(info.data)
+        return NeonAccountInfo.from_account_info(info)
 
-    def get_multiple_rent_exempt_balances_for_size(self, size_list: [int], commitment='confirmed') -> [int]:
+    def get_neon_account_info_list(self,
+                                   neon_account_list: List[Union[NeonAddress, str]]) -> List[Optional[NeonAccountInfo]]:
+        requests_list = []
+        for neon_account in neon_account_list:
+            account_sol, _nonce = neon_2program(neon_account)
+            requests_list.append(account_sol)
+        responses_list = self.get_account_info_list(requests_list)
+        accounts_list = []
+        for account_sol, info in zip(requests_list, responses_list):
+            if info is None or len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof() or info.tag != NEON_ACCOUNT_TAG:
+                accounts_list.append(None)
+                continue
+            accounts_list.append(NeonAccountInfo.from_account_info(info))
+        return accounts_list
+
+    def get_holder_account_info(self, holder_account: SolPubKey) -> Optional[HolderAccountInfo]:
+        info = self.get_account_info(holder_account)
+        if info is None:
+            return None
+        return HolderAccountInfo.from_account_info(info)
+
+    def get_account_lookup_table_info(self, table_account: SolPubKey) -> Optional[ALTAccountInfo]:
+        info = self.get_account_info(table_account)
+        if info is None:
+            return None
+        return ALTAccountInfo.from_account_info(info)
+
+    def get_multiple_rent_exempt_balances_for_size(self, size_list: List[int], commitment='confirmed') -> List[int]:
         opts = {
             "commitment": commitment
         }
         request_list = [(size, opts) for size in size_list]
         response_list = self._send_rpc_batch_request("getMinimumBalanceForRentExemption", request_list)
-        return [r['result'] for r in response_list]
+        return [r.get('result', 0) for r in response_list]
 
-    def get_block_slot_list(self, last_block_slot, limit: int, commitment='confirmed') -> [int]:
-        opts = {
-            "commitment": commitment,
-            "enconding": "json",
-        }
-        return self._send_rpc_request("getBlocksWithLimit", last_block_slot, limit, opts)['result']
+    @staticmethod
+    def _decode_block_info(block_slot: int, net_block: Dict[str, Any]) -> SolanaBlockInfo:
+        return SolanaBlockInfo(
+            block_slot=block_slot,
+            block_hash='0x' + base58.b58decode(net_block.get('blockhash', '')).hex().lower(),
+            block_time=net_block.get('blockTime', None),
+            block_height=net_block.get('blockHeight', None),
+            parent_block_slot=net_block.get('parentSlot', None)
+        )
 
-    def get_block_info(self, slot: int, commitment='confirmed') -> [SolanaBlockInfo]:
+    def get_block_info(self, block_slot: int, commitment='confirmed') -> SolanaBlockInfo:
         opts = {
             "commitment": commitment,
             "encoding": "json",
-            "transactionDetails": "signatures",
+            "transactionDetails": "none",
             "rewards": False
         }
 
-        response = self._send_rpc_request('getBlock', slot, opts)
+        response = self._send_rpc_request('getBlock', block_slot, opts)
         net_block = response.get('result', None)
         if not net_block:
-            return SolanaBlockInfo(slot=slot)
+            return SolanaBlockInfo(block_slot=block_slot)
 
-        return SolanaBlockInfo(
-            slot=slot,
-            finalized=(commitment == FINALIZED),
-            hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
-            parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
-            time=net_block['blockTime'],
-            signs=net_block['signatures']
-        )
+        return self._decode_block_info(block_slot, net_block)
 
-    def get_block_info_list(self, block_slot_list: [int], commitment='confirmed') -> [SolanaBlockInfo]:
+    def get_block_info_list(self, block_slot_list: List[int], commitment='confirmed') -> List[SolanaBlockInfo]:
         block_list = []
         if not len(block_slot_list):
             return block_list
@@ -299,7 +399,7 @@ class SolanaInteractor:
         opts = {
             "commitment": commitment,
             "encoding": "json",
-            "transactionDetails": "signatures",
+            "transactionDetails": "none",
             "rewards": False
         }
 
@@ -308,509 +408,139 @@ class SolanaInteractor:
             request_list.append((slot, opts))
 
         response_list = self._send_rpc_batch_request('getBlock', request_list)
-        for slot, response in zip(block_slot_list, response_list):
-            if (not response) or ('result' not in response):
-                block = SolanaBlockInfo(
-                    slot=slot,
-                    finalized=(commitment == FINALIZED),
-                )
+        for block_slot, response in zip(block_slot_list, response_list):
+            if response is None:
+                block = SolanaBlockInfo(block_slot=block_slot)
             else:
-                net_block = response['result']
-                block = SolanaBlockInfo(
-                    slot=slot,
-                    finalized=(commitment == FINALIZED),
-                    hash='0x' + base58.b58decode(net_block['blockhash']).hex(),
-                    parent_hash='0x' + base58.b58decode(net_block['previousBlockhash']).hex(),
-                    time=net_block['blockTime'],
-                    signs=net_block['signatures']
-                )
+                net_block = response.get('result', None)
+                if net_block is None:
+                    block = SolanaBlockInfo(block_slot=block_slot)
+                else:
+                    block = self._decode_block_info(block_slot, net_block)
             block_list.append(block)
         return block_list
 
-    def get_recent_blockslot(self, commitment='confirmed') -> int:
+    def get_recent_blockslot(self, commitment='confirmed', default: Optional[int] = None) -> int:
         opts = {
             'commitment': commitment
         }
-        blockhash_resp = self._send_rpc_request('getRecentBlockhash', opts)
-        if not blockhash_resp["result"]:
-            raise RuntimeError("failed to get recent blockhash")
-        return blockhash_resp['result']['context']['slot']
+        blockhash_resp = self._send_rpc_request('getLatestBlockhash', opts)
+        result = blockhash_resp.get("result")
+        if result is None:
+            if default:
+                return default
+            LOG.debug(f'{blockhash_resp}')
+            raise RuntimeError("failed to get latest blockhash")
+        return result.get('context', {}).get('slot', 0)
 
-    def get_recent_blockhash(self, commitment='confirmed') -> Blockhash:
+    def get_recent_blockhash(self, commitment='finalized') -> SolBlockhash:
         opts = {
             'commitment': commitment
         }
-        blockhash_resp = self._send_rpc_request('getRecentBlockhash', opts)
-        if not blockhash_resp["result"]:
+        blockhash_resp = self._send_rpc_request('getLatestBlockhash', opts)
+        if not blockhash_resp.get("result"):
             raise RuntimeError("failed to get recent blockhash")
-        blockhash = blockhash_resp["result"]["value"]["blockhash"]
-        return Blockhash(blockhash)
+        blockhash = blockhash_resp.get("result", {}).get("value", {}).get("blockhash", None)
+        return SolBlockhash.from_string(blockhash)
 
-    def _fuzzing_transactions(self, signer: SolanaAccount, tx_list, tx_opts, request_list):
-        """
-        Make each second transaction a bad one.
-        This is used to test a transaction sending on a live cluster (testnet/devnet).
-        """
-        if not FUZZING_BLOCKHASH:
-            return request_list
-
-        self._fuzzing_hash_cycle = not self._fuzzing_hash_cycle
-        if not self._fuzzing_hash_cycle:
-            return request_list
-
-        # get bad block slot for sent transactions
-        slot = self.get_recent_blockslot()
-        # blockhash = '4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4'
+    def get_blockhash(self, block_slot: int) -> SolBlockhash:
         block_opts = {
             "encoding": "json",
             "transactionDetails": "none",
             "rewards": False
         }
-        slot = max(slot - 500, 10)
-        block = self._send_rpc_request("getBlock", slot, block_opts)
-        fuzzing_blockhash = Blockhash(block['result']['blockhash'])
-        self.debug(f"fuzzing block {fuzzing_blockhash} for slot {slot}")
 
-        # sign half of transactions with a bad blockhash
-        for idx, tx in enumerate(tx_list):
-            if idx % 2 == 1:
-                continue
-            tx.recent_blockhash = fuzzing_blockhash
-            tx.sign(signer)
-            base64_tx = base64.b64encode(tx.serialize()).decode('utf-8')
-            request_list[idx] = (base64_tx, tx_opts)
-        return request_list
+        block = self._send_rpc_request("getBlock", block_slot, block_opts)
+        return SolBlockhash.from_string(block.get('result', {}).get('blockhash', None))
 
-    def _send_multiple_transactions(self, signer: SolanaAccount, tx_list: [Transaction],
-                                    skip_preflight: bool, preflight_commitment: str) -> [str]:
+    def get_block_height(self, block_slot: Optional[int] = None, commitment='confirmed') -> int:
+        opts = {
+            'commitment': commitment
+        }
+        if block_slot is None:
+            block_height_resp = self._send_rpc_request('getBlockHeight', opts)
+            block_height = block_height_resp.get('result', None)
+        else:
+            block_height = self.get_block_info(cast(int, block_slot), commitment).block_height
+        return block_height if block_height is not None else 0
+
+    def send_tx_list(self, tx_list: List[SolTx], skip_preflight: bool) -> List[SolSendResult]:
         opts = {
             "skipPreflight": skip_preflight,
             "encoding": "base64",
-            "preflightCommitment": preflight_commitment
+            "preflightCommitment": 'processed'
         }
 
-        blockhash = None
         request_list = []
-
         for tx in tx_list:
-            if not tx.recent_blockhash:
-                if not blockhash:
-                    blockhash = self.get_recent_blockhash()
-                tx.recent_blockhash = blockhash
-                tx.signatures.clear()
-            if not tx.signatures:
-                tx.sign(signer)
             base64_tx = base64.b64encode(tx.serialize()).decode('utf-8')
             request_list.append((base64_tx, opts))
 
-        request_list = self._fuzzing_transactions(signer, tx_list, opts, request_list)
         response_list = self._send_rpc_batch_request('sendTransaction', request_list)
-        return [SendResult(result=r.get('result'), error=r.get('error')) for r in response_list]
+        result_list = []
 
-    def send_multiple_transactions(self, signer: SolanaAccount, tx_list: [], waiter,
-                                   skip_preflight: bool, preflight_commitment: str) -> [{}]:
-        send_result_list = self._send_multiple_transactions(signer, tx_list, skip_preflight, preflight_commitment)
-        # Filter good transactions and wait the confirmations for them
-        sign_list = [s.result for s in send_result_list if s.result]
-        self._confirm_multiple_transactions(sign_list, waiter)
-        # Get receipts for good transactions
-        confirmed_list = self._get_multiple_receipts(sign_list)
-        # Mix errors with receipts for good transactions
-        receipt_list = []
-        for s in send_result_list:
-            if s.error:
-                self.debug(f'Got error on preflight check of transaction: {s.error}')
-                receipt_list.append(s.error)
-            else:
-                receipt_list.append(confirmed_list.pop(0))
+        for response, tx in zip(response_list, tx_list):
+            raw_result = response.get('result')
 
-        return receipt_list
+            result = None
+            if isinstance(raw_result, dict):
+                LOG.debug(f'Got strange result on transaction execution: {raw_result}')
+            elif isinstance(raw_result, str):
+                result = base58.b58encode(base58.b58decode(raw_result)).decode("utf-8")
+            elif isinstance(raw_result, bytes):
+                result = base58.b58encode(raw_result).decode("utf-8")
+            elif raw_result is not None:
+                LOG.debug(f'Got strange result on transaction execution: {str(raw_result)}')
 
-    def _confirm_multiple_transactions(self, sign_list: [str], waiter=None):
-        """Confirm a transaction."""
-        if not len(sign_list):
-            self.debug('No confirmations, because transaction list is empty')
-            return
+            error = response.get('error')
+            if error:
+                if SolTxErrorParser(error).check_if_already_processed():
+                    result = str(tx.signature)
+                    LOG.debug(f'Transaction is already processed: {str(result)}')
+                    error = None
+                else:
+                    # LOG.debug(f'Got error on transaction execution: {error}')
+                    result = None
 
-        base58_sign_list: List[str] = []
-        for sign in sign_list:
-            if isinstance(sign, str):
-                base58_sign_list.append(b58encode(b58decode(sign)).decode("utf-8"))
-            else:
-                base58_sign_list.append(b58encode(sign).decode("utf-8"))
+            result_list.append(SolSendResult(result=result, error=error))
+        return result_list
+
+    def get_confirmed_slot_for_tx_sig_list(self, tx_sig_list: List[str]) -> Tuple[int, bool]:
+        if len(tx_sig_list) == 0:
+            return 0, False
 
         opts = {
             "searchTransactionHistory": False
         }
 
-        elapsed_time = 0
-        while elapsed_time < CONFIRM_TIMEOUT:
-            if elapsed_time > 0:
-                time.sleep(CONFIRMATION_CHECK_DELAY)
-            elapsed_time += CONFIRMATION_CHECK_DELAY
+        block_slot = 0
+        while len(tx_sig_list) > 0:
+            (part_tx_sig_list, tx_sig_list) = (tx_sig_list[:100], tx_sig_list[100:])
+            response = self._send_rpc_request("getSignatureStatuses", part_tx_sig_list, opts)
 
-            response = self._send_rpc_request("getSignatureStatuses", base58_sign_list, opts)
             result = response.get('result', None)
             if not result:
-                continue
+                return block_slot, False
 
-            if waiter:
-                slot = result['context']['slot']
-                waiter.on_wait_confirm(elapsed_time, slot)
+            block_slot = result.get('context', {}).get('slot', 0)
 
-            for status in result['value']:
+            for status in result.get('value', []):
                 if not status:
-                    break
-                if status['confirmationStatus'] == 'processed':
-                    break
-            else:
-                self.debug(f'Got confirmed status for transactions: {sign_list}')
-                return
+                    return block_slot, False
+                if status.get('confirmationStatus', '') == 'processed':
+                    return block_slot, False
 
-        self.warning(f'No confirmed status for transactions: {sign_list}')
+        return block_slot, (block_slot != 0)
 
-    def _get_multiple_receipts(self, sign_list: [str]) -> [Any]:
-        if not len(sign_list):
+    def get_tx_receipt_list(self, tx_sig_list: List[str], commitment='confirmed') -> List[Optional[Dict[str, Any]]]:
+        if len(tx_sig_list) == 0:
             return []
-        opts = {"encoding": "json", "commitment": "confirmed"}
-        request_list = [(sign, opts) for sign in sign_list]
+
+        opts = {
+            "encoding": "json",
+            "commitment": commitment,
+            "maxSupportedTransactionVersion": 0
+        }
+        request_list = [(tx_sig, opts) for tx_sig in tx_sig_list]
         response_list = self._send_rpc_batch_request("getTransaction", request_list)
-        return [r['result'] for r in response_list]
-
-
-@logged_group("neon.Proxy")
-class SolTxListSender:
-    def __init__(self, sender, tx_list: [Transaction], name: str,
-                 skip_preflight=SKIP_PREFLIGHT, preflight_commitment='confirmed'):
-        self._s = sender
-        self._name = name
-        self._skip_preflight = skip_preflight
-        self._preflight_commitment = preflight_commitment
-
-        self._blockhash = None
-        self._retry_idx = 0
-        self._slots_behind = 0
-        self._tx_list = tx_list
-        self._node_behind_list = []
-        self._bad_block_list = []
-        self._blocked_account_list = []
-        self._pending_list = []
-        self._budget_exceeded_list = []
-        self._storage_bad_status_list = []
-        self._unknown_error_list = []
-
-        self._all_tx_list = [self._node_behind_list,
-                             self._bad_block_list,
-                             self._blocked_account_list,
-                             self._budget_exceeded_list,
-                             self._pending_list]
-
-    def clear(self):
-        self._tx_list.clear()
-        for lst in self._all_tx_list:
-            lst.clear()
-
-    def _get_full_list(self):
-        return [tx for lst in self._all_tx_list for tx in lst]
-
-    def send(self) -> SolTxListSender:
-        solana = self._s.solana
-        signer = self._s.signer
-        waiter = self._s.waiter
-        skip = self._skip_preflight
-        commitment = self._preflight_commitment
-
-        self.debug(f'start transactions sending: {self._name}')
-
-        while (self._retry_idx < RETRY_ON_FAIL) and (len(self._tx_list)):
-            self._retry_idx += 1
-            self._slots_behind = 0
-
-            receipt_list = solana.send_multiple_transactions(signer, self._tx_list, waiter, skip, commitment)
-            self.update_transaction_cost(receipt_list)
-
-            success_cnt = 0
-            for receipt, tx in zip(receipt_list, self._tx_list):
-                slots_behind = check_if_node_behind(receipt)
-                if slots_behind:
-                    self._slots_behind = slots_behind
-                    self._node_behind_list.append(tx)
-                elif check_if_blockhash_notfound(receipt):
-                    self._bad_block_list.append(tx)
-                elif check_if_accounts_blocked(receipt):
-                    self._blocked_account_list.append(tx)
-                elif check_for_errors(receipt):
-                    if check_if_program_exceeded_instructions(receipt):
-                        self._budget_exceeded_list.append(tx)
-                    else:
-                        custom = check_if_storage_is_empty_error(receipt)
-                        if custom in (1, 4):
-                            self._storage_bad_status_list.append(receipt)
-                        else:
-                            self._unknown_error_list.append(receipt)
-                else:
-                    success_cnt += 1
-                    self._on_success_send(tx, receipt)
-
-            self.debug(f'retry {self._retry_idx}, ' +
-                       f'total receipts {len(receipt_list)}, ' +
-                       f'success receipts {success_cnt}, ' +
-                       f'node behind {len(self._node_behind_list)}, '
-                       f'bad blocks {len(self._bad_block_list)}, ' +
-                       f'blocked accounts {len(self._blocked_account_list)}, ' +
-                       f'budget exceeded {len(self._budget_exceeded_list)}, ' +
-                       f'bad storage: {len(self._storage_bad_status_list)}, ' +
-                       f'unknown error: {len(self._unknown_error_list)}')
-
-            self._on_post_send()
-
-        if len(self._tx_list):
-            raise RuntimeError('Run out of attempts to execute transaction')
-        return self
-
-    def update_transaction_cost(self, receipt_list):
-        if not WRITE_TRANSACTION_COST_IN_DB:
-            return False
-        if not hasattr(self._s, 'eth_tx'):
-            return False
-
-        for receipt in receipt_list:
-            update_transaction_cost(receipt, self._s.eth_tx, reason=self._name)
-
-    def _on_success_send(self, tx: Transaction, receipt: {}) -> bool:
-        """Store the last successfully blockhash and set it in _set_tx_blockhash"""
-        self._blockhash = tx.recent_blockhash
-        return False
-
-    def _on_post_send(self):
-        if len(self._unknown_error_list):
-            raise SolTxError(self._unknown_error_list[0])
-        elif len(self._node_behind_list):
-            self.warning(f'Node is behind by {self._slots_behind} slots')
-            time.sleep(1)
-        elif len(self._storage_bad_status_list):
-            raise SolTxError(self._storage_bad_status_list[0])
-        elif len(self._budget_exceeded_list):
-            raise RuntimeError(COMPUTATION_BUDGET_EXCEEDED)
-
-        # There is no more retries to send transactions
-        if self._retry_idx >= RETRY_ON_FAIL:
-            if not self._is_canceled:
-                self._cancel()
-            return
-
-        if len(self._blocked_account_list):
-            time.sleep(0.4)  # one block time
-
-        # force changing of recent_blockhash if Solana doesn't accept the current one
-        if len(self._bad_block_list):
-            self._blockhash = None
-
-        # resend not-accepted transactions
-        self._move_txlist()
-
-    def _set_tx_blockhash(self, tx):
-        """Try to keep the branch of block history"""
-        tx.recent_blockhash = self._blockhash
-        tx.signatures.clear()
-
-    def _move_txlist(self):
-        full_list = self._get_full_list()
-        self.clear()
-        for tx in full_list:
-            self._set_tx_blockhash(tx)
-            self._tx_list.append(tx)
-        if len(self._tx_list):
-            self.debug(f' Resend Solana transactions: {len(self._tx_list)}')
-
-
-@logged_group("neon.Proxy")
-class Measurements:
-    def __init__(self):
-        pass
-
-    # Do not change headers in info logs! This name used in CI measurements (see function `cleanup_docker` in
-    # .buildkite/steps/deploy-test.sh)
-    def extract(self, reason: str, receipt: {}):
-        if not LOG_SENDING_SOLANA_TRANSACTION:
-            return
-
-        try:
-            self.debug(f"send multiple transactions for reason {reason}")
-
-            measurements = self._extract_measurements_from_receipt(receipt)
-            for m in measurements:
-                self.info(f'get_measurements: {json.dumps(m)}')
-        except Exception as err:
-            self.error(f"get_measurements: can't get measurements {err}")
-            self.info(f"get measurements: failed result {json.dumps(receipt, indent=3)}")
-
-    def _extract_measurements_from_receipt(self, receipt):
-        if check_for_errors(receipt):
-            self.warning("Can't get measurements from receipt with error")
-            self.info(f"Failed result: {json.dumps(receipt, indent=3)}")
-            return []
-
-        log_messages = receipt['meta']['logMessages']
-        transaction = receipt['transaction']
-        accounts = transaction['message']['accountKeys']
-        instructions = []
-        for instr in transaction['message']['instructions']:
-            program = accounts[instr['programIdIndex']]
-            instructions.append({
-                'accs': [accounts[acc] for acc in instr['accounts']],
-                'program': accounts[instr['programIdIndex']],
-                'data': base58.b58decode(instr['data']).hex()
-            })
-
-        pattern = re.compile('Program ([0-9A-Za-z]+) (.*)')
-        messages = []
-        for log in log_messages:
-            res = pattern.match(log)
-            if res:
-                (program, reason) = res.groups()
-                if reason == 'invoke [1]': messages.append({'program': program, 'logs': []})
-            messages[-1]['logs'].append(log)
-
-        for instr in instructions:
-            if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',): continue
-            if messages[0]['program'] != instr['program']:
-                raise ValueError('Invalid program in log messages: expect %s, actual %s' % (
-                    messages[0]['program'], instr['program']))
-            instr['logs'] = messages.pop(0)['logs']
-            exit_result = re.match(r'Program %s (success)' % instr['program'], instr['logs'][-1])
-            if not exit_result: raise ValueError("Can't get exit result")
-            instr['result'] = exit_result.group(1)
-
-            if instr['program'] == EVM_LOADER_ID:
-                memory_result = re.match(r'Program log: Total memory occupied: ([0-9]+)', instr['logs'][-3])
-                instruction_result = re.match(
-                    r'Program %s consumed ([0-9]+) of ([0-9]+) compute units' % instr['program'], instr['logs'][-2])
-                if not (memory_result and instruction_result):
-                    raise ValueError("Can't parse measurements for evm_loader")
-                instr['measurements'] = {
-                    'instructions': instruction_result.group(1),
-                    'memory': memory_result.group(1)
-                }
-
-        result = []
-        for instr in instructions:
-            if instr['program'] == EVM_LOADER_ID:
-                result.append({
-                    'program': instr['program'],
-                    'measurements': instr['measurements'],
-                    'result': instr['result'],
-                    'data': instr['data']
-                })
-        return result
-
-
-def get_error_definition_from_receipt(receipt):
-    err_from_receipt = get_from_dict(receipt, 'result', 'meta', 'err', 'InstructionError')
-    if err_from_receipt is not None:
-        return err_from_receipt
-
-    err_from_receipt_result = get_from_dict(receipt, 'meta', 'err', 'InstructionError')
-    if err_from_receipt_result is not None:
-        return err_from_receipt_result
-
-    err_from_send_trx_error = get_from_dict(receipt, 'data', 'err', 'InstructionError')
-    if err_from_send_trx_error is not None:
-        return err_from_send_trx_error
-
-    err_from_send_trx_error = get_from_dict(receipt, 'data', 'err')
-    if err_from_send_trx_error is not None:
-        return err_from_send_trx_error
-
-    err_from_prepared_receipt = get_from_dict(receipt, 'err', 'InstructionError')
-    if err_from_prepared_receipt is not None:
-        return err_from_prepared_receipt
-
-    return None
-
-
-def check_for_errors(receipt):
-    if get_error_definition_from_receipt(receipt) is not None:
-        return True
-    return False
-
-
-def check_if_big_transaction(err: Exception) -> bool:
-    return str(err).startswith("transaction too large:")
-
-
-PROGRAM_FAILED_TO_COMPLETE = 'ProgramFailedToComplete'
-COMPUTATION_BUDGET_EXCEEDED = 'ComputationalBudgetExceeded'
-
-
-def check_if_program_exceeded_instructions(receipt):
-    error_type = None
-    if isinstance(receipt, Exception):
-        error_type = str(receipt)
-    else:
-        error_arr = get_error_definition_from_receipt(receipt)
-        if isinstance(error_arr, list):
-            error_type = error_arr[1]
-
-    if isinstance(error_type, str):
-        return error_type in [PROGRAM_FAILED_TO_COMPLETE, COMPUTATION_BUDGET_EXCEEDED]
-    return False
-
-
-def check_if_storage_is_empty_error(receipt):
-    error_arr = get_error_definition_from_receipt(receipt)
-    if error_arr is not None and isinstance(error_arr, list):
-        error_dict = error_arr[1]
-        if isinstance(error_dict, dict) and 'Custom' in error_dict:
-            custom = error_dict['Custom']
-            if custom in (1, 4):
-                return custom
-    return 0
-
-
-def get_logs_from_receipt(receipt):
-    log_from_receipt = get_from_dict(receipt, 'result', 'meta', 'logMessages')
-    if log_from_receipt is not None:
-        return log_from_receipt
-
-    log_from_receipt_result = get_from_dict(receipt, 'meta', 'logMessages')
-    if log_from_receipt_result is not None:
-        return log_from_receipt_result
-
-    log_from_receipt_result_meta = get_from_dict(receipt, 'logMessages')
-    if log_from_receipt_result_meta is not None:
-        return log_from_receipt_result_meta
-
-    log_from_send_trx_error = get_from_dict(receipt, 'data', 'logs')
-    if log_from_send_trx_error is not None:
-        return log_from_send_trx_error
-
-    log_from_prepared_receipt = get_from_dict(receipt, 'logs')
-    if log_from_prepared_receipt is not None:
-        return log_from_prepared_receipt
-
-    return []
-
-
-@logged_group("neon.Proxy")
-def check_if_accounts_blocked(receipt, *, logger):
-    logs = get_logs_from_receipt(receipt)
-    if logs is None:
-        logger.error("Can't get logs")
-        logger.info(f"Failed result: {json.dumps(receipt, indent=3)}")
-        return False
-
-    ro_blocked = "trying to execute transaction on ro locked account"
-    rw_blocked = "trying to execute transaction on rw locked account"
-    for log in logs:
-        if log.find(ro_blocked) >= 0 or log.find(rw_blocked) >= 0:
-            return True
-    return False
-
-
-def check_if_blockhash_notfound(receipt):
-    return (not receipt) or (get_from_dict(receipt, 'data', 'err') == 'BlockhashNotFound')
-
-
-def check_if_node_behind(receipt):
-    return get_from_dict(receipt, 'data', 'numSlotsBehind')
+        return [r.get('result') for r in response_list]

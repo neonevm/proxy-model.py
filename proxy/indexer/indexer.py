@@ -1,823 +1,364 @@
-from typing import Optional
+from __future__ import annotations
 
-import base58
 import time
-from logged_groups import logged_group, logging_context
-from solana.system_program import SYS_PROGRAM_ID
+import logging
+from collections import deque
+from typing import List, Optional, Dict, Deque, Type, Set
 
+from ..common_neon.cancel_transaction_executor import CancelTxExecutor
+from ..common_neon.config import Config
+from ..common_neon.constants import ACTIVE_HOLDER_TAG
+from ..common_neon.operator_secret_mng import OpSecretMng
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo
+from ..common_neon.solana_tx import SolPubKey, SolAccount
+from ..common_neon.solana_tx_error_parser import SolTxErrorParser
+from ..common_neon.utils import SolanaBlockInfo
+from ..common_neon.utils.json_logger import logging_context
+
+from ..statistic.data import NeonBlockStatData
+from ..statistic.indexer_client import IndexerStatClient
+
+from ..indexer.indexed_objects import NeonIndexedBlockInfo, NeonIndexedBlockDict, SolNeonTxDecoderState
+from ..indexer.indexed_objects import NeonIndexedTxInfo
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.indexer_db import IndexerDB
-from ..indexer.utils import SolanaIxSignInfo, MetricsToLogBuff
-from ..indexer.utils import get_accounts_from_storage, check_error
-from ..indexer.canceller import Canceller
-
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, str_fmt_object
-from ..common_neon.solana_interactor import SolanaInteractor
-
-from ..environment import EVM_LOADER_ID, FINALIZED, CANCEL_TIMEOUT, SOLANA_URL
+from ..indexer.neon_ix_decoder import DummyIxDecoder, get_neon_ix_decoder_list
+from ..indexer.neon_ix_decoder_deprecate import get_neon_ix_decoder_deprecated_list
+from ..indexer.solana_tx_meta_collector import FinalizedSolTxMetaCollector, ConfirmedSolTxMetaCollector
+from ..indexer.solana_tx_meta_collector import SolTxMetaDict, SolHistoryNotFound
+from ..indexer.utils import MetricsToLogger
 
 
-@logged_group("neon.Indexer")
-class SolanaIxInfo:
-    def __init__(self, sign: str, slot: int, tx: {}):
-        self.sign = SolanaIxSignInfo(sign=sign, slot=slot, idx=-1)
-        self.tx = tx
-        self._is_valid = isinstance(tx, dict)
-        self._msg = self.tx['transaction']['message'] if self._is_valid else None
-        self._set_defaults()
+LOG = logging.getLogger(__name__)
 
-    def __str__(self):
-        return f'{self.sign} {self.evm_ix}'
 
-    def _set_defaults(self):
-        self.ix = {}
-        self.evm_ix = 0xFF
-        self.ix_data = None
+class Indexer(IndexerBase):
+    def __init__(self, config: Config):
+        solana = SolInteractor(config, config.solana_url)
+        self._db = IndexerDB(config)
+        last_known_slot = self._db.get_min_receipt_block_slot()
+        super().__init__(config, solana, last_known_slot)
 
-    def _decode_ixdata(self) -> bool:
-        try:
-            self.ix_data = base58.b58decode(self.ix['data'])
-            self.evm_ix = int(self.ix_data[0])
-            return True
-        except Exception as e:
-            self.debug(f'{self} fail to get a Neon EVM instruction: {e}')
-            self.evm_ix = 0xFF
-            self.ix_data = None
-        return False
+        self._last_op_account_update_time = 0.0
+        self._op_account_set: Set[str] = set()
 
-    def clear(self):
-        self._set_defaults()
+        self._cancel_tx_executor: Optional[CancelTxExecutor] = None
+        self._refresh_op_account_list()
 
-    def iter_ixs(self):
-        if not self._is_valid:
+        self._counted_logger = MetricsToLogger()
+        self._stat_client = IndexerStatClient(config)
+        self._stat_client.start()
+        self._last_stat_time = 0.0
+
+        sol_tx_meta_dict = SolTxMetaDict()
+        collector = FinalizedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict, self._start_slot)
+        self._finalized_sol_tx_collector = collector
+
+        collector = ConfirmedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict)
+        self._confirmed_sol_tx_collector = collector
+
+        self._confirmed_block_slot: Optional[int] = None
+
+        self._last_confirmed_block_slot = 0
+        self._last_finalized_block_slot = 0
+        self._neon_block_dict = NeonIndexedBlockDict()
+
+        sol_neon_ix_decoder_list: List[Type[DummyIxDecoder]] = list()
+        sol_neon_ix_decoder_list.extend(get_neon_ix_decoder_list())
+        sol_neon_ix_decoder_list.extend(get_neon_ix_decoder_deprecated_list())
+
+        self._sol_neon_ix_decoder_dict: Dict[int, Type[DummyIxDecoder]] = dict()
+        for decoder in sol_neon_ix_decoder_list:
+            ix_code = decoder.ix_code()
+            assert ix_code not in self._sol_neon_ix_decoder_dict
+            self._sol_neon_ix_decoder_dict[ix_code] = decoder
+
+    def _refresh_op_account_list(self) -> None:
+        now = time.time()
+        if abs(now - self._last_op_account_update_time) < 5 * 60:
+            return
+        self._last_op_account_update_time = now
+
+        op_secret_mng = OpSecretMng(self._config)
+        secret_list = op_secret_mng.read_secret_list()
+        if len(secret_list) == 0:
             return
 
-        self._set_defaults()
-        accounts = self._msg['accountKeys']
-        tx_ixs = enumerate(self._msg['instructions'])
+        if self._cancel_tx_executor is None:
+            signer = SolAccount.from_seed(secret_list[0])
+            self._cancel_tx_executor = CancelTxExecutor(self._config, self._solana, signer)
 
-        evm_ix_idx = -1
-        for ix_idx, self.ix in tx_ixs:
-            # Make a new object to keep values in existing
-            self.sign = SolanaIxSignInfo(sign=self.sign.sign, slot=self.sign.slot, idx=ix_idx)
-            if 'programIdIndex' not in self.ix:
-                self.debug(f'{self} error: fail to get program id')
+        self._op_account_set: Set[str] = {str(SolAccount.from_seed(k).pubkey()) for k in secret_list}
+
+    def _cancel_old_neon_txs(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> None:
+        if self._cancel_tx_executor is None:
+            return
+
+        for tx in state.neon_block.iter_neon_tx():
+            if tx.storage_account == '':
                 continue
-            if accounts[self.ix['programIdIndex']] != EVM_LOADER_ID:
-                continue
-            if not self._decode_ixdata():
-                continue
+            if state.stop_block_slot - tx.last_block_slot > self._config.cancel_timeout:
+                self._cancel_neon_tx(tx, sol_tx_meta)
 
-            evm_ix_idx += 1
-            yield evm_ix_idx
+        try:
+            self._cancel_tx_executor.execute_tx_list()
+        except BaseException as exc:
+            LOG.warning('Failed to cancel neon txs.', exc_info=exc)
+        finally:
+            self._cancel_tx_executor.clear()
 
-        self._set_defaults()
+    def _cancel_neon_tx(self, tx: NeonIndexedTxInfo, sol_tx_meta: SolTxMetaInfo) -> bool:
+        # We've already indexed the transaction
+        if tx.neon_tx_res.is_valid():
+            return True
 
-    def get_account_cnt(self):
-        assert self._is_valid
+        # We've already sent Cancel and are waiting for receipt
+        if tx.status != NeonIndexedTxInfo.Status.InProgress:
+            return True
 
-        return len(self.ix['accounts'])
+        if not tx.blocked_account_cnt:
+            LOG.warning(f"neon tx {tx.neon_tx} hasn't blocked accounts.")
+            return False
 
-    def get_account(self, idx: int) -> str:
-        assert self._is_valid
+        holder_account = tx.storage_account
+        holder_info = self._solana.get_holder_account_info(SolPubKey.from_string(holder_account))
+        if not holder_info:
+            LOG.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} is empty')
+            return False
 
-        msg_keys = self._msg['accountKeys']
-        ix_accounts = self.ix['accounts']
-        if len(ix_accounts) > idx:
-            return msg_keys[ix_accounts[idx]]
-        return ''
+        if holder_info.tag != ACTIVE_HOLDER_TAG:
+            LOG.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} has bad tag: {holder_info.tag}')
+            return False
 
-    def get_account_list(self, start: int) -> [str]:
-        assert self._is_valid
+        if holder_info.neon_tx_sig != tx.neon_tx.sig:
+            LOG.warning(
+                f'storage {holder_account} has another neon tx hash: '
+                f'{holder_info.neon_tx_sig} != {tx.neon_tx.sig}'
+            )
+            return False
 
-        msg_keys = self._msg['accountKeys']
-        ix_accounts = self.ix['accounts']
-        return [msg_keys[idx] for idx in ix_accounts[start:]]
+        if not self._cancel_tx_executor.add_blocked_holder_account(holder_info):
+            LOG.warning(
+                f'neon tx {tx.neon_tx} uses the storage account {holder_account} '
+                'which is already in the list on unlock'
+            )
+            return False
 
-
-class BaseEvmObject:
-    def __init__(self):
-        self.used_ixs = []
-        self.slot = 0
-
-    def mark_ix_used(self, ix_info: SolanaIxInfo):
-        self.used_ixs.append(ix_info.sign)
-        self.slot = max(self.slot, ix_info.sign.slot)
-
-    def move_ix_used(self, obj):
-        self.used_ixs += obj.used_ixs
-        obj.used_ixs.clear()
-        self.slot = max(self.slot, obj.slot)
-
-
-class NeonHolderObject(BaseEvmObject):
-    def __init__(self, account: str):
-        BaseEvmObject.__init__(self)
-        self.account = account
-        self.data = bytes()
-        self.count_written = 0
-        self.max_written = 0
-
-    def __str__(self):
-        return str_fmt_object(self)
-
-
-class NeonTxObject(BaseEvmObject):
-    def __init__(self, storage_account: str, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo):
-        BaseEvmObject.__init__(self)
-        self.storage_account = storage_account
-        self.neon_tx = (neon_tx or NeonTxInfo())
-        self.neon_res = (neon_res or NeonTxResultInfo())
-        self.step_count = []
-        self.holder_account = ''
-        self.blocked_accounts = []
-        self.canceled = False
-
-    def __str__(self):
-        return str_fmt_object(self)
-
-
-@logged_group("neon.Indexer")
-class ReceiptsParserState:
-    """
-    Each instruction is passed to a decoder (see DummyIxDecoder bellow).
-
-    The decoder analyzes the instruction and stores the intermediate data in the parser state:
-    - _holder_table contains Neon holder accounts for big Neon transactions;
-    - _tx_table contains Neon transactions.
-
-    Holder accounts are required to execute big Neon transactions.
-    The execution of a big Neon transaction contains two steps:
-    - storing chunks of the Neon transaction into the holder account;
-    - executing of the Neon transaction by passing the holder account to the Neon EVM program.
-
-    On parsing the instruction is stored into the intermediate object (holder, transaction) and in the _used_ixs.
-    If an error occurs while decoding, the decoder can skip this instruction.
-
-    So, in the _used_ixs the parser stores all instructions needed for assembling intermediate objects. After
-    each cycle the parser stores the number of the smallest slot from the _used_ixs. That is why, the parser can be
-    restarted in any moment.
-
-    After restarting the parser:
-    - Restores the intermediate state of objects;
-    - And continues the decoding process.
-
-    When the whole Neon transaction is assembled:
-    - Neon transaction is stored into the DB;
-    - All instructions used for assembly the transaction are stored into the DB;
-    - All instructions are removed from the _used_ixs;
-    - If number of the smallest slot in the _used_ixs is changed, it's stored into the DB for the future restart.
-    """
-    def __init__(self, db: IndexerDB, solana: SolanaInteractor):
-        self._db = db
-        self._solana = solana
-        self._holder_table = {}
-        self._tx_table = {}
-        self._done_tx_list = []
-        self._used_ixs = {}
-        self.ix = SolanaIxInfo(sign='', slot=-1, tx=None)
-
-    def set_ix(self, ix_info: SolanaIxInfo):
-        self.ix = ix_info
-
-    def mark_ix_used(self, obj: BaseEvmObject):
-        self._used_ixs.setdefault(self.ix.sign, 0)
-        self._used_ixs[self.ix.sign] += 1
-
-        obj.mark_ix_used(self.ix)
-
-    def unmark_ix_used(self, obj: BaseEvmObject):
-        for ix in obj.used_ixs:
-            self._used_ixs[ix] -= 1
-            if self._used_ixs[ix] == 0:
-                del self._used_ixs[ix]
-
-    def find_min_used_slot(self, min_slot):
-        for ix in self._used_ixs:
-            min_slot = min(min_slot, ix.slot)
-        return min_slot
-
-    def get_holder(self, account: str) -> Optional[NeonHolderObject]:
-        return self._holder_table.get(account)
-
-    def add_holder(self, account: str) -> NeonHolderObject:
-        if account in self._holder_table:
-            self.debug(f'{self.ix} ATTENTION: the holder {account} is already used!')
-
-        holder = NeonHolderObject(account=account)
-        self._holder_table[account] = holder
-        return holder
-
-    def del_holder(self, holder: NeonHolderObject):
-        self._holder_table.pop(holder.account, None)
-
-    def get_tx(self, storage_account: str) -> Optional[NeonTxObject]:
-        return self._tx_table.get(storage_account)
-
-    def add_tx(self, storage_account: str, neon_tx=None, neon_res=None) -> NeonTxObject:
-        if storage_account in self._tx_table:
-            self.debug(f'{self.ix} ATTENTION: the tx {storage_account} is already used!')
-
-        tx = NeonTxObject(storage_account=storage_account, neon_tx=neon_tx, neon_res=neon_res)
-        self._tx_table[storage_account] = tx
-        return tx
-
-    def del_tx(self, tx: NeonTxObject):
-        self._tx_table.pop(tx.storage_account, None)
-
-    def done_tx(self, tx: NeonTxObject):
-        """
-        Continue waiting of ixs in the slot with the same neon tx,
-        because the parsing order can be other than the execution order.
-        """
-        self._done_tx_list.append(tx)
-
-    def complete_done_txs(self):
-        """
-        Slot is done, store all done neon txs into the DB.
-        """
-        for tx in self._done_tx_list:
-            self.unmark_ix_used(tx)
-            if tx.neon_tx.is_valid() and tx.neon_res.is_valid():
-                with logging_context(neon_tx=tx.neon_tx.sign[:7]):
-                    self._db.submit_transaction(tx.neon_tx, tx.neon_res, tx.used_ixs)
-            self.del_tx(tx)
-        self._done_tx_list.clear()
-
-        holders = len(self._holder_table)
-        transactions = len(self._tx_table)
-        used_ixs = len(self._used_ixs)
-        if holders > 0 or transactions > 0 or used_ixs > 0:
-            self.debug('Receipt state stats: ' +
-                        f'holders {holders}, ' +
-                        f'transactions {transactions}, ' +
-                        f'used ixs {used_ixs}')
-
-    def iter_txs(self):
-        for tx in self._tx_table.values():
-            yield tx
-
-    def add_account_to_db(self, neon_account: str, pda_account: str, code_account: str, slot: int):
-        self._db.fill_account_info_by_indexer(neon_account, pda_account, code_account, slot)
-
-
-@logged_group("neon.Indexer")
-class DummyIxDecoder:
-    def __init__(self, name: str, state: ReceiptsParserState):
-        self.name = name
-        self.state = state
-
-    def __str__(self):
-        return f'{self.name} {self.state.ix}'
-
-    @staticmethod
-    def neon_addr_fmt(neon_tx: NeonTxInfo):
-        return f'Neon tx {neon_tx.sign}, Neon addr {neon_tx.addr}'
-
-    def _getadd_tx(self, storage_account, neon_tx=None, blocked_accounts=None) -> NeonTxObject:
-        if blocked_accounts is None:
-            blocked_accounts = ['']
-        tx = self.state.get_tx(storage_account)
-        if tx and neon_tx and tx.neon_tx and (neon_tx.sign != tx.neon_tx.sign):
-            self.warning(f'tx.neon_tx({tx.neon_tx}) != neon_tx({neon_tx}), storage: {storage_account}')
-            self.state.unmark_ix_used(tx)
-            self.state.del_tx(tx)
-            tx = None
-
-        if not tx:
-            tx = self.state.add_tx(storage_account=storage_account)
-            tx.blocked_accounts = blocked_accounts
-        if neon_tx:
-            tx.neon_tx = neon_tx
-        return tx
-
-    def _decoding_start(self):
-        """
-        Start decoding process:
-        - get the instruction from the parser state;
-        - log the start of decoding.
-        """
-        self.ix = self.state.ix
-        self.debug(f'{self} ...')
-
-    def _decoding_success(self, obj: BaseEvmObject, msg: str) -> bool:
-        """
-        The instruction has been successfully parsed:
-        - Mark the instruction as used;
-        - log the success message.
-        """
-        self.state.mark_ix_used(obj)
-        self.debug(f'{msg} - {obj}')
+        LOG.debug(f'Neon tx is blocked: storage {holder_account}, {tx.neon_tx}, {holder_info.account_list}')
+        tx.set_status(NeonIndexedTxInfo.Status.Canceled, sol_tx_meta.block_slot)
         return True
 
-    def _decoding_done(self, obj: BaseEvmObject, msg: str) -> bool:
-        """
-        Assembling of the object has been successfully finished.
-        """
-        if isinstance(obj, NeonTxObject):
-            self.state.mark_ix_used(obj)
-            self.state.done_tx(obj)
-        elif isinstance(obj, NeonHolderObject):
-            self.state.unmark_ix_used(obj)
-            self.state.del_holder(obj)
+    def _save_checkpoint(self) -> None:
+        cache_stat = self._neon_block_dict.stat
+        self._db.set_min_receipt_block_slot(cache_stat.min_block_slot)
+
+    def _complete_neon_block(self, state: SolNeonTxDecoderState) -> None:
+        if not state.has_neon_block():
+            return
+
+        neon_block = state.neon_block
+        is_finalized = state.is_neon_block_finalized
+        backup_is_finalized = neon_block.is_finalized
+        if backup_is_finalized:
+            return
+
+        try:
+            neon_block.set_finalized(is_finalized)
+            if not neon_block.is_completed:
+                neon_block.fill_log_info_list()
+                self._db.submit_block(neon_block)
+                neon_block.calc_stat(self._config, self._op_account_set)
+                neon_block.complete_block(self._config)
+            elif is_finalized:
+                # the confirmed block becomes finalized
+                self._db.finalize_block(neon_block)
+
+            # Add block to cache only after indexing and applying last changes to DB
+            self._neon_block_dict.add_neon_block(neon_block)
+            if is_finalized:
+                self._neon_block_dict.finalize_neon_block(neon_block)
+                self._commit_tx_stat(neon_block)
+                self._save_checkpoint()
+
+            self._commit_block_stat(neon_block)
+            self._commit_status_stat()
+        except (Exception,):
+            # Revert finalized status
+            neon_block.set_finalized(backup_is_finalized)
+            raise
+
+    def _commit_tx_stat(self, neon_block: NeonIndexedBlockInfo) -> None:
+        for tx_stat in neon_block.iter_stat_neon_tx():
+            self._stat_client.commit_neon_tx_result(tx_stat)
+
+    def _commit_block_stat(self, neon_block: NeonIndexedBlockInfo) -> None:
+        stat = NeonBlockStatData(
+            start_block=self._start_slot,
+            parsed_block=neon_block.block_slot,
+            finalized_block=self._last_finalized_block_slot,
+            confirmed_block=self._last_confirmed_block_slot
+        )
+        self._stat_client.commit_block_stat(stat)
+
+    def _commit_status_stat(self) -> None:
+        now = time.time()
+        if abs(now - self._last_stat_time) < 1:
+            return
+
+        self._last_stat_time = now
+        self._stat_client.commit_db_health(self._db.is_healthy())
+        self._stat_client.commit_solana_rpc_health(self._solana.is_healthy())
+
+    def _get_sol_block_deque(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> Deque[SolanaBlockInfo]:
+        if not state.has_neon_block():
+            sol_block = self._solana.get_block_info(sol_tx_meta.block_slot)
+            if sol_block.is_empty():
+                raise SolHistoryNotFound(f"can't get block: {sol_tx_meta.block_slot}")
+            return deque([sol_block])
+
+        start_block_slot = state.block_slot
+        block_slot_list = [block_slot for block_slot in range(start_block_slot + 1, sol_tx_meta.block_slot + 1)]
+        sol_block_list = self._solana.get_block_info_list(block_slot_list, state.commitment)
+        result_sol_block_deque: Deque[SolanaBlockInfo] = deque()
+        for sol_block in sol_block_list:
+            if sol_block.is_empty():
+                pass
+            elif sol_block.parent_block_slot == start_block_slot:
+                result_sol_block_deque.append(sol_block)
+                start_block_slot = sol_block.block_slot
+
+        if (len(result_sol_block_deque) == 0) or (result_sol_block_deque[-1].block_slot != sol_tx_meta.block_slot):
+            raise SolHistoryNotFound(f"can't get block history: {start_block_slot + 1} -> {sol_tx_meta.block_slot}")
+        return result_sol_block_deque
+
+    def _locate_neon_block(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> NeonIndexedBlockInfo:
+        # The same block
+        if state.has_neon_block():
+            if state.neon_block.block_slot == sol_tx_meta.block_slot:
+                return state.neon_block
+            # The next step, the indexer will choose another block, that is why here is saving of block in DB, cache ...
+            self._complete_neon_block(state)
+
+        neon_block = self._neon_block_dict.get_neon_block(sol_tx_meta.block_slot)
+        if neon_block:
+            pass  # The parsed block from cache
         else:
-            assert False, 'Unknown type of object'
-        self.debug(f'{msg} - {obj}')
-        return True
-
-    def _decoding_skip(self, reason: str) -> bool:
-        """Skip decoding of the instruction"""
-        self.debug(f'{reason}')
-        return False
-
-    def _decoding_fail(self, obj: BaseEvmObject, reason: str) -> bool:
-        """
-        Assembling of objects has been failed:
-        - destroy the intermediate objects;
-        - unmark all instructions as unused.
-
-        Show errors in warning mode because it can be a result of restarting.
-        """
-        self.warning(f'{reason} - {obj}')
-        self.state.unmark_ix_used(obj)
-
-        if isinstance(obj, NeonTxObject):
-            self.state.del_tx(obj)
-        elif isinstance(obj, NeonHolderObject):
-            self.state.del_holder(obj)
-        else:
-            assert False, 'Unknown type of object'
-        return False
-
-    def _decode_tx(self, tx: NeonTxObject):
-        """
-        If the transaction doesn't have results, then try to get results for the transaction.
-        If the transaction has received results, then call done for the transaction.
-        The transaction can already have results, because parser waits all ixs in the slot, because
-        the parsing order can be other than the execution order
-        """
-        if not tx.neon_res.is_valid():
-            tx.neon_res.decode(tx.neon_tx.sign, self.ix.tx, self.ix.sign.idx)
-            if tx.neon_res.is_valid():
-                return self._decoding_done(tx, 'found Neon results')
-        return self._decoding_success(tx, 'mark ix used')
-
-    def _init_tx_from_holder(self, holder_account: str, storage_account: str, blocked_accounts: [str]) -> Optional[NeonTxObject]:
-        tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
-        if tx.holder_account:
-            return tx
-
-        holder = self.state.get_holder(holder_account)
-        if not holder:
-            self._decoding_skip(f'no holder account {holder_account}')
-            return None
-
-        rlp_sign = holder.data[0:65]
-        rlp_len = int.from_bytes(holder.data[65:73], "little")
-        rlp_endpos = 73 + rlp_len
-        rlp_data = holder.data[73:rlp_endpos]
-
-        rlp_error = tx.neon_tx.decode(rlp_sign=rlp_sign, rlp_data=bytes(rlp_data)).error
-        if rlp_error:
-            self.error(f'Neon tx rlp error: {rlp_error}')
-
-        tx.holder_account = holder_account
-        tx.move_ix_used(holder)
-        self._decoding_done(holder, f'init {self.neon_addr_fmt(tx.neon_tx)} from holder')
-        return tx
-
-    def execute(self) -> bool:
-        """By default, skip the instruction without parsing."""
-        return self._decoding_skip(f'no logic to decode the instruction: {self.state.ix.ix_data.hex()[:8]}')
-
-
-class WriteIxDecoder(DummyIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'Write', state)
-
-    class _DataChunk:
-        def __init__(self, offset=0, length=0, data=bytes()):
-            self.offset = offset
-            self.length = length
-            self.endpos = self.offset + self.length
-            self.data = data
-
-        def __str__(self):
-            return str_fmt_object(self)
-
-        def is_valid(self) -> bool:
-            return (self.length > 0) and (len(self.data) == self.length)
-
-    def _decode_datachunck(self, ix_info: SolanaIxInfo) -> _DataChunk:
-        # No enough bytes to get length of chunk
-        if len(ix_info.ix_data) < 17:
-            return self._DataChunk()
-
-        return self._DataChunk(
-            offset=int.from_bytes(ix_info.ix_data[4:8], "little"),
-            length=int.from_bytes(ix_info.ix_data[8:16], "little"),
-            data=ix_info.ix_data[16:],
-        )
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        chunk = self._decode_datachunck(self.ix)
-        if not chunk.is_valid():
-            return self._decoding_skip(f'bad data chunk {chunk}')
-        if self.ix.get_account_cnt() < 1:
-            return self._decoding_skip(f'no enough accounts {self.ix.get_account_cnt()}')
-
-        holder_account = self.ix.get_account(0)
-        holder = self.state.get_holder(holder_account)
-        if not holder:
-            holder = self.state.add_holder(holder_account)
-
-        # Write the received chunk into the holder account buffer
-        holder.max_written = max(holder.max_written, chunk.endpos)
-        if len(holder.data) < holder.max_written:
-            holder.data += bytes(holder.max_written - len(holder.data))
-        holder.data = holder.data[:chunk.offset] + chunk.data + holder.data[chunk.endpos:]
-        holder.count_written += chunk.length
-
-        return self._decoding_success(holder, f'add chunk {chunk}')
-
-
-class WriteWithHolderIxDecoder(WriteIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'WriteWithHolder', state)
-
-    def _decode_datachunck(self, ix_info: SolanaIxInfo) -> WriteIxDecoder._DataChunk:
-        # No enough bytes to get length of chunk
-        if len(ix_info.ix_data) < 22:
-            return self._DataChunk()
-
-        return self._DataChunk(
-            offset=int.from_bytes(ix_info.ix_data[9:13], "little"),
-            length=int.from_bytes(ix_info.ix_data[13:21], "little"),
-            data=ix_info.ix_data[21:]
-        )
-
-
-class CreateAccountIxDecoder(DummyIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'CreateAccount', state)
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        if check_error(self.ix.tx):
-            return self._decoding_skip("Ignore failed create account")
-
-        if len(self.ix.ix_data) < 41:
-            return self._decoding_skip(f'not enough data to get the Neon account {len(self.ix.ix_data)}')
-
-        neon_account = "0x" + self.ix.ix_data[8+8+4:][:20].hex()
-        pda_account = self.ix.get_account(1)
-        code_account = self.ix.get_account(3)
-        if code_account == str(SYS_PROGRAM_ID) or code_account == '':
-            code_account = None
-
-        self.debug(f"neon_account({neon_account}), pda_account({pda_account}), code_account({code_account}), slot({self.ix.sign.slot})")
-
-        self.state.add_account_to_db(neon_account, pda_account, code_account, self.ix.sign.slot)
-        return True
-
-
-class ResizeStorageAccountIxDecoder(DummyIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'ResizeStorageAccount', state)
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        if check_error(self.ix.tx):
-            return self._decoding_skip("Ignore failed resize account")
-
-        pda_account = self.ix.get_account(0)
-        code_account = self.ix.get_account(2)
-
-        self.debug(f"pda_account({pda_account}), code_account({code_account}), slot({self.ix.sign.slot})")
-
-        self.state.add_account_to_db(None, pda_account, code_account, self.ix.sign.slot)
-        return True
-
-
-class CallFromRawIxDecoder(DummyIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'CallFromRaw', state)
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        if len(self.ix.ix_data) < 92:
-            return self._decoding_skip('no enough data to get the Neon tx')
-
-        rlp_sign = self.ix.ix_data[25:90]
-        rlp_data = self.ix.ix_data[90:]
-
-        neon_tx = NeonTxInfo(rlp_sign=rlp_sign, rlp_data=rlp_data)
-        if neon_tx.error:
-            return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
-
-        neon_res = NeonTxResultInfo(neon_tx.sign, self.ix.tx, self.ix.sign.idx)
-        tx = NeonTxObject('', neon_tx=neon_tx, neon_res=neon_res)
-        return self._decoding_done(tx, 'call success')
-
-
-class PartialCallIxDecoder(DummyIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'PartialCallFromRawEthereumTX', state)
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        blocked_accounts_start = 7
-
-        if self.ix.get_account_cnt() < blocked_accounts_start + 1:
-            return self._decoding_skip('no enough accounts')
-        if len(self.ix.ix_data) < 100:
-            return self._decoding_skip('no enough data to get arguments')
-
-        storage_account = self.ix.get_account(0)
-        blocked_accounts = self.ix.get_account_list(blocked_accounts_start)
-        step_count = int.from_bytes(self.ix.ix_data[5:13], 'little')
-        rlp_sign = self.ix.ix_data[33:98]
-        rlp_data = self.ix.ix_data[98:]
-
-        neon_tx = NeonTxInfo(rlp_sign=rlp_sign, rlp_data=rlp_data)
-        if neon_tx.error:
-            return self._decoding_skip(f'Neon tx rlp error "{neon_tx.error}"')
-
-        tx = self._getadd_tx(storage_account, neon_tx=neon_tx, blocked_accounts=blocked_accounts)
-        tx.step_count.append(step_count)
-        return self._decode_tx(tx)
-
-
-class PartialCallV02IxDecoder(PartialCallIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'PartialCallFromRawEthereumTXv02', state)
-
-
-class PartialCallOrContinueIxDecoder(PartialCallIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'PartialCallOrContinueFromRawEthereumTX', state)
-
-
-class ContinueIxDecoder(DummyIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'Continue', state)
-        self._blocked_accounts_start = 5
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        if self.ix.get_account_cnt() < self._blocked_accounts_start + 1:
-            return self._decoding_skip('no enough accounts')
-        if len(self.ix.ix_data) < 14:
-            return self._decoding_skip('no enough data to get arguments')
-
-        storage_account = self.ix.get_account(0)
-        blocked_accounts = self.ix.get_account_list(self._blocked_accounts_start)
-        step_count = int.from_bytes(self.ix.ix_data[5:13], 'little')
-
-        tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
-        tx.step_count.append(step_count)
-        return self._decode_tx(tx)
-
-
-class ContinueV02IxDecoder(ContinueIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'ContinueV02', state)
-        self._blocked_accounts_start = 6
-
-
-class ExecuteTrxFromAccountIxDecoder(DummyIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'ExecuteTrxFromAccountDataIterative', state)
-        self._blocked_accounts_start = 5
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        if self.ix.get_account_cnt() < self._blocked_accounts_start + 1:
-            return self._decoding_skip('no enough accounts')
-
-        holder_account = self.ix.get_account(0)
-        storage_account = self.ix.get_account(1)
-        blocked_accounts = self.ix.get_account_list(self._blocked_accounts_start)
-        step_count = int.from_bytes(self.ix.ix_data[5:13], 'little')
-
-        tx = self._init_tx_from_holder(holder_account, storage_account, blocked_accounts)
-        if not tx:
-            return self._decoding_skip(f'fail to init in storage {storage_account} from holder {holder_account}')
-        tx.step_count.append(step_count)
-        return self._decode_tx(tx)
-
-
-class ExecuteTrxFromAccountV02IxDecoder(ExecuteTrxFromAccountIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'ExecuteTrxFromAccountDataIterativeV02', state)
-        self._blocked_accounts_start = 7
-
-
-class CancelIxDecoder(DummyIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'Cancel', state)
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        blocked_accounts_start = 6
-        if self.ix.get_account_cnt() < blocked_accounts_start + 1:
-            return self._decoding_skip('no enough accounts')
-
-        storage_account = self.ix.get_account(0)
-        blocked_accounts = self.ix.get_account_list(blocked_accounts_start)
-
-        tx = self._getadd_tx(storage_account, blocked_accounts=blocked_accounts)
-        if not tx.neon_tx.is_valid():
-            return self._decoding_fail(tx, f'cannot find storage {tx}')
-
-        tx.neon_res.canceled(self.ix.tx)
-        return self._decoding_done(tx, f'cancel success')
-
-
-class CancelV02IxDecoder(CancelIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'CancelV02', state)
-
-
-class ExecuteOrContinueIxParser(DummyIxDecoder):
-    def __init__(self, state: ReceiptsParserState):
-        DummyIxDecoder.__init__(self, 'ExecuteTrxFromAccountDataIterativeOrContinue', state)
-
-    def execute(self) -> bool:
-        self._decoding_start()
-
-        blocked_accounts_start = 7
-
-        if self.ix.get_account_cnt() < blocked_accounts_start + 1:
-            return self._decoding_skip('no enough accounts')
-
-        holder_account = self.ix.get_account(0)
-        storage_account = self.ix.get_account(1)
-        blocked_accounts = self.ix.get_account_list(blocked_accounts_start)
-        step_count = int.from_bytes(self.ix.ix_data[5:13], 'little')
-
-        tx = self._init_tx_from_holder(holder_account, storage_account, blocked_accounts)
-        if not tx:
-            return self._decoding_skip(f'fail to init the storage {storage_account} from the holder {holder_account}')
-        tx.step_count.append(step_count)
-        return self._decode_tx(tx)
-
-
-@logged_group("neon.Indexer")
-class BlocksIndexer:
-    def __init__(self, db: IndexerDB, solana: SolanaInteractor):
-        self.db = db
-        self.solana = solana
-        self.counted_logger = MetricsToLogBuff()
-
-    def gather_blocks(self):
-        start_time = time.time()
-        slot = self.solana.get_slot(FINALIZED)['result']
-        self.db.set_latest_block(slot)
-        gather_blocks_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.counted_logger.print(
-            self.debug,
-            list_params={"gather_blocks_ms": gather_blocks_ms},
-            latest_params={"last_block_slot": slot}
-        )
-
-
-@logged_group("neon.Indexer")
-class Indexer(IndexerBase):
-    def __init__(self, solana_url):
-        self.debug(f'Finalized commitment: {FINALIZED}')
-        solana = SolanaInteractor(solana_url)
-        self.db = IndexerDB(solana)
-        last_known_slot = self.db.get_min_receipt_slot()
-        IndexerBase.__init__(self, solana, last_known_slot)
-        self.indexed_slot = self.last_slot
-        self.canceller = Canceller()
-        self.blocked_storages = {}
-        self.block_indexer = BlocksIndexer(db=self.db, solana=solana)
-        self.counted_logger = MetricsToLogBuff()
-
-        self.state = ReceiptsParserState(db=self.db, solana=solana)
-        self.ix_decoder_map = {
-            0x00: WriteIxDecoder(self.state),
-            0x01: DummyIxDecoder('Finalize', self.state),
-            0x02: CreateAccountIxDecoder(self.state),
-            0x03: DummyIxDecoder('Call', self.state),
-            0x04: DummyIxDecoder('CreateAccountWithSeed', self.state),
-            0x05: CallFromRawIxDecoder(self.state),
-            0x06: DummyIxDecoder('OnEvent', self.state),
-            0x07: DummyIxDecoder('OnResult', self.state),
-            0x09: PartialCallIxDecoder(self.state),
-            0x0a: ContinueIxDecoder(self.state),
-            0x0b: ExecuteTrxFromAccountIxDecoder(self.state),
-            0x0c: CancelIxDecoder(self.state),
-            0x0d: PartialCallOrContinueIxDecoder(self.state),
-            0x0e: ExecuteOrContinueIxParser(self.state),
-            0x0f: DummyIxDecoder('ERC20CreateTokenAccount', self.state),
-            0x11: ResizeStorageAccountIxDecoder(self.state),
-            0x12: WriteWithHolderIxDecoder(self.state),
-            0x13: PartialCallV02IxDecoder(self.state),
-            0x14: ContinueV02IxDecoder(self.state),
-            0x15: CancelV02IxDecoder(self.state),
-            0x16: ExecuteTrxFromAccountV02IxDecoder(self.state)
-        }
-        self.def_decoder = DummyIxDecoder('Unknown', self.state)
+            # A new block with history from the Solana network
+            sol_block_deque = self._get_sol_block_deque(state, sol_tx_meta)
+            if state.has_neon_block():
+                neon_block = state.neon_block.clone(sol_block_deque)
+            else:
+                neon_block = NeonIndexedBlockInfo(sol_block_deque)
+        state.set_neon_block(neon_block)
+        return neon_block
+
+    def _run_sol_tx_collector(self, state: SolNeonTxDecoderState) -> None:
+        stop_block_slot = self._solana.get_block_slot(state.commitment)
+        state.set_stop_block_slot(stop_block_slot)
+        if stop_block_slot < state.start_block_slot:
+            return
+
+        for sol_tx_meta in state.iter_sol_tx_meta():
+            with logging_context(ident=sol_tx_meta.req_id):
+                neon_block = self._locate_neon_block(state, sol_tx_meta)
+                if neon_block.is_completed:
+                    continue
+
+                neon_block.add_sol_tx_cost(SolTxCostInfo.from_tx_meta(sol_tx_meta))
+                is_error = SolTxErrorParser(sol_tx_meta.tx).check_if_error()
+
+            for sol_neon_ix in state.iter_sol_neon_ix():
+                with logging_context(sol_neon_ix=sol_neon_ix.req_id):
+                    neon_block.add_sol_neon_ix(sol_neon_ix)
+                    SolNeonIxDecoder = self._sol_neon_ix_decoder_dict.get(sol_neon_ix.program_ix, DummyIxDecoder)
+                    sol_neon_ix_decoder = SolNeonIxDecoder(state)
+                    if is_error:
+                        if hasattr(sol_neon_ix_decoder, 'decode_failed_neon_tx_event_list'):
+                            sol_neon_ix_decoder.decode_failed_neon_tx_event_list()
+                        # LOG.debug('failed tx')
+                        continue
+
+                    sol_neon_ix_decoder.execute()
+
+        sol_tx_meta = state.end_range
+        with logging_context(ident=sol_tx_meta.req_id):
+            if (not state.has_neon_block()) or (state.block_slot != state.stop_block_slot):
+                self._locate_neon_block(state, sol_tx_meta)
+
+            self._complete_neon_block(state)
+
+    def _refresh_block_slots(self) -> None:
+        self._last_confirmed_block_slot = self._solana.get_block_slot(self._confirmed_sol_tx_collector.commitment)
+        self._last_finalized_block_slot = self._solana.get_block_slot(self._finalized_sol_tx_collector.commitment)
+
+    def _has_new_blocks(self) -> bool:
+        if self._confirmed_block_slot is None:
+            return True
+
+        return self._confirmed_block_slot != self._last_confirmed_block_slot
 
     def process_functions(self):
-        self.block_indexer.gather_blocks()
-        IndexerBase.process_functions(self)
-        self.process_receipts()
-        self.canceller.unlock_accounts(self.blocked_storages)
-        self.blocked_storages = {}
+        self._refresh_block_slots()
+        if not self._has_new_blocks():
+            return
 
-    def process_receipts(self):
-        start_time = time.time()
+        start_block_slot = self._finalized_sol_tx_collector.last_block_slot + 1
+        finalized_neon_block = self._neon_block_dict.finalized_neon_block
+        if finalized_neon_block is not None:
+            start_block_slot = finalized_neon_block.block_slot + 1
 
-        max_slot = 0
-        last_block_slot = self.db.get_latest_block().slot
+        try:
+            state = SolNeonTxDecoderState(self._finalized_sol_tx_collector, start_block_slot, finalized_neon_block)
+            self._run_sol_tx_collector(state)
+        except SolHistoryNotFound as err:
+            LOG.debug(f'skip parsing of finalized history: {str(err)}')
+            return
 
-        for slot, sign, tx in self.transaction_receipts.get_trxs(self.indexed_slot, reverse=False):
-            if slot > last_block_slot:
-                break
+        # If there were a lot of transactions in the finalized state,
+        # the head of finalized blocks will go forward
+        # and there are no reason to parse confirmed blocks,
+        # because on next iteration there will be the next portion of finalized blocks
+        finalized_block_slot = self._solana.get_block_slot(state.commitment)
+        if (finalized_block_slot - state.stop_block_slot) < 3:
+            state.shift_to_collector(self._confirmed_sol_tx_collector)
+            try:
+                self._run_sol_tx_collector(state)
+            except SolHistoryNotFound as err:
+                LOG.debug(f'skip parsing of confirmed history: {str(err)}')
+            else:
+                sol_tx_meta = state.end_range
+                with logging_context(ident=sol_tx_meta.req_id):
+                    # Activate branch of history
+                    self._db.activate_block_list(state.iter_neon_block())
+                    # Cancel stuck transactions
+                    self._cancel_old_neon_txs(state, sol_tx_meta)
+                    # Save confirmed block only after successfully parsing
+                    self._confirmed_block_slot = state.stop_block_slot
 
-            if max_slot != slot:
-                self.state.complete_done_txs()
-                max_slot = max(max_slot, slot)
+        self._print_stat(state)
+        self._commit_status_stat()
+        self._refresh_op_account_list()
 
-            ix_info = SolanaIxInfo(sign=sign, slot=slot,  tx=tx)
+    def _print_stat(self, state: SolNeonTxDecoderState) -> None:
+        cache_stat = self._neon_block_dict.stat
 
-            for _ in ix_info.iter_ixs():
-                req_id = ix_info.sign.get_req_id()
-                with logging_context(sol_tx=req_id):
-                        self.state.set_ix(ix_info)
-                        (self.ix_decoder_map.get(ix_info.evm_ix) or self.def_decoder).execute()
-
-        self.indexed_slot = last_block_slot
-        self.db.set_min_receipt_slot(self.state.find_min_used_slot(self.indexed_slot))
-
-        # cancel transactions with long inactive time
-        for tx in self.state.iter_txs():
-            if tx.storage_account and abs(tx.slot - self.current_slot) > CANCEL_TIMEOUT:
-                if not self.unlock_accounts(tx):
-                    tx.neon_res.slot = self.indexed_slot
-                    self.state.done_tx(tx)
-
-        # after last instruction and slot
-        self.state.complete_done_txs()
-
-        process_receipts_ms = (time.time() - start_time) * 1000  # convert this into milliseconds
-        self.counted_logger.print(
-            self.debug,
-            list_params={"process_receipts_ms": process_receipts_ms, "processed_slots": self.current_slot - self.indexed_slot},
-            latest_params={"transaction_receipts.len": self.transaction_receipts.size(), "indexed_slot": self.indexed_slot}
-        )
-
-    def unlock_accounts(self, tx) -> bool:
-        # We already indexed the transaction
-        if tx.neon_res.is_valid():
-            return True
-
-        # We already sent Cancel and waiting for reciept
-        if tx.canceled:
-            return True
-
-        if not tx.blocked_accounts:
-            self.warning(f"Transaction {tx.neon_tx} hasn't blocked accounts.")
-            return False
-
-        storage_accounts_list = get_accounts_from_storage(self.solana, tx.storage_account)
-        if storage_accounts_list is None:
-            self.warning(f"Transaction {tx.neon_tx} has empty storage.")
-            return False
-
-        if storage_accounts_list != tx.blocked_accounts:
-            self.warning(f"Transaction {tx.neon_tx} has another list of accounts than storage.")
-            return False
-
-        self.debug(f'Neon tx is blocked: storage {tx.storage_account}, {tx.neon_tx}')
-        self.blocked_storages[tx.storage_account] = (tx.neon_tx, tx.blocked_accounts)
-        tx.canceled = True
-        return True
-
-
-@logged_group("neon.Indexer")
-def run_indexer(solana_url, *, logger):
-    logger.info(f"""Running indexer with params:
-        solana_url: {solana_url},
-        evm_loader_id: {EVM_LOADER_ID}""")
-
-    indexer = Indexer(solana_url)
-    indexer.run()
-
-
-if __name__ == "__main__":
-    solana_url = SOLANA_URL
-    run_indexer(solana_url)
+        with logging_context(ident='stat'):
+            self._counted_logger.print(
+                self._config,
+                LOG.debug,
+                list_value_dict={
+                    'receipts processing ms': state.process_time_ms,
+                    'processed neon blocks': state.neon_block_cnt,
+                    'processed solana transactions': state.sol_tx_meta_cnt,
+                    'processed solana instructions': state.sol_neon_ix_cnt
+                },
+                latest_value_dict={
+                    'neon blocks': cache_stat.neon_block_cnt,
+                    'neon holders': cache_stat.neon_holder_cnt,
+                    'neon transactions': cache_stat.neon_tx_cnt,
+                    'solana instructions': cache_stat.sol_neon_ix_cnt,
+                    'indexed block slot': state.stop_block_slot,
+                    'min used block slot': cache_stat.min_block_slot
+                }
+            )

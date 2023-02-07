@@ -13,18 +13,10 @@
 ##------------------------------------------
 
 import unittest
-import os
-from web3 import Web3
-from solcx import compile_source
 
-from proxy.testing.testing_helpers import request_airdrop
+from proxy.testing.testing_helpers import Proxy
 
 issue = 'https://github.com/neonlabsorg/neon-evm/issues/360'
-proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-proxy = Web3(Web3.HTTPProvider(proxy_url))
-admin = proxy.eth.account.create(issue + '/admin')
-proxy.eth.default_account = admin.address
-request_airdrop(admin.address)
 
 # Address: HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU (a token mint account)
 # uint256: 110178555362476360822489549210862241441608066866019832842197691544474470948129
@@ -36,54 +28,75 @@ CONTRACT_SOURCE = '''
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.0;
 
+/**
+ * @title QueryAccount
+ * @dev Wrappers around QueryAccount operations.
+ */
 library QueryAccount {
     address constant precompiled = 0xff00000000000000000000000000000000000002;
 
-    // Takes a Solana address, treats it as an address of an account.
-    // Puts the metadata and a chunk of data into the cache.
-    function cache(uint256 solana_address, uint64 offset, uint64 len) internal returns (bool) {
-        (bool success, bytes memory _dummy) = precompiled.staticcall(abi.encodeWithSignature("cache(uint256,uint64,uint64)", solana_address, offset, len));
+    /**
+     * @dev Puts the metadata and a chunk of data into the cache.
+     * @param solana_address Address of an account.
+     * @param offset Offset in bytes from the beginning of the data.
+     * @param len Length in bytes of the chunk.
+     */
+    function cache(uint256 solana_address, uint64 offset, uint64 len) internal view returns (bool) {
+        (bool success,) = precompiled.staticcall(abi.encodeWithSignature("cache(uint256,uint64,uint64)", solana_address, offset, len));
         return success;
     }
 
-    // Takes a Solana address, treats it as an address of an account.
-    // Returns the account's owner Solana address (32 bytes).
+    /**
+     * @dev Returns the account's owner Solana address.
+     * @param solana_address Address of an account.
+     */
     function owner(uint256 solana_address) internal view returns (bool, uint256) {
         (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("owner(uint256)", solana_address));
         return (success, to_uint256(result));
     }
 
-    // Takes a Solana address, treats it as an address of an account.
-    // Returns the length of the account's data (8 bytes).
+    /**
+     * @dev Returns full length of the account's data.
+     * @param solana_address Address of an account.
+     */
     function length(uint256 solana_address) internal view returns (bool, uint256) {
         (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("length(uint256)", solana_address));
         return (success, to_uint256(result));
     }
 
-    // Takes a Solana address, treats it as an address of an account.
-    // Returns the funds in lamports of the account.
+    /**
+     * @dev Returns the funds in lamports of the account.
+     * @param solana_address Address of an account.
+     */
     function lamports(uint256 solana_address) internal view returns (bool, uint256) {
         (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("lamports(uint256)", solana_address));
         return (success, to_uint256(result));
     }
 
-    // Takes a Solana address, treats it as an address of an account.
-    // Returns the executable flag of the account.
+    /**
+     * @dev Returns the executable flag of the account.
+     * @param solana_address Address of an account.
+     */
     function executable(uint256 solana_address) internal view returns (bool, bool) {
         (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("executable(uint256)", solana_address));
         return (success, to_bool(result));
     }
 
-    // Takes a Solana address, treats it as an address of an account.
-    // Returns the rent epoch of the account.
+    /**
+     * @dev Returns the rent epoch of the account.
+     * @param solana_address Address of an account.
+     */
     function rent_epoch(uint256 solana_address) internal view returns (bool, uint256) {
         (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("rent_epoch(uint256)", solana_address));
         return (success, to_uint256(result));
     }
 
-    // Takes a Solana address, treats it as an address of an account,
-    // also takes an offset and length of the account's data.
-    // Returns a chunk of the data (length bytes).
+    /**
+     * @dev Returns a chunk of the data.
+     * @param solana_address Address of an account.
+     * @param offset Offset in bytes from the beginning of the cached segment of data.
+     * @param len Length in bytes of the returning chunk.
+     */
     function data(uint256 solana_address, uint64 offset, uint64 len) internal view returns (bool, bytes memory) {
         return precompiled.staticcall(abi.encodeWithSignature("data(uint256,uint64,uint64)", solana_address, offset, len));
     }
@@ -328,58 +341,49 @@ contract TestQueryAccount {
 class Test_Query_Account_Contract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.proxy = proxy = Proxy()
+        cls.admin = proxy.create_signer_account(issue + '/admin')
+
         print('\n\n' + issue)
-        print('admin address:', admin.address)
+        print('admin address:', cls.admin.address)
+
         cls.deploy_contract(cls)
 
     def deploy_contract(self):
-        compiled = compile_source(CONTRACT_SOURCE)
-        id, interface = compiled.popitem()
-        self.contract = interface
-        contract = proxy.eth.contract(abi=self.contract['abi'], bytecode=self.contract['bin'])
-        nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        tx = {'nonce': nonce}
-        tx_constructor = contract.constructor().buildTransaction(tx)
-        tx_deploy = proxy.eth.account.sign_transaction(tx_constructor, admin.key)
-        tx_deploy_hash = proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
-        tx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(tx_deploy_hash)
-        self.contract_address = tx_deploy_receipt.contractAddress
-        print('contract address:', self.contract_address)
+        deployed_info = self.proxy.compile_and_deploy_contract(self.admin, CONTRACT_SOURCE)
+        self.contract = deployed_info.contract
+        print('contract address:', self.contract.address)
 
     # @unittest.skip("a.i.")
     def test_cache(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_cache().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_cache().call()
+        self.assertTrue(ok)
 
     # @unittest.skip("a.i.")
     def test_noncached(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_noncached().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_noncached().call()
+        self.assertTrue(ok)
 
     # @unittest.skip("a.i.")
     def test_metadata_ok(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_metadata_ok().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_metadata_ok().call()
+        self.assertTrue(ok)
 
     @unittest.skip("a.i.")
     def test_data_ok(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_data_ok().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_data_ok().call()
+        self.assertTrue(ok)
 
     # @unittest.skip("a.i.")
     def test_data_wrong_range(self):
-        print
-        query = proxy.eth.contract(address=self.contract_address, abi=self.contract['abi'])
-        ok = query.functions.test_data_wrong_range().call()
-        assert(ok)
+        print()
+        ok = self.contract.functions.test_data_wrong_range().call()
+        self.assertTrue(ok)
+
 
 if __name__ == '__main__':
     unittest.main()

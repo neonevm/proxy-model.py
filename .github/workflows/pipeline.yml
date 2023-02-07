@@ -1,0 +1,203 @@
+name: Build proxy docker image
+on:
+  workflow_dispatch:
+    inputs:
+      full_test_suite:
+        required: true
+      neon_evm_commit:
+        required: true
+      neon_evm_branch:
+        required: true
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
+  push:
+    branches:
+      - master
+      - develop
+      - '[vt][0-9].[0-9]+.[0-9x]+*'
+    tags:
+      - "*"
+env:
+  NEON_EVM_TAG: "latest"
+  AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
+  AWS_DEFAULT_REGION: ${{secrets.AWS_DEFAULT_REGION}}
+  AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+  DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
+  DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
+  BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.inputs.neon_evm_commit }}
+  cancel-in-progress: true
+jobs:
+  build-image:
+    runs-on: build-runner
+    outputs:
+      proxy_tag: ${{ steps.tags.outputs.proxy }}
+      neon_evm_tag: ${{ steps.tags.outputs.neon_evm }}
+      is_version_proxy_branch: ${{ steps.is_version_proxy_branch.outputs.value }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: output branches name
+        run: |
+          echo "neon_evm_branch = ${{ github.event.inputs.neon_evm_branch }}"
+          echo "proxy_branch = ${{ github.ref }}"
+      - name: Check if proxy branch is version branch
+        id: is_version_proxy_branch
+        run: |
+          if [[ "${{ github.ref }}" =~ "refs/heads/"[vt][0-9]+\.[0-9]+\.x ]]; then
+            echo "value=true"
+            echo "value=true" >> $GITHUB_OUTPUT
+          else
+            echo "value=false"
+            echo "value=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Define images tags
+        id: tags
+        run: |
+          if [[ "${{ github.event.inputs.neon_evm_commit }}" != "" ]]; then
+            neon_evm_tag=${{ github.event.inputs.neon_evm_commit }}
+          else
+            neon_evm_tag="${NEON_EVM_TAG}"
+          fi;
+          echo "neon_evm_tag=${neon_evm_tag}"
+          echo "neon_evm=${neon_evm_tag}" >> $GITHUB_OUTPUT
+
+          if [[ "${{ github.event.inputs.neon_evm_commit }}" != "" ]]; then
+            evm_short_commit=`git rev-parse --short ${{ github.event.inputs.neon_evm_commit }}`
+            proxy_tag="${{ github.sha }}-${evm_short_commit}"
+          else
+            proxy_tag="${{ github.sha }}"
+          fi;
+          echo "proxy_tag=${proxy_tag}"
+          echo "proxy=$proxy_tag" >> $GITHUB_OUTPUT
+      - name: Build docker image
+        run: |
+          python3 ./.github/workflows/deploy.py build_docker_image \
+          --neon_evm_tag=${{ steps.tags.outputs.neon_evm }} \
+          --proxy_tag=${{ steps.tags.outputs.proxy }} \
+          --head_ref_branch=${{ github.head_ref }}
+      - name: Publish image
+        run: |
+          python3 ./.github/workflows/deploy.py publish_image \
+          --proxy_tag=${{ steps.tags.outputs.proxy }}
+  deploy-check:
+    needs:
+      - build-image
+    runs-on: test-runner
+    steps:
+      - uses: actions/checkout@v3
+      - name: deploy_check
+        timeout-minutes: 60
+        run: |
+          python3 ./.github/workflows/deploy.py deploy_check \
+          --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
+          --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
+          --head_ref_branch=${{ github.head_ref }}
+      - name: Dump docker logs
+        if: always()
+        run: python3 ./.github/workflows/deploy.py dump_apps_logs
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Docker logs
+          path: ./*.log
+      - name: Stop containers
+        if: always()
+        run: python3 ./.github/workflows/deploy.py stop_containers
+
+  openzeppelin-tests:
+    needs:
+      - build-image
+    if: |
+      (contains(github.event.pull_request.labels.*.name, 'FullTestSuite') && ! github.event.pull_request.draft) ||
+      (github.ref_name =='develop' && !startsWith(github.event.inputs.neon_evm_branch , 'refs/pull')) ||
+      github.ref_name =='master' ||
+      startsWith(github.ref , 'refs/tags/') ||
+      (needs.build-image.outputs.is_version_proxy_branch == 'true' && github.event.inputs.neon_evm_commit == '') ||
+      github.event.inputs.full_test_suite == 'true'
+    runs-on: test-runner
+    steps:
+      - uses: actions/checkout@v3
+      - name: Add private key
+        run: |
+          echo "${{ secrets.CI_STANDS_KEY }}" > ${HOME}/.ssh/ci-stands
+          chmod 644 ${HOME}/.ssh/ci-stands
+      - name: Terraform build infra structure
+        id: terraform
+        run: |
+          python3 ./.github/workflows/deploy.py terraform_infrastructure \
+            --github_ref_name=${{ github.ref_name }} \
+            --head_ref_branch=${{ github.head_ref }} \
+            --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
+            --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
+            --run_number=${GITHUB_RUN_NUMBER}
+
+      - name: Run openzeppelin tests
+        run: python3 ./.github/workflows/deploy.py openzeppelin --run_number=${GITHUB_RUN_NUMBER}
+
+      - name: Destroy terraform infrastructure
+        if: ${{always() && steps.terraform.outcome != 'skipped'}}
+        run: |
+          python3 ./.github/workflows/deploy.py destroy_terraform \
+          --run_number=${GITHUB_RUN_NUMBER} \
+          --proxy_tag=${{ needs.build-image.outputs.proxy_tag }}
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: FTS allure report
+          path: allure-reports.tar.gz
+      - run:  ls -la ./logs/
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: FTS docker logs
+          path: ./logs/*
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Terraform infrastructure logs
+          path: ./terraform.log
+  finalize-image:
+    runs-on: build-runner
+    needs:
+      - build-image
+      - openzeppelin-tests
+      - deploy-check
+    if: |
+      always() &&
+      needs.deploy-check.result == 'success' &&
+      (needs.openzeppelin-tests.result == 'success' || needs.openzeppelin-tests.result == 'skipped')
+    steps:
+      - uses: actions/checkout@v3
+      - name: Tag published image
+        if: ${{ (github.event.inputs.neon_evm_commit == ''  &&
+            needs.build-image.outputs.is_version_proxy_branch == 'false') ||
+            github.event.inputs.neon_evm_branch == 'refs/heads/develop' ||
+            github.event.inputs.neon_evm_branch == 'refs/heads/master'  }}
+        run: |
+          python3 ./.github/workflows/deploy.py finalize_image \
+          --head_ref_branch=${{ github.head_ref }} \
+          --github_ref=${GITHUB_REF} \
+          --proxy_tag=${{ needs.build-image.outputs.proxy_tag }}
+  notification:
+    runs-on: build-runner
+    needs:
+      - finalize-image
+      - openzeppelin-tests
+      - deploy-check
+      - build-image
+    if: |
+       failure() &&
+        (github.ref_name == 'develop' ||
+          github.ref_name == 'master' ||
+          (needs.build-image.outputs.is_version_proxy_branch == 'true' && github.event.inputs.neon_evm_commit == '') ||
+          startsWith(github.ref , 'refs/tags/'))
+    steps:
+      - uses: actions/checkout@v3
+      - name: Send notification to slack
+        run: |
+          python3 ./.github/workflows/deploy.py send_notification \
+          --url=${{secrets.SLACK_PROXY_CHANNEL_URL}} \
+          --build_url=${BUILD_URL}

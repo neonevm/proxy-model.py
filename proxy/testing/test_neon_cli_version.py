@@ -4,7 +4,8 @@ import requests
 import json
 import inspect
 
-from proxy.environment import neon_cli
+from ..common_neon.environment_utils import NeonCli
+from ..common_neon.config import Config
 
 proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
 headers = {'Content-type': 'application/json'}
@@ -32,7 +33,7 @@ class TestNeonProxyVersion(unittest.TestCase):
         print('response:', response)
         neon_cli_version = response['result']
         print('neon_cli_version:', neon_cli_version)
-        self.assertEqual(neon_cli_version, neon_cli().version())
+        self.assertEqual(neon_cli_version, NeonCli(Config()).version())
 
 
 if __name__ == '__main__':

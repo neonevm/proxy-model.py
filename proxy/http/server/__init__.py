@@ -9,13 +9,12 @@
     :license: BSD, see LICENSE for more details.
 """
 from .web import HttpWebServerPlugin
-from .pac_plugin import HttpWebServerPacFilePlugin
 from .plugin import HttpWebServerBasePlugin
 from .protocols import httpProtocolTypes
 
+
 __all__ = [
     'HttpWebServerPlugin',
-    'HttpWebServerPacFilePlugin',
     'HttpWebServerBasePlugin',
     'httpProtocolTypes',
 ]

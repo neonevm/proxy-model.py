@@ -1,0 +1,12 @@
+version: 2
+updates:
+    - package-ecosystem: "pip"
+      directory: "/"
+      schedule:
+          interval: "daily"
+          time: "10:00"
+          timezone: "UTC"
+      target-branch: "develop"
+      open-pull-requests-limit: 10
+      assignees:
+        - "afalaleev"

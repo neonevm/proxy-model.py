@@ -1,17 +1,9 @@
 from __future__ import annotations
 
 import statistics
+from typing import Dict, Union, Callable, List
 
-from solana.publickey import PublicKey
-from logged_groups import logged_group
-from typing import Dict, Union, Callable
-
-from ..common_neon.address import ether2program
-from ..common_neon.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, CODE_ACCOUNT_INFO_LAYOUT, ACCOUNT_INFO_LAYOUT
-from ..common_neon.solana_interactor import SolanaInteractor
-
-from ..environment import INDEXER_LOG_SKIP_COUNT
-
+from ..common_neon.config import Config
 
 
 def check_error(trx):
@@ -20,108 +12,35 @@ def check_error(trx):
     return False
 
 
-class SolanaIxSignInfo:
-    def __init__(self, sign: str, slot: int, idx: int):
-        self.sign = sign  # Solana transaction signature
-        self.slot = slot  # Solana block slot
-        self.idx  = idx   # Instruction index
-
-    def __str__(self):
-        return f'{self.slot} {self.sign} {self.idx}'
-
-    def __hash__(self):
-        return hash((self.sign, self.slot, self.idx))
-
-    def __eq__(self, other):
-        return (self.sign, self.slot, self.idx) == (other.sign, other.slot, other.idx)
-
-    def get_req_id(self):
-        return f"{self.idx}{self.sign}"[:7]
-
-
-@logged_group("neon.Indexer")
-def get_accounts_from_storage(solana: SolanaInteractor, storage_account, *, logger):
-    info = solana.get_account_info(storage_account, length=0)
-    # logger.debug("\n{}".format(json.dumps(result, indent=4, sort_keys=True)))
-
-    if info is None:
-        raise Exception(f"Can't get information about {storage_account}")
-
-    if info.tag in (0, 1, 4):
-        logger.debug("Empty")
-        return None
-    else:
-        logger.debug("Not empty storage")
-
-        acc_list = []
-        storage = STORAGE_ACCOUNT_INFO_LAYOUT.parse(info.data[1:])
-        offset = 1 + STORAGE_ACCOUNT_INFO_LAYOUT.sizeof()
-        for _ in range(storage.accounts_len):
-            some_pubkey = PublicKey(info.data[offset:offset + 32])
-            acc_list.append(str(some_pubkey))
-            offset += 32
-
-        return acc_list
-
-
-@logged_group("neon.Indexer")
-def get_accounts_by_neon_address(solana: SolanaInteractor, neon_address, *, logger):
-    pda_address, _nonce = ether2program(neon_address)
-    info = solana.get_account_info(pda_address, length=0)
-    if info is None:
-        logger.debug(f"account_info is None for pda_address({pda_address})")
-        return None, None
-    if len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
-        logger.debug(f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}")
-        return None, None
-    account = ACCOUNT_INFO_LAYOUT.parse(info.data)
-    code_account = None
-    if account.code_account != [0]*32:
-        code_account = str(PublicKey(account.code_account))
-    return pda_address, code_account
-
-
-@logged_group("neon.Indexer")
-def get_code_from_account(solana: SolanaInteractor, address, *, logger):
-    code_account_info = solana.get_account_info(address, length=0)
-    if code_account_info is None:
-        logger.debug(f"code_account_info is None for code_address({address})")
-        return None
-    if len(code_account_info.data) < CODE_ACCOUNT_INFO_LAYOUT.sizeof():
-        return None
-    storage = CODE_ACCOUNT_INFO_LAYOUT.parse(code_account_info.data)
-    offset = CODE_ACCOUNT_INFO_LAYOUT.sizeof()
-    if len(code_account_info.data) < offset + storage.code_size:
-        return None
-    return '0x' + code_account_info.data[offset:][:storage.code_size].hex()
-
-
-class MetricsToLogBuff:
+class MetricsToLogger:
     def __init__(self):
-        self._reset()
+        self._counter: int = 0
+        self._item_list_dict: Dict[str, List[Union[int, float]]] = {}
+        self._item_value_dict: Dict[str, int] = {}
 
     def _reset(self):
-        self.counter = 0
-        self.items_list = {}
-        self.items_latest = {}
+        self._counter = 0
+        self._item_list_dict.clear()
 
-    def print(self, logger: Callable[[str], None], list_params: Dict[str, Union[int, float]], latest_params: Dict[str, int]):
-        for key, value in list_params.items():
-            metric_list = self.items_list.setdefault(key, [])
+    def print(self, config: Config, logger: Callable[[str], None],
+              list_value_dict: Dict[str, Union[int, float]],
+              latest_value_dict: Dict[str, int]):
+        for key, value in list_value_dict.items():
+            metric_list = self._item_list_dict.setdefault(key, [])
             metric_list.append(value)
-        for key, value in latest_params.items():
-            self.items_latest[key] = value
-        self.counter += 1
+        for key, value in latest_value_dict.items():
+            self._item_value_dict[key] = value
+        self._counter += 1
 
-        if self.counter % INDEXER_LOG_SKIP_COUNT != 0:
+        if self._counter % config.indexer_log_skip_cnt != 0:
             return
 
         msg = ''
-        for key, value_list in self.items_list.items():
+        for key, value_list in self._item_list_dict.items():
             msg += f' {key} avg: {statistics.mean(value_list):.2f}'
             msg += f' min: {min(value_list):.2f}'
             msg += f' max: {max(value_list):.2f};'
-        for key, value in self.items_latest.items():
+        for key, value in self._item_value_dict.items():
             msg += f' {key}: {value};'
         logger(msg)
         self._reset()

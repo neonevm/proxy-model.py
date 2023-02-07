@@ -1,136 +1,156 @@
-import base58
-import traceback
+from typing import Optional, Iterator, List, Dict, Any
 
-from logged_groups import logged_group
-from typing import Optional
+from ..common_neon.utils import NeonTxReceiptInfo
 
-from ..common_neon.utils import NeonTxInfo, NeonTxResultInfo, NeonTxFullInfo
-
-from ..environment import FINALIZED
-from ..indexer.utils import SolanaIxSignInfo
-from ..indexer.accounts_db import NeonAccountDB, NeonAccountInfo
-from ..indexer.blocks_db import SolanaBlocksDB, SolanaBlockInfo
-from ..indexer.transactions_db import NeonTxsDB
-from ..indexer.logs_db import LogsDB
+from ..indexer.base_db import BaseDB
+from ..indexer.indexed_objects import NeonIndexedBlockInfo
+from ..indexer.neon_tx_logs_db import NeonTxLogsDB
+from ..indexer.neon_txs_db import NeonTxsDB
+from ..indexer.solana_blocks_db import SolBlocksDB, SolanaBlockInfo
+from ..indexer.solana_neon_txs_db import SolNeonTxsDB
+from ..indexer.solana_tx_costs_db import SolTxCostsDB
 from ..indexer.sql_dict import SQLDict
-from ..indexer.utils import get_code_from_account, get_accounts_by_neon_address
-from ..common_neon.solana_interactor import SolanaInteractor
+from ..common_neon.config import Config
 
 
-@logged_group("neon.Indexer")
 class IndexerDB:
-    def __init__(self, solana: SolanaInteractor):
-        self._logs_db = LogsDB()
-        self._blocks_db = SolanaBlocksDB()
-        self._txs_db = NeonTxsDB()
-        self._account_db = NeonAccountDB()
-        self._solana = solana
+    def __init__(self, config: Config):
+        self._sol_blocks_db = SolBlocksDB(config)
+        self._sol_tx_costs_db = SolTxCostsDB()
+        self._neon_txs_db = NeonTxsDB()
+        self._sol_neon_txs_db = SolNeonTxsDB()
+        self._neon_tx_logs_db = NeonTxLogsDB()
 
-        self._constants = SQLDict(tablename="constants")
-        for k in ['min_receipt_slot', 'latest_slot']:
-            if k not in self._constants:
-                self._constants[k] = 0
+        self._db_list = [
+            self._sol_blocks_db,
+            self._sol_tx_costs_db,
+            self._neon_txs_db,
+            self._sol_neon_txs_db,
+            self._neon_tx_logs_db
+        ]
 
-    def submit_transaction(self, neon_tx: NeonTxInfo, neon_res: NeonTxResultInfo, used_ixs: [SolanaIxSignInfo]):
-        try:
-            block = self.get_block_by_slot(neon_res.slot)
-            if block.hash is None:
-                self.critical(f'Unable to submit transaction {neon_tx.sign} because slot {neon_res.slot} not found')
-                return
-            self.debug(f'{neon_tx} {neon_res} {block}')
-            neon_res.fill_block_info(block)
-            self._logs_db.push_logs(neon_res.logs, block)
-            tx = NeonTxFullInfo(neon_tx=neon_tx, neon_res=neon_res, used_ixs=used_ixs)
-            self._txs_db.set_tx(tx)
-        except Exception as err:
-            err_tb = "".join(traceback.format_tb(err.__traceback__))
-            self.error('Exception on submitting transaction. ' +
-                       f'Type(err): {type(err)}, Error: {err}, Traceback: {err_tb}')
+        self._constants_db = SQLDict(tablename="constants")
+        for k in ['min_receipt_block_slot', 'latest_block_slot', 'starting_block_slot', 'finalized_block_slot']:
+            if k not in self._constants_db:
+                self._constants_db[k] = 0
 
-    def _get_block_from_net(self, block: SolanaBlockInfo) -> SolanaBlockInfo:
-        net_block = self._solana.get_block_info(block.slot, FINALIZED)
-        if not net_block.hash:
-            return block
+        self._starting_block = SolanaBlockInfo(block_slot=0)
+        self._latest_block_slot = self.get_latest_block_slot()
+        self._finalized_block_slot = self.get_finalized_block_slot()
+        self._min_receipt_block_slot = self.get_min_receipt_block_slot()
 
-        self.debug(f'{net_block}')
-        self._blocks_db.set_block(net_block)
-        return net_block
+    def is_healthy(self) -> bool:
+        return self._neon_tx_logs_db.is_connected()
 
-    def _fill_account_data_from_net(self, account: NeonAccountInfo):
-        got_changes = False
-        if not account.pda_account:
-            pda_account, code_account = get_accounts_by_neon_address(self._solana, account.neon_account)
-            if pda_account:
-                account.pda_account = pda_account
-                account.code_account = code_account
-                got_changes = True
-        if account.code_account:
-            code = get_code_from_account(self._solana, account.code_account)
-            if code:
-                account.code = code
-                got_changes = True
-        if got_changes:
-            self._account_db.set_acc_by_request(
-                account.neon_account,
-                account.pda_account,
-                account.code_account,
-                account.code)
-        return account
+    def submit_block(self, neon_block: NeonIndexedBlockInfo) -> None:
+        with self._sol_blocks_db.conn() as conn:
+            with conn.cursor() as cursor:
+                self._sol_blocks_db.set_block_list(cursor, neon_block.iter_history_block())
+                if neon_block.is_finalized:
+                    self._finalize_block(cursor, neon_block)
+                self._neon_txs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
+                self._neon_tx_logs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
+                self._sol_neon_txs_db.set_tx_list(cursor, neon_block.iter_sol_neon_ix())
+                self._sol_tx_costs_db.set_cost_list(cursor, neon_block.iter_sol_tx_cost())
 
-    def get_block_by_slot(self, slot) -> SolanaBlockInfo:
-        block = self._blocks_db.get_block_by_slot(slot)
-        if not block.hash:
-            block = self._get_block_from_net(block)
-        return block
+        if self.get_starting_block().block_slot == 0:
+            self._constants_db['starting_block_slot'] = neon_block.block_slot
 
-    def get_full_block_by_slot(self, slot) -> SolanaBlockInfo:
-        block = self._blocks_db.get_full_block_by_slot(slot)
-        if not block.parent_hash:
-            block = self._get_block_from_net(block)
-        return block
+        if neon_block.is_finalized:
+            self._set_finalized_block_slot(neon_block.block_slot)
 
-    def get_latest_block(self) -> SolanaBlockInfo:
-        return SolanaBlockInfo(slot=self._constants['latest_slot'])
+    def _finalize_block(self, cursor: BaseDB.Cursor, neon_block: NeonIndexedBlockInfo) -> None:
+        block_slot_list = [block.block_slot for block in neon_block.iter_history_block()]
+        for db in self._db_list:
+            db.finalize_block_list(cursor, self._finalized_block_slot, block_slot_list)
 
-    def set_latest_block(self, slot: int):
-        self._constants['latest_slot'] = slot
+    def finalize_block(self, neon_block: NeonIndexedBlockInfo) -> None:
+        with self._sol_blocks_db.conn() as conn:
+            with conn.cursor() as cursor:
+                self._finalize_block(cursor, neon_block)
 
-    def get_min_receipt_slot(self) -> int:
-        return self._constants['min_receipt_slot']
+        self._set_finalized_block_slot(neon_block.block_slot)
 
-    def set_min_receipt_slot(self, slot: int):
-        self._constants['min_receipt_slot'] = slot
+    def _set_finalized_block_slot(self, block_slot: int) -> None:
+        self._finalized_block_slot = block_slot
+        self._constants_db['finalized_block_slot'] = block_slot
+        self._set_latest_block_slot(block_slot)
 
-    def get_logs(self, from_block, to_block, addresses, topics, block_hash):
-        return self._logs_db.get_logs(from_block, to_block, addresses, topics, block_hash)
+    def _set_latest_block_slot(self, block_slot: int) -> None:
+        if self._latest_block_slot > block_slot:
+            return
+        self._latest_block_slot = block_slot
+        self._constants_db['latest_block_slot'] = block_slot
+
+    def activate_block_list(self, iter_neon_block: Iterator[NeonIndexedBlockInfo]) -> None:
+        block_slot_list = [b.block_slot for n in iter_neon_block for b in n.iter_history_block() if not n.is_finalized]
+        if not len(block_slot_list):
+            return
+
+        with self._sol_blocks_db.conn() as conn:
+            with conn.cursor() as cursor:
+                self._sol_blocks_db.activate_block_list(cursor, self._finalized_block_slot, block_slot_list)
+        self._set_latest_block_slot(block_slot_list[-1])
+
+    def get_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
+        return self._sol_blocks_db.get_block_by_slot(block_slot, self.get_latest_block_slot())
 
     def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
-        return self._blocks_db.get_block_by_hash(block_hash)
+        return self._sol_blocks_db.get_block_by_hash(block_hash, self.get_latest_block_slot())
 
-    def get_tx_list_by_sol_sign(self, sol_sign_list: [str]) -> [NeonTxFullInfo]:
-        tx_list = self._txs_db.get_tx_list_by_sol_sign(sol_sign_list)
-        block = None
-        for tx in tx_list:
-            if not block:
-                block = self.get_block_by_slot(tx.neon_res.slot)
-            tx.block = block
-        return tx_list
+    def get_latest_block(self) -> SolanaBlockInfo:
+        block_slot = self.get_latest_block_slot()
+        if block_slot == 0:
+            return SolanaBlockInfo(block_slot=0)
+        return self.get_block_by_slot(block_slot)
 
-    def get_tx_by_neon_sign(self, neon_sign: str) -> Optional[NeonTxFullInfo]:
-        tx = self._txs_db.get_tx_by_neon_sign(neon_sign)
-        if tx:
-            tx.block = self.get_block_by_slot(tx.neon_res.slot)
-        return tx
+    def get_latest_block_slot(self) -> int:
+        return self._constants_db['latest_block_slot']
 
-    def get_contract_code(self, address) -> str:
-        account = self._account_db.get_account_info(address)
-        if not account.neon_account or (account.code_account and not account.code):
-            if not account.neon_account:
-                account.neon_account = address
-            account = self._fill_account_data_from_net(account)
-        if account.code:
-            return account.code
-        return '0x'
+    def get_finalized_block_slot(self) -> int:
+        return self._constants_db['finalized_block_slot']
 
-    def fill_account_info_by_indexer(self, neon_account: str, pda_account: str, code_account: str, slot: int):
-        self._account_db.set_acc_indexer(neon_account, pda_account, code_account, slot)
+    def get_finalized_block(self) -> SolanaBlockInfo:
+        block_slot = self.get_finalized_block_slot()
+        if block_slot == 0:
+            return SolanaBlockInfo(block_slot=0)
+        return self.get_block_by_slot(block_slot)
+
+    def get_starting_block(self) -> SolanaBlockInfo:
+        if self._starting_block.block_slot != 0:
+            return self._starting_block
+
+        block_slot = self._constants_db['starting_block_slot']
+        if block_slot == 0:
+            return SolanaBlockInfo(block_slot=0)
+        self._starting_block = self.get_block_by_slot(block_slot)
+        return self._starting_block
+
+    def get_starting_block_slot(self) -> int:
+        return self.get_starting_block().block_slot
+
+    def get_min_receipt_block_slot(self) -> int:
+        return self._constants_db['min_receipt_block_slot']
+
+    def set_min_receipt_block_slot(self, block_slot: int) -> None:
+        if self._min_receipt_block_slot >= block_slot:
+            return
+
+        self._min_receipt_block_slot = block_slot
+        self._constants_db['min_receipt_block_slot'] = block_slot
+
+    def get_log_list(self, from_block: Optional[int], to_block: Optional[int],
+                     address_list: List[str], topic_list: List[List[str]]) -> List[Dict[str, Any]]:
+        return self._neon_tx_logs_db.get_log_list(from_block, to_block, address_list, topic_list)
+
+    def get_tx_list_by_block_slot(self, block_slot: int) -> List[NeonTxReceiptInfo]:
+        return self._neon_txs_db.get_tx_list_by_block_slot(block_slot)
+
+    def get_tx_by_neon_sig(self, neon_sig: str) -> Optional[NeonTxReceiptInfo]:
+        return self._neon_txs_db.get_tx_by_neon_sig(neon_sig)
+
+    def get_tx_by_block_slot_tx_idx(self, block_slot: int, tx_idx: int) -> Optional[NeonTxReceiptInfo]:
+        return self._neon_txs_db.get_tx_by_block_slot_tx_idx(block_slot, tx_idx)
+
+    def get_sol_sig_list_by_neon_sig(self, neon_sig: str) -> List[str]:
+        return self._sol_neon_txs_db.get_sol_sig_list_by_neon_sig(neon_sig)

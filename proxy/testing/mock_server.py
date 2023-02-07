@@ -1,7 +1,8 @@
-import requests
-
-from flask import Flask, request
+from flask import Flask
+from werkzeug.serving import make_server
 from threading import Thread
+import ctypes
+
 
 class MockServer(Thread):
     def __init__(self, port):
@@ -9,20 +10,15 @@ class MockServer(Thread):
         self.port = port
         self.app = Flask(__name__)
         self.url = "http://localhost:%s" % self.port
-        self.app.add_url_rule("/shutdown", view_func=self._shutdown_server)
+        self.server = make_server('localhost', self.port, self.app)
+        self.ctx = self.app.app_context()
+        self.ctx.push()
 
     def add_url_rule(self, url, callback, methods):
         self.app.add_url_rule(url, view_func=callback, methods=methods)
 
-    def _shutdown_server(self):
-        if not 'werkzeug.server.shutdown' in request.environ:
-            raise RuntimeError('Not running the development server')
-        request.environ['werkzeug.server.shutdown']()
-        return 'Server shutting down...'
-
     def run(self):
-        self.app.run(port=self.port)
+        self.server.serve_forever()
 
     def shutdown_server(self):
-        requests.get("http://localhost:%s/shutdown" % self.port)
-        self.join()
+        self.server.shutdown()

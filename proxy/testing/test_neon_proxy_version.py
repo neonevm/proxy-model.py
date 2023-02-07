@@ -4,10 +4,7 @@ import requests
 import json
 import inspect
 
-from proxy.plugin.solana_rest_api import NEON_PROXY_PKG_VERSION, NEON_PROXY_REVISION
-
-proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-headers = {'Content-type': 'application/json'}
+from proxy.neon_rpc_api_model import NEON_PROXY_PKG_VERSION, NEON_PROXY_REVISION
 
 
 def get_line_number():
@@ -18,17 +15,20 @@ def get_line_number():
 class TestNeonProxyVersion(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        pass
+        cls.proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
+        cls.headers = {'Content-type': 'application/json'}
 
     def test_01_neon_proxy_version(self):
         print("https://github.com/neonlabsorg/proxy-model.py/issues/320")
         response = json.loads(requests.post(
-            proxy_url, headers=headers,
-            data=json.dumps({"jsonrpc": "2.0",
-                             "id": get_line_number(),
-                             "method": "neon_proxy_version",
-                             "params": []
-                             })).text)
+            self.proxy_url, headers=self.headers,
+            data=json.dumps({
+                "jsonrpc": "2.0",
+                "id": get_line_number(),
+                "method": "neon_proxy_version",
+                "params": []
+            })).text
+        )
         print('response:', response)
         neon_proxy_version = response['result']
         print('neon_proxy_version:', neon_proxy_version)

@@ -1,33 +1,28 @@
 ## File: test_erc20_wrapper_contract.py
 ## Integration test for the Neon ERC20 Wrapper contract.
 
-from time import sleep
 import unittest
-import os
 import json
-from xmlrpc.client import Boolean
-from solana.rpc.commitment import Confirmed
+
+from time import sleep
+
+from solana.rpc.api import Client as SolanaClient
 from solana.rpc.types import TxOpts
-from web3 import Web3
+from solana.rpc.commitment import Confirmed
+
+from solana.transaction import Transaction
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
-from solana.rpc.api import Client as SolanaClient
-from solana.account import Account as SolanaAccount
-from solana.publickey import PublicKey
-from proxy.environment import EVM_LOADER_ID
+from ..common_neon.metaplex import create_metadata_instruction_data,create_metadata_instruction
+
+from proxy.common_neon.config import Config
+from proxy.common_neon.solana_tx import SolAccount, SolPubKey
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
-from proxy.common_neon.neon_instruction import NeonInstruction
-from solcx import compile_source
 
-from proxy.testing.testing_helpers import request_airdrop
+from proxy.testing.testing_helpers import Proxy
 
-proxy_url = os.environ.get('PROXY_URL', 'http://127.0.0.1:9090/solana')
-solana_url = os.environ.get("SOLANA_URL", "http://127.0.0.1:8899")
-proxy = Web3(Web3.HTTPProvider(proxy_url))
-admin = proxy.eth.account.create('issues/neonlabsorg/proxy-model.py/197/admin')
-proxy.eth.default_account = admin.address
-request_airdrop(proxy.eth.default_account)
-
+NAME = 'TestToken'
+SYMBOL = 'TST'
 CONTRACT = '''
 pragma solidity >= 0.7.0;
 
@@ -40,93 +35,98 @@ contract ReadOnly {
 '''
 
 
-class Test_read_only_accounts(unittest.TestCase):
+class TestReadOnlyAccounts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.config = Config()
+        cls.proxy = Proxy()
+        cls.admin = cls.proxy.create_signer_account('issues/neonlabsorg/proxy-model.py/197/readonly')
         cls.create_token_mint(cls)
         cls.deploy_erc20_wrapper_contract(cls)
         cls.deploy_test_contract(cls)
 
-    def account_exists(self, key: PublicKey) -> Boolean:
+    def account_exists(self, key: SolPubKey) -> bool:
         info = self.solana_client.get_account_info(key)
-        info["result"]["value"] is not None
+        return info.value is not None
 
     def create_token_mint(self):
-        self.solana_client = SolanaClient(solana_url)
+        self.solana_client = SolanaClient(self.config.solana_url)
 
         with open("proxy/operator-keypairs/id.json") as f:
             d = json.load(f)
-        self.solana_account = SolanaAccount(d[0:32])
-        self.solana_client.request_airdrop(self.solana_account.public_key(), 1000_000_000_000, Confirmed)
+        self.solana_account = SolAccount.from_bytes(bytes(d))
+        print('Account: ', self.solana_account.pubkey())
+        self.solana_client.request_airdrop(self.solana_account.pubkey(), 1000_000_000_000)
 
-        while True:
-            balance = self.solana_client.get_balance(self.solana_account.public_key(), Confirmed)["result"]["value"]
-            if balance > 0:
-                break
+        for i in range(20):
             sleep(1)
-        print('create_token_mint mint, SolanaAccount: ', self.solana_account.public_key())
+            balance = self.solana_client.get_balance(self.solana_account.pubkey()).value
+            if balance == 0:
+                continue
 
-        self.token = SplToken.create_mint(
-            self.solana_client,
-            self.solana_account,
-            self.solana_account.public_key(),
-            9,
-            TOKEN_PROGRAM_ID,
-        )
+            try:
+                self.token = SplToken.create_mint(
+                    self.solana_client,
+                    self.solana_account,
+                    self.solana_account.pubkey(),
+                    9,
+                    TOKEN_PROGRAM_ID,
+                )
+                print(
+                    'create_token_mint mint, SolanaAccount: ',
+                    self.solana_client.get_account_info(self.solana_account.pubkey())
+                )
+
+                print(f'Created new token mint: {self.token.pubkey}')
+
+                metadata = create_metadata_instruction_data(NAME, SYMBOL, 0, ())
+                txn = Transaction()
+                txn.add(
+                    create_metadata_instruction(
+                        metadata,
+                        self.solana_account.pubkey(),
+                        self.token.pubkey,
+                        self.solana_account.pubkey(),
+                        self.solana_account.pubkey(),
+                    )
+                )
+                self.solana_client.send_transaction(txn, self.solana_account, opts=TxOpts(preflight_commitment=Confirmed, skip_confirmation=False))
+
+                return
+            except (Exception,):
+                continue
+        self.assertTrue(False)
 
     def deploy_erc20_wrapper_contract(self):
-        self.wrapper = ERC20Wrapper(proxy, "NEON", "NEON",
-                                    self.token, admin,
-                                    self.solana_account,
-                                    PublicKey(EVM_LOADER_ID))
+        self.wrapper = ERC20Wrapper(
+            self.proxy.web3, NAME, SYMBOL,
+            self.token, self.admin,
+            self.solana_account,
+            self.config.evm_loader_id
+        )
         self.wrapper.deploy_wrapper()
 
     def deploy_test_contract(self):
-        compiled = compile_source(CONTRACT)
-        id, interface = compiled.popitem()
-        contract = proxy.eth.contract(abi=interface['abi'], bytecode=interface['bin'])
-        trx = proxy.eth.account.sign_transaction(dict(
-            nonce=proxy.eth.get_transaction_count(admin.address),
-            chainId=proxy.eth.chain_id,
-            gas=987654321,
-            gasPrice=1000000000,
-            to='',
-            value=0,
-            data=contract.bytecode),
-            admin.key
-        )
-        signature = proxy.eth.send_raw_transaction(trx.rawTransaction)
-        receipt = proxy.eth.wait_for_transaction_receipt(signature)
-
-        self.contract = proxy.eth.contract(
-            address=receipt.contractAddress,
-            abi=contract.abi
-        )
-
+        deployed_info = self.proxy.compile_and_deploy_contract(self.admin, CONTRACT)
+        self.contract = deployed_info.contract
 
     def test_balanceOf(self):
-        account = proxy.eth.account.create()
+        account = self.proxy.create_account()
 
         solana_account = self.wrapper.get_neon_account_address(account.address)
         self.assertFalse(self.account_exists(solana_account))
 
-        nonce = proxy.eth.get_transaction_count(admin.address)
-        tx = self.contract.functions.balanceOf(account.address).buildTransaction({ "nonce": nonce })
-        tx = proxy.eth.account.sign_transaction(tx, admin.key)
+        tx = self.contract.functions.balanceOf(account.address).build_transaction({"from": self.admin.address})
+        tx = self.proxy.sign_send_wait_transaction(self.admin, tx)
 
-        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
-
-        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
-        self.assertIsNotNone(tx_receipt)
-        self.assertEqual(tx_receipt.status, 1)
+        self.assertEqual(tx.tx_receipt.status, 1)
 
         self.assertFalse(self.account_exists(solana_account))
-
 
     def test_erc20_balanceOf(self):
         erc20 = self.wrapper.erc20_interface()
 
-        account = proxy.eth.account.create()
+        account = self.proxy.create_account()
 
         solana_account = self.wrapper.get_neon_account_address(account.address)
         self.assertFalse(self.account_exists(solana_account))
@@ -134,19 +134,13 @@ class Test_read_only_accounts(unittest.TestCase):
         token_account = self.wrapper.get_neon_erc20_account_address(account.address)
         self.assertFalse(self.account_exists(token_account))
 
-        nonce = proxy.eth.get_transaction_count(admin.address)
-        tx = erc20.functions.balanceOf(account.address).buildTransaction({ "nonce": nonce })
-        tx = proxy.eth.account.sign_transaction(tx, admin.key)
+        tx = erc20.functions.balanceOf(account.address).build_transaction({"from": self.admin.address})
+        tx = self.proxy.sign_send_wait_transaction(self.admin, tx)
 
-        tx_hash = proxy.eth.send_raw_transaction(tx.rawTransaction)
-
-        tx_receipt = proxy.eth.wait_for_transaction_receipt(tx_hash)
-        self.assertIsNotNone(tx_receipt)
-        self.assertEqual(tx_receipt.status, 1)
+        self.assertEqual(tx.tx_receipt.status, 1)
 
         self.assertFalse(self.account_exists(solana_account))
         self.assertFalse(self.account_exists(token_account))
-
 
 
 if __name__ == '__main__':

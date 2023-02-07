@@ -1,29 +1,21 @@
 from collections.abc import MutableMapping
-from proxy.indexer.pg_common import encode, decode, dummy
-from proxy.indexer.base_db import BaseDB
+
+import psycopg2.extensions
+
+from ..indexer.base_db import BaseDB
+from ..indexer.pg_common import encode, decode, dummy
 
 
 class SQLDict(MutableMapping, BaseDB):
     """Serialize an object using pickle to a binary format accepted by SQLite."""
 
-    def __init__(self, tablename='table', bin_key=False):
-        self.bin_key = bin_key
+    def __init__(self, tablename='table'):
         self.encode = encode
         self.decode = decode
-        self.key_encode = encode if self.bin_key else dummy
-        self.key_decode = decode if self.bin_key else dummy
-        self._table_name = tablename + ("_bin_key" if self.bin_key else "")
-        BaseDB.__init__(self)
-
-    def _create_table_sql(self) -> str:
-        key_type = 'BYTEA' if self.bin_key else 'TEXT'
-        return f'''
-                CREATE TABLE IF NOT EXISTS
-                {self._table_name} (
-                    key {key_type} UNIQUE,
-                    value BYTEA
-                )
-            '''
+        self.key_encode = dummy
+        self.key_decode = dummy
+        super().__init__(tablename, [])
+        self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
     def __len__(self):
         with self._conn.cursor() as cur:
@@ -81,10 +73,12 @@ class SQLDict(MutableMapping, BaseDB):
         bin_value = self.encode(value)
         with self._conn.cursor() as cur:
             cur.execute(f'''
-                    INSERT INTO {self._table_name} (key, value)
-                    VALUES (%s,%s)
-                    ON CONFLICT (key)
-                    DO UPDATE SET
+                INSERT INTO {self._table_name}
+                    (key, value)
+                VALUES
+                    (%s,%s)
+                ON CONFLICT (key)
+                DO UPDATE SET
                     value = EXCLUDED.value
                 ''',
                 (bin_key, bin_value)

@@ -1,42 +1,28 @@
-import os
-import sys
-
-from proxy.common_neon.constants import SYSVAR_INSTRUCTION_PUBKEY
-from proxy.environment import ETH_TOKEN_MINT_ID
-
-os.environ['SOLANA_URL'] = "http://solana:8899"
-os.environ['EVM_LOADER'] = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
-os.environ['ETH_TOKEN_MINT'] = "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU"
-os.environ['COLLATERAL_POOL_BASE'] = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
-
-import base64
 import unittest
-import rlp
-from eth_tx_utils import make_instruction_data_from_tx, make_keccak_instruction_data
-from eth_utils import big_endian_to_int
-from ethereum.transactions import Transaction as EthTrx
-from ethereum.utils import sha3
-from solana.publickey import PublicKey
-from solana.rpc.commitment import Confirmed
-from solana.system_program import SYS_PROGRAM_ID
-from solana.transaction import AccountMeta, Transaction, TransactionInstruction
-from solana_utils import *
-from spl.token.constants import TOKEN_PROGRAM_ID
-from spl.token.instructions import get_associated_token_address
-from web3 import Web3
-from web3.auto.gethdev import w3
-from .testing_helpers import request_airdrop
+import os
 
-from solcx import compile_source
+from solana.rpc.api import Client as SolanaClient
+from .solana_utils import WalletAccount, wallet_path, EvmLoader, client, send_transaction
 
-MINIMAL_GAS_PRICE = 1
+from proxy.common_neon.environment_data import EVM_LOADER_ID
+from proxy.common_neon.address import NeonAddress
+from proxy.common_neon.config import Config
+from proxy.common_neon.neon_instruction import NeonIxBuilder
+from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolPubKey
+from proxy.common_neon.solana_tx_legacy import SolLegacyTx
+from proxy.common_neon.solana_interactor import SolInteractor
+from proxy.common_neon.eth_proto import NeonTx
+from proxy.mempool.operator_resource_mng import OpResInfo, OpResInit, OpResIdent
+
+from proxy.testing.testing_helpers import Proxy
+
+
+proxy_program = os.environ.get("TEST_PROGRAM")
+
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/196'
-proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-proxy = Web3(Web3.HTTPProvider(proxy_url))
-eth_account = proxy.eth.account.create(SEED)
-proxy.eth.default_account = eth_account.address
+SEED_INVOKED = 'https://github.com/neonlabsorg/proxy-model.py/issues/755'
+SEED_GETTER = SEED + "/GETTER"
 
-ACCOUNT_SEED_VERSION=b'\1'
 
 TEST_EVENT_SOURCE_196 = '''
 // SPDX-License-Identifier: MIT
@@ -71,177 +57,272 @@ contract ReturnsEvents {
 '''
 
 
+class FakeConfig(Config):
+    @property
+    def min_operator_balance_to_warn(self) -> int:
+        return 1
+
+    @property
+    def min_operator_balance_to_err(self) -> int:
+        return 1
+
+
 class CancelTest(unittest.TestCase):
+    proxy: Proxy
+
     @classmethod
     def setUpClass(cls):
-        print("\ntest_cancel_hanged.py setUpClass")
-        request_airdrop(eth_account.address)
+        print("\ntest_indexer_work.py setUpClass")
 
-        cls.token = SplToken(solana_url)
+        cls.proxy = proxy = Proxy()
+        cls.eth_account = eth_account = cls.proxy.create_signer_account(SEED)
+        cls.eth_account_invoked = eth_account_invoked = cls.proxy.create_signer_account(SEED_INVOKED)
+        cls.eth_account_getter = eth_account_getter = cls.proxy.create_signer_account(SEED_GETTER)
+
+        cls.solana = SolanaClient(Config().solana_url)
+
+        print(f"proxy_program: {proxy_program}")
+
         wallet = WalletAccount(wallet_path())
-        cls.loader = EvmLoader(wallet, EVM_LOADER)
-        cls.acc = wallet.get_acc()
+        cls.loader = loader = EvmLoader(wallet, EVM_LOADER_ID)
+        cls.signer = wallet.get_acc()
 
-        cls.deploy_contract(cls)
+        deployed_info = proxy.compile_and_deploy_contract(eth_account, TEST_EVENT_SOURCE_196)
+        cls.storage_contract = storage_contract = deployed_info.contract
+        print(storage_contract.address)
 
-        print(cls.storage_contract.address)
+        reid_eth = storage_contract.address.lower()
+        print('contract_eth', reid_eth)
+        cls.re_id, _ = re_id, _ = loader.ether2program(str(reid_eth))
+        print('contract', re_id)
 
-        cls.reId_eth = cls.storage_contract.address.lower()
-        print ('contract_eth', cls.reId_eth)
-        (cls.reId, cls.reId_token, cls.re_code) = cls.get_accounts(cls, cls.reId_eth)
-        print ('contract', cls.reId)
-        print ('contract_code', cls.re_code)
-
-        proxy.eth.default_account
         # Create ethereum account for user account
-        cls.caller_ether = proxy.eth.default_account.lower()
-        (cls.caller, cls.caller_token, _) = cls.get_accounts(cls, cls.caller_ether)
-        print ('caller_ether', cls.caller_ether)
-        print ('caller', cls.caller)
+        cls.caller_ether = caller_ether = NeonAddress.from_private_key(bytes(eth_account.key))
+        cls.caller, _ = caller, _ = loader.ether2program(str(caller_ether))
 
-        if getBalance(cls.caller) == 0:
-            print("Create caller account...")
-            _ = cls.loader.createEtherAccount(cls.caller_ether)
-            print("Done\n")
-        # cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, cls.caller_token)
+        cls.caller_ether_invoked = caller_ether_invoked = NeonAddress.from_private_key(bytes(eth_account_invoked.key))
+        cls.caller_invoked, _ = caller_invoked, _ = loader.ether2program(str(caller_ether_invoked))
 
-        collateral_pool_index = 2
-        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
-        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+        cls.caller_ether_getter = caller_ether_getter = NeonAddress.from_private_key(bytes(eth_account_getter.key))
+        cls.caller_getter, _ = caller_getter, _ = loader.ether2program(str(caller_ether_getter))
 
+        print(f'caller_ether: {caller_ether} {caller}')
+        print(f'caller_ether_invoked: {caller_ether_invoked} {caller_invoked}')
+        print(f'caller_ether_getter: {caller_ether_getter} {caller_getter}')
+
+        cls.create_two_calls_in_transaction(cls)
         cls.create_hanged_transaction(cls)
+        cls.create_invoked_transaction(cls)
+        cls.create_invoked_transaction_combined(cls)
 
-    def get_accounts(self, ether):
-        (sol_address, _) = self.loader.ether2program(ether)
-        info = client.get_account_info(sol_address, commitment=Confirmed)['result']['value']
-        data = base64.b64decode(info['data'][0])
-        acc_info = ACCOUNT_INFO_LAYOUT.parse(data)
+    def create_neon_ix_builder(self, raw_tx, neon_account_list):
+        resource = OpResInfo.from_ident(OpResIdent(
+            public_key=str(self.signer.pubkey()),
+            private_key=self.signer.secret(),
+            res_id=int.from_bytes(raw_tx[:8], byteorder="little")
+        ))
+        config = FakeConfig()
+        OpResInit(config, SolInteractor(config, config.solana_url)).init_resource(resource)
 
-        code_address = PublicKey(acc_info.code_account)
-        alternate_token = get_associated_token_address(PublicKey(sol_address), ETH_TOKEN_MINT_ID)
+        neon_ix_builder = NeonIxBuilder(resource.public_key)
+        neon_ix_builder.init_operator_neon(NeonAddress.from_private_key(resource.secret_key))
 
-        return (sol_address, alternate_token, code_address)
+        neon_tx = NeonTx.from_string(raw_tx)
+        neon_ix_builder.init_neon_tx(neon_tx)
+        neon_ix_builder.init_neon_account_list(neon_account_list)
 
-    def deploy_contract(self):
-        compiled_sol = compile_source(TEST_EVENT_SOURCE_196)
-        contract_id, contract_interface = compiled_sol.popitem()
-        storage = proxy.eth.contract(abi=contract_interface['abi'], bytecode=contract_interface['bin'])
-        trx_deploy = proxy.eth.account.sign_transaction(dict(
-            nonce=proxy.eth.get_transaction_count(proxy.eth.default_account),
-            chainId=proxy.eth.chain_id,
-            gas=987654321,
-            gasPrice=1000000000,
-            to='',
-            value=0,
-            data=storage.bytecode),
-            eth_account.key
-        )
-        trx_deploy_hash = proxy.eth.send_raw_transaction(trx_deploy.rawTransaction)
-        print('trx_deploy_hash:', trx_deploy_hash.hex())
-        trx_deploy_receipt = proxy.eth.wait_for_transaction_receipt(trx_deploy_hash)
-        print('trx_deploy_receipt:', trx_deploy_receipt)
+        neon_ix_builder.init_iterative(resource.holder)
 
-        self.storage_contract = proxy.eth.contract(
-            address=trx_deploy_receipt.contractAddress,
-            abi=storage.abi,
-            bytecode=contract_interface['bin']
-        )
+        return neon_ix_builder, resource.signer
+
+    @staticmethod
+    def print_if_err(receipt):
+        if not isinstance(receipt, dict):
+            return
+        if receipt.get('result', None) is None:
+            return
+        if receipt.get('result').get('meta', None) is None:
+            return
+        if receipt.get('result').get('meta').get('err') is None:
+            return
+        print(f"{receipt}")
 
     def create_hanged_transaction(self):
-        print("\ncommit_two_event_trx")
-        right_nonce = proxy.eth.get_transaction_count(proxy.eth.default_account)
-        trx_store = self.storage_contract.functions.addReturnEventTwice(1, 1).buildTransaction({'nonce': right_nonce, 'gasPrice': MINIMAL_GAS_PRICE})
-        trx_store_signed = proxy.eth.account.sign_transaction(trx_store, eth_account.key)
+        print("\ncreate_hanged_transaction")
+        tx_store = self.storage_contract.functions.addReturnEventTwice(1, 1).build_transaction({
+            'from': self.eth_account.address,
+            'gasPrice': 0
+        })
+        tx_store = self.proxy.sign_transaction(self.eth_account, tx_store)
 
-        (from_addr, sign, msg) = make_instruction_data_from_tx(trx_store_signed.rawTransaction.hex())
-        instruction = from_addr + sign + msg
+        neon_ix_builder, signer = self.create_neon_ix_builder(
+            self,
+            tx_store.tx_signed.rawTransaction,
+            [
+                SolAccountMeta(pubkey=self.re_id, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self.caller, is_signer=False, is_writable=True)
+            ]
+        )
 
-        (trx_raw, self.tx_hash, from_address) = self.get_trx_receipts(self, msg, sign)
-        print(self.tx_hash)
-        print(from_address)
+        self.tx_hash = tx_hash = tx_store.tx_signed.hash
+        print(f'tx_hash: {tx_hash.hex()}')
 
-        self.storage = self.create_storage_account(self, sign[:8].hex())
-        print("storage", self.storage)
-        self.call_begin(self, self.storage, 10, msg, instruction)
+        tx = SolLegacyTx(instructions=[
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            neon_ix_builder.make_compute_budget_cu_ix(),
+            neon_ix_builder.make_tx_step_from_data_ix(10, 1)
+        ])
+        receipt = send_transaction(client, tx.low_level_tx, signer)
+        self.print_if_err(receipt)
 
-    def get_trx_receipts(self, unsigned_msg, signature):
-        trx = rlp.decode(unsigned_msg, EthTrx)
+    def create_invoked_transaction(self):
+        print("\ncreate_invoked_transaction")
 
-        v = int(signature[64]) + 35 + 2 * trx[6]
-        r = big_endian_to_int(signature[0:32])
-        s = big_endian_to_int(signature[32:64])
+        tx_transfer = self.proxy.sign_transaction(
+            self.eth_account_invoked,
+            dict(
+                to=self.eth_account_getter.address,
+                value=1_000_000_000_000_000_000
+            )
+        )
 
-        trx_raw = rlp.encode(EthTrx(trx[0], trx[1], trx[2], trx[3], trx[4], trx[5], v, r, s), EthTrx)
-        eth_signature = '0x' + sha3(trx_raw).hex()
-        from_address = w3.eth.account.recover_transaction(trx_raw).lower()
+        self.tx_hash_invoked = tx_hash = tx_transfer.tx_signed.hash
+        print(f'tx_hash_invoked: {tx_hash.hex}')
 
-        return (trx_raw.hex(), eth_signature, from_address)
+        neon_ix_builder, signer = self.create_neon_ix_builder(
+            self,
+            tx_transfer.tx_signed.rawTransaction,
+            [
+                SolAccountMeta(pubkey=self.caller_getter, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self.caller_invoked, is_signer=False, is_writable=True)
+            ]
+        )
+        noniterative = neon_ix_builder.make_tx_exec_from_data_ix()
 
-    def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction):
-        return TransactionInstruction(
-            program_id=self.loader.loader_id,
-            data=bytearray.fromhex("13") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
-            keys=[
-                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+        tx = SolLegacyTx(instructions=[
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            neon_ix_builder.make_compute_budget_cu_ix(),
+            SolTxIx(
+                accounts=[SolAccountMeta(pubkey=SolPubKey.from_string(EVM_LOADER_ID), is_signer=False, is_writable=False)] +
+                     noniterative.accounts,
+                data=noniterative.data,
+                program_id=SolPubKey.from_string(proxy_program)
+            )
+        ])
 
-                # System instructions account:
-                AccountMeta(pubkey=PublicKey(SYSVAR_INSTRUCTION_PUBKEY), is_signer=False, is_writable=False),
-                # Operator address:
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                # Collateral pool address:
-                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                # Operator's NEON token account:
-                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # User's NEON token account:
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-                # System program account:
-                AccountMeta(pubkey=PublicKey(SYS_PROGRAM_ID), is_signer=False, is_writable=False),
+        receipt = send_transaction(client, tx.low_level_tx, signer)
+        self.print_if_err(receipt)
 
-                AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.reId_token, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
+    def create_invoked_transaction_combined(self):
+        print("\ncreate_invoked_transaction_combined")
 
-                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-            ])
+        tx_transfer = self.proxy.sign_transaction(
+            self.eth_account_invoked,
+            dict(
+                to=self.eth_account_getter.address,
+                value=500_000_000_000_000_000
+            )
+        )
 
-    def call_begin(self, storage, steps, msg, instruction):
-        print("Begin")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(self, make_keccak_instruction_data(1, len(msg), 13)))
-        trx.add(self.sol_instr_19_partial_call(self, storage, steps, instruction))
-        print(trx.__dict__)
-        return send_transaction(client, trx, self.acc)
+        self.tx_hash_invoked_combined = tx_hash = tx_transfer.tx_signed.hash
+        print(f'tx_hash_invoked_combined: {tx_hash.hex()}')
 
-    def sol_instr_keccak(self, keccak_instruction):
-        return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
-                AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
+        neon_ix_builder, signer = self.create_neon_ix_builder(
+            self,
+            tx_transfer.tx_signed.rawTransaction,
+            [
+                SolAccountMeta(pubkey=self.caller_getter, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self.caller_invoked, is_signer=False, is_writable=True),
+            ]
+        )
 
-    def create_storage_account(self, seed):
-        storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(EVM_LOADER))).digest())
-        print("Storage", storage)
+        iterative = neon_ix_builder.make_tx_step_from_data_ix(250, 1)
+        tx = SolLegacyTx(instructions=[
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            neon_ix_builder.make_compute_budget_cu_ix(),
+            SolTxIx(
+                accounts=[SolAccountMeta(pubkey=SolPubKey.from_string(EVM_LOADER_ID), is_signer=False, is_writable=False)] +
+                     iterative.accounts,
+                data=b''.join([bytes.fromhex("ef"), iterative.data]),
+                program_id=SolPubKey.from_string(proxy_program)
+            )
+        ])
 
-        if getBalance(storage) == 0:
-            trx = Transaction()
-            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(EVM_LOADER)))
-            send_transaction(client, trx, self.acc)
+        receipt = send_transaction(client, tx.low_level_tx, signer)
+        self.print_if_err(receipt)
 
-        return storage
+    def create_two_calls_in_transaction(self):
+        print("\ncreate_two_calls_in_transaction")
+
+        account_list = [
+            SolAccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+            SolAccountMeta(pubkey=self.re_id, is_signer=False, is_writable=True),
+        ]
+
+        nonce1 = self.proxy.conn.get_transaction_count(self.eth_account.address)
+        tx = {'nonce': nonce1, 'from': self.eth_account.address}
+        call1_dict = self.storage_contract.functions.addReturn(1, 1).build_transaction(tx)
+        call1 = self.proxy.sign_transaction(self.eth_account, call1_dict)
+
+        self.tx_hash_call1 = tx_hash = call1.tx_signed.hash
+        print(f'tx_hash_call1: {tx_hash.hex()}')
+
+        nonce2 = nonce1 + 1
+        tx = {'nonce': nonce2, 'from': self.eth_account.address}
+        call2_dict = self.storage_contract.functions.addReturnEvent(2, 2).build_transaction(tx)
+        call2 = self.proxy.sign_transaction(self.eth_account, call2_dict)
+
+        self.tx_hash_call2 = tx_hash = call2.tx_signed.hash
+        print(f'tx_hash_call2: {tx_hash.hex()}')
+
+        neon_ix_builder, signer = self.create_neon_ix_builder(self, call1.tx_signed.rawTransaction, account_list)
+        noniterative1 = neon_ix_builder.make_tx_exec_from_data_ix()
+
+        neon_ix_builder.init_neon_tx(NeonTx.from_string(call2.tx_signed.rawTransaction))
+        noniterative2 = neon_ix_builder.make_tx_exec_from_data_ix()
+
+        tx = SolLegacyTx(instructions=[
+            neon_ix_builder.make_compute_budget_heap_ix(),
+            neon_ix_builder.make_compute_budget_cu_ix(),
+            noniterative1,
+            noniterative2
+        ])
+
+        receipt = send_transaction(client, tx.low_level_tx, signer)
+        self.print_if_err(receipt)
 
     # @unittest.skip("a.i.")
     def test_01_canceled(self):
         print("\ntest_01_canceled")
-        trx_receipt = proxy.eth.wait_for_transaction_receipt(self.tx_hash)
+        trx_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash)
         print('trx_receipt:', trx_receipt)
         self.assertEqual(trx_receipt['status'], 0)
 
     def test_02_get_code_from_indexer(self):
         print("\ntest_02_get_code_from_indexer")
-        code = proxy.eth.get_code(self.storage_contract.address)
+        code = self.proxy.conn.get_code(self.storage_contract.address)
+        print("getCode result:", code.hex())
+        print("storage_contract.bytecode:", self.storage_contract.bytecode.hex())
         self.assertEqual(code, self.storage_contract.bytecode[-len(code):])
+
+    def test_03_invoked_found(self):
+        print("\ntest_03_invoked_found")
+        trx_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_invoked)
+        print('trx_receipt:', trx_receipt)
+
+    def test_04_right_result_for_invoked(self):
+        print("\ntest_04_right_result_for_invoked")
+        trx_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_invoked_combined)
+        print('trx_receipt:', trx_receipt)
+
+    def test_05_check_two_calls_in_transaction(self):
+        print("\ntest_05_check_two_calls_in_transaction")
+        call1_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_call1)
+        print('test_05 receipt1:', call1_receipt)
+        self.assertEqual(len(call1_receipt['logs']), 0)
+        call2_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_call2)
+        print('test_05 receipt2:', call2_receipt)
+        self.assertEqual(len(call2_receipt['logs']), 1)
 
 
 if __name__ == '__main__':

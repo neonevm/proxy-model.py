@@ -1,315 +1,326 @@
-import eth_utils
-import struct
+from __future__ import annotations
 
+import logging
+from enum import Enum
+from typing import Optional, List, cast
+
+from rlp import encode as rlp_encode
 from sha3 import keccak_256
-from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType
-from solana.publickey import PublicKey
-from solana.system_program import SYS_PROGRAM_ID
-from solana.sysvar import SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from spl.token.constants import ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID
-from spl.token.instructions import transfer2, Transfer2Params
-from typing import Tuple
-from logged_groups import logged_group
 
-from .address import accountWithSeed, ether2program, getTokenAddr, EthereumAddress
-from .constants import SYSVAR_INSTRUCTION_PUBKEY, INCINERATOR_PUBKEY, KECCAK_PROGRAM, COLLATERALL_POOL_MAX
-from .layouts import CREATE_ACCOUNT_LAYOUT
-from ..environment import EVM_LOADER_ID, ETH_TOKEN_MINT_ID , COLLATERAL_POOL_BASE
+from solders.system_program import CreateAccountWithSeedParams, create_account_with_seed
+
+from ..common_neon.address import neon_2program, NeonAddress
+from ..common_neon.constants import INCINERATOR_ID, COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID
+from ..common_neon.elf_params import ElfParams
+from ..common_neon.environment_data import EVM_LOADER_ID
+from ..common_neon.eth_proto import NeonTx
+from ..common_neon.layouts import CREATE_ACCOUNT_LAYOUT
+from ..common_neon.solana_tx import SolTxIx, SolPubKey, SolAccountMeta
 
 
-obligatory_accounts = [
-    AccountMeta(pubkey=EVM_LOADER_ID, is_signer=False, is_writable=False),
-    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-]
+LOG = logging.getLogger(__name__)
 
 
-def create_account_with_seed_layout(base, seed, lamports, space):
-    return SYSTEM_INSTRUCTIONS_LAYOUT.build(
-        dict(
-            instruction_type = InstructionType.CREATE_ACCOUNT_WITH_SEED,
-            args=dict(
-                base=bytes(base),
-                seed=dict(length=len(seed), chars=seed),
+class EvmInstruction(Enum):
+    TransactionExecuteFromData = b'\x1f'            # 31,
+    TransactionExecuteFromAccount = b'\x2a'         # 42
+    TransactionStepFromData = b'\x20'               # 32
+    TransactionStepFromAccount = b'\x21'            # 33
+    TransactionStepFromAccountNoChainId = b'\x22'   # 34
+    CancelWithHash = b'\x23'                        # 35
+    HolderCreate = b'\x24'                          # 36
+    HolderDelete = b'\x25'                          # 37
+    HolderWrite = b'\x26'                           # 38
+    DepositV03 = b'\x27'                            # 39
+    CreateAccountV03 = b'\x28'                      # 40
+
+
+def create_account_layout(ether):
+    return EvmInstruction.CreateAccountV03.value + CREATE_ACCOUNT_LAYOUT.build(dict(ether=ether))
+
+
+class NeonIxBuilder:
+    def __init__(self, operator: SolPubKey):
+        self._evm_program_id = SolPubKey.from_string(EVM_LOADER_ID)
+        self._operator_account = operator
+        self._operator_neon_address: Optional[SolPubKey] = None
+        self._neon_account_list: List[SolAccountMeta] = []
+        self._neon_tx: Optional[NeonTx] = None
+        self._msg: Optional[bytes] = None
+        self._holder_msg: Optional[bytes] = None
+        self._treasury_pool_index_buf: Optional[bytes] = None
+        self._treasury_pool_address: Optional[SolPubKey] = None
+        self._holder: Optional[SolPubKey] = None
+        self._elf_params = ElfParams()
+
+    @property
+    def operator_account(self) -> SolPubKey:
+        return self._operator_account
+
+    @property
+    def holder_msg(self) -> bytes:
+        assert self._holder_msg is not None
+        return cast(bytes, self._holder_msg)
+
+    def init_operator_neon(self, operator_ether: NeonAddress) -> NeonIxBuilder:
+        self._operator_neon_address = neon_2program(operator_ether)[0]
+        return self
+
+    def init_neon_tx(self, neon_tx: NeonTx) -> NeonIxBuilder:
+        self._neon_tx = neon_tx
+
+        self._msg = rlp_encode(self._neon_tx)
+        self._holder_msg = self._msg
+
+        keccak_result = self._neon_tx.hash_signed()
+        treasury_pool_index = int().from_bytes(keccak_result[:4], "little") % ElfParams().treasury_pool_max
+        self._treasury_pool_index_buf = treasury_pool_index.to_bytes(4, 'little')
+        self._treasury_pool_address = SolPubKey.find_program_address(
+            [b'treasury_pool', self._treasury_pool_index_buf],
+            self._evm_program_id
+        )[0]
+
+        return self
+
+    def init_neon_account_list(self, neon_account_list: List[SolAccountMeta]) -> NeonIxBuilder:
+        self._neon_account_list = neon_account_list
+        return self
+
+    def init_iterative(self, holder: SolPubKey):
+        self._holder = holder
+        return self
+
+    def make_create_account_with_seed_ix(self, account: SolPubKey, seed: bytes, lamports: int, space: int) -> SolTxIx:
+        seed_str = str(seed, 'utf8')
+        LOG.debug(f"createAccountWithSeedIx {self._operator_account} account({account} seed({seed_str})")
+
+        return create_account_with_seed(
+            CreateAccountWithSeedParams(
+                from_pubkey=self._operator_account,
+                to_pubkey=account,
+                base=self._operator_account,
+                seed=seed_str,
                 lamports=lamports,
                 space=space,
-                program_id=bytes(PublicKey(EVM_LOADER_ID))
+                owner=self._evm_program_id
             )
         )
-    )
 
-
-def create_account_layout(lamports, space, ether, nonce):
-    return bytes.fromhex("02000000")+CREATE_ACCOUNT_LAYOUT.build(dict(
-        lamports=lamports,
-        space=space,
-        ether=ether,
-        nonce=nonce
-    ))
-
-
-def write_holder_layout(nonce, offset, data):
-    return (bytes.fromhex('12')+
-            nonce.to_bytes(8, byteorder='little')+
-            offset.to_bytes(4, byteorder='little')+
-            len(data).to_bytes(8, byteorder='little')+
-            data)
-
-
-def make_keccak_instruction_data(check_instruction_index, msg_len, data_start):
-    if check_instruction_index > 255 and check_instruction_index < 0:
-        raise Exception("Invalid index for instruction - {}".format(check_instruction_index))
-
-    check_count = 1
-    eth_address_size = 20
-    signature_size = 65
-    eth_address_offset = data_start
-    signature_offset = eth_address_offset + eth_address_size
-    message_data_offset = signature_offset + signature_size
-
-    data = struct.pack("B", check_count)
-    data += struct.pack("<H", signature_offset)
-    data += struct.pack("B", check_instruction_index)
-    data += struct.pack("<H", eth_address_offset)
-    data += struct.pack("B", check_instruction_index)
-    data += struct.pack("<H", message_data_offset)
-    data += struct.pack("<H", msg_len)
-    data += struct.pack("B", check_instruction_index)
-
-    return data
-
-
-@logged_group("neon.Proxy")
-class NeonInstruction:
-    def __init__(self, operator):
-        self.operator_account = operator
-        self.operator_neon_address = getTokenAddr(self.operator_account)
-
-    def init_eth_trx(self, eth_trx, eth_accounts, caller_token):
-        self.eth_accounts = eth_accounts
-        self.caller_token = caller_token
-
-        self.eth_trx = eth_trx
-
-        self.msg = bytes.fromhex(self.eth_trx.sender()) + self.eth_trx.signature() + self.eth_trx.unsigned_msg()
-
-        hash = keccak_256(self.eth_trx.unsigned_msg()).digest()
-        collateral_pool_index = int().from_bytes(hash[:4], "little") % COLLATERALL_POOL_MAX
-        self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
-        self.collateral_pool_address = self.create_collateral_pool_address(collateral_pool_index)
-
-        return self
-
-    def init_iterative(self, storage, holder, perm_accs_id):
-        self.storage = storage
-        self.holder = holder
-        self.perm_accs_id = perm_accs_id
-
-        return self
-
-    @staticmethod
-    def create_collateral_pool_address(collateral_pool_index):
-        COLLATERAL_SEED_PREFIX = "collateral_seed_"
-        seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
-        return accountWithSeed(PublicKey(COLLATERAL_POOL_BASE), str.encode(seed))
-
-    def create_account_with_seed_trx(self, account, seed, lamports, space):
-        seed_str = str(seed, 'utf8')
-        self.debug(f"createAccountWithSeedTrx {self.operator_account} account({account} seed({seed_str})")
-        return TransactionInstruction(
-            keys=[
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),
+    def make_delete_holder_ix(self, holder_account: SolPubKey) -> SolTxIx:
+        LOG.debug(f"deleteHolderIx {self._operator_account} refunded account({holder_account})")
+        return SolTxIx(
+            accounts=[
+                SolAccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
             ],
-            program_id=SYS_PROGRAM_ID,
-            data=create_account_with_seed_layout(self.operator_account, seed_str, lamports, space)
+            program_id=self._evm_program_id,
+            data=EvmInstruction.HolderDelete.value,
         )
 
-    def make_create_eth_account_trx(self, eth_address: EthereumAddress, code_acc=None) -> Tuple[Transaction, PublicKey]:
+    def create_holder_ix(self, holder: SolPubKey) -> SolTxIx:
+        LOG.debug(f"createHolderIx {self._operator_account} account({holder})")
+        return SolTxIx(
+            accounts=[
+                SolAccountMeta(pubkey=holder, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+            ],
+            program_id=self._evm_program_id,
+            data=EvmInstruction.HolderCreate.value,
+        )
+
+    def make_create_neon_account_ix(self, eth_address: NeonAddress) -> SolTxIx:
         if isinstance(eth_address, str):
-            eth_address = EthereumAddress(eth_address)
-        pda_account, nonce = ether2program(eth_address)
-        neon_token_account = getTokenAddr(PublicKey(pda_account))
-        self.debug(f'Create eth account: {eth_address}, sol account: {pda_account}, neon_token_account: {neon_token_account}, nonce: {nonce}')
+            eth_address = NeonAddress(eth_address)
+        pda_account, nonce = neon_2program(eth_address)
+        LOG.debug(f'Create eth account: {str(eth_address)}, sol account: {pda_account}, nonce: {nonce}')
 
-        base = self.operator_account
-        data = create_account_layout(0, 0, bytes(eth_address), nonce)
-        trx = Transaction()
-        if code_acc is None:
-            trx.add(TransactionInstruction(
-                program_id=EVM_LOADER_ID,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(pda_account), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=neon_token_account, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
-                ]))
-        else:
-            trx.add(TransactionInstruction(
-                program_id=EVM_LOADER_ID,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(pda_account), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=neon_token_account, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
-                ]))
-        return trx, neon_token_account
+        data = create_account_layout(bytes(eth_address))
+        return SolTxIx(
+            program_id=self._evm_program_id,
+            data=data,
+            accounts=[
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                SolAccountMeta(pubkey=pda_account, is_signer=False, is_writable=True),
+            ])
 
-    def createERC20TokenAccountTrx(self, token_info) -> Transaction:
-        trx = Transaction()
-        trx.add(TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=bytes.fromhex('0F'),
-            keys=[
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=PublicKey(token_info["key"]), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(token_info["owner"]), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(token_info["contract"]), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(token_info["mint"]), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
-            ]
-        ))
-
-        return trx
-
-    def make_resize_instruction(self, account, code_account_old, code_account_new, seed) -> TransactionInstruction:
-        return TransactionInstruction(
-            program_id = EVM_LOADER_ID,
-            data = bytearray.fromhex("11") + bytes(seed), # 17- ResizeStorageAccount
-            keys = [
-                AccountMeta(pubkey=PublicKey(account), is_signer=False, is_writable=True),
-                (
-                    AccountMeta(pubkey=code_account_old, is_signer=False, is_writable=True)
-                    if code_account_old else
-                    AccountMeta(pubkey=PublicKey("11111111111111111111111111111111"), is_signer=False, is_writable=False)
-                ),
-                AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False)
-            ],
-        )
-
-    def make_write_transaction(self, offset: int, data: bytes) -> Transaction:
-        return Transaction().add(TransactionInstruction(
-            program_id=EVM_LOADER_ID,
-            data=write_holder_layout(self.perm_accs_id, offset, data),
-            keys=[
-                AccountMeta(pubkey=self.holder, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=False),
-            ]
-        ))
-
-    def make_keccak_instruction(self, check_instruction_index, msg_len, data_start) -> TransactionInstruction:
-        return TransactionInstruction(
-            program_id=KECCAK_PROGRAM,
-            data=make_keccak_instruction_data(check_instruction_index, msg_len, data_start),
-            keys=[
-                AccountMeta(pubkey=KECCAK_PROGRAM, is_signer=False, is_writable=False),
+    def make_write_ix(self, neon_tx_sig: bytes, offset: int, data: bytes) -> SolTxIx:
+        ix_data = b"".join([
+            EvmInstruction.HolderWrite.value,
+            neon_tx_sig,
+            offset.to_bytes(8, byteorder='little'),
+            data
+        ])
+        return SolTxIx(
+            program_id=self._evm_program_id,
+            data=ix_data,
+            accounts=[
+                SolAccountMeta(pubkey=self._holder, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),
             ]
         )
 
-    def make_05_call_instruction(self) -> TransactionInstruction:
-        return TransactionInstruction(
-            program_id = EVM_LOADER_ID,
-            data = bytearray.fromhex("05") + self.collateral_pool_index_buf + self.msg,
-            keys = [
-                AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_neon_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-
-            ] + self.eth_accounts + obligatory_accounts
+    def make_tx_exec_from_data_ix(self) -> SolTxIx:
+        ix_data = b"".join([
+            EvmInstruction.TransactionExecuteFromData.value,
+            self._treasury_pool_index_buf,
+            self._msg
+        ])
+        return SolTxIx(
+            program_id=self._evm_program_id,
+            data=ix_data,
+            accounts=[
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                SolAccountMeta(pubkey=self._treasury_pool_address, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_neon_address, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                SolAccountMeta(pubkey=self._evm_program_id, is_signer=False, is_writable=False),
+            ] + self._neon_account_list
         )
 
-    def make_noniterative_call_transaction(self, length_before: int = 0) -> Transaction:
-        trx = Transaction()
-        trx.add(self.make_keccak_instruction(length_before + 1, len(self.eth_trx.unsigned_msg()), 5))
-        trx.add(self.make_05_call_instruction())
-        return trx
+    def make_tx_exec_from_account_ix(self) -> SolTxIx:
+        ix_data = b"".join([
+            EvmInstruction.TransactionExecuteFromAccount.value,
+            self._treasury_pool_index_buf,
+        ])
+        return self._make_holder_ix(ix_data)
 
-    def make_cancel_transaction(self, cancel_keys = None) -> Transaction:
-        append_keys = []
-        if cancel_keys:
-            append_keys = cancel_keys
-        else:
-            append_keys = self.eth_accounts
-            append_keys.append(AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False))
-            append_keys += obligatory_accounts
-        return Transaction().add(TransactionInstruction(
-            program_id = EVM_LOADER_ID,
-            data = bytearray.fromhex("15") + self.eth_trx.nonce.to_bytes(8, 'little'),
-            keys = [
-                AccountMeta(pubkey=self.storage, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=self.operator_neon_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=INCINERATOR_PUBKEY, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+    def make_cancel_ix(self, holder_account: Optional[SolPubKey] = None,
+                       neon_tx_sig: Optional[bytes] = None,
+                       cancel_key_list: Optional[List[SolAccountMeta]] = None) -> SolTxIx:
+        append_key_list: List[SolAccountMeta] = self._neon_account_list if cancel_key_list is None else cancel_key_list
 
-            ] + append_keys
-        ))
+        if neon_tx_sig is None:
+            neon_tx_sig = keccak_256(self._msg).digest()
 
-    def make_partial_call_or_continue_instruction(self, steps=0) -> TransactionInstruction:
-        data = bytearray.fromhex("0D") + self.collateral_pool_index_buf + steps.to_bytes(8, byteorder="little") + self.msg
-        return TransactionInstruction(
-            program_id = EVM_LOADER_ID,
-            data = data,
-            keys = [
-                AccountMeta(pubkey=self.storage, is_signer=False, is_writable=True),
+        if holder_account is None:
+            holder_account = self._holder
 
-                AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_neon_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-
-            ] + self.eth_accounts + [
-
-                AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False),
-            ] + obligatory_accounts
+        return SolTxIx(
+            program_id=self._evm_program_id,
+            data=EvmInstruction.CancelWithHash.value + neon_tx_sig,
+            accounts=[
+                SolAccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                SolAccountMeta(pubkey=INCINERATOR_ID, is_signer=False, is_writable=True),
+            ] + append_key_list
         )
 
-    def make_partial_call_or_continue_transaction(self, steps=0, length_before=0) -> Transaction:
-        trx = Transaction()
-        trx.add(self.make_keccak_instruction(length_before + 1, len(self.eth_trx.unsigned_msg()), 13))
-        trx.add(self.make_partial_call_or_continue_instruction(steps))
-        return trx
+    def make_tx_step_from_data_ix(self, step_cnt: int, index: int) -> SolTxIx:
+        return self._make_tx_step_ix(EvmInstruction.TransactionStepFromData.value, step_cnt, index, self._msg)
 
-    def make_partial_call_or_continue_from_account_data(self, steps, index=0) -> Transaction:
-        data = bytearray.fromhex("0E") + self.collateral_pool_index_buf + steps.to_bytes(8, byteorder='little')
-        if index:
-            data = data + index.to_bytes(8, byteorder="little")
-        return Transaction().add(TransactionInstruction(
-            program_id = EVM_LOADER_ID,
-            data = data,
-            keys = [
-                AccountMeta(pubkey=self.holder, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.storage, is_signer=False, is_writable=True),
+    def _make_tx_step_ix(self, ix_id_byte: bytes, neon_step_cnt: int, index: int,
+                         data: Optional[bytes]) -> SolTxIx:
+        ix_data = b"".join([
+            ix_id_byte,
+            self._treasury_pool_index_buf,
+            neon_step_cnt.to_bytes(4, byteorder='little'),
+            index.to_bytes(4, byteorder="little")
+        ])
 
-                AccountMeta(pubkey=self.operator_account, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.operator_neon_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+        if data is not None:
+            ix_data = ix_data + data
 
-            ] + self.eth_accounts + [
+        return self._make_holder_ix(ix_data)
 
-                AccountMeta(pubkey=SYSVAR_INSTRUCTION_PUBKEY, is_signer=False, is_writable=False),
-            ] + obligatory_accounts
-        ))
+    def _make_holder_ix(self, ix_data: bytes):
+        return SolTxIx(
+            program_id=self._evm_program_id,
+            data=ix_data,
+            accounts=[
+                 SolAccountMeta(pubkey=self._holder, is_signer=False, is_writable=True),
+                 SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                 SolAccountMeta(pubkey=self._treasury_pool_address, is_signer=False, is_writable=True),
+                 SolAccountMeta(pubkey=self._operator_neon_address, is_signer=False, is_writable=True),
+                 SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                 SolAccountMeta(pubkey=self._evm_program_id, is_signer=False, is_writable=False),
+             ] + self._neon_account_list
+        )
+
+    def make_tx_step_from_account_ix(self, neon_step_cnt: int, index: int) -> SolTxIx:
+        return self._make_tx_step_ix(EvmInstruction.TransactionStepFromAccount.value, neon_step_cnt, index, None)
+
+    def make_tx_step_from_account_no_chainid_ix(self, neon_step_cnt: int, index: int) -> SolTxIx:
+        return self._make_tx_step_ix(
+            EvmInstruction.TransactionStepFromAccountNoChainId.value,
+            neon_step_cnt, index, None
+        )
+
+    def make_create_lookup_table_ix(self, table_account: SolPubKey,
+                                    recent_block_slot: int,
+                                    seed: int) -> SolTxIx:
+        data = b"".join([
+            int(0).to_bytes(4, byteorder="little"),
+            recent_block_slot.to_bytes(8, byteorder="little"),
+            seed.to_bytes(1, byteorder="little")
+        ])
+        return SolTxIx(
+            program_id=ADDRESS_LOOKUP_TABLE_ID,
+            data=data,
+            accounts=[
+                SolAccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),  # signer
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),   # payer
+                SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+            ]
+        )
+
+    def make_extend_lookup_table_ix(self, table_account: SolPubKey,
+                                    account_list: List[SolPubKey]) -> SolTxIx:
+        data = b"".join(
+            [
+                int(2).to_bytes(4, byteorder="little"),
+                len(account_list).to_bytes(8, byteorder="little")
+            ] +
+            [bytes(pubkey) for pubkey in account_list]
+        )
+
+        return SolTxIx(
+            program_id=ADDRESS_LOOKUP_TABLE_ID,
+            data=data,
+            accounts=[
+                SolAccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),  # signer
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),   # payer
+                SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+            ]
+        )
+
+    def make_deactivate_lookup_table_ix(self, table_account: SolPubKey) -> SolTxIx:
+        data = int(3).to_bytes(4, byteorder="little")
+        return SolTxIx(
+            program_id=ADDRESS_LOOKUP_TABLE_ID,
+            data=data,
+            accounts=[
+                SolAccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),  # signer
+            ]
+        )
+
+    def make_close_lookup_table_ix(self, table_account: SolPubKey) -> SolTxIx:
+        data = int(4).to_bytes(4, byteorder="little")
+        return SolTxIx(
+            program_id=ADDRESS_LOOKUP_TABLE_ID,
+            data=data,
+            accounts=[
+                SolAccountMeta(pubkey=table_account, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=False),  # signer
+                SolAccountMeta(pubkey=self._operator_account, is_signer=False, is_writable=True),  # refund
+            ]
+        )
+
+    def make_compute_budget_heap_ix(self) -> SolTxIx:
+        heap_frame_size = self._elf_params.neon_heap_frame
+        return SolTxIx(
+            program_id=COMPUTE_BUDGET_ID,
+            accounts=[],
+            data=bytes.fromhex("01") + heap_frame_size.to_bytes(4, "little")
+        )
+
+    def make_compute_budget_cu_ix(self) -> SolTxIx:
+        compute_unit_cnt = self._elf_params.neon_compute_units
+        return SolTxIx(
+            program_id=COMPUTE_BUDGET_ID,
+            accounts=[],
+            data=bytes.fromhex("02") + compute_unit_cnt.to_bytes(4, "little")
+        )

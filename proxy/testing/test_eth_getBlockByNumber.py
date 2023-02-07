@@ -1,25 +1,22 @@
 import unittest
-import os
-from web3 import Web3
 
-proxy_url = os.environ.get('PROXY_URL', 'http://localhost:9090/solana')
-proxy = Web3(Web3.HTTPProvider(proxy_url))
-eth_account = proxy.eth.account.create('https://github.com/neonlabsorg/proxy-model.py/issues/140')
-proxy.eth.default_account = eth_account.address
+from proxy.testing.testing_helpers import Proxy
 
 
-class Test_eth_getBlockByNumber(unittest.TestCase):
+class TestEthGetBlockByNumber(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.proxy = Proxy()
+        cls.eth_account = cls.proxy.create_signer_account('https://github.com/neonlabsorg/proxy-model.py/issues/140')
         print("\n\nhttps://github.com/neonlabsorg/proxy-model.py/issues/140")
-        print('eth_account.address:', eth_account.address)
-        print('eth_account.key:', eth_account.key.hex())
+        print('eth_account.address:', cls.eth_account.address)
+        print('eth_account.key:', cls.eth_account.key.hex())
 
     def test_block_number_with_tag_latest(self):
         print("check tag latest in eth_getBlockByNumber")
-        proxy.eth.default_block = 'latest'
+        self.proxy.conn.default_block = 'latest'
         try:
-            print('proxy.eth.block_number:', proxy.eth.block_number)
+            print('proxy.eth.block_number:', self.proxy.conn.block_number)
         except Exception as e:
             print('type(e):', type(e))
             print('Exception:', e)
@@ -27,13 +24,13 @@ class Test_eth_getBlockByNumber(unittest.TestCase):
 
     def test_block_number_with_tag_earliest(self):
         print("check tag earliest in eth_getBlockByNumber")
-        proxy.eth.default_block = 'earliest'
-        self.assertRaises(Exception, proxy.eth.block_number)
+        self.proxy.conn.default_block = 'earliest'
+        self.assertRaises(Exception, self.proxy.conn.block_number)
 
     def test_block_number_with_tag_pending(self):
         print("check tag pending in eth_getBlockByNumber")
-        proxy.eth.default_block = 'pending'
-        self.assertRaises(Exception, proxy.eth.block_number)
+        self.proxy.conn.default_block = 'pending'
+        self.assertRaises(Exception, self.proxy.conn.block_number)
 
 
 if __name__ == '__main__':
