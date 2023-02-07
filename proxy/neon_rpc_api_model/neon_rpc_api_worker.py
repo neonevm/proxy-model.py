@@ -166,18 +166,26 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message='transaction-id is not hex')
 
-    @staticmethod
-    def _validate_block_tag(tag: Union[int, str]) -> None:
-        if isinstance(tag, int):
-            return
-
+    def _validate_block_tag(self, tag: Union[int, str, dict]) -> None:
         try:
-            tag.strip().lower()
-            if tag in {'latest', 'pending', 'earliest', 'finalized', 'safe'}:
-                return
+            if isinstance(tag, int):
+                pass
+            elif isinstance(tag, str):
+                tag.strip().lower()
+                if tag in {'latest', 'pending', 'earliest', 'finalized', 'safe'}:
+                    return
 
-            assert tag[:2] == '0x'
-            int(tag[2:], 16)
+                assert tag[:2] == '0x'
+                int(tag[2:], 16)
+            elif isinstance(tag, dict):
+                block_hash = tag['blockHash']
+                block = self._get_block_by_hash(block_hash)
+                if block.is_empty():
+                    raise InvalidParamError(message=f'header for hash {block_hash} not found')
+            else:
+                assert False, 'Bad type of tag'
+        except (InvalidParamError, ):
+            raise
         except (Exception,):
             raise InvalidParamError(message=f'invalid block tag {tag}')
 
