@@ -347,6 +347,9 @@ class NeonRpcApiWorker:
             else:
                 self._update_event_type(log_rec)
 
+            if log_rec['data'] == '':
+                log_rec['data'] = '0x'
+
             filtered_log_list.append(log_rec)
         return filtered_log_list
 
