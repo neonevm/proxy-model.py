@@ -62,6 +62,8 @@ class Config:
         pyth_mapping_account = os.environ.get('PYTH_MAPPING_ACCOUNT', None)
         if pyth_mapping_account is not None:
             self._pyth_mapping_account = SolPubKey.from_string(pyth_mapping_account)
+        else:
+            self._pyth_mapping_account = None
         self._update_pyth_mapping_period_sec = self._env_int('UPDATE_PYTH_MAPPING_PERIOD_SEC', 10, 60 * 60)
 
         self._validate()
