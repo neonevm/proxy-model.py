@@ -178,6 +178,10 @@ def terraform_build_infrastructure(head_ref_branch, github_ref_name, proxy_tag, 
     if return_code != 0:
         print("Terraform infrastructure is not built correctly")
         sys.exit(1)
+    output = terraform.output(json=True)
+    click.echo(f"output: {output}")
+    os.environ["PROXY_IP"] = output["proxy_ip"]["value"]
+    os.environ["SOLANA_IP"] = output["solana_ip"]["value"]
 
 
 @cli.command(name="destroy_terraform")
@@ -206,10 +210,6 @@ def openzeppelin_test(run_number):
     os.environ["REQUEST_AMOUNT"] = '20000'
     os.environ["USE_FAUCET"] = 'true'
 
-    output = terraform.output(json=True)
-    click.echo(f"output: {output}")
-    os.environ["PROXY_IP"] = output["proxy_ip"]["value"]
-    os.environ["SOLANA_IP"] = output["solana_ip"]["value"]
     proxy_ip = os.environ.get("PROXY_IP")
     solana_ip = os.environ.get("SOLANA_IP")
 
@@ -270,6 +270,40 @@ def check_tests_results(fts_threshold, log_file):
         raise RuntimeError(
             f"Tests failed: Passing - {passing_test_count}\n Threshold - {fts_threshold}")
 
+
+@cli.command(name="basic_tests")
+@click.option('--run_number')
+def run_basic_tests(run_number):
+    neon_test_image = "neonlabsorg/neon_tests:latest"
+    click.echo('pull docker images...')
+    out = docker_client.pull(neon_test_image, stream=True, decode=True)
+    process_output(out)
+    env = {
+        "PROXY_IP": os.environ.get("PROXY_IP"),
+        "SOLANA_IP": os.environ.get("SOLANA_IP")
+    }
+    container_name = f"basic_tests-{run_number}"
+    docker_client.create_container(neon_test_image, command="/bin/bash", name=container_name,
+                                   detach=True, tty=True)
+    docker_client.start(container_name)
+    inst = docker_client.exec_create(
+        container_name, './clickfile.py run basic -n aws --numprocesses 4', environment=env)
+
+    out = docker_client.exec_start(inst['Id'], stream=True)
+    failed_tests = 0
+    for line in out:
+        click.echo(line.decode())
+        if " ERROR " in line.decode():
+            failed_tests += 1
+    if failed_tests > 0:
+        raise RuntimeError(f"Tests failed! Errors count: {failed_tests}")
+
+@cli.command(name="remove_basic_test_container")
+@click.option('--run_number')
+def remove_basic_test_container(run_number):
+    container_name = f"basic_tests-{run_number}"
+    docker_client.stop(container_name)
+    docker_client.remove_container(container_name)
 
 def upload_remote_logs(ssh_client, service, artifact_logs):
     scp_client = SCPClient(transport=ssh_client.get_transport())
