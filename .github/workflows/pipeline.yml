@@ -174,7 +174,6 @@ jobs:
 
   destroy-terraform:
     needs:
-      - build-image
       - prepare-infrastructure
       - openzeppelin-tests
       - basic-tests
