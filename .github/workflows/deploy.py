@@ -305,7 +305,7 @@ def run_basic_tests(run_number):
     failed_tests = 0
     for line in out:
         click.echo(line.decode())
-        if " ERROR " in line.decode():
+        if " ERROR " in line.decode() or " FAILED " in line.decode():
             failed_tests += 1
     if failed_tests > 0:
         raise RuntimeError(f"Tests failed! Errors count: {failed_tests}")
