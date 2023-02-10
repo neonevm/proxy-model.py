@@ -7,6 +7,7 @@ import subprocess
 import pathlib
 import requests
 import json
+import typing as tp
 from urllib.parse import urlparse
 from python_terraform import Terraform
 from paramiko import SSHClient
@@ -180,8 +181,19 @@ def terraform_build_infrastructure(head_ref_branch, github_ref_name, proxy_tag, 
         sys.exit(1)
     output = terraform.output(json=True)
     click.echo(f"output: {output}")
-    os.environ["PROXY_IP"] = output["proxy_ip"]["value"]
-    os.environ["SOLANA_IP"] = output["solana_ip"]["value"]
+    proxy_ip = output["proxy_ip"]["value"]
+    solana_ip = output["solana_ip"]["value"]
+    infra = dict(solana_ip=solana_ip, proxy_ip=proxy_ip)
+    set_github_env(infra)
+
+
+def set_github_env(envs: tp.Dict, upper=True) -> None:
+    """Set environment for github action"""
+    path = os.getenv("GITHUB_ENV", str())
+    if os.path.exists(path):
+        with open(path, "a") as env_file:
+            for key, value in envs.items():
+                env_file.write(f"\n{key.upper() if upper else key}={str(value)}")
 
 
 @cli.command(name="destroy_terraform")
@@ -298,12 +310,14 @@ def run_basic_tests(run_number):
     if failed_tests > 0:
         raise RuntimeError(f"Tests failed! Errors count: {failed_tests}")
 
+
 @cli.command(name="remove_basic_test_container")
 @click.option('--run_number')
 def remove_basic_test_container(run_number):
     container_name = f"basic_tests-{run_number}"
     docker_client.stop(container_name)
     docker_client.remove_container(container_name)
+
 
 def upload_remote_logs(ssh_client, service, artifact_logs):
     scp_client = SCPClient(transport=ssh_client.get_transport())
