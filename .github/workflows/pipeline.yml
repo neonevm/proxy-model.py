@@ -186,7 +186,7 @@ jobs:
         run: python3 ./.github/workflows/deploy.py basic_tests --run_number=${GITHUB_RUN_NUMBER}
       - name: remove container
         if: always()
-        run: python3 ./.github/workflows/deploy.py stop_containers
+        run: python3 ./.github/workflows/deploy.py remove_basic_test_container --run_number=${GITHUB_RUN_NUMBER}
 
   destroy-terraform:
     needs:
