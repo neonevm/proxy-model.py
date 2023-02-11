@@ -48,7 +48,7 @@ class SimpleNeonTxSender(SolTxListSender):
     def _convert_state_to_tx_list(self, tx_status: SolTxSendState.Status,
                                   tx_state_list: List[SolTxSendState]) -> List[SolTx]:
         if self._neon_tx_res.is_valid():
-            return []
+            return list()
         return super()._convert_state_to_tx_list(tx_status, tx_state_list)
 
 
@@ -75,7 +75,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     def _validate_no_resize_iter_cnt(self) -> bool:
         if self._ctx.neon_tx_exec_cfg.resize_iter_cnt <= 0:
             return True
-        self._validation_error_msg = 'Has additional account resize iterations'
+        self._validation_error_msg = 'Has account resize iterations'
         return False
 
     def _build_tx(self) -> SolLegacyTx:
