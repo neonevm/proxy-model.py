@@ -8,6 +8,7 @@ from typing import Optional, List, Dict
 from ..common_neon.config import Config
 from ..common_neon.errors import CUBudgetExceededError
 from ..common_neon.errors import NodeBehindError, NoMoreRetriesError, NonceTooLowError, BlockedAccountsError
+from ..common_neon.errors import InvalidIxDataError, RequireResizeIterError
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolBlockhash, SolTxReceipt, SolAccount
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser, SolTxError
@@ -31,6 +32,8 @@ class SolTxSendState:
         CUBudgetExceededError = enum.auto()
         BlockhashNotFoundError = enum.auto()
         AccountAlreadyExistsError = enum.auto()
+        InvalidIxDataError = enum.auto()
+        RequireResizeIterError = enum.auto()
         UnknownError = enum.auto()
 
     status: Status
@@ -112,11 +115,12 @@ class SolTxListSender:
             self._add_tx_state(tx, tx_receipt, SolTxSendState.Status.WaitForReceipt)
 
     def _get_tx_list_for_send(self) -> List[SolTx]:
+        s = SolTxSendState.Status
         good_tx_status_set = {
-            SolTxSendState.Status.WaitForReceipt,
-            SolTxSendState.Status.GoodReceipt,
-            SolTxSendState.Status.AlreadyFinalizedError,
-            SolTxSendState.Status.AccountAlreadyExistsError,
+            s.WaitForReceipt,
+            s.GoodReceipt,
+            s.AlreadyFinalizedError,
+            s.AccountAlreadyExistsError,
         }
 
         tx_list: List[SolTx] = []
@@ -158,24 +162,27 @@ class SolTxListSender:
         if tx_status == SolTxSendState.Status.AltInvalidIndexError:
             time.sleep(self._one_block_time)
 
+        s = SolTxSendState.Status
         good_tx_status_set = {
-            SolTxSendState.Status.NoReceipt,
-            SolTxSendState.Status.BlockhashNotFoundError,
-            SolTxSendState.Status.AltInvalidIndexError
+            s.NoReceipt,
+            s.BlockhashNotFoundError,
+            s.AltInvalidIndexError
         }
 
         if tx_status in good_tx_status_set:
             return self._get_tx_list_from_state(tx_state_list)
 
-        if tx_status == SolTxSendState.Status.NodeBehindError:
-            raise NodeBehindError()
-        elif tx_status == SolTxSendState.Status.BadNonceError:
-            raise NonceTooLowError()
-        elif tx_status == SolTxSendState.Status.BlockedAccountError:
-            raise BlockedAccountsError()
-        elif tx_status == SolTxSendState.Status.CUBudgetExceededError:
-            raise CUBudgetExceededError()
-        raise SolTxError(tx_state_list[0].receipt)
+        error_tx_status_dict = {
+            s.NodeBehindError: NodeBehindError,
+            s.BadNonceError: NonceTooLowError,
+            s.BlockedAccountError: BlockedAccountsError,
+            s.CUBudgetExceededError: CUBudgetExceededError,
+            s.InvalidIxDataError: InvalidIxDataError,
+            s.RequireResizeIterError: RequireResizeIterError
+        }
+
+        e = error_tx_status_dict.get(tx_status, SolTxError)
+        raise e(tx_state_list[0].receipt)
 
     def _wait_for_confirmation_of_tx_list(self, tx_sig_list: List[str]) -> None:
         confirm_timeout = self._config.confirm_timeout_sec
@@ -205,27 +212,32 @@ class SolTxListSender:
         slots_behind = tx_error_parser.get_slots_behind()
         state_tx_cnt, tx_nonce = tx_error_parser.get_nonce_error()
 
+        s = SolTxSendState.Status
         if slots_behind is not None:
             LOG.warning(f'Node is behind by {slots_behind} slots')
-            return SolTxSendState.Status.NodeBehindError
+            return s.NodeBehindError
         elif state_tx_cnt is not None:
             LOG.debug(f'tx nonce {tx_nonce} != state tx count {state_tx_cnt}')
-            return SolTxSendState.Status.BadNonceError
+            return s.BadNonceError
         elif tx_error_parser.check_if_alt_uses_invalid_index():
-            return SolTxSendState.Status.AltInvalidIndexError
+            return s.AltInvalidIndexError
         elif tx_error_parser.check_if_already_finalized():
-            return SolTxSendState.Status.AlreadyFinalizedError
+            return s.AlreadyFinalizedError
         elif tx_error_parser.check_if_blockhash_notfound():
             if tx.recent_blockhash == self._blockhash:
                 self._blockhash = None
             tx.recent_blockhash = None
-            return SolTxSendState.Status.BlockhashNotFoundError
+            return s.BlockhashNotFoundError
         elif tx_error_parser.check_if_accounts_blocked():
-            return SolTxSendState.Status.BlockedAccountError
+            return s.BlockedAccountError
         elif tx_error_parser.check_if_account_already_exists():
-            return SolTxSendState.Status.AccountAlreadyExistsError
+            return s.AccountAlreadyExistsError
+        elif tx_error_parser.check_if_invalid_ix_data():
+            return s.InvalidIxDataError
         elif tx_error_parser.check_if_budget_exceeded():
-            return SolTxSendState.Status.CUBudgetExceededError
+            return s.CUBudgetExceededError
+        elif tx_error_parser.check_if_require_resize_iter():
+            return s.RequireResizeIterError
         elif tx_error_parser.check_if_error():
             LOG.debug(f'unknown_error_receipt: {tx_error_parser.receipt}')
             return SolTxSendState.Status.UnknownError
