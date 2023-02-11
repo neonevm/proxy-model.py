@@ -50,3 +50,13 @@ class NoMoreRetriesError(Exception):
 class CUBudgetExceededError(Exception):
     def __int__(self):
         super().__init__('The transaction is too complicated. Solana`s computing budget is exceeded.')
+
+
+class InvalidIxDataError(Exception):
+    def __int__(self):
+        super().__init__('Wrong instruction data.')
+
+
+class RequireResizeIterError(Exception):
+    def __int__(self):
+        super().__init__('Transaction requires resize iterations.')

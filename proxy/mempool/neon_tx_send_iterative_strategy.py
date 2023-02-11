@@ -37,7 +37,7 @@ class IterativeNeonTxSender(SimpleNeonTxSender):
     def _convert_state_to_tx_list(self, tx_status: SolTxSendState.Status,
                                   tx_state_list: List[SolTxSendState]) -> List[SolTx]:
         if self._neon_tx_res.is_valid():
-            return []
+            return list()
 
         try:
             if tx_status == SolTxSendState.Status.CUBudgetExceededError:
@@ -113,6 +113,11 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
 
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
+
+        LOG.debug(
+            f'Total EVM steps {self._ctx.emulated_evm_step_cnt}, '
+            f'total resize iterations {self._ctx.neon_tx_exec_cfg.resize_iter_cnt}'
+        )
 
         emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._evm_step_cnt)
         additional_iter_cnt = self._ctx.neon_tx_exec_cfg.resize_iter_cnt

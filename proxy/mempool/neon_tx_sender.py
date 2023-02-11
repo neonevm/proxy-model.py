@@ -3,7 +3,8 @@ import logging
 from ..common_neon.address import NeonAddress
 from ..common_neon.data import NeonEmulatedResult
 from ..common_neon.emulator_interactor import call_tx_emulated
-from ..common_neon.errors import NonceTooLowError, CUBudgetExceededError, NoMoreRetriesError
+from ..common_neon.errors import NonceTooLowError, CUBudgetExceededError, InvalidIxDataError, RequireResizeIterError
+from ..common_neon.errors import NoMoreRetriesError
 from ..common_neon.utils import NeonTxResultInfo
 
 from .neon_tx_send_base_strategy import BaseNeonTxStrategy
@@ -70,7 +71,7 @@ class NeonTxSendStrategyExecutor:
 
                 raise NoMoreRetriesError()
 
-            except (CUBudgetExceededError,):
+            except (CUBudgetExceededError, InvalidIxDataError, RequireResizeIterError):
                 continue
             except (Exception,):
                 raise
