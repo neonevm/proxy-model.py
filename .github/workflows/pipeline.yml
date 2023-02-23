@@ -106,7 +106,7 @@ jobs:
         if: always()
         run: python3 ./.github/workflows/deploy.py stop_containers
 
-  openzeppelin-tests:
+  prepare-infrastructure:
     needs:
       - build-image
     if: |
@@ -132,17 +132,30 @@ jobs:
             --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
             --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
             --run_number=${GITHUB_RUN_NUMBER}
+      - name: Set outputs
+        id: share
+        env:
+          SOLANA_IP: ${{ env.SOLANA_IP }}
+          PROXY_IP: ${{ env.PROXY_IP }}
+        run: |
+          echo "solana_ip=${{ env.SOLANA_IP }}" >> $GITHUB_OUTPUT
+          echo "proxy_ip=${{ env.PROXY_IP }}" >> $GITHUB_OUTPUT
+    outputs:
+      solana_ip: ${{ steps.share.outputs.solana_ip }}
+      proxy_ip: ${{ steps.share.outputs.proxy_ip }}
 
+  openzeppelin-tests:
+    if: ${{needs.prepare-infrastructure.result != 'skipped'}}
+    needs:
+      - prepare-infrastructure
+    runs-on: test-runner
+    env:
+      SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
+      PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
+    steps:
+      - uses: actions/checkout@v3
       - name: Run openzeppelin tests
         run: python3 ./.github/workflows/deploy.py openzeppelin --run_number=${GITHUB_RUN_NUMBER}
-
-      - name: Destroy terraform infrastructure
-        if: ${{always() && steps.terraform.outcome != 'skipped'}}
-        run: |
-          python3 ./.github/workflows/deploy.py destroy_terraform \
-          --run_number=${GITHUB_RUN_NUMBER} \
-          --proxy_tag=${{ needs.build-image.outputs.proxy_tag }}
-
       - uses: actions/upload-artifact@v3
         if: always()
         with:
@@ -159,16 +172,49 @@ jobs:
         with:
           name: Terraform infrastructure logs
           path: ./terraform.log
+  basic-tests:
+    if: ${{needs.prepare-infrastructure.result != 'skipped'}}
+    needs:
+      - prepare-infrastructure
+    runs-on: test-runner
+    env:
+      SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
+      PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run basic tests
+        run: python3 ./.github/workflows/deploy.py basic_tests --run_number=${GITHUB_RUN_NUMBER}
+      - name: remove container
+        if: always()
+        run: python3 ./.github/workflows/deploy.py remove_basic_test_container --run_number=${GITHUB_RUN_NUMBER}
+
+  destroy-terraform:
+    needs:
+      - prepare-infrastructure
+      - openzeppelin-tests
+      - basic-tests
+    runs-on: test-runner
+    steps:
+      - uses: actions/checkout@v3
+      - name: Destroy terraform infrastructure
+        if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
+        run: |
+          python3 ./.github/workflows/deploy.py destroy_terraform \
+          --run_number=${GITHUB_RUN_NUMBER} \
+          --proxy_tag=${{ needs.build-image.outputs.proxy_tag }}
   finalize-image:
     runs-on: build-runner
     needs:
       - build-image
+      - prepare-infrastructure
       - openzeppelin-tests
+      - basic-tests
       - deploy-check
     if: |
       always() &&
       needs.deploy-check.result == 'success' &&
-      (needs.openzeppelin-tests.result == 'success' || needs.openzeppelin-tests.result == 'skipped')
+      ((needs.openzeppelin-tests.result == 'success' && needs.basic-tests.result == 'success') ||
+      needs.prepare-infrastructure.result == 'skipped')
     steps:
       - uses: actions/checkout@v3
       - name: Tag published image
@@ -186,6 +232,7 @@ jobs:
     needs:
       - finalize-image
       - openzeppelin-tests
+      - basic-tests
       - deploy-check
       - build-image
     if: |
