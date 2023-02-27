@@ -140,11 +140,11 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
         self._sig_cnt += cnt
         if self._sig_cnt < self._config.indexer_poll_cnt:
             return
-        elif self._last_info is None:
+        elif self._last_info is None or self._last_info.block_slot == info.block_slot:
             self._last_info = info
         elif self._last_info.block_slot != info.block_slot:
-            LOG.debug(f'save checkpoint: {info}: {self._sig_cnt}')
-            self._sigs_db.add_sig(info)
+            LOG.debug(f'save checkpoint: {self._last_info}: {self._sig_cnt}')
+            self._sigs_db.add_sig(self._last_info)
             self._reset_checkpoint_cache()
 
     def _reset_checkpoint_cache(self) -> None:
@@ -163,16 +163,17 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
 
             sig_slot_list = list(self._iter_sig_slot(start_sig, start_slot, self._stop_slot))
             sig_slot_list_len = len(sig_slot_list)
+            LOG.debug(f"Get list from {start_sig} with {sig_slot_list_len} items ({self._stop_slot} .. {start_slot})")
             if sig_slot_list_len == 0:
                 if next_info is not None:
-                    self._stop_slot = next_info.block_slot + 1
+                    self._stop_slot = next_info.block_slot
                     continue
                 return
 
             if next_info is None:
                 self._stop_slot = sig_slot_list[0].block_slot + 1
             else:
-                self._stop_slot = next_info.block_slot + 1
+                self._stop_slot = next_info.block_slot
 
             if not is_long_list:
                 self._save_checkpoint(sig_slot_list[0], sig_slot_list_len)
