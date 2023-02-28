@@ -58,12 +58,13 @@ class IndexerBase:
         return start_int_slot
 
     def run(self):
+        check_sec = float(self._config.indexer_check_msec) / 1000
         while True:
             try:
                 self.process_functions()
             except BaseException as exc:
                 LOG.debug('Exception on transactions processing.', exc_info=exc)
-            time.sleep(0.05)
+            time.sleep(check_sec)
 
     def process_functions(self) -> None:
         pass

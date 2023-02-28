@@ -40,6 +40,8 @@ class Config:
         self._start_slot = os.environ.get('START_SLOT', '0')
         self._indexer_parallel_request_cnt = self._env_int("INDEXER_PARALLEL_REQUEST_COUNT", 1, 10)
         self._indexer_poll_cnt = self._env_int("INDEXER_POLL_COUNT", 1, 1000)
+        self._indexer_log_skip_cnt = self._env_int("INDEXER_LOG_SKIP_COUNT", 1, 1000)
+        self._indexer_check_msec = self._env_int('INDEXER_CHECK_MSEC', 50, 200)
         self._max_account_cnt = self._env_int("MAX_ACCOUNT_COUNT", 20, 60)
         self._skip_preflight = self._env_bool("SKIP_PREFLIGHT", False)
         self._fuzzing_blockhash = self._env_bool("FUZZING_BLOCKHASH", False)
@@ -51,7 +53,6 @@ class Config:
         self._cancel_timeout = self._env_int("CANCEL_TIMEOUT", 1, 60)
         self._skip_cancel_timeout = self._env_int("SKIP_CANCEL_TIMEOUT", 1, 1000)
         self._holder_timeout = self._env_int("HOLDER_TIMEOUT", 1, 216000)  # 1 day by default
-        self._indexer_log_skip_cnt = self._env_int("INDEXER_LOG_SKIP_COUNT", 1, 1000)
         self._gather_statistics = self._env_bool("GATHER_STATISTICS", False)
         self._hvac_url = os.environ.get('HVAC_URL', None)
         self._hvac_token = os.environ.get('HVAC_TOKEN', None)
@@ -220,6 +221,14 @@ class Config:
         return self._indexer_poll_cnt
 
     @property
+    def indexer_log_skip_cnt(self) -> int:
+        return self._indexer_log_skip_cnt
+
+    @property
+    def indexer_check_msec(self) -> int:
+        return self._indexer_check_msec
+
+    @property
     def max_account_cnt(self) -> int:
         return self._max_account_cnt
 
@@ -262,10 +271,6 @@ class Config:
     @property
     def holder_timeout(self) -> int:
         return self._holder_timeout
-
-    @property
-    def indexer_log_skip_cnt(self) -> int:
-        return self._indexer_log_skip_cnt
 
     @property
     def gather_statistics(self) -> bool:
@@ -326,6 +331,8 @@ class Config:
             'START_SLOT': self.start_slot,
             'INDEXER_PARALLEL_REQUEST_COUNT': self.indexer_parallel_request_cnt,
             'INDEXER_POLL_COUNT': self.indexer_poll_cnt,
+            'INDEXER_LOG_SKIP_COUNT': self.indexer_log_skip_cnt,
+            'INDEXER_CHECK_MSEC': self.indexer_check_msec,
             'MAX_ACCOUNT_COUNT': self.max_account_cnt,
             'SKIP_PREFLIGHT': self.skip_preflight,
             'FUZZING_BLOCKHASH': self.fuzzing_blockhash,
@@ -337,7 +344,6 @@ class Config:
             'CANCEL_TIMEOUT': self.cancel_timeout,
             'SKIP_CANCEL_TIMEOUT': self.skip_cancel_timeout,
             'HOLDER_TIMOUT': self.holder_timeout,
-            'INDEXER_LOG_SKIP_COUNT': self.indexer_log_skip_cnt,
             'GATHER_STATISTICS': self.gather_statistics,
             'HVAC_URL': self.hvac_url,
             'HVAC_TOKEN': self.hvac_token,
