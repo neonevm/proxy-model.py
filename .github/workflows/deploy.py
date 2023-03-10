@@ -48,7 +48,7 @@ UNISWAP_V2_CORE_IMAGE = f'neonlabsorg/uniswap-v2-core:{UNISWAP_V2_CORE_COMMIT}'
 
 FAUCET_COMMIT = 'latest'
 
-FTS_NAME = "neonlabsorg/full_test_suite:develop"
+NEON_TESTS_IMAGE = "neonlabsorg/neon_tests:latest"
 
 CONTAINERS = ['proxy', 'solana', 'neon_test_invoke_program_loader',
               'dbcreation', 'faucet', 'airdropper', 'indexer']
@@ -214,7 +214,7 @@ def openzeppelin_test(run_number):
     container_name = f'fts_{run_number}'
     fts_threshold = 2370
     os.environ["FTS_CONTAINER_NAME"] = container_name
-    os.environ["FTS_IMAGE"] = FTS_NAME
+    os.environ["FTS_IMAGE"] = NEON_TESTS_IMAGE
     os.environ["FTS_USERS_NUMBER"] = '15'
     os.environ["FTS_JOBS_NUMBER"] = '8'
     os.environ["NETWORK_NAME"] = f'full-test-suite-{run_number}'
@@ -236,7 +236,7 @@ def openzeppelin_test(run_number):
     fts_result = docker_compose(
         "-f docker-compose/docker-compose-full-test-suite.yml up")
     click.echo(fts_result)
-    command = f'docker cp {container_name}:/opt/allure-reports.tar.gz ./'
+    command = f'docker cp {container_name}:/opt/neon-tests/allure-reports.tar.gz ./'
     click.echo(f"run command: {command}")
     subprocess.run(command, shell=True)
 
@@ -286,16 +286,15 @@ def check_tests_results(fts_threshold, log_file):
 @cli.command(name="basic_tests")
 @click.option('--run_number')
 def run_basic_tests(run_number):
-    neon_test_image = "neonlabsorg/neon_tests:latest"
     click.echo('pull docker images...')
-    out = docker_client.pull(neon_test_image, stream=True, decode=True)
+    out = docker_client.pull(NEON_TESTS_IMAGE, stream=True, decode=True)
     process_output(out)
     env = {
         "PROXY_IP": os.environ.get("PROXY_IP"),
         "SOLANA_IP": os.environ.get("SOLANA_IP")
     }
     container_name = f"basic_tests-{run_number}"
-    docker_client.create_container(neon_test_image, command="/bin/bash", name=container_name,
+    docker_client.create_container(NEON_TESTS_IMAGE, command="/bin/bash", name=container_name,
                                    detach=True, tty=True)
     docker_client.start(container_name)
     inst = docker_client.exec_create(
