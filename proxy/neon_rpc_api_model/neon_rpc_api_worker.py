@@ -322,6 +322,9 @@ class NeonRpcApiWorker:
 
         if 'topics' in obj:
             raw_topic_list = obj['topics']
+            if raw_topic_list is None:
+                raw_topic_list = []
+
             if not isinstance(raw_topic_list, list):
                 raise InvalidParamError(message=f'bad topics {raw_topic_list}')
 
