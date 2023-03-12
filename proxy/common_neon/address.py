@@ -41,6 +41,15 @@ class NeonAddress:
 
     def __bytes__(self):
         return self.data
+    
+    def __hash__(self):
+        return hash(self.data)
+    
+    def __eq__(self, other):
+        return self.data == other.data
+    
+    def __ne__(self, other):
+        return self.data != other.data
 
 
 def account_with_seed(base_address: SolPubKey, seed: bytes) -> SolPubKey:

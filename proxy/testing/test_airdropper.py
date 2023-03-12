@@ -13,7 +13,7 @@ from ..common_neon.config import Config
 from ..common_neon.solana_tx import SolPubKey
 from ..indexer.sql_dict import SQLDict
 from ..common_neon.solana_interactor import SolInteractor
-from ..testing.transactions import pre_token_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address
+from ..testing.transactions import pre_token_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address, write_wormhole_redeem_trx, execute_wormhole_redeem_trx
 
 
 class MockFaucet(MockServer):
@@ -320,3 +320,36 @@ class TestAirdropper(unittest.TestCase):
         self.assertEqual(new_airdropper.latest_processed_slot, start_slot + 1)
         mock_get_slot.assert_called_once_with('finalized')
         mock_dict_get.assert_called()
+
+    def test_wormhole_transaction_simple_case(self):
+        """
+        Should airdrop to liquidity transfer in simple case
+        """
+
+        # self.mock_pyth_client.get_price.side_effect = Exception('TestException')
+        # self.mock_airdrop_ready.is_airdrop_ready.side_effect = [False]  # new eth address
+        # self.faucet.request_neon_in_galans_mock.side_effect = [Response("{}", status=200, mimetype='application/json')]
+
+        config = FakeConfig('0')
+        sol_price = Decimal('341.5')
+        airdrop_amount = int(pow(Decimal(10), config.neon_decimals) * (AIRDROP_AMOUNT_SOL * sol_price) /
+                             config.neon_price_usd)
+        self.airdropper.current_slot = 2
+        self.mock_pyth_client.get_price.side_effect = [{
+            'valid_slot': self.airdropper.current_slot,
+            'price': sol_price,
+            'conf': Decimal('1.3'),
+            'status': 1
+        }]
+
+        #self.airdropper.process_trx_airdropper_mode(pre_token_airdrop_trx)
+        self.airdropper.process_trx_airdropper_mode(write_wormhole_redeem_trx)
+        self.airdropper.process_trx_airdropper_mode(execute_wormhole_redeem_trx)
+        self.airdropper.process_scheduled_trxs()
+
+        # self.mock_failed_attempts.airdrop_failed.assert_called_once_with('ALL', ANY)
+        # self.mock_pyth_client.update_mapping.assert_called_once()
+        # self.mock_airdrop_ready.is_airdrop_ready.assert_called_once_with(token_airdrop_address)
+        # self.mock_airdrop_ready.register_airdrop.assert_not_called()
+        # self.mock_pyth_client.get_price.assert_called_once_with('Crypto.SOL/USD')
+        # self.faucet.request_neon_in_galans_mock.assert_not_called()
