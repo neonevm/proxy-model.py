@@ -63,7 +63,7 @@ class IndexerBase:
             try:
                 self.process_functions()
             except BaseException as exc:
-                LOG.debug('Exception on transactions processing.', exc_info=exc)
+                LOG.warning('Exception on transactions processing.', exc_info=exc)
             time.sleep(check_sec)
 
     def process_functions(self) -> None:
