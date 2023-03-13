@@ -213,7 +213,7 @@ jobs:
     if: |
       always() &&
       needs.deploy-check.result == 'success' &&
-      ((needs.openzeppelin-tests.result == 'success') ||
+      ((needs.openzeppelin-tests.result == 'success' && needs.basic-tests.result == 'success') ||
       needs.prepare-infrastructure.result == 'skipped')
     steps:
       - uses: actions/checkout@v3
