@@ -542,6 +542,7 @@ class NeonIndexedBlockInfo:
         for holder in list(self.iter_neon_holder()):
             if abs(self.block_slot - holder.last_block_slot) > config.holder_timeout:
                 LOG.debug(f'skip the neon holder {holder}')
+                self.fail_neon_holder(holder)
 
 
 class NeonIndexedBlockDict:
