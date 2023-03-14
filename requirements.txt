@@ -15,5 +15,5 @@ base58
 pysha3
 construct
 git+https://github.com/ethereum/web3.py.git@v6.0.0-beta.6
-aioprometheus==22.5.0
+aioprometheus==23.3.0
 singleton-decorator==1.0.0
