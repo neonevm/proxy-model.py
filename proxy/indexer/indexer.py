@@ -253,8 +253,8 @@ class Indexer(IndexerBase):
         state.set_neon_block(neon_block)
         return neon_block
 
-    def _run_sol_tx_collector(self, state: SolNeonTxDecoderState) -> None:
-        stop_block_slot = self._solana.get_block_slot(state.commitment)
+    def _run_sol_tx_collector(self, state: SolNeonTxDecoderState, slot_processing_delay: int) -> None:
+        stop_block_slot = self._solana.get_block_slot(state.commitment) - slot_processing_delay
         state.set_stop_block_slot(stop_block_slot)
         if stop_block_slot < state.start_block_slot:
             return
@@ -310,7 +310,7 @@ class Indexer(IndexerBase):
 
         try:
             state = SolNeonTxDecoderState(self._finalized_sol_tx_collector, start_block_slot, finalized_neon_block)
-            self._run_sol_tx_collector(state)
+            self._run_sol_tx_collector(state, 0)
         except SolHistoryNotFound as err:
             LOG.debug(f'skip parsing of finalized history: {str(err)}')
             return
@@ -323,7 +323,7 @@ class Indexer(IndexerBase):
         if (finalized_block_slot - state.stop_block_slot) < 3:
             state.shift_to_collector(self._confirmed_sol_tx_collector)
             try:
-                self._run_sol_tx_collector(state)
+                self._run_sol_tx_collector(state, self._config.slot_processing_delay)
             except SolHistoryNotFound as err:
                 LOG.debug(f'skip parsing of confirmed history: {str(err)}')
             else:
