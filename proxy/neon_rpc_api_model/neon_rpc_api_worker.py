@@ -436,10 +436,10 @@ class NeonRpcApiWorker:
 
         try:
             value = NeonCli(self._config).call('get-storage-at', account, position)
-            return value
+            return '0x' + (value or 64*'0')
         except (Exception,):
             # LOG.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
-            return '0x00'
+            return '0x' + 64*'0'
 
     def _get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
         try:
