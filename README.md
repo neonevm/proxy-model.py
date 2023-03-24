@@ -37,6 +37,13 @@ proxy environment the service takes the next variables:
    to airdrop NEONs. This set should contain the next items: "tokenChain:tokenAddress", where:
     - `tokenChain` is an original token chain number in terms of Portal bridge numbers
     - `tokenAddress` is the address of the token in hexadecimal lowercase form with a '0x' prefix
+ - ERC20_BRIDGE_CONTRACTS - the comma-separated list of Common ERC20 Bridge contracts.
+ - ERC20_BRIDGE_TOKENS_WHITELIST - the whiltelist of tokens for the transfer of which
+   to airdrop NEONs. This set should contains ERC20 addresses separated by comma.
+   It can contain the `ANY` value to accept any token.
 
 Note: PORTAL_BRIDGE_CONTRACTS & PORTAL_BRIDGE_TOKENS_WHITELIST should be specified together.
 If they are missed the airdropper doesn't analyze Portal Bridge transfers.
+
+Note: ERC20_BRIDGE_CONTRACTS & ERC20_BRIDGE_TOKENS_WHITELIST should be specified together.
+If they are missed the ardropper doesn't analyze Common ERC20 Transfers.
