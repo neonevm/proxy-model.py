@@ -3,11 +3,12 @@ on:
   workflow_dispatch:
     inputs:
       full_test_suite:
+        default: false
         required: true
       neon_evm_commit:
-        required: true
+        required: false
       neon_evm_branch:
-        required: true
+        required: false
   pull_request:
     types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
   push:
@@ -25,6 +26,8 @@ env:
   DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
   DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
   BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+  NEON_TEST_IMAGE:  neonlabsorg/neon_tests:latest
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.inputs.neon_evm_commit }}
   cancel-in-progress: true
@@ -152,16 +155,105 @@ jobs:
     env:
       SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
       PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
+      CONTAINER: oz-${{ github.run_id }}
+      NETWORK_NAME: aws_custom
     steps:
       - uses: actions/checkout@v3
-      - name: Run openzeppelin tests
-        run: python3 ./.github/workflows/deploy.py openzeppelin --run_number=${GITHUB_RUN_NUMBER}
+      - name: Pull docker image
+        run: docker pull ${{ env.NEON_TEST_IMAGE }}
+      - name: Run docker container
+        run: |
+          docker run -i -e PROXY_IP=${{env.PROXY_IP}} \
+          -e SOLANA_IP=${{env.SOLANA_IP}} \
+          -e DUMP_ENVS=true \
+          -e NETWORK_ID=111 \
+          -e FAUCET_URL="http://${{env.PROXY_IP}}:3333/request_neon" \
+          -e SOLANA_URL="http://${{env.SOLANA_IP}}:8899" \
+          -e PROXY_URL="http://${{env.PROXY_IP}}:9090/solana" \
+          -e NETWORK_NAME=${{env.NETWORK_NAME}} \
+          -d --name=${{ env.CONTAINER }} ${{ env.NEON_TEST_IMAGE }} /bin/bash
+      - name: Wait until proxy is ready
+        timeout-minutes: 5
+        run: |
+          while [[ "$(curl -s -X POST -o /dev/null -w ''%{http_code}'' http://${{ env.PROXY_IP }}:9090/solana)" != "200" ]];
+            do echo  "Proxy is not ready yet. Waiting 5 seconds...";
+            sleep 5;
+          done
+      - name: Run OpenZeppelin tests
+        run: |
+          docker exec -i ${{ env.CONTAINER }} ./clickfile.py run oz \
+            --network ${{ env.NETWORK_NAME }} \
+            --jobs 8 \
+            --users 10
+      - name: Print OpenZeppelin report
+        run: |
+          docker exec -i ${{ env.CONTAINER }} ./clickfile.py ozreport
+      - name: Analyze tests results
+        run: |
+          docker exec -i ${{ env.CONTAINER }} ./clickfile.py analyze-openzeppelin-results
+      - name: "Archive report"
+        if: always()
+        run: |
+          docker exec -i ${{ env.CONTAINER }} tar -czvf ./allure-results.tar.gz /opt/neon-tests/allure-results
+          docker cp ${{ env.CONTAINER }}:/opt/neon-tests/allure-results.tar.gz ./
       - uses: actions/upload-artifact@v3
         if: always()
         with:
           name: FTS allure report
           path: allure-reports.tar.gz
-      - run:  ls -la ./logs/
+      - name: Remove docker container
+        if: always()
+        run: docker rm -f ${{ env.CONTAINER }}
+
+  basic-tests:
+    if: ${{needs.prepare-infrastructure.result != 'skipped'}}
+    needs:
+      - prepare-infrastructure
+    runs-on: test-runner
+    env:
+      SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
+      PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
+      NUMPROCESSES: 4
+      IMAGE: neonlabsorg/neon_tests
+      CONTAINER: basic-${{ github.run_id }}
+      NETWORK: aws
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run docker container
+        run: |
+          docker pull ${{ env.NEON_TEST_IMAGE }}
+          docker run -i -d -e PROXY_IP=${{ env.PROXY_IP }} -e SOLANA_IP=${{ env.SOLANA_IP }} \
+          --name=${{ env.CONTAINER }} ${{ env.NEON_TEST_IMAGE }} /bin/bash
+      - name: Wait until proxy is ready
+        timeout-minutes: 5
+        run: |
+          while [[ "$(curl -s -X POST -o /dev/null -w ''%{http_code}'' http://${{ env.PROXY_IP }}:9090/solana)" != "200" ]];
+            do echo  "Proxy is not ready yet. Waiting 5 seconds...";
+            sleep 5;
+          done
+      - name: Run basic tests
+        run: |
+          docker exec -i ${{ env.CONTAINER }} \
+            ./clickfile.py run basic -n ${{ env.NETWORK }} --numprocesses ${{ env.NUMPROCESSES }}
+      - name: Remove docker container
+        if: always()
+        run: docker rm -f ${{ env.CONTAINER }}
+
+  destroy-terraform:
+    needs:
+      - prepare-infrastructure
+      - openzeppelin-tests
+      - basic-tests
+    runs-on: test-runner
+    if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
+    env:
+      SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
+      PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get container logs
+        if: always()
+        run: python3 ./.github/workflows/deploy.py get_container_logs
       - uses: actions/upload-artifact@v3
         if: always()
         with:
@@ -172,30 +264,6 @@ jobs:
         with:
           name: Terraform infrastructure logs
           path: ./terraform.log
-  basic-tests:
-    if: ${{needs.prepare-infrastructure.result != 'skipped'}}
-    needs:
-      - prepare-infrastructure
-    runs-on: test-runner
-    env:
-      SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
-      PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
-    steps:
-      - uses: actions/checkout@v3
-      - name: Run basic tests
-        run: python3 ./.github/workflows/deploy.py basic_tests --run_number=${GITHUB_RUN_NUMBER}
-      - name: remove container
-        if: always()
-        run: python3 ./.github/workflows/deploy.py remove_basic_test_container --run_number=${GITHUB_RUN_NUMBER}
-
-  destroy-terraform:
-    needs:
-      - prepare-infrastructure
-      - openzeppelin-tests
-      - basic-tests
-    runs-on: test-runner
-    steps:
-      - uses: actions/checkout@v3
       - name: Destroy terraform infrastructure
         if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
         run: |
