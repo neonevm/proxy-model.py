@@ -96,7 +96,10 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 response['error'] = {'code': -32601, 'message': f'method {rpc_method} is not supported'}
             else:
                 method = getattr(self._model, rpc_method)
-                param_list = [self._sanitize_value(param) for param in request.get('params', [])]
+                param_object = []
+                if "params" in request and isinstance(request["params"], list):
+                    param_object = request["params"]
+                param_list = [self._sanitize_value(param) for param in param_object]
                 response['result'] = method(*param_list)
         except SolTxError as err:
             # traceback.print_exc()
