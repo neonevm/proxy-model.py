@@ -3,7 +3,7 @@ ecdsa==0.18.0
 pysha3==1.0.2
 eth-keys==0.4.0
 rlp
-solana==0.29.1
+solana==0.29.2
 solders==0.14.3
 psycopg2-binary
 ethereum
