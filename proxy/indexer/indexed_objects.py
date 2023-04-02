@@ -13,7 +13,7 @@ from typing import Iterator, List, Optional, Dict, Set, Deque, Tuple, cast
 from ..common_neon.config import Config
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolNeonIxReceiptInfo, SolTxCostInfo, SolTxReceiptInfo
 from ..common_neon.evm_log_decoder import NeonLogTxEvent
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolanaBlockInfo, str_fmt_object
+from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolBlockInfo, str_fmt_object
 from ..indexer.solana_tx_meta_collector import SolTxMetaCollector
 
 from ..statistic.data import NeonTxStatData
@@ -255,6 +255,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         for event in reversed(neon_event_list):
             yield event
 
+    @property
     def len_neon_event_list(self) -> int:
         return len(self._neon_event_list)
 
@@ -297,7 +298,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
 
 
 class NeonIndexedBlockInfo:
-    def __init__(self, history_block_deque: Deque[SolanaBlockInfo]):
+    def __init__(self, history_block_deque: Deque[SolBlockInfo]):
         self._sol_block = history_block_deque[-1]
         self._history_block_deque = history_block_deque
         self._is_completed = False
@@ -315,7 +316,7 @@ class NeonIndexedBlockInfo:
     def __str__(self) -> str:
         return str_fmt_object(self, False)
 
-    def clone(self, history_block_deque: Deque[SolanaBlockInfo]) -> NeonIndexedBlockInfo:
+    def clone(self, history_block_deque: Deque[SolBlockInfo]) -> NeonIndexedBlockInfo:
         sol_block = history_block_deque[-1]
         assert sol_block.block_slot > self.block_slot
 
@@ -424,7 +425,7 @@ class NeonIndexedBlockInfo:
     def add_neon_account(self, _: NeonAccountInfo, __: SolNeonIxReceiptInfo) -> None:
         pass
 
-    def iter_history_block(self) -> Iterator[SolanaBlockInfo]:
+    def iter_history_block(self) -> Iterator[SolBlockInfo]:
         return iter(self._history_block_deque)
 
     @property

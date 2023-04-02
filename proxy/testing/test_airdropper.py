@@ -13,7 +13,8 @@ from ..common_neon.config import Config
 from ..common_neon.solana_tx import SolPubKey
 from ..indexer.sql_dict import SQLDict
 from ..common_neon.solana_interactor import SolInteractor
-from ..testing.transactions import pre_token_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address, write_wormhole_redeem_trx, execute_wormhole_redeem_trx
+from ..testing.transactions import pre_token_airdrop_trx, wrapper_whitelist, evm_loader_addr, token_airdrop_address
+from ..testing.transactions import write_wormhole_redeem_trx, execute_wormhole_redeem_trx
 
 
 class MockFaucet(MockServer):
@@ -28,48 +29,28 @@ class MockFaucet(MockServer):
         return self.request_neon_in_galans_mock(req)
 
 
-def create_signature_for_address(signature: str):
-    return {
-        'blockTime': 1638177745,  # not make sense
-        'confirmationStatus': 'finalized',
-        'err': None,
-        'memo': None,
-        'signature': signature,
-        'slot': 9748200  # not make sense
-    }
-
-
-def create_get_signatures_for_address(signatures: list):
-    return {
-        'jsonrpc': '2.0',
-        'result': [create_signature_for_address(sign) for sign in signatures],
-        'id': 1
-    }
-
-
-def create_price_info(valid_slot: int, price: Decimal, conf: Decimal):
-    return {
-        'valid_slot':   valid_slot,
-        'price':        price,
-        'conf':         conf
-    }
-
-
 class FakeConfig(Config):
     def __init__(self, start_slot: str):
         super().__init__()
         self._start_slot = start_slot
         self._pyth_mapping_account = SolPubKey.new_unique()
 
+    @property
     def pyth_mapping_account(self) -> Optional[SolPubKey]:
         return self._pyth_mapping_account
+
+    @property
+    def fuzz_fail_pct(self) -> int:
+        return 0
 
 
 class TestAirdropper(unittest.TestCase):
     def create_airdropper(self, start_slot: str):
-        return Airdropper(config            =FakeConfig(start_slot),
-                          faucet_url        =f'http://{self.address}:{self.faucet_port}',
-                          wrapper_whitelist =self.wrapper_whitelist)
+        return Airdropper(
+            config=FakeConfig(start_slot),
+            faucet_url=f'http://{self.address}:{self.faucet_port}',
+            wrapper_whitelist=self.wrapper_whitelist
+        )
 
     @classmethod
     @patch.object(SQLDict, 'get')
@@ -80,25 +61,25 @@ class TestAirdropper(unittest.TestCase):
         cls.faucet_port = 3333
         cls.evm_loader_id = evm_loader_addr
         cls.wrapper_whitelist = wrapper_whitelist
-        cls.airdropper = cls.create_airdropper(cls, '0')
+        cls.airdropper = airdropper = cls.create_airdropper(cls, '0')
         mock_get_slot.assert_called_once_with('finalized')
         mock_dict_get.assert_called()
 
-        cls.airdropper.always_reload_price = True
+        airdropper.always_reload_price = True
 
-        cls.mock_pyth_client = Mock()
-        cls.mock_pyth_client.get_price = MagicMock()
-        cls.mock_pyth_client.update_mapping = MagicMock()
-        cls.airdropper.pyth_client = cls.mock_pyth_client
+        cls.mock_pyth_client = mock_pyth_client = Mock()
+        mock_pyth_client.get_price = MagicMock()
+        mock_pyth_client.update_mapping = MagicMock()
+        airdropper.pyth_client = mock_pyth_client
 
-        cls.mock_airdrop_ready = Mock()
-        cls.mock_airdrop_ready.register_airdrop = MagicMock()
-        cls.mock_airdrop_ready.is_airdrop_ready = MagicMock()
-        cls.airdropper.airdrop_ready = cls.mock_airdrop_ready
+        cls.mock_airdrop_ready = mock_airdrop_ready = Mock()
+        mock_airdrop_ready.register_airdrop = MagicMock()
+        mock_airdrop_ready.is_airdrop_ready = MagicMock()
+        airdropper.airdrop_ready = mock_airdrop_ready
 
-        cls.mock_failed_attempts = Mock()
-        cls.mock_failed_attempts.airdrop_failed = MagicMock()
-        cls.airdropper.failed_attempts = cls.mock_failed_attempts
+        cls.mock_failed_attempts = mock_failed_attempts = Mock()
+        mock_failed_attempts.airdrop_failed = MagicMock()
+        airdropper.failed_attempts = mock_failed_attempts
 
     def setUp(self) -> None:
         print(f"\n\n{self._testMethodName}\n{self._testMethodDoc}")

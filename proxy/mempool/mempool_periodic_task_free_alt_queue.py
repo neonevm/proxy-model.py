@@ -13,10 +13,11 @@ LOG = logging.getLogger(__name__)
 
 
 class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
+    _default_sleep_sec = 30
     _freeing_depth = 512 + 32
 
     def __init__(self, executor_mng: MPExecutorMng, op_res_mng: OpResMng) -> None:
-        super().__init__(name='alt', sleep_time=30, executor_mng=executor_mng)
+        super().__init__(name='alt', sleep_sec=self._default_sleep_sec, executor_mng=executor_mng)
         self._op_res_mng = op_res_mng
         self._iteration = 0
         self._get_list_iteration = 0

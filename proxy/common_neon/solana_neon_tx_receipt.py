@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import logging
 import re
 
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, cast
-import logging
+
 import base58
 
 from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.evm_log_decoder import decode_log_list, NeonLogTxReturn, NeonLogTxEvent
+from ..common_neon.solana_tx import SolTxReceipt
 from ..common_neon.utils import str_fmt_object
 
 
@@ -50,7 +52,7 @@ class SolTxMetaInfo:
     @staticmethod
     def from_end_range(block_slot: int, postfix: str) -> SolTxMetaInfo:
         ident = SolTxSigSlotInfo(block_slot=block_slot, sol_sig=f'end-{postfix}')
-        return SolTxMetaInfo(ident, block_slot, ident.sol_sig, {}, '', '')
+        return SolTxMetaInfo(ident, block_slot, ident.sol_sig, dict(), '', '')
 
     @staticmethod
     def from_response(sig_slot: SolTxSigSlotInfo, response: Dict[str, Any]) -> SolTxMetaInfo:
@@ -87,117 +89,169 @@ class _SolIxInvokeLog:
     level: int
 
 
-_SolIxStatusLog = Union[None, _SolIxSuccessLog, _SolIxFailedLog]
+@dataclass(frozen=True)
+class _SolIxBFPUsageLog:
+    max_bpf_cycle_cnt: int
+    used_bpf_cycle_cnt: int
 
 
-@dataclass
-class _SolIxLogList:
+@dataclass(frozen=True)
+class _SolIxHeapUsageLog:
+    used_heap_size: int
+
+
+@dataclass(frozen=True)
+class SolIxLogState:
     class Status(Enum):
-        UNKNOWN = 0
-        SUCCESS = 1
-        FAILED = 2
+        Unknown = 0
+        Success = 1
+        Failed = 2
 
     program: str
     level: int
 
-    status: Status = Status.UNKNOWN
+    max_bpf_cycle_cnt: int = 0
+    used_bpf_cycle_cnt: int = 0
+    used_heap_size: int = 0
+
+    status: Status = Status.Unknown
     error: Optional[str] = None
 
-    log_list: List[Union[str, _SolIxLogList]] = None
-    inner_log_list: List[_SolIxLogList] = None
+    log_list: List[Union[str, SolIxLogState]] = None
+    inner_log_list: List[SolIxLogState] = None
 
     def __post_init__(self):
-        self.log_list = []
-        self.inner_log_list = []
+        object.__setattr__(self, 'log_list', list())
+        self.set_inner_log_list(list())
 
     def __str__(self) -> str:
         return str_fmt_object(self)
 
-    def set_status(self, status: _SolIxStatusLog) -> None:
-        assert self.status == self.status.UNKNOWN
-        if isinstance(status, _SolIxSuccessLog):
-            assert status.program == self.program
-            self.status = self.Status.SUCCESS
-        elif isinstance(status, _SolIxFailedLog):
-            assert status.program == self.program
-            self.status = self.Status.FAILED
-            self.error = status.error
-        else:
-            assert False, f'unknown status {status}'
+    def set_inner_log_list(self, inner_log_list: List[SolIxLogState]) -> None:
+        object.__setattr__(self, 'inner_log_list', inner_log_list)
 
-    def iter_str_log_msg(self) -> str:
+    def set_success(self, status: _SolIxSuccessLog) -> None:
+        assert self.status == self.Status.Unknown
+        assert self.program == status.program
+
+        object.__setattr__(self, 'status', self.Status.Success)
+
+    def set_failed(self, status: _SolIxFailedLog) -> None:
+        assert self.status == self.Status.Unknown
+        assert self.program == status.program
+
+        object.__setattr__(self, 'status', self.Status.Failed)
+        object.__setattr__(self, 'error', status.error)
+
+    def set_bpf_cycle_usage(self, stat: _SolIxBFPUsageLog) -> None:
+        assert self.max_bpf_cycle_cnt == 0
+        assert self.used_bpf_cycle_cnt == 0
+
+        object.__setattr__(self, 'max_bpf_cycle_cnt', stat.max_bpf_cycle_cnt)
+        object.__setattr__(self, 'used_bpf_cycle_cnt', stat.used_bpf_cycle_cnt)
+
+    def set_heap_usage(self, stat: _SolIxHeapUsageLog) -> None:
+        assert self.used_heap_size == 0
+
+        object.__setattr__(self, 'used_heap_size', stat.used_heap_size)
+
+    def iter_str_log_msg(self) -> Iterator[str]:
         for log_msg in self.log_list:
             if isinstance(log_msg, str):
                 yield log_msg
 
 
-class _SolTxLogDecoder:
+class SolTxLogDecoder:
     _invoke_re = re.compile(r'^Program (\w+) invoke \[(\d+)]$')
     _success_re = re.compile(r'^Program (\w+) success$')
     _failed_re = re.compile(r'^Program (\w+) failed: (.+)$')
+    _bpf_cycle_cnt_re = re.compile(r'^Program (\w+) consumed (\d+) of (\d+) compute units$')
+    _heap_size_re = re.compile(r'^Program log: Total memory occupied: (\d+)$')
 
-    def decode(self, log_msg_list: List[str]) -> List[_SolIxLogList]:
-        log_state = _SolIxLogList('', 0)
-        self._decode(iter(log_msg_list), log_state)
-        return log_state.inner_log_list
+    def decode(self, log_msg_list: List[str]) -> SolIxLogState:
+        log_state = SolIxLogState('', 0)
+        self._decode(log_state, iter(log_msg_list))
+        return log_state
 
-    def _decode(self, log_msg_iter: Iterator[str], log_state: _SolIxLogList) -> _SolIxStatusLog:
+    def _decode(self, log_state: SolIxLogState, log_msg_iter: Iterator[str]) -> None:
         for log_msg in log_msg_iter:
-            invoke = self._get_invoke(log_msg)
-            if invoke:
-                ix_log_state = _SolIxLogList(invoke.program, invoke.level)
-
-                log_state.log_list.append(ix_log_state)
-                log_state.inner_log_list.append(ix_log_state)
-
-                next_log_state = _SolIxLogList(invoke.program, invoke.level)
-                next_log_state.log_list = ix_log_state.log_list
-                if invoke.level > 1:
-                    next_log_state.inner_log_list = log_state.inner_log_list
-                else:
-                    next_log_state.inner_log_list = ix_log_state.inner_log_list
-
-                status = self._decode(log_msg_iter, next_log_state)
-                if status is not None:
-                    ix_log_state.set_status(status)
+            if self._decode_invoke(log_state, log_msg, log_msg_iter):
                 continue
 
-            success = self._get_success(log_msg)
-            if success:
-                return success
+            if self._decode_success(log_state, log_msg):
+                return
 
-            failed = self._get_failed(log_msg)
-            if failed:
-                return failed
+            elif self._decode_failed(log_state, log_msg):
+                return
+
+            elif self._decode_bpf_cycle_usage(log_state, log_msg):
+                continue
+
+            elif self._decode_heap_usage(log_state, log_msg):
+                continue
 
             log_state.log_list.append(log_msg)
         return None
 
-    def _get_invoke(self, log_msg: str) -> Optional[_SolIxInvokeLog]:
+    def _decode_invoke(self, log_state: SolIxLogState, log_msg: str, log_msg_iter: Iterator[str]) -> bool:
         match = self._invoke_re.match(log_msg)
-        if match is not None:
-            return _SolIxInvokeLog(program=match[1], level=int(match[2]))
-        return None
+        if match is None:
+            return False
 
-    def _get_success(self, log_msg: str) -> Optional[_SolIxSuccessLog]:
+        invoke = _SolIxInvokeLog(program=match[1], level=int(match[2]))
+        ix_log_state = SolIxLogState(invoke.program, invoke.level)
+
+        log_state.log_list.append(ix_log_state)
+        log_state.inner_log_list.append(ix_log_state)
+
+        self._decode(ix_log_state, log_msg_iter)
+        log_state.inner_log_list.extend(ix_log_state.inner_log_list)
+
+        return True
+
+    def _decode_success(self, log_state: SolIxLogState, log_msg: str) -> bool:
         match = self._success_re.match(log_msg)
-        if match is not None:
-            return _SolIxSuccessLog(program=match[1])
-        return None
+        if match is None:
+            return False
 
-    def _get_failed(self, log_msg: str) -> Optional[_SolIxFailedLog]:
+        success = _SolIxSuccessLog(program=match[1])
+        log_state.set_success(success)
+        return True
+
+    def _decode_failed(self, log_state: SolIxLogState, log_msg: str) -> bool:
         match = self._failed_re.match(log_msg)
-        if match is not None:
-            return _SolIxFailedLog(program=match[1], error=match[2])
-        return None
+        if match is None:
+            return False
+
+        failed = _SolIxFailedLog(program=match[1], error=match[2])
+        log_state.set_failed(failed)
+        return True
+
+    def _decode_bpf_cycle_usage(self, log_state: SolIxLogState, log_msg: str) -> bool:
+        match = self._bpf_cycle_cnt_re.match(log_msg)
+        if match is None:
+            return False
+
+        stat = _SolIxBFPUsageLog(used_bpf_cycle_cnt=int(match[2]), max_bpf_cycle_cnt=int(match[3]))
+        log_state.set_bpf_cycle_usage(stat)
+        return True
+
+    def _decode_heap_usage(self, log_state: SolIxLogState, log_msg: str) -> bool:
+        match = self._heap_size_re.match(log_msg)
+        if match is None:
+            return False
+
+        stat = _SolIxHeapUsageLog(used_heap_size=int(match[1]))
+        log_state.set_heap_usage(stat)
+        return True
 
 
 @dataclass(frozen=True)
 class SolIxMetaInfo:
     class Status(Enum):
-        UNKNOWN = 0
-        SUCCESS = 1
-        FAILED = 2
+        Unknown = 0
+        Success = 1
+        Failed = 2
 
     ix: Dict[str, Any]
     idx: int
@@ -208,7 +262,7 @@ class SolIxMetaInfo:
     status: Status
     error: Optional[str]
 
-    heap_size: int
+    used_heap_size: int
     max_bpf_cycle_cnt: int
     used_bpf_cycle_cnt: int
 
@@ -220,18 +274,8 @@ class SolIxMetaInfo:
     neon_tx_event_list: List[NeonLogTxEvent]
 
     @staticmethod
-    def from_log_list(ix: Dict[str, Any], idx: int, inner_idx: Optional[int], log_list: _SolIxLogList) -> SolIxMetaInfo:
+    def from_log_list(ix: Dict[str, Any], idx: int, inner_idx: Optional[int], log_list: SolIxLogState) -> SolIxMetaInfo:
         log_info = decode_log_list(log_list.iter_str_log_msg())
-
-        max_bpf_cycle_cnt = 0
-        used_bpf_cycle_cnt = 0
-        if log_info.sol_bpf_cycle_usage is not None:
-            max_bpf_cycle_cnt = log_info.sol_bpf_cycle_usage.max_bpf_cycle_cnt
-            used_bpf_cycle_cnt = log_info.sol_bpf_cycle_usage.used_bpf_cycle_cnt
-
-        heap_size = 0
-        if log_info.sol_heap_usage is not None:
-            heap_size = log_info.sol_heap_usage
 
         neon_tx_sig = ''
         if log_info.neon_tx_sig is not None:
@@ -243,11 +287,11 @@ class SolIxMetaInfo:
             neon_ix_gas_usage = log_info.neon_tx_ix.gas_used
             neon_ix_total_gas_usage = log_info.neon_tx_ix.total_gas_used
 
-        status = SolIxMetaInfo.Status.UNKNOWN
-        if log_list.status == _SolIxLogList.Status.FAILED:
-            status = SolIxMetaInfo.Status.FAILED
-        elif log_list.status == _SolIxLogList.Status.SUCCESS:
-            status = SolIxMetaInfo.Status.SUCCESS
+        status = SolIxMetaInfo.Status.Unknown
+        if log_list.status == SolIxLogState.Status.Failed:
+            status = SolIxMetaInfo.Status.Failed
+        elif log_list.status == SolIxLogState.Status.Success:
+            status = SolIxMetaInfo.Status.Success
 
         return SolIxMetaInfo(
             ix=ix,
@@ -259,9 +303,9 @@ class SolIxMetaInfo:
             status=status,
             error=log_list.error,
 
-            max_bpf_cycle_cnt=max_bpf_cycle_cnt,
-            used_bpf_cycle_cnt=used_bpf_cycle_cnt,
-            heap_size=heap_size,
+            max_bpf_cycle_cnt=log_list.max_bpf_cycle_cnt,
+            used_bpf_cycle_cnt=log_list.used_bpf_cycle_cnt,
+            used_heap_size=log_list.used_heap_size,
 
             neon_tx_sig=neon_tx_sig,
             neon_gas_used=neon_ix_gas_usage,
@@ -369,7 +413,7 @@ class SolNeonIxReceiptInfo(SolIxMetaInfo):
 
             max_bpf_cycle_cnt=ix_meta.max_bpf_cycle_cnt,
             used_bpf_cycle_cnt=ix_meta.used_bpf_cycle_cnt,
-            heap_size=ix_meta.heap_size,
+            used_heap_size=ix_meta.used_heap_size,
 
             sol_tx_cost=tx_cost,
 
@@ -436,10 +480,10 @@ class SolTxReceiptInfo(SolTxMetaInfo):
     _ix_list: List[Dict[str, Any]]
     _inner_ix_list: List[Dict[str, Any]]
     _account_key_list: List[str]
-    _ix_log_msg_list: List[_SolIxLogList]
+    _ix_log_msg_list: List[SolIxLogState]
 
     @staticmethod
-    def from_tx(tx: Dict[str, Any]) -> SolTxReceiptInfo:
+    def from_tx_receipt(tx: SolTxReceipt) -> SolTxReceiptInfo:
         block_slot = tx['slot']
         sol_sig = tx['transaction']['signatures'][0]
         sol_sig_slot = SolTxSigSlotInfo(sol_sig=sol_sig, block_slot=block_slot)
@@ -455,7 +499,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
         _ix_list = msg['instructions']
 
         meta = tx_meta.tx['meta']
-        log_msg_list = meta.get('logMessages', [])
+        log_msg_list = meta.get('logMessages', list())
         _inner_ix_list = meta['innerInstructions']
 
         _account_key_list: List[str] = msg['accountKeys']
@@ -464,7 +508,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
             _account_key_list.extend(lookup_key_list['writable'])
             _account_key_list.extend(lookup_key_list['readonly'])
 
-        _ix_log_msg_list: List[_SolIxLogList] = []
+        _ix_log_msg_list: List[SolIxLogState] = list()
 
         result = SolTxReceiptInfo(
             ident=tx_meta.ident,
@@ -481,14 +525,14 @@ class SolTxReceiptInfo(SolTxMetaInfo):
             _ix_list=_ix_list,
             _inner_ix_list=_inner_ix_list,
             _account_key_list=_account_key_list,
-            _ix_log_msg_list=[],
+            _ix_log_msg_list=list(),
         )
         result._parse_log_msg_list(log_msg_list)
         return result
 
-    def _add_missing_log_msgs(self, log_list_list: List[_SolIxLogList],
+    def _add_missing_log_msgs(self, log_list_list: List[SolIxLogState],
                               ix_list: List[Dict[str, Any]],
-                              level: int) -> List[_SolIxLogList]:
+                              level: int) -> List[SolIxLogState]:
         base_level = level
 
         def calc_level() -> int:
@@ -496,14 +540,14 @@ class SolTxReceiptInfo(SolTxMetaInfo):
                 return 1
             return level + 1
 
-        result_log_list_list: List[_SolIxLogList] = []
+        result_log_list_list: List[SolIxLogState] = list()
 
         log_iter = iter(log_list_list)
         log = next(log_iter) if len(log_list_list) > 0 else None
         for idx, ix in enumerate(ix_list):
             ix_program_key = self._get_program_key(ix)
             if (log is None) or (log.program != ix_program_key):
-                result_log_list_list.append(_SolIxLogList(ix_program_key, calc_level()))
+                result_log_list_list.append(SolIxLogState(ix_program_key, calc_level()))
             else:
                 level = log.level
                 result_log_list_list.append(log)
@@ -513,9 +557,9 @@ class SolTxReceiptInfo(SolTxMetaInfo):
         assert log is None
         return result_log_list_list
 
-    def _parse_log_msg_list(self, log_msg_list: List[str]) -> None:
-        log_list_list: List[_SolIxLogList] = _SolTxLogDecoder().decode(log_msg_list)
-        self._ix_log_msg_list.extend(self._add_missing_log_msgs(log_list_list, self._ix_list, 1))
+    def _parse_log_msg_list(self, raw_log_msg_list: List[str]) -> None:
+        log_state = SolTxLogDecoder().decode(raw_log_msg_list)
+        self._ix_log_msg_list.extend(self._add_missing_log_msgs(log_state.log_list, self._ix_list, 1))
         for ix_idx, ix in enumerate(self._ix_list):
             inner_ix_list = self._get_inner_ix_list(ix_idx)
             if len(inner_ix_list) == 0:
@@ -523,7 +567,8 @@ class SolTxReceiptInfo(SolTxMetaInfo):
 
             log_list = self._ix_log_msg_list[ix_idx]
             inner_log_msg_list = log_list.inner_log_list
-            log_list.inner_log_list = self._add_missing_log_msgs(inner_log_msg_list, inner_ix_list, 2)
+            inner_log_msg_list = self._add_missing_log_msgs(inner_log_msg_list, inner_ix_list, 2)
+            log_list.set_inner_log_list(inner_log_msg_list)
 
     def _get_program_key(self, ix: Dict[str, Any]) -> str:
         program_idx = ix.get('programIdIndex', None)
@@ -536,14 +581,15 @@ class SolTxReceiptInfo(SolTxMetaInfo):
 
         return self._account_key_list[program_idx]
 
-    def _has_ix_data(self, ix: Dict[str, Any]) -> bool:
+    @staticmethod
+    def _has_ix_data(ix: Dict[str, Any]) -> bool:
         ix_data = ix.get('data', None)
         return (ix_data is not None) and (len(ix_data) > 1)
 
     def _is_neon_program(self, ix: Dict[str, Any]) -> bool:
         return self._get_program_key(ix) == EVM_LOADER_ID
 
-    def _get_log_list(self, ix_idx: int, inner_ix_idx: Optional[int]) -> Optional[_SolIxLogList]:
+    def _get_log_list(self, ix_idx: int, inner_ix_idx: Optional[int]) -> Optional[SolIxLogState]:
         if ix_idx >= len(self._ix_log_msg_list):
             LOG.warning(f'{self} error: cannot find logs for instruction {ix_idx} > {len(self._ix_log_msg_list)}')
             return None
@@ -564,7 +610,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
         for inner_ix in self._inner_ix_list:
             if inner_ix['index'] == ix_idx:
                 return inner_ix['instructions']
-        return []
+        return list()
 
     def iter_sol_neon_ix(self) -> Iterator[SolNeonIxReceiptInfo]:
         for ix_idx, ix in enumerate(self._ix_list):

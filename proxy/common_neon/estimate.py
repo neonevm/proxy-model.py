@@ -1,18 +1,18 @@
-import math
 import logging
+import math
+
 from typing import Dict, Any, List, Optional
 
-from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status
-from ..common_neon.elf_params import ElfParams
-
-from ..common_neon.config import Config
-from ..common_neon.eth_proto import NeonTx
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_alt_builder import ALTTxBuilder
-from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockhash, SolTxSizeError
-from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.address import NeonAddress
+from ..common_neon.config import Config
+from ..common_neon.elf_params import ElfParams
+from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status
+from ..common_neon.eth_proto import NeonTx
+from ..common_neon.neon_instruction import NeonIxBuilder
+from ..common_neon.solana_alt_limit import ALTLimit
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockHash, SolTxSizeError
+from ..common_neon.solana_tx_legacy import SolLegacyTx
 
 
 LOG = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class _GasTxBuilder:
         ])
         self._signer = SolAccount.from_seed(operator_key)
         neon_address = NeonAddress.from_private_key(operator_key)
-        self._blockhash = SolBlockhash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+        self._block_hash = SolBlockHash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
 
         self._neon_ix_builder = NeonIxBuilder(self._signer.pubkey())
         self._neon_ix_builder.init_iterative(holder.pubkey())
@@ -43,17 +43,21 @@ class _GasTxBuilder:
         self._neon_ix_builder.init_neon_tx(tx)
         self._neon_ix_builder.init_neon_account_list(account_list)
 
-        tx = SolLegacyTx(instructions=[
-            self._neon_ix_builder.make_compute_budget_heap_ix(),
-            self._neon_ix_builder.make_compute_budget_cu_ix(),
-            self._neon_ix_builder.make_tx_step_from_data_ix(ElfParams().neon_evm_steps, 1)
-        ])
+        tx = SolLegacyTx(
+            name='Estimate',
+            ix_list=[
+                self._neon_ix_builder.make_compute_budget_heap_ix(),
+                self._neon_ix_builder.make_compute_budget_cu_ix(),
+                self._neon_ix_builder.make_tx_step_from_data_ix(ElfParams().neon_evm_steps, 1)
+            ]
+        )
 
-        tx.recent_blockhash = self._blockhash
+        tx.recent_block_hash = self._block_hash
         tx.sign(self._signer)
         return tx
 
-    def neon_tx_len(self) -> int:
+    @property
+    def len_neon_tx(self) -> int:
         return len(self._neon_ix_builder.holder_msg)
 
 
@@ -85,8 +89,8 @@ class GasEstimate:
         self._cached_overhead_cost: Optional[int] = None
         self._cached_alt_cost: Optional[int] = None
 
-        self._account_list: List[SolAccountMeta] = []
-        self.emulator_json = {}
+        self._account_list: List[SolAccountMeta] = list()
+        self.emulator_json = dict()
 
     def execute(self):
         emulator_json = call_emulated(self._config, self._contract or "deploy", self._sender, self._data, self._value)
@@ -125,7 +129,7 @@ class GasEstimate:
         except BaseException as exc:
             LOG.debug('Error during pack solana tx', exc_info=exc)
 
-        self._cached_tx_cost_size = self._holder_tx_cost(self._tx_builder.neon_tx_len())
+        self._cached_tx_cost_size = self._holder_tx_cost(self._tx_builder.len_neon_tx)
         return self._cached_tx_cost_size
 
     def _holder_tx_cost(self, neon_tx_len: int) -> int:
@@ -161,7 +165,7 @@ class GasEstimate:
 
         # ALT used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
         acc_cnt = len(self._account_list) + 6
-        if acc_cnt > ALTTxBuilder.tx_account_cnt:
+        if acc_cnt > ALTLimit.max_tx_account_cnt:
             self._cached_alt_cost = 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
         else:
             self._cached_alt_cost = 0

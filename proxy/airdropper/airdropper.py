@@ -1,13 +1,8 @@
 import requests
 import base58
-from base64 import b64decode
-from base58 import b58decode
 import logging
 import psycopg2.extensions
-import json
-from pprint import pprint
 from typing import Dict, Iterator, Optional, Any
-from sha3 import keccak_256
 import dataclasses
 
 from datetime import datetime
@@ -30,8 +25,6 @@ from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMeta
 from ..indexer.base_db import BaseDB
 from ..indexer.utils import check_error
 from ..indexer.sql_dict import SQLDict
-
-from dataclasses import dataclass
 
 
 LOG = logging.getLogger(__name__)
@@ -94,7 +87,7 @@ class AirdropperTxInfo(NeonIndexedTxInfo):
         self.iterations: Dict[int,int] = {}
 
     @staticmethod
-    def create_tx_info(sol_sig: str, neon_tx_sig: str, message: bytes, type: NeonIndexedTxInfo.Type, key: NeonIndexedTxInfo.Key, 
+    def create_tx_info(sol_sig: str, neon_tx_sig: str, message: bytes, type: NeonIndexedTxInfo.Type, key: NeonIndexedTxInfo.Key,
                                 holder: str, iter_blocked_account: Iterator[str]) -> Optional[NeonIndexedTxInfo]:
         neon_tx = NeonTxInfo.from_sig_data(message)
         if neon_tx.error:
@@ -105,7 +98,7 @@ class AirdropperTxInfo(NeonIndexedTxInfo):
             return None
 
         return AirdropperTxInfo(type, key, neon_tx, holder, iter_blocked_account)
-                
+
     def append_receipt(self, ix: SolNeonIxReceiptInfo):
         self.iterations[ix.neon_total_gas_used] = ix.neon_gas_used
         self.add_sol_neon_ix(ix)
@@ -244,7 +237,7 @@ class Airdropper(IndexerBase, AirdropperState):
             LOG.debug('bad transaction')
             return False
 
-        caller = bytes.fromhex(tx.sender())
+        caller = tx.sender
         erc20 = tx.toAddress
         method_id = tx.callData[:4]
         source_token = tx.callData[4:36]
@@ -300,13 +293,13 @@ class Airdropper(IndexerBase, AirdropperState):
             return False
 
         return True
-    
+
     # Method to process NeonEVM transaction extracted from the instructions
     def process_neon_transaction(self, tx_info: AirdropperTxInfo):
         if tx_info.status != AirdropperTxInfo.Status.Done or tx_info.neon_tx_res.status != '0x1':
             LOG.debug(f'SKIPPED {tx_info.key} status {tx_info.status} result {tx_info.neon_tx_res.status}: {tx_info}')
             return
-        
+
         try:
             tx_info.finalize()
             trx = tx_info._neon_receipt.neon_tx
@@ -321,15 +314,15 @@ class Airdropper(IndexerBase, AirdropperState):
 
 
     # Method to process Solana transactions and extract NeonEVM transaction from the contract instructions.
-    # For large NeonEVM transaction that passing to contract via account data, this method extracts and 
-    # combines chunk of data from different HolderWrite instructions. At the any time `neon_large_tx` 
-    # dictionary contains actual NeonEVM transactions written into the holder accounts. The stored account 
-    # are cleared in case of execution, cancel trx or writing chunk of data from another NeonEVM transaction. 
+    # For large NeonEVM transaction that passing to contract via account data, this method extracts and
+    # combines chunk of data from different HolderWrite instructions. At the any time `neon_large_tx`
+    # dictionary contains actual NeonEVM transactions written into the holder accounts. The stored account
+    # are cleared in case of execution, cancel trx or writing chunk of data from another NeonEVM transaction.
     # This logic are implemented according to the work with holder account inside contract.
-    # Note: the `neon_large_tx` dictionary stored only in memory, so `last_processed_slot` move forward only 
-    # after finalize corresponding holder account. It is necessary for correct transaction processing after 
+    # Note: the `neon_large_tx` dictionary stored only in memory, so `last_processed_slot` move forward only
+    # after finalize corresponding holder account. It is necessary for correct transaction processing after
     # restart the airdriop service.
-    # Note: this implementation analyzes only the final step in case of iterative execution. It simplifies it 
+    # Note: this implementation analyzes only the final step in case of iterative execution. It simplifies it
     # but does not process events generated from the Solidity contract.
     def process_trx_neon_instructions(self, trx):
         if check_error(trx):
@@ -410,7 +403,7 @@ class Airdropper(IndexerBase, AirdropperState):
                     continue
 
                 tx_info = AirdropperTxInfo.create_tx_info(
-                    sol_sig, sol_neon_ix.neon_tx_sig, sol_neon_ix.ix_data[5:], 
+                    sol_sig, sol_neon_ix.neon_tx_sig, sol_neon_ix.ix_data[5:],
                     AirdropperTxInfo.Type.Single, AirdropperTxInfo.Key(sol_neon_ix),
                     '', iter(())
                 )
@@ -442,7 +435,7 @@ class Airdropper(IndexerBase, AirdropperState):
                         continue
                     self.neon_processed_tx[key.value] = tx_info
 
-                tx_info.append_receipt(sol_neon_ix)                
+                tx_info.append_receipt(sol_neon_ix)
 
             elif instruction == EVM_LOADER_CANCEL:
                 key = AirdropperTxInfo.Key(sol_neon_ix)
@@ -451,7 +444,7 @@ class Airdropper(IndexerBase, AirdropperState):
                     LOG.warning(f'{sol_sig} Cancel unknown trx {key}')
                     continue
                 tx_info.set_status(AirdropperTxInfo.Status.Canceled, sol_neon_ix.block_slot)
-    
+
     def process_trx_airdropper_mode(self, trx):
         if check_error(trx):
             return
@@ -643,8 +636,8 @@ class Airdropper(IndexerBase, AirdropperState):
             LOG.info(f"Outdated holder {tx_key}. Drop it.")
             self.neon_large_tx.pop(tx_key)
 
-        lost_trx = [k for k,v in self.neon_processed_tx.items() if 
-                        v.status == AirdropperTxInfo.Status.InProgress and 
+        lost_trx = [k for k,v in self.neon_processed_tx.items() if
+                        v.status == AirdropperTxInfo.Status.InProgress and
                         v.last_block_slot + self._config.holder_timeout < self._sol_tx_collector.last_block_slot]
         for k in lost_trx:
             tx_info = self.neon_processed_tx.pop(k)

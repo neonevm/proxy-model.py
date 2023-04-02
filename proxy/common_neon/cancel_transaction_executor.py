@@ -5,6 +5,7 @@ from ..common_neon.config import Config
 from ..common_neon.layouts import HolderAccountInfo
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt import ALTInfo
+from ..common_neon.solana_alt_limit import ALTLimit
 from ..common_neon.solana_alt_builder import ALTTxBuilder, ALTTxSet
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolAccountMeta, SolAccount, SolPubKey
@@ -25,15 +26,15 @@ class CancelTxExecutor:
 
         self._alt_builder = ALTTxBuilder(solana, self._ix_builder, signer)
         self._alt_tx_set = ALTTxSet()
-        self._alt_info_list: List[ALTInfo] = []
-        self._cancel_tx_list: List[SolTx] = []
+        self._alt_info_list: List[ALTInfo] = list()
+        self._cancel_tx_list: List[SolTx] = list()
         self._holder_account_set: Set[str] = set()
 
     def add_blocked_holder_account(self, holder_info: HolderAccountInfo) -> bool:
         if str(holder_info.holder_account) in self._holder_account_set:
             return False
 
-        if len(holder_info.account_list) >= self._alt_builder.tx_account_cnt:
+        if len(holder_info.account_list) >= ALTLimit.max_tx_account_cnt:
             tx = self._build_alt_cancel_tx(holder_info)
         else:
             tx = self._build_cancel_tx(holder_info)
@@ -41,14 +42,14 @@ class CancelTxExecutor:
         return True
 
     def _build_cancel_tx(self, holder_info: HolderAccountInfo) -> SolLegacyTx:
-        key_list: List[SolAccountMeta] = []
+        key_list: List[SolAccountMeta] = list()
         for is_writable, exists, acct in holder_info.account_list:
             meta = SolAccountMeta(pubkey=SolPubKey.from_string(acct), is_signer=False, is_writable=is_writable)
             key_list.append(meta)
 
         return SolLegacyTx(
             name='CancelWithHash',
-            instructions=[
+            ix_list=[
                 self._ix_builder.make_cancel_ix(
                     holder_account=holder_info.holder_account,
                     neon_tx_sig=bytes.fromhex(holder_info.neon_tx_sig[2:]),
@@ -65,7 +66,7 @@ class CancelTxExecutor:
         self._alt_info_list.append(alt_info)
         self._alt_tx_set.extend(alt_tx_set)
 
-        return SolV0Tx(name='CancelWithHash', address_table_lookups=[alt_info]).add(legacy_tx)
+        return SolV0Tx(name='CancelWithHash', ix_list=None, alt_info_list=[alt_info]).add(legacy_tx)
 
     def execute_tx_list(self) -> None:
         if not len(self._cancel_tx_list):

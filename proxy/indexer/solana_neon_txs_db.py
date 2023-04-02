@@ -25,6 +25,8 @@ class SolNeonTxsDB(BaseDB):
                     value_list.append(ix.neon_tx_sig)
                 elif column == 'neon_income':
                     value_list.append(ix.neon_gas_used)
+                elif column == 'heap_size':
+                    value_list.append(ix.used_heap_size)
                 else:
                     raise RuntimeError(f'Wrong usage {self._table_name}: {idx} -> {column}!')
             value_list_list.append(value_list)

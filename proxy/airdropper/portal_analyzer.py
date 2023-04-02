@@ -1,10 +1,9 @@
 from .airdropper import AirdropperState, AirdropperTrxAnalyzer, AirdropperTxInfo
-from ..common_neon.eth_proto import NeonTx
 from ..common_neon.address import NeonAddress
 from typing import Set
 
 import logging
-from construct import ConstructError, Const, Struct, GreedyBytes, Byte, Bytes, BytesInteger, this, Int32ub, Int16ub, Int64ub, Switch, Enum
+from construct import Const, Struct, GreedyBytes, Byte, Bytes, BytesInteger, this, Int32ub, Int16ub, Int64ub, Switch, Enum
 
 LOG = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from typing import List, Optional, Callable, Dict, cast
 from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
 from ..common_neon.layouts import ACCOUNT_LOOKUP_TABLE_LAYOUT, ALTAccountInfo, AccountInfo
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_tx import SolAccount, SolPubKey, SolTxIx, SolTx
+from ..common_neon.solana_tx import SolAccount, SolPubKey, SolTxIx, SolTx, SolCommit
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
@@ -26,7 +26,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             self._auth_offset += sc.sizeof()
 
     def _get_block_height(self) -> int:
-        return self._solana.get_block_height(commitment=self._config.finalized_commitment)
+        return self._solana.get_block_height(commitment=SolCommit.Finalized)
 
     def _decode_alt_info(self, account_info: Optional[AccountInfo], secret: bytes) -> Optional[MPALTInfo]:
         try:
@@ -40,7 +40,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
                     alt_info.last_extended_slot if alt_info.deactivation_slot is None else
                     alt_info.deactivation_slot
                 ),
-                commitment=self._config.finalized_commitment
+                commitment=SolCommit.Finalized
             )
 
             mp_alt_info = MPALTInfo(
@@ -63,7 +63,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             account_info = self._solana.get_account_info(
                 SolPubKey.from_string(alt_address.table_account),
                 length=ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof(),
-                commitment=self._config.finalized_commitment
+                commitment=SolCommit.Finalized
             )
 
             mp_alt_info = self._decode_alt_info(account_info, alt_address.secret)
@@ -79,7 +79,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
                 length=ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof(),
                 data_offset=self._auth_offset,
                 data=bytes(operator_account.pubkey()),
-                commitment=self._config.finalized_commitment
+                commitment=SolCommit.Finalized
             )
 
             for account_info in account_info_list:
@@ -103,7 +103,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             try:
                 tx_sender.send(tx_list)
             except BaseException as exc:
-                LOG.debug('Failed to execute.', exc_info=exc)
+                LOG.debug('Failed to execute', exc_info=exc)
             tx_list.clear()
 
         tx_list: List[SolTx] = list()
@@ -127,7 +127,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             alt_info.block_height = block_height
             tx = SolLegacyTx(
                 name=name,
-                instructions=[make_ix(ix_builder, SolPubKey.from_string(alt_info.table_account))]
+                ix_list=[make_ix(ix_builder, SolPubKey.from_string(alt_info.table_account))]
             )
             tx_list.append(tx)
 

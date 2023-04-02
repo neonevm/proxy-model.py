@@ -9,7 +9,7 @@ if [ "$CONFIG" == "ci" ]; then
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="2.5"
   [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
   [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="postgres"
-  [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=20
+  [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=60
   [[ -z "$RETRY_ON_FAIL"                ]] && export RETRY_ON_FAIL=20
   [[ -z "$START_SLOT"                   ]] && export START_SLOT="LATEST"
   [[ -z "$CONFIRM_TIMEOUT_SEC"          ]] && export CONFIRM_TIMEOUT_SEC=10
@@ -21,7 +21,7 @@ elif [ "$CONFIG" == "local" ]; then
   [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="2.5"
   [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
   [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="localhost"
-  [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=20
+  [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=60
   [[ -z "$RETRY_ON_FAIL"                ]] && export RETRY_ON_FAIL=10
   [[ -z "$START_SLOT"                   ]] && export START_SLOT=0
   [[ -z "$CONFIRM_TIMEOUT_SEC"          ]] && export CONFIRM_TIMEOUT_SEC=10

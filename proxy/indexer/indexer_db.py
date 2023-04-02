@@ -1,12 +1,12 @@
 from typing import Optional, Iterator, List, Dict, Any
 
-from ..common_neon.utils import NeonTxReceiptInfo
+from ..common_neon.utils import NeonTxReceiptInfo, SolBlockInfo
 
 from ..indexer.base_db import BaseDB
 from ..indexer.indexed_objects import NeonIndexedBlockInfo
 from ..indexer.neon_tx_logs_db import NeonTxLogsDB
 from ..indexer.neon_txs_db import NeonTxsDB
-from ..indexer.solana_blocks_db import SolBlocksDB, SolanaBlockInfo
+from ..indexer.solana_blocks_db import SolBlocksDB
 from ..indexer.solana_neon_txs_db import SolNeonTxsDB
 from ..indexer.solana_tx_costs_db import SolTxCostsDB
 from ..indexer.sql_dict import SQLDict
@@ -34,7 +34,7 @@ class IndexerDB:
             if k not in self._constants_db:
                 self._constants_db[k] = 0
 
-        self._starting_block = SolanaBlockInfo(block_slot=0)
+        self._starting_block = SolBlockInfo(block_slot=0)
         self._latest_block_slot = self.get_latest_block_slot()
         self._finalized_block_slot = self.get_finalized_block_slot()
         self._min_receipt_block_slot = self.get_min_receipt_block_slot()
@@ -92,16 +92,16 @@ class IndexerDB:
                 self._sol_blocks_db.activate_block_list(cursor, self._finalized_block_slot, block_slot_list)
         self._set_latest_block_slot(block_slot_list[-1])
 
-    def get_block_by_slot(self, block_slot: int) -> SolanaBlockInfo:
+    def get_block_by_slot(self, block_slot: int) -> SolBlockInfo:
         return self._sol_blocks_db.get_block_by_slot(block_slot, self.get_latest_block_slot())
 
-    def get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
+    def get_block_by_hash(self, block_hash: str) -> SolBlockInfo:
         return self._sol_blocks_db.get_block_by_hash(block_hash, self.get_latest_block_slot())
 
-    def get_latest_block(self) -> SolanaBlockInfo:
+    def get_latest_block(self) -> SolBlockInfo:
         block_slot = self.get_latest_block_slot()
         if block_slot == 0:
-            return SolanaBlockInfo(block_slot=0)
+            return SolBlockInfo(block_slot=0)
         return self.get_block_by_slot(block_slot)
 
     def get_latest_block_slot(self) -> int:
@@ -110,19 +110,19 @@ class IndexerDB:
     def get_finalized_block_slot(self) -> int:
         return self._constants_db['finalized_block_slot']
 
-    def get_finalized_block(self) -> SolanaBlockInfo:
+    def get_finalized_block(self) -> SolBlockInfo:
         block_slot = self.get_finalized_block_slot()
         if block_slot == 0:
-            return SolanaBlockInfo(block_slot=0)
+            return SolBlockInfo(block_slot=0)
         return self.get_block_by_slot(block_slot)
 
-    def get_starting_block(self) -> SolanaBlockInfo:
+    def get_starting_block(self) -> SolBlockInfo:
         if self._starting_block.block_slot != 0:
             return self._starting_block
 
         block_slot = self._constants_db['starting_block_slot']
         if block_slot == 0:
-            return SolanaBlockInfo(block_slot=0)
+            return SolBlockInfo(block_slot=0)
         self._starting_block = self.get_block_by_slot(block_slot)
         return self._starting_block
 

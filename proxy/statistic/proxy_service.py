@@ -73,7 +73,8 @@ class ProxyStatService(StatService):
 
         self._metr_tx_total = Counter('tx_total', 'Incoming TX Count', registry=self._registry)
         self._metr_tx_in_mempool = Gauge('tx_in_mempool', 'Count of Txs in mempool', registry=self._registry)
-        self._metr_tx_in_progress = Gauge('tx_in_progress', 'Count Of Txs Currently Processed', registry=self._registry)
+        self._metr_tx_in_progress = Gauge('tx_in_progress', 'Count Of Processed Txs', registry=self._registry)
+        self._metr_tx_in_reschedule = Gauge('tx_in_reschedule', 'Count Of Rescheduled Txs', registry=self._registry)
         self._metr_tx_success = Counter('tx_success_count', 'Count Of Succeeded Txs', registry=self._registry)
         self._metr_tx_failed = Counter('tx_failed_count', 'Count Of Failed Txs', registry=self._registry)
 
@@ -122,15 +123,17 @@ class ProxyStatService(StatService):
         self._metr_tx_total.inc({})
         self._metr_tx_in_mempool.inc({})
 
-    def commit_tx_begin(self, begin_stat: NeonTxBeginData) -> None:
-        self._metr_tx_in_progress.add({}, begin_stat.begin_cnt)
+    def commit_tx_begin(self, stat: NeonTxBeginData) -> None:
+        self._metr_tx_in_progress.add({}, stat.started_cnt)
+        self._metr_tx_in_reschedule.sub({}, stat.restarted_cnt)
 
-    def commit_tx_end(self, end_stat: NeonTxEndData) -> None:
-        total_done_cnt = end_stat.failed_cnt + end_stat.done_cnt
-        self._metr_tx_in_progress.sub({}, total_done_cnt + end_stat.rescheduled_cnt)
+    def commit_tx_end(self, stat: NeonTxEndData) -> None:
+        total_done_cnt = stat.failed_cnt + stat.done_cnt
+        self._metr_tx_in_progress.sub({}, total_done_cnt + stat.canceled_cnt)
+        self._metr_tx_in_reschedule.add({}, stat.rescheduled_cnt)
         self._metr_tx_in_mempool.sub({}, total_done_cnt)
-        self._metr_tx_failed.add({}, end_stat.failed_cnt)
-        self._metr_tx_success.add({}, end_stat.done_cnt)
+        self._metr_tx_failed.add({}, stat.failed_cnt)
+        self._metr_tx_success.add({}, stat.done_cnt)
 
     def commit_db_health(self, status: bool) -> None:
         self._metr_db_health.set({}, 1 if status else 0)

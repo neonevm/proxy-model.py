@@ -4,38 +4,28 @@ from typing import Optional, Dict, Any
 
 from ..common_neon.data import NeonEmulatedResult
 from ..common_neon.environment_utils import NeonCli
-from ..common_neon.errors import EthereumError
+from ..common_neon.errors import EthereumError, NoMoreRetriesError
 from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils import str_fmt_object
 
 
 LOG = logging.getLogger(__name__)
 
 
 def call_emulated(config: Config, contract_id, caller_id, data=None, value=None) -> NeonEmulatedResult:
+    LOG.debug(f'{str_fmt_object(dict(contract=contract_id, caller=caller_id, data=data, value=value), name="Call")}')
     output = emulator(config, contract_id, caller_id, data, value)
-    LOG.debug(
-        f'Call emulated. contract_id: {contract_id}, caller_id: {caller_id}, '
-        f'data: {data}, value: {value}, return: {output}'
-    )
+    LOG.debug(f'return: {output}')
     return output
 
 
 def call_tx_emulated(config: Config, neon_tx: NeonTx) -> NeonEmulatedResult:
-    neon_sender_acc = neon_tx.sender()
-    contract = neon_tx.contract()
-    LOG.debug(f'sender address: 0x{neon_sender_acc}')
-    if contract:
-        dst = 'deploy'
-        LOG.debug(f'deploy contract: {contract}')
-    else:
-        dst = neon_tx.toAddress.hex()
-        LOG.debug(f'destination address {dst}')
-    LOG.debug(f"Calling data: {(dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))}")
-    emulator_json = call_emulated(config, dst, neon_sender_acc, neon_tx.callData.hex(), hex(neon_tx.value))
-    LOG.debug(f'emulator returns: {emulator_json}')
-    return emulator_json
+    sender = neon_tx.hex_sender
+    contract = neon_tx.hex_contract
+    dst = 'deploy' if contract else neon_tx.hex_to_address
+    return call_emulated(config, dst, sender, neon_tx.hex_call_data, hex(neon_tx.value))
 
 
 def check_emulated_exit_status(result: Dict[str, Any]):
@@ -300,29 +290,26 @@ class NeonCliErrorParser:
         return parser.execute(err)
 
 
-def emulator(config: Config, contract, sender, data, value):
+def emulator(config: Config, contract: str, sender: str, data: Optional[str], value: Optional[str]):
     value = value or ""
+    neon_token_mint = ElfParams().neon_token_mint
+    chain_id = ElfParams().chain_id
+    max_evm_steps_to_execute = config.max_evm_step_cnt_emulate
     try:
-        neon_token_mint = ElfParams().neon_token_mint
-        chain_id = ElfParams().chain_id
-        max_evm_steps_to_execute = config.max_evm_step_cnt_emulate
-        retry_cnt = 0
-        while True:
-            try:
-                return NeonCli(config).call(
-                    "emulate",
-                    "--token_mint", str(neon_token_mint),
-                    "--chain_id", str(chain_id),
-                    "--max_steps_to_execute", str(max_evm_steps_to_execute),
-                    sender,
-                    contract,
-                    value,
-                    data=data
-                )
-            except subprocess.TimeoutExpired:
-                retry_cnt += 1
-                if retry_cnt > config.retry_on_fail:
-                    raise
+        return NeonCli(config).call(
+            'emulate',
+            '--token_mint', str(neon_token_mint),
+            '--chain_id', str(chain_id),
+            '--max_steps_to_execute', str(max_evm_steps_to_execute),
+            sender,
+            contract,
+            value,
+            data=data
+        )
+
+    except subprocess.TimeoutExpired:
+        raise NoMoreRetriesError()
+
     except subprocess.CalledProcessError as err:
         msg, code = NeonCliErrorParser().execute('emulator', err)
         raise EthereumError(message=msg, code=code)

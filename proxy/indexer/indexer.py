@@ -13,7 +13,7 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxCostInfo
 from ..common_neon.solana_tx import SolPubKey, SolAccount
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
-from ..common_neon.utils import SolanaBlockInfo
+from ..common_neon.utils import SolBlockInfo
 from ..common_neon.utils.json_logger import logging_context
 
 from ..statistic.data import NeonBlockStatData
@@ -104,7 +104,7 @@ class Indexer(IndexerBase):
         try:
             self._cancel_tx_executor.execute_tx_list()
         except BaseException as exc:
-            LOG.warning('Failed to cancel neon txs.', exc_info=exc)
+            LOG.warning('Failed to cancel neon txs', exc_info=exc)
         finally:
             self._cancel_tx_executor.clear()
 
@@ -210,7 +210,7 @@ class Indexer(IndexerBase):
         self._stat_client.commit_db_health(self._db.is_healthy())
         self._stat_client.commit_solana_rpc_health(self._solana.is_healthy())
 
-    def _get_sol_block_deque(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> Deque[SolanaBlockInfo]:
+    def _get_sol_block_deque(self, state: SolNeonTxDecoderState, sol_tx_meta: SolTxMetaInfo) -> Deque[SolBlockInfo]:
         if not state.has_neon_block():
             sol_block = self._solana.get_block_info(sol_tx_meta.block_slot)
             if sol_block.is_empty():
@@ -220,7 +220,7 @@ class Indexer(IndexerBase):
         start_block_slot = state.block_slot
         block_slot_list = [block_slot for block_slot in range(start_block_slot + 1, sol_tx_meta.block_slot + 1)]
         sol_block_list = self._solana.get_block_info_list(block_slot_list, state.commitment)
-        result_sol_block_deque: Deque[SolanaBlockInfo] = deque()
+        result_sol_block_deque: Deque[SolBlockInfo] = deque()
         for sol_block in sol_block_list:
             if sol_block.is_empty():
                 pass
@@ -346,7 +346,6 @@ class Indexer(IndexerBase):
         with logging_context(ident='stat'):
             self._counted_logger.print(
                 self._config,
-                LOG.debug,
                 list_value_dict={
                     'receipts processing ms': state.process_time_ms,
                     'processed neon blocks': state.neon_block_cnt,

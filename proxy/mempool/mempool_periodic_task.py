@@ -15,11 +15,12 @@ LOG = logging.getLogger(__name__)
 
 
 class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.ABC):
-    _check_sleep_time = 0.01
+    _one_block_sec = 0.4
+    _check_sleep_sec = 0.01
 
-    def __init__(self, name: str, sleep_time: float, executor_mng: MPExecutorMng):
+    def __init__(self, name: str, sleep_sec: float, executor_mng: MPExecutorMng):
         self._name = name
-        self._sleep_time = sleep_time
+        self._sleep_sec = sleep_sec
         self._executor_mng = executor_mng
         self._task_idx = 0
         self._task: Optional[MPTask] = None
@@ -57,6 +58,14 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
     def _process_error(self, mp_request: MPPeriodicTaskRequest) -> None:
         pass
 
+    @staticmethod
+    async def _await_task_done(task: MPTask) -> None:
+        while True:
+            if not task.aio_task.done():
+                await asyncio.sleep(0.1)
+            else:
+                break
+
     async def _check_request_status(self) -> None:
         assert self._task is not None
         if not self._task.aio_task.done():
@@ -66,15 +75,12 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
         self._task = None
         with logging_context(req_id=task.mp_request.req_id):
             try:
-                while True:
-                    if not task.aio_task.done():
-                        await asyncio.sleep(0.1)
-                    else:
-                        break
-
+                await self._await_task_done(task)
                 await self._check_request_status_impl(task)
+
             except BaseException as exc:
                 LOG.error(f'Error during processing {self._name} on mempool.', exc_info=exc)
+
             finally:
                 self._executor_mng.release_executor(task.executor_id)
 
@@ -97,8 +103,8 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
         self._try_to_submit_request()  # first request
         while True:
             if self._task is not None:
-                await asyncio.sleep(self._check_sleep_time)
+                await asyncio.sleep(self._check_sleep_sec)
                 await self._check_request_status()
             else:
-                await asyncio.sleep(self._sleep_time)
+                await asyncio.sleep(self._sleep_sec)
                 self._try_to_submit_request()

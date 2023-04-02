@@ -6,6 +6,8 @@ import rlp
 from eth_keys import keys as neon_keys
 from sha3 import keccak_256
 
+from .utils import str_fmt_object
+
 # public = '0x2377BB12320F46F0B9E30EBFB941121352716f2C'
 # private = '0x886d5b4ce9465473701bf394b1b0b217548c57576436864fcbc1f554033a0680'
 # trx = '0xF86B80850BA43B7400825208947917bc33eea648809c285607579c9919fb864f8f8703BAF82D03A0008025A0067940651530790861714b2e8fd8b080361d1ada048189000c07a66848afde46A069b041db7c29dbcc6becf42017ca7ac086b12bd53ec8ee494596f790fb6a0a69'
@@ -23,7 +25,7 @@ from sha3 import keccak_256
 # '''
 
 
-class InvalidNeonTx(Exception):
+class InvalidNeonTx(RuntimeError):
     pass
 
 
@@ -60,11 +62,23 @@ class NeonTx(rlp.Serializable):
 
     def __init__(self, *args, **kwargs):
         rlp.Serializable.__init__(self, *args, **kwargs)
-        self._msg: Optional[bytes] = None
-        self._hash_signed: Optional[bytes] = None
-        self._sig: Optional[neon_keys.Signature] = None
+        self._tx_sig: Optional[bytes] = None
+        self._hex_tx_sig: Optional[str] = None
+        self._sender: Optional[bytes] = None
         self._hex_sender: Optional[str] = None
-        self._contract: Optional[str] = None
+        self._contract: Optional[bytes] = None
+        self._hex_contract: Optional[str] = None
+        self._hex_to_address: Optional[str] = None
+        self._hex_call_data: Optional[str] = None
+        self._str = ''
+
+    def __str__(self) -> str:
+        if len(self._str) == 0:
+            self._str = str_fmt_object(
+                {'sender': self.hex_sender, 'nonce': self.nonce, 'sig': self.hex_tx_sig},
+                name='NeonTx'
+            )
+        return self._str
 
     @classmethod
     def from_string(cls, s) -> NeonTx:
@@ -85,11 +99,11 @@ class NeonTx(rlp.Serializable):
         value_list += [0, 0, 0]
         return cls(*value_list)
 
-    def hasChainId(self) -> bool:
+    def has_chain_id(self) -> bool:
         return self.v not in (0, 27, 28)
 
-    def chainId(self) -> Optional[int]:
-        if not self.hasChainId():
+    def chain_id(self) -> Optional[int]:
+        if not self.has_chain_id():
             return None
         elif self.v >= 37:
             # chainid*2 + 35  xxxxx0 + 100011   xxxx0 + 100010 +1
@@ -98,9 +112,9 @@ class NeonTx(rlp.Serializable):
         else:
             raise InvalidNeonTx(f"Invalid V value {self.v}")
 
-    def _unsigned_msg(self) -> bytes:
-        chain_id = self.chainId()
-        if not self.hasChainId():
+    def _unsigned_msg_impl(self) -> bytes:
+        chain_id = self.chain_id()
+        if not self.has_chain_id():
             return rlp.encode((
                 self.nonce, self.gasPrice, self.gasLimit, self.toAddress, self.value, self.callData
             ))
@@ -110,23 +124,16 @@ class NeonTx(rlp.Serializable):
                 chain_id, 0, 0
             ))
 
-    def unsigned_msg(self) -> bytes:
-        if self._msg is None:
-            self._msg = self._unsigned_msg()
-        return self._msg
+    def _sig_impl(self) -> neon_keys.Signature:
+        return neon_keys.Signature(vrs=[1 if self.v % 2 == 0 else 0, self.r, self.s])
 
-    def _signature(self) -> neon_keys.Signature:
-        if self._sig is None:
-            self._sig = neon_keys.Signature(vrs=[1 if self.v % 2 == 0 else 0, self.r, self.s])
-        return self._sig
-
-    def _sender(self) -> bytes:
+    def _sender_impl(self) -> bytes:
         if self.r == 0 and self.s == 0:
             return self.null_address
-        elif not self.hasChainId():
+        elif not self.has_chain_id():
             pass
         elif self.v >= 37:
-            vee = self.v - self.chainId() * 2 - 8
+            vee = self.v - self.chain_id() * 2 - 8
             assert vee in (27, 28)
         else:
             raise InvalidNeonTx(f"Invalid V value {self.v}")
@@ -134,32 +141,73 @@ class NeonTx(rlp.Serializable):
         if self.r >= self.secpk1n or self.s >= self.secpk1n or self.r == 0 or self.s == 0:
             raise InvalidNeonTx(f"Invalid signature values: r={self.r} s={self.s}!")
 
-        sighash = keccak_256(self._unsigned_msg()).digest()
-        sig = self._signature()
+        sighash = keccak_256(self._unsigned_msg_impl()).digest()
+        sig = self._sig_impl()
         pub = sig.recover_public_key_from_msg_hash(sighash)
 
         return pub.to_canonical_address()
 
-    def sender(self) -> str:
+    @property
+    def sender(self) -> bytes:
+        if self._sender is None:
+            self._sender = self._sender_impl()
+        return self._sender
+
+    @property
+    def hex_sender(self) -> str:
         if self._hex_sender is None:
-            self._hex_sender = self._sender().hex()
+            self._hex_sender = '0x' + self.sender.hex()
         return self._hex_sender
 
-    def hash_signed(self) -> bytes:
-        if self._hash_signed is None:
-            self._hash_signed = keccak_256(
+    @property
+    def tx_sig(self) -> bytes:
+        if self._tx_sig is None:
+            self._tx_sig = keccak_256(
                 rlp.encode((
                     self.nonce, self.gasPrice, self.gasLimit,
                     self.toAddress, self.value, self.callData,
                     self.v, self.r, self.s
                 ))
             ).digest()
-        return self._hash_signed
+        return self._tx_sig
 
-    def contract(self) -> Optional[str]:
+    @property
+    def hex_tx_sig(self) -> str:
+        if self._hex_tx_sig is None:
+            self._hex_tx_sig = '0x' + self.tx_sig.hex()
+        return self._hex_tx_sig
+
+    @property
+    def contract(self) -> Optional[bytes]:
         if self.toAddress:
             return None
+
         if self._contract is None:
-            contract_addr = rlp.encode((self._sender(), self.nonce))
-            self._contract = keccak_256(contract_addr).digest()[-20:].hex()
+            contract_addr = rlp.encode((self.sender, self.nonce))
+            self._contract = keccak_256(contract_addr).digest()[-20:]
         return self._contract
+
+    @property
+    def hex_contract(self) -> Optional[str]:
+        contract = self.contract
+        if contract is None:
+            return None
+
+        if self._hex_contract is None:
+            self._hex_contract = '0x' + contract.hex()
+        return self._hex_contract
+
+    @property
+    def hex_to_address(self) -> Optional[str]:
+        if not self.toAddress:
+            return None
+
+        if self._hex_to_address is None:
+            self._hex_to_address = '0x' + self.toAddress.hex()
+        return self._hex_to_address
+
+    @property
+    def hex_call_data(self) -> Optional[str]:
+        if self._hex_call_data is None:
+            self._hex_call_data = '0x' + self.callData.hex()
+        return self._hex_call_data

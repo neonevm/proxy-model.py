@@ -16,14 +16,13 @@ class CliBase:
     def __init__(self, config: Config):
         self._config = config
 
-    def run_cli(self, cmd: List[str], data: str = None, **kwargs) -> str:
-        LOG.debug("Calling: " + " ".join(cmd))
+    def _hide_solana_url(self, cmd: List[str]) -> str:
+        return ' '.join([item.replace(self._config.solana_url, 'XXXX') for item in cmd])
 
-        if not data:
-            data = ""
-        LOG.debug(f"data: {data}, len: {len(data)}")
+    def run_cli(self, cmd: List[str], **kwargs) -> str:
+        LOG.debug(f'Calling: {self._hide_solana_url(cmd)}')
 
-        result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
+        result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
         if result.stderr is not None:
             print(result.stderr, file=sys.stderr)
         output = result.stdout
@@ -35,13 +34,15 @@ class CliBase:
 class SolanaCli(CliBase):
     def call(self, *args):
         try:
-            cmd = ["solana",
-                   "--url", self._config.solana_url,
-                   ] + list(args)
-            LOG.debug("Calling: " + " ".join(cmd))
+            cmd = [
+                'solana',
+                '--url', self._config.solana_url,
+            ]
+            cmd.extend(list(args))
+
             return self.run_cli(cmd, universal_newlines=True)
         except subprocess.CalledProcessError as err:
-            LOG.error("ERR: solana error {}".format(err))
+            LOG.error(f'ERR: solana error {str(err)}')
             raise
 
 
@@ -57,15 +58,16 @@ class NeonCli(CliBase):
 
     def call(self, *args, data=None):
         try:
-            cmd = ["neon-cli",
-                   "--commitment=recent",
-                   "--url", self._config.solana_url,
-                   f"--evm_loader={str(self._config.evm_loader_id)}",
-                   f"--loglevel={self._emulator_logging_level}"
-                   ]\
-                  + (["-vvv"] if self._config.neon_cli_debug_log else [])\
-                  + list(args)
-            LOG.info("Calling neon-cli: " + " ".join(cmd))
+            cmd = [
+                'neon-cli',
+                '--commitment=recent',
+                '--url', self._config.solana_url,
+                '--evm_loader', f'{str(self._config.evm_loader_id)}',
+                '--loglevel',  f'{self._emulator_logging_level}'
+            ]
+            cmd.extend(['-vvv'] if self._config.neon_cli_debug_log else [])
+            cmd.extend(list(args))
+            LOG.info(f'Calling neon-cli: {self._hide_solana_url(cmd)}')
 
             if data is None:
                 data = ""
@@ -74,28 +76,29 @@ class NeonCli(CliBase):
                                     universal_newlines=True, timeout=self._config.neon_cli_timeout)
 
             output = json.loads(result.stdout)
-            for log in output.get("logs", []):
+            for log in output.get('logs', []):
                 LOG.debug(log)
 
-            if "error" in output:
-                LOG.error("ERR: neon-cli error value '{}'".format(output["error"]))
+            if 'error' in output:
+                LOG.error(f'ERR: neon-cli error value f{output["error"]}')
                 raise subprocess.CalledProcessError(result.returncode, cmd, stderr=output["error"])
 
-            return output.get("value", "")
+            return output.get('value', '')
+
         except subprocess.CalledProcessError as err:
-            LOG.error("ERR: neon-cli error {}".format(err))
+            LOG.error(f'ERR: neon-cli error {str(err)}')
             raise
 
     @property
     def _emulator_logging_level(self):
-        level = logging.getLogger("neon.Emulator").getEffectiveLevel()
-        cli_level = self.EMULATOR_LOGLEVEL.get(level, "warn")
+        level = logging.getLogger('neon.Emulator').getEffectiveLevel()
+        cli_level = self.EMULATOR_LOGLEVEL.get(level, 'warn')
         return cli_level
 
     def version(self):
         try:
-            cmd = ["neon-cli", "--version"]
+            cmd = ['neon-cli', '--version']
             return self.run_cli(cmd, timeout=self._config.neon_cli_timeout, universal_newlines=True).split()[1]
         except subprocess.CalledProcessError as err:
-            LOG.error("ERR: neon-cli error {}".format(err))
+            LOG.error(f'ERR: neon-cli error {str(err)}')
             raise

@@ -10,7 +10,6 @@ from .mempool_api import MPRequest, MPTask
 from .mempool_executor import MPExecutor
 
 from ..common_neon.config import Config
-from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.pickable_data_server import PipePickableDataClient
 
 from ..statistic.data import NeonExecutorStatData
@@ -89,8 +88,7 @@ class MPExecutorMng:
         await self.set_executor_cnt(0)
 
     def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
-        with logging_context(req_id=mp_request.req_id):
-            executor_id, executor = self._get_executor()
+        executor_id, executor = self._get_executor()
         task = asyncio.get_event_loop().create_task(executor.send_data_async(mp_request))
         return MPTask(executor_id=executor_id, aio_task=task, mp_request=mp_request)
 

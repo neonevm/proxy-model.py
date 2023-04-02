@@ -1,13 +1,19 @@
 import math
+import logging
 
 from typing import Optional, List, Any, Iterator
 
-from ..common_neon.utils import SolanaBlockInfo
+from ..common_neon.utils import SolBlockInfo
 from ..indexer.base_db import BaseDB
 from ..common_neon.config import Config
 
 
+LOG = logging.getLogger(__name__)
+
+
 class SolBlocksDB(BaseDB):
+    _one_block_sec = 0.4
+
     def __init__(self, config: Config):
         super().__init__(
             table_name='solana_blocks',
@@ -57,17 +63,17 @@ class SolBlocksDB(BaseDB):
             value_list = cursor.fetchone()
 
         if value_list is None:
-            self.warning(f'Failed to get nearest blocks for block {block_slot}. Calculate based on genesis')
-            return math.ceil(block_slot * 0.4) + self._config.genesis_timestamp
+            LOG.warning(f'Failed to get nearest blocks for block {block_slot}. Calculate based on genesis')
+            return math.ceil(block_slot * self._one_block_sec) + self._config.genesis_timestamp
 
         nearest_block_slot = value_list[0]
         if nearest_block_slot is not None:
             nearest_block_time = value_list[1]
-            return nearest_block_time + math.ceil((block_slot - nearest_block_slot) * 0.4)
+            return nearest_block_time + math.ceil((block_slot - nearest_block_slot) * self._one_block_sec)
 
         nearest_block_slot = value_list[2]
         nearest_block_time = value_list[3]
-        return nearest_block_time - math.ceil((nearest_block_slot - block_slot) * 0.4)
+        return nearest_block_time - math.ceil((nearest_block_slot - block_slot) * self._one_block_sec)
 
     def _check_block_time(self, block_slot: int, block_time: Optional[int]) -> int:
         return block_time or self._generate_fake_block_time(block_slot)
@@ -82,11 +88,11 @@ class SolBlocksDB(BaseDB):
             return 0
         return int(hex_number, 16)
 
-    def _block_from_value(self, block_slot: Optional[int], value_list: Optional[List[Any]]) -> SolanaBlockInfo:
+    def _block_from_value(self, block_slot: Optional[int], value_list: Optional[List[Any]]) -> SolBlockInfo:
         if not value_list:
             if block_slot is None:
-                return SolanaBlockInfo(block_slot=0)
-            return SolanaBlockInfo(
+                return SolBlockInfo(block_slot=0)
+            return SolBlockInfo(
                 block_slot=block_slot,
                 block_hash=self._generate_fake_block_hash(block_slot),
                 block_time=self._generate_fake_block_time(block_slot),
@@ -95,7 +101,7 @@ class SolBlocksDB(BaseDB):
 
         if block_slot is None:
             block_slot = self._get_column_value('block_slot', value_list)
-        return SolanaBlockInfo(
+        return SolBlockInfo(
             block_slot=block_slot,
             block_hash=self._check_block_hash(block_slot, self._get_column_value('block_hash', value_list)),
             block_time=self._check_block_time(block_slot, self._get_column_value('block_time', value_list)),
@@ -114,9 +120,9 @@ class SolBlocksDB(BaseDB):
                     AND b.is_active = True
         '''
 
-    def get_block_by_slot(self, block_slot: int, latest_block_slot: int) -> SolanaBlockInfo:
+    def get_block_by_slot(self, block_slot: int, latest_block_slot: int) -> SolBlockInfo:
         if block_slot > latest_block_slot:
-            return SolanaBlockInfo(block_slot=block_slot)
+            return SolBlockInfo(block_slot=block_slot)
 
         request = f'''
                 (SELECT {",".join(['a.' + c for c in self._column_list])},
@@ -145,7 +151,7 @@ class SolBlocksDB(BaseDB):
             cursor.execute(request, (block_slot - 1, block_slot, block_slot, block_slot - 1))
             return self._block_from_value(block_slot, cursor.fetchone())
 
-    def get_block_by_hash(self, block_hash: str, latest_block_slot: int) -> SolanaBlockInfo:
+    def get_block_by_hash(self, block_hash: str, latest_block_slot: int) -> SolBlockInfo:
         fake_block_slot = self._get_fake_block_slot(block_hash)
         if fake_block_slot is not None:
             block = self.get_block_by_slot(fake_block_slot, latest_block_slot)
@@ -167,7 +173,7 @@ class SolBlocksDB(BaseDB):
             cursor.execute(request, (block_hash,))
             return self._block_from_value(None, cursor.fetchone())
 
-    def set_block_list(self, cursor: BaseDB.Cursor, iter_block: Iterator[SolanaBlockInfo]) -> None:
+    def set_block_list(self, cursor: BaseDB.Cursor, iter_block: Iterator[SolBlockInfo]) -> None:
         value_list_list: List[List[Any]] = []
         for block in iter_block:
             value_list_list.append([

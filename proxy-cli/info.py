@@ -1,9 +1,9 @@
 from __future__ import annotations
-from argparse import ArgumentParser
 from decimal import Decimal
 
 import sys
 import json
+import base58
 from typing import Any, List
 
 import logging
@@ -91,7 +91,7 @@ class InfoHandler:
         for sol_account in self._get_solana_accounts():
             acc_info_js = {
                 'address': str(sol_account.pubkey()),
-                'private': list(sol_account.secret())
+                'private': base58.b58encode(sol_account.secret()).decode('utf-8')
             }
 
             self._print(f"{acc_info_js['address']}    {acc_info_js['private']}")
@@ -183,7 +183,7 @@ class InfoHandler:
 
         for sol_account, neon_account in zip(operator_accounts, neon_accounts):
             acc_info_js = self._get_solana_account_info(sol_account)
-            acc_info_js['private'] = list(sol_account.secret())
+            acc_info_js['private'] = base58.b58encode(sol_account.secret()).decode('utf-8')
 
             ret_js['total_balance'] += acc_info_js['balance']
 
@@ -212,7 +212,7 @@ class InfoHandler:
         neon_layout = self._solana.get_neon_account_info(neon_address)
         return Decimal(neon_layout.balance) / 1_000_000_000 / 1_000_000_000 if neon_layout else 0
 
-    def _get_solana_account_info(self, sol_account):
+    def _get_solana_account_info(self, sol_account: SolAccount):
         resource_tags = {
             0: 'EMPTY',
             11: 'NEON_ACCOUNT',

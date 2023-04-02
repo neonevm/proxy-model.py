@@ -101,9 +101,9 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                     param_object = request["params"]
                 param_list = [self._sanitize_value(param) for param in param_object]
                 response['result'] = method(*param_list)
-        except SolTxError as err:
+        except SolTxError as exc:
             # traceback.print_exc()
-            response['error'] = {'code': -32000, 'message': err.error}
+            response['error'] = {'code': -32000, 'message': exc.error_msg}
         except EthereumError as err:
             # traceback.print_exc()
             response['error'] = err.get_error()
