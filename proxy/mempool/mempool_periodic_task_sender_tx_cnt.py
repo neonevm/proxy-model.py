@@ -6,11 +6,11 @@ from .mempool_schedule import MPTxSchedule
 
 class MPSenderTxCntTaskLoop(MPPeriodicTaskLoop[MPSenderTxCntRequest, MPSenderTxCntResult]):
     def __init__(self, executor_mng: MPExecutorMng, tx_schedule: MPTxSchedule) -> None:
-        super().__init__(name='state-tx-cnt', sleep_time=0.4, executor_mng=executor_mng)
+        super().__init__(name='state-tx-cnt', sleep_sec=self._one_block_sec, executor_mng=executor_mng)
         self._tx_schedule = tx_schedule
 
     def _submit_request(self) -> None:
-        paused_sender_list = self._tx_schedule.get_paused_sender_list()
+        paused_sender_list = self._tx_schedule.paused_sender_list
         if len(paused_sender_list) == 0:
             return
 

@@ -1,13 +1,17 @@
+import math
 import os
 
 from decimal import Decimal
 from typing import Optional
 
 from ..common_neon.environment_data import EVM_LOADER_ID
-from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.solana_tx import SolPubKey, SolCommit
 
 
 class Config:
+    _one_block_sec = 0.4
+    _min_finalize_sec = _one_block_sec * 32
+
     def __init__(self):
         self._solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
         self._pp_solana_url = os.environ.get("PP_SOLANA_URL", self._solana_url)
@@ -36,17 +40,14 @@ class Config:
         self._min_wo_chainid_gas_price = self._env_int("MINIMAL_WO_CHAINID_GAS_PRICE", 0, 10) * (10 ** 9)
         self._neon_price_usd = Decimal('0.25')
         self._neon_decimals = self._env_int('NEON_DECIMALS', 1, 9)
-        self._finalized_commitment = os.environ.get('FINALIZED_COMMITMENT', 'finalized')
-        self._confirmed_commitment = os.environ.get('CONFIRMED_COMMITMENT', 'confirmed')
         self._start_slot = os.environ.get('START_SLOT', '0')
         self._indexer_parallel_request_cnt = self._env_int("INDEXER_PARALLEL_REQUEST_COUNT", 1, 10)
         self._indexer_poll_cnt = self._env_int("INDEXER_POLL_COUNT", 1, 1000)
         self._indexer_log_skip_cnt = self._env_int("INDEXER_LOG_SKIP_COUNT", 1, 1000)
         self._indexer_check_msec = self._env_int('INDEXER_CHECK_MSEC', 50, 200)
-        self._max_account_cnt = self._env_int("MAX_ACCOUNT_COUNT", 20, 60)
-        self._skip_preflight = self._env_bool("SKIP_PREFLIGHT", False)
-        self._fuzzing_blockhash = self._env_bool("FUZZING_BLOCKHASH", False)
-        self._confirm_timeout_sec = self._env_int("CONFIRM_TIMEOUT_SEC", 10, 10)
+        self._max_tx_account_cnt = self._env_int("MAX_TX_ACCOUNT_COUNT", 20, 62)
+        self._fuzz_fail_pct = self._env_int("FUZZ_FAIL_PCT", 0, 0)
+        self._confirm_timeout_sec = self._env_int("CONFIRM_TIMEOUT_SEC", 4, math.ceil(self._min_finalize_sec))
         self._confirm_check_msec = self._env_int("CONFIRM_CHECK_MSEC", 10, 100)
         self._max_evm_step_cnt_emulate = self._env_int("MAX_EVM_STEP_COUNT_TO_EMULATE", 1000, 500000)
         self._neon_cli_timeout = self._env_decimal("NEON_CLI_TIMEOUT", "2.5")
@@ -60,6 +61,7 @@ class Config:
         self._hvac_mount = os.environ.get('HVAC_MOUNT', None)
         self._hvac_path = os.environ.get('HVAC_PATH', '')
         self._genesis_timestamp = self._env_int('GENESIS_BLOCK_TIMESTAMP', 0, 0)
+        self._commit_level = os.environ.get('COMMIT_LEVEL', SolCommit.Confirmed)
 
         pyth_mapping_account = os.environ.get('PYTH_MAPPING_ACCOUNT', None)
         if pyth_mapping_account is not None:
@@ -71,10 +73,14 @@ class Config:
         self._validate()
 
     def _validate(self) -> None:
+        self._commit_level = SolCommit.Type(self._commit_level.lower())
+        assert SolCommit.level(self._commit_level) >= SolCommit.level(SolCommit.Confirmed)
+
         assert (self._operator_fee > 0) and (self._operator_fee < 1)
         assert (self._gas_price_suggested_pct >= 0) and (self._gas_price_suggested_pct < 1)
         assert (self._extra_gas_pct >= 0) and (self._extra_gas_pct < 1)
         assert (self._slot_processing_delay < 32)
+        assert (self._fuzz_fail_pct >= 0) and (self._fuzz_fail_pct < 100)
 
     @staticmethod
     def _env_bool(name: str, default_value: bool) -> bool:
@@ -165,10 +171,6 @@ class Config:
         return self._use_earliest_block_if_0_passed
 
     @property
-    def account_permission_update_int(self) -> int:
-        return self._account_permission_update_int
-
-    @property
     def allow_underpriced_tx_wo_chainid(self) -> bool:
         return self._allow_underpriced_tx_wo_chainid
 
@@ -179,7 +181,7 @@ class Config:
     @property
     def operator_fee(self) -> Decimal:
         return self._operator_fee
-    
+
     @property
     def slot_processing_delay(self) -> int:
         """Slot processing delay relative to the last confirmed slot on Solana cluster"""
@@ -208,14 +210,6 @@ class Config:
         return self._neon_decimals
 
     @property
-    def finalized_commitment(self) -> str:
-        return self._finalized_commitment
-
-    @property
-    def confirmed_commitment(self) -> str:
-        return self._confirmed_commitment
-
-    @property
     def start_slot(self) -> str:
         return self._start_slot
 
@@ -236,16 +230,12 @@ class Config:
         return self._indexer_check_msec
 
     @property
-    def max_account_cnt(self) -> int:
-        return self._max_account_cnt
+    def max_tx_account_cnt(self) -> int:
+        return self._max_tx_account_cnt
 
     @property
-    def skip_preflight(self) -> bool:
-        return self._skip_preflight
-
-    @property
-    def fuzzing_blockhash(self) -> bool:
-        return self._fuzzing_blockhash
+    def fuzz_fail_pct(self) -> int:
+        return self._fuzz_fail_pct
 
     @property
     def confirm_timeout_sec(self) -> int:
@@ -303,12 +293,16 @@ class Config:
     def genesis_timestamp(self) -> int:
         return self._genesis_timestamp
 
+    @property
+    def commit_level(self) -> SolCommit.Type:
+        return self._commit_level
+
     def as_dict(self) -> dict:
         return {
             'SOLANA_URL': self.solana_url,
-            'EVM_LOADER_ID': self.evm_loader_id,
+            'EVM_LOADER_ID': str(self.evm_loader_id),
             'PP_SOLANA_URL': self.pyth_solana_url,
-            'PYTH_MAPPING_ACCOUNT': self.pyth_mapping_account,
+            'PYTH_MAPPING_ACCOUNT': str(self.pyth_mapping_account),
             'UPDATE_PYTH_MAPPING_PERIOD_SEC': self.update_pyth_mapping_period_sec,
             'MEMPOOL_CAPACITY': self.mempool_capacity,
             'MEMPOOL_EXECUTOR_LIMIT_CNT': self.mempool_executor_limit_cnt,
@@ -324,7 +318,6 @@ class Config:
             'ENABLE_PRIVATE_API': self.enable_private_api,
             'ENABLE_SEND_TX_API': self.enable_send_tx_api,
             'USE_EARLIEST_BLOCK_IF_0_PASSED': self.use_earliest_block_if_0_passed,
-            'ACCOUNT_PERMISSION_UPDATE_INT': self.account_permission_update_int,
             'ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID': self.allow_underpriced_tx_wo_chainid,
             'EXTRA_GAS_PCT': self.extra_gas_pct,
             'OPERATOR_FEE': self.operator_fee,
@@ -334,16 +327,13 @@ class Config:
             'MINIMAL_WO_CHAINID_GAS_PRICE': self.min_wo_chainid_gas_price,
             'NEON_PRICE_USD': self.neon_price_usd,
             'NEON_DECIMALS': self.neon_decimals,
-            'FINALIZED_COMMITMENT': self.finalized_commitment,
-            'CONFIRMED_COMMITMENT': self.confirmed_commitment,
             'START_SLOT': self.start_slot,
             'INDEXER_PARALLEL_REQUEST_COUNT': self.indexer_parallel_request_cnt,
             'INDEXER_POLL_COUNT': self.indexer_poll_cnt,
             'INDEXER_LOG_SKIP_COUNT': self.indexer_log_skip_cnt,
             'INDEXER_CHECK_MSEC': self.indexer_check_msec,
-            'MAX_ACCOUNT_COUNT': self.max_account_cnt,
-            'SKIP_PREFLIGHT': self.skip_preflight,
-            'FUZZING_BLOCKHASH': self.fuzzing_blockhash,
+            'MAX_TX_ACCOUNT_COUNT': self.max_tx_account_cnt,
+            'FUZZ_FAIL_PCT': self.fuzz_fail_pct,
             'CONFIRM_TIMEOUT_SEC': self.confirm_timeout_sec,
             'CONFIRM_CHECK_MSEC': self.confirm_check_msec,
             'MAX_EVM_STEP_COUNT_TO_EMULATE': self.max_evm_step_cnt_emulate,
@@ -357,5 +347,6 @@ class Config:
             'HVAC_TOKEN': self.hvac_token,
             'HVAC_PATH': self.hvac_path,
             'HVAC_MOUNT': self.hvac_mount,
-            'GENESIS_BLOCK_TIMESTAMP': self.genesis_timestamp
+            'GENESIS_BLOCK_TIMESTAMP': self.genesis_timestamp,
+            'COMMIT_LEVEL': self.commit_level
         }

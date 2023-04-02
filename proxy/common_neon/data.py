@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Dict, Any, List
 
 from .solana_alt import ALTAddress
+from .solana_tx import SolTx
+from .utils import str_fmt_object
 
 
 NeonEmulatedResult = Dict[str, Any]
@@ -16,6 +18,15 @@ class NeonTxExecCfg:
         self._alt_address_dict: Dict[str, ALTAddress] = dict()
         self._account_dict: NeonAccountDict = dict()
         self._resize_iter_cnt = 0
+
+        self._strategy_idx = 0
+        self._sol_tx_cnt = 0
+        self._has_completed_receipt = False
+        self._is_holder_used = False
+        self._sol_tx_list_dict: Dict[str, List[SolTx]] = dict()
+
+    def __str__(self) -> str:
+        return str_fmt_object(self)
 
     @property
     def state_tx_cnt(self) -> int:
@@ -38,18 +49,18 @@ class NeonTxExecCfg:
         return list(self._alt_address_dict.values())
 
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
-        account_dict = {k: emulated_result[k] for k in ["accounts", "token_accounts", "solana_accounts"]}
-        evm_step_cnt = emulated_result["steps_executed"]
+        account_dict = {k: emulated_result.get(k, None) for k in ['accounts', 'token_accounts', 'solana_accounts']}
+        evm_step_cnt = emulated_result.get('steps_executed', 0)
         self._account_dict = account_dict
         self._evm_step_cnt = evm_step_cnt
-        self._resize_iter_cnt = NeonTxExecCfg.resolve_resize_iter_cnt(account_dict)
+        self._resize_iter_cnt = self._resolve_resize_iter_cnt(account_dict)
         return self
 
     @staticmethod
-    def resolve_resize_iter_cnt(emulated_result: NeonEmulatedResult) -> int:
+    def _resolve_resize_iter_cnt(emulated_result: NeonEmulatedResult) -> int:
         max_resize_iter_cnt = 0
-        for account in emulated_result["accounts"]:
-            max_resize_iter_cnt = max(max_resize_iter_cnt, int(account["additional_resize_steps"] or 0))
+        for account in emulated_result.get('accounts', list()):
+            max_resize_iter_cnt = max(max_resize_iter_cnt, int(account.get('additional_resize_steps', 0) or 0))
         return max_resize_iter_cnt
 
     def set_state_tx_cnt(self, value: int) -> NeonTxExecCfg:
@@ -58,3 +69,41 @@ class NeonTxExecCfg:
 
     def add_alt_address(self, alt_address: ALTAddress) -> None:
         self._alt_address_dict[alt_address.table_account] = alt_address
+
+    @property
+    def strategy_idx(self) -> int:
+        return self._strategy_idx
+
+    @property
+    def sol_tx_cnt(self) -> int:
+        self._sol_tx_cnt += 1
+        return self._sol_tx_cnt
+
+    def set_strategy_idx(self, idx: int) -> None:
+        self._strategy_idx = idx
+
+    def has_completed_receipt(self) -> bool:
+        return self._has_completed_receipt
+
+    def set_completed_receipt(self, value: bool) -> None:
+        self._has_completed_receipt = value
+
+    def is_holder_used(self) -> bool:
+        return self._is_holder_used
+
+    def set_holder_usage(self, value: bool) -> None:
+        self._is_holder_used = value
+
+    def pop_sol_tx_list(self, tx_name_list: List[str]) -> List[SolTx]:
+        sol_tx_list: List[SolTx] = list()
+        for tx_name in tx_name_list:
+            sol_tx_sublist = self._sol_tx_list_dict.pop(tx_name, None)
+            if sol_tx_sublist is None:
+                continue
+
+            sol_tx_list.extend(sol_tx_sublist)
+        return sol_tx_list
+
+    def add_sol_tx_list(self, tx_list: List[SolTx]) -> None:
+        for tx in tx_list:
+            self._sol_tx_list_dict.setdefault(tx.name, list()).append(tx)

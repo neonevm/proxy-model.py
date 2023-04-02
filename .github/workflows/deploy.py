@@ -107,8 +107,7 @@ def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch, skip_pull):
         click.echo('skip pulling of docker images')
 
     buildargs = {"NEON_EVM_COMMIT": neon_evm_tag,
-                 "PROXY_REVISION": proxy_tag,
-                 "PROXY_LOG_CFG": "log_cfg.json"}
+                 "PROXY_REVISION": proxy_tag}
 
     click.echo("Start build")
 
@@ -351,13 +350,13 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
 
     if not skip_pull:
         click.echo('pull docker images...')
-        out = docker_compose(f"-f proxy/docker-compose-test.yml pull")
+        out = docker_compose(f"-f docker-compose/docker-compose-test.yml pull")
         click.echo(out)
     else:
         click.echo('skip pulling of docker images')
 
     try:
-        docker_compose(f"-f proxy/docker-compose-test.yml up -d")
+        docker_compose(f"-f docker-compose/docker-compose-test.yml up -d")
     except:
         raise RuntimeError("Docker-compose failed to start")
 
@@ -365,7 +364,8 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
                   for item in docker_client.containers() if item['State'] == 'running']
     click.echo(f"Running containers: {containers}")
 
-    wait_for_faucet()
+    for service_name in ['SOLANA', 'PROXY', 'FAUCET']:
+        wait_for_service(service_name)
 
     if not skip_uniswap:
         run_uniswap_test()
@@ -440,54 +440,61 @@ def stop_containers():
 
 def cleanup_docker():
     click.echo(f"Cleanup docker-compose...")
-    docker_compose("-f proxy/docker-compose-test.yml down -t 1")
+    docker_compose("-f docker-compose/docker-compose-test.yml down -t 1")
     click.echo(f"Cleanup docker-compose done.")
+
+    click.echo(f"Cleanup old docker containers...")
+    command = "sudo docker ps -a | awk '/Created|Exited/{s=\"sudo docker rm \" $(NF); print(s); system(s)}'"
+    subprocess.run(command, shell=True)
+    click.echo(f"Cleanup old docker containers done.")
+
     click.echo(f"Removing temporary data volumes...")
     command = "docker volume prune -f"
     subprocess.run(command, shell=True)
     click.echo(f"Removing temporary data done.")
 
 
-def get_faucet_url():
+def get_service_url(service_name: str):
     inspect_out = docker_client.inspect_container("proxy")
     env = inspect_out["Config"]["Env"]
-    faucet_url = ""
+    service_url = ""
     for item in env:
-        if "FAUCET_URL=" in item:
-            faucet_url = item.replace("FAUCET_URL=", "")
+        if f"{service_name}_URL=" in item:
+            service_url = item.replace(f"{service_name}_URL=", "")
             break
-    click.echo(f"fauset_url: {faucet_url}")
-    return faucet_url
+    click.echo(f"service_url: {service_url}")
+    return service_url
 
 
-def wait_for_faucet():
-    faucet_url = get_faucet_url()
-    faucet_ip, faucet_port = faucet_url.replace("http://", "").split(':')
+def wait_for_service(service_name: str):
+    service_url = get_service_url(service_name)
+    service_info = urlparse(service_url)
+    service_ip, service_port = service_info.hostname, service_info.port
 
-    command = f'docker exec proxy nc -zvw1 {faucet_ip} {faucet_port}'
+    command = f'docker exec proxy nc -zvw1 {service_ip} {service_port}'
     timeout_sec = 120
     start_time = time.time()
     while True:
         if time.time() - start_time > timeout_sec:
-            raise RuntimeError(f'Faucet {faucet_url} is unavailable - time is over')
+            raise RuntimeError(f'Service {service_name} {service_url} is unavailable - time is over')
         try:
-            if subprocess.run(
-                command, shell=True, capture_output=True, text=True).returncode == 0:
-                click.echo(f"Faucet {faucet_url} is available")
+            if subprocess.run(command, shell=True, capture_output=True, text=True).returncode == 0:
+                click.echo(f"Service {service_name} is available")
                 break
             else:
-                click.echo(f"Faucet {faucet_url} is unavailable - sleeping")
+                click.echo(f"Service {service_name} {service_url} is unavailable - sleeping")
         except:
             raise RuntimeError(f"Error during run command {command}")
         time.sleep(1)
 
 
 def run_uniswap_test():
-    faucet_url = get_faucet_url()
-    os.environ["FAUCET_URL"] = faucet_url
+    faucet_name = 'FAUCET'
+    faucet_url = get_service_url(faucet_name)
+    os.environ[f'{faucet_name}_URL'] = faucet_url
 
     docker_client.pull(UNISWAP_V2_CORE_IMAGE)
-    command = f'docker run --rm --network=container:proxy -e FAUCET_URL \
+    command = f'docker run --rm --network=container:proxy -e {faucet_name}_URL \
         --entrypoint ./deploy-test.sh {UNISWAP_V2_CORE_IMAGE} all 2>&1'
     subprocess.run(command, shell=True)
 
@@ -504,7 +511,7 @@ def send_notification(url, build_url):
 
     tpl["blocks"][0]["text"]["text"] = (
         f"*Build <{build_url}|`{build_id}`> of repository `{repo_name}` is failed.*"
-        f"\n<{build_url}|View build details>"
+        f"\n<{build_url}|View builosetd details>"
     )
     requests.post(url=url, data=json.dumps(tpl))
 

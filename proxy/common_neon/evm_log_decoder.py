@@ -54,9 +54,9 @@ class NeonLogTxEvent:
 
     address: bytes
     topic_list: List[bytes]
-    data: bytes
+    data: bytes = b''
 
-    sol_sig: str
+    sol_sig: str = ''
     idx: int = 0
     inner_idx: Optional[int] = None
     total_gas_used: int = 0
@@ -89,21 +89,7 @@ class NeonLogTxSig:
 
 
 @dataclass(frozen=True)
-class SolLogBPFCycleUsage:
-    max_bpf_cycle_cnt: int
-    used_bpf_cycle_cnt: int
-
-
-@dataclass(frozen=True)
-class SolLogHeapUsage:
-    heap_size: int
-
-
-@dataclass(frozen=True)
 class NeonLogInfo:
-    sol_bpf_cycle_usage: Optional[SolLogBPFCycleUsage]
-    sol_heap_usage: Optional[SolLogHeapUsage]
-
     neon_tx_sig: Optional[NeonLogTxSig]
     neon_tx_ix: Optional[NeonLogTxIx]
     neon_tx_return: Optional[NeonLogTxReturn]
@@ -112,32 +98,16 @@ class NeonLogInfo:
 
 class _NeonLogDecoder:
     _re_data = re.compile(r'^Program data: (.+)$')
-    _bpf_cycle_cnt_re = re.compile(f'^Program {EVM_LOADER_ID}' + r' consumed (\d+) of (\d+) compute units$')
-    _heap_size_re = re.compile(r'^Program log: Total memory occupied: (\d+)$')
-
-    def _decode_bpf_cycle_usage(self, line: str) -> Optional[SolLogBPFCycleUsage]:
-        match = self._bpf_cycle_cnt_re.match(line)
-        if match is None:
-            return None
-
-        return SolLogBPFCycleUsage(used_bpf_cycle_cnt=int(match[1]), max_bpf_cycle_cnt=int(match[2]))
-
-    def _decode_heap_usage(self, line: str) -> Optional[SolLogHeapUsage]:
-        match = self._heap_size_re.match(line)
-        if match is None:
-            return None
-
-        return SolLogHeapUsage(heap_size=int(match[1]))
 
     def _decode_mnemonic(self, line: str) -> Tuple[str, List[str]]:
         match = self._re_data.match(line)
         if match is None:
-            return '', []
+            return '', list()
 
         tail: str = match.group(1)
         data_list: List[str] = tail.split()
         if len(data_list) < 2:
-            return '', []
+            return '', list()
 
         mnemonic = base64.b64decode(data_list[0]).decode('utf-8')
         return mnemonic, data_list[1:]
@@ -198,9 +168,7 @@ class _NeonLogDecoder:
             LOG.error(f'Failed to decode enter event, address has wrong length: {address}')
             return None
 
-        return NeonLogTxEvent(
-            event_type=event_type, is_hidden=True, address=address, data=b'', topic_list=[], sol_sig=''
-        )
+        return NeonLogTxEvent(event_type=event_type, is_hidden=True, address=address, topic_list=list())
 
     @staticmethod
     def _decode_neon_tx_exit(data_list: List[str]) -> Optional[NeonLogTxEvent]:
@@ -229,7 +197,7 @@ class _NeonLogDecoder:
             LOG.error(f'Failed to decode exit event, wrong type: {type_name}')
             return None
 
-        return NeonLogTxEvent(event_type=event_type, is_hidden=True, address=b'', topic_list=[], data=b'', sol_sig='')
+        return NeonLogTxEvent(event_type=event_type, is_hidden=True, address=b'', topic_list=list())
 
     @staticmethod
     def _decode_neon_tx_event(log_num: int, data_list: List[str]) -> Optional[NeonLogTxEvent]:
@@ -264,9 +232,7 @@ class _NeonLogDecoder:
 
         event_type = NeonLogTxEvent.Type.Log
 
-        return NeonLogTxEvent(
-            event_type=event_type, is_hidden=False, address=address, topic_list=topic_list, data=data, sol_sig=''
-        )
+        return NeonLogTxEvent(event_type=event_type, is_hidden=False, address=address, topic_list=topic_list, data=data)
 
     @staticmethod
     def _decode_neon_tx_sig(data_list: List[str]) -> Optional[NeonLogTxSig]:
@@ -302,23 +268,12 @@ class _NeonLogDecoder:
     def decode_neon_log(self, log_iter: Iterator[str]) -> NeonLogInfo:
         """Extracts Neon transaction result information"""
 
-        sol_bpf_cycle_usage: Optional[SolLogBPFCycleUsage] = None
-        sol_heap_usage: Optional[SolLogHeapUsage] = None
         neon_tx_sig: Optional[NeonLogTxSig] = None
         neon_tx_ix: Optional[NeonLogTxIx] = None
         neon_tx_return: Optional[NeonLogTxReturn] = None
-        neon_tx_event_list: List[NeonLogTxEvent] = []
+        neon_tx_event_list: List[NeonLogTxEvent] = list()
 
         for line in log_iter:
-            if sol_bpf_cycle_usage is None:
-                sol_bpf_cycle_usage = self._decode_bpf_cycle_usage(line)
-                if sol_bpf_cycle_usage is not None:
-                    continue
-            elif sol_heap_usage is None:
-                sol_heap_usage = self._decode_heap_usage(line)
-                if sol_heap_usage is not None:
-                    continue
-
             name, data_list = self._decode_mnemonic(line)
             if len(name) == 0:
                 continue
@@ -352,8 +307,6 @@ class _NeonLogDecoder:
                     LOG.warning('GAS is already exist!')
 
         return NeonLogInfo(
-            sol_bpf_cycle_usage=sol_bpf_cycle_usage,
-            sol_heap_usage=sol_heap_usage,
             neon_tx_sig=neon_tx_sig,
             neon_tx_ix=neon_tx_ix,
             neon_tx_return=neon_tx_return,

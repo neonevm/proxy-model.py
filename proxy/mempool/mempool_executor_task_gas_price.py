@@ -59,5 +59,6 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
             sol_price_account=self._gas_price_calculator.sol_price_account,
             neon_price_account=self._gas_price_calculator.neon_price_account
         )
-        LOG.debug(f'{gas_price}')
+
+        LOG.debug(f'suggested_gas_price: {gas_price.suggested_gas_price}, min_gas_price: {gas_price.min_gas_price}')
         return gas_price

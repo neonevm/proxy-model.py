@@ -1,7 +1,6 @@
 from flask import Flask
 from werkzeug.serving import make_server
 from threading import Thread
-import ctypes
 
 
 class MockServer(Thread):

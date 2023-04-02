@@ -46,7 +46,8 @@ class DummyIxDecoder:
     def state(self) -> SolNeonTxDecoderState:
         return self._state
 
-    def _decoding_success(self, indexed_obj: Any, msg: str) -> bool:
+    @staticmethod
+    def _decoding_success(indexed_obj: Any, msg: str) -> bool:
         """
         The instruction has been successfully parsed:
         - log the success message.
@@ -67,7 +68,8 @@ class DummyIxDecoder:
         LOG.debug(f'decoding done: {msg} - {indexed_obj}')
         return True
 
-    def _decoding_skip(self, reason: str) -> bool:
+    @staticmethod
+    def _decoding_skip(reason: str) -> bool:
         """Skip decoding of the instruction"""
         LOG.debug(f'decoding skip: {reason}')
         return False
@@ -75,8 +77,8 @@ class DummyIxDecoder:
     def _decode_neon_tx_from_holder(self, tx: NeonIndexedTxInfo) -> None:
         if tx.neon_tx.is_valid() or (not tx.neon_tx_res.is_valid()):
             return
-        TxType = NeonIndexedTxInfo.Type
-        if tx.tx_type not in {TxType.SingleFromAccount, TxType.IterFromAccount, TxType.IterFromAccountWoChainId}:
+        t = NeonIndexedTxInfo.Type
+        if tx.tx_type not in {t.SingleFromAccount, t.IterFromAccount, t.IterFromAccountWoChainId}:
             return
 
         key = NeonIndexedHolderInfo.Key(tx.storage_account, tx.neon_tx.sig)
@@ -98,23 +100,26 @@ class DummyIxDecoder:
             self._decoding_done(holder, f'init Neon tx {tx.neon_tx} from holder')
 
     def _decode_neon_tx_return(self, tx: NeonIndexedTxInfo) -> None:
-        if tx.neon_tx_res.is_valid():
+        res = tx.neon_tx_res
+        if res.is_valid():
             return
 
         ix = self.state.sol_neon_ix
         ret = ix.neon_tx_return
         if (ret is None) and tx.is_canceled:
-            ret = NeonLogTxReturn(gas_used=ix.neon_total_gas_used, status=0, is_canceled=True)
+            ret = NeonLogTxReturn(gas_used=ix.neon_total_gas_used, status=res.canceled_status, is_canceled=True)
         elif ret is None:
             return
 
-        tx.neon_tx_res.set_result(status=ret.status, gas_used=ret.gas_used)
-        tx.neon_tx_res.set_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
+        res.set_result(status=ret.status, gas_used=ret.gas_used)
+        res.set_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
+
+        event_type = NeonLogTxEvent.Type.Cancel if tx.is_canceled else NeonLogTxEvent.Type.Return
+
         tx.add_neon_event(NeonLogTxEvent(
-            event_type=NeonLogTxEvent.Type.Cancel if tx.is_canceled else NeonLogTxEvent.Type.Return,
-            is_hidden=True, address=b'', topic_list=[],
+            event_type=event_type, is_hidden=True, address=b'', topic_list=list(),
             data=ret.status.to_bytes(1, 'little'),
-            total_gas_used=ret.gas_used + 5000,
+            total_gas_used=ret.gas_used + 5000,  # to move event to the end of the list
             sol_sig=ix.sol_sig, idx=ix.idx, inner_idx=ix.inner_idx
         ))
 
@@ -244,7 +249,7 @@ class BaseTxStepIxDecoder(DummyIxDecoder):
         for event in self.state.sol_neon_ix.neon_tx_event_list:
             tx.add_neon_event(dataclasses.replace(
                 event,
-                total_gas_used=tx.len_neon_event_list(),
+                total_gas_used=tx.len_neon_event_list,
                 is_reverted=True,
                 is_hidden=True,
                 sol_sig=self.state.sol_neon_ix.sol_sig,

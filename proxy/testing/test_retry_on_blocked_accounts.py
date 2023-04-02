@@ -1,16 +1,18 @@
 import datetime
 import multiprocessing
 import unittest
+
 from proxy.common_neon.neon_instruction import NeonIxBuilder
 from proxy.common_neon.eth_proto import NeonTx
-from proxy.common_neon.address import NeonAddress
+from proxy.common_neon.address import NeonAddress, neon_2program
 from proxy.common_neon.config import Config
-from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.solana_tx import SolAccountMeta
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
+
 from proxy.mempool.operator_resource_mng import OpResInfo, OpResInit, OpResIdent
-from proxy.testing.solana_utils import EVM_LOADER, EvmLoader, wallet_path, WalletAccount, client, send_transaction
-from proxy.testing.testing_helpers import Proxy, NeonLocalAccount
+
+from proxy.testing.solana_utils import wallet_path, WalletAccount
+from proxy.testing.testing_helpers import Proxy, NeonLocalAccount, SolClient
 
 
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/365'
@@ -45,6 +47,10 @@ def send_routine(acc_seed, storage_contract, loop, return_dict, padding_string):
 
 class FakeConfig(Config):
     @property
+    def fuzz_fail_pct(self) -> int:
+        return 0
+
+    @property
     def min_operator_balance_to_warn(self) -> int:
         return 1
 
@@ -61,14 +67,12 @@ class BlockedTest(unittest.TestCase):
     def setUpClass(cls):
         cls.proxy = Proxy()
         cls.eth_account = cls.proxy.create_signer_account(SEED)
+        cls.config = config = FakeConfig()
+        cls.solana = solana = SolClient(config)
 
         print("\ntest_retry_on_blocked_accounts.py setUpClass")
 
         wallet = WalletAccount(wallet_path())
-        cls.loader = loader = EvmLoader(wallet, EVM_LOADER)
-
-        cls.config = config = Config()
-        cls.solana = solana = SolInteractor(config, config.solana_url)
 
         res_acct = wallet.get_acc()
         cls.resource_iter = resource = OpResInfo.from_ident(OpResIdent(
@@ -76,7 +80,7 @@ class BlockedTest(unittest.TestCase):
             private_key=res_acct.secret(),
             res_id=365
         ))
-        OpResInit(FakeConfig(), solana).init_resource(resource)
+        OpResInit(config, solana).init_resource(resource)
 
         res_single_acct = wallet.get_acc()
         cls.resource_single = resource = OpResInfo.from_ident(OpResIdent(
@@ -84,7 +88,7 @@ class BlockedTest(unittest.TestCase):
             private_key=res_single_acct.secret(),
             res_id=366
         ))
-        OpResInit(FakeConfig(), solana).init_resource(resource)
+        OpResInit(config, solana).init_resource(resource)
 
         deployed_info = cls.proxy.compile_and_deploy_contract(cls.eth_account, TEST_RETRY_BLOCKED_365)
         cls.storage_contract = deployed_info.contract
@@ -93,12 +97,12 @@ class BlockedTest(unittest.TestCase):
 
         reid_eth = deployed_info.contract.address.lower()
         print('contract_eth', reid_eth)
-        cls.re_id, _ = re_id, _ = loader.ether2program(reid_eth)
+        cls.re_id, _ = re_id, _ = neon_2program(reid_eth)
         print('contract', re_id)
 
-        cls.caller, _ = loader.ether2program(cls.eth_account.address)
+        cls.caller, _ = neon_2program(cls.eth_account.address)
 
-    def create_blocked_transaction(self, resource):
+    def create_blocked_transaction(self, resource: OpResInfo):
         print("\ncreate_blocked_transaction")
         tx_store = self.storage_contract.functions.add_some(1, 30, "").build_transaction({
             'from': self.eth_account.address
@@ -118,22 +122,24 @@ class BlockedTest(unittest.TestCase):
 
         neon_ix_builder.init_iterative(resource.holder)
 
-        solana_tx = SolLegacyTx(instructions=[
-            neon_ix_builder.make_compute_budget_heap_ix(),
-            neon_ix_builder.make_compute_budget_cu_ix(),
-            neon_ix_builder.make_tx_step_from_data_ix(500, 1)
-        ])
+        sol_tx = SolLegacyTx(
+            name='BlockAccount',
+            ix_list=[
+                neon_ix_builder.make_compute_budget_heap_ix(),
+                neon_ix_builder.make_compute_budget_cu_ix(),
+                neon_ix_builder.make_tx_step_from_data_ix(500, 1)
+            ]
+        )
 
-        send_transaction(client, solana_tx, resource.signer)
-        return solana_tx
+        self.solana.send_tx(sol_tx, resource.signer)
+        return sol_tx
 
-    @staticmethod
-    def finish_blocker_transaction(solana_tx, resource):
-        return send_transaction(client, solana_tx, resource.signer)
+    def finish_blocker_transaction(self, sol_tx: SolLegacyTx, resource: OpResInfo):
+        return self.solana.send_tx(sol_tx, resource.signer)
 
     def test_blocked_iterative(self):
         print("\ntest_blocked_iterative")
-        solana_tx = self.create_blocked_transaction(self.resource_iter)
+        sol_tx = self.create_blocked_transaction(self.resource_iter)
         caller_seed = "long"
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
@@ -154,14 +160,14 @@ class BlockedTest(unittest.TestCase):
                 1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
                 """))
         p2.start()
-        self.finish_blocker_transaction(solana_tx, self.resource_iter)
+        self.finish_blocker_transaction(sol_tx, self.resource_iter)
         p2.join()
         print('test_blocked_iterative return_dict:', return_dict)
         self.assertEqual(return_dict[caller_seed]['status'], 1)
 
     def test_blocked_single(self):
         print("\ntest_blocked_single")
-        solana_tx = self.create_blocked_transaction(self.resource_single)
+        sol_tx = self.create_blocked_transaction(self.resource_single)
         caller_seed = "short"
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
@@ -169,7 +175,7 @@ class BlockedTest(unittest.TestCase):
             target=send_routine,
             args=(caller_seed, self.storage_contract, 10, return_dict, ""))
         p2.start()
-        self.finish_blocker_transaction(solana_tx, self.resource_single)
+        self.finish_blocker_transaction(sol_tx, self.resource_single)
         p2.join()
         print('test_blocked_single return_dict:', return_dict)
         self.assertEqual(return_dict[caller_seed]['status'], 1)

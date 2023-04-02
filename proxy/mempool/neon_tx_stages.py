@@ -23,7 +23,7 @@ class NeonTxStage(abc.ABC):
         self._ix_builder = ix_builder
         self._size = 0
         self._balance = 0
-        self.tx = SolLegacyTx(name=self.name)
+        self.tx = SolLegacyTx(name=self.name, ix_list=None)
 
     def _is_empty(self) -> bool:
         return self.tx.is_empty()

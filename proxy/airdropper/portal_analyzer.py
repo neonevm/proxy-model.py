@@ -1,10 +1,9 @@
-from .airdropper import AirdropperState, AirdropperTrxAnalyzer
-from ..common_neon.eth_proto import NeonTx
+from .airdropper import AirdropperState, AirdropperTrxAnalyzer, AirdropperTxInfo
 from ..common_neon.address import NeonAddress
 from typing import Set
 
 import logging
-from construct import ConstructError, Const, Struct, GreedyBytes, Byte, Bytes, BytesInteger, this, Int32ub, Int16ub, Int64ub, Switch, Enum
+from construct import Const, Struct, GreedyBytes, Byte, Bytes, BytesInteger, this, Int32ub, Int16ub, Int64ub, Switch, Enum
 
 LOG = logging.getLogger(__name__)
 
@@ -63,11 +62,13 @@ class PortalTrxAnalyzer(AirdropperTrxAnalyzer):
         self.tokens_whitelist = tokens_whitelist
         pass
 
-    def process(self, neon_tx: NeonTx, state: AirdropperState):
-        if neon_tx.callData[0:4] == COMPLETE_TRANSFER:
-            offset = int.from_bytes(neon_tx.callData[4:36],'big')
-            length = int.from_bytes(neon_tx.callData[36:68],'big')
-            data = neon_tx.callData[36+offset:36+offset+length]
+    def process(self, neon_tx: AirdropperTxInfo, state: AirdropperState):
+        callData = bytes.fromhex(neon_tx._neon_receipt.neon_tx.calldata[2:])
+        LOG.debug(f'callData: {callData.hex()}')
+        if callData[0:4] == COMPLETE_TRANSFER:
+            offset = int.from_bytes(callData[4:36],'big')
+            length = int.from_bytes(callData[36:68],'big')
+            data = callData[36+offset:36+offset+length]
             vaa = VAA.parse(data)
 
             tokenAddress = NeonAddress(vaa.payload.tokenAddress[12:32])

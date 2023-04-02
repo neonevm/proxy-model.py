@@ -59,8 +59,11 @@ class ContextFilter(Filter):
 @contextlib.contextmanager
 def logging_context(**kwargs):
     thread = threading.current_thread()
+    old_log_context = {}
     if not hasattr(thread, "log_context"):
         thread.log_context = {}
+    else:
+        old_log_context = thread.log_context
     thread.log_context.update(kwargs)
     yield
-    thread.log_context = {}
+    thread.log_context = old_log_context

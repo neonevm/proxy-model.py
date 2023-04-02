@@ -5,7 +5,6 @@ from typing import Union, Dict, Any, Tuple
 
 from eth_account.signers.local import LocalAccount as NeonAccount
 
-import spl.token.instructions as spl_token
 from spl.token.client import Token
 from spl.token.constants import TOKEN_PROGRAM_ID
 
@@ -15,8 +14,7 @@ from solana.rpc.commitment import Confirmed
 from solcx import install_solc
 
 from ..common_neon.solana_tx import SolTxIx, SolAccountMeta, SolAccount, SolPubKey
-from ..common_neon.solana_tx_legacy import SolLegacyTx
-from ..common_neon.address import NeonAddress
+from ..common_neon.address import NeonAddress, neon_2program
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
@@ -92,10 +90,6 @@ class ERC20Wrapper:
         self.mint_authority = mint_authority
         self.evm_loader_id = evm_loader_id
 
-    def get_neon_account_address(self, neon_account_address: str) -> SolPubKey:
-        neon_account_addressbytes = bytes.fromhex(neon_account_address[2:])
-        return SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, neon_account_addressbytes], self.evm_loader_id)[0]
-
     def get_auth_account_address(self, neon_account_address: str) -> SolPubKey:
         neon_account_addressbytes = bytes(12) + bytes.fromhex(neon_account_address[2:])
         neon_contract_addressbytes = bytes.fromhex(self.neon_contract_address[2:])
@@ -126,7 +120,7 @@ class ERC20Wrapper:
         LOG.debug(f'tx_deploy_receipt: {tx_deploy_receipt}')
         LOG.debug(f'deploy status: {tx_deploy_receipt.status}')
         self.neon_contract_address = ChecksumAddress(tx_deploy_receipt.contractAddress)
-        self.solana_contract_address = self.get_neon_account_address(self.neon_contract_address)
+        self.solana_contract_address, _ = neon_2program(self.neon_contract_address)
 
         self.erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
 
@@ -149,17 +143,8 @@ class ERC20Wrapper:
         ]
         return SolPubKey.find_program_address(seeds, self.evm_loader_id)[0]
 
-    def create_associated_token_account(self, owner: SolPubKey, payer: SolAccount):
-        # Construct transaction
-        # This part of code is based on original implementation of Token.create_associated_token_account
-        # except that skip_preflight is set to True
-        tx = SolLegacyTx(instructions=[
-            spl_token.create_associated_token_account(
-                payer=payer.pubkey(), owner=owner, mint=self.token.pubkey
-            )
-        ]).low_level_tx
-        self.token._conn.send_transaction(tx, payer, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
-        return tx.instructions[0].accounts[1].pubkey
+    def create_associated_token_account(self, owner: SolPubKey):
+        return self.token.create_associated_token_account(owner)
 
     def create_claim_instruction(self, owner: SolPubKey, from_acc: SolPubKey, to_acc: NeonAccount, amount: int):
         erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])

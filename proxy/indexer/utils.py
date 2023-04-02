@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import statistics
-from typing import Dict, Union, Callable, List
+import logging
+
+from typing import Dict, Union, List
 
 from ..common_neon.config import Config
+
+
+LOG = logging.getLogger(__name__)
 
 
 def check_error(trx):
@@ -22,7 +27,7 @@ class MetricsToLogger:
         self._counter = 0
         self._item_list_dict.clear()
 
-    def print(self, config: Config, logger: Callable[[str], None],
+    def print(self, config: Config,
               list_value_dict: Dict[str, Union[int, float]],
               latest_value_dict: Dict[str, int]):
         for key, value in list_value_dict.items():
@@ -42,5 +47,5 @@ class MetricsToLogger:
             msg += f' max: {max(value_list):.2f};'
         for key, value in self._item_value_dict.items():
             msg += f' {key}: {value};'
-        logger(msg)
+        LOG.debug(msg)
         self._reset()

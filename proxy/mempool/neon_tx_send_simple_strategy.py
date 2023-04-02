@@ -1,13 +1,11 @@
 import logging
-from typing import List
 
-from ..common_neon.solana_tx import SolTxReceipt, SolTx
+from typing import List, Generator
+
 from ..common_neon.solana_tx_legacy import SolLegacyTx
-from ..common_neon.solana_tx_list_sender import SolTxListSender, SolTxSendState
-from ..common_neon.solana_tx_error_parser import SolTxErrorParser
-from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo
-from ..common_neon.errors import CUBudgetExceededError
+from ..common_neon.solana_tx_list_sender import SolTxSendState
 from ..common_neon.utils import NeonTxResultInfo
+from ..common_neon.solana_tx_error_parser import SolTxError
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
@@ -17,78 +15,55 @@ from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 LOG = logging.getLogger(__name__)
 
 
-class SimpleNeonTxSender(SolTxListSender):
-    def __init__(self, strategy: BaseNeonTxStrategy, *args, **kwargs):
-        super().__init__(strategy.ctx.config, *args, **kwargs)
-        self._strategy = strategy
-        self._neon_tx_res = NeonTxResultInfo()
-
-    @property
-    def neon_tx_res(self) -> NeonTxResultInfo:
-        return self._neon_tx_res
-
-    def _decode_tx_status(self, tx: SolTx, tx_error_parser: SolTxErrorParser) -> SolTxSendState.Status:
-        tx_status = super()._decode_tx_status(tx, tx_error_parser)
-        if tx_status == SolTxSendState.Status.GoodReceipt:
-            self._decode_neon_tx_result(tx, tx_error_parser.receipt)
-        return tx_status
-
-    def _decode_neon_tx_result(self, _: SolTx, tx_receipt: SolTxReceipt) -> None:
-        if self._neon_tx_res.is_valid():
-            return
-
-        tx_receipt_info = SolTxReceiptInfo.from_tx(tx_receipt)
-        for sol_neon_ix in tx_receipt_info.iter_sol_neon_ix():
-            res = sol_neon_ix.neon_tx_return
-            if res is not None:
-                self._neon_tx_res.set_result(status=res.status, gas_used=res.gas_used)
-                LOG.debug(f'Got Neon tx result: {self._neon_tx_res}')
-                break
-
-    def _convert_state_to_tx_list(self, tx_status: SolTxSendState.Status,
-                                  tx_state_list: List[SolTxSendState]) -> List[SolTx]:
-        if self._neon_tx_res.is_valid():
-            return list()
-        return super()._convert_state_to_tx_list(tx_status, tx_state_list)
-
-
 class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     name = 'TxExecFromData'
 
-    def __init__(self, ctx: NeonTxSendCtx):
-        super().__init__(ctx)
+    def execute(self) -> NeonTxResultInfo:
+        self._sol_tx_list_sender.clear()
 
-    def _validate(self) -> bool:
-        return (
-            # self._validate_notdeploy_tx() and
-            # self._validate_evm_step_cnt() and  <- by default, try to execute the neon tx in one solana tx
-            self._validate_tx_has_chainid() and
-            self._validate_no_resize_iter_cnt()
-        )
+        assert self.is_valid()
 
-    def _validate_evm_step_cnt(self) -> bool:
-        if self._ctx.emulated_evm_step_cnt < self._evm_step_cnt:
-            return True
-        self._validation_error_msg = 'Too lot of EVM steps'
-        return False
+        self._send_tx_list([self.name], self._build_tx_list())
+        tx_send_state_list = self._sol_tx_list_sender.tx_state_list
+        tx_state = tx_send_state_list[0]
+        neon_tx_res = NeonTxResultInfo()
+        status = SolTxSendState.Status
+        if tx_state.status == status.GoodReceipt:
+            sol_neon_ix = self._find_sol_neon_ix(tx_state)
+            ret = sol_neon_ix.neon_tx_return
+            if ret is not None:
+                neon_tx_res.set_result(status=ret.status, gas_used=ret.gas_used)
+                LOG.debug(f'Set Neon tx result: {neon_tx_res}')
 
-    def _validate_no_resize_iter_cnt(self) -> bool:
-        if self._ctx.neon_tx_exec_cfg.resize_iter_cnt <= 0:
-            return True
-        self._validation_error_msg = 'Has account resize iterations'
-        return False
+        elif tx_state.status == status.LogTruncatedError:
+            neon_tx_res.set_lost_result(gas_used=1)  # unknown gas
+            LOG.debug(f'Set truncated Neon tx result: {neon_tx_res}')
+
+        else:
+            raise SolTxError(tx_state.receipt)
+
+        return neon_tx_res
+
+    def cancel(self) -> None:
+        LOG.error('canceling of simple Neon tx')
+
+    def _build_tx_list(self) -> Generator[List[SolLegacyTx], None, None]:
+        yield [self._build_tx()]
 
     def _build_tx(self) -> SolLegacyTx:
         return self._build_cu_tx(self._ctx.ix_builder.make_tx_exec_from_data_ix())
 
-    def execute(self) -> NeonTxResultInfo:
-        assert self.is_valid()
+    def _validate(self) -> bool:
+        return (
+            self._validate_tx_has_chainid() and
+            self._validate_no_resize_iter_cnt()
+        )
 
-        tx_sender = SimpleNeonTxSender(self, self._ctx.solana, self._ctx.signer)
-        tx_sender.send([self._build_tx()])
-        if not tx_sender.neon_tx_res.is_valid():
-            raise CUBudgetExceededError()
-        return tx_sender.neon_tx_res
+    def _validate_no_resize_iter_cnt(self) -> bool:
+        if self._ctx.resize_iter_cnt <= 0:
+            return True
+        self._validation_error_msg = 'Has account resize iterations'
+        return False
 
 
 @alt_strategy
