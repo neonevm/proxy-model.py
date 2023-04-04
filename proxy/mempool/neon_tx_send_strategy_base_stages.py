@@ -93,7 +93,7 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
         self._alt_tx_set = ALTTxSet()
 
     def complete_init(self) -> None:
-        pass
+        self._ctx.set_holder_usage(True)  # using of the operator key for ALTs
 
     def init_alt_info(self, legacy_tx: SolLegacyTx) -> bool:
         actual_alt_info = self._alt_builder.build_alt_info(legacy_tx)
@@ -114,15 +114,20 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
         if actual_alt_info.len_account_key_list < ALTLimit.max_tx_account_cnt:
             return True
 
+        use_existing_alt_info = False
         for alt_info in alt_info_list:
             if actual_alt_info.len_account_key_list + alt_info.len_account_key_list < ALTLimit.max_alt_account_cnt:
                 alt_info.add_account_key_list(actual_alt_info.account_key_list)
                 actual_alt_info = alt_info
+                LOG.debug(f'Use existing ALT: {str(alt_info.table_account)}')
+                use_existing_alt_info = True
                 break
 
         self._alt_tx_set = self._alt_builder.build_alt_tx_set(actual_alt_info)
         self._actual_alt_info = actual_alt_info
-        self._alt_info_list.append(actual_alt_info)
+        if not use_existing_alt_info:
+            LOG.debug(f'Use new ALT: {str(actual_alt_info.table_account)}')
+            self._alt_info_list.append(actual_alt_info)
 
         return True
 

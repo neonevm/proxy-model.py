@@ -16,7 +16,7 @@ def str_enum(value: Enum) -> str:
     return value
 
 
-def str_fmt_object(obj: Any, skip_prefix=True, name='') -> str:
+def str_fmt_object(obj: Any, skip_underling=True, name='') -> str:
     def _decode_name(value: Any) -> str:
         result = f'{type(value)}'
         result = result[result.rfind('.') + 1:-2]
@@ -92,7 +92,7 @@ def str_fmt_object(obj: Any, skip_prefix=True, name='') -> str:
         for key, value in d.items():
             if not isinstance(key, str):
                 key = str(key)
-            if skip_prefix and key.startswith('_'):
+            if skip_underling and key.startswith('_'):
                 continue
             if key == '_str':
                 continue

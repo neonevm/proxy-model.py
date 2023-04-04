@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import time
 
 from collections import deque
@@ -313,7 +314,7 @@ class MemPool:
 
     async def _reschedule_tx(self, tx: MPTxRequest):
         with logging_context(req_id=tx.req_id):
-            LOG.debug(f'Tx {tx.sig} will be rescheduled in {self.reschedule_timeout_sec} sec')
+            LOG.debug(f'Tx {tx.sig} will be rescheduled in {math.ceil(self.reschedule_timeout_sec * 1000)} msec')
 
         await asyncio.sleep(self.reschedule_timeout_sec)
 
