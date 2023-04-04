@@ -7,6 +7,7 @@ from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_tx import SolAccount, SolPubKey, SolTxIx, SolTx, SolCommit
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender
+from ..common_neon.errors import RescheduleError
 
 from .mempool_api import MPALTListResult
 from .mempool_api import MPGetALTList, MPALTInfo, MPDeactivateALTListRequest, MPCloseALTListRequest
@@ -102,6 +103,8 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             tx_sender = SolTxListSender(self._config, self._solana, cast(SolAccount, signer))
             try:
                 tx_sender.send(tx_list)
+            except RescheduleError:
+                pass
             except BaseException as exc:
                 LOG.debug('Failed to execute', exc_info=exc)
             tx_list.clear()

@@ -33,12 +33,15 @@ class SolTxError(BaseException):
         return log_msg_list
 
     @staticmethod
-    def _get_status(status: SolIxLogState.Status) -> str:
+    def _get_level_msg(level: int, status: SolIxLogState.Status) -> str:
         if status == SolIxLogState.Status.Success:
-            return '+'
+            status_str = '+'
         elif status == SolIxLogState.Status.Failed:
-            return '-'
-        return '?'
+            status_str = '-'
+        else:
+            status_str = '?'
+
+        return f'[{level}]({status_str})'
 
     @staticmethod
     def _get_program_name(uid: str) -> str:
@@ -59,7 +62,7 @@ class SolTxError(BaseException):
     def _filter_log_msg_list(self, status: SolIxLogState.Status,
                              ix_log_state: SolIxLogState,
                              log_msg_list: List[str]) -> SolIxLogState.Status:
-        level_msg = f'[{ix_log_state.level}]({self._get_status(status)})'
+        level_msg = self._get_level_msg(ix_log_state.level, status)
 
         for ix_log_rec in ix_log_state.log_list:
             if isinstance(ix_log_rec, SolIxLogState):
@@ -69,7 +72,11 @@ class SolTxError(BaseException):
                 log_msg_list.append(invoke_msg)
 
                 status = self._filter_log_msg_list(invoke_status, ix_log_rec, log_msg_list)
-                level_msg = f'[{ix_log_state.level}]({self._get_status(status)})'
+                if status == SolIxLogState.Status.Failed:
+                    failed_msg = f'{self._get_level_msg(ix_log_state.level + 1, status)} Failed: {ix_log_rec.error}'
+                    log_msg_list.append(failed_msg)
+
+                level_msg = self._get_level_msg(ix_log_state.level, status)
 
             elif isinstance(ix_log_rec, str):
                 for prefix in ['Program log: ', 'Program failed to complete: ']:

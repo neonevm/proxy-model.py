@@ -1,4 +1,4 @@
-typing-extensions==4.4.0
+typing-extensions==4.5.0
 ecdsa==0.18.0
 pysha3==1.0.2
 eth-keys==0.4.0
@@ -8,12 +8,12 @@ solders==0.14.4
 psycopg2-binary
 ethereum
 py-solc-x==1.1.1
-flask==2.2.2
-hvac==1.0.2
+flask==2.2.3
+hvac==1.1.0
 requests
 base58
 pysha3
 construct
 git+https://github.com/ethereum/web3.py.git@v6.0.0-beta.6
-aioprometheus==22.5.0
+aioprometheus==23.3.0
 singleton-decorator==1.0.0

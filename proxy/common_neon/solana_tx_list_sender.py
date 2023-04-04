@@ -198,6 +198,10 @@ class SolTxListSender:
             if tx_block_slot is not None:
                 min_block_slot = min(min_block_slot, tx_block_slot)
 
+        if min_block_slot == self._big_block_slot:
+            LOG.debug('Tx list does not contain a block - skip validating of the commit level')
+            return
+
         min_block_status = self._solana.get_block_status(min_block_slot)
         if SolCommit.level(min_block_status.commitment) < SolCommit.level(commit_level):
             raise CommitLevelError(commit_level, min_block_status.commitment)

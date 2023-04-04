@@ -26,7 +26,7 @@ class NeonTxExecCfg:
         self._sol_tx_list_dict: Dict[str, List[SolTx]] = dict()
 
     def __str__(self) -> str:
-        return str_fmt_object(self)
+        return str_fmt_object(self, skip_underling=False)
 
     @property
     def state_tx_cnt(self) -> int:
