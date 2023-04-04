@@ -2,6 +2,7 @@ from typing import List, Set
 import logging
 
 from ..common_neon.config import Config
+from ..common_neon.errors import RescheduleError
 from ..common_neon.layouts import HolderAccountInfo
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt import ALTInfo
@@ -78,13 +79,18 @@ class CancelTxExecutor:
         if len(self._alt_tx_set) > 0:
             tx_list_info_list = self._alt_builder.build_prep_alt_list(self._alt_tx_set)
             for tx_list_info in tx_list_info_list:
-                tx_sender.send(tx_list_info)
+                try:
+                    tx_sender.send(tx_list_info)
+                except RescheduleError:
+                    pass
 
             # Update lookups from Solana
             self._alt_builder.update_alt_info_list(self._alt_info_list)
 
         try:
             tx_sender.send(self._cancel_tx_list)
+        except RescheduleError:
+            pass
         except BaseException as exc:
             LOG.warning('Failed to cancel tx', exc_info=exc)
 
