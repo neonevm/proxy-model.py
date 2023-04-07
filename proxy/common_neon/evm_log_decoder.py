@@ -94,6 +94,7 @@ class NeonLogInfo:
     neon_tx_ix: Optional[NeonLogTxIx]
     neon_tx_return: Optional[NeonLogTxReturn]
     neon_tx_event_list: List[NeonLogTxEvent]
+    is_truncated: bool
 
 
 class _NeonLogDecoder:
@@ -272,8 +273,13 @@ class _NeonLogDecoder:
         neon_tx_ix: Optional[NeonLogTxIx] = None
         neon_tx_return: Optional[NeonLogTxReturn] = None
         neon_tx_event_list: List[NeonLogTxEvent] = list()
+        is_truncated = False
 
         for line in log_iter:
+            if line == 'Log truncated':
+                is_truncated = True
+                continue
+
             name, data_list = self._decode_mnemonic(line)
             if len(name) == 0:
                 continue
@@ -310,7 +316,8 @@ class _NeonLogDecoder:
             neon_tx_sig=neon_tx_sig,
             neon_tx_ix=neon_tx_ix,
             neon_tx_return=neon_tx_return,
-            neon_tx_event_list=neon_tx_event_list
+            neon_tx_event_list=neon_tx_event_list,
+            is_truncated=is_truncated
         )
 
 

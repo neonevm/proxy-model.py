@@ -15,7 +15,7 @@ from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status, call_tx_emulated
 from ..common_neon.environment_utils import NeonCli
-from ..common_neon.errors import EthereumError, InvalidParamError
+from ..common_neon.errors import EthereumError, InvalidParamError, RescheduleError
 from ..common_neon.estimate import GasEstimate
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.keys_storage import KeyStorage
@@ -507,11 +507,24 @@ class NeonRpcApiWorker:
             contract_id = obj.get('to', 'deploy')
             data = obj.get('data', "None")
             value = obj.get('value', '')
-            emulator_json = call_emulated(self._config, contract_id, caller_id, data, value)
-            check_emulated_exit_status(emulator_json)
-            return '0x' + emulator_json['result']
+
+            retry_idx = 0
+            retry_on_fail = self._config.retry_on_fail
+            while True:
+                try:
+                    emulator_json = call_emulated(self._config, contract_id, caller_id, data, value)
+                    check_emulated_exit_status(emulator_json)
+                    return '0x' + emulator_json['result']
+
+                except RescheduleError:
+                    retry_idx += 1
+                    if retry_idx < retry_on_fail:
+                        continue
+                    raise
+
         except EthereumError:
             raise
+
         except Exception as err:
             LOG.debug(f'eth_call Exception {err}.')
             raise

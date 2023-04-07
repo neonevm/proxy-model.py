@@ -35,9 +35,9 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
                 neon_tx_res.set_result(status=ret.status, gas_used=ret.gas_used)
                 LOG.debug(f'Set Neon tx result: {neon_tx_res}')
 
-        elif tx_state.status == status.LogTruncatedError:
-            neon_tx_res.set_lost_result(gas_used=1)  # unknown gas
-            LOG.debug(f'Set truncated Neon tx result: {neon_tx_res}')
+            elif sol_neon_ix.is_log_truncated:
+                neon_tx_res.set_lost_result(gas_used=1)  # unknown gas
+                LOG.debug(f'Set truncated Neon tx result: {neon_tx_res}')
 
         else:
             raise SolTxError(tx_state.receipt)

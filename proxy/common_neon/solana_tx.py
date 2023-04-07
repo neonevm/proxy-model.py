@@ -78,10 +78,7 @@ class SolTx(abc.ABC):
         self._name = name
         self._is_signed = False
         self._is_cloned = False
-
-        self._solders_legacy_tx = _SoldersLegacyTx.default()
-        if ix_list is not None:
-            self._solders_legacy_tx = self._build_legacy_tx(ix_list=ix_list)
+        self._solders_legacy_tx = self._build_legacy_tx(recent_block_hash=None, ix_list=ix_list)
 
     @property
     def name(self) -> str:
@@ -101,12 +98,24 @@ class SolTx(abc.ABC):
         return block_hash
 
     @recent_block_hash.setter
-    def recent_block_hash(self, block_hash: Optional[SolBlockHash]) -> None:
-        self._solders_legacy_tx = self._build_legacy_tx(recent_block_hash=block_hash, ix_list=self._decode_ix_list())
+    def recent_block_hash(self, value: Optional[SolBlockHash]) -> None:
+        ix_list = self._decode_ix_list()
+        self._solders_legacy_tx = self._build_legacy_tx(recent_block_hash=value, ix_list=ix_list)
 
     @property
     def ix_list(self) -> List[SolTxIx]:
         return self._decode_ix_list()
+
+    @property
+    def fee_payer(self) -> Optional[SolPubKey]:
+        acct_key_list = self._solders_legacy_tx.message.account_keys
+        return acct_key_list[0] if acct_key_list else None
+
+    @fee_payer.setter
+    def fee_payer(self, value: SolPubKey) -> None:
+        block_hash = self.recent_block_hash
+        ix_list = self._decode_ix_list(value)
+        self._solders_legacy_tx = self._build_legacy_tx(recent_block_hash=block_hash, ix_list=ix_list)
 
     def add(self, *args: Union[SolTx, SolTxIx]) -> SolTx:
         ix_list = self._decode_ix_list()
@@ -118,7 +127,8 @@ class SolTx(abc.ABC):
             else:
                 raise ValueError('invalid instruction:', arg)
 
-        self._solders_legacy_tx = self._build_legacy_tx(recent_block_hash=self.recent_block_hash, ix_list=ix_list)
+        block_hash = self.recent_block_hash
+        self._solders_legacy_tx = self._build_legacy_tx(recent_block_hash=block_hash, ix_list=ix_list)
         return self
 
     def serialize(self) -> bytes:
@@ -129,6 +139,8 @@ class SolTx(abc.ABC):
         return result
 
     def sign(self, signer: SolAccount) -> None:
+        if signer.pubkey() != self.fee_payer:
+            self.fee_payer = signer.pubkey()
         self._sign(signer)
         self._is_signed = True
 
@@ -137,37 +149,44 @@ class SolTx(abc.ABC):
         self._is_cloned = True
         return tx
 
-    def _build_legacy_tx(self, recent_block_hash: Optional[SolBlockHash] = None,
-                         ix_list: Optional[Sequence[SolTxIx]] = None) -> _SoldersLegacyTx:
+    def _build_legacy_tx(self, recent_block_hash: Optional[SolBlockHash],
+                         ix_list: Optional[Sequence[SolTxIx]]) -> _SoldersLegacyTx:
         self._is_signed = False
-
-        acct_key_list = self._solders_legacy_tx.message.account_keys
-        fee_payer = acct_key_list[0] if acct_key_list else None
 
         if recent_block_hash is None:
             recent_block_hash = SolBlockHash.default()
 
         if ix_list is None:
-            ix_list: List[SolTx] = list()
+            ix_list: List[SolTxIx] = list()
+
+        fee_payer: Optional[SolPubKey] = None
+        for ix in ix_list:
+            for acct_meta in ix.accounts:
+                if acct_meta.is_signer:
+                    fee_payer = acct_meta.pubkey
+                    break
 
         msg = _SoldersLegacyMsg.new_with_blockhash(ix_list, fee_payer, recent_block_hash)
         return _SoldersLegacyTx.new_unsigned(msg)
 
-    def _decode_ix_list(self) -> List[SolTxIx]:
+    def _decode_ix_list(self, signer: Optional[SolPubKey] = None) -> List[SolTxIx]:
         msg = self._solders_legacy_tx.message
         acct_key_list = msg.account_keys
         ix_list: List[SolTxIx] = list()
         for compiled_ix in msg.instructions:
+            ix_data = compiled_ix.data
             program_id = acct_key_list[compiled_ix.program_id_index]
-            acct_meta_list = [
-                SolAccountMeta(
-                    acct_key_list[idx],
-                    is_signer=msg.is_signer(idx),
-                    is_writable=msg.is_writable(idx),
-                )
-                for idx in compiled_ix.accounts
-            ]
-            ix_list.append(SolTxIx(program_id, compiled_ix.data, acct_meta_list))
+
+            acct_meta_list: List[SolAccountMeta] = list()
+            for idx in compiled_ix.accounts:
+                is_signer = msg.is_signer(idx)
+                if (signer is not None) and is_signer:
+                    acct_meta = SolAccountMeta(signer, True, msg.is_writable(idx))
+                else:
+                    acct_meta = SolAccountMeta(acct_key_list[idx], is_signer, msg.is_writable(idx))
+                acct_meta_list.append(acct_meta)
+
+            ix_list.append(SolTxIx(program_id, ix_data, acct_meta_list))
         return ix_list
 
     @property

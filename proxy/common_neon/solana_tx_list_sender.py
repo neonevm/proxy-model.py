@@ -26,7 +26,6 @@ class SolTxSendState:
         # Good receipts
         WaitForReceipt = enum.auto()
         GoodReceipt = enum.auto()
-        LogTruncatedError = enum.auto()
 
         # Skipped errors
         AccountAlreadyExistsError = enum.auto()
@@ -81,7 +80,6 @@ class SolTxListSender:
     _completed_tx_status_set = {
         SolTxSendState.Status.WaitForReceipt,
         SolTxSendState.Status.GoodReceipt,
-        SolTxSendState.Status.LogTruncatedError,
         SolTxSendState.Status.AccountAlreadyExistsError,
         SolTxSendState.Status.AlreadyFinalizedError,
     }
@@ -122,16 +120,9 @@ class SolTxListSender:
         tx_sig_list = [str(tx.sig) for tx in tx_list]
         self._get_tx_receipt_list(tx_sig_list, tx_list)
 
-        # Try to block accounts
-        status = SolTxSendState.Status
-        tx_state_list = self._tx_state_list_dict.get(status.BlockedAccountError, list())
-        for tx_state in tx_state_list:
-            tx = tx_state.tx
-            if not tx.is_cloned():
-                self._add_tx_state(tx.clone(), None, status.NoReceiptError)
-                break
+        if not self._get_tx_list_for_lock_account():
+            self._get_tx_list_for_send()
 
-        self._get_tx_list_for_send()
         return self._send()
 
     @property
@@ -150,13 +141,29 @@ class SolTxListSender:
         self._tx_state_dict.clear()
         self._tx_state_list_dict.clear()
 
+    def _get_tx_list_for_lock_account(self) -> bool:
+        if self.has_completed_receipt():
+            return False
+
+        status = SolTxSendState.Status
+        tx_state_list = self._tx_state_list_dict.get(status.BlockedAccountError, list())
+        for tx_state in tx_state_list:
+            tx = tx_state.tx
+            if not tx.is_cloned():
+                self._tx_list.append(tx.clone())
+                return True
+
+        return False
+
     def _send(self) -> bool:
         try:
             self._send_impl()
             self._validate_commit_level()
             return True  # always True, because we send txs
+
         except (WrongStrategyError, RescheduleError):
             raise
+
         except (BaseException,):
             self._validate_commit_level()
             raise
@@ -255,10 +262,10 @@ class SolTxListSender:
                 self._tx_state_dict.pop(tx_sig, None)
                 if tx.recent_block_hash in self._bad_block_hash_set:
                     tx.recent_block_hash = None
-                    LOG.debug(f'Flash block hash: {tx.recent_block_hash}')
+                    LOG.debug(f'Flash bad block hash: {tx.recent_block_hash} for tx {str(tx.sig)}')
 
             if tx.recent_block_hash is not None:
-                LOG.debug(f'Block hash {tx.recent_block_hash} is not None')
+                LOG.debug(f'Skip signing, tx {str(tx.sig)} has block hash {tx.recent_block_hash}')
                 continue
 
             # Fuzz testing of bad blockhash
@@ -347,9 +354,8 @@ class SolTxListSender:
 
         # The first few txs failed on blocked accounts, but the subsequent tx successfully locked the accounts.
         if tx_status == tx_status.BlockedAccountError:
-            for completed_status in self._completed_tx_status_set:
-                if completed_status in self._tx_state_list_dict:
-                    return True
+            if self.has_completed_receipt():
+                return True
 
         tx_state = tx_state_list[0]
         error = tx_state.error or SolTxError(tx_state.receipt)
@@ -433,9 +439,6 @@ class SolTxListSender:
         if state_tx_cnt is not None:
             # sender is unknown - should be replaced on upper stack level
             return self._DecodeResult(status.BadNonceError, NonceTooLowError.init_no_sender(tx_nonce, state_tx_cnt))
-        elif tx_error_parser.check_if_log_truncated():
-            # no exception: by default this is a good receipt
-            return self._DecodeResult(status.LogTruncatedError, None)
         elif tx_error_parser.check_if_error():
             LOG.debug(f'unknown error receipt {str(tx.sig)}: {tx_receipt}')
             # no exception: will be converted to DEFAULT EXCEPTION

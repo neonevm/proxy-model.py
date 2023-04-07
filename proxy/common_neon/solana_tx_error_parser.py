@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import enum
 from typing import Union, Optional, Any, Tuple, List, cast
 
 from ..common_neon.environment_data import EVM_LOADER_ID
@@ -28,20 +29,9 @@ class SolTxError(BaseException):
         if len(raw_log_msg_list) == 0:
             return log_msg_list
 
-        ix_log_list = SolTxLogDecoder().decode(raw_log_msg_list)
-        self._filter_log_msg_list(SolIxLogState.Status.Success, ix_log_list, log_msg_list)
+        ix_log_state = SolTxLogDecoder().decode(raw_log_msg_list)
+        self._filter_log_msg_list(ix_log_state, log_msg_list)
         return log_msg_list
-
-    @staticmethod
-    def _get_level_msg(level: int, status: SolIxLogState.Status) -> str:
-        if status == SolIxLogState.Status.Success:
-            status_str = '+'
-        elif status == SolIxLogState.Status.Failed:
-            status_str = '-'
-        else:
-            status_str = '?'
-
-        return f'[{level}]({status_str})'
 
     @staticmethod
     def _get_program_name(uid: str) -> str:
@@ -59,33 +49,72 @@ class SolTxError(BaseException):
             return 'NeonEVM'
         return uid
 
-    def _filter_log_msg_list(self, status: SolIxLogState.Status,
-                             ix_log_state: SolIxLogState,
-                             log_msg_list: List[str]) -> SolIxLogState.Status:
-        level_msg = self._get_level_msg(ix_log_state.level, status)
+    class _LevelChangeType(enum.Enum):
+        Up = 1,
+        Down = -1
+        Same = 0
+
+    def _get_level_msg(self, level: int, level_change: _LevelChangeType, status: SolIxLogState.Status) -> str:
+        if status == SolIxLogState.Status.Success:
+            status_str = '+'
+        elif status == SolIxLogState.Status.Failed:
+            status_str = '-'
+        else:
+            status_str = '?'
+
+        if level_change == self._LevelChangeType.Up:
+            level_change_str = '>'
+        elif level_change == self._LevelChangeType.Down:
+            level_change_str = '<'
+        else:
+            level_change_str = '='
+
+        return f'[{level}]{level_change_str}{status_str}'
+
+    def _add_subrange_log_msg_list(self, level: int,
+                                   status: SolIxLogState.Status,
+                                   subrange_log_msg_list: List[str],
+                                   log_msg_list: List[str]) -> None:
+        level_msg = self._get_level_msg(level, self._LevelChangeType.Same, status)
+
+        for log_msg in subrange_log_msg_list:
+            for prefix in ['Program log: ', 'Program failed to complete: ']:
+                if not log_msg.startswith(prefix):
+                    continue
+
+                log_msg = f'{level_msg} {log_msg[len(prefix):]}'
+                log_msg_list.append(log_msg)
+                break
+
+            else:
+                log_msg = f'{level_msg} {log_msg}'
+                log_msg_list.append(log_msg)
+
+        subrange_log_msg_list.clear()
+
+    def _filter_log_msg_list(self, ix_log_state: SolIxLogState, log_msg_list: List[str]) -> None:
+        status = SolIxLogState.Status
+        subrange_log_msg_list: List[str] = list()
+        if ix_log_state.level > 0:
+            level_msg = self._get_level_msg(ix_log_state.level - 1, self._LevelChangeType.Up, status.Success)
+            invoke_msg = f'{level_msg} {self._get_program_name(ix_log_state.program)}'
+            log_msg_list.append(invoke_msg)
 
         for ix_log_rec in ix_log_state.log_list:
             if isinstance(ix_log_rec, SolIxLogState):
-                invoke_status = ix_log_rec.status if len(ix_log_rec.inner_log_list) == 0 else status
-
-                invoke_msg = f'{level_msg} Invoke {self._get_program_name(ix_log_rec.program)}'
-                log_msg_list.append(invoke_msg)
-
-                status = self._filter_log_msg_list(invoke_status, ix_log_rec, log_msg_list)
-                if status == SolIxLogState.Status.Failed:
-                    failed_msg = f'{self._get_level_msg(ix_log_state.level + 1, status)} Failed: {ix_log_rec.error}'
-                    log_msg_list.append(failed_msg)
-
-                level_msg = self._get_level_msg(ix_log_state.level, status)
+                self._add_subrange_log_msg_list(ix_log_state.level, status.Success, subrange_log_msg_list, log_msg_list)
+                self._filter_log_msg_list(ix_log_rec, log_msg_list)
 
             elif isinstance(ix_log_rec, str):
-                for prefix in ['Program log: ', 'Program failed to complete: ']:
-                    if not ix_log_rec.startswith(prefix):
-                        continue
+                if ix_log_rec.startswith('Program data:'):
+                    continue
+                subrange_log_msg_list.append(ix_log_rec)
 
-                    log_msg = f'{level_msg} {ix_log_rec[len(prefix):]}'
-                    log_msg_list.append(log_msg)
-        return status
+        self._add_subrange_log_msg_list(ix_log_state.level, ix_log_state.status, subrange_log_msg_list, log_msg_list)
+        if ix_log_state.status == status.Failed:
+            level_msg = self._get_level_msg(ix_log_state.level, self._LevelChangeType.Down, ix_log_state.status)
+            failed_msg = f'{level_msg} {ix_log_state.error}'
+            log_msg_list.append(failed_msg)
 
     @property
     def receipt(self) -> SolTxReceipt:
@@ -296,20 +325,13 @@ class SolTxErrorParser:
         if error_type != self._program_failed_to_complete_type:
             return False
 
-        if self.check_if_log_truncated():
-            return True
-
         log_list = self._get_log_list()
         for log_rec in reversed(log_list):
             if log_rec.startswith(self._exceeded_cu_number_log):
                 return True
+            elif log_rec == self._log_truncated_log:
+                return True
 
-        return False
-
-    def check_if_log_truncated(self) -> bool:
-        log_list = self._get_log_list()
-        if len(log_list) > 0:
-            return log_list[-1] == self._log_truncated_log
         return False
 
     def check_if_require_resize_iter(self) -> bool:

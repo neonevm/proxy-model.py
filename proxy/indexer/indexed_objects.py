@@ -173,22 +173,22 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
             return self._value
 
     def __init__(self, tx_type: NeonIndexedTxInfo.Type, key: NeonIndexedTxInfo.Key, neon_tx: NeonTxInfo,
-                 storage_account: str, iter_blocked_account: Iterator[str]):
+                 holder_account: str, iter_blocked_account: Iterator[str]):
         super().__init__()
         assert not key.is_empty()
 
         self._key = key
         self._neon_receipt = NeonTxReceiptInfo(neon_tx, NeonTxResultInfo())
         self._tx_type = tx_type
-        self._storage_account = storage_account
+        self._holder_account = holder_account
         self._blocked_account_list = list(iter_blocked_account)
         self._status = NeonIndexedTxInfo.Status.InProgress
         self._is_canceled = False
         self._neon_event_list: List[NeonLogTxEvent] = list()
 
     @property
-    def storage_account(self) -> str:
-        return self._storage_account
+    def holder_account(self) -> str:
+        return self._holder_account
 
     @property
     def blocked_account_cnt(self) -> int:
@@ -224,19 +224,18 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
     def is_canceled(self) -> bool:
         return self._is_canceled
 
-    def set_holder_account(self, holder: NeonIndexedHolderInfo, neon_tx: NeonTxInfo) -> None:
-        self.set_neon_tx(neon_tx)
-        self._set_start_block_slot(holder.start_block_slot)
-        self._set_last_block_slot(holder.last_block_slot)
-
     def set_status(self, value: NeonIndexedTxInfo.Status, block_slot: int) -> None:
         self._status = value
         self._set_last_block_slot(block_slot)
 
-    def set_neon_tx(self, neon_tx: NeonTxInfo) -> None:
+    def set_neon_tx(self, neon_tx: NeonTxInfo, holder: Optional[NeonIndexedHolderInfo]) -> None:
         assert not self._neon_receipt.neon_tx.is_valid()
         assert neon_tx.is_valid()
+
         self._neon_receipt.set_neon_tx(neon_tx)
+        if holder is not None:
+            self._set_start_block_slot(holder.start_block_slot)
+            self._set_last_block_slot(holder.last_block_slot)
 
     def add_neon_event(self, event: NeonLogTxEvent) -> None:
         self._neon_event_list.append(event)
@@ -393,12 +392,12 @@ class NeonIndexedBlockInfo:
         return tx
 
     def add_neon_tx(self, tx_type: NeonIndexedTxInfo.Type, key: NeonIndexedTxInfo.Key, neon_tx: NeonTxInfo,
-                    storage_account: str, iter_blocked_account: Iterator[str],
+                    holder_account: str, iter_blocked_account: Iterator[str],
                     sol_neon_ix: SolNeonIxReceiptInfo) -> NeonIndexedTxInfo:
         if key.value in self._neon_tx_dict:
             raise RuntimeError(f'the tx {key} already in use!')
 
-        tx = NeonIndexedTxInfo(tx_type, key, neon_tx, storage_account, iter_blocked_account)
+        tx = NeonIndexedTxInfo(tx_type, key, neon_tx, holder_account, iter_blocked_account)
         tx.add_sol_neon_ix(sol_neon_ix)
         self._neon_tx_dict[tx.key] = tx
         return tx
