@@ -96,7 +96,7 @@ class Indexer(IndexerBase):
             return
 
         for tx in state.neon_block.iter_neon_tx():
-            if tx.storage_account == '':
+            if tx.holder_account == '':
                 continue
             if state.stop_block_slot - tx.last_block_slot > self._config.cancel_timeout:
                 self._cancel_neon_tx(tx, sol_tx_meta)
@@ -121,7 +121,7 @@ class Indexer(IndexerBase):
             LOG.warning(f"neon tx {tx.neon_tx} hasn't blocked accounts.")
             return False
 
-        holder_account = tx.storage_account
+        holder_account = tx.holder_account
         holder_info = self._solana.get_holder_account_info(SolPubKey.from_string(holder_account))
         if not holder_info:
             LOG.warning(f'holder {holder_account} for neon tx {tx.neon_tx.sig} is empty')
