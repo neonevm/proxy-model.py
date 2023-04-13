@@ -5,7 +5,7 @@ import random
 
 from typing import Tuple, Union
 
-import sha3
+from sha3 import keccak_256
 
 from eth_keys import keys as neon_keys
 
@@ -41,13 +41,13 @@ class NeonAddress:
 
     def __bytes__(self):
         return self.data
-    
+
     def __hash__(self):
         return hash(self.data)
-    
+
     def __eq__(self, other):
         return self.data == other.data
-    
+
     def __ne__(self, other):
         return self.data != other.data
 
@@ -61,7 +61,7 @@ def account_with_seed(base_address: SolPubKey, seed: bytes) -> SolPubKey:
 def perm_account_seed(prefix: bytes, resource_id: int) -> bytes:
     aid = resource_id.to_bytes(math.ceil(resource_id.bit_length() / 8), 'big')
     seed_base = prefix + aid
-    seed = sha3.keccak_256(seed_base).hexdigest()[:32]
+    seed = keccak_256(seed_base).hexdigest()[:32]
     return bytes(seed, 'utf8')
 
 

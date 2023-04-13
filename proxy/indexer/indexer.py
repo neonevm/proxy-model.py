@@ -261,11 +261,15 @@ class Indexer(IndexerBase):
 
         for sol_tx_meta in state.iter_sol_tx_meta():
             with logging_context(ident=sol_tx_meta.req_id):
-                neon_block = self._locate_neon_block(state, sol_tx_meta)
+                neon_block: NeonIndexedBlockInfo = self._locate_neon_block(state, sol_tx_meta)
                 if neon_block.is_completed:
                     continue
+                elif neon_block.checked_add_sol_sig(sol_tx_meta.sol_sig):
+                    LOG.warning(f'Trying to parse the already parsed tx: {sol_tx_meta.sol_sig}')
+                    continue
 
-                neon_block.add_sol_tx_cost(SolTxCostInfo.from_tx_meta(sol_tx_meta))
+                sol_tx_cost = SolTxCostInfo.from_tx_meta(sol_tx_meta)
+                neon_block.add_sol_tx_cost(sol_tx_cost)
                 is_error = SolTxErrorParser(sol_tx_meta.tx).check_if_error()
 
             for sol_neon_ix in state.iter_sol_neon_ix():

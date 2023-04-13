@@ -1,5 +1,4 @@
 import json
-import threading
 import subprocess
 import sys
 from typing import List
@@ -72,16 +71,29 @@ class NeonCli(CliBase):
             if data is None:
                 data = ""
 
-            result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    universal_newlines=True, timeout=self._config.neon_cli_timeout)
+            result = subprocess.run(
+                cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True, timeout=self._config.neon_cli_timeout
+            )
 
-            output = json.loads(result.stdout)
+            try:
+                output = json.loads(result.stdout)
+            except json.decoder.JSONDecodeError:
+                LOG.warning(f'STDERR: {result.stderr}')
+                LOG.warning(f'STDOUT: {result.stdout}')
+
+                error = result.stderr
+                if len(error) == 0:
+                    error = result.stdout
+                raise subprocess.CalledProcessError(result.returncode, cmd, stderr=error)
+
             for log in output.get('logs', []):
                 LOG.debug(log)
 
             if 'error' in output:
-                LOG.error(f'ERR: neon-cli error value f{output["error"]}')
-                raise subprocess.CalledProcessError(result.returncode, cmd, stderr=output["error"])
+                error = output.get('error')
+                LOG.error(f'ERR: neon-cli error value f{error}')
+                raise subprocess.CalledProcessError(result.returncode, cmd, stderr=error)
 
             return output.get('value', '')
 

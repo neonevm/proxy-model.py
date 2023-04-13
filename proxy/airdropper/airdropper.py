@@ -114,7 +114,7 @@ class AirdropperTxInfo(NeonIndexedTxInfo):
             total_gas_used += 1
 
         if ix.neon_tx_return is not None:
-            self.neon_tx_res.set_result(status=ix.neon_tx_return.status, gas_used=ix.neon_tx_return.gas_used)
+            self.neon_tx_res.set_res(status=ix.neon_tx_return.status, gas_used=ix.neon_tx_return.gas_used)
             self.neon_tx_res.set_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
             self.add_neon_event(NeonLogTxEvent(
                 event_type=NeonLogTxEvent.Type.Return,

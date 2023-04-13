@@ -22,7 +22,7 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
             return exc
 
         nonce_exc = cast(NonceTooLowError, exc)
-        if nonce_exc.has_sender():
+        if not nonce_exc.is_empty_sender():
             return exc
 
         # sender is absent on the level of SolTxSender

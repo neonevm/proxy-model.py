@@ -273,6 +273,7 @@ class SolIxMetaInfo:
     neon_tx_return: Optional[NeonLogTxReturn]
     neon_tx_event_list: List[NeonLogTxEvent]
     is_log_truncated: bool
+    is_already_finalized: bool
 
     @staticmethod
     def from_log_list(ix: Dict[str, Any], idx: int, inner_idx: Optional[int], log_list: SolIxLogState) -> SolIxMetaInfo:
@@ -313,7 +314,8 @@ class SolIxMetaInfo:
             neon_total_gas_used=neon_ix_total_gas_usage,
             neon_tx_return=log_info.neon_tx_return,
             neon_tx_event_list=log_info.neon_tx_event_list,
-            is_log_truncated=log_info.is_truncated
+            is_log_truncated=log_info.is_truncated,
+            is_already_finalized=log_info.is_already_finalized
         )
 
 
@@ -425,6 +427,7 @@ class SolNeonIxReceiptInfo(SolIxMetaInfo):
             neon_tx_return=ix_meta.neon_tx_return,
             neon_tx_event_list=ix_meta.neon_tx_event_list,
             is_log_truncated=ix_meta.is_log_truncated,
+            is_already_finalized=ix_meta.is_already_finalized,
             neon_step_cnt=0,
 
             _str='',
