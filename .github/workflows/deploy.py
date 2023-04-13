@@ -417,7 +417,10 @@ def run_uniswap_test():
     docker_client.pull(UNISWAP_V2_CORE_IMAGE)
     command = f'docker run --rm --network=container:proxy -e {faucet_name}_URL \
         --entrypoint ./deploy-test.sh {UNISWAP_V2_CORE_IMAGE} all 2>&1'
-    subprocess.run(command, shell=True)
+    out = subprocess.run(command, shell=True)
+    click.echo("return code: " + str(out.returncode))
+    if out.returncode != 0:
+        raise RuntimeError(f"Uniswap tests failed. Err: {out.stderr}")
 
 
 @cli.command(name="send_notification", help="Send notification to slack")
