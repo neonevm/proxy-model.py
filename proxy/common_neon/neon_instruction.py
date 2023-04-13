@@ -5,7 +5,6 @@ from enum import Enum
 from typing import Optional, List, cast
 
 from rlp import encode as rlp_encode
-from sha3 import keccak_256
 
 from solders.system_program import CreateAccountWithSeedParams, create_account_with_seed
 
@@ -73,7 +72,7 @@ class NeonIxBuilder:
         self._holder_msg = self._msg
 
         neon_tx_sig = self._neon_tx.tx_sig
-        treasury_pool_index = int().from_bytes(neon_tx_sig[:4], "little") % ElfParams().treasury_pool_max
+        treasury_pool_index = int().from_bytes(neon_tx_sig[:4], 'little') % ElfParams().treasury_pool_max
         self._treasury_pool_index_buf = treasury_pool_index.to_bytes(4, 'little')
         self._treasury_pool_address = SolPubKey.find_program_address(
             [b'treasury_pool', self._treasury_pool_index_buf],
@@ -92,7 +91,7 @@ class NeonIxBuilder:
 
     def make_create_account_with_seed_ix(self, account: SolPubKey, seed: bytes, lamports: int, space: int) -> SolTxIx:
         seed_str = str(seed, 'utf8')
-        LOG.debug(f"createAccountWithSeedIx {self._operator_account} account({account} seed({seed_str})")
+        LOG.debug(f'createAccountWithSeedIx {self._operator_account} account({account} seed({seed_str})')
 
         return create_account_with_seed(
             CreateAccountWithSeedParams(
@@ -107,7 +106,7 @@ class NeonIxBuilder:
         )
 
     def make_delete_holder_ix(self, holder_account: SolPubKey) -> SolTxIx:
-        LOG.debug(f"deleteHolderIx {self._operator_account} refunded account({holder_account})")
+        LOG.debug(f'deleteHolderIx {self._operator_account} refunded account({holder_account})')
         return SolTxIx(
             accounts=[
                 SolAccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
@@ -118,7 +117,7 @@ class NeonIxBuilder:
         )
 
     def create_holder_ix(self, holder: SolPubKey) -> SolTxIx:
-        LOG.debug(f"createHolderIx {self._operator_account} account({holder})")
+        LOG.debug(f'createHolderIx {self._operator_account} account({holder})')
         return SolTxIx(
             accounts=[
                 SolAccountMeta(pubkey=holder, is_signer=False, is_writable=True),
@@ -145,7 +144,7 @@ class NeonIxBuilder:
             ])
 
     def make_write_ix(self, offset: int, data: bytes) -> SolTxIx:
-        ix_data = b"".join([
+        ix_data = b''.join([
             EvmInstruction.HolderWrite.value,
             self._neon_tx.tx_sig,
             offset.to_bytes(8, byteorder='little'),
@@ -161,7 +160,7 @@ class NeonIxBuilder:
         )
 
     def make_tx_exec_from_data_ix(self) -> SolTxIx:
-        ix_data = b"".join([
+        ix_data = b''.join([
             EvmInstruction.TransactionExecuteFromData.value,
             self._treasury_pool_index_buf,
             self._msg
@@ -179,7 +178,7 @@ class NeonIxBuilder:
         )
 
     def make_tx_exec_from_account_ix(self) -> SolTxIx:
-        ix_data = b"".join([
+        ix_data = b''.join([
             EvmInstruction.TransactionExecuteFromAccount.value,
             self._treasury_pool_index_buf,
         ])
@@ -191,7 +190,7 @@ class NeonIxBuilder:
         append_key_list: List[SolAccountMeta] = self._neon_account_list if cancel_key_list is None else cancel_key_list
 
         if neon_tx_sig is None:
-            neon_tx_sig = keccak_256(self._msg).digest()
+            neon_tx_sig = self._neon_tx.tx_sig
 
         if holder_account is None:
             holder_account = self._holder
@@ -211,7 +210,7 @@ class NeonIxBuilder:
 
     def _make_tx_step_ix(self, ix_id_byte: bytes, neon_step_cnt: int, index: int,
                          data: Optional[bytes]) -> SolTxIx:
-        ix_data = b"".join([
+        ix_data = b''.join([
             ix_id_byte,
             self._treasury_pool_index_buf,
             neon_step_cnt.to_bytes(4, byteorder='little'),
@@ -219,7 +218,7 @@ class NeonIxBuilder:
         ])
 
         if data is not None:
-            ix_data = ix_data + data
+            ix_data += data
 
         return self._make_holder_ix(ix_data)
 
@@ -249,10 +248,10 @@ class NeonIxBuilder:
     def make_create_lookup_table_ix(self, table_account: SolPubKey,
                                     recent_block_slot: int,
                                     seed: int) -> SolTxIx:
-        data = b"".join([
-            int(0).to_bytes(4, byteorder="little"),
-            recent_block_slot.to_bytes(8, byteorder="little"),
-            seed.to_bytes(1, byteorder="little")
+        data = b''.join([
+            int(0).to_bytes(4, byteorder='little'),
+            recent_block_slot.to_bytes(8, byteorder='little'),
+            seed.to_bytes(1, byteorder='little')
         ])
         return SolTxIx(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
@@ -269,8 +268,8 @@ class NeonIxBuilder:
                                     account_list: List[SolPubKey]) -> SolTxIx:
         data = b"".join(
             [
-                int(2).to_bytes(4, byteorder="little"),
-                len(account_list).to_bytes(8, byteorder="little")
+                int(2).to_bytes(4, byteorder='little'),
+                len(account_list).to_bytes(8, byteorder='little')
             ] +
             [bytes(pubkey) for pubkey in account_list]
         )
@@ -287,7 +286,7 @@ class NeonIxBuilder:
         )
 
     def make_deactivate_lookup_table_ix(self, table_account: SolPubKey) -> SolTxIx:
-        data = int(3).to_bytes(4, byteorder="little")
+        data = int(3).to_bytes(4, byteorder='little')
         return SolTxIx(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,
@@ -298,7 +297,7 @@ class NeonIxBuilder:
         )
 
     def make_close_lookup_table_ix(self, table_account: SolPubKey) -> SolTxIx:
-        data = int(4).to_bytes(4, byteorder="little")
+        data = int(4).to_bytes(4, byteorder='little')
         return SolTxIx(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,
@@ -314,7 +313,7 @@ class NeonIxBuilder:
         return SolTxIx(
             program_id=COMPUTE_BUDGET_ID,
             accounts=[],
-            data=bytes.fromhex("01") + heap_frame_size.to_bytes(4, "little")
+            data=b'\x01' + heap_frame_size.to_bytes(4, 'little')
         )
 
     def make_compute_budget_cu_ix(self) -> SolTxIx:
@@ -322,5 +321,5 @@ class NeonIxBuilder:
         return SolTxIx(
             program_id=COMPUTE_BUDGET_ID,
             accounts=[],
-            data=bytes.fromhex("02") + compute_unit_cnt.to_bytes(4, "little")
+            data=b'\x02' + compute_unit_cnt.to_bytes(4, 'little')
         )

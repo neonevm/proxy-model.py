@@ -5,8 +5,6 @@ import enum
 from dataclasses import dataclass
 from typing import List, Iterator, Optional, Tuple
 
-from ..common_neon.environment_data import EVM_LOADER_ID
-
 
 LOG = logging.getLogger(__name__)
 
@@ -95,10 +93,13 @@ class NeonLogInfo:
     neon_tx_return: Optional[NeonLogTxReturn]
     neon_tx_event_list: List[NeonLogTxEvent]
     is_truncated: bool
+    is_already_finalized: bool
 
 
 class _NeonLogDecoder:
     _re_data = re.compile(r'^Program data: (.+)$')
+    _log_truncated_msg = 'Log truncated'
+    _is_already_finalized_msg = 'Program log: Storage Account is finalized'
 
     def _decode_mnemonic(self, line: str) -> Tuple[str, List[str]]:
         match = self._re_data.match(line)
@@ -274,10 +275,14 @@ class _NeonLogDecoder:
         neon_tx_return: Optional[NeonLogTxReturn] = None
         neon_tx_event_list: List[NeonLogTxEvent] = list()
         is_truncated = False
+        is_already_finalized = False
 
         for line in log_iter:
-            if line == 'Log truncated':
+            if line == self._log_truncated_msg:
                 is_truncated = True
+                continue
+            elif line == self._is_already_finalized_msg:
+                is_already_finalized = True
                 continue
 
             name, data_list = self._decode_mnemonic(line)
@@ -317,7 +322,8 @@ class _NeonLogDecoder:
             neon_tx_ix=neon_tx_ix,
             neon_tx_return=neon_tx_return,
             neon_tx_event_list=neon_tx_event_list,
-            is_truncated=is_truncated
+            is_truncated=is_truncated,
+            is_already_finalized=is_already_finalized
         )
 
 

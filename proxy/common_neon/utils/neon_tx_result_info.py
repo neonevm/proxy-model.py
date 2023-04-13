@@ -27,8 +27,8 @@ class NeonTxResultInfo:
 
     log_list: List[Dict[str, Any]] = None
 
-    _canceled_status = 0
-    _lost_status = 0
+    _is_completed = False
+    _is_canceled = False
     _str = ''
 
     def __post_init__(self):
@@ -68,16 +68,19 @@ class NeonTxResultInfo:
         self.log_list.append(rec)
         object.__setattr__(self, '_str', '')
 
-    def set_result(self, status: int, gas_used: int) -> None:
+    def set_res(self, status: int, gas_used: int) -> None:
         object.__setattr__(self, 'status', hex(status))
         object.__setattr__(self, 'gas_used', hex(gas_used))
+        object.__setattr__(self, '_is_completed', True)
         object.__setattr__(self, '_str', '')
 
-    def set_canceled_result(self, gas_used: int) -> None:
-        self.set_result(status=self._canceled_status, gas_used=gas_used)
+    def set_canceled_res(self, gas_used: int) -> None:
+        self.set_res(status=0, gas_used=gas_used)
+        object.__setattr__(self, '_is_canceled', True)
 
-    def set_lost_result(self, gas_used: int) -> None:
-        self.set_result(status=self._lost_status, gas_used=gas_used)
+    def set_lost_res(self, gas_used: int) -> None:
+        self.set_res(status=0, gas_used=gas_used)
+        object.__setattr__(self, '_is_completed', False)
 
     def set_sol_sig_info(self, sol_sig: str, sol_ix_idx: int, sol_ix_inner_idx: Optional[int]) -> None:
         object.__setattr__(self, 'sol_sig', sol_sig)
@@ -111,3 +114,9 @@ class NeonTxResultInfo:
 
     def is_valid(self) -> bool:
         return self.gas_used != ''
+
+    def is_completed(self) -> bool:
+        return self._is_completed
+
+    def is_canceled(self) -> bool:
+        return self._is_canceled

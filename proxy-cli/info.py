@@ -4,19 +4,13 @@ from decimal import Decimal
 import sys
 import json
 import base58
-from typing import Any, List
-
-import logging
+from typing import List, Dict, Any
 
 from proxy.common_neon.address import NeonAddress, account_with_seed, perm_account_seed
 from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.operator_secret_mng import OpSecretMng
 from proxy.common_neon.solana_tx import SolAccount, SolPubKey
 from proxy.common_neon.config import Config
-
-
-neon_logger = logging.getLogger("neon")
-neon_logger.setLevel(logging.CRITICAL)
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -31,8 +25,6 @@ class InfoHandler:
         self._config = Config()
         self._solana = SolInteractor(self._config, self._config.solana_url)
         self.command = 'info'
-        self._storage = None
-        self.print_stdout = True
 
     def _get_solana_accounts(self) -> List[SolAccount]:
         secret_list = OpSecretMng(self._config).read_secret_list()
@@ -42,140 +34,108 @@ class InfoHandler:
     def init_args_parser(parsers) -> InfoHandler:
         h = InfoHandler()
         h.root_parser = parsers.add_parser(h.command)
-        h.subparsers = h.root_parser.add_subparsers(title='command', dest='subcommand', description='valid commands')
-        h.holder_parser = h.subparsers.add_parser('holder-accounts')
-        h.solana_pk_parser = h.subparsers.add_parser('solana-private-key')
-        h.neon_pk_parser = h.subparsers.add_parser('neon-private-key')
-        h.neon_parser = h.subparsers.add_parser('neon-address')
-        h.solana_parser = h.subparsers.add_parser('solana-accounts')
+        h.sub_parser = h.root_parser.add_subparsers(title='command', dest='subcommand', description='valid commands')
+        h.holder_parser = h.sub_parser.add_parser('holder-accounts')
+        h.solana_pk_parser = h.sub_parser.add_parser('solana-private-keys')
+        h.neon_pk_parser = h.sub_parser.add_parser('neon-private-keys')
+        h.neon_parser = h.sub_parser.add_parser('neon-accounts')
+        h.solana_parser = h.sub_parser.add_parser('solana-accounts')
+        h.full_parser = h.sub_parser.add_parser('full')
         return h
 
-    def execute(self, args):
+    def execute(self, args) -> None:
         if args.subcommand == 'holder-accounts':
             self._holder_accounts_info(args)
-        elif args.subcommand == 'solana-private-key':
+        elif args.subcommand == 'solana-private-keys':
             self._solana_private_key_info(args)
-        elif args.subcommand == 'neon-private-key':
+        elif args.subcommand == 'neon-private-keys':
             self._neon_private_key_info(args)
-        elif args.subcommand == 'neon-address':
+        elif args.subcommand == 'neon-accounts':
             self._neon_address_info(args)
         elif args.subcommand == 'solana-accounts':
             self._solana_accounts_info(args)
-        elif args.subcommand is None:
-            self.print_stdout = False
+        elif args.subcommand == 'full' or args.subcommand is None:
             ret_js = self._all_info(args)
             print(json.dumps(ret_js, cls=DecimalEncoder))
         else:
             print(f'Unknown command {args.subcommand} for account', file=sys.stderr)
             return
 
-    def _holder_accounts_info(self, _):
-        ret_js = {
-            'holder-accounts': []
-        }
-
+    def _holder_accounts_info(self, _) -> None:
         stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
         for sol_account in self._get_solana_accounts():
             for rid in range(self._config.perm_account_id, stop_perm_account_id):
                 holder_address = self._generate_holder_address(sol_account.pubkey(), rid)
-                ret_js['holder-accounts'].append(str(holder_address))
-                self._print(str(holder_address))
 
-        return ret_js
+                print(f'{ str(holder_address) }')
 
-    def _solana_private_key_info(self, _):
-        ret_js = {
-            'solana-accounts': []
-        }
-
+    def _solana_private_key_info(self, _) -> None:
         for sol_account in self._get_solana_accounts():
-            acc_info_js = {
-                'address': str(sol_account.pubkey()),
-                'private': base58.b58encode(sol_account.secret()).decode('utf-8')
-            }
+            address = str(sol_account.pubkey())
+            private = base58.b58encode(sol_account.secret()).decode('utf-8')
 
-            self._print(f"{acc_info_js['address']}    {acc_info_js['private']}")
+            print(f'{ address }\t { private }')
 
-            ret_js['solana-accounts'].append(acc_info_js)
-
-        return ret_js
-
-    def _neon_private_key_info(self, _):
-        ret_js = {
-            'neon-accounts': []
-        }
-
+    def _neon_private_key_info(self, _) -> None:
         neon_accounts = [
             NeonAddress.from_private_key(operator.secret())
             for operator in self._get_solana_accounts()
         ]
 
         for neon_account in neon_accounts:
-            acc_info_js = {
-                'address': str(neon_account),
-                'private': str(neon_account.private)
-            }
+            address = str(neon_account)
+            private = str(neon_account.private)
 
-            self._print(f"{acc_info_js['address']}    {acc_info_js['private']}")
+            print(f'{ address }\t { private }')
 
-            ret_js['neon-accounts'].append(acc_info_js)
-
-        return ret_js
-
-    def _neon_address_info(self, _):
-        ret_js = {
-            'neon-accounts': [],
-            'total_balance': 0
-        }
-
+    def _neon_address_info(self, _) -> None:
+        total_balance = Decimal(0)
         operator_accounts = self._get_solana_accounts()
         neon_accounts = [NeonAddress.from_private_key(operator.secret()) for operator in operator_accounts]
 
         for neon_account in neon_accounts:
-            acc_info_js = {
-                'address': str(neon_account),
-                'balance': self._get_neon_balance(neon_account)
-            }
+            address = str(neon_account)
+            balance = self._get_neon_balance(neon_account)
+            total_balance += balance
 
-            self._print(f"{acc_info_js['address']}    {acc_info_js['balance']:,.18f}")
+            print(f'{ address }\t { balance:,.18f}')
 
-            ret_js['total_balance'] += acc_info_js['balance']
-            ret_js['neon-accounts'].append(acc_info_js)
+        print(f'total_balance\t { total_balance:,.18f}')
 
-        self._print(f"total_balance    {ret_js['total_balance']:,.18f}")
-        return ret_js
-
-    def _solana_accounts_info(self, _):
-        ret_js = {
-            'accounts': [],
-            'total_balance': 0,
-            'resource_balance': 0
-        }
+    def _solana_accounts_info(self, _) -> None:
+        total_balance = Decimal(0)
+        resource_balance = Decimal(0)
 
         operator_accounts = self._get_solana_accounts()
 
         for sol_account in operator_accounts:
             acc_info_js = self._get_solana_account_info(sol_account)
-            self._print(f"{acc_info_js['address']}    {acc_info_js['balance']:,.9f}")
 
-            ret_js['total_balance'] += acc_info_js['balance']
-            self._print(f"holder:")
-            for holder_account in acc_info_js['holder']:
-                self._print(f"    {holder_account['address']}    {holder_account['balance']:,.9f}")
-                ret_js['resource_balance'] += holder_account['balance']
+            address = acc_info_js['address']
+            balance = acc_info_js['balance']
+            holder_account_list = acc_info_js['holder']
 
-            ret_js['accounts'].append(acc_info_js)
+            total_balance += balance
 
-        self._print(f"total_balance       {ret_js['total_balance']:,.9f}")
-        self._print(f"resource_balance    {ret_js['resource_balance']:,.9f}")
-        return ret_js
+            print(f'{ address }\t { balance:,.9f}')
+            print('holder:')
 
-    def _all_info(self, _):
+            for holder_account in holder_account_list:
+                address = holder_account['address']
+                balance = holder_account['balance']
+                resource_balance += balance
+
+                print(f'\t { address }\t { balance:,.9f}')
+
+        print(f'total_balance\t { total_balance:,.9f}')
+        print(f'resource_balance\t { resource_balance:,.9f}')
+
+    def _all_info(self, _) -> Dict[str, Any]:
         ret_js = {
             'accounts': [],
-            'total_balance': 0,
-            'resource_balance': 0,
-            'total_neon_balance': 0
+            'total_balance': Decimal(0),
+            'resource_balance': Decimal(0),
+            'total_neon_balance': Decimal(0)
         }
 
         operator_accounts = self._get_solana_accounts()
@@ -208,11 +168,11 @@ class InfoHandler:
         seed = perm_account_seed(prefix, rid)
         return account_with_seed(base_address, seed)
 
-    def _get_neon_balance(self, neon_address: NeonAddress):
+    def _get_neon_balance(self, neon_address: NeonAddress) -> Decimal:
         neon_layout = self._solana.get_neon_account_info(neon_address)
         return Decimal(neon_layout.balance) / 1_000_000_000 / 1_000_000_000 if neon_layout else 0
 
-    def _get_solana_account_info(self, sol_account: SolAccount):
+    def _get_solana_account_info(self, sol_account: SolAccount) -> Dict[str, Any]:
         resource_tags = {
             0: 'EMPTY',
             11: 'NEON_ACCOUNT',
@@ -241,7 +201,3 @@ class InfoHandler:
                 acc_info_js['holder'].append(holder_account)
 
         return acc_info_js
-
-    def _print(self, msg: Any):
-        if self.print_stdout:
-            print(f"{msg}")

@@ -6,7 +6,7 @@ import logging
 from typing import Optional, Union, Dict, Any, List, cast
 
 import eth_utils
-import sha3
+from sha3 import keccak_256
 
 from eth_account import Account as NeonAccount
 
@@ -839,7 +839,7 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message='data is not hex string')
 
-        return sha3.keccak_256(data).hexdigest()
+        return keccak_256(data).hexdigest()
 
     @staticmethod
     def eth_mining() -> bool:

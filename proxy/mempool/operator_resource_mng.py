@@ -134,8 +134,7 @@ class OpResInit:
         elif holder_info.owner != self._config.evm_loader_id:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
         elif holder_info.tag == ACTIVE_HOLDER_TAG:
-            LOG.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
-            self._unlock_storage_account(resource)
+            self._complete_neon_tx(resource)
         elif holder_info.tag not in {FINALIZED_HOLDER_TAG, HOLDER_TAG}:
             LOG.debug(f"Wrong tag {holder_info.tag} of {holder_address} for resource {resource}")
             self._recreate_holder(builder, resource, size)
@@ -147,7 +146,7 @@ class OpResInit:
         self._execute_stage(NeonDeleteHolderAccountStage(builder, resource.holder_seed), resource)
         self._execute_stage(NeonCreateHolderAccountStage(builder, resource.holder_seed, size, balance), resource)
 
-    def _unlock_storage_account(self, resource: OpResInfo) -> None:
+    def _complete_neon_tx(self, resource: OpResInfo) -> None:
         holder_info = self._solana.get_holder_account_info(resource.holder)
         cancel_tx_executor = CancelTxExecutor(self._config, self._solana, resource.signer)
         cancel_tx_executor.add_blocked_holder_account(holder_info)

@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Set
 from ..common_neon.config import Config
 from ..common_neon.errors import BlockHashNotFound, NonceTooLowError
 from ..common_neon.errors import CUBudgetExceededError, InvalidIxDataError, RequireResizeIterError
-from ..common_neon.errors import CommitLevelError, NodeBehindError, NoMoreRetriesError, BlockedAccountsError
+from ..common_neon.errors import CommitLevelError, NodeBehindError, NoMoreRetriesError, BlockedAccountError
 from ..common_neon.errors import RescheduleError, WrongStrategyError
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolBlockHash, SolTxReceipt, SolAccount, SolCommit
@@ -424,7 +424,7 @@ class SolTxListSender:
         elif tx_error_parser.check_if_accounts_blocked():
             if tx_error_parser.check_if_preprocessed_error():
                 return self._DecodeResult(status.BlockedAccountPrepError, None)
-            return self._DecodeResult(status.BlockedAccountError, BlockedAccountsError())
+            return self._DecodeResult(status.BlockedAccountError, BlockedAccountError())
         elif tx_error_parser.check_if_account_already_exists():
             # no exception: account exists - the goal is reached
             return self._DecodeResult(status.AccountAlreadyExistsError, None)

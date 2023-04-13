@@ -10,7 +10,6 @@ from ..common_neon.utils import NeonTxResultInfo
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
 from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
-from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 
 
 LOG = logging.getLogger(__name__)
@@ -88,6 +87,9 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
         builder = self._ctx.ix_builder
         return self._build_cu_tx(builder.make_tx_step_from_data_ix(self._evm_step_cnt, uniq_idx))
 
+    def _build_cancel_tx(self) -> SolLegacyTx:
+        return self._build_cu_tx(name='CancelWithHash', ix=self._ctx.ix_builder.make_cancel_ix())
+
     def _decode_neon_tx_result(self) -> NeonTxResultInfo:
         neon_tx_res = NeonTxResultInfo()
         tx_send_state_list = self._sol_tx_list_sender.tx_state_list
@@ -112,18 +114,18 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
             if ret is None:
                 continue
 
-            neon_tx_res.set_result(status=ret.status, gas_used=ret.gas_used)
+            neon_tx_res.set_res(status=ret.status, gas_used=ret.gas_used)
             LOG.debug(f'Set Neon tx result: {neon_tx_res}')
             return neon_tx_res
 
         if has_already_finalized:
-            neon_tx_res.set_lost_result(neon_total_gas_used)
+            neon_tx_res.set_lost_res(neon_total_gas_used)
             LOG.debug(f'Set lost Neon tx result: {neon_tx_res}')
 
         return neon_tx_res
 
     def _build_cancel_tx_list(self) -> Generator[List[SolTx], None, None]:
-        yield [self._build_cu_tx(name='CancelWithHash', ix=self._ctx.ix_builder.make_cancel_ix())]
+        yield [self._build_cancel_tx()]
 
 
 @alt_strategy

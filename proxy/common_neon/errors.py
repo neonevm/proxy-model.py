@@ -37,7 +37,17 @@ class BadResourceError(RescheduleError):
     pass
 
 
-class BlockedAccountsError(RescheduleError):
+class NotCompletedNeonTxError(RescheduleError):
+    def __init__(self, holder_account: str) -> None:
+        super().__init__(holder_account)
+
+        self._holder_account = holder_account
+
+    def __str__(self) -> str:
+        return f'Holder account {self._holder_account} contains not-completed Neon tx'
+
+
+class BlockedAccountError(RescheduleError):
     pass
 
     def __str__(self) -> str:
@@ -90,8 +100,8 @@ class NonceTooLowError(BaseException):
     def init_no_sender(tx_nonce: int, state_tx_cnt: int):
         return NonceTooLowError(NonceTooLowError._empty_sender, tx_nonce, state_tx_cnt)
 
-    def has_sender(self) -> bool:
-        return self._sender != self._empty_sender
+    def is_empty_sender(self) -> bool:
+        return self._sender == self._empty_sender
 
     def init_sender(self, sender: str) -> NonceTooLowError:
         return NonceTooLowError(sender, self._tx_nonce, self._state_tx_cnt)

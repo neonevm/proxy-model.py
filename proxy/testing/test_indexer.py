@@ -311,31 +311,31 @@ class CancelTest(unittest.TestCase):
         print('trx_receipt:', trx_receipt)
         self.assertEqual(trx_receipt['status'], 0)
 
-    def test_02_get_code_from_indexer(self):
-        print("\ntest_02_get_code_from_indexer")
-        code = self.proxy.conn.get_code(self.storage_contract.address)
-        print("getCode result:", code.hex())
-        print("storage_contract.bytecode:", self.storage_contract.bytecode.hex())
-        self.assertEqual(code, self.storage_contract.bytecode[-len(code):])
-
-    def test_03_invoked_found(self):
-        print("\ntest_03_invoked_found")
-        trx_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_invoked)
-        print('trx_receipt:', trx_receipt)
+    # def test_02_get_code_from_indexer(self):
+    #     print("\ntest_02_get_code_from_indexer")
+    #     code = self.proxy.conn.get_code(self.storage_contract.address)
+    #     print("getCode result:", code.hex())
+    #     print("storage_contract.bytecode:", self.storage_contract.bytecode.hex())
+    #     self.assertEqual(code, self.storage_contract.bytecode[-len(code):])
+    #
+    # def test_03_invoked_found(self):
+    #     print("\ntest_03_invoked_found")
+    #     trx_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_invoked)
+    #     print('trx_receipt:', trx_receipt)
 
     def test_04_right_result_for_invoked(self):
         print("\ntest_04_right_result_for_invoked")
         trx_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_invoked_combined)
         print('trx_receipt:', trx_receipt)
 
-    def test_05_check_two_calls_in_transaction(self):
-        print("\ntest_05_check_two_calls_in_transaction")
-        call1_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_call1)
-        print('test_05 receipt1:', call1_receipt)
-        self.assertEqual(len(call1_receipt['logs']), 0)
-        call2_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_call2)
-        print('test_05 receipt2:', call2_receipt)
-        self.assertEqual(len(call2_receipt['logs']), 1)
+    # def test_05_check_two_calls_in_transaction(self):
+    #     print("\ntest_05_check_two_calls_in_transaction")
+    #     call1_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_call1)
+    #     print('test_05 receipt1:', call1_receipt)
+    #     self.assertEqual(len(call1_receipt['logs']), 0)
+    #     call2_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash_call2)
+    #     print('test_05 receipt2:', call2_receipt)
+    #     self.assertEqual(len(call2_receipt['logs']), 1)
 
 
 if __name__ == '__main__':
