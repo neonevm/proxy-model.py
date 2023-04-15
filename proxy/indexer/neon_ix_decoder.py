@@ -141,6 +141,9 @@ class BaseTxIxDecoder(DummyIxDecoder):
         return neon_tx_sig
 
     def _decode_neon_tx_from_holder_account(self, tx: NeonIndexedTxInfo) -> bool:
+        if tx.neon_tx.is_valid():
+            return False
+
         ix = self.state.sol_neon_ix
         block = self.state.neon_block
 

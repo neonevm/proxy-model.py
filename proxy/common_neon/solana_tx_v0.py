@@ -16,8 +16,8 @@ from .solana_alt_list_filter import ALTListFilter
 _SoldersMsgALT = solders.message.MessageAddressTableLookup
 _SoldersCompiledIx = solders.instruction.CompiledInstruction
 _SoldersMsgHdr = solders.message.MessageHeader
-_SoldersMsgV0 = solders.message.MessageV0
-_SoldersTxV0 = solders.transaction.VersionedTransaction
+_SoldersV0Msg = solders.message.MessageV0
+_SoldersV0Tx = solders.transaction.VersionedTransaction
 
 
 class SolV0Tx(SolTx):
@@ -27,7 +27,7 @@ class SolV0Tx(SolTx):
                  ix_list: Optional[Sequence[SolTxIx]],
                  alt_info_list: Sequence[ALTInfo]) -> None:
         super().__init__(name=name, ix_list=ix_list)
-        self._solders_v0_tx = _SoldersTxV0.default()
+        self._solders_v0_tx = _SoldersV0Tx.default()
         self._alt_info_list = list(alt_info_list)
         assert len(self._alt_info_list) > 0
 
@@ -147,7 +147,7 @@ class SolV0Tx(SolTx):
             num_readonly_unsigned_accounts=tx_ro_unsigned_account_key_cnt
         )
 
-        msg = _SoldersMsgV0(
+        msg = _SoldersV0Msg(
             header=hdr,
             account_keys=[key for key in tx_key_list],
             recent_blockhash=legacy_msg.recent_blockhash,
@@ -155,7 +155,7 @@ class SolV0Tx(SolTx):
             address_table_lookups=alt_msg_list
         )
 
-        self._solders_v0_tx = _SoldersTxV0(msg, [signer])
+        self._solders_v0_tx = _SoldersV0Tx(msg, [signer])
 
     def _clone(self) -> SolV0Tx:
         return SolV0Tx(self._name, self._decode_ix_list(), self._alt_info_list)

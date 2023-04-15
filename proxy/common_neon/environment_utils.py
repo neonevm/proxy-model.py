@@ -79,8 +79,8 @@ class NeonCli(CliBase):
             try:
                 output = json.loads(result.stdout)
             except json.decoder.JSONDecodeError:
-                LOG.warning(f'STDERR: {result.stderr}')
-                LOG.warning(f'STDOUT: {result.stdout}')
+                LOG.error(f'JSON, STDERR: {result.stderr}')
+                LOG.error(f'JSON, STDOUT: {result.stdout}')
 
                 error = result.stderr
                 if len(error) == 0:
