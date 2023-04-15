@@ -68,7 +68,10 @@ class SolCommit:
 
 class SolTxSizeError(AttributeError):
     def __init__(self):
-        super().__init__('Transaction size is exceeded')
+        super().__init__()
+
+    def __str__(self) -> str:
+        return 'Transaction size is exceeded'
 
 
 class SolTx(abc.ABC):
@@ -143,6 +146,16 @@ class SolTx(abc.ABC):
             self.fee_payer = signer.pubkey()
         self._sign(signer)
         self._is_signed = True
+
+    def has_valid_size(self, signer: SolAccount) -> bool:
+        tx = self._clone()
+        tx.recent_block_hash = SolBlockHash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
+        tx.sign(signer)
+        try:
+            tx.serialize()  # <- there will be exception
+            return True
+        except SolTxSizeError:
+            return False
 
     def clone(self) -> SolTx:
         tx = self._clone()

@@ -5,7 +5,7 @@ from typing import Optional, List, Generator, cast
 
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo, SolNeonIxReceiptInfo
-from ..common_neon.solana_tx import SolBlockHash, SolTx, SolTxIx
+from ..common_neon.solana_tx import SolTx, SolTxIx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender, SolTxSendState
 from ..common_neon.utils import NeonTxResultInfo
@@ -119,13 +119,11 @@ class BaseNeonTxStrategy(abc.ABC):
         yield from tx_list_list
 
     def _validate_tx_size(self) -> bool:
-        tx = self._build_tx()
+        if self._build_tx().has_valid_size(self._ctx.signer):
+            return True
 
-        # Predefined block_hash is used only to check transaction size, the transaction won't be sent to network
-        tx.recent_block_hash = SolBlockHash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
-        tx.sign(self._ctx.signer)
-        tx.serialize()  # <- there will be exception
-        return True
+        _validation_error_msg = 'Transaction size is exceeded'
+        return False
 
     def _validate_tx_has_chainid(self) -> bool:
         if self._ctx.neon_tx.has_chain_id():

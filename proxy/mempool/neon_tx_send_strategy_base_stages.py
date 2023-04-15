@@ -1,7 +1,7 @@
 import copy
 import logging
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
 from ..common_neon.elf_params import ElfParams
@@ -47,7 +47,7 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
             return True
 
         elif holder_info.tag == FINALIZED_HOLDER_TAG:
-            return False
+            return holder_info.neon_tx_sig == self._ctx.neon_tx.hex_tx_sig
 
         elif holder_info.tag == HOLDER_TAG:
             holder_msg_len = len(builder.holder_msg)
@@ -88,48 +88,69 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
     def __init__(self, ctx: NeonTxSendCtx):
         super().__init__(ctx)
         self._actual_alt_info: Optional[ALTInfo] = None
-        self._alt_info_list: List[ALTInfo] = list()
+        self._alt_info_dict: Dict[str, ALTInfo] = dict()
         self._alt_builder = ALTTxBuilder(self._ctx.solana, self._ctx.ix_builder, self._ctx.signer)
         self._alt_tx_set = ALTTxSet()
+
+    @property
+    def _alt_info_list(self) -> List[ALTInfo]:
+        return list(self._alt_info_dict.values())
 
     def complete_init(self) -> None:
         self._ctx.set_holder_usage(True)  # using of the operator key for ALTs
 
     def init_alt_info(self, legacy_tx: SolLegacyTx) -> bool:
+        self._alt_info_dict.clear()
         actual_alt_info = self._alt_builder.build_alt_info(legacy_tx)
 
+        alt_info_list = self._filter_alt_info_list(actual_alt_info)
+        if (len(self._alt_info_dict) > 0) and self.build_tx(legacy_tx).has_valid_size(self._ctx.signer):
+            return True
+
+        actual_alt_info = self._extend_alt_info(actual_alt_info, alt_info_list)
+
+        self._alt_tx_set = self._alt_builder.build_alt_tx_set(actual_alt_info)
+        self._actual_alt_info = actual_alt_info
+        self._add_alt_info(actual_alt_info)
+        return True
+
+    def _filter_alt_info_list(self, actual_alt_info: ALTInfo) -> List[ALTInfo]:
         alt_info_list: List[ALTInfo] = list()
         for alt_address in self._ctx.alt_address_list:
             alt_info = ALTInfo(alt_address)
             try:
                 self._alt_builder.update_alt_info_list([alt_info])
                 alt_info_list.append(alt_info)
+
+                if actual_alt_info.remove_account_key_list(alt_info.account_key_list):
+                    self._add_alt_info(alt_info)
+
             except Exception as e:
                 LOG.debug(f'Skip ALT {alt_address.table_account}: {str(e)}')
 
+        return alt_info_list
+
+    def _add_alt_info(self, alt_info: ALTInfo) -> None:
+        table_account = alt_info.alt_address.table_account
+        if table_account in self._alt_info_dict:
+            return
+
+        self._alt_info_dict[table_account] = alt_info
+        if alt_info.is_exist():
+            LOG.debug(f'Use existing ALT: {alt_info.alt_address.table_account}')
+        else:
+            LOG.debug(f'Use new ALT: {alt_info.alt_address.table_account}')
+
+    @staticmethod
+    def _extend_alt_info(actual_alt_info: ALTInfo, alt_info_list: List[ALTInfo]) -> ALTInfo:
         for alt_info in alt_info_list:
-            if actual_alt_info.remove_account_key_list(alt_info.account_key_list):
-                self._alt_info_list.append(alt_info)
+            if actual_alt_info.len_account_key_list + alt_info.len_account_key_list >= ALTLimit.max_alt_account_cnt:
+                continue
 
-        if actual_alt_info.len_account_key_list < ALTLimit.max_tx_account_cnt:
-            return True
+            alt_info.add_account_key_list(actual_alt_info.account_key_list)
+            return alt_info
 
-        use_existing_alt_info = False
-        for alt_info in alt_info_list:
-            if actual_alt_info.len_account_key_list + alt_info.len_account_key_list < ALTLimit.max_alt_account_cnt:
-                alt_info.add_account_key_list(actual_alt_info.account_key_list)
-                actual_alt_info = alt_info
-                LOG.debug(f'Use existing ALT: {str(alt_info.table_account)}')
-                use_existing_alt_info = True
-                break
-
-        self._alt_tx_set = self._alt_builder.build_alt_tx_set(actual_alt_info)
-        self._actual_alt_info = actual_alt_info
-        if not use_existing_alt_info:
-            LOG.debug(f'Use new ALT: {str(actual_alt_info.table_account)}')
-            self._alt_info_list.append(actual_alt_info)
-
-        return True
+        return actual_alt_info
 
     def get_tx_name_list(self) -> List[str]:
         return self._alt_builder.get_tx_name_list()
@@ -150,7 +171,7 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
         self._actual_alt_info = None
 
     def build_tx(self, legacy_tx: SolLegacyTx) -> SolV0Tx:
-        return SolV0Tx(name=legacy_tx.name, ix_list=None, alt_info_list=self._alt_info_list).add(legacy_tx)
+        return SolV0Tx(name=legacy_tx.name, ix_list=legacy_tx.ix_list, alt_info_list=self._alt_info_list)
 
 
 def alt_strategy(cls):

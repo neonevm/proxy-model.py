@@ -115,8 +115,6 @@ def emulator(config: Config, contract: str, sender: str, data: Optional[str], va
         raise NoMoreRetriesError()
 
     except subprocess.CalledProcessError as err:
-        msg = str(err.stderr)
-        LOG.error(f'ERR: neon-cli error {msg}')
-        msg = convert_evm_error(msg)
+        msg = convert_evm_error(str(err.stderr))
         raise EthereumError(message=msg)
 
