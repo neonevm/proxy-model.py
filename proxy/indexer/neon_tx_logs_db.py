@@ -1,4 +1,4 @@
-from typing import List, Any, Optional, Dict, Iterator, Set
+from typing import List, Any, Optional, Dict, Iterator
 
 from ..indexer.base_db import BaseDB
 from ..indexer.indexed_objects import NeonIndexedTxInfo
@@ -61,9 +61,8 @@ class NeonTxLogsDB(BaseDB):
                     else:
                         key = self._column2field_dict.get(column, None)
                         value = log.get(key, None)
-                        if value is not None:
-                            if key in self._hex_field_dict:
-                                value = int(value[2:], 16)
+                        if (value is not None) and (key in self._hex_field_dict):
+                            value = int(value[2:], 16)
                         value_list.append(value)
                 value_list_list.append(value_list)
 
