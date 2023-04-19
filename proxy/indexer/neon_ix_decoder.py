@@ -345,10 +345,11 @@ class BaseTxStepIxDecoder(BaseTxIxDecoder):
         if tx is None:
             return
 
+        cnt = tx.len_neon_event_list
         for event in ix.neon_tx_event_list:
             event = dataclasses.replace(
                 event,
-                total_gas_used=tx.len_neon_event_list,  # insert event to the beginning of the list
+                total_gas_used=9199999999999999999 + cnt,  # insert event to the end of the list
                 is_reverted=True,
                 is_hidden=True,
                 sol_sig=ix.sol_sig,
@@ -356,6 +357,7 @@ class BaseTxStepIxDecoder(BaseTxIxDecoder):
                 inner_idx=ix.inner_idx
             )
             tx.add_neon_event(event)
+            cnt += 1
 
         if ix.is_already_finalized and (not tx.neon_tx_res.is_valid()):
             tx.neon_tx_res.set_lost_res(1)  # unknown gas usage

@@ -19,6 +19,7 @@ class Config:
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
         self._mempool_executor_limit_cnt = self._env_int('MEMPOOL_EXECUTOR_LIMIT_CNT', 4, 1024)
         self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 15 * 60)
+        self._accept_reverted_tx_into_mempool = self._env_bool('ACCEPT_REVERTED_TX_INTO_MEMPOOL', False)
         self._holder_size = self._env_int("HOLDER_SIZE", 1024, 131072)  # 128*1024
         self._min_op_balance_to_warn = self._env_int("MIN_OPERATOR_BALANCE_TO_WARN", 9000000000, 9000000000)
         self._min_op_balance_to_err = self._env_int("MIN_OPERATOR_BALANCE_TO_ERR", 1000000000, 1000000000)
@@ -109,6 +110,10 @@ class Config:
     @property
     def mempool_cache_life_sec(self) -> int:
         return self._mempool_cache_life_sec
+
+    @property
+    def accept_reverted_tx_into_mempool(self) -> bool:
+        return self._accept_reverted_tx_into_mempool
 
     @property
     def pyth_mapping_account(self) -> Optional[SolPubKey]:
@@ -307,6 +312,7 @@ class Config:
             'MEMPOOL_CAPACITY': self.mempool_capacity,
             'MEMPOOL_EXECUTOR_LIMIT_CNT': self.mempool_executor_limit_cnt,
             'MEMPOOL_CACHE_LIFE_SEC': self.mempool_cache_life_sec,
+            'ACCEPT_REVERTED_TX_INTO_MEMPOOL': self.accept_reverted_tx_into_mempool,
             'HOLDER_SIZE': self.holder_size,
             'MIN_OPERATOR_BALANCE_TO_WARN': self.min_operator_balance_to_warn,
             'MIN_OPERATOR_BALANCE_TO_ERR': self.min_operator_balance_to_err,

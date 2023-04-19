@@ -69,8 +69,10 @@ class NeonTxValidator:
         self._prevalidate_underpriced_tx_wo_chainid()
 
     def prevalidate_emulator(self, emulator_json: Dict[str, Any]):
-        check_emulated_exit_status(emulator_json)
-        self._prevalidate_gas_usage(emulator_json)
+        if not self._config.accept_reverted_tx_into_mempool:
+            check_emulated_exit_status(emulator_json)
+            self._prevalidate_gas_usage(emulator_json)
+
         self._prevalidate_account_sizes(emulator_json)
         self._prevalidate_account_cnt(emulator_json)
 

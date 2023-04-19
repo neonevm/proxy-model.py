@@ -231,19 +231,17 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
     def add_neon_event(self, event: NeonLogTxEvent) -> None:
         self._neon_event_list.append(event)
 
-    def _iter_reversed_neon_event_list(self) -> Iterator[NeonLogTxEvent]:
+    def _get_sorted_neon_event_list(self) -> List[NeonLogTxEvent]:
+        # no events
         if len(self._neon_event_list) == 0:
-            return  # no events
+            return list()
 
         # old type of event without enter/exit(revert) information ...
         if self._neon_event_list[0].total_gas_used == 0:
-            neon_event_list = self._neon_event_list
-        else:
-            # sort events by total_gas_used, because its value increases each iteration
-            neon_event_list = sorted(self._neon_event_list, key=lambda x: x.total_gas_used, reverse=False)
+            return self._neon_event_list
 
-        for event in reversed(neon_event_list):
-            yield event
+        # sort events by total_gas_used, because its value increases each iteration
+        return sorted(self._neon_event_list, key=lambda x: x.total_gas_used, reverse=False)
 
     @property
     def len_neon_event_list(self) -> int:
@@ -254,36 +252,49 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         if (not self.neon_tx_res.is_valid()) or (len(self.neon_tx_res.log_list) > 0) or (event_list_len == 0):
             return
 
-        neon_event_list: List[NeonLogTxEvent] = list()
-        current_level = 1
+        current_level = 0
+        current_order = 0
+
+        neon_event_list = self._get_sorted_neon_event_list()
+        for event in neon_event_list:
+            if event.is_reverted:
+                event_level = 0
+            else:
+                if event.is_start_event_type():
+                    current_level += 1
+                    event_level = current_level
+                elif event.is_exit_event_type():
+                    event_level = current_level
+                    current_level -= 1
+                else:
+                    event_level = current_level
+
+            current_order += 1
+            object.__setattr__(event, 'event_level', event_level)
+            object.__setattr__(event, 'event_order', current_order)
+
         reverted_level = -1
-        current_order = event_list_len
         is_failed = (self.neon_tx_res.status == '0x0')
 
-        for event in self._iter_reversed_neon_event_list():
+        for event in reversed(neon_event_list):
             if event.is_reverted:
                 is_reverted = True
                 is_hidden = True
             else:
                 if event.is_start_event_type():
-                    current_level -= 1
-                    if (reverted_level != -1) and (current_level < reverted_level):
+                    if event.event_level == reverted_level:
                         reverted_level = -1
                 elif event.is_exit_event_type():
-                    current_level += 1
                     if (event.event_type == NeonLogTxEvent.Type.ExitRevert) and (reverted_level == -1):
-                        reverted_level = current_level
+                        reverted_level = event.event_level
 
                 is_reverted = (reverted_level != -1) or is_failed
                 is_hidden = (event.is_hidden or is_reverted)
 
-            neon_event_list.append(dataclasses.replace(
-                event,
-                is_hidden=is_hidden, is_reverted=is_reverted, event_level=current_level, event_order=current_order
-            ))
-            current_order -= 1
+            object.__setattr__(event, 'is_reverted', is_reverted)
+            object.__setattr__(event, 'is_hidden', is_hidden)
 
-        for event in reversed(neon_event_list):
+        for event in neon_event_list:
             self.neon_tx_res.add_event(event)
 
 

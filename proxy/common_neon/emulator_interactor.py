@@ -79,7 +79,7 @@ def decode_revert_message(data: str) -> Optional[str]:
 
 
 class ConvertEVMInsufficientBalanceParser:
-    _re = re.compile('EVM Error. Insufficient balance for transfer, account = 0x([0-9a-fA-F]+), required = (\d+)')
+    _re = re.compile(r'EVM Error. Insufficient balance for transfer, account = 0x([0-9a-fA-F]+), required = (\d+)')
 
     def execute(self, msg: str) -> str:
         match = self._re.match(msg)

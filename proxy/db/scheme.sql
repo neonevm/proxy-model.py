@@ -118,6 +118,9 @@
         max_bpf_cycle_cnt INT,
         used_bpf_cycle_cnt INT
     );
+    ALTER TABLE solana_neon_transactions ADD COLUMN IF NOT EXISTS neon_gas_used BIGINT;
+    ALTER TABLE solana_neon_transactions ADD COLUMN IF NOT EXISTS neon_total_gas_used BIGINT;
+
     CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_neon_transactions_neon_sol_idx_inner ON solana_neon_transactions(sol_sig, block_slot, idx, inner_idx);
     CREATE INDEX IF NOT EXISTS idx_solana_neon_transactions_neon_sig ON solana_neon_transactions(neon_sig, block_slot);
     CREATE INDEX IF NOT EXISTS idx_solana_neon_transactions_neon_block ON solana_neon_transactions(block_slot);

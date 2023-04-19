@@ -103,7 +103,7 @@ class NeonCli(CliBase):
 
     @property
     def _emulator_logging_level(self):
-        level = logging.getLogger('neon.Emulator').getEffectiveLevel()
+        level = LOG.getEffectiveLevel()
         cli_level = self.EMULATOR_LOGLEVEL.get(level, 'warn')
         return cli_level
 
