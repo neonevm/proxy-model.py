@@ -331,7 +331,10 @@ class NeonRpcApiWorker:
 
             for raw_topic in raw_topic_list:
                 if isinstance(raw_topic, list):
-                    topic_list.append([self._normalize_topic(raw_item) for raw_item in raw_topic])
+                    item_list = [self._normalize_topic(raw_item) for raw_item in raw_topic if raw_item is not None]
+                    topic_list.append(item_list)
+                elif raw_topic is None:
+                    topic_list.append(list())
                 else:
                     topic_list.append([self._normalize_topic(raw_topic)])
 
