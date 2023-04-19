@@ -130,7 +130,7 @@ class NeonTxLogsDB(BaseDB):
                 ON b.block_slot = a.block_slot
                AND b.is_active = True
              WHERE {' AND '.join(query_list)}
-          ORDER BY a.block_slot DESC
+          ORDER BY a.block_slot DESC, a.log_idx DESC
              LIMIT 1000
          '''
 
@@ -139,7 +139,7 @@ class NeonTxLogsDB(BaseDB):
             row_list = cursor.fetchall()
 
         log_list: List[Dict[str, Any]] = []
-        for value_list in row_list:
+        for value_list in reversed(row_list):
             log_rec = self._log_from_value(value_list)
             log_list.append(log_rec)
 
