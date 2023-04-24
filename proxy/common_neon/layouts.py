@@ -29,6 +29,8 @@ ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
     "operator" / Bytes(32),
     "block_slot" / Int64ul,
     "account_list_len" / Int64ul,
+    "evm_state_len" / Int64ul,
+    "evm_machine_len" / Int64ul,
 )
 
 FINALIZED_HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
