@@ -261,8 +261,8 @@ class SolTxListSender:
                 tx_sig = str(tx.sig)
                 self._tx_state_dict.pop(tx_sig, None)
                 if tx.recent_block_hash in self._bad_block_hash_set:
-                    tx.recent_block_hash = None
                     LOG.debug(f'Flash bad block hash: {tx.recent_block_hash} for tx {str(tx.sig)}')
+                    tx.recent_block_hash = None
 
             if tx.recent_block_hash is not None:
                 LOG.debug(f'Skip signing, tx {str(tx.sig)} has block hash {tx.recent_block_hash}')

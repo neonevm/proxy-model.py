@@ -106,8 +106,7 @@ class NeonTxSendStrategyExecutor:
             LOG.error(f'Failed to cancel tx', exc_info=exc)
 
     def _init_state_tx_cnt(self) -> None:
-        neon_account_info = self._ctx.solana.get_neon_account_info(NeonAddress(self._ctx.neon_tx.sender))
-        state_tx_cnt = neon_account_info.tx_count if neon_account_info is not None else 0
+        state_tx_cnt = self._ctx.solana.get_state_tx_cnt(self._ctx.neon_tx.sender)
         self._ctx.set_state_tx_cnt(state_tx_cnt)
 
     def _emulate_neon_tx(self) -> None:

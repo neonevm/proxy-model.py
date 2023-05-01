@@ -8,7 +8,7 @@
 !README.md
 !run-test-faucet.sh
 !run-faucet.sh
-!run-airdropper.sh
+!run-gas-tank.sh
 !log_cfg.json
 !proxy-cli
 !proxy-cli.sh

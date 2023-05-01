@@ -119,11 +119,8 @@ class BaseNeonTxStrategy(abc.ABC):
         yield from tx_list_list
 
     def _validate_tx_size(self) -> bool:
-        if self._build_tx().has_valid_size(self._ctx.signer):
-            return True
-
-        _validation_error_msg = 'Transaction size is exceeded'
-        return False
+        self._build_tx().validate(self._ctx.signer)  # <- there will be exception
+        return True
 
     def _validate_tx_has_chainid(self) -> bool:
         if self._ctx.neon_tx.has_chain_id():

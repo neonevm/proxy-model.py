@@ -83,14 +83,26 @@ class MemPool:
         tx_request = cast(MPTxRequest, mp_request)
         return await self.schedule_mp_tx_request(tx_request)
 
+    def _update_gas_price(self, tx: MPTxRequest) -> Optional[MPTxSendResult]:
+        if not tx.has_chain_id():
+            LOG.debug('Increase gas-price for wo-chain-id tx')
+        elif tx.gas_price == 0:
+            LOG.debug('Increase gas-price for gas-less tx')
+        else:
+            return None
+
+        if not self.has_gas_price():
+            LOG.debug("Mempool doesn't have gas price information")
+            return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
+
+        tx.gas_price = self._gas_price.suggested_gas_price * 2
+        return None
+
     async def schedule_mp_tx_request(self, tx: MPTxRequest) -> MPTxSendResult:
         try:
-            if not tx.has_chain_id():
-                if not self.has_gas_price():
-                    LOG.debug("Mempool doesn't have gas price information")
-                    return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
-                LOG.debug(f'Increase gas-price for wo-chain-id tx {tx.sig}')
-                tx.gas_price = self._gas_price.suggested_gas_price * 2
+            result: Optional[MPTxSendResult] = self._update_gas_price(tx)
+            if result is not None:
+                return result
 
             result: MPTxSendResult = self._tx_schedule.add_tx(tx)
             if result.code == MPTxSendResultCode.Success:

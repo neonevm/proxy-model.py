@@ -1,5 +1,5 @@
 #!/bin/bash
-COMPONENT=Airdropper
+COMPONENT=GasTank
 echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Start ${COMPONENT} service"
 
 if [ -z "$EVM_LOADER" ]; then
@@ -10,4 +10,4 @@ fi
 
 [[ -z "$FINALIZED" ]] && export FINALIZED="confirmed"
 
-python3 -m proxy.airdropper
+python3 -m proxy.gas_tank

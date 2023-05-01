@@ -67,11 +67,13 @@ class SolCommit:
 
 
 class SolTxSizeError(AttributeError):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, current_len: int, max_len: int):
+        super().__init__(current_len, max_len)
+        self._current_len = current_len
+        self._max_len = max_len
 
     def __str__(self) -> str:
-        return 'Transaction size is exceeded'
+        return f'Transaction size is exceeded {self._current_len} > {self._max_len}'
 
 
 class SolTx(abc.ABC):
@@ -138,7 +140,7 @@ class SolTx(abc.ABC):
         assert self._is_signed, 'transaction has not been signed'
         result = self._serialize()
         if len(result) > _SolPktDataSize:
-            raise SolTxSizeError()
+            raise SolTxSizeError(len(result), _SolPktDataSize)
         return result
 
     def sign(self, signer: SolAccount) -> None:
@@ -147,15 +149,11 @@ class SolTx(abc.ABC):
         self._sign(signer)
         self._is_signed = True
 
-    def has_valid_size(self, signer: SolAccount) -> bool:
+    def validate(self, signer: SolAccount):
         tx = self._clone()
         tx.recent_block_hash = SolBlockHash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
         tx.sign(signer)
-        try:
-            tx.serialize()  # <- there will be exception
-            return True
-        except SolTxSizeError:
-            return False
+        tx.serialize()  # <- there will be exception
 
     def clone(self) -> SolTx:
         tx = self._clone()

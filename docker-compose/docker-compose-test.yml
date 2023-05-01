@@ -143,7 +143,6 @@ services:
     environment:
       FAUCET_RPC_BIND: 0.0.0.0
       FAUCET_RPC_PORT: 3333
-      FAUCET_RPC_ALLOWED_ORIGINS: '["http://airdropper"]'
       FAUCET_WEB3_ENABLE: 'true'
       WEB3_RPC_URL: http://solana:8899
       WEB3_PRIVATE_KEY: 0x4deacb079b4714c38f39508aa8900039f2721ed8686835d43347ba9267da767b
@@ -171,8 +170,8 @@ services:
       solana:
         condition: service_healthy
 
-  airdropper:
-    container_name: airdropper
+  gas_tank:
+    container_name: gas_tank
     image: neonlabsorg/proxy:${REVISION}
     environment:
       POSTGRES_DB: neon-db
@@ -180,16 +179,10 @@ services:
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
       SOLANA_URL: http://solana:8899
-      FAUCET_URL: http://faucet:3333
-      NEON_CLI_TIMEOUT: 0.9
       INDEXER_ERC20_WRAPPER_WHITELIST: ANY
-      PRICE_UPDATE_INTERVAL: 10
       START_SLOT: LATEST
-      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.testnet.solana.com}
-      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-AFmdnt9ng1uVxqCmqwQJDAYC5cKTkw8gJKSM5PnzuF6z}
-      MAX_CONFIDENCE_INTERVAL: 0.1
-    hostname: airdropper
-    entrypoint: ./run-airdropper.sh
+    hostname: gas_tank
+    entrypoint: ./run-gas-tank.sh
     networks:
       - net
     depends_on:

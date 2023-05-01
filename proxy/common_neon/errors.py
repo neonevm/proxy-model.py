@@ -97,7 +97,7 @@ class NonceTooLowError(BaseException):
         self._state_tx_cnt = state_tx_cnt
 
     @staticmethod
-    def init_no_sender(tx_nonce: int, state_tx_cnt: int):
+    def init_no_sender(tx_nonce: int, state_tx_cnt: int) -> NonceTooLowError:
         return NonceTooLowError(NonceTooLowError._empty_sender, tx_nonce, state_tx_cnt)
 
     def is_empty_sender(self) -> bool:
@@ -105,6 +105,13 @@ class NonceTooLowError(BaseException):
 
     def init_sender(self, sender: str) -> NonceTooLowError:
         return NonceTooLowError(sender, self._tx_nonce, self._state_tx_cnt)
+
+    @staticmethod
+    def raise_if_error(sender: str, tx_nonce: int, state_tx_cnt: int) -> None:
+        if state_tx_cnt <= tx_nonce:
+            return
+
+        raise NonceTooLowError(sender, tx_nonce, state_tx_cnt)
 
     def __str__(self) -> str:
         return f'nonce too low: address {self._sender}, tx: {self._tx_nonce} state: {self._state_tx_cnt}'

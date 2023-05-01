@@ -276,8 +276,10 @@ class SolIxMetaInfo:
     is_already_finalized: bool
 
     @staticmethod
-    def from_log_list(ix: Dict[str, Any], idx: int, inner_idx: Optional[int], log_list: SolIxLogState) -> SolIxMetaInfo:
-        log_info = decode_log_list(log_list.iter_str_log_msg())
+    def from_log_state(ix: Dict[str, Any], idx: int,
+                       inner_idx: Optional[int],
+                       log_state: SolIxLogState) -> SolIxMetaInfo:
+        log_info = decode_log_list(log_state.iter_str_log_msg())
 
         neon_tx_sig = ''
         if log_info.neon_tx_sig is not None:
@@ -290,9 +292,9 @@ class SolIxMetaInfo:
             neon_ix_total_gas_usage = log_info.neon_tx_ix.total_gas_used
 
         status = SolIxMetaInfo.Status.Unknown
-        if log_list.status == SolIxLogState.Status.Failed:
+        if log_state.status == SolIxLogState.Status.Failed:
             status = SolIxMetaInfo.Status.Failed
-        elif log_list.status == SolIxLogState.Status.Success:
+        elif log_state.status == SolIxLogState.Status.Success:
             status = SolIxMetaInfo.Status.Success
 
         return SolIxMetaInfo(
@@ -300,14 +302,14 @@ class SolIxMetaInfo:
             idx=idx,
             inner_idx=inner_idx,
 
-            program=log_list.program,
-            level=log_list.level,
+            program=log_state.program,
+            level=log_state.level,
             status=status,
-            error=log_list.error,
+            error=log_state.error,
 
-            max_bpf_cycle_cnt=log_list.max_bpf_cycle_cnt,
-            used_bpf_cycle_cnt=log_list.used_bpf_cycle_cnt,
-            used_heap_size=log_list.used_heap_size,
+            max_bpf_cycle_cnt=log_state.max_bpf_cycle_cnt,
+            used_bpf_cycle_cnt=log_state.used_bpf_cycle_cnt,
+            used_heap_size=log_state.used_heap_size,
 
             neon_tx_sig=neon_tx_sig,
             neon_gas_used=neon_ix_gas_usage,
@@ -536,7 +538,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
         result._parse_log_msg_list(log_msg_list)
         return result
 
-    def _add_missing_log_msgs(self, log_list_list: List[SolIxLogState],
+    def _add_missing_log_msgs(self, log_state_list: List[SolIxLogState],
                               ix_list: List[Dict[str, Any]],
                               level: int) -> List[SolIxLogState]:
         base_level = level
@@ -546,22 +548,22 @@ class SolTxReceiptInfo(SolTxMetaInfo):
                 return 1
             return level + 1
 
-        result_log_list_list: List[SolIxLogState] = list()
+        result_log_state_list: List[SolIxLogState] = list()
 
-        log_iter = iter(log_list_list)
-        log = next(log_iter) if len(log_list_list) > 0 else None
+        log_iter = iter(log_state_list)
+        log = next(log_iter) if len(log_state_list) > 0 else None
         for idx, ix in enumerate(ix_list):
             ix_program_key = self._get_program_key(ix)
             if (log is None) or (log.program != ix_program_key):
-                result_log_list_list.append(SolIxLogState(ix_program_key, calc_level()))
+                result_log_state_list.append(SolIxLogState(ix_program_key, calc_level()))
             else:
                 level = log.level
-                result_log_list_list.append(log)
+                result_log_state_list.append(log)
                 log = next(log_iter, None)
 
-        assert len(result_log_list_list) == len(ix_list), f'{len(result_log_list_list)} == {len(ix_list)}'
+        assert len(result_log_state_list) == len(ix_list), f'{len(result_log_state_list)} == {len(ix_list)}'
         assert log is None
-        return result_log_list_list
+        return result_log_state_list
 
     def _parse_log_msg_list(self, raw_log_msg_list: List[str]) -> None:
         log_state = SolTxLogDecoder().decode(raw_log_msg_list)
@@ -571,10 +573,10 @@ class SolTxReceiptInfo(SolTxMetaInfo):
             if len(inner_ix_list) == 0:
                 continue
 
-            log_list = self._ix_log_msg_list[ix_idx]
-            inner_log_msg_list = log_list.inner_log_list
+            log_state = self._ix_log_msg_list[ix_idx]
+            inner_log_msg_list = log_state.inner_log_list
             inner_log_msg_list = self._add_missing_log_msgs(inner_log_msg_list, inner_ix_list, 2)
-            log_list.set_inner_log_list(inner_log_msg_list)
+            log_state.set_inner_log_list(inner_log_msg_list)
 
     def _get_program_key(self, ix: Dict[str, Any]) -> str:
         program_idx = ix.get('programIdIndex', None)
@@ -595,7 +597,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
     def _is_neon_program(self, ix: Dict[str, Any]) -> bool:
         return self._get_program_key(ix) == EVM_LOADER_ID
 
-    def _get_log_list(self, ix_idx: int, inner_ix_idx: Optional[int]) -> Optional[SolIxLogState]:
+    def get_log_state(self, ix_idx: int, inner_ix_idx: Optional[int]) -> Optional[SolIxLogState]:
         if ix_idx >= len(self._ix_log_msg_list):
             LOG.warning(f'{self} error: cannot find logs for instruction {ix_idx} > {len(self._ix_log_msg_list)}')
             return None
@@ -621,15 +623,15 @@ class SolTxReceiptInfo(SolTxMetaInfo):
     def iter_sol_neon_ix(self) -> Iterator[SolNeonIxReceiptInfo]:
         for ix_idx, ix in enumerate(self._ix_list):
             if self._is_neon_program(ix) and self._has_ix_data(ix):
-                log_list = self._get_log_list(ix_idx, None)
-                if log_list is not None:
-                    ix_meta = SolIxMetaInfo.from_log_list(ix, ix_idx, None, log_list)
+                log_state = self.get_log_state(ix_idx, None)
+                if log_state is not None:
+                    ix_meta = SolIxMetaInfo.from_log_state(ix, ix_idx, None, log_state)
                     yield SolNeonIxReceiptInfo.from_ix(self, self.sol_cost, ix_meta)
 
             inner_ix_list = self._get_inner_ix_list(ix_idx)
             for inner_idx, inner_ix in enumerate(inner_ix_list):
                 if self._is_neon_program(inner_ix) and self._has_ix_data(inner_ix):
-                    log_list = self._get_log_list(ix_idx, inner_idx)
-                    if log_list is not None:
-                        ix_meta = SolIxMetaInfo.from_log_list(inner_ix, ix_idx, inner_idx, log_list)
+                    log_state = self.get_log_state(ix_idx, inner_idx)
+                    if log_state is not None:
+                        ix_meta = SolIxMetaInfo.from_log_state(inner_ix, ix_idx, inner_idx, log_state)
                         yield SolNeonIxReceiptInfo.from_ix(self, self.sol_cost, ix_meta)

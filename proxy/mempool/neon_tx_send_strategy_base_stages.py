@@ -9,7 +9,7 @@ from ..common_neon.errors import BadResourceError
 from ..common_neon.solana_alt import ALTInfo
 from ..common_neon.solana_alt_limit import ALTLimit
 from ..common_neon.solana_alt_builder import ALTTxBuilder, ALTTxSet
-from ..common_neon.solana_tx import SolTx
+from ..common_neon.solana_tx import SolTx, SolTxSizeError
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_v0 import SolV0Tx
 
@@ -99,12 +99,19 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
     def complete_init(self) -> None:
         self._ctx.set_holder_usage(True)  # using of the operator key for ALTs
 
+    def _tx_has_valid_size(self, legacy_tx: SolLegacyTx) -> bool:
+        try:
+            self.build_tx(legacy_tx).validate(self._ctx.signer)
+            return True
+        except SolTxSizeError:
+            return False
+
     def init_alt_info(self, legacy_tx: SolLegacyTx) -> bool:
         self._alt_info_dict.clear()
         actual_alt_info = self._alt_builder.build_alt_info(legacy_tx)
 
         alt_info_list = self._filter_alt_info_list(actual_alt_info)
-        if (len(self._alt_info_dict) > 0) and self.build_tx(legacy_tx).has_valid_size(self._ctx.signer):
+        if (len(self._alt_info_dict) > 0) and self._tx_has_valid_size(legacy_tx):
             return True
 
         actual_alt_info = self._extend_alt_info(actual_alt_info, alt_info_list)

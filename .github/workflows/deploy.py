@@ -51,7 +51,7 @@ FAUCET_COMMIT = 'latest'
 NEON_TESTS_IMAGE = "neonlabsorg/neon_tests:latest"
 
 CONTAINERS = ['proxy', 'solana', 'neon_test_invoke_program_loader',
-              'dbcreation', 'faucet', 'airdropper', 'indexer']
+              'dbcreation', 'faucet', 'gas_tank', 'indexer']
 
 docker_client = docker.APIClient()
 terraform = Terraform(working_dir=pathlib.Path(
@@ -440,6 +440,12 @@ def stop_containers():
 
 def cleanup_docker():
     click.echo(f"Cleanup docker-compose...")
+
+    command = "docker stop -t 1 airdropper"
+    subprocess.run(command, shell=True)
+    command = "docker rm airdropper"
+    subprocess.run(command, shell=True)
+
     docker_compose("-f docker-compose/docker-compose-test.yml down -t 1")
     click.echo(f"Cleanup docker-compose done.")
 

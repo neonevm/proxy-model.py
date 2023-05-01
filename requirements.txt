@@ -8,7 +8,6 @@ solders==0.14.4
 psycopg2-binary
 ethereum
 py-solc-x==1.1.1
-flask==2.2.3
 hvac==1.1.0
 requests
 base58

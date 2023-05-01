@@ -321,15 +321,20 @@ class SolInteractor:
 
         return balances_list
 
-    def get_neon_account_info(self, eth_account: Union[str, NeonAddress],
+    def get_neon_account_info(self, neon_account: Union[str, bytes, NeonAddress],
                               commitment=SolCommit.Confirmed) -> Optional[NeonAccountInfo]:
-        if isinstance(eth_account, str):
-            eth_account = NeonAddress(eth_account)
-        account_sol, nonce = neon_2program(eth_account)
+        if not isinstance(neon_account, NeonAddress):
+            neon_account = NeonAddress(neon_account)
+        account_sol, nonce = neon_2program(neon_account)
         info = self.get_account_info(account_sol, commitment=commitment)
         if info is None:
             return None
+
         return NeonAccountInfo.from_account_info(info)
+
+    def get_state_tx_cnt(self, neon_account: Union[str, bytes, NeonAddress], commitment=SolCommit.Confirmed) -> int:
+        neon_account_info = self.get_neon_account_info(neon_account, commitment)
+        return neon_account_info.tx_count if neon_account_info is not None else 0
 
     def get_neon_account_info_list(self, neon_account_list: List[Union[NeonAddress, str]],
                                    commitment=SolCommit.Confirmed) -> List[Optional[NeonAccountInfo]]:

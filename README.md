@@ -20,22 +20,22 @@ python3 -m proxy --hostname 127.0.0.1 --port 9090 --enable-web-server --plugins 
 Then add network `http://localhost:9090/solana` into MetaMask
 
 
-The repository contains sources for several services with similar logic: 
+The repository contains sources for several services with similar logic:
 - proxy
 - indexer
-- airdropper
+- gas-tank
 
-Airdropper is a service that analyzes transactions with NeonEVM instructions and looks for liquidity transfers into Neon accounts. The service rewards users that make such transfers with NEON tokens.
+GasTank is a service that analyzes transactions with NeonEVM instructions and looks for liquidity transfers into Neon accounts. The service provides users that make such transfers with gas-less transactions.
 
 The service is configured via environment variables. Further to the common proxy environment, the service accepts the following variables:
 
-- FAUCET_URL 
+- FAUCET_URL
 
  > URL to the faucet service for distributing NEON tokens to the users
 
-- INDEXER_ERC20_WRAPPER_WHITELIST 
+- INDEXER_ERC20_WRAPPER_WHITELIST
 
- > A comma-separated list of ERC20ForSpl wrapped tokens for transfer (those transactions which trigger the service to reward the users). The airdropper looks for the first transfers of such tokens from Solana to Neon (those transfers that lead to the creation of Neon accounts). Alt: provide the `ANY` value to accept any token.
+ > A comma-separated list of ERC20ForSpl wrapped tokens for transfer (those transactions which trigger the service to allow gas-less transactions). The gas-tank looks for the first transfers of such tokens from Solana to Neon (those transfers that lead to the creation of Neon accounts).
 
 - PORTAL_BRIDGE_CONTRACTS
 
@@ -43,20 +43,22 @@ The service is configured via environment variables. Further to the common proxy
 
 - PORTAL_BRIDGE_TOKENS_WHITELIST
 
-  > An allowlist of tokens for the transfer which will trigger an airdrop of NEONs. This set should contain "tokenChain:tokenAddress", where:
+  > An allow list of tokens for the transfer which will trigger the providing of gas-less transactions. This set should contain "tokenChain:tokenAddress", where:
   > - `tokenChain` is an original token chain number in terms of Portal bridge numbers
   > - `tokenAddress` is the address of the token in hexadecimal lowercase form with a '0x' prefix
+  >
+  > Alt: provide the ANY value to accept any token.
 
 - ERC20_BRIDGE_CONTRACTS
 
-> A comma-separated list of Common ERC20 Bridge contracts
+> A comma-separated list of Common ERC20 Bridge contracts.
 
 - ERC20_BRIDGE_TOKENS_WHITELIST
 
-> An allowlist of tokens whose transfer triggers the airdrop of NEONs. This set should contains ERC20 addresses separated by a comma. Alt: provide the `ANY` value to accept any token.
+> An allowlist of tokens whose transfer triggers the providing of gas-less transactions. This set should contain ERC20 addresses separated by a comma. Alt: provide the ANY value to accept any token.
 
 ## Gotchas
 
-- PORTAL_BRIDGE_CONTRACTS & PORTAL_BRIDGE_TOKENS_WHITELIST should both be specified. If either is missed, the airdropper doesn't analyze Portal Bridge transfers.
+- PORTAL_BRIDGE_CONTRACTS & PORTAL_BRIDGE_TOKENS_WHITELIST should both be specified. If either is missed, the gas-tank doesn't analyze Portal Bridge transfers.
 
-- ERC20_BRIDGE_CONTRACTS & ERC20_BRIDGE_TOKENS_WHITELIST should both be specified. If they are missed, the airdropper doesn't analyze Common ERC20 Transfers.
+- ERC20_BRIDGE_CONTRACTS & ERC20_BRIDGE_TOKENS_WHITELIST should both be specified. If they are missed, the gas-tank doesn't analyze Common ERC20 Transfers.

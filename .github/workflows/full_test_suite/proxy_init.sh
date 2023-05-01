@@ -56,7 +56,7 @@ EOF
 
 
 # Get list of services
-SERVICES=$(docker-compose -f docker-compose-test.yml config --services | grep -vP "solana|airdropper|neon_test_invoke_program_loader|hashicorp")
+SERVICES=$(docker-compose -f docker-compose-test.yml config --services | grep -vP "solana|gas_tank|neon_test_invoke_program_loader|hashicorp")
 
 
 # Pull latest versions
