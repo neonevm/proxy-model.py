@@ -28,7 +28,7 @@ from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
 
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
 
-NEON_PROXY_PKG_VERSION = '0.15.17'
+NEON_PROXY_PKG_VERSION = '0.15.18'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 LOG = logging.getLogger(__name__)
 
