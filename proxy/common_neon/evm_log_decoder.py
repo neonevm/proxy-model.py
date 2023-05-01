@@ -145,7 +145,7 @@ class _NeonLogDecoder:
         ENTER CREATE2 <20 bytes contract address>
         """
         if len(data_list) != 2:
-            LOG.error(f'Failed to decode enter event, it should contain 2 elements: {len(data_list)}, {data_list}')
+            LOG.error(f'Failed to decode ENTER event, it does not contain 2 elements: {len(data_list)}, {data_list}')
             return None
 
         type_name = base64.b64decode(data_list[0]).decode('utf-8')
@@ -179,10 +179,10 @@ class _NeonLogDecoder:
         EXIT STOP
         EXIT RETURN
         EXIT SELFDESTRUCT
-        EXIT REVERT
+        EXIT REVERT data
         """
-        if len(data_list) != 1:
-            LOG.error(f'Failed to decode exit event, it should contain 1 element: {len(data_list)}, {data_list}')
+        if len(data_list) < 1:
+            LOG.error(f'Failed to decode EXIT event, it contains less that 1 element: {len(data_list)}, {data_list}')
             return None
 
         type_name = base64.b64decode(data_list[0]).decode('utf-8')
@@ -199,7 +199,11 @@ class _NeonLogDecoder:
             LOG.error(f'Failed to decode exit event, wrong type: {type_name}')
             return None
 
-        return NeonLogTxEvent(event_type=event_type, is_hidden=True, address=b'', topic_list=list())
+        data = b''
+        if len(data_list) > 1:
+            data = base64.b64decode(data_list[1])
+
+        return NeonLogTxEvent(event_type=event_type, is_hidden=True, address=b'', data=data, topic_list=list())
 
     @staticmethod
     def _decode_neon_tx_event(log_num: int, data_list: List[str]) -> Optional[NeonLogTxEvent]:

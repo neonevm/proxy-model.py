@@ -70,7 +70,7 @@ class BaseDB:
             page_size=1000
         )
 
-    def conn(self) -> BaseDB.Connnection:
+    def conn(self) -> BaseDB.Connection:
         return self._conn
 
     def is_connected(self) -> bool:

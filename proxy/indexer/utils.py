@@ -11,12 +11,6 @@ from ..common_neon.config import Config
 LOG = logging.getLogger(__name__)
 
 
-def check_error(trx):
-    if 'meta' in trx and 'err' in trx['meta'] and trx['meta']['err'] is not None:
-        return True
-    return False
-
-
 class MetricsToLogger:
     def __init__(self):
         self._counter: int = 0
