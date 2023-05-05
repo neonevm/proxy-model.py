@@ -403,7 +403,7 @@ class NeonIndexedBlockInfo:
                     holder_account: str, iter_blocked_account: Iterator[str],
                     sol_neon_ix: SolNeonIxReceiptInfo) -> NeonIndexedTxInfo:
         key = NeonIndexedTxInfo.Key(sol_neon_ix)
-        assert key.value not in self._neon_tx_dict, 'the tx {key} already in use!'
+        assert key.value not in self._neon_tx_dict, f'the tx {key} already in use!'
 
         tx = NeonIndexedTxInfo(tx_type, key, neon_tx, holder_account, iter_blocked_account)
         tx.add_sol_neon_ix(sol_neon_ix)
