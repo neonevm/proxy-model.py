@@ -978,7 +978,7 @@ class NeonRpcApiWorker:
     def neon_getEvmParams(self) -> Dict[str, str]:
         """Returns map of Neon-EVM parameters"""
         elf_param_dict = ElfParams().elf_param_dict
-        elf_param_dict['NEON_EVM_ID'] = self._config.evm_program_id
+        elf_param_dict['NEON_EVM_ID'] = str(self._config.evm_program_id)
         return elf_param_dict
 
     def is_allowed_api(self, method_name: str) -> bool:
