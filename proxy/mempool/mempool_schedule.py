@@ -3,10 +3,10 @@ from typing import List, Dict, Set, Optional, Tuple, Iterator, cast
 
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.eth_proto import NeonTx
-from ..common_neon.sorted_queue import SortedQueue
 from ..common_neon.utils.json_logger import logging_context
 
-from ..mempool.mempool_api import MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData, MPTxRequestList
+from .mempool_api import MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData, MPTxRequestList
+from .sorted_queue import SortedQueue
 
 
 LOG = logging.getLogger(__name__)
@@ -220,7 +220,9 @@ class MPTxSchedule:
     def _drop_tx_from_sender_pool(self, sender_pool: MPSenderTxPool, tx: MPTxRequest) -> None:
         LOG.debug(f'Drop tx {tx.sig} from pool {sender_pool.sender_address}')
         if (not sender_pool.is_paused()) and sender_pool.is_top_tx(tx):
+            LOG.debug(f'Pause sender pool {sender_pool.sender_address}')
             self._sender_pool_queue.pop(sender_pool)
+            self._paused_sender_set.add(sender_pool.sender_address)
 
         sender_pool.drop_tx(tx)
         self._tx_dict.pop(tx)
@@ -248,8 +250,6 @@ class MPTxSchedule:
 
     def _schedule_sender_pool(self, sender_pool: MPSenderTxPool) -> None:
         assert not sender_pool.is_processing(), f'Cannot schedule processing pool {sender_pool.sender_address}'
-        if sender_pool.is_empty():
-            return
 
         tx = sender_pool.top_tx
         with logging_context(req_id=tx.req_id):
@@ -265,16 +265,19 @@ class MPTxSchedule:
     def _set_sender_tx_cnt(self, sender_pool: MPSenderTxPool, state_tx_cnt: int) -> None:
         assert not sender_pool.is_processing(), f'Cannot update processing pool {sender_pool.sender_address}'
 
-        if sender_pool.is_empty() or (sender_pool.state_tx_cnt == state_tx_cnt):
+        if sender_pool.state_tx_cnt == state_tx_cnt:
             return
 
-        sender_pool.set_state_tx_cnt(state_tx_cnt)
-
-        while not sender_pool.is_empty():
+        while True:
             tx = sender_pool.top_tx
             if tx.nonce >= state_tx_cnt:
                 break
+
             self._drop_tx_from_sender_pool(sender_pool, tx)
+            if sender_pool.is_empty():
+                return
+
+        sender_pool.set_state_tx_cnt(state_tx_cnt)
 
     def add_tx(self, tx: MPTxRequest) -> MPTxSendResult:
         LOG.debug(f'Try to add tx {tx.sig} (gas price {tx.gas_price}) to mempool with {self.tx_cnt} txs')
@@ -296,7 +299,7 @@ class MPTxSchedule:
                 return MPTxSendResult(code=MPTxSendResultCode.Underprice, state_tx_cnt=None)
 
         sender_pool = self._get_or_create_sender_pool(tx.sender_address)
-        LOG.debug(f'Got pool for sender {tx.sender_address} with {sender_pool.len_tx_nonce_queue} txs')
+        LOG.debug(f'Got sender pool {tx.sender_address} with {sender_pool.len_tx_nonce_queue} txs')
 
         if sender_pool.is_processing():
             top_tx = sender_pool.top_tx
@@ -381,6 +384,9 @@ class MPTxSchedule:
         sender_pool = self._get_sender_pool(tx.sender_address)
 
         self._done_tx_in_sender_pool(sender_pool, tx)
+        if sender_pool.is_empty():
+            return
+
         self._set_sender_tx_cnt(sender_pool, tx.neon_tx_exec_cfg.state_tx_cnt)
 
         # the sender pool was removed from the execution queue and from the paused set,
@@ -423,7 +429,7 @@ class MPTxSchedule:
 
             # the sender pool was paused,
             #   and now should be included into the execution queue
-            if not sender_pool.is_paused():
+            elif not sender_pool.is_paused():
                 self._schedule_sender_pool(sender_pool)
 
     @property

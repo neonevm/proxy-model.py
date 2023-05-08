@@ -18,9 +18,11 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolPubKey, SolAccount
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
+from .neon_tx_stages import (
+    NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage,
+    NeonTxStage
+)
 from .mempool_api import OpResIdent
-from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
-from .neon_tx_stages import NeonTxStage
 
 from ..statistic.data import NeonOpResStatData
 from ..statistic.proxy_client import ProxyStatClient
@@ -45,7 +47,7 @@ class OpResInfo:
         assert ident.public_key == str(signer.pubkey())
 
         holder_seed = perm_account_seed(b'holder-', ident.res_id)
-        holder = account_with_seed(signer.pubkey(), holder_seed)
+        holder = account_with_seed(ident.evm_program_id, signer.pubkey(), holder_seed)
         neon_address = NeonAddress.from_private_key(signer.secret())
 
         return OpResInfo(ident=ident, signer=signer, holder=holder, holder_seed=holder_seed, neon_address=neon_address)
@@ -73,7 +75,7 @@ class OpResInit:
         try:
             self._validate_operator_balance(resource)
 
-            builder = NeonIxBuilder(resource.public_key)
+            builder = NeonIxBuilder(self._config, resource.public_key)
             self._create_holder_account(builder, resource)
             self._create_neon_account(builder, resource)
         except RescheduleError:
@@ -107,7 +109,7 @@ class OpResInit:
         tx_sender.send([stage.tx])
 
     def _create_neon_account(self, builder: NeonIxBuilder, resource: OpResInfo):
-        solana_address = neon_2program(resource.neon_address)[0]
+        solana_address = neon_2program(builder.evm_program_id, resource.neon_address)[0]
 
         account_info = self._solana.get_account_info(solana_address)
         if account_info is not None:
@@ -131,7 +133,7 @@ class OpResInit:
         elif holder_info.lamports < balance:
             LOG.debug(f"Resize account {holder_address} for resource {resource}")
             self._recreate_holder(builder, resource, balance)
-        elif holder_info.owner != self._config.evm_loader_id:
+        elif holder_info.owner != self._config.evm_program_id:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
         elif holder_info.tag == ACTIVE_HOLDER_TAG:
             self._complete_neon_tx(resource)
@@ -194,6 +196,7 @@ class OpResIdentListBuilder:
             for ident in secret_list:
                 sol_account = SolAccount.from_seed(ident)
                 ident = OpResIdent(
+                    self._config.evm_program_id,
                     public_key=str(sol_account.pubkey()),
                     private_key=sol_account.secret(),
                     res_id=res_id

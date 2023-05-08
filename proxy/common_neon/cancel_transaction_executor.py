@@ -20,7 +20,7 @@ LOG = logging.getLogger(__name__)
 
 class CancelTxExecutor:
     def __init__(self, config: Config, solana: SolInteractor, signer: SolAccount) -> None:
-        self._ix_builder = NeonIxBuilder(signer.pubkey())
+        self._ix_builder = NeonIxBuilder(config, signer.pubkey())
         self._config = config
         self._solana = solana
         self._signer = signer

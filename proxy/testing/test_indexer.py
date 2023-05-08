@@ -5,7 +5,6 @@ from typing import List
 
 from web3 import eth as web3_eth
 
-from proxy.common_neon.environment_data import EVM_LOADER_ID
 from proxy.common_neon.address import NeonAddress
 from proxy.common_neon.config import Config
 from proxy.common_neon.neon_instruction import NeonIxBuilder
@@ -107,18 +106,18 @@ class CancelTest(unittest.TestCase):
 
         reid_eth = cls.storage_contract.address.lower()
         print('contract_eth', reid_eth)
-        cls.re_id, _ = neon_2program(str(reid_eth))
+        cls.re_id, _ = neon_2program(cls.config.evm_program_id, str(reid_eth))
         print('contract', cls.re_id)
 
         # Create ethereum account for user account
         caller_ether = NeonAddress.from_private_key(bytes(cls.eth_account.key))
-        cls.caller, _ = caller, _ = neon_2program(str(caller_ether))
+        cls.caller, _ = caller, _ = neon_2program(cls.config.evm_program_id, str(caller_ether))
 
         caller_ether_invoked = NeonAddress.from_private_key(bytes(cls.eth_account_invoked.key))
-        cls.caller_invoked, _ = neon_2program(str(caller_ether_invoked))
+        cls.caller_invoked, _ = neon_2program(cls.config.evm_program_id, str(caller_ether_invoked))
 
         caller_ether_getter = NeonAddress.from_private_key(bytes(cls.eth_account_getter.key))
-        cls.caller_getter, _ = caller_getter, _ = neon_2program(str(caller_ether_getter))
+        cls.caller_getter, _ = caller_getter, _ = neon_2program(cls.config.evm_program_id, str(caller_ether_getter))
 
         print(f'caller_ether: {caller_ether} {caller}')
         print(f'caller_ether_invoked: {caller_ether_invoked} {cls.caller_invoked}')
@@ -132,13 +131,14 @@ class CancelTest(unittest.TestCase):
     @classmethod
     def create_neon_ix_builder(cls, raw_tx, neon_account_list: List[SolAccountMeta]):
         resource = OpResInfo.from_ident(OpResIdent(
+            cls.config.evm_program_id,
             public_key=str(cls.signer.pubkey()),
             private_key=cls.signer.secret(),
             res_id=int.from_bytes(raw_tx[:8], byteorder="little")
         ))
         OpResInit(cls.config, cls.solana).init_resource(resource)
 
-        neon_ix_builder = NeonIxBuilder(resource.public_key)
+        neon_ix_builder = NeonIxBuilder(cls.config, resource.public_key)
         neon_ix_builder.init_operator_neon(NeonAddress.from_private_key(resource.secret_key))
 
         neon_tx = NeonTx.from_string(raw_tx)
@@ -210,7 +210,7 @@ class CancelTest(unittest.TestCase):
                 neon_ix_builder.make_compute_budget_cu_ix(),
                 SolTxIx(
                     accounts=[
-                        SolAccountMeta(pubkey=SolPubKey.from_string(EVM_LOADER_ID), is_signer=False, is_writable=False)
+                        SolAccountMeta(pubkey=cls.config.evm_program_id, is_signer=False, is_writable=False)
                     ] + noniterative.accounts,
                     data=noniterative.data,
                     program_id=SolPubKey.from_string(proxy_program)
@@ -251,7 +251,7 @@ class CancelTest(unittest.TestCase):
                 neon_ix_builder.make_compute_budget_cu_ix(),
                 SolTxIx(
                     accounts=[
-                        SolAccountMeta(pubkey=SolPubKey.from_string(EVM_LOADER_ID), is_signer=False, is_writable=False)
+                        SolAccountMeta(pubkey=cls.config.evm_program_id, is_signer=False, is_writable=False)
                     ] + iterative.accounts,
                     data=b''.join([bytes.fromhex("ef"), iterative.data]),
                     program_id=SolPubKey.from_string(proxy_program)

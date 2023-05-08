@@ -1,13 +1,17 @@
 import logging
 from typing import List, Type, Callable, Dict, cast
 
+from .mempool_api import (
+    MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest,
+    MPRequest, MPRequestType, MPALTAddress, MPALTInfo, MPALTListResult
+)
+
 from .executor_mng import MPExecutorMng
-from .mempool_api import MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest
-from .mempool_api import MPRequest, MPRequestType, MPALTAddress, MPALTInfo, MPALTListResult
 from .mempool_periodic_task import MPPeriodicTaskLoop
 from .operator_resource_mng import OpResMng
+from .sorted_queue import SortedQueue
+
 from ..common_neon.solana_alt import ALTAddress
-from ..common_neon.sorted_queue import SortedQueue
 
 LOG = logging.getLogger(__name__)
 

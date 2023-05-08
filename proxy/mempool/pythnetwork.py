@@ -3,10 +3,10 @@ import logging
 from decimal import Decimal
 from typing import List, Union, Dict, Any, Optional, Tuple
 
-from ..common_neon.constants import SYS_PROGRAM_ID
-from ..common_neon.layouts import AccountInfo
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_tx import SolPubKey
+from proxy.common_neon.constants import SYS_PROGRAM_ID
+from proxy.common_neon.layouts import AccountInfo
+from proxy.common_neon.solana_interactor import SolInteractor
+from proxy.common_neon.solana_tx import SolPubKey
 
 
 LOG = logging.getLogger(__name__)

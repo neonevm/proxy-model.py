@@ -11,7 +11,7 @@ from solders.system_program import CreateAccountWithSeedParams, create_account_w
 from ..common_neon.address import neon_2program, NeonAddress
 from ..common_neon.constants import INCINERATOR_ID, COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.environment_data import EVM_LOADER_ID
+from ..common_neon.config import Config
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.layouts import CREATE_ACCOUNT_LAYOUT
 from ..common_neon.solana_tx import SolTxIx, SolPubKey, SolAccountMeta
@@ -39,8 +39,8 @@ def create_account_layout(ether):
 
 
 class NeonIxBuilder:
-    def __init__(self, operator: SolPubKey):
-        self._evm_program_id = SolPubKey.from_string(EVM_LOADER_ID)
+    def __init__(self, config: Config, operator: SolPubKey):
+        self._evm_program_id = config.evm_program_id
         self._operator_account = operator
         self._operator_neon_address: Optional[SolPubKey] = None
         self._neon_account_list: List[SolAccountMeta] = []
@@ -53,6 +53,10 @@ class NeonIxBuilder:
         self._elf_params = ElfParams()
 
     @property
+    def evm_program_id(self) -> SolPubKey:
+        return self._evm_program_id
+
+    @property
     def operator_account(self) -> SolPubKey:
         return self._operator_account
 
@@ -62,7 +66,7 @@ class NeonIxBuilder:
         return cast(bytes, self._holder_msg)
 
     def init_operator_neon(self, operator_ether: NeonAddress) -> NeonIxBuilder:
-        self._operator_neon_address = neon_2program(operator_ether)[0]
+        self._operator_neon_address = neon_2program(self.evm_program_id, operator_ether)[0]
         return self
 
     def init_neon_tx(self, neon_tx: NeonTx) -> NeonIxBuilder:
@@ -130,7 +134,7 @@ class NeonIxBuilder:
     def make_create_neon_account_ix(self, neon_address: NeonAddress) -> SolTxIx:
         if isinstance(neon_address, str):
             neon_address = NeonAddress(neon_address)
-        pda_account, nonce = neon_2program(neon_address)
+        pda_account, nonce = neon_2program(self.evm_program_id, neon_address)
         LOG.debug(f'Create neon account: {str(neon_address)}, sol account: {pda_account}, nonce: {nonce}')
 
         data = create_account_layout(bytes(neon_address))

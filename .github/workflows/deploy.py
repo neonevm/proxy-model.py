@@ -362,11 +362,6 @@ def stop_containers():
 def cleanup_docker():
     click.echo(f"Cleanup docker-compose...")
 
-    command = "docker stop -t 1 airdropper"
-    subprocess.run(command, shell=True)
-    command = "docker rm airdropper"
-    subprocess.run(command, shell=True)
-
     docker_compose("-f docker-compose/docker-compose-test.yml down -t 1")
     click.echo(f"Cleanup docker-compose done.")
 

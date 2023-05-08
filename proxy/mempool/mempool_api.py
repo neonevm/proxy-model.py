@@ -47,21 +47,26 @@ class MPRequest:
 
 @dataclass
 class MPTxRequest(MPRequest):
-    sig: str = None
     neon_tx: Optional[NeonTx] = None
     neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
-    sender_address: str = None
     gas_price: int = 0
     start_time: int = 0
 
     def __post_init__(self):
         self.type = MPRequestType.SendTransaction
 
-        self.gas_price = self.neon_tx.gasPrice
-        if self.sender_address is None:
-            self.sender_address = self.neon_tx.hex_sender
+        if self.gas_price == 0:
+            self.gas_price = self.neon_tx.gasPrice
         if self.start_time == 0:
             self.start_time = time.time_ns()
+
+    @property
+    def sig(self) -> str:
+        return self.neon_tx.hex_tx_sig
+
+    @property
+    def sender_address(self) -> str:
+        return self.neon_tx.hex_sender
 
     @property
     def nonce(self) -> int:
@@ -73,6 +78,7 @@ class MPTxRequest(MPRequest):
 
 @dataclass(frozen=True)
 class OpResIdent:
+    evm_program_id: SolPubKey
     public_key: str
     private_key: bytes
     res_id: int = -1
@@ -102,10 +108,8 @@ class MPTxExecRequest(MPTxRequest):
     def clone(tx: MPTxRequest, res_ident: OpResIdent, elf_param_dict: Dict[str, str]):
         req = MPTxExecRequest(
             req_id=tx.req_id,
-            sig=tx.sig,
             neon_tx=tx.neon_tx,
             neon_tx_exec_cfg=tx.neon_tx_exec_cfg,
-            sender_address=tx.sender_address,
             start_time=tx.start_time,
             elf_param_dict=elf_param_dict,
             res_ident=res_ident

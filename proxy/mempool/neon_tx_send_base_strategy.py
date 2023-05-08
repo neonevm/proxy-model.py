@@ -163,10 +163,9 @@ class BaseNeonTxStrategy(abc.ABC):
             ]
         )
 
-    @staticmethod
-    def _find_sol_neon_ix(tx_send_state: SolTxSendState) -> Optional[SolNeonIxReceiptInfo]:
+    def _find_sol_neon_ix(self, tx_send_state: SolTxSendState) -> Optional[SolNeonIxReceiptInfo]:
         tx_receipt_info = SolTxReceiptInfo.from_tx_receipt(tx_send_state.receipt)
-        for sol_neon_ix in tx_receipt_info.iter_sol_neon_ix():
+        for sol_neon_ix in tx_receipt_info.iter_sol_ix(self._ctx.config.evm_program_id):
             return sol_neon_ix
         return None
 

@@ -40,7 +40,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
                 LOG.debug(f'Set truncated Neon tx result: {neon_tx_res}')
 
         else:
-            raise SolTxError(tx_state.receipt)
+            raise SolTxError(self._ctx.config.evm_program_id, tx_state.receipt)
 
         return neon_tx_res
 

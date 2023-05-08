@@ -14,11 +14,14 @@ from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.solana_tx import SolPubKey
 
-from ..mempool.executor_mng import MPExecutorMng
+from ..mempool.mempool_api import (
+    MPRequest, OpResIdent,
+    MPTxRequest, MPTxExecRequest, MPTxExecResult, MPTxExecResultCode, MPTxSendResult,
+    MPGasPriceResult, MPSenderTxCntData, MPTxSendResultCode
+)
+
+from ..mempool.executor_mng import MPExecutorMng, IMPExecutorMngUser
 from ..mempool.mempool import MemPool, MPTask, MPTxRequestList
-from ..mempool.mempool_api import MPRequest, OpResIdent
-from ..mempool.mempool_api import MPTxRequest, MPTxExecRequest, MPTxExecResult, MPTxExecResultCode, MPTxSendResult
-from ..mempool.mempool_api import MPGasPriceResult, MPSenderTxCntData, MPTxSendResultCode
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 from ..common_neon.eth_proto import NeonTx
 from ..common_neon.elf_params import ElfParams
@@ -32,6 +35,8 @@ def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: 
                                from_acct: Union[NeonAccount, NeonLocalAccount, None] = None,
                                to_acct: Union[NeonAccount, NeonLocalAccount, None] = None,
                                value: int = 0, data: bytes = b'') -> MPTxExecRequest:
+    evm_program_id = SolPubKey.from_string('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
+
     if from_acct is None:
         from_acct = NeonAccount.create()
 
@@ -43,16 +48,14 @@ def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: 
         dict(nonce=nonce, chainId=111, gas=gas, gasPrice=gas_price, to=to_addr, value=value, data=data),
         from_acct.key
     )
-    neon_sig = signed_tx_data.hash.hex()
     neon_tx = NeonTx.from_string(bytearray(signed_tx_data.rawTransaction))
     neon_tx_exec_cfg = NeonTxExecCfg()
     neon_tx_exec_cfg.set_state_tx_cnt(0)
     mp_tx_req = MPTxExecRequest(
         req_id=req_id,
-        sig=neon_sig,
         neon_tx=neon_tx,
         neon_tx_exec_cfg=neon_tx_exec_cfg,
-        res_ident=OpResIdent(public_key='test', private_key=b'test'),
+        res_ident=OpResIdent(evm_program_id=evm_program_id, public_key='test', private_key=b'test'),
         elf_param_dict=ElfParams().elf_param_dict
     )
     return mp_tx_req
@@ -74,10 +77,12 @@ class MockTask:
         return self._exception
 
 
-class MockMPExecutor(MPExecutorMng):
-    def __init__(self, *args, **kwargs):
+class FakeExecutorMsgUser(IMPExecutorMngUser):
+    def on_executor_released(self, executor_id: int):
         pass
 
+
+class MockMPExecutor(MPExecutorMng):
     def submit_mp_request(self, mp_req: MPRequest) -> MPTask:
         return self.create_mp_task(mp_req)
 
@@ -102,14 +107,11 @@ class MockMPExecutor(MPExecutorMng):
 
 
 class MockResourceManager(OpResMng):
-    def __init__(self, *args):
-        pass
-
     def init_resource_list(self, res_ident_list: List[Union[OpResIdent, bytes]]) -> None:
         pass
 
     def get_resource(self, ident: str) -> OpResIdent:
-        return OpResIdent(public_key='test', private_key=b'test')
+        return OpResIdent(self._config.evm_program_id, public_key='test', private_key=b'test')
 
     def enable_resource(self, ident: OpResIdent) -> None:
         pass
@@ -130,7 +132,11 @@ class FakeConfig(Config):
         return 0
 
     @property
-    def evm_loader_id(self) -> SolPubKey:
+    def gather_statistics(self) -> bool:
+        return False
+
+    @property
+    def evm_program_id(self) -> SolPubKey:
         return SolPubKey.from_string('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
 
     @property
@@ -145,18 +151,21 @@ class FakeConfig(Config):
     def recheck_resource_after_uses_cnt(self) -> int:
         return 1000
 
-    @property
-    def gather_statistics(self) -> bool:
-        return False
-
 
 class TestMemPool(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self._executor = MockMPExecutor()
-        self._config = FakeConfig()
-        self._stat_client = ProxyStatClient(self._config)
-        self._op_res_mng = MockResourceManager(self._config)
-        self._mempool = MemPool(self._config, self._stat_client, self._op_res_mng, self._executor)
+        config = FakeConfig()
+        self._config = config
+
+        stat_client = ProxyStatClient(config)
+        self._stat_client = stat_client
+
+        user = FakeExecutorMsgUser()
+        self._user = user
+
+        self._executor = MockMPExecutor(config, user, stat_client)
+        self._op_res_mng = MockResourceManager(self._config, stat_client)
+        self._mempool = MemPool(self._config, stat_client, self._op_res_mng, self._executor)
 
         price_result = MPGasPriceResult(
             suggested_gas_price=1,

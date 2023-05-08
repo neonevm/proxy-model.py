@@ -5,17 +5,17 @@ import re
 import enum
 from typing import Union, Optional, Any, Tuple, List, cast
 
-from ..common_neon.environment_data import EVM_LOADER_ID
-from ..common_neon.solana_tx import SolTxReceipt
+from ..common_neon.solana_tx import SolTxReceipt, SolPubKey
 from ..common_neon.utils import get_from_dict
 from ..common_neon.solana_neon_tx_receipt import SolTxLogDecoder, SolIxLogState
 
 
 class SolTxError(BaseException):
-    def __init__(self, receipt: SolTxReceipt):
-        super().__init__(receipt)
+    def __init__(self, evm_program_id: SolPubKey, receipt: SolTxReceipt):
+        super().__init__(evm_program_id, receipt)
 
         self._receipt = receipt
+        self._evm_program_id = str(evm_program_id)
 
         log_list = self._filter_raw_log_list(receipt)
         if len(log_list) == 0:
@@ -33,8 +33,7 @@ class SolTxError(BaseException):
         self._filter_log_msg_list(ix_log_state, log_msg_list)
         return log_msg_list
 
-    @staticmethod
-    def _get_program_name(uid: str) -> str:
+    def _get_program_name(self, uid: str) -> str:
         if uid == 'ComputeBudget111111111111111111111111111111':
             return 'ComputeBudget'
         elif uid == '11111111111111111111111111111111':
@@ -45,7 +44,7 @@ class SolTxError(BaseException):
             return 'Metaplex'
         elif uid == 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA':
             return 'Token'
-        elif uid == EVM_LOADER_ID:
+        elif uid == self._evm_program_id:
             return 'NeonEVM'
         return uid
 
@@ -190,7 +189,7 @@ class SolTxErrorParser:
         r'Program log: Invalid Nonce, origin \w+ nonce (\d+) != Transaction nonce (\d+)'
     )
 
-    def __init__(self, receipt: Union[SolTxReceipt, BaseException, str]):
+    def __init__(self, evm_program_id: SolPubKey, receipt: Union[SolTxReceipt, BaseException, str]):
         assert isinstance(receipt, dict) or isinstance(receipt, BaseException) or isinstance(receipt, str)
 
         if isinstance(receipt, SolTxError):
@@ -198,6 +197,7 @@ class SolTxErrorParser:
         else:
             self._receipt = receipt
 
+        self._evm_program_id = str(evm_program_id)
         self._log_list: Optional[List[str]] = None
         self._evm_log_list: Optional[List[str]] = None
 
@@ -292,7 +292,7 @@ class SolTxErrorParser:
         raw_log_msg_list = self._get_log_list()
         ix_log_state = SolTxLogDecoder().decode(raw_log_msg_list)
         for ix_log_msg in ix_log_state.inner_log_list:
-            if ix_log_msg.program != EVM_LOADER_ID:
+            if ix_log_msg.program != self._evm_program_id:
                 continue
             log_list.extend(ix_log_msg.iter_str_log_msg())
         return log_list

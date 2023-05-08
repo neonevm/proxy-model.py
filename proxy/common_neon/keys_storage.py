@@ -1,6 +1,7 @@
 import os
 from typing import Optional
-from proxy.common_neon.address import NeonAddress
+
+from .address import NeonAddress
 
 
 class KeyStorage:

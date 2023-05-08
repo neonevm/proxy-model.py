@@ -270,7 +270,7 @@ class Indexer(IndexerBase):
 
                 sol_tx_cost = SolTxCostInfo.from_tx_meta(sol_tx_meta)
                 neon_block.add_sol_tx_cost(sol_tx_cost)
-                is_error = SolTxErrorParser(sol_tx_meta.tx).check_if_error()
+                is_error = SolTxErrorParser(self._config.evm_program_id, sol_tx_meta.tx).check_if_error()
 
             for sol_neon_ix in state.iter_sol_neon_ix():
                 with logging_context(sol_neon_ix=sol_neon_ix.req_id):
@@ -313,7 +313,10 @@ class Indexer(IndexerBase):
             start_block_slot = finalized_neon_block.block_slot + 1
 
         try:
-            state = SolNeonTxDecoderState(self._finalized_sol_tx_collector, start_block_slot, finalized_neon_block)
+            state = SolNeonTxDecoderState(
+                self._config, self._finalized_sol_tx_collector,
+                start_block_slot, finalized_neon_block
+            )
             self._run_sol_tx_collector(state, 0)
         except SolHistoryNotFound as err:
             LOG.debug(f'skip parsing of finalized history: {str(err)}')

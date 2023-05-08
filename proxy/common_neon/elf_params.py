@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from typing import Optional, Dict
 
@@ -8,7 +7,6 @@ from singleton_decorator import singleton
 
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.environment_utils import NeonCli
-from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.config import Config
 
 
@@ -120,5 +118,4 @@ class ElfParams:
 
     def set_elf_param_dict(self, elf_param_dict: Dict[str, str]) -> ElfParams:
         self._elf_param_dict = elf_param_dict
-        self._elf_param_dict['NEON_EVM_ID'] = EVM_LOADER_ID
         return self

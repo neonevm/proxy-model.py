@@ -14,7 +14,6 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 import spl.token.instructions as SplTokenInstrutions
 
 from proxy.common_neon.metaplex import create_metadata_instruction_data, create_metadata_instruction
-from proxy.common_neon.environment_data import EVM_LOADER_ID
 from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolAccount, SolPubKey
 from proxy.common_neon.neon_instruction import create_account_layout
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
@@ -28,7 +27,6 @@ from proxy.testing.testing_helpers import Proxy, SolClient, NeonLocalAccount
 
 
 MAX_ZERO_GAS_PRICE_WAIT_TIME = 15
-EVM_LOADER_ID = SolPubKey.from_string(EVM_LOADER_ID)
 NAME = 'TestToken'
 SYMBOL = 'TST'
 
@@ -89,7 +87,7 @@ class TestGasTankIntegration(TestCase):
 
         print(f'Created new token mint: {cls.token.pubkey}')
 
-        metadata = create_metadata_instruction_data(NAME, SYMBOL, 0, ())
+        metadata = create_metadata_instruction_data(NAME, SYMBOL)
         tx = SolLegacyTx(
             name='CreateMetadata',
             ix_list=[
@@ -107,22 +105,22 @@ class TestGasTankIntegration(TestCase):
     @classmethod
     def deploy_erc20_for_spl(cls):
         cls.erc20_for_spl = ERC20Wrapper(
+            cls.config,
             cls.proxy.web3,
             NAME,
             SYMBOL,
             cls.token,
             cls.admin,
-            cls.mint_authority,
-            EVM_LOADER_ID
+            cls.mint_authority
         )
         cls.erc20_for_spl.deploy_wrapper()
 
-    @staticmethod
-    def create_account_instruction(eth_address: str, payer: SolPubKey):
-        dest_address_solana, nonce = neon_2program(eth_address)
+    @classmethod
+    def create_account_instruction(cls, neon_address: str, payer: SolPubKey):
+        dest_address_solana, nonce = neon_2program(cls.config.evm_program_id, neon_address)
         return SolTxIx(
-            program_id=EVM_LOADER_ID,
-            data=create_account_layout(bytes.fromhex(eth_address[2:])),
+            program_id=cls.config.evm_program_id,
+            data=create_account_layout(bytes.fromhex(neon_address[2:])),
             accounts=[
                 SolAccountMeta(pubkey=payer, is_signer=True, is_writable=True),
                 SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
