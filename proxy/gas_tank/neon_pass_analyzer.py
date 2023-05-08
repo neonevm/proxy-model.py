@@ -19,8 +19,8 @@ from ..common_neon.evm_log_decoder import decode_log_list, NeonLogTxReturn
 
 LOG = logging.getLogger(__name__)
 
-EVM_LOADER_CREATE_ACCT = 0x28
-EVM_LOADER_CALL_FROM_RAW_TRX = 0x1f
+EVM_PROGRAM_CREATE_ACCT = 0x28
+EVM_PROGRAM_CALL_FROM_RAW_TRX = 0x1f
 
 TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
 TOKEN_APPROVE = 0x04
@@ -101,7 +101,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
 
     def __init__(self, config: Config, token_whitelist: Union[bool, Dict[str, int]]):
         super().__init__(config, token_whitelist)
-        self._evm_loader_id = str(config.evm_loader_id)
+        self._evm_program_id = str(config.evm_program_id)
 
     def _check_on_neon_pass_tx(self, tx: NPSolTx) -> List[Tuple[NeonAddress, NeonTxInfo]]:
         tx_parser = NPTxParser(tx)
@@ -115,7 +115,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
         #   1. Create token account (token.init_v2)
         #   2. Transfer tokens (token.transfer)
         # First: select all instructions that can form such chains
-        create_ix_list = self._find_evm_ix_list(tx_parser, 'create account', EVM_LOADER_CREATE_ACCT)
+        create_ix_list = self._find_evm_ix_list(tx_parser, 'create account', EVM_PROGRAM_CREATE_ACCT)
         if not len(create_ix_list):
             return approved_list
 
@@ -123,7 +123,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
         if not len(approve_ix_list):
             return approved_list
 
-        call_ix_list = self._find_evm_ix_list(tx_parser, 'call', EVM_LOADER_CALL_FROM_RAW_TRX)
+        call_ix_list = self._find_evm_ix_list(tx_parser, 'call', EVM_PROGRAM_CALL_FROM_RAW_TRX)
         if not len(call_ix_list):
             return approved_list
 
@@ -155,7 +155,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
         return approved_list
 
     def _find_evm_ix_list(self, tx_parser: NPTxParser, caption: str, tag_id: int) -> List[Tuple[int, NPSolIx]]:
-        return tx_parser.find_ix_list(caption, self._evm_loader_id, tag_id)
+        return tx_parser.find_ix_list(caption, self._evm_program_id, tag_id)
 
     @staticmethod
     def _find_token_ix_list(tx_parser: NPTxParser, caption: str, tag_id: int) -> List[Tuple[int, NPSolIx]]:
@@ -207,7 +207,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
 
         sol_caller, _ = SolPubKey.find_program_address(
             [ACCOUNT_SEED_VERSION, b'AUTH', erc20, bytes(12) + neon_tx.sender],
-            self._config.evm_loader_id
+            self._config.evm_program_id
         )
         if SolPubKey.from_string(tx_parser.acct_key_list[approve_ix['accounts'][1]]) != sol_caller:
             LOG.debug(f"{tx_parser.acct_key_list[approve_ix['accounts'][1]]} != {sol_caller}")

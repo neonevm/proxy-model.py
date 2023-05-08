@@ -3,10 +3,13 @@ import logging
 from multiprocessing import Process
 from typing import Any, Optional, cast, Union
 
+from .mempool_api import (
+    MPResult, MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest,
+    MPPendingTxNonceRequest, MPMempoolTxNonceRequest
+)
+
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 from .mempool import MemPool
-from .mempool_api import MPResult, MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest
-from .mempool_api import MPPendingTxNonceRequest, MPMempoolTxNonceRequest
 from .mempool_replicator import MemPoolReplicator
 from .operator_resource_mng import OpResMng
 

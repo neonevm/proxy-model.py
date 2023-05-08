@@ -61,7 +61,7 @@ class NeonCli(CliBase):
                 'neon-cli',
                 '--commitment=recent',
                 '--url', self._config.solana_url,
-                '--evm_loader', f'{str(self._config.evm_loader_id)}',
+                '--evm_loader', f'{str(self._config.evm_program_id)}',
                 '--loglevel',  f'{self._emulator_logging_level}'
             ]
             cmd.extend(['-vvv'] if self._config.neon_cli_debug_log else [])

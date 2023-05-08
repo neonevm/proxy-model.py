@@ -76,6 +76,7 @@ class BlockedTest(unittest.TestCase):
 
         res_acct = wallet.get_acc()
         cls.resource_iter = resource = OpResInfo.from_ident(OpResIdent(
+            config.evm_program_id,
             public_key=str(res_acct.pubkey()),
             private_key=res_acct.secret(),
             res_id=365
@@ -84,6 +85,7 @@ class BlockedTest(unittest.TestCase):
 
         res_single_acct = wallet.get_acc()
         cls.resource_single = resource = OpResInfo.from_ident(OpResIdent(
+            config.evm_program_id,
             public_key=str(res_single_acct.pubkey()),
             private_key=res_single_acct.secret(),
             res_id=366
@@ -97,10 +99,10 @@ class BlockedTest(unittest.TestCase):
 
         reid_eth = deployed_info.contract.address.lower()
         print('contract_eth', reid_eth)
-        cls.re_id, _ = re_id, _ = neon_2program(reid_eth)
+        cls.re_id, _ = re_id, _ = neon_2program(config.evm_program_id, reid_eth)
         print('contract', re_id)
 
-        cls.caller, _ = neon_2program(cls.eth_account.address)
+        cls.caller, _ = neon_2program(config.evm_program_id, cls.eth_account.address)
 
     def create_blocked_transaction(self, resource: OpResInfo):
         print("\ncreate_blocked_transaction")
@@ -110,7 +112,7 @@ class BlockedTest(unittest.TestCase):
         tx_store = self.proxy.sign_transaction(self.eth_account, tx_store)
         print(f'blocked tx hash: {tx_store.tx_signed.hash.hex()}')
 
-        neon_ix_builder = NeonIxBuilder(resource.public_key)
+        neon_ix_builder = NeonIxBuilder(self.config, resource.public_key)
         neon_ix_builder.init_operator_neon(NeonAddress.from_private_key(resource.secret_key))
 
         neon_tx = NeonTx.from_string(tx_store.tx_signed.rawTransaction)

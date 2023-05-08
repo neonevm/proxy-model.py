@@ -99,7 +99,7 @@ class SolTxMetaCollector(ABC):
         response_list_len = 1
         while response_list_len:
             response_list = self._solana.get_sig_list_for_address(
-                self._config.evm_loader_id,
+                self._config.evm_program_id,
                 start_sig, self._config.indexer_poll_cnt, self._commitment
             )
             response_list_len = len(response_list)

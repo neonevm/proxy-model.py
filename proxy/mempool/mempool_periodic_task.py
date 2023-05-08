@@ -7,6 +7,7 @@ from .mempool_api import MPTask
 from .executor_mng import MPExecutorMng
 from ..common_neon.utils.json_logger import logging_context
 
+
 MPPeriodicTaskRequest = TypeVar('MPPeriodicTaskRequest')
 MPPeriodicTaskResult = TypeVar('MPPeriodicTaskResult')
 

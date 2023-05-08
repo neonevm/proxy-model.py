@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
 class EthereumError(BaseException):
@@ -89,6 +89,7 @@ class CommitLevelError(RescheduleError):
 
 class NonceTooLowError(BaseException):
     _empty_sender = '?'
+    eth_error_code = -32002
 
     def __init__(self, sender: str, tx_nonce: int, state_tx_cnt: int):
         super().__init__(sender, tx_nonce, state_tx_cnt)
@@ -100,17 +101,18 @@ class NonceTooLowError(BaseException):
     def init_no_sender(tx_nonce: int, state_tx_cnt: int) -> NonceTooLowError:
         return NonceTooLowError(NonceTooLowError._empty_sender, tx_nonce, state_tx_cnt)
 
-    def is_empty_sender(self) -> bool:
-        return self._sender == self._empty_sender
+    @staticmethod
+    def raise_if_error(sender: str, tx_nonce: Optional[int], state_tx_cnt: Optional[int]) -> None:
+        if tx_nonce is None:
+            tx_nonce = 0
+        if state_tx_cnt is None:
+            state_tx_cnt = 0
 
-    def init_sender(self, sender: str) -> NonceTooLowError:
-        return NonceTooLowError(sender, self._tx_nonce, self._state_tx_cnt)
+        if state_tx_cnt > tx_nonce:
+            NonceTooLowError.raise_error(sender, tx_nonce, state_tx_cnt)
 
     @staticmethod
-    def raise_if_error(sender: str, tx_nonce: int, state_tx_cnt: int) -> None:
-        if state_tx_cnt <= tx_nonce:
-            return
-
+    def raise_error(sender: str, tx_nonce: int, state_tx_cnt: int) -> None:
         raise NonceTooLowError(sender, tx_nonce, state_tx_cnt)
 
     def __str__(self) -> str:

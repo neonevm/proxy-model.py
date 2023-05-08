@@ -1,7 +1,5 @@
 import logging
 
-from typing import cast
-
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import RescheduleError, NonceTooLowError, NonceTooHighError, BadResourceError
 
@@ -16,23 +14,14 @@ LOG = logging.getLogger(__name__)
 
 
 class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
-    @staticmethod
-    def _complete_nonce_error(mp_tx_req: MPTxExecRequest, exc: BaseException) -> BaseException:
-        if not isinstance(exc, NonceTooLowError):
-            return exc
-
-        nonce_exc = cast(NonceTooLowError, exc)
-        if not nonce_exc.is_empty_sender():
-            return exc
-
-        # sender is absent on the level of SolTxSender
-        return nonce_exc.init_sender(mp_tx_req.sender_address)
-
     def execute_neon_tx(self, mp_tx_req: MPTxExecRequest) -> MPTxExecResult:
         neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
         try:
             assert neon_tx_exec_cfg is not None
             self.execute_neon_tx_impl(mp_tx_req)
+
+        except NonceTooLowError:
+            LOG.debug(f'Skip {mp_tx_req}, reason: nonce too low')
 
         except NonceTooHighError:
             LOG.debug(f'Reschedule tx {mp_tx_req}, reason: nonce too high')
@@ -48,7 +37,6 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
 
         except BaseException as exc:
             LOG.error(f'Failed to execute tx {mp_tx_req.sig}', exc_info=exc)
-            exc = self._complete_nonce_error(mp_tx_req, exc)
             return MPTxExecResult(MPTxExecResultCode.Failed, exc)
 
         return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)

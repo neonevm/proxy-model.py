@@ -23,16 +23,16 @@ from ..indexer.utils import MetricsToLogger
 
 LOG = logging.getLogger(__name__)
 
-EVM_LOADER_HOLDER_WRITE = 0x26
+EVM_PROGRAM_HOLDER_WRITE = 0x26
 
-EVM_LOADER_CALL_FROM_DATA = 0x1f
-EVM_LOADER_CALL_FROM_ACCOUNT = 0x2A
+EVM_PROGRAM_CALL_FROM_DATA = 0x1f
+EVM_PROGRAM_CALL_FROM_ACCOUNT = 0x2A
 
-EVM_LOADER_TX_STEP_FROM_DATA = 0x20
-EVM_LOADER_TX_STEP_FROM_ACCOUNT = 0x21
-EVM_LOADER_TX_STEP_FROM_ACCOUNT_NO_CHAINID = 0x22
+EVM_PROGRAM_TX_STEP_FROM_DATA = 0x20
+EVM_PROGRAM_TX_STEP_FROM_ACCOUNT = 0x21
+EVM_PROGRAM_TX_STEP_FROM_ACCOUNT_NO_CHAINID = 0x22
 
-EVM_LOADER_CANCEL = 0x23
+EVM_PROGRAM_CANCEL = 0x23
 
 
 class GasTank(IndexerBase):
@@ -173,7 +173,7 @@ class GasTank(IndexerBase):
             return
         tx_info.append_receipt(sol_neon_ix)
 
-        if ix_code == EVM_LOADER_CALL_FROM_ACCOUNT:
+        if ix_code == EVM_PROGRAM_CALL_FROM_ACCOUNT:
             if tx_info.status != GasTankTxInfo.Status.Done:
                 LOG.warning('no tx_return for single call')
             else:
@@ -263,24 +263,24 @@ class GasTank(IndexerBase):
 
         self._process_finalized_tx_list(tx_receipt_info.block_slot)
 
-        for sol_neon_ix in tx_receipt_info.iter_sol_neon_ix():
+        for sol_neon_ix in tx_receipt_info.iter_sol_ix(self._config.evm_program_id):
             ix_code = sol_neon_ix.ix_data[0]
             LOG.debug(f'instruction: {ix_code} {sol_neon_ix.neon_tx_sig}')
-            if ix_code == EVM_LOADER_HOLDER_WRITE:
+            if ix_code == EVM_PROGRAM_HOLDER_WRITE:
                 self._process_write_holder_ix(sol_neon_ix)
 
-            elif ix_code in {EVM_LOADER_TX_STEP_FROM_ACCOUNT,
-                             EVM_LOADER_TX_STEP_FROM_ACCOUNT_NO_CHAINID,
-                             EVM_LOADER_CALL_FROM_ACCOUNT}:
+            elif ix_code in {EVM_PROGRAM_TX_STEP_FROM_ACCOUNT,
+                             EVM_PROGRAM_TX_STEP_FROM_ACCOUNT_NO_CHAINID,
+                             EVM_PROGRAM_CALL_FROM_ACCOUNT}:
                 self._process_step_ix(sol_neon_ix, ix_code)
 
-            elif ix_code == EVM_LOADER_CALL_FROM_DATA:
+            elif ix_code == EVM_PROGRAM_CALL_FROM_DATA:
                 self._process_call_raw_tx(sol_neon_ix)
 
             elif ix_code == EVM_LOADER_TX_STEP_FROM_DATA:
                 self._process_call_raw_nochain_id_tx(sol_neon_ix)
 
-            elif ix_code == EVM_LOADER_CANCEL:
+            elif ix_code == EVM_PROGRAM_CANCEL:
                 self._process_cancel(sol_neon_ix)
 
     def _has_gas_less_tx_permit(self, account: NeonAddress) -> bool:

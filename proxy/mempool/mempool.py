@@ -6,11 +6,14 @@ import time
 from collections import deque
 from typing import List, Tuple, Optional, Any, Dict, cast, Iterator, Union, Deque
 
+from .mempool_api import (
+    MPRequest, MPRequestType, MPTask, MPTxRequestList,
+    MPResult, MPGasPriceResult,
+    MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest,
+    MPTxSendResult, MPTxSendResultCode
+)
+
 from .executor_mng import MPExecutorMng
-from .mempool_api import MPRequest, MPRequestType, MPTask, MPTxRequestList
-from .mempool_api import MPResult, MPGasPriceResult
-from .mempool_api import MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest
-from .mempool_api import MPTxSendResult, MPTxSendResultCode
 from .mempool_neon_tx_dict import MPTxDict
 from .mempool_periodic_task_elf_params import MPElfParamDictTaskLoop
 from .mempool_periodic_task_free_alt_queue import MPFreeALTQueueTaskLoop
@@ -100,6 +103,10 @@ class MemPool:
 
     async def schedule_mp_tx_request(self, tx: MPTxRequest) -> MPTxSendResult:
         try:
+            if self._completed_tx_dict.get(tx.sig) is not None:
+                LOG.debug('Tx is already processed')
+                return MPTxSendResult(MPTxSendResultCode.AlreadyKnown, state_tx_cnt=None)
+
             result: Optional[MPTxSendResult] = self._update_gas_price(tx)
             if result is not None:
                 return result
@@ -107,11 +114,11 @@ class MemPool:
             result: MPTxSendResult = self._tx_schedule.add_tx(tx)
             if result.code == MPTxSendResultCode.Success:
                 self._stat_client.commit_tx_add()
-            LOG.debug(f'Got tx {tx.sig} and scheduled request')
+            LOG.debug('Got tx and scheduled request')
             return result
 
         except BaseException as exc:
-            LOG.error(f'Failed to schedule tx {tx.sig}', exc_info=exc)
+            LOG.error('Failed to schedule tx', exc_info=exc)
             return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
 
         finally:
@@ -164,7 +171,7 @@ class MemPool:
                 return code
 
             except BaseException as exc:
-                LOG.error(f'Failed to enqueue to execute {tx.sig}', exc_info=exc)
+                LOG.error('Failed to enqueue to execute', exc_info=exc)
                 self._on_reschedule_tx(tx)
                 return NeonTxBeginCode.Failed
 
@@ -177,7 +184,8 @@ class MemPool:
         if tx is None:
             return None
 
-        LOG.debug(f'Got tx {tx.sig} from rescheduling queue')
+        with logging_context(req_id=tx.req_id):
+            LOG.debug('Got tx from rescheduling queue')
         self._rescheduled_tx_queue.popleft()
         return tx
 
@@ -190,7 +198,8 @@ class MemPool:
         if tx is None:
             return None
 
-        LOG.debug(f'Got tx {tx.sig} from schedule')
+        with logging_context(req_id=tx.req_id):
+            LOG.debug('Got tx from schedule')
         self._tx_schedule.acquire_tx()
         return tx
 
@@ -269,14 +278,14 @@ class MemPool:
         try:
             exc = mp_task.aio_task.exception()
             if exc is not None:
-                LOG.error(f'Exception during processing tx {tx.sig} on executor', exc_info=exc)
+                LOG.error('Exception during processing tx on executor', exc_info=exc)
                 return self._on_fail_tx(tx, exc)
 
             mp_result = mp_task.aio_task.result()
             return self._process_mp_tx_result(tx, mp_result)
 
         except BaseException as exc:
-            LOG.error(f'Exception on the result processing of tx {tx.sig}', exc_info=exc)
+            LOG.error('Exception on the result processing of tx', exc_info=exc)
         return NeonTxEndCode.Unspecified  # skip task
 
     def _process_mp_tx_result(self, tx: MPTxRequest, mp_res: Any) -> NeonTxEndCode:
@@ -317,7 +326,7 @@ class MemPool:
         return NeonTxEndCode.Canceled
 
     def _on_reschedule_tx(self, tx: MPTxRequest) -> NeonTxEndCode:
-        LOG.debug(f'Got reschedule status for tx {tx.sig}')
+        LOG.debug('Got reschedule status')
         asyncio.get_event_loop().create_task(self._reschedule_tx(tx))
         cfg = tx.neon_tx_exec_cfg
         if cfg.is_holder_used() or cfg.has_completed_receipt():
@@ -326,7 +335,7 @@ class MemPool:
 
     async def _reschedule_tx(self, tx: MPTxRequest):
         with logging_context(req_id=tx.req_id):
-            LOG.debug(f'Tx {tx.sig} will be rescheduled in {math.ceil(self.reschedule_timeout_sec * 1000)} msec')
+            LOG.debug(f'Tx will be rescheduled in {math.ceil(self.reschedule_timeout_sec * 1000)} msec')
 
         await asyncio.sleep(self.reschedule_timeout_sec)
 
@@ -340,21 +349,21 @@ class MemPool:
                     self._release_resource(tx)
                     self._tx_schedule.cancel_tx(tx)
             except BaseException as exc:
-                LOG.error(f'Exception on the result processing of tx {tx.sig}', exc_info=exc)
+                LOG.error('Exception on the result processing of tx', exc_info=exc)
 
         await self._kick_tx_schedule()
 
     def _on_done_tx(self, tx: MPTxRequest) -> NeonTxEndCode:
         self._release_resource(tx)
         self._tx_schedule.done_tx(tx)
-        self._completed_tx_dict.add(tx.sig, tx.neon_tx, None)
+        self._completed_tx_dict.add(tx.neon_tx, None)
         LOG.debug(f'Request {tx.sig} is done')
         return NeonTxEndCode.Done
 
     def _on_fail_tx(self, tx: MPTxRequest, exc: Optional[BaseException]) -> NeonTxEndCode:
         self._release_resource(tx)
         self._tx_schedule.fail_tx(tx)
-        self._completed_tx_dict.add(tx.sig, tx.neon_tx, exc)
+        self._completed_tx_dict.add(tx.neon_tx, exc)
         LOG.debug(f'Request {tx.sig} is failed - dropped away')
         return NeonTxEndCode.Failed
 
@@ -380,18 +389,18 @@ class MemPool:
 
     def suspend_processing(self) -> MPResult:
         if not self._is_active:
-            LOG.warning("No need to suspend mempool, already suspended")
+            LOG.warning('No need to suspend mempool, already suspended')
             return MPResult()
         self._is_active = False
-        LOG.info("Transaction processing suspended")
+        LOG.info('Transaction processing suspended')
         return MPResult()
 
     def resume_processing(self) -> MPResult:
         if self._is_active:
-            LOG.warning("No need to resume mempool, not suspended")
+            LOG.warning('No need to resume mempool, not suspended')
             return MPResult()
         self._is_active = True
-        LOG.info("Transaction processing resumed")
+        LOG.info('Transaction processing resumed')
         self._create_kick_tx_schedule_task()
         return MPResult()
 

@@ -15,10 +15,10 @@ class Config:
     def __init__(self):
         self._solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
         self._pp_solana_url = os.environ.get("PP_SOLANA_URL", self._solana_url)
-        self._evm_loader_id = SolPubKey.from_string(EVM_LOADER_ID)
+        self._evm_program_id = SolPubKey.from_string(EVM_LOADER_ID)
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
         self._mempool_executor_limit_cnt = self._env_int('MEMPOOL_EXECUTOR_LIMIT_CNT', 4, 1024)
-        self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 15 * 60)
+        self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 30 * 60)
         self._accept_reverted_tx_into_mempool = self._env_bool('ACCEPT_REVERTED_TX_INTO_MEMPOOL', False)
         self._holder_size = self._env_int("HOLDER_SIZE", 1024, 131072)  # 128*1024
         self._min_op_balance_to_warn = self._env_int("MIN_OPERATOR_BALANCE_TO_WARN", 9000000000, 9000000000)
@@ -130,8 +130,8 @@ class Config:
         return self._pp_solana_url
 
     @property
-    def evm_loader_id(self) -> SolPubKey:
-        return self._evm_loader_id
+    def evm_program_id(self) -> SolPubKey:
+        return self._evm_program_id
 
     @property
     def holder_size(self) -> int:
@@ -315,7 +315,7 @@ class Config:
     def as_dict(self) -> dict:
         return {
             'SOLANA_URL': self.solana_url,
-            'EVM_LOADER_ID': str(self.evm_loader_id),
+            'EVM_LOADER_ID': str(self.evm_program_id),
             'PP_SOLANA_URL': self.pyth_solana_url,
             'PYTH_MAPPING_ACCOUNT': str(self.pyth_mapping_account),
             'UPDATE_PYTH_MAPPING_PERIOD_SEC': self.update_pyth_mapping_period_sec,

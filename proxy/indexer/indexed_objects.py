@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import time
 import logging
-import dataclasses
 
 from collections import deque
 from dataclasses import dataclass
@@ -680,9 +679,11 @@ class SolNeonTxDecoderState:
     #           for solana_ix in solana_tx.solana_ix_list:
     #               solana_ix.level <- level in stack of calls
     #  ....
-    def __init__(self, sol_tx_meta_collector: SolTxMetaCollector,
+    def __init__(self, config: Config,
+                 sol_tx_meta_collector: SolTxMetaCollector,
                  start_block_slot: int,
                  neon_block: Optional[NeonIndexedBlockInfo]):
+        self._config = config
         self._start_time = time.time()
         self._init_block_slot = start_block_slot
         self._start_block_slot = start_block_slot
@@ -791,9 +792,10 @@ class SolNeonTxDecoderState:
     def iter_sol_neon_ix(self) -> Iterator[SolNeonIxReceiptInfo]:
         assert self._sol_tx_meta is not None
 
+        evm_program_id = self._config.evm_program_id
         try:
             self._sol_tx = SolTxReceiptInfo.from_tx_meta(self._sol_tx_meta)
-            for self._sol_neon_ix in self._sol_tx.iter_sol_neon_ix():
+            for self._sol_neon_ix in self._sol_tx.iter_sol_ix(evm_program_id):
                 self._sol_neon_ix_cnt += 1
                 yield self._sol_neon_ix
         finally:

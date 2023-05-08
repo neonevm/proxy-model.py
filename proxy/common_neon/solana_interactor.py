@@ -162,7 +162,7 @@ class SolInteractor:
         status = response.get('result', None)
         if status == 'ok':
             return 0
-        slots_behind = SolTxErrorParser(response).get_slots_behind()
+        slots_behind = SolTxErrorParser(self._config.evm_program_id, response).get_slots_behind()
         if slots_behind is not None:
             return int(slots_behind)
         return None
@@ -325,7 +325,7 @@ class SolInteractor:
                               commitment=SolCommit.Confirmed) -> Optional[NeonAccountInfo]:
         if not isinstance(neon_account, NeonAddress):
             neon_account = NeonAddress(neon_account)
-        account_sol, nonce = neon_2program(neon_account)
+        account_sol, nonce = neon_2program(self._config.evm_program_id, neon_account)
         info = self.get_account_info(account_sol, commitment=commitment)
         if info is None:
             return None
@@ -340,7 +340,7 @@ class SolInteractor:
                                    commitment=SolCommit.Confirmed) -> List[Optional[NeonAccountInfo]]:
         requests_list = list()
         for neon_account in neon_account_list:
-            account_sol, _nonce = neon_2program(neon_account)
+            account_sol, _nonce = neon_2program(self._config.evm_program_id, neon_account)
             requests_list.append(account_sol)
         responses_list = self.get_account_info_list(requests_list, commitment=commitment)
         accounts_list = list()
@@ -504,7 +504,7 @@ class SolInteractor:
 
             error = response.get('error', None)
             if error:
-                if SolTxErrorParser(error).check_if_already_processed():
+                if SolTxErrorParser(self._config.evm_program_id, error).check_if_already_processed():
                     result = str(tx.sig)
                     LOG.debug(f'Transaction is already processed: {str(result)}')
                     error = None

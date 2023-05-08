@@ -9,9 +9,8 @@ from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, cast
 
 import base58
 
-from ..common_neon.environment_data import EVM_LOADER_ID
 from ..common_neon.evm_log_decoder import decode_log_list, NeonLogTxReturn, NeonLogTxEvent
-from ..common_neon.solana_tx import SolTxReceipt
+from ..common_neon.solana_tx import SolTxReceipt, SolPubKey
 from ..common_neon.utils import str_fmt_object
 
 
@@ -594,8 +593,8 @@ class SolTxReceiptInfo(SolTxMetaInfo):
         ix_data = ix.get('data', None)
         return (ix_data is not None) and (len(ix_data) > 1)
 
-    def _is_neon_program(self, ix: Dict[str, Any]) -> bool:
-        return self._get_program_key(ix) == EVM_LOADER_ID
+    def _is_program(self, ix: Dict[str, Any], program_id: str) -> bool:
+        return self._get_program_key(ix) == program_id
 
     def get_log_state(self, ix_idx: int, inner_ix_idx: Optional[int]) -> Optional[SolIxLogState]:
         if ix_idx >= len(self._ix_log_msg_list):
@@ -620,9 +619,10 @@ class SolTxReceiptInfo(SolTxMetaInfo):
                 return inner_ix['instructions']
         return list()
 
-    def iter_sol_neon_ix(self) -> Iterator[SolNeonIxReceiptInfo]:
+    def iter_sol_ix(self, evm_program_id: SolPubKey) -> Iterator[SolNeonIxReceiptInfo]:
+        evm_program_id = str(evm_program_id)
         for ix_idx, ix in enumerate(self._ix_list):
-            if self._is_neon_program(ix) and self._has_ix_data(ix):
+            if self._is_program(ix, evm_program_id) and self._has_ix_data(ix):
                 log_state = self.get_log_state(ix_idx, None)
                 if log_state is not None:
                     ix_meta = SolIxMetaInfo.from_log_state(ix, ix_idx, None, log_state)
@@ -630,7 +630,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
 
             inner_ix_list = self._get_inner_ix_list(ix_idx)
             for inner_idx, inner_ix in enumerate(inner_ix_list):
-                if self._is_neon_program(inner_ix) and self._has_ix_data(inner_ix):
+                if self._is_program(inner_ix, evm_program_id) and self._has_ix_data(inner_ix):
                     log_state = self.get_log_state(ix_idx, inner_idx)
                     if log_state is not None:
                         ix_meta = SolIxMetaInfo.from_log_state(inner_ix, ix_idx, inner_idx, log_state)

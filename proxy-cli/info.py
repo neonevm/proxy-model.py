@@ -163,10 +163,9 @@ class InfoHandler:
     def _generate_holder_address(self, base_address: SolPubKey, rid: int) -> SolPubKey:
         return self._generate_resource_address(base_address, b'holder-', rid)
 
-    @staticmethod
-    def _generate_resource_address(base_address: SolPubKey, prefix: bytes, rid: int) -> SolPubKey:
+    def _generate_resource_address(self, base_address: SolPubKey, prefix: bytes, rid: int) -> SolPubKey:
         seed = perm_account_seed(prefix, rid)
-        return account_with_seed(base_address, seed)
+        return account_with_seed(self._config.evm_program_id, base_address, seed)
 
     def _get_neon_balance(self, neon_address: NeonAddress) -> Decimal:
         neon_layout = self._solana.get_neon_account_info(neon_address)

@@ -1,6 +1,5 @@
 import logging
 
-from ..common_neon.address import NeonAddress
 from ..common_neon.emulator_interactor import call_tx_emulated
 from ..common_neon.errors import NonceTooLowError, NonceTooHighError, WrongStrategyError, RescheduleError, BigTxError
 from ..common_neon.errors import NoMoreRetriesError
