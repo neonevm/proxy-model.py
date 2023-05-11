@@ -32,7 +32,7 @@ from .nonce_validator import NeonTxNonceValidator
 from .estimate import GasEstimate
 
 
-NEON_PROXY_PKG_VERSION = '0.15.18'
+NEON_PROXY_PKG_VERSION = '0.15.19'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 LOG = logging.getLogger(__name__)
 
