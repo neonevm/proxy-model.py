@@ -8,13 +8,13 @@ from rlp import encode as rlp_encode
 
 from solders.system_program import CreateAccountWithSeedParams, create_account_with_seed
 
-from ..common_neon.address import neon_2program, NeonAddress
-from ..common_neon.constants import INCINERATOR_ID, COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID
-from ..common_neon.elf_params import ElfParams
-from ..common_neon.config import Config
-from ..common_neon.eth_proto import NeonTx
-from ..common_neon.layouts import CREATE_ACCOUNT_LAYOUT
-from ..common_neon.solana_tx import SolTxIx, SolPubKey, SolAccountMeta
+from .address import neon_2program, NeonAddress
+from .constants import INCINERATOR_ID, COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID
+from .elf_params import ElfParams
+from .config import Config
+from .utils.eth_proto import NeonTx
+from .layouts import CREATE_ACCOUNT_LAYOUT
+from .solana_tx import SolTxIx, SolPubKey, SolAccountMeta
 
 
 LOG = logging.getLogger(__name__)

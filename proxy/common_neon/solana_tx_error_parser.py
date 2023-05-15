@@ -5,9 +5,9 @@ import re
 import enum
 from typing import Union, Optional, Any, Tuple, List, cast
 
-from ..common_neon.solana_tx import SolTxReceipt, SolPubKey
-from ..common_neon.utils import get_from_dict
-from ..common_neon.solana_neon_tx_receipt import SolTxLogDecoder, SolIxLogState
+from .solana_tx import SolTxReceipt, SolPubKey
+from .utils import get_from_dict
+from .solana_neon_tx_receipt import SolTxLogDecoder, SolIxLogState
 
 
 class SolTxError(BaseException):

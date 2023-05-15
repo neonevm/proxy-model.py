@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Set
 
-from ..common_neon.solana_tx import SolPubKey
-from ..common_neon.solana_tx_legacy import SolLegacyTx
-from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
-from ..common_neon.errors import ALTError
-from ..common_neon.solana_alt_list_filter import ALTListFilter
-from ..common_neon.layouts import ALTAccountInfo
+from .solana_tx import SolPubKey
+from .solana_tx_legacy import SolLegacyTx
+from .constants import ADDRESS_LOOKUP_TABLE_ID
+from .errors import ALTError
+from .solana_alt_list_filter import ALTListFilter
+from .layouts import ALTAccountInfo
 
 
 @dataclass(frozen=True)

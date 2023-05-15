@@ -5,12 +5,11 @@ import random
 
 from typing import Tuple, Union
 
+from eth_keys import keys as neon_keys
 from sha3 import keccak_256
 
-from eth_keys import keys as neon_keys
-
-from ..common_neon.solana_tx import SolPubKey
-from ..common_neon.constants import ACCOUNT_SEED_VERSION
+from .constants import ACCOUNT_SEED_VERSION
+from .solana_tx import SolPubKey
 
 
 class NeonAddress:

@@ -5,7 +5,7 @@ import logging
 
 from .solana_block import SolBlockInfo
 from .utils import str_fmt_object
-from ..evm_log_decoder import NeonLogTxEvent
+from .evm_log_decoder import NeonLogTxEvent
 
 
 LOG = logging.getLogger(__name__)

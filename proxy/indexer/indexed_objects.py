@@ -11,7 +11,7 @@ from typing import Iterator, List, Optional, Dict, Set, Deque, Tuple, cast
 
 from ..common_neon.config import Config
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolNeonIxReceiptInfo, SolTxCostInfo, SolTxReceiptInfo
-from ..common_neon.evm_log_decoder import NeonLogTxEvent
+from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolBlockInfo, str_fmt_object
 from ..indexer.solana_tx_meta_collector import SolTxMetaCollector
 

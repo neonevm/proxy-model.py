@@ -6,18 +6,18 @@ import time
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Set
 
-from ..common_neon.errors import (
+from .errors import (
     BlockHashNotFound, NonceTooLowError,
     CUBudgetExceededError, InvalidIxDataError, RequireResizeIterError,
     CommitLevelError, NodeBehindError, NoMoreRetriesError, BlockedAccountError,
     RescheduleError, WrongStrategyError
 )
 
-from ..common_neon.config import Config
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_tx import SolTx, SolBlockHash, SolTxReceipt, SolAccount, SolCommit
-from ..common_neon.solana_tx_error_parser import SolTxErrorParser, SolTxError
-from ..common_neon.utils import str_enum
+from .config import Config
+from .solana_interactor import SolInteractor
+from .solana_tx import SolTx, SolBlockHash, SolTxReceipt, SolAccount, SolCommit
+from .solana_tx_error_parser import SolTxErrorParser, SolTxError
+from .utils import str_enum
 
 
 LOG = logging.getLogger(__name__)
@@ -75,7 +75,6 @@ class SolTxSendState:
 
 
 class SolTxListSender:
-    _one_block_sec = 0.4
     _commit_set = SolCommit.upper_set(SolCommit.Confirmed)
     _big_block_height = 2 ** 64 - 1
     _big_block_slot = 2 ** 64 - 1
@@ -350,7 +349,7 @@ class SolTxListSender:
             return False
 
         if tx_status == tx_status.AltInvalidIndexError:
-            time.sleep(self._one_block_sec)
+            time.sleep(self._config.one_block_sec)
 
         if tx_status in self._resubmitted_tx_status_set:
             return True

@@ -5,7 +5,7 @@ from .operator_resource_mng import OpResInfo
 
 from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg, NeonAccountDict, NeonEmulatedResult
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolPubKey, SolAccountMeta, SolAccount

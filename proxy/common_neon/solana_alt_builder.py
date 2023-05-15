@@ -4,13 +4,13 @@ import time
 
 from typing import Optional, List
 
-from ..common_neon.errors import ALTError
-from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_alt import ALTInfo
-from ..common_neon.solana_alt_limit import ALTLimit
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_tx import SolTx, SolAccount, SolCommit
-from ..common_neon.solana_tx_legacy import SolLegacyTx
+from .errors import ALTError
+from .neon_instruction import NeonIxBuilder
+from .solana_alt import ALTInfo
+from .solana_alt_limit import ALTLimit
+from .solana_interactor import SolInteractor
+from .solana_tx import SolTx, SolAccount, SolCommit
+from .solana_tx_legacy import SolLegacyTx
 
 
 class ALTTxSet:

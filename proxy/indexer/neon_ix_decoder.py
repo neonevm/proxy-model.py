@@ -4,7 +4,7 @@ import dataclasses
 from typing import Any, List, Type, Optional, Iterator
 
 from ..common_neon.utils import NeonTxInfo
-from ..common_neon.evm_log_decoder import NeonLogTxEvent
+from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
 
 from ..indexer.indexed_objects import NeonIndexedTxInfo, NeonIndexedHolderInfo, NeonAccountInfo, SolNeonTxDecoderState
 

@@ -3,7 +3,7 @@ import multiprocessing
 import unittest
 
 from proxy.common_neon.neon_instruction import NeonIxBuilder
-from proxy.common_neon.eth_proto import NeonTx
+from proxy.common_neon.utils.eth_proto import NeonTx
 from proxy.common_neon.address import NeonAddress, neon_2program
 from proxy.common_neon.config import Config
 from proxy.common_neon.solana_tx import SolAccountMeta

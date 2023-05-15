@@ -1,7 +1,6 @@
 from .proxy import entry_point
 from .mempool.mempool_service import MPService
-
-from proxy.statistic.proxy_service import ProxyStatService
+from .statistic.proxy_service import ProxyStatService
 from .common_neon.config import Config
 
 

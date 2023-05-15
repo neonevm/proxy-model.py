@@ -28,7 +28,7 @@ from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import EthereumError
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils.json_logger import logging_context
 
 from ..statistic.data import NeonTxBeginCode, NeonTxBeginData, NeonTxEndCode, NeonTxEndData

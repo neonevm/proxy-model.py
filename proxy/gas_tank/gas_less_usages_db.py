@@ -1,19 +1,23 @@
 from typing import List, Iterator, Any
 
-from ..indexer.base_db import BaseDB
+from ..common_neon.db.base_db_table import BaseDBTable
+from ..common_neon.db.db_connect import DBConnection
+
 from .gas_tank_types import GasLessUsage
 
 
-class GasLessUsagesDB(BaseDB):
-    def __init__(self):
+class GasLessUsagesDB(BaseDBTable):
+    def __init__(self, db: DBConnection):
         super().__init__(
+            db,
             table_name='gas_less_usages',
             column_list=[
                 'address', 'block_slot', 'neon_sig', 'nonce', 'to_addr', 'operator', 'neon_total_gas_usage'
-            ]
+            ],
+            key_list=list()
         )
 
-    def add_gas_less_usage_list(self, cursor: BaseDB.Cursor, usage_list: Iterator[GasLessUsage]) -> None:
+    def add_gas_less_usage_list(self, usage_list: Iterator[GasLessUsage]) -> None:
         row_list: List[List[Any]] = list()
         for usage in usage_list:
             row_list.append([
@@ -22,4 +26,4 @@ class GasLessUsagesDB(BaseDB):
                 usage.operator, usage.neon_total_gas_usage
             ])
 
-        self._insert_batch(cursor, row_list)
+        self._insert_row_list(row_list)

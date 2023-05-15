@@ -11,13 +11,13 @@ from solana.rpc.commitment import Confirmed
 
 from solcx import install_solc, compile_source
 
-from ..common_neon.solana_tx import SolAccountMeta, SolAccount, SolPubKey
-from ..common_neon.address import NeonAddress, neon_2program
-from ..common_neon.constants import ACCOUNT_SEED_VERSION
-from ..common_neon.eth_proto import NeonTx
-from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.web3 import NeonWeb3, ChecksumAddress
-from ..common_neon.config import Config
+from .solana_tx import SolAccountMeta, SolAccount, SolPubKey
+from .address import NeonAddress, neon_2program
+from .constants import ACCOUNT_SEED_VERSION
+from .utils.eth_proto import NeonTx
+from .neon_instruction import NeonIxBuilder
+from .web3 import NeonWeb3, ChecksumAddress
+from .config import Config
 
 
 install_solc(version='0.7.6')

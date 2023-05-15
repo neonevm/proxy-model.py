@@ -5,8 +5,7 @@ from eth_utils import big_endian_to_int
 from dataclasses import dataclass
 
 from .utils import str_fmt_object
-
-from ..eth_proto import NeonTx
+from .eth_proto import NeonTx
 
 
 @dataclass(frozen=True)

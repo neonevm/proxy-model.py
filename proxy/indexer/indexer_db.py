@@ -1,27 +1,28 @@
 from typing import Optional, Iterator, List, Dict, Any
 
 from ..common_neon.utils import NeonTxReceiptInfo, SolBlockInfo
+from ..common_neon.db.db_connect import DBConnection
+from ..common_neon.db.sql_dict import SQLDict
+from ..common_neon.config import Config
 
-from ..indexer.base_db import BaseDB
 from ..indexer.indexed_objects import NeonIndexedBlockInfo
 from ..indexer.neon_tx_logs_db import NeonTxLogsDB
 from ..indexer.neon_txs_db import NeonTxsDB
 from ..indexer.solana_blocks_db import SolBlocksDB
 from ..indexer.solana_neon_txs_db import SolNeonTxsDB
 from ..indexer.solana_tx_costs_db import SolTxCostsDB
-from ..indexer.sql_dict import SQLDict
-from ..common_neon.config import Config
 
 
 class IndexerDB:
     def __init__(self, config: Config):
-        self._sol_blocks_db = SolBlocksDB(config)
-        self._sol_tx_costs_db = SolTxCostsDB()
-        self._neon_txs_db = NeonTxsDB()
-        self._sol_neon_txs_db = SolNeonTxsDB()
-        self._neon_tx_logs_db = NeonTxLogsDB()
+        self._db = DBConnection(config)
+        self._sol_blocks_db = SolBlocksDB(self._db)
+        self._sol_tx_costs_db = SolTxCostsDB(self._db)
+        self._neon_txs_db = NeonTxsDB(self._db)
+        self._sol_neon_txs_db = SolNeonTxsDB(self._db)
+        self._neon_tx_logs_db = NeonTxLogsDB(self._db)
 
-        self._db_list = [
+        self._db_table_list = [
             self._sol_blocks_db,
             self._sol_tx_costs_db,
             self._neon_txs_db,
@@ -29,7 +30,7 @@ class IndexerDB:
             self._neon_tx_logs_db
         ]
 
-        self._constants_db = SQLDict(tablename="constants")
+        self._constants_db = SQLDict(self._db, table_name='constants')
         for k in ['min_receipt_block_slot', 'latest_block_slot', 'starting_block_slot', 'finalized_block_slot']:
             if k not in self._constants_db:
                 self._constants_db[k] = 0
@@ -40,41 +41,48 @@ class IndexerDB:
         self._min_receipt_block_slot = self.get_min_receipt_block_slot()
 
     def is_healthy(self) -> bool:
-        return self._neon_tx_logs_db.is_connected()
+        return self._db.is_connected()
 
     def submit_block(self, neon_block: NeonIndexedBlockInfo) -> None:
-        with self._sol_blocks_db.conn() as conn:
-            with conn.cursor() as cursor:
-                self._sol_blocks_db.set_block_list(cursor, neon_block.iter_history_block())
-                if neon_block.is_finalized:
-                    self._finalize_block(cursor, neon_block)
-                self._neon_txs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
-                self._neon_tx_logs_db.set_tx_list(cursor, neon_block.iter_done_neon_tx())
-                self._sol_neon_txs_db.set_tx_list(cursor, neon_block.iter_sol_neon_ix())
-                self._sol_tx_costs_db.set_cost_list(cursor, neon_block.iter_sol_tx_cost())
+        self._db.run_tx(
+            lambda: self._submit_block(neon_block)
+        )
+
+    def finalize_block(self, neon_block: NeonIndexedBlockInfo) -> None:
+        self._db.run_tx(
+            lambda: self._finalize_block(neon_block)
+        )
+
+    def activate_block_list(self, iter_neon_block: Iterator[NeonIndexedBlockInfo]) -> None:
+        block_slot_list = [b.block_slot for n in iter_neon_block for b in n.iter_history_block() if not n.is_finalized]
+        if not len(block_slot_list):
+            return
+
+        self._db.run_tx(
+            lambda: self._activate_block_list(block_slot_list)
+        )
+
+    def _submit_block(self, neon_block: NeonIndexedBlockInfo) -> None:
+        self._sol_blocks_db.set_block_list(neon_block.iter_history_block())
+        if neon_block.is_finalized:
+            self._finalize_block(neon_block)
+        self._neon_txs_db.set_tx_list(neon_block.iter_done_neon_tx())
+        self._neon_tx_logs_db.set_tx_list(neon_block.iter_done_neon_tx())
+        self._sol_neon_txs_db.set_tx_list(neon_block.iter_sol_neon_ix())
+        self._sol_tx_costs_db.set_cost_list(neon_block.iter_sol_tx_cost())
 
         if self.get_starting_block().block_slot == 0:
             self._constants_db['starting_block_slot'] = neon_block.block_slot
 
-        if neon_block.is_finalized:
-            self._set_finalized_block_slot(neon_block.block_slot)
-
-    def _finalize_block(self, cursor: BaseDB.Cursor, neon_block: NeonIndexedBlockInfo) -> None:
+    def _finalize_block(self, neon_block: NeonIndexedBlockInfo) -> None:
         block_slot_list = [block.block_slot for block in neon_block.iter_history_block()]
-        for db in self._db_list:
-            db.finalize_block_list(cursor, self._finalized_block_slot, block_slot_list)
+        if len(block_slot_list) > 0:
+            for db_table in self._db_table_list:
+                db_table.finalize_block_list(self._finalized_block_slot, block_slot_list)
 
-    def finalize_block(self, neon_block: NeonIndexedBlockInfo) -> None:
-        with self._sol_blocks_db.conn() as conn:
-            with conn.cursor() as cursor:
-                self._finalize_block(cursor, neon_block)
-
-        self._set_finalized_block_slot(neon_block.block_slot)
-
-    def _set_finalized_block_slot(self, block_slot: int) -> None:
-        self._finalized_block_slot = block_slot
-        self._constants_db['finalized_block_slot'] = block_slot
-        self._set_latest_block_slot(block_slot)
+        self._finalized_block_slot = neon_block.block_slot
+        self._constants_db['finalized_block_slot'] = neon_block.block_slot
+        self._set_latest_block_slot(neon_block.block_slot)
 
     def _set_latest_block_slot(self, block_slot: int) -> None:
         if self._latest_block_slot > block_slot:
@@ -82,14 +90,8 @@ class IndexerDB:
         self._latest_block_slot = block_slot
         self._constants_db['latest_block_slot'] = block_slot
 
-    def activate_block_list(self, iter_neon_block: Iterator[NeonIndexedBlockInfo]) -> None:
-        block_slot_list = [b.block_slot for n in iter_neon_block for b in n.iter_history_block() if not n.is_finalized]
-        if not len(block_slot_list):
-            return
-
-        with self._sol_blocks_db.conn() as conn:
-            with conn.cursor() as cursor:
-                self._sol_blocks_db.activate_block_list(cursor, self._finalized_block_slot, block_slot_list)
+    def _activate_block_list(self, block_slot_list: List[int]) -> None:
+        self._sol_blocks_db.activate_block_list(self._finalized_block_slot, block_slot_list)
         self._set_latest_block_slot(block_slot_list[-1])
 
     def get_block_by_slot(self, block_slot: int) -> SolBlockInfo:

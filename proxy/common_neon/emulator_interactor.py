@@ -1,16 +1,16 @@
+import logging
 import re
 import subprocess
-import logging
+
 from typing import Optional, Dict, Any
 
-from ..common_neon.data import NeonEmulatedResult
-from ..common_neon.environment_utils import NeonCli
-from ..common_neon.errors import EthereumError, NoMoreRetriesError
-from ..common_neon.config import Config
-from ..common_neon.elf_params import ElfParams
-from ..common_neon.eth_proto import NeonTx
-from ..common_neon.utils import str_fmt_object
-
+from .config import Config
+from .data import NeonEmulatedResult
+from .elf_params import ElfParams
+from .environment_utils import NeonCli
+from .errors import EthereumError, NoMoreRetriesError
+from .utils import str_fmt_object
+from .utils.eth_proto import NeonTx
 
 LOG = logging.getLogger(__name__)
 

@@ -63,5 +63,3 @@ for val in $EXTRA_ARGS; do
     isArg $val '--timeout' && EXTRA_ARGS_TIMEOUT=''
 done
 EXTRA_ARGS+=$EXTRA_ARGS_TIMEOUT
-
-export PROMETHEUS_MULTIPROC_DIR=$(mktemp -d)

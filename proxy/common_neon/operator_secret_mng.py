@@ -6,9 +6,9 @@ from typing import List, Optional
 import hvac
 from hvac.api.secrets_engines.kv_v2 import DEFAULT_MOUNT_POINT
 
-from ..common_neon.config import Config
-from ..common_neon.environment_utils import SolanaCli
-from ..common_neon.solana_tx import SolAccount
+from .config import Config
+from .environment_utils import SolanaCli
+from .solana_tx import SolAccount
 
 
 LOG = logging.getLogger(__name__)

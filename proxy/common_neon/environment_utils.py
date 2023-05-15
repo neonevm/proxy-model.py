@@ -5,7 +5,7 @@ from typing import List
 
 import logging
 
-from ..common_neon.config import Config
+from .config import Config
 
 
 LOG = logging.getLogger(__name__)

@@ -23,7 +23,7 @@ from ..mempool.mempool_api import (
 from ..mempool.executor_mng import MPExecutorMng, IMPExecutorMngUser
 from ..mempool.mempool import MemPool, MPTask, MPTxRequestList
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
-from ..common_neon.eth_proto import NeonTx
+from proxy.common_neon.utils.eth_proto import NeonTx
 from ..common_neon.elf_params import ElfParams
 
 from ..mempool.operator_resource_mng import OpResMng
