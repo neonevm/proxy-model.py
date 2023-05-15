@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from pickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
-from typing import List, Tuple, Dict, Any, Optional, Union
+from typing import List, Tuple, Dict, Any, Optional, Union, Set
 
 import psycopg2
 
@@ -27,7 +27,7 @@ class BaseDBTable:
 
         for key in key_list:
             assert key in self._column_dict
-        key_set = set(key_list)
+        key_set: Set[str] = set(key_list)
         assert len(key_set) == len(key_list)
         self._key_list = key_list
         self._key_set = key_set
@@ -81,9 +81,30 @@ class BaseDBTable:
         assert len(self._column_list) == len(value_list)
         self._db.update_row(self._insert_row_request, value_list)
 
+    def _remove_dups(self, row_list: List[List[Any]]) -> List[List[Any]]:
+        if not len(self._key_set):
+            return row_list
+
+        done_key_set: Set[str] = set()
+        result_row_list: List[List[Any]] = list()
+
+        # filter in reverse order to get the latest value
+        for value_list in reversed(row_list):
+            assert len(value_list) == len(self._column_list)
+            key = ':'.join([
+                str(value)
+                for idx, value in enumerate(value_list)
+                if self._column_list[idx] in self._key_set
+            ])
+            if key in done_key_set:
+                continue
+            done_key_set.add(key)
+            result_row_list.append(value_list)
+        return result_row_list
+
     def _insert_row_list(self, row_list: List[List[Any]]) -> None:
         if len(row_list) == 0:
             return
 
-        assert len(row_list[0]) == len(self._column_list)
+        row_list = self._remove_dups(row_list)
         self._db.update_row_list(self._insert_row_list_request, row_list)

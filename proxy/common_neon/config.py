@@ -37,6 +37,7 @@ class Config(DBConfig):
         self._allow_underpriced_tx_wo_chainid = self._env_bool("ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID", False)
         self._extra_gas_pct = self._env_decimal("EXTRA_GAS_PCT", "0.0")
         self._operator_fee = self._env_decimal("OPERATOR_FEE", "0.1")
+        self._slot_processing_delay = self._env_int("SLOT_PROCESSING_DELAY", 0, 0)
         self._gas_price_suggested_pct = self._env_decimal("GAS_PRICE_SUGGEST_PCT", "0.01")
         self._min_gas_price = self._env_int("MINIMAL_GAS_PRICE", 0, 1) * (10 ** 9)
         self._min_wo_chainid_gas_price = self._env_int("MINIMAL_WO_CHAINID_GAS_PRICE", 0, 10) * (10 ** 9)
@@ -88,6 +89,7 @@ class Config(DBConfig):
         assert (self._operator_fee > 0) and (self._operator_fee < 1)
         assert (self._gas_price_suggested_pct >= 0) and (self._gas_price_suggested_pct < 1)
         assert (self._extra_gas_pct >= 0) and (self._extra_gas_pct < 1)
+        assert (self._slot_processing_delay < 32)
         assert (self._fuzz_fail_pct >= 0) and (self._fuzz_fail_pct < 100)
 
     @staticmethod
@@ -201,6 +203,11 @@ class Config(DBConfig):
     @property
     def operator_fee(self) -> Decimal:
         return self._operator_fee
+
+    @property
+    def slot_processing_delay(self) -> int:
+        """Slot processing delay relative to the last confirmed slot on Tracer API node"""
+        return self._slot_processing_delay
 
     @property
     def gas_price_suggested_pct(self) -> Decimal:
@@ -365,6 +372,7 @@ class Config(DBConfig):
             'ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID': self.allow_underpriced_tx_wo_chainid,
             'EXTRA_GAS_PCT': self.extra_gas_pct,
             'OPERATOR_FEE': self.operator_fee,
+            'SLOT_PROCESSING_DELAY': self.slot_processing_delay,
             'GAS_PRICE_SUGGEST_PCT': self.gas_price_suggested_pct,
             'MINIMAL_GAS_PRICE': self.min_gas_price,
             'MINIMAL_WO_CHAINID_GAS_PRICE': self.min_wo_chainid_gas_price,

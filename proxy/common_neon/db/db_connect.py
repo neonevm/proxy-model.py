@@ -97,7 +97,7 @@ class DBConnection:
                     time.sleep(1)
 
                 except BaseException as exc:
-                    LOG.debug('Unknown fail on run TPC transaction', exc_info=exc)
+                    LOG.error('Unknown fail on run TPC transaction', exc_info=exc)
                     raise
 
         finally:
@@ -130,7 +130,7 @@ class DBConnection:
                 time.sleep(1)
 
             except BaseException as exc:
-                LOG.debug('Unknown fail to fetching of records', exc_info=exc)
+                LOG.error('Unknown fail to fetching of records', exc_info=exc)
                 raise
 
     def fetch_one(self, request: str, *args) -> List[Any]:
