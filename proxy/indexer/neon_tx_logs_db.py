@@ -1,19 +1,23 @@
 from typing import List, Any, Optional, Dict, Iterator
 
-from ..indexer.base_db import BaseDB
+from ..common_neon.db.base_db_table import BaseDBTable
+from ..common_neon.db.db_connect import DBConnection
+
 from ..indexer.indexed_objects import NeonIndexedTxInfo
 
 
-class NeonTxLogsDB(BaseDB):
-    def __init__(self):
+class NeonTxLogsDB(BaseDBTable):
+    def __init__(self, db: DBConnection):
         super().__init__(
+            db,
             table_name='neon_transaction_logs',
             column_list=[
                 'log_topic1', 'log_topic2', 'log_topic3', 'log_topic4',
                 'log_topic_cnt', 'log_data',
                 'block_slot', 'tx_hash', 'tx_idx', 'tx_log_idx', 'log_idx', 'address',
                 'event_order', 'event_level', 'sol_sig', 'idx', 'inner_idx'
-            ]
+            ],
+            key_list=['block_slot', 'tx_hash', 'tx_log_idx']
         )
 
         self._column2field_dict = {
@@ -31,14 +35,14 @@ class NeonTxLogsDB(BaseDB):
             'inner_idx': 'neonInnerIxIdx'
         }
 
-        self._hex_field_dict = {
+        self._hex_field_set = {
             'blockNumber', 'transactionIndex', 'transactionLogIndex', 'logIndex',
             'neonIxIdx', 'neonInnerIxIdx', 'neonEventLevel', 'neonEventOrder'
         }
 
         self._topic_column_list = ['log_topic1', 'log_topic2', 'log_topic3', 'log_topic4']
 
-    def set_tx_list(self, cursor: BaseDB.Cursor, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
+    def set_tx_list(self, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
         value_list_list: List[List[Any]] = list()
         for tx in iter_neon_tx:
             for log in tx.neon_tx_res.log_list:
@@ -61,12 +65,12 @@ class NeonTxLogsDB(BaseDB):
                     else:
                         key = self._column2field_dict.get(column, None)
                         value = log.get(key, None)
-                        if (value is not None) and (key in self._hex_field_dict):
+                        if (value is not None) and (key in self._hex_field_set):
                             value = int(value[2:], 16)
                         value_list.append(value)
                 value_list_list.append(value_list)
 
-        self._insert_batch(cursor, value_list_list)
+        self._insert_row_list(value_list_list)
 
     def _log_from_value(self, value_list: List[Any]) -> Optional[Dict[str, Any]]:
         log: Dict[str, Any] = dict()
@@ -82,7 +86,7 @@ class NeonTxLogsDB(BaseDB):
                 if key is None:
                     raise RuntimeError(f'Wrong usage {self._table_name}: {idx} -> {column}!')
 
-                if (value is not None) and (key in self._hex_field_dict):
+                if (value is not None) and (key in self._hex_field_set):
                     value = hex(value)
                 log[key] = value
         log['blockHash'] = value_list[-1]
@@ -122,8 +126,8 @@ class NeonTxLogsDB(BaseDB):
             query_list.append(address_query)
             param_list += address_list
 
-        query_string = f'''
-            SELECT {",".join(['a.' + c for c in self._column_list])},
+        request = f'''
+            SELECT {', '.join(['a.' + c for c in self._column_list])},
                    b.block_hash
               FROM {self._table_name} AS a
         INNER JOIN {self._blocks_table_name} AS b
@@ -134,23 +138,20 @@ class NeonTxLogsDB(BaseDB):
              LIMIT 1000
          '''
 
-        with self._conn.cursor() as cursor:
-            cursor.execute(query_string, tuple(param_list))
-            row_list = cursor.fetchall()
+        row_list = self._db.fetch_all(request, tuple(param_list))
 
-        log_list: List[Dict[str, Any]] = []
+        log_list: List[Dict[str, Any]] = list()
         for value_list in reversed(row_list):
             log_rec = self._log_from_value(value_list)
             log_list.append(log_rec)
 
         return log_list
 
-    def finalize_block_list(self, cursor: BaseDB.Cursor, base_block_slot: int, block_slot_list: List[int]) -> None:
-        cursor.execute(f'''
+    def finalize_block_list(self, base_block_slot: int, block_slot_list: List[int]) -> None:
+        request = f'''
             DELETE FROM {self._table_name}
                   WHERE block_slot > %s
                     AND block_slot < %s
                     AND block_slot NOT IN ({','.join(["%s" for _ in block_slot_list])})
-            ''',
-            [base_block_slot, block_slot_list[-1]] + block_slot_list
-        )
+            '''
+        self._db.update_row(request, [base_block_slot, block_slot_list[-1]] + block_slot_list)

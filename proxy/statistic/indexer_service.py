@@ -1,7 +1,7 @@
 from aioprometheus import Counter, Gauge, Histogram
 
-from proxy.statistic.data import NeonTxStatData, NeonBlockStatData
-from proxy.statistic.middleware import StatService
+from ..statistic.data import NeonTxStatData, NeonBlockStatData
+from ..statistic.middleware import StatService
 
 
 class IndexerStatService(StatService):

@@ -5,9 +5,9 @@ from typing import Optional, Dict
 
 from singleton_decorator import singleton
 
-from ..common_neon.solana_tx import SolPubKey
-from ..common_neon.environment_utils import NeonCli
-from ..common_neon.config import Config
+from .solana_tx import SolPubKey
+from .environment_utils import NeonCli
+from .config import Config
 
 
 LOG = logging.getLogger(__name__)

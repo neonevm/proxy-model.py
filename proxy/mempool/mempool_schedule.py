@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, Set, Optional, Tuple, Iterator, cast
 
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils.json_logger import logging_context
 
 from .mempool_api import MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData, MPTxRequestList

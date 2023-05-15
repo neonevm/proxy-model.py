@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Dict, Deque, Union, Optional
 
 from ..common_neon.errors import EthereumError
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.config import Config
 
 

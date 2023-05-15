@@ -5,13 +5,13 @@ import logging
 
 from typing import Dict, Union, List
 
-from ..common_neon.config import Config
+from .config import Config
 
 
 LOG = logging.getLogger(__name__)
 
 
-class MetricsToLogger:
+class MetricsLogger:
     def __init__(self):
         self._counter: int = 0
         self._item_list_dict: Dict[str, List[Union[int, float]]] = {}

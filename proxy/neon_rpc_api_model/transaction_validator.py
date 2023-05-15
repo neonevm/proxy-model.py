@@ -7,7 +7,7 @@ from ..common_neon.data import NeonTxExecCfg, NeonEmulatedResult
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.emulator_interactor import call_tx_emulated, check_emulated_exit_status
 from ..common_neon.errors import EthereumError, NonceTooLowError
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 

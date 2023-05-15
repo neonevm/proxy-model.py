@@ -9,7 +9,7 @@ from typing import Any, Optional, List, Dict
 
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.utils import str_fmt_object
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.solana_tx import SolPubKey
 
 

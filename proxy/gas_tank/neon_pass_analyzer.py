@@ -9,12 +9,11 @@ from .gas_tank_types import GasTankSolTxAnalyzer
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.constants import ACCOUNT_SEED_VERSION
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils import NeonTxInfo
 from ..common_neon.solana_tx import SolPubKey
-
 from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo
-from ..common_neon.evm_log_decoder import decode_log_list, NeonLogTxReturn
+from ..common_neon.utils.evm_log_decoder import decode_log_list, NeonLogTxReturn
 
 
 LOG = logging.getLogger(__name__)

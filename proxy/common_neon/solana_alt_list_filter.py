@@ -1,9 +1,9 @@
 from typing import Set, List, Tuple
 
-from ..common_neon.errors import ALTError
-from ..common_neon.solana_alt_limit import ALTLimit
-from ..common_neon.solana_tx import SolPubKey
-from ..common_neon.solana_tx_legacy import SolLegacyMsg
+from .errors import ALTError
+from .solana_alt_limit import ALTLimit
+from .solana_tx import SolPubKey
+from .solana_tx_legacy import SolLegacyMsg
 
 
 class ALTListFilter:

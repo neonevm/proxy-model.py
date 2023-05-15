@@ -5,11 +5,14 @@ from abc import ABC, abstractmethod
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, Iterator, List, Any
 
-from .solana_signatures_db import SolSigsDB
 from ..common_neon.config import Config
 from ..common_neon.solana_tx import SolCommit
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
+from ..common_neon.db.db_connect import DBConnection
+
+
+from .solana_signatures_db import SolSigsDB
 
 
 LOG = logging.getLogger(__name__)
@@ -121,7 +124,8 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
     def __init__(self, config: Config, solana: SolInteractor, tx_meta_dict: SolTxMetaDict, stop_slot: int):
         super().__init__(config, solana, tx_meta_dict, commitment=SolCommit.Finalized, is_finalized=True)
         LOG.debug(f'Finalized commitment: {self._commitment}')
-        self._sigs_db = SolSigsDB()
+        self._db = DBConnection(config)
+        self._sigs_db = SolSigsDB(self._db)
         self._stop_slot = stop_slot
         self._sig_cnt = 0
         self._last_info: Optional[SolTxSigSlotInfo] = None

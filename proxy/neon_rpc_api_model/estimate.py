@@ -7,7 +7,7 @@ from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt_limit import ALTLimit
 from ..common_neon.solana_interactor import SolInteractor

@@ -9,6 +9,7 @@ from ..common_neon.utils import NeonTxInfo
 from ..common_neon.address import NeonAddress
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.db.sql_dict import SQLDict
 
 from ..gas_tank import GasTank
 from ..gas_tank.portal_analyzer import PortalAnalyzer
@@ -16,7 +17,6 @@ from ..gas_tank.erc20_bridge_analyzer import ERC20Analyzer
 from ..gas_tank.neon_pass_analyzer import NeonPassAnalyzer
 from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
 
-from ..indexer.sql_dict import SQLDict
 
 from ..testing.transactions import (
     neon_pass_tx, neon_pass_claim_to_ix_data, neon_pass_erc20_for_spl,

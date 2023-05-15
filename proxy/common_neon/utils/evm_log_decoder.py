@@ -1,7 +1,8 @@
 import base64
-import re
-import logging
 import enum
+import logging
+import re
+
 from dataclasses import dataclass
 from typing import List, Iterator, Optional, Tuple
 

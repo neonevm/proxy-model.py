@@ -1,6 +1,6 @@
 from solders.system_program import ID as _SYS_PROGRAM_ID
 
-from ..common_neon.solana_tx import SolPubKey
+from .solana_tx import SolPubKey
 
 KECCAK_PROGRAM_ID = SolPubKey.from_string("KeccakSecp256k11111111111111111111111111111")
 INCINERATOR_ID = SolPubKey.from_string("1nc1nerator11111111111111111111111111111111")

@@ -11,7 +11,7 @@ from .mempool_api import (
 
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.errors import EthereumError
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.pickable_data_server import AddrPickableDataClient
 
 

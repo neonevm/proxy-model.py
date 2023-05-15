@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..common_neon.errors import EthereumError, NonceTooLowError
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.solana_interactor import SolInteractor
 
 

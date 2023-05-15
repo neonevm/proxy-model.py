@@ -10,15 +10,15 @@ import logging
 import base58
 import requests
 
-from ..common_neon.address import NeonAddress, neon_2program
-from ..common_neon.config import Config
-from ..common_neon.constants import NEON_ACCOUNT_TAG
-from ..common_neon.errors import SolanaUnavailableError
-from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from ..common_neon.solana_tx import SolTx, SolBlockHash, SolPubKey, SolCommit
-from ..common_neon.solana_tx_error_parser import SolTxErrorParser
-from ..common_neon.utils import SolBlockInfo
-from ..common_neon.layouts import HolderAccountInfo, AccountInfo, NeonAccountInfo, ALTAccountInfo
+from .address import NeonAddress, neon_2program
+from .config import Config
+from .constants import NEON_ACCOUNT_TAG
+from .errors import SolanaUnavailableError
+from .layouts import ACCOUNT_INFO_LAYOUT
+from .solana_tx import SolTx, SolBlockHash, SolPubKey, SolCommit
+from .solana_tx_error_parser import SolTxErrorParser
+from .utils import SolBlockInfo
+from .layouts import HolderAccountInfo, AccountInfo, NeonAccountInfo, ALTAccountInfo
 
 
 LOG = logging.getLogger(__name__)

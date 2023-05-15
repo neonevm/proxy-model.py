@@ -40,8 +40,8 @@ class ProxyStatDataPeeker:
                 self._stat_operator_balance()
                 self._stat_solana_rpc_health()
                 self._stat_db_health()
-            except Exception as err:
-                LOG.warning('Exception on transactions processing', exc_info=err)
+            except BaseException as err:
+                LOG.warning('Exception on statistic processing', exc_info=err)
 
     def _stat_operator_balance(self) -> None:
         sol_balance_list = self._solana.get_sol_balance_list(self._sol_account_list)

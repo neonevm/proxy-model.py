@@ -8,9 +8,10 @@ from typing import Dict, Iterator, Optional, Any, Tuple, Union, List
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
-from ..common_neon.evm_log_decoder import NeonLogTxEvent
+from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
 from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
+
 from ..indexer.indexed_objects import NeonIndexedTxInfo
 
 

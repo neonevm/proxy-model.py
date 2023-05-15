@@ -13,12 +13,13 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo, SolNeonIxReceiptInfo
 from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
+from ..common_neon.db.db_connect import DBConnection
+from ..common_neon.db.sql_dict import SQLDict
+from ..common_neon.metrics_logger import MetricsLogger
 
 from ..indexer.indexed_objects import NeonIndexedHolderInfo
 from ..indexer.indexer_base import IndexerBase
 from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
-from ..indexer.sql_dict import SQLDict
-from ..indexer.utils import MetricsToLogger
 
 
 LOG = logging.getLogger(__name__)
@@ -37,25 +38,26 @@ EVM_PROGRAM_CANCEL = 0x23
 
 class GasTank(IndexerBase):
     def __init__(self, config: Config):
-        self._constants = SQLDict(tablename='constants')
+        self._db = DBConnection(config)
+        self._constant_db = SQLDict(self._db, table_name='constants')
+
+        self._gas_less_account_db = GasLessAccountsDB(self._db)
+        self._gas_less_account_dict: Dict[str, GasLessPermit] = dict()
+
+        self._gas_less_usage_db = GasLessUsagesDB(self._db)
+        self._gas_less_usage_list: List[GasLessUsage] = list()
 
         solana = SolInteractor(config, config.solana_url)
-        last_known_slot = self._constants.get('latest_gas_tank_slot', None)
+        last_known_slot = self._constant_db.get('latest_gas_tank_slot', None)
         super().__init__(config, solana, last_known_slot)
         self._last_block_slot = self._start_slot
         self._latest_gas_tank_slot = self._start_slot
         self._current_slot = 0
 
-        self._counted_logger = MetricsToLogger()
+        self._counted_logger = MetricsLogger()
 
         sol_tx_meta_dict = SolTxMetaDict()
         self._sol_tx_collector = FinalizedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict, self._start_slot)
-
-        self._gas_less_account_db = GasLessAccountsDB()
-        self._gas_less_account_dict: Dict[str, GasLessPermit] = dict()
-
-        self._gas_less_usage_db = GasLessUsagesDB()
-        self._gas_less_usage_list: List[GasLessUsage] = list()
 
         self._neon_large_tx_dict: Dict[str, NeonIndexedHolderInfo] = dict()
         self._neon_processed_tx_dict: Dict[str, GasTankTxInfo] = dict()
@@ -277,7 +279,7 @@ class GasTank(IndexerBase):
             elif ix_code == EVM_PROGRAM_CALL_FROM_DATA:
                 self._process_call_raw_tx(sol_neon_ix)
 
-            elif ix_code == EVM_LOADER_TX_STEP_FROM_DATA:
+            elif ix_code == EVM_PROGRAM_TX_STEP_FROM_DATA:
                 self._process_call_raw_nochain_id_tx(sol_neon_ix)
 
             elif ix_code == EVM_PROGRAM_CANCEL:
@@ -393,15 +395,16 @@ class GasTank(IndexerBase):
         for tx in self._neon_processed_tx_dict.values():
             self._latest_gas_tank_slot = min(self._latest_gas_tank_slot, tx.start_block_slot - 1)
 
-        self._constants['latest_gas_tank_slot'] = self._latest_gas_tank_slot
+        self._constant_db['latest_gas_tank_slot'] = self._latest_gas_tank_slot
 
     def _save_cached_data(self) -> None:
         if (len(self._gas_less_account_dict) == 0) and (len(self._gas_less_usage_list) == 0):
             return
 
-        with self._gas_less_account_db.conn() as conn:
-            with conn.cursor() as cursor:
-                self._gas_less_account_db.add_gas_less_permit_list(cursor, iter(self._gas_less_account_dict.values()))
-                self._gas_less_account_dict.clear()
-                self._gas_less_usage_db.add_gas_less_usage_list(cursor, iter(self._gas_less_usage_list))
-                self._gas_less_usage_list.clear()
+        def _run_tx():
+            self._gas_less_account_db.add_gas_less_permit_list(iter(self._gas_less_account_dict.values()))
+            self._gas_less_usage_db.add_gas_less_usage_list(iter(self._gas_less_usage_list))
+        self._db.run_tx(_run_tx)
+
+        self._gas_less_account_dict.clear()
+        self._gas_less_usage_list.clear()
