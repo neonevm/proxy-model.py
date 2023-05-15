@@ -31,6 +31,9 @@ class TracerAPIClient:
     def max_slot(self) -> Optional[int]:
         if self._conn is None:
             return None
-        request = '''SELECT max(slot) FROM events.update_slot'''
+        request = f'''
+            SELECT MAX(slot)-{self._config.slot_processing_delay}
+              FROM events.update_account_distributed
+        '''
         slot = self._conn.query(request).result_set[0][0]
         return slot
