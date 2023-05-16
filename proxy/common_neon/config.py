@@ -67,11 +67,7 @@ class Config(DBConfig):
         self._hvac_path = os.environ.get('HVAC_PATH', '')
         self._genesis_timestamp = self._env_int('GENESIS_BLOCK_TIMESTAMP', 0, 0)
         self._commit_level = os.environ.get('COMMIT_LEVEL', SolCommit.Confirmed)
-        self._ch_host = os.environ.get('CLICKHOUSE_HOST', None)
-        self._ch_user = os.environ.get('CLICKHOUSE_USER', None)
-        self._ch_password = os.environ.get('CLICKHOUSE_PASSWORD', None)
-        self._ch_port = int(os.environ.get('CLICKHOUSE_PORT', 0))
-        self._ch_secure = self._env_bool('CLICKHOUSE', False)
+        self._ch_dsn_list = os.environ.get('CLICKHOUSE_DSN_LIST', '')
 
         pyth_mapping_account = os.environ.get('PYTH_MAPPING_ACCOUNT', None)
         if pyth_mapping_account is not None:
@@ -215,7 +211,7 @@ class Config(DBConfig):
 
     @property
     def min_gas_price(self) -> int:
-        """Minimal gas price to accept into the mempool"""
+        """Minimal gas price to accept tx into the mempool"""
         return self._min_gas_price
 
     @property
@@ -328,30 +324,12 @@ class Config(DBConfig):
         return self._commit_level
 
     @property
-    def ch_host(self) -> Optional[str]:
-        return self._ch_host
-
-    @property
-    def ch_user(self) -> Optional[str]:
-        return self._ch_user
-
-    @property
-    def ch_password(self) -> Optional[str]:
-        return self._ch_password
-
-    @property
-    def ch_port(self) -> int:
-        return self._ch_port
-
-    @property
-    def ch_secure(self) -> bool:
-        return self._ch_secure
+    def ch_dsn_list(self) -> str:
+        return self._ch_dsn_list
 
     def as_dict(self) -> dict:
-        return {
-            # 'SOLANA_URL': self.solana_url,
+        config_dict = {
             'EVM_LOADER_ID': str(self.evm_program_id),
-            # 'PP_SOLANA_URL': self.pyth_solana_url,
             'PYTH_MAPPING_ACCOUNT': str(self.pyth_mapping_account),
             'UPDATE_PYTH_MAPPING_PERIOD_SEC': self.update_pyth_mapping_period_sec,
             'MEMPOOL_CAPACITY': self.mempool_capacity,
@@ -396,10 +374,21 @@ class Config(DBConfig):
             'SKIP_CANCEL_TIMEOUT': self.skip_cancel_timeout,
             'HOLDER_TIMOUT': self.holder_timeout,
             'GATHER_STATISTICS': self.gather_statistics,
+
+            'GENESIS_BLOCK_TIMESTAMP': self.genesis_timestamp,
+            'COMMIT_LEVEL': self.commit_level,
+
+            # Don't print accesses to the logs
+
+            # 'SOLANA_URL': self.solana_url,
+            # 'PP_SOLANA_URL': self.pyth_solana_url,
+
             # 'HVAC_URL': self.hvac_url,
             # 'HVAC_TOKEN': self.hvac_token,
             # 'HVAC_PATH': self.hvac_path,
             # 'HVAC_MOUNT': self.hvac_mount,
-            'GENESIS_BLOCK_TIMESTAMP': self.genesis_timestamp,
-            'COMMIT_LEVEL': self.commit_level
+
+            # 'CLICKHOUSE_DSN_LIST': self.ch_dsn_list,
         }
+        config_dict.update(super().as_dict())
+        return config_dict
