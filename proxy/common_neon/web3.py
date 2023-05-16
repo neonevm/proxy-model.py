@@ -1,7 +1,6 @@
 from web3 import Web3
 from web3.module import Module
-from web3.method import Method
-from web3.eth import default_root_munger
+from web3.method import Method, default_root_munger
 from web3.providers.base import BaseProvider
 from typing import Optional, Tuple
 from web3.types import RPCEndpoint, ChecksumAddress
