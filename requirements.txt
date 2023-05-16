@@ -3,8 +3,8 @@ ecdsa==0.18.0
 pysha3==1.0.2
 eth-keys==0.4.0
 rlp
-solana==0.29.2
-solders==0.14.4
+solana==0.30.1
+solders==0.17.0
 psycopg2-binary
 ethereum
 py-solc-x==1.1.1
@@ -13,7 +13,7 @@ requests
 base58
 pysha3
 construct
-git+https://github.com/ethereum/web3.py.git@v6.0.0-beta.6
+web3==6.3.0
 aioprometheus==23.3.0
 singleton-decorator==1.0.0
 clickhouse-connect==0.5.24
