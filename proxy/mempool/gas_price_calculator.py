@@ -3,10 +3,11 @@ import math
 import logging
 from typing import Optional
 
-from ..common_neon.pythnetwork import PythNetworkClient
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
 from ..common_neon.solana_tx import SolPubKey
+
+from .pythnetwork import PythNetworkClient
 
 
 LOG = logging.getLogger(__name__)

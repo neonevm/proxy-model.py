@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import os
 import secrets
-import signal
 import requests
 import solcx
+import time
+
 from dataclasses import dataclass
 from eth_account.account import LocalAccount as NeonLocalAccount, Account as NeonAccount, SignedTransaction
 from web3 import Web3, eth as web3_eth
 from web3.types import TxReceipt, HexBytes, Wei, TxParams
-from typing import Type, Dict, Union
+from typing import Type, Dict, Union, Optional
 
 from proxy.common_neon.web3 import NeonWeb3
+from proxy.common_neon.config import Config
+from proxy.common_neon.solana_interactor import SolInteractor
+from proxy.common_neon.solana_tx import SolTx, SolAccount, SolSig, SolPubKey, SolCommit
+
 
 @dataclass(frozen=True)
 class ContractCompiledInfo:
@@ -33,7 +38,7 @@ class TransactionSigned:
 
 
 @dataclass(frozen=True)
-class TransactionSended:
+class TransactionSent:
     tx: TxParams
     tx_signed: SignedTransaction
     tx_hash: HexBytes
@@ -113,18 +118,18 @@ class Proxy:
             tx_signed=self._proxy.account.sign_transaction(tx, signer.key)
         )
 
-    def send_wait_transaction(self, tx: TransactionSigned) -> TransactionSended:
+    def send_wait_transaction(self, tx: TransactionSigned) -> TransactionSent:
         print(f' -> {tx.tx}: {tx.tx_signed}')
         tx_hash = self._proxy.send_raw_transaction(tx.tx_signed.rawTransaction)
         tx_receipt = self._proxy.wait_for_transaction_receipt(tx_hash)
-        return TransactionSended(
+        return TransactionSent(
             tx=tx.tx,
             tx_signed=tx.tx_signed,
             tx_hash=tx_hash,
             tx_receipt=tx_receipt
         )
 
-    def sign_send_wait_transaction(self, signer: NeonLocalAccount, tx: dict) -> TransactionSended:
+    def sign_send_wait_transaction(self, signer: NeonLocalAccount, tx: dict) -> TransactionSent:
         tx = self.sign_transaction(signer, tx)
         return self.send_wait_transaction(tx)
 
@@ -155,23 +160,43 @@ class Proxy:
         return self.compile_and_deploy_contract(signer, source)
 
 
-class TestTimeoutExc(Exception):
-    pass
+class SolClient(SolInteractor):
+    def __init__(self, config: Config):
+        super().__init__(config, config.solana_url)
 
+    def send_tx(self, tx: SolTx, signer: SolAccount, skip_preflight=False) -> Optional[SolSig]:
+        recent_resp = self.get_recent_block_hash(SolCommit.Finalized)
 
-class TestTimeout:
-    def __init__(self, seconds, error_message=None):
-        if error_message is None:
-            error_message = 'test timed out after {}s.'.format(seconds)
-        self.seconds = seconds
-        self.error_message = error_message
+        tx.recent_block_hash = recent_resp.block_hash
+        tx.sign(signer)
+        print(f'-> send solana tx {tx.name}: {tx.sig}')
+        sent_resp = self.send_tx_list([tx], skip_preflight=skip_preflight)[0]
+        if sent_resp.result is None:
+            print(f'-> fail to send tx: {sent_resp.error}')
+            return None
 
-    def handle_timeout(self, signum, frame):
-        raise TestTimeoutExc(self.error_message)
+        tx_sig = sent_resp.result
+        print(f'-> success send solana tx {tx.name}: {tx_sig}')
 
-    def __enter__(self):
-        signal.signal(signal.SIGALRM, self.handle_timeout)
-        signal.alarm(self.seconds)
+        valid_block_height = recent_resp.last_valid_block_height
+        confirm_set = SolCommit.upper_set(SolCommit.Confirmed)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        signal.alarm(0)
+        elapsed_time = 0.0
+        confirm_timeout = 32 * 0.4
+        confirm_check_delay = 0.1
+
+        while elapsed_time < confirm_timeout:
+            is_confirmed = self.check_confirm_of_tx_sig_list([tx_sig], confirm_set, valid_block_height)
+            if is_confirmed:
+                break
+
+            time.sleep(confirm_check_delay)
+            elapsed_time += confirm_check_delay
+
+        tx_receipt = self.get_tx_receipt_list([tx_sig], SolCommit.Confirmed)
+        print(f'-> solana receipt: {tx_receipt}')
+
+        return SolSig.from_string(tx_sig)
+
+    def request_airdrop(self, acct: SolPubKey, amount: int) -> None:
+        self._send_rpc_request('requestAirdrop', str(acct), amount)

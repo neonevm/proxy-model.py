@@ -9,6 +9,7 @@ from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.operator_secret_mng import OpSecretMng
 from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.errors import RescheduleError
 
 from ..statistic.data import NeonOpResListData
 from ..statistic.proxy_client import ProxyStatClient
@@ -42,6 +43,7 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
             self._stat_client.commit_op_res_list(stat)
 
             return MPOpResGetListResult(res_ident_list=res_ident_list)
+
         except BaseException as exc:
             LOG.error(f'Failed to read secret list', exc_info=exc)
             return MPOpResGetListResult(res_ident_list=[])
@@ -51,7 +53,12 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
         resource = OpResInfo.from_ident(mp_op_res_req.res_ident)
         try:
             OpResInit(self._config, self._solana).init_resource(resource)
-            return MPOpResInitResult(code=MPOpResInitResultCode.Success)
+            return MPOpResInitResult(MPOpResInitResultCode.Success)
+
+        except RescheduleError as exc:
+            LOG.debug(f'Rescheduling init of operator resource {resource}: {str(exc)}')
+            return MPOpResInitResult(MPOpResInitResultCode.Reschedule)
+
         except BaseException as exc:
-            LOG.error(f'Failed to init operator resource tx {resource}.', exc_info=exc)
-            return MPOpResInitResult(code=MPOpResInitResultCode.Failed)
+            LOG.error(f'Failed to init operator resource tx {resource}', exc_info=exc)
+            return MPOpResInitResult(MPOpResInitResultCode.Failed)

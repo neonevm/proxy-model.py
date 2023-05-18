@@ -4,19 +4,20 @@ import time
 
 from typing import Optional, List
 
-from ..common_neon.errors import ALTError
-from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_alt import ALTInfo
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_tx import SolTx, SolAccount
-from ..common_neon.solana_tx_legacy import SolLegacyTx
+from .errors import ALTError
+from .neon_instruction import NeonIxBuilder
+from .solana_alt import ALTInfo
+from .solana_alt_limit import ALTLimit
+from .solana_interactor import SolInteractor
+from .solana_tx import SolTx, SolAccount, SolCommit
+from .solana_tx_legacy import SolLegacyTx
 
 
 class ALTTxSet:
     def __init__(self, create_alt_tx_list: Optional[List[SolLegacyTx]] = None,
                  extend_alt_tx_list: Optional[List[SolLegacyTx]] = None) -> None:
-        self.create_alt_tx_list = create_alt_tx_list if create_alt_tx_list is not None else []
-        self.extend_alt_tx_list = extend_alt_tx_list if extend_alt_tx_list is not None else []
+        self.create_alt_tx_list = create_alt_tx_list if create_alt_tx_list is not None else list()
+        self.extend_alt_tx_list = extend_alt_tx_list if extend_alt_tx_list is not None else list()
 
     def extend(self, tx_list: ALTTxSet) -> ALTTxSet:
         self.create_alt_tx_list.extend(tx_list.create_alt_tx_list)
@@ -32,7 +33,8 @@ class ALTTxSet:
 
 
 class ALTTxBuilder:
-    tx_account_cnt = 30
+    _create_name = 'CreateLookupTable'
+    _extend_name = 'ExtendLookupTable'
 
     def __init__(self, solana: SolInteractor, ix_builder: NeonIxBuilder, signer: SolAccount) -> None:
         self._solana = solana
@@ -42,12 +44,15 @@ class ALTTxBuilder:
 
     def _get_recent_block_slot(self) -> int:
         while True:
-            recent_block_slot = self._solana.get_recent_blockslot('finalized')
+            recent_block_slot = self._solana.get_block_slot(SolCommit.Finalized)
             if recent_block_slot == self._recent_block_slot:
                 time.sleep(0.1)  # To make unique address for Address Lookup Table
                 continue
             self._recent_block_slot = recent_block_slot
             return recent_block_slot
+
+    def get_tx_name_list(self) -> List[str]:
+        return [self._create_name, self._extend_name]
 
     def build_alt_info(self, legacy_tx: SolLegacyTx) -> ALTInfo:
         recent_block_slot = self._get_recent_block_slot()
@@ -58,27 +63,34 @@ class ALTTxBuilder:
         return alt_info
 
     def build_alt_tx_set(self, alt_info: ALTInfo) -> ALTTxSet:
-        # Tx to create an Account Lookup Table
-        create_alt_tx = SolLegacyTx(
-            name='CreateLookupTable',
-            instructions=[
-                self._ix_builder.make_create_lookup_table_ix(
-                    alt_info.table_account,
-                    alt_info.recent_block_slot,
-                    alt_info.nonce
-                )
-            ]
-        )
+        is_alt_exist = alt_info.is_exist()
 
-        # List of tx to extend the Account Lookup Table
-        acct_list = alt_info.account_key_list
+        # Tx to create an Address Lookup Table
+        create_alt_tx_list: List[SolLegacyTx] = list()
+        if not is_alt_exist:
+            create_alt_tx = SolLegacyTx(
+                name=self._create_name,
+                ix_list=[
+                    self._ix_builder.make_create_lookup_table_ix(
+                        alt_info.table_account,
+                        alt_info.recent_block_slot,
+                        alt_info.nonce
+                    )
+                ]
+            )
+            create_alt_tx_list.append(create_alt_tx)
 
-        extend_alt_tx_list: List[SolLegacyTx] = []
+        # List of accounts to write to the Address Lookup Table
+        acct_list = alt_info.new_account_key_list
+
+        # List of txs to extend the Address Lookup Table
+        extend_alt_tx_list: List[SolLegacyTx] = list()
+        max_tx_account_cnt = ALTLimit.max_tx_account_cnt
         while len(acct_list):
-            acct_list_part, acct_list = acct_list[:self.tx_account_cnt], acct_list[self.tx_account_cnt:]
+            acct_list_part, acct_list = acct_list[:max_tx_account_cnt], acct_list[max_tx_account_cnt:]
             tx = SolLegacyTx(
-                name='ExtendLookupTable',
-                instructions=[
+                name=self._extend_name,
+                ix_list=[
                     self._ix_builder.make_extend_lookup_table_ix(
                         alt_info.table_account,
                         acct_list_part
@@ -88,17 +100,18 @@ class ALTTxBuilder:
             extend_alt_tx_list.append(tx)
 
         # If list of accounts is small, including of first extend-tx into create-tx will decrease time of tx execution
-        create_alt_tx.add(extend_alt_tx_list[0])
-        extend_alt_tx_list = extend_alt_tx_list[1:]
+        if not is_alt_exist:
+            create_alt_tx_list[0].add(extend_alt_tx_list[0])
+            extend_alt_tx_list = extend_alt_tx_list[1:]
 
         return ALTTxSet(
-            create_alt_tx_list=[create_alt_tx],
+            create_alt_tx_list=create_alt_tx_list,
             extend_alt_tx_list=extend_alt_tx_list
         )
 
     @staticmethod
     def build_prep_alt_list(alt_tx_set: ALTTxSet) -> List[List[SolTx]]:
-        tx_list_list: List[List[SolTx]] = []
+        tx_list_list: List[List[SolTx]] = list()
 
         if len(alt_tx_set.create_alt_tx_list) > 0:
             tx_list_list.append(alt_tx_set.create_alt_tx_list)

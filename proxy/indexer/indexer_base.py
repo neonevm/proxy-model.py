@@ -1,6 +1,7 @@
 import time
 import logging
 
+from ..common_neon.solana_tx import SolCommit
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 
@@ -22,7 +23,7 @@ class IndexerBase:
         - NUMBER - first start from the number, then continue from last parsed slot
         """
         last_known_slot = 0 if not isinstance(last_known_slot, int) else last_known_slot
-        latest_slot = self._solana.get_block_slot(self._config.finalized_commitment)
+        latest_slot = self._solana.get_block_slot(SolCommit.Finalized)
         start_int_slot = 0
         name = f'{name} slot'
 
@@ -58,12 +59,13 @@ class IndexerBase:
         return start_int_slot
 
     def run(self):
+        check_sec = float(self._config.indexer_check_msec) / 1000
         while True:
             try:
                 self.process_functions()
             except BaseException as exc:
-                LOG.debug('Exception on transactions processing.', exc_info=exc)
-            time.sleep(0.05)
+                LOG.warning('Exception on transactions processing.', exc_info=exc)
+            time.sleep(check_sec)
 
     def process_functions(self) -> None:
         pass

@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import List, Dict, Optional, Sequence
 
-import solders.hash
 import solders.instruction
 import solders.message
 import solders.transaction
 
-from .solana_tx import SolTx, SolSignature, SolAccount, SolPubKey, SolTxIx
+from .solana_tx import SolTx, SolSig, SolAccount, SolPubKey, SolTxIx
 
 from .errors import ALTError
 from .solana_alt import ALTInfo
@@ -16,30 +15,33 @@ from .solana_alt_list_filter import ALTListFilter
 
 _SoldersMsgALT = solders.message.MessageAddressTableLookup
 _SoldersCompiledIx = solders.instruction.CompiledInstruction
-_SoldersHash = solders.hash.Hash
 _SoldersMsgHdr = solders.message.MessageHeader
-_SoldersMsgV0 = solders.message.MessageV0
-_SoldersTxV0 = solders.transaction.VersionedTransaction
+_SoldersV0Msg = solders.message.MessageV0
+_SoldersV0Tx = solders.transaction.VersionedTransaction
 
 
 class SolV0Tx(SolTx):
     """Versioned transaction class to represent an atomic versioned transaction."""
 
-    def __init__(self, address_table_lookups: Sequence[ALTInfo],
-                 name: str = '',
-                 instructions: Optional[Sequence[SolTxIx]] = None) -> None:
-        super().__init__(name=name, instructions=instructions)
-        self._solders_tx = _SoldersTxV0.default()
-        self._alt_list = list(address_table_lookups)
+    def __init__(self, name: str,
+                 ix_list: Optional[Sequence[SolTxIx]],
+                 alt_info_list: Sequence[ALTInfo]) -> None:
+        super().__init__(name=name, ix_list=ix_list)
+        self._solders_v0_tx = _SoldersV0Tx.default()
+        self._alt_info_list = list(alt_info_list)
+        assert len(self._alt_info_list) > 0
 
-    def _signature(self) -> SolSignature:
-        return self._solders_tx.signatures[0]
+    def _sig(self) -> SolSig:
+        return self._solders_v0_tx.signatures[0]
+
+    def _sig_result_list(self) -> List[bool]:
+        return self._solders_v0_tx.verify_with_results()
 
     def _serialize(self) -> bytes:
-        return bytes(self._solders_tx)
+        return bytes(self._solders_v0_tx)
 
     def _sign(self, signer: SolAccount) -> None:
-        legacy_msg = self._tx.compile_message()
+        legacy_msg = self._solders_legacy_tx.message
         alt_filter = ALTListFilter(legacy_msg)
 
         rw_key_set = alt_filter.filter_rw_account_key_set()
@@ -51,14 +53,14 @@ class SolV0Tx(SolTx):
         #   2) ordered list of keys loaded from `writable` lookup table indexes
         #   3) ordered list of keys loaded from `readable` lookup table indexes
 
-        rw_key_list: List[str] = []
-        ro_key_list: List[str] = []
+        rw_key_list: List[str] = list()
+        ro_key_list: List[str] = list()
 
         # Build the lookup list in the V0 transaction
-        alt_msg_list: List[_SoldersMsgALT] = []
-        for alt_info in self._alt_list:
-            rw_idx_list: List[int] = []
-            ro_idx_list: List[int] = []
+        alt_msg_list: List[_SoldersMsgALT] = list()
+        for alt_info in self._alt_info_list:
+            rw_idx_list: List[int] = list()
+            ro_idx_list: List[int] = list()
             for idx, key in enumerate(alt_info.account_key_list):
                 key = str(key)
                 if key in rw_key_set:
@@ -145,7 +147,7 @@ class SolV0Tx(SolTx):
             num_readonly_unsigned_accounts=tx_ro_unsigned_account_key_cnt
         )
 
-        msg = _SoldersMsgV0(
+        msg = _SoldersV0Msg(
             header=hdr,
             account_keys=[key for key in tx_key_list],
             recent_blockhash=legacy_msg.recent_blockhash,
@@ -153,4 +155,7 @@ class SolV0Tx(SolTx):
             address_table_lookups=alt_msg_list
         )
 
-        self._solders_tx = _SoldersTxV0(msg, [signer])
+        self._solders_v0_tx = _SoldersV0Tx(msg, [signer])
+
+    def _clone(self) -> SolV0Tx:
+        return SolV0Tx(self._name, self._decode_ix_list(), self._alt_info_list)

@@ -7,6 +7,7 @@ import subprocess
 import pathlib
 import requests
 import json
+import typing as tp
 from urllib.parse import urlparse
 from python_terraform import Terraform
 from paramiko import SSHClient
@@ -47,10 +48,10 @@ UNISWAP_V2_CORE_IMAGE = f'neonlabsorg/uniswap-v2-core:{UNISWAP_V2_CORE_COMMIT}'
 
 FAUCET_COMMIT = 'latest'
 
-FTS_NAME = "neonlabsorg/full_test_suite:develop"
+NEON_TESTS_IMAGE = "neonlabsorg/neon_tests:latest"
 
 CONTAINERS = ['proxy', 'solana', 'neon_test_invoke_program_loader',
-              'dbcreation', 'faucet', 'airdropper', 'indexer']
+              'dbcreation', 'faucet', 'gas_tank', 'indexer']
 
 docker_client = docker.APIClient()
 terraform = Terraform(working_dir=pathlib.Path(
@@ -61,6 +62,10 @@ def docker_compose(args: str):
     command = f'docker-compose {args}'
     click.echo(f"run command: {command}")
     out = subprocess.run(command, shell=True)
+    click.echo("return code: " + str(out.returncode))
+    if out.returncode != 0:
+        raise RuntimeError(f"Command {command} failed. Err: {out.stderr}")
+
     return out
 
 
@@ -106,8 +111,7 @@ def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch, skip_pull):
         click.echo('skip pulling of docker images')
 
     buildargs = {"NEON_EVM_COMMIT": neon_evm_tag,
-                 "PROXY_REVISION": proxy_tag,
-                 "PROXY_LOG_CFG": "log_cfg.json"}
+                 "PROXY_REVISION": proxy_tag}
 
     click.echo("Start build")
 
@@ -178,6 +182,21 @@ def terraform_build_infrastructure(head_ref_branch, github_ref_name, proxy_tag, 
     if return_code != 0:
         print("Terraform infrastructure is not built correctly")
         sys.exit(1)
+    output = terraform.output(json=True)
+    click.echo(f"output: {output}")
+    proxy_ip = output["proxy_ip"]["value"]
+    solana_ip = output["solana_ip"]["value"]
+    infra = dict(solana_ip=solana_ip, proxy_ip=proxy_ip)
+    set_github_env(infra)
+
+
+def set_github_env(envs: tp.Dict, upper=True) -> None:
+    """Set environment for github action"""
+    path = os.getenv("GITHUB_ENV", str())
+    if os.path.exists(path):
+        with open(path, "a") as env_file:
+            for key, value in envs.items():
+                env_file.write(f"\n{key.upper() if upper else key}={str(value)}")
 
 
 @cli.command(name="destroy_terraform")
@@ -192,47 +211,14 @@ def destroy_terraform(proxy_tag, run_number):
     terraform.destroy()
 
 
-@cli.command(name="openzeppelin")
-@click.option('--run_number')
-def openzeppelin_test(run_number):
-    container_name = f'fts_{run_number}'
-    fts_threshold = 2370
-    os.environ["FTS_CONTAINER_NAME"] = container_name
-    os.environ["FTS_IMAGE"] = FTS_NAME
-    os.environ["FTS_USERS_NUMBER"] = '15'
-    os.environ["FTS_JOBS_NUMBER"] = '8'
-    os.environ["NETWORK_NAME"] = f'full-test-suite-{run_number}'
-    os.environ["NETWORK_ID"] = '111'
-    os.environ["REQUEST_AMOUNT"] = '20000'
-    os.environ["USE_FAUCET"] = 'true'
-
-    output = terraform.output(json=True)
-    click.echo(f"output: {output}")
-    os.environ["PROXY_IP"] = output["proxy_ip"]["value"]
-    os.environ["SOLANA_IP"] = output["solana_ip"]["value"]
-    proxy_ip = os.environ.get("PROXY_IP")
-    solana_ip = os.environ.get("SOLANA_IP")
-
-    os.environ["PROXY_URL"] = f"http://{proxy_ip}:9090/solana"
-    os.environ["FAUCET_URL"] = f"http://{proxy_ip}:3333/request_neon"
-    os.environ["SOLANA_URL"] = f"http://{solana_ip}:8899"
-
-    click.echo(f"Env: {os.environ}")
-    click.echo(f"Running tests....")
-
-    docker_compose("-f docker-compose/docker-compose-full-test-suite.yml pull")
-    fts_result = docker_compose(
-        "-f docker-compose/docker-compose-full-test-suite.yml up")
-    click.echo(fts_result)
-    command = f'docker cp {container_name}:/opt/allure-reports.tar.gz ./'
-    click.echo(f"run command: {command}")
-    subprocess.run(command, shell=True)
-
-    dump_docker_logs(container_name)
+@cli.command(name="get_container_logs")
+def get_all_containers_logs():
     home_path = os.environ.get("HOME")
     artifact_logs = "./logs"
     ssh_key = f"{home_path}/.ssh/ci-stands"
     os.mkdir(artifact_logs)
+    proxy_ip = os.environ.get("PROXY_IP")
+    solana_ip = os.environ.get("SOLANA_IP")
 
     subprocess.run(
         f'ssh-keyscan -H {solana_ip} >> {home_path}/.ssh/known_hosts', shell=True)
@@ -250,25 +236,6 @@ def openzeppelin_test(run_number):
     services = ["postgres", "dbcreation", "indexer", "proxy", "faucet"]
     for service in services:
         upload_remote_logs(ssh_client, service, artifact_logs)
-    dump_docker_logs(container_name)
-    docker_compose(
-        "-f docker-compose/docker-compose-full-test-suite.yml rm -f")
-    check_tests_results(fts_threshold, f"{container_name}.log")
-
-
-def check_tests_results(fts_threshold, log_file):
-    passing_test_count = 0
-    with open(log_file, "r") as file:
-        while True:
-            line = file.readline()
-            if not line:
-                break
-            if re.match(r".*Passing - ", line):
-                passing_test_count = int(line.split('-')[1].strip())
-                break
-    if passing_test_count < fts_threshold:
-        raise RuntimeError(
-            f"Tests failed: Passing - {passing_test_count}\n Threshold - {fts_threshold}")
 
 
 def upload_remote_logs(ssh_client, service, artifact_logs):
@@ -304,13 +271,13 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
 
     if not skip_pull:
         click.echo('pull docker images...')
-        out = docker_compose(f"-f proxy/docker-compose-test.yml pull")
+        out = docker_compose(f"-f docker-compose/docker-compose-test.yml pull")
         click.echo(out)
     else:
         click.echo('skip pulling of docker images')
 
     try:
-        docker_compose(f"-f proxy/docker-compose-test.yml up -d")
+        docker_compose(f"-f docker-compose/docker-compose-test.yml up -d")
     except:
         raise RuntimeError("Docker-compose failed to start")
 
@@ -318,7 +285,8 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
                   for item in docker_client.containers() if item['State'] == 'running']
     click.echo(f"Running containers: {containers}")
 
-    wait_for_faucet()
+    for service_name in ['SOLANA', 'PROXY', 'FAUCET']:
+        wait_for_service(service_name)
 
     if not skip_uniswap:
         run_uniswap_test()
@@ -393,56 +361,67 @@ def stop_containers():
 
 def cleanup_docker():
     click.echo(f"Cleanup docker-compose...")
-    docker_compose("-f proxy/docker-compose-test.yml down -t 1")
+
+    docker_compose("-f docker-compose/docker-compose-test.yml down -t 1")
     click.echo(f"Cleanup docker-compose done.")
+
+    click.echo(f"Cleanup old docker containers...")
+    command = "sudo docker ps -a | awk '/Created|Exited/{s=\"sudo docker rm \" $(NF); print(s); system(s)}'"
+    subprocess.run(command, shell=True)
+    click.echo(f"Cleanup old docker containers done.")
+
     click.echo(f"Removing temporary data volumes...")
     command = "docker volume prune -f"
     subprocess.run(command, shell=True)
     click.echo(f"Removing temporary data done.")
 
 
-def get_faucet_url():
+def get_service_url(service_name: str):
     inspect_out = docker_client.inspect_container("proxy")
     env = inspect_out["Config"]["Env"]
-    faucet_url = ""
+    service_url = ""
     for item in env:
-        if "FAUCET_URL=" in item:
-            faucet_url = item.replace("FAUCET_URL=", "")
+        if f"{service_name}_URL=" in item:
+            service_url = item.replace(f"{service_name}_URL=", "")
             break
-    click.echo(f"fauset_url: {faucet_url}")
-    return faucet_url
+    click.echo(f"service_url: {service_url}")
+    return service_url
 
 
-def wait_for_faucet():
-    faucet_url = get_faucet_url()
-    faucet_ip, faucet_port = faucet_url.replace("http://", "").split(':')
+def wait_for_service(service_name: str):
+    service_url = get_service_url(service_name)
+    service_info = urlparse(service_url)
+    service_ip, service_port = service_info.hostname, service_info.port
 
-    command = f'docker exec proxy nc -zvw1 {faucet_ip} {faucet_port}'
+    command = f'docker exec proxy nc -zvw1 {service_ip} {service_port}'
     timeout_sec = 120
     start_time = time.time()
     while True:
         if time.time() - start_time > timeout_sec:
-            raise RuntimeError(f'Faucet {faucet_url} is unavailable - time is over')
+            raise RuntimeError(f'Service {service_name} {service_url} is unavailable - time is over')
         try:
-            if subprocess.run(
-                command, shell=True, capture_output=True, text=True).returncode == 0:
-                click.echo(f"Faucet {faucet_url} is available")
+            if subprocess.run(command, shell=True, capture_output=True, text=True).returncode == 0:
+                click.echo(f"Service {service_name} is available")
                 break
             else:
-                click.echo(f"Faucet {faucet_url} is unavailable - sleeping")
+                click.echo(f"Service {service_name} {service_url} is unavailable - sleeping")
         except:
             raise RuntimeError(f"Error during run command {command}")
         time.sleep(1)
 
 
 def run_uniswap_test():
-    faucet_url = get_faucet_url()
-    os.environ["FAUCET_URL"] = faucet_url
+    faucet_name = 'FAUCET'
+    faucet_url = get_service_url(faucet_name)
+    os.environ[f'{faucet_name}_URL'] = faucet_url
 
     docker_client.pull(UNISWAP_V2_CORE_IMAGE)
-    command = f'docker run --rm --network=container:proxy -e FAUCET_URL \
+    command = f'docker run --rm --network=container:proxy -e {faucet_name}_URL \
         --entrypoint ./deploy-test.sh {UNISWAP_V2_CORE_IMAGE} all 2>&1'
-    subprocess.run(command, shell=True)
+    out = subprocess.run(command, shell=True)
+    click.echo("return code: " + str(out.returncode))
+    if out.returncode != 0:
+        raise RuntimeError(f"Uniswap tests failed. Err: {out.stderr}")
 
 
 @cli.command(name="send_notification", help="Send notification to slack")
@@ -457,7 +436,7 @@ def send_notification(url, build_url):
 
     tpl["blocks"][0]["text"]["text"] = (
         f"*Build <{build_url}|`{build_id}`> of repository `{repo_name}` is failed.*"
-        f"\n<{build_url}|View build details>"
+        f"\n<{build_url}|View builosetd details>"
     )
     requests.post(url=url, data=json.dumps(tpl))
 

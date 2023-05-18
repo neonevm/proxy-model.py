@@ -1,27 +1,28 @@
 from __future__ import annotations
 
-import math
 import dataclasses
-
 import logging
-from datetime import datetime
-from typing import Optional, List, Dict, Deque, Set, Union, cast
-from collections import deque
+import math
 
-from .neon_tx_stages import NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
-from .neon_tx_stages import NeonTxStage
+from collections import deque
+from datetime import datetime
+from typing import Optional, List, Dict, Deque, Set
 
 from ..common_neon.address import NeonAddress, neon_2program, perm_account_seed, account_with_seed
 from ..common_neon.cancel_transaction_executor import CancelTxExecutor
 from ..common_neon.config import Config
 from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
-from ..common_neon.errors import BadResourceError
+from ..common_neon.errors import BadResourceError, RescheduleError
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolPubKey, SolAccount
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
-from ..mempool.mempool_api import OpResIdent
+from .neon_tx_stages import (
+    NeonCreateAccountTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage,
+    NeonTxStage
+)
+from .mempool_api import OpResIdent
 
 from ..statistic.data import NeonOpResStatData
 from ..statistic.proxy_client import ProxyStatClient
@@ -46,7 +47,7 @@ class OpResInfo:
         assert ident.public_key == str(signer.pubkey())
 
         holder_seed = perm_account_seed(b'holder-', ident.res_id)
-        holder = account_with_seed(signer.pubkey(), holder_seed)
+        holder = account_with_seed(ident.evm_program_id, signer.pubkey(), holder_seed)
         neon_address = NeonAddress.from_private_key(signer.secret())
 
         return OpResInfo(ident=ident, signer=signer, holder=holder, holder_seed=holder_seed, neon_address=neon_address)
@@ -74,14 +75,14 @@ class OpResInit:
         try:
             self._validate_operator_balance(resource)
 
-            builder = NeonIxBuilder(resource.public_key)
+            builder = NeonIxBuilder(self._config, resource.public_key)
             self._create_holder_account(builder, resource)
             self._create_neon_account(builder, resource)
-        except BadResourceError:
+        except RescheduleError:
             raise
         except BaseException as exc:
-            LOG.error(f'Fail to init accounts for resource {resource}.', exc_info=exc)
-            raise BadResourceError(exc)
+            LOG.error(f'Fail to init accounts for resource {resource}', exc_info=exc)
+            raise BadResourceError(str(exc))
 
     def _validate_operator_balance(self, resource: OpResInfo) -> None:
         # Validate operator's account has enough SOLs
@@ -108,7 +109,7 @@ class OpResInit:
         tx_sender.send([stage.tx])
 
     def _create_neon_account(self, builder: NeonIxBuilder, resource: OpResInfo):
-        solana_address = neon_2program(resource.neon_address)[0]
+        solana_address = neon_2program(builder.evm_program_id, resource.neon_address)[0]
 
         account_info = self._solana.get_account_info(solana_address)
         if account_info is not None:
@@ -132,12 +133,11 @@ class OpResInit:
         elif holder_info.lamports < balance:
             LOG.debug(f"Resize account {holder_address} for resource {resource}")
             self._recreate_holder(builder, resource, balance)
-        elif holder_info.owner != self._config.evm_loader_id:
+        elif holder_info.owner != self._config.evm_program_id:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
         elif holder_info.tag == ACTIVE_HOLDER_TAG:
-            LOG.debug(f"Cancel transaction in {str(resource.holder)} for resource {resource}")
-            self._unlock_storage_account(resource)
-        elif holder_info.tag not in (FINALIZED_HOLDER_TAG, HOLDER_TAG):
+            self._complete_neon_tx(resource)
+        elif holder_info.tag not in {FINALIZED_HOLDER_TAG, HOLDER_TAG}:
             LOG.debug(f"Wrong tag {holder_info.tag} of {holder_address} for resource {resource}")
             self._recreate_holder(builder, resource, size)
         else:
@@ -148,7 +148,7 @@ class OpResInit:
         self._execute_stage(NeonDeleteHolderAccountStage(builder, resource.holder_seed), resource)
         self._execute_stage(NeonCreateHolderAccountStage(builder, resource.holder_seed, size, balance), resource)
 
-    def _unlock_storage_account(self, resource: OpResInfo) -> None:
+    def _complete_neon_tx(self, resource: OpResInfo) -> None:
         holder_info = self._solana.get_holder_account_info(resource.holder)
         cancel_tx_executor = CancelTxExecutor(self._config, self._solana, resource.signer)
         cancel_tx_executor.add_blocked_holder_account(holder_info)
@@ -196,6 +196,7 @@ class OpResIdentListBuilder:
             for ident in secret_list:
                 sol_account = SolAccount.from_seed(ident)
                 ident = OpResIdent(
+                    self._config.evm_program_id,
                     public_key=str(sol_account.pubkey()),
                     private_key=sol_account.secret(),
                     res_id=res_id
@@ -313,17 +314,7 @@ class OpResMng:
 
         return res_used_time.ident
 
-    def disable_resource(self, ident_or_sig: Union[OpResIdent, str]) -> None:
-        if isinstance(ident_or_sig, str):
-            res_time: Optional[OpResUsedTime] = self._pop_used_resource(cast(str, ident_or_sig))
-            if res_time is None:
-                return
-            ident = res_time.ident
-        elif isinstance(ident_or_sig, OpResIdent):
-            ident = cast(OpResIdent, ident_or_sig)
-        else:
-            assert False, f'Wrong type {type(ident_or_sig)} of ident_or_sig'
-
+    def disable_resource(self, ident: OpResIdent) -> None:
         LOG.debug(f'Disable resource {ident}')
         self._checked_res_ident_set.discard(ident)
         self._disabled_res_ident_list.append(ident)
@@ -342,20 +333,27 @@ class OpResMng:
     def get_secret_list(self) -> List[bytes]:
         return self._secret_list
 
-    def get_disabled_resource(self) -> Optional[OpResIdent]:
+    def _check_used_resource_list(self) -> None:
         now = self._get_current_time()
         recheck_sec = self._config.recheck_used_resource_sec
         check_time = now - recheck_sec
 
-        if self._last_check_time < check_time:
-            self._last_check_time = now
-            for neon_sig, res_used_time in list(self._used_res_ident_dict.items()):
-                if res_used_time.last_used_time < check_time:
-                    res_used_time = self._pop_used_resource(neon_sig)
-                    if res_used_time is not None:
-                        LOG.debug(f'Recheck resource {res_used_time} by time usage')
-                        self._disabled_res_ident_list.append(res_used_time.ident)
+        if self._last_check_time > check_time:
+            return
 
+        self._last_check_time = now
+        for neon_sig, res_used_time in list(self._used_res_ident_dict.items()):
+            if res_used_time.last_used_time > check_time:
+                continue
+
+            res_used_time = self._pop_used_resource(neon_sig)
+            if res_used_time is None:
+                continue
+
+            LOG.debug(f'Recheck resource {res_used_time} by time usage')
+            self._disabled_res_ident_list.append(res_used_time.ident)
+
+    def get_disabled_resource(self) -> Optional[OpResIdent]:
         if len(self._disabled_res_ident_list) == 0:
             return None
 

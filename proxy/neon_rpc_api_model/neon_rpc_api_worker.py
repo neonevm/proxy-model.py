@@ -6,26 +6,32 @@ import logging
 from typing import Optional, Union, Dict, Any, List, cast
 
 import eth_utils
-import sha3
+from sha3 import keccak_256
 
 from eth_account import Account as NeonAccount
 
-from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status, call_tx_emulated
 from ..common_neon.environment_utils import NeonCli
-from ..common_neon.errors import EthereumError, InvalidParamError
-from ..common_neon.estimate import GasEstimate
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.errors import EthereumError, InvalidParamError, RescheduleError, NonceTooLowError
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.keys_storage import KeyStorage
+from ..common_neon.solana_tx import SolCommit
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.transaction_validator import NeonTxValidator
-from ..common_neon.utils import SolanaBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
+from ..common_neon.utils import SolBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
+from ..common_neon.db.db_connect import DBConnection
 
 from ..indexer.indexer_db import IndexerDB
+from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
 
 from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
+
+from .transaction_validator import NeonTxValidator
+from .nonce_validator import NeonTxNonceValidator
+from .estimate import GasEstimate
+
 
 NEON_PROXY_PKG_VERSION = '0.15.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
@@ -43,8 +49,9 @@ class NeonRpcApiWorker:
 
     def __init__(self, config: Config):
         self._config = config
-        self._solana = SolInteractor(self._config, self._config.solana_url)
+        self._solana = SolInteractor(config, config.solana_url)
         self._db = IndexerDB(config)
+        self._gas_tank = GasLessAccountsDB(DBConnection(config))
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price_value: Optional[MPGasPriceResult] = None
@@ -99,13 +106,60 @@ class NeonRpcApiWorker:
     def eth_gasPrice(self) -> str:
         return hex(self._gas_price.suggested_gas_price)
 
+    def neon_gasPrice(self, param: Dict[str, Any]) -> str:
+        account = param.get('from', None)
+        if account is None:
+            return self.eth_gasPrice()
+        account = self._normalize_address(account, 'from-address').lower()
+
+        state_tx_cnt = self._solana.get_state_tx_cnt(account)
+        tx_nonce = param.get('nonce', None)
+        if tx_nonce is not None:
+            tx_nonce = self._normalize_hex(tx_nonce, 'nonce')
+        if tx_nonce is None:
+            tx_nonce = state_tx_cnt
+        else:
+            NonceTooLowError.raise_if_error(account, tx_nonce, state_tx_cnt)
+
+        tx_gas = param.get('gas', 0)
+        tx_gas = self._normalize_hex(tx_gas, 'gas')
+
+        if self._has_gas_less_tx_permit(account, tx_nonce, tx_gas):
+            return hex(0)
+
+        return self.eth_gasPrice()
+
+    @staticmethod
+    def _normalize_hex(value: Union[str, int], name: str) -> int:
+        try:
+            if isinstance(value, int):
+                return value
+            elif not isinstance(value, str):
+                raise RuntimeError('bad type')
+
+            value = value.lower()
+            if not value.startswith('0x'):
+                raise RuntimeError('bad hex')
+
+            return int(value[2:], 16)
+        except (Exception,):
+            raise InvalidParamError(f'invalid {name}: value')
+
+    def _has_gas_less_tx_permit(self, account: str, tx_nonce: int, tx_gas_limit: int) -> bool:
+        if self._config.gas_less_tx_max_nonce < tx_nonce:
+            return False
+        if self._config.gas_less_tx_max_gas < tx_gas_limit:
+            return False
+
+        return self._gas_tank.has_gas_less_tx_permit(account)
+
     def eth_estimateGas(self, param: Dict[str, Any]) -> str:
         if not isinstance(param, dict):
             raise InvalidParamError('invalid param')
         if 'from' in param:
-            param['from'] = self._normalize_address(param['from'])
+            param['from'] = self._normalize_address(param['from'], 'from-address')
         if 'to' in param:
-            param['to'] = self._normalize_address(param['to'])
+            param['to'] = self._normalize_address(param['to'], 'to-address')
 
         try:
             calculator = GasEstimate(self._config, self._solana, param)
@@ -125,12 +179,12 @@ class NeonRpcApiWorker:
         return tag == 'earliest' \
             or ((tag == '0x0' or str(tag) == '0') and self._config.use_earliest_block_if_0_passed)
 
-    def _process_block_tag(self, tag: Union[str, int]) -> SolanaBlockInfo:
+    def _process_block_tag(self, tag: Union[str, int]) -> SolBlockInfo:
         if tag == 'latest':
             block = self._db.get_latest_block()
         elif tag == 'pending':
             latest_block = self._db.get_latest_block()
-            block = SolanaBlockInfo(
+            block = SolBlockInfo(
                 block_slot=latest_block.block_slot + 1,
                 block_time=latest_block.block_time,
                 parent_block_hash=latest_block.block_hash,
@@ -142,11 +196,11 @@ class NeonRpcApiWorker:
             block = self._db.get_starting_block()
         elif isinstance(tag, str):
             try:
-                block = SolanaBlockInfo(block_slot=int(tag.strip(), 16))
+                block = SolBlockInfo(block_slot=int(tag.strip(), 16))
             except (Exception,):
                 raise InvalidParamError(message=f'failed to parse block tag: {tag}')
         elif isinstance(tag, int):
-            block = SolanaBlockInfo(block_slot=tag)
+            block = SolBlockInfo(block_slot=tag)
         else:
             raise InvalidParamError(message=f'failed to parse block tag: {tag}')
         return block
@@ -190,7 +244,7 @@ class NeonRpcApiWorker:
             raise InvalidParamError(message=f'invalid block tag {tag}')
 
     @staticmethod
-    def _normalize_address(raw_address: str, error='bad account') -> str:
+    def _normalize_address(raw_address: str, address_type='address') -> str:
         try:
             address = raw_address.strip().lower()
             assert address[:2] == '0x'
@@ -201,9 +255,9 @@ class NeonRpcApiWorker:
 
             return eth_utils.to_checksum_address(address)
         except (Exception,):
-            raise InvalidParamError(message=error)
+            raise InvalidParamError(message=f'bad {address_type}: {raw_address}')
 
-    def _get_full_block_by_number(self, tag: Union[str, int]) -> SolanaBlockInfo:
+    def _get_full_block_by_number(self, tag: Union[str, int]) -> SolBlockInfo:
         block = self._process_block_tag(tag)
         if block.is_empty():
             block = self._db.get_block_by_slot(block.block_slot)
@@ -226,13 +280,13 @@ class NeonRpcApiWorker:
 
         try:
             if tag == 'pending':
-                commitment = 'processed'
+                commitment = SolCommit.Processed
             elif tag in {'finalized', 'safe'}:
-                commitment = 'finalized'
+                commitment = SolCommit.Finalized
             else:
-                commitment = 'confirmed'
+                commitment = SolCommit.Confirmed
 
-            neon_account_info = self._solana.get_neon_account_info(NeonAddress(account), commitment)
+            neon_account_info = self._solana.get_neon_account_info(account, commitment)
             if neon_account_info is None:
                 return hex(0)
 
@@ -248,32 +302,25 @@ class NeonRpcApiWorker:
         if event_type is None:
             return
 
-        if event_type == 1:
-            log_rec[key] = 'LOG'
-        elif event_type == 101:
-            log_rec[key] = 'ENTER CALL'
-        elif event_type == 102:
-            log_rec[key] = 'ENTER CALL CODE'
-        elif event_type == 103:
-            log_rec[key] = 'ENTER STATICCALL'
-        elif event_type == 104:
-            log_rec[key] = 'ENTER DELEGATECALL'
-        elif event_type == 105:
-            log_rec[key] = 'ENTER CREATE'
-        elif event_type == 106:
-            log_rec[key] = 'ENTER CREATE2'
-        elif event_type == 201:
-            log_rec[key] = 'EXIT STOP'
-        elif event_type == 202:
-            log_rec[key] = 'EXIT RETURN'
-        elif event_type == 203:
-            log_rec[key] = 'EXIT SELFDESTRUCT'
-        elif event_type == 204:
-            log_rec[key] = 'EXIT REVERT'
-        elif event_type == 300:
-            log_rec[key] = 'RETURN'
-        elif event_type == 301:
-            log_rec[key] = 'CANCEL'
+        event_type_dict: Dict[int, str] = {
+            1:   'LOG',
+            101: 'ENTER CALL',
+            102: 'ENTER CALL CODE',
+            103: 'ENTER STATICCALL',
+            104: 'ENTER DELEGATECALL',
+            105: 'ENTER CREATE',
+            106: 'ENTER CREATE2',
+            201: 'EXIT STOP',
+            202: 'EXIT RETURN',
+            203: 'EXIT SELFDESTRUCT',
+            204: 'EXIT REVERT',
+            300: 'RETURN',
+            301: 'CANCEL'
+        }
+
+        event_type_str = event_type_dict.get(event_type, None)
+        if event_type_str is not None:
+            log_rec[key] = event_type_str
 
     @staticmethod
     def _normalize_topic(raw_topic: Any) -> str:
@@ -297,12 +344,12 @@ class NeonRpcApiWorker:
         address_list: List[str] = list()
         topic_list: List[List[str]] = list()
 
-        if 'fromBlock' in obj and obj['fromBlock'] != '0':
+        if obj.get('fromBlock', '0') != '0':
             from_block = self._process_block_tag(obj['fromBlock']).block_slot
-        if 'toBlock' in obj and obj['toBlock'] not in {'latest', 'pending', 'finalized', 'safe'}:
+        if obj.get('toBlock', 'latest') not in {'latest', 'pending', 'finalized', 'safe'}:
             to_block = self._process_block_tag(obj['toBlock']).block_slot
 
-        if 'blockHash' in obj:
+        if obj.get('blockHash', None) is not None:
             block_hash = obj['blockHash']
             block = self._get_block_by_hash(block_hash)
             if block.is_empty():
@@ -310,24 +357,30 @@ class NeonRpcApiWorker:
             from_block = block.block_slot
             to_block = block.block_slot
 
-        if 'address' in obj:
+        if obj.get('address', None) is not None:
             raw_address_list = obj['address']
             if isinstance(raw_address_list, str):
-                address_list = [self._normalize_address(raw_address_list, f'bad address {raw_address_list}').lower()]
+                address_list = [self._normalize_address(raw_address_list).lower()]
             elif isinstance(raw_address_list, list):
                 for raw_address in raw_address_list:
-                    address_list.append(self._normalize_address(raw_address, f'bad address {raw_address}').lower())
+                    address_list.append(self._normalize_address(raw_address).lower())
             else:
                 raise InvalidParamError(message=f'bad address {raw_address_list}')
 
         if 'topics' in obj:
             raw_topic_list = obj['topics']
+            if raw_topic_list is None:
+                raw_topic_list = []
+
             if not isinstance(raw_topic_list, list):
                 raise InvalidParamError(message=f'bad topics {raw_topic_list}')
 
             for raw_topic in raw_topic_list:
                 if isinstance(raw_topic, list):
-                    topic_list.append([self._normalize_topic(raw_item) for raw_item in raw_topic])
+                    item_list = [self._normalize_topic(raw_item) for raw_item in raw_topic if raw_item is not None]
+                    topic_list.append(item_list)
+                elif raw_topic is None:
+                    topic_list.append(list())
                 else:
                     topic_list.append([self._normalize_topic(raw_topic)])
 
@@ -369,7 +422,7 @@ class NeonRpcApiWorker:
         log_list = self._get_logs(obj)
         return self._filter_log_list(log_list, True)
 
-    def _get_block_by_slot(self, block: SolanaBlockInfo, full: bool, skip_transaction: bool) -> Optional[dict]:
+    def _get_block_by_slot(self, block: SolBlockInfo, full: bool, skip_transaction: bool) -> Optional[dict]:
         if block.is_empty():
             block = self._db.get_block_by_slot(block.block_slot)
             if block.is_empty():
@@ -433,12 +486,12 @@ class NeonRpcApiWorker:
 
         try:
             value = NeonCli(self._config).call('get-storage-at', account, position)
-            return value
+            return '0x' + (value or 64*'0')
         except (Exception,):
             # LOG.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
-            return '0x00'
+            return '0x' + 64*'0'
 
-    def _get_block_by_hash(self, block_hash: str) -> SolanaBlockInfo:
+    def _get_block_by_hash(self, block_hash: str) -> SolBlockInfo:
         try:
             block_hash = block_hash.strip().lower()
             assert block_hash[:2] == '0x'
@@ -467,7 +520,8 @@ class NeonRpcApiWorker:
 
     def eth_getBlockByNumber(self, tag: Union[int, str], full: bool) -> Optional[dict]:
         """Returns information about a block by block number.
-            tag - integer of a block number, or the string "finalized", "safe", "earliest", "latest" or "pending", as in the default block parameter.
+            tag  - integer of a block number, or the string "finalized", "safe", "earliest", "latest" or "pending",
+                   as in the default block parameter.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
         is_pending = tag == 'pending'
@@ -484,12 +538,15 @@ class NeonRpcApiWorker:
            Parameters
             obj - The transaction call object
                 from: DATA, 20 Bytes - (optional) The address the transaction is sent from.
-                to: DATA, 20 Bytes - The address the transaction is directed to.
-                gas: QUANTITY - (optional) Integer of the gas provided for the transaction execution. eth_call consumes zero gas, but this parameter may be needed by some executions.
-                gasPrice: QUANTITY - (optional) Integer of the gasPrice used for each paid gas
-                value: QUANTITY - (optional) Integer of the value sent with this transaction
-                data: DATA - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
-            tag - integer block number, or the string "finalized", "safe", "latest", "earliest" or "pending", see the default block parameter
+                to: DATA, 20 Bytes   - The address the transaction is directed to.
+                gas: QUANTITY        - (optional) Integer of the gas provided for the transaction execution.
+                                       eth_call consumes zero gas, but this parameter may be needed by some executions.
+                gasPrice: QUANTITY   - (optional) Integer of the gasPrice used for each paid gas
+                value: QUANTITY      - (optional) Integer of the value sent with this transaction
+                data: DATA           - (optional) Hash of the method signature and encoded parameters.
+                                       For details see Ethereum Contract ABI in the Solidity documentation
+            tag                      - integer block number, or the string "finalized", "safe", "latest",
+                                       "earliest" or "pending", see the default block parameter
         """
         self._validate_block_tag(tag)
         if not isinstance(obj, dict):
@@ -503,11 +560,24 @@ class NeonRpcApiWorker:
             contract_id = obj.get('to', 'deploy')
             data = obj.get('data', "None")
             value = obj.get('value', '')
-            emulator_json = call_emulated(self._config, contract_id, caller_id, data, value)
-            check_emulated_exit_status(emulator_json)
-            return '0x' + emulator_json['result']
+
+            retry_idx = 0
+            retry_on_fail = self._config.retry_on_fail
+            while True:
+                try:
+                    emulator_json = call_emulated(self._config, contract_id, caller_id, data, value)
+                    check_emulated_exit_status(emulator_json)
+                    return '0x' + emulator_json['result']
+
+                except RescheduleError:
+                    retry_idx += 1
+                    if retry_idx < retry_on_fail:
+                        continue
+                    raise
+
         except EthereumError:
             raise
+
         except Exception as err:
             LOG.debug(f'eth_call Exception {err}.')
             raise
@@ -520,27 +590,27 @@ class NeonRpcApiWorker:
             LOG.debug(f'Get transaction count. Account: {account}, tag: {tag}')
 
             pending_tx_nonce: Optional[int] = None
-            commitment = 'confirmed'
+            commitment = SolCommit.Confirmed
             req_id = get_req_id_from_log()
 
             if tag == 'pending':
-                commitment = 'processed'
+                commitment = SolCommit.Processed
 
                 pending_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
                 LOG.debug(f'Pending tx count for: {account} - is: {pending_tx_nonce}')
             elif tag == 'latest':
-                commitment = 'processed'
+                commitment = SolCommit.Processed
 
                 pending_tx_nonce = self._mempool_client.get_mempool_tx_nonce(req_id=req_id, sender=account)
                 LOG.debug(f'Mempool tx count for: {account} - is: {pending_tx_nonce}')
             elif tag in {'finalized', 'safe'}:
-                commitment = 'finalized'
+                commitment = SolCommit.Finalized
 
             if pending_tx_nonce is None:
                 pending_tx_nonce = 0
 
-            neon_account_info = self._solana.get_neon_account_info(account, commitment)
-            tx_count = max(neon_account_info.tx_count, pending_tx_nonce)
+            tx_cnt = self._solana.get_state_tx_cnt(account, commitment)
+            tx_count = max(tx_cnt, pending_tx_nonce)
 
             return hex(tx_count)
         except (Exception,):
@@ -654,52 +724,80 @@ class NeonRpcApiWorker:
             return '0x'
 
     def eth_sendRawTransaction(self, raw_tx: str) -> str:
+        neon_tx: NeonTx = self._decode_neon_raw_tx(raw_tx)
         try:
-            neon_tx = NeonTx.from_string(bytearray.fromhex(raw_tx[2:]))
-        except (Exception,):
-            raise InvalidParamError(message="wrong transaction format")
+            # validate that tx was executed 2 times (second in the except section)
+            if self._is_neon_tx_exist(neon_tx):
+                return neon_tx.hex_tx_sig
 
-        def _readable_tx(tx: NeonTx) -> dict:
-            result = dict()
-            for k, v in tx.as_dict().items():
-                if isinstance(v, bytearray) or isinstance(v, bytes):
-                    result[k] = v.hex()
-                else:
-                    result[k] = v
-            return result
-
-        neon_sig = '0x' + neon_tx.hash_signed().hex()
-        LOG.debug(f"sendRawTransaction {neon_sig}: {_readable_tx(neon_tx)}")
-
-        try:
-            neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_neon_sig(neon_sig)
-            if neon_tx_receipt is not None:
-                raise EthereumError(message='already known')
-
-            min_gas_price = self._gas_price.min_gas_price
-            neon_tx_validator = NeonTxValidator(self._config, self._solana, neon_tx, min_gas_price)
-            neon_tx_exec_cfg = neon_tx_validator.precheck()
+            neon_tx_exec_cfg: NeonTxExecCfg = self._get_neon_tx_exec_cfg(neon_tx)
 
             result: MPTxSendResult = self._mempool_client.send_raw_transaction(
-                req_id=get_req_id_from_log(), neon_sig=neon_sig, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
+                req_id=get_req_id_from_log(), neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
             )
 
             if result.code in (MPTxSendResultCode.Success, MPTxSendResultCode.AlreadyKnown):
-                return neon_sig
+                return neon_tx.hex_tx_sig
             elif result.code == MPTxSendResultCode.Underprice:
                 raise EthereumError(message='replacement transaction underpriced')
             elif result.code == MPTxSendResultCode.NonceTooLow:
-                neon_tx_validator.raise_nonce_error(result.state_tx_cnt, neon_tx.nonce)
+                NonceTooLowError.raise_error(neon_tx.hex_sender, neon_tx.nonce, result.state_tx_cnt)
             else:
                 raise EthereumError(message='unknown error')
-        except EthereumError:
-            raise
-
         except BaseException as exc:
-            LOG.error('Failed to process eth_sendRawTransaction.', exc_info=exc)
+            # revalidate that tx was executed
+            if self._is_neon_tx_exist(neon_tx):
+                return neon_tx.hex_tx_sig
+
+            if not isinstance(exc, (EthereumError, NonceTooLowError)):
+                LOG.error('Failed to process eth_sendRawTransaction', exc_info=exc)
             raise
 
-    def _get_transaction_by_index(self, block: SolanaBlockInfo, tx_idx: Union[str, int]) -> Optional[Dict[str, Any]]:
+    @staticmethod
+    def _decode_neon_raw_tx(raw_tx: str) -> NeonTx:
+        try:
+            neon_tx = NeonTx.from_string(bytearray.fromhex(raw_tx[2:]))
+        except (Exception,):
+            raise InvalidParamError(message='wrong transaction format')
+
+        def _readable_tx(tx: NeonTx) -> Dict[str, Any]:
+            fmt_tx = dict()
+            for k, v in tx.as_dict().items():
+                if isinstance(v, bytearray) or isinstance(v, bytes):
+                    fmt_tx[k] = v.hex()
+                else:
+                    fmt_tx[k] = v
+            return fmt_tx
+
+        LOG.debug(f'sendRawTransaction {neon_tx.hex_tx_sig}: {_readable_tx(neon_tx)}')
+        return neon_tx
+
+    def _is_neon_tx_exist(self, neon_tx: NeonTx) -> bool:
+        # only if tx was indexed by the Indexer
+        neon_tx_receipt = self._db.get_tx_by_neon_sig(neon_tx.hex_tx_sig)
+        if neon_tx_receipt is not None:
+            raise EthereumError(message='already known')
+
+        # only if the Proxy mempool knows about tx
+        neon_tx_or_error = self._mempool_client.get_pending_tx_by_hash(get_req_id_from_log(), neon_tx.hex_tx_sig)
+        if neon_tx_or_error is not None:
+            return True
+
+        NeonTxNonceValidator(self._solana, neon_tx).precheck()
+        return False
+
+    def _get_neon_tx_exec_cfg(self, neon_tx: NeonTx) -> NeonTxExecCfg:
+        gas_less_permit = False
+        if neon_tx.gasPrice == 0:
+            gas_less_permit = self._has_gas_less_tx_permit(neon_tx.hex_sender, neon_tx.nonce, neon_tx.gasLimit)
+
+        min_gas_price = self._gas_price.min_gas_price
+        neon_tx_validator = NeonTxValidator(self._config, self._solana, neon_tx, gas_less_permit, min_gas_price)
+        neon_tx_exec_cfg = neon_tx_validator.precheck()
+
+        return neon_tx_exec_cfg
+
+    def _get_transaction_by_index(self, block: SolBlockInfo, tx_idx: Union[str, int]) -> Optional[Dict[str, Any]]:
         try:
             if isinstance(tx_idx, str):
                 tx_idx = int(tx_idx, 16)
@@ -776,10 +874,10 @@ class NeonRpcApiWorker:
 
         sender = tx['from']
         del tx['from']
-        sender = self._normalize_address(sender)
+        sender = self._normalize_address(sender, 'from-address')
 
         if 'to' in tx:
-            tx['to'] = self._normalize_address(tx['to'])
+            tx['to'] = self._normalize_address(tx['to'], 'to-address')
 
         account = KeyStorage().get_key(sender)
         if not account:
@@ -794,13 +892,14 @@ class NeonRpcApiWorker:
         try:
             signed_tx = NeonAccount().sign_transaction(tx, account.private)
             raw_tx = signed_tx.rawTransaction.hex()
+            neon_tx = NeonTx.from_string(bytearray.fromhex(raw_tx[2:]))
 
-            tx['from'] = sender
-            tx['to'] = NeonTx.from_string(bytearray.fromhex(raw_tx[2:])).toAddress.hex()
-            tx['hash'] = signed_tx.hash.hex()
-            tx['r'] = hex(signed_tx.r)
-            tx['s'] = hex(signed_tx.s)
-            tx['v'] = hex(signed_tx.v)
+            tx['from'] = neon_tx.hex_sender
+            tx['to'] = neon_tx.hex_to_address
+            tx['hash'] = neon_tx.hex_tx_sig
+            tx['r'] = hex(neon_tx.r)
+            tx['s'] = hex(neon_tx.s)
+            tx['v'] = hex(neon_tx.v)
 
             return {
                 'raw': raw_tx,
@@ -821,7 +920,7 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message='data is not hex string')
 
-        return sha3.keccak_256(data).hexdigest()
+        return keccak_256(data).hexdigest()
 
     @staticmethod
     def eth_mining() -> bool:
@@ -866,8 +965,7 @@ class NeonRpcApiWorker:
         return self._db.get_sol_sig_list_by_neon_sig(neon_sig)
 
     def neon_emulate(self, raw_signed_tx: str):
-        """Executes emulator with given transaction
-        """
+        """Executes emulator with given transaction"""
         LOG.debug(f"Call neon_emulate: {raw_signed_tx}")
 
         neon_tx = NeonTx.from_string(bytearray.fromhex(raw_signed_tx))
@@ -878,10 +976,11 @@ class NeonRpcApiWorker:
         slot = self._db.get_finalized_block_slot()
         return hex(slot)
 
-    @staticmethod
-    def neon_getEvmParams() -> Dict[str, str]:
+    def neon_getEvmParams(self) -> Dict[str, str]:
         """Returns map of Neon-EVM parameters"""
-        return ElfParams().elf_param_dict
+        elf_param_dict = ElfParams().elf_param_dict
+        elf_param_dict['NEON_EVM_ID'] = str(self._config.evm_program_id)
+        return elf_param_dict
 
     def is_allowed_api(self, method_name: str) -> bool:
         for prefix in ('eth_', 'net_', 'web3_', 'neon_'):

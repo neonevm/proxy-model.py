@@ -18,7 +18,7 @@ import logging
 from typing import List, Tuple, Dict, Any, Optional
 
 from ..common.utils import build_http_response
-from ..common_neon.errors import EthereumError
+from ..common_neon.errors import EthereumError, NonceTooLowError
 from ..common_neon.solana_tx_error_parser import SolTxError
 from ..common_neon.config import Config
 from ..common_neon.utils.json_logger import logging_context
@@ -96,14 +96,19 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 response['error'] = {'code': -32601, 'message': f'method {rpc_method} is not supported'}
             else:
                 method = getattr(self._model, rpc_method)
-                param_list = [self._sanitize_value(param) for param in request.get('params', [])]
+                param_object = []
+                if "params" in request and isinstance(request["params"], list):
+                    param_object = request["params"]
+                param_list = [self._sanitize_value(param) for param in param_object]
                 response['result'] = method(*param_list)
-        except SolTxError as err:
+        except SolTxError as exc:
             # traceback.print_exc()
-            response['error'] = {'code': -32000, 'message': err.error}
+            response['error'] = {'code': -32000, 'message': exc.error_msg}
         except EthereumError as err:
             # traceback.print_exc()
             response['error'] = err.get_error()
+        except NonceTooLowError as exc:
+            response['error'] = {'code': exc.eth_error_code, 'message': str(exc)}
         except BaseException as exc:
             LOG.debug('Exception on process request', exc_info=exc)
             response['error'] = {'code': -32000, 'message': str(exc)}

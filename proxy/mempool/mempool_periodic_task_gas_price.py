@@ -6,8 +6,10 @@ from .mempool_periodic_task import MPPeriodicTaskLoop
 
 
 class MPGasPriceTaskLoop(MPPeriodicTaskLoop[MPGasPriceRequest, MPGasPriceResult]):
+    _default_sleep_sec = MPPeriodicTaskLoop._one_block_sec * 16
+
     def __init__(self, executor_mng: MPExecutorMng) -> None:
-        super().__init__(name='gas-price', sleep_time=4.0, executor_mng=executor_mng)
+        super().__init__(name='gas-price', sleep_sec=self._default_sleep_sec, executor_mng=executor_mng)
         self._gas_price: Optional[MPGasPriceResult] = None
 
     @property

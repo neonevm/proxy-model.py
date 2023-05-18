@@ -8,8 +8,10 @@ from ..common_neon.elf_params import ElfParams
 
 
 class MPElfParamDictTaskLoop(MPPeriodicTaskLoop[MPElfParamDictRequest, Dict[str, str]]):
+    _default_sleep_sec = MPPeriodicTaskLoop._one_block_sec * 16
+
     def __init__(self, executor_mng: MPExecutorMng) -> None:
-        super().__init__(name='elf-params', sleep_time=4.0, executor_mng=executor_mng)
+        super().__init__(name='elf-params', sleep_sec=self._default_sleep_sec, executor_mng=executor_mng)
 
     def _submit_request(self) -> None:
         mp_req = MPElfParamDictRequest(req_id=self._generate_req_id(), elf_param_dict=ElfParams().elf_param_dict)

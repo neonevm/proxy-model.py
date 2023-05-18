@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import List
+from enum import Enum, auto as enum_auto
 
 
 @dataclass(frozen=True)
@@ -34,16 +35,61 @@ class NeonGasPriceData:
     operator_fee: Decimal
 
 
-@dataclass(frozen=True)
+class NeonTxBeginCode(Enum):
+    Failed = enum_auto()
+    Started = enum_auto()
+    Restarted = enum_auto()
+
+
 class NeonTxBeginData:
-    begin_cnt: int
+    started_cnt: int = 0
+    restarted_cnt: int = 0
+    total_cnt: int = 0
+
+    def add_value(self, code: NeonTxBeginCode) -> None:
+        if code == NeonTxBeginCode.Started:
+            self.started_cnt += 1
+        elif code == NeonTxBeginCode.Restarted:
+            self.restarted_cnt += 1
+        else:
+            return
+        self.total_cnt += 1
+
+    def has_value(self) -> bool:
+        return self.total_cnt > 0
 
 
-@dataclass(frozen=True)
+class NeonTxEndCode(Enum):
+    Unspecified = enum_auto()
+    Unfinished = enum_auto()
+    Done = enum_auto()
+    Failed = enum_auto()
+    Rescheduled = enum_auto()
+    Canceled = enum_auto()
+
+
 class NeonTxEndData:
-    done_cnt: int
-    failed_cnt: int
-    rescheduled_cnt: int
+    done_cnt: int = 0
+    failed_cnt: int = 0
+    rescheduled_cnt: int = 0
+    canceled_cnt: int = 0
+    total_cnt: int = 0
+
+    def add_value(self, code: NeonTxEndCode) -> None:
+        if code == NeonTxEndCode.Done:
+            self.done_cnt += 1
+        elif code == NeonTxEndCode.Failed:
+            self.failed_cnt += 1
+        elif code == NeonTxEndCode.Rescheduled:
+            self.rescheduled_cnt += 1
+        elif code == NeonTxEndCode.Canceled:
+            self.canceled_cnt += 1
+        else:
+            return
+        self.total_cnt += 1
+
+    def has_value(self) -> bool:
+        return self.total_cnt > 0
 
 
 @dataclass(frozen=True)
