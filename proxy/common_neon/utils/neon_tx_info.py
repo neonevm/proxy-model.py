@@ -5,8 +5,7 @@ from eth_utils import big_endian_to_int
 from dataclasses import dataclass
 
 from .utils import str_fmt_object
-
-from ..eth_proto import NeonTx
+from .eth_proto import NeonTx
 
 
 @dataclass(frozen=True)
@@ -34,26 +33,19 @@ class NeonTxInfo:
 
     @staticmethod
     def from_neon_tx(tx: NeonTx) -> NeonTxInfo:
-        if not tx.toAddress:
-            to_addr = None
-            contract = '0x' + tx.contract()
-        else:
-            to_addr = '0x' + tx.toAddress.hex()
-            contract = None
-
         return NeonTxInfo(
             v=hex(tx.v),
             r=hex(tx.r),
             s=hex(tx.s),
-            sig='0x' + tx.hash_signed().hex().lower(),
-            addr='0x' + tx.sender(),
+            sig=tx.hex_tx_sig,
+            addr=tx.hex_sender,
             nonce=hex(tx.nonce),
             gas_price=hex(tx.gasPrice),
             gas_limit=hex(tx.gasLimit),
             value=hex(tx.value),
-            calldata='0x' + tx.callData.hex(),
-            to_addr=to_addr,
-            contract=contract
+            calldata=tx.hex_call_data,
+            to_addr=tx.hex_to_address,
+            contract=tx.hex_contract
         )
 
     @staticmethod

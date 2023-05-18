@@ -8,7 +8,8 @@ from enum import IntEnum
 from typing import Any, Optional, List, Dict
 
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils import str_fmt_object
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.solana_tx import SolPubKey
 
 
@@ -40,35 +41,44 @@ class MPRequest:
     req_id: str
     type: MPRequestType = MPRequestType.Unspecified
 
+    def __str__(self) -> str:
+        return str_fmt_object(self)
+
 
 @dataclass
 class MPTxRequest(MPRequest):
-    sig: str = None
     neon_tx: Optional[NeonTx] = None
     neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
-    sender_address: str = None
     gas_price: int = 0
     start_time: int = 0
 
     def __post_init__(self):
         self.type = MPRequestType.SendTransaction
 
-        self.gas_price = self.neon_tx.gasPrice
-        if self.sender_address is None:
-            self.sender_address = "0x" + self.neon_tx.sender()
+        if self.gas_price == 0:
+            self.gas_price = self.neon_tx.gasPrice
         if self.start_time == 0:
             self.start_time = time.time_ns()
+
+    @property
+    def sig(self) -> str:
+        return self.neon_tx.hex_tx_sig
+
+    @property
+    def sender_address(self) -> str:
+        return self.neon_tx.hex_sender
 
     @property
     def nonce(self) -> int:
         return self.neon_tx.nonce
 
     def has_chain_id(self) -> bool:
-        return self.neon_tx.hasChainId()
+        return self.neon_tx.has_chain_id()
 
 
 @dataclass(frozen=True)
 class OpResIdent:
+    evm_program_id: SolPubKey
     public_key: str
     private_key: bytes
     res_id: int = -1
@@ -98,10 +108,8 @@ class MPTxExecRequest(MPTxRequest):
     def clone(tx: MPTxRequest, res_ident: OpResIdent, elf_param_dict: Dict[str, str]):
         req = MPTxExecRequest(
             req_id=tx.req_id,
-            sig=tx.sig,
             neon_tx=tx.neon_tx,
             neon_tx_exec_cfg=tx.neon_tx_exec_cfg,
-            sender_address=tx.sender_address,
             start_time=tx.start_time,
             elf_param_dict=elf_param_dict,
             res_ident=res_ident
@@ -222,18 +230,19 @@ class MPCloseALTListRequest(MPRequest):
 
 class MPTxExecResultCode(IntEnum):
     Done = 0
-    BlockedAccount = 1
-    SolanaUnavailable = 2
-    NodeBehind = 3
-    NonceTooLow = 4
-    BadResource = 5
-    Unspecified = 255
+    Reschedule = 1
+    Failed = 2
+    BadResource = 3
+    NonceTooHigh = 4
 
 
 @dataclass(frozen=True)
 class MPTxExecResult:
     code: MPTxExecResultCode
     data: Any
+
+    def __str__(self) -> str:
+        return str_fmt_object(self)
 
 
 class MPTxSendResultCode(IntEnum):
@@ -273,7 +282,7 @@ class MPSenderTxCntResult:
 class MPOpResInitResultCode(IntEnum):
     Success = 0
     Failed = 1
-    Unspecified = 255
+    Reschedule = 2
 
 
 @dataclass(frozen=True)

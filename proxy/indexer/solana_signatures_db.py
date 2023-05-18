@@ -1,53 +1,48 @@
 from typing import Optional
 
-import psycopg2.extensions
-
 from ..common_neon.solana_neon_tx_receipt import SolTxSigSlotInfo
-from ..indexer.base_db import BaseDB
+from ..common_neon.db.base_db_table import BaseDBTable
+from ..common_neon.db.db_connect import DBConnection
 
 
-class SolSigsDB(BaseDB):
-    def __init__(self):
-        super().__init__('solana_transaction_signatures', [])
-        self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+class SolSigsDB(BaseDBTable):
+    def __init__(self, db: DBConnection):
+        super().__init__(
+            db,
+            table_name='solana_transaction_signatures',
+            column_list=['block_slot', 'signature'],
+            key_list=['block_slot', 'signature']
+        )
 
     def add_sig(self, info: SolTxSigSlotInfo) -> None:
-        with self._conn.cursor() as cursor:
-            cursor.execute(f'''
-                INSERT INTO {self._table_name}
-                    (block_slot, signature)
-                VALUES
-                    (%s, %s)
-                ON CONFLICT DO NOTHING
-                ''',
-                (info.block_slot, info.sol_sig)
-            )
+        self._db.run_tx(
+            lambda: self._insert_row((info.block_slot, info.sol_sig))
+        )
 
     def get_next_sig(self, block_slot: int) -> Optional[SolTxSigSlotInfo]:
-        with self._conn.cursor() as cursor:
-            cursor.execute(f'''
-                SELECT signature,
-                       block_slot
-                  FROM {self._table_name}
-                 WHERE block_slot > {block_slot}
-              ORDER BY block_slot
-                 LIMIT 1
-            ''')
-            row = cursor.fetchone()
-            if row is not None:
-                return SolTxSigSlotInfo(sol_sig=row[0], block_slot=row[1])
+        request = f'''
+            SELECT signature,
+                   block_slot
+              FROM {self._table_name}
+             WHERE block_slot > %s
+          ORDER BY block_slot
+             LIMIT 1
+        '''
+        value_list = self._db.fetch_one(request, (block_slot,))
+        if not len(value_list):
             return None
+        return SolTxSigSlotInfo(sol_sig=value_list[0], block_slot=value_list[1])
 
     def get_max_sig(self) -> Optional[SolTxSigSlotInfo]:
-        with self._conn.cursor() as cursor:
-            cursor.execute(f'''
-                SELECT signature,
-                       block_slot
-                  FROM {self._table_name}
-              ORDER BY block_slot DESC
-                 LIMIT 1
-            ''')
-            row = cursor.fetchone()
-            if row is not None:
-                return SolTxSigSlotInfo(sol_sig=row[0], block_slot=row[1])
+        request = f'''
+            SELECT signature,
+                   block_slot
+              FROM {self._table_name}
+          ORDER BY block_slot DESC
+             LIMIT 1
+        '''
+
+        value_list = self._db.fetch_one(request, ())
+        if not len(value_list):
             return None
+        return SolTxSigSlotInfo(sol_sig=value_list[0], block_slot=value_list[1])

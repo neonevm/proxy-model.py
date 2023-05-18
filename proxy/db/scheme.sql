@@ -38,25 +38,25 @@
         value BYTEA
     );
 
-    CREATE TABLE IF NOT EXISTS airdrop_scheduled (
-        key TEXT UNIQUE,
-        value BYTEA
+    CREATE TABLE IF NOT EXISTS gas_less_accounts (
+        address TEXT,
+        contract TEXT,
+        nonce BIGINT,
+        block_slot BIGINT,
+        neon_sig TEXT
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_gas_less_accounts ON gas_less_accounts(address, contract, nonce);
 
-    CREATE TABLE IF NOT EXISTS failed_airdrop_attempts (
-        attempt_time    BIGINT,
-        eth_address     TEXT,
-        reason          TEXT
+    CREATE TABLE IF NOT EXISTS gas_less_usages(
+        address TEXT,
+        block_slot BIGINT,
+        neon_sig TEXT,
+        nonce BIGINT,
+        to_addr TEXT,
+        neon_total_gas_usage BIGINT,
+        operator TEXT
     );
-    CREATE INDEX IF NOT EXISTS failed_attempt_time_idx ON failed_airdrop_attempts (attempt_time);
-
-    CREATE TABLE IF NOT EXISTS airdrop_ready (
-        eth_address     TEXT UNIQUE,
-        scheduled_ts    BIGINT,
-        finished_ts     BIGINT,
-        duration        INTEGER,
-        amount_galans   INTEGER
-    );
+    CREATE INDEX IF NOT EXISTS idx_gas_less_usages ON gas_less_usages(address);
 
     CREATE TABLE IF NOT EXISTS solana_blocks (
         block_slot BIGINT,
@@ -118,6 +118,9 @@
         max_bpf_cycle_cnt INT,
         used_bpf_cycle_cnt INT
     );
+    ALTER TABLE solana_neon_transactions ADD COLUMN IF NOT EXISTS neon_gas_used BIGINT;
+    ALTER TABLE solana_neon_transactions ADD COLUMN IF NOT EXISTS neon_total_gas_used BIGINT;
+
     CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_neon_transactions_neon_sol_idx_inner ON solana_neon_transactions(sol_sig, block_slot, idx, inner_idx);
     CREATE INDEX IF NOT EXISTS idx_solana_neon_transactions_neon_sig ON solana_neon_transactions(neon_sig, block_slot);
     CREATE INDEX IF NOT EXISTS idx_solana_neon_transactions_neon_block ON solana_neon_transactions(block_slot);

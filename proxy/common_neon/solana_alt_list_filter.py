@@ -1,15 +1,12 @@
 from typing import Set, List, Tuple
 
-from ..common_neon.errors import ALTError
-from ..common_neon.solana_tx import SolPubKey
-from ..common_neon.solana_tx_legacy import SolLegacyMsg
+from .errors import ALTError
+from .solana_alt_limit import ALTLimit
+from .solana_tx import SolPubKey
+from .solana_tx_legacy import SolLegacyMsg
 
 
 class ALTListFilter:
-    _max_required_sig_cnt = 19
-    _max_tx_account_cnt = 27
-    _max_account_cnt = 255
-
     def __init__(self, legacy_msg: SolLegacyMsg) -> None:
         self._msg = legacy_msg
         self._validate_legacy_msg()
@@ -19,18 +16,6 @@ class ALTListFilter:
         self._tx_acct_key_list: List[SolPubKey] = self._filter_tx_acct_key_list()
 
     @property
-    def max_required_sig_cnt(self) -> int:
-        return type(self)._max_required_sig_cnt
-
-    @property
-    def max_tx_account_cnt(self) -> int:
-        return type(self)._max_tx_account_cnt
-
-    @property
-    def max_account_cnt(self) -> int:
-        return type(self)._max_account_cnt
-
-    @property
     def tx_unsigned_account_key_cnt(self):
         return self._tx_unsigned_acct_key_cnt
 
@@ -38,16 +23,12 @@ class ALTListFilter:
     def tx_account_key_list(self) -> List[SolPubKey]:
         return self._tx_acct_key_list
 
-    @property
-    def len_tx_account_key_list(self) -> int:
-        return len(self._tx_acct_key_list)
-
     def _validate_legacy_msg(self) -> None:
-        if self._msg.header.num_required_signatures > self.max_required_sig_cnt:
+        if self._msg.header.num_required_signatures > ALTLimit.max_required_sig_cnt:
             raise ALTError(
                 f'Too big number {self._msg.header.num_required_signatures} of signed accounts for a V0Transaction'
             )
-        elif len(self._msg.account_keys) > self.max_account_cnt:
+        elif len(self._msg.account_keys) > ALTLimit.max_alt_account_cnt:
             raise ALTError(f'Too big number {len(self._msg.account_keys)} of accounts for a V0Transaction')
 
     def _filter_tx_acct_key_set(self) -> Tuple[Set[str], int]:
@@ -65,10 +46,9 @@ class ALTListFilter:
             raise ALTError('Zero number of static transaction accounts')
         elif len(tx_acct_key_set) != len(required_key_list) + len(prog_key_list):
             raise ALTError('Transaction uses signature from a program?')
-        elif len(tx_acct_key_set) > self.max_tx_account_cnt:
+        elif len(tx_acct_key_set) > ALTLimit.max_tx_account_cnt:
             raise ALTError(
-                'Too big number of transactions account keys: '
-                f'{len(tx_acct_key_set)} > {self.max_tx_account_cnt}'
+                f'Too big number of transactions account keys: {len(tx_acct_key_set)} > {ALTLimit.max_tx_account_cnt}'
             )
 
         return tx_acct_key_set, len(prog_key_list)

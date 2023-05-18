@@ -7,10 +7,10 @@ from ..common_neon.elf_params import ElfParams
 
 
 class MPInitOpResTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOpResInitResult]):
-    _default_sleep_time = 4.0
+    _default_sleep_sec = MPPeriodicTaskLoop._one_block_sec * 16
 
     def __init__(self, executor_mng: MPExecutorMng, op_res_mng: OpResMng) -> None:
-        super().__init__(name='op-res-init', sleep_time=self._check_sleep_time, executor_mng=executor_mng)
+        super().__init__(name='op-res-init', sleep_sec=self._default_sleep_sec, executor_mng=executor_mng)
         self._op_res_mng = op_res_mng
 
     def _submit_request(self) -> None:
@@ -20,10 +20,10 @@ class MPInitOpResTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOpResInitResu
 
         resource = self._op_res_mng.get_disabled_resource()
         if resource is None:
-            self._sleep_time = self._default_sleep_time
+            self._sleep_sec = self._default_sleep_sec
             return
         else:
-            self._sleep_time = self._check_sleep_time
+            self._sleep_sec = self._check_sleep_sec
         mp_req = MPOpResInitRequest(
             req_id=self._generate_req_id(),
             elf_param_dict=elf_params.elf_param_dict,

@@ -7,7 +7,7 @@ from .utils import str_fmt_object
 
 
 @dataclass(frozen=True)
-class SolanaBlockInfo:
+class SolBlockInfo:
     block_slot: int
     block_hash: str = None
     block_time: Optional[int] = None

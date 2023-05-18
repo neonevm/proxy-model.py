@@ -1,128 +1,131 @@
-from __future__ import annotations
-
 import logging
-from typing import List
 
-from ..common_neon.errors import CUBudgetExceededError, NoMoreRetriesError
-from ..common_neon.solana_tx import SolTxReceipt, SolTx
+from typing import List, Generator
+
+from ..common_neon.errors import NoMoreRetriesError
+from ..common_neon.solana_tx import SolTx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxSendState
 from ..common_neon.utils import NeonTxResultInfo
 
 from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
-from ..mempool.neon_tx_send_simple_strategy import SimpleNeonTxSender
 from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
-from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 
 
 LOG = logging.getLogger(__name__)
 
 
-class IterativeNeonTxSender(SimpleNeonTxSender):
-    def __init__(self, strategy: IterativeNeonTxStrategy, *args, **kwargs):
-        super().__init__(strategy, *args, **kwargs)
-        self._strategy = strategy
-        self._is_canceled = False
-
-    def _decode_neon_tx_result(self, tx: SolTx, tx_receipt: SolTxReceipt) -> None:
-        if self._neon_tx_res.is_valid():
-            return
-        elif self._is_canceled:
-            # Transaction with cancel is confirmed
-            self._neon_tx_res.set_result(status=0, gas_used=0)
-            LOG.debug(f'Got Neon tx cancel: {self._neon_tx_res}')
-        else:
-            super()._decode_neon_tx_result(tx, tx_receipt)
-
-    def _convert_state_to_tx_list(self, tx_status: SolTxSendState.Status,
-                                  tx_state_list: List[SolTxSendState]) -> List[SolTx]:
-        if self._neon_tx_res.is_valid():
-            return []
-
-        try:
-            if tx_status == SolTxSendState.Status.CUBudgetExceededError:
-                raise CUBudgetExceededError()
-            elif tx_status == SolTxSendState.Status.BlockedAccountError:
-                if self._has_good_receipt_list():
-                    return self._get_tx_list_from_state(tx_state_list)
-            return super()._convert_state_to_tx_list(tx_status, tx_state_list)
-        except Exception as e:
-            return self._cancel(e)
-
-    def _get_tx_list_for_send(self) -> List[SolTx]:
-        if self._retry_idx >= self._config.retry_on_fail:
-            return self._cancel(NoMoreRetriesError())
-
-        tx_list = super()._get_tx_list_for_send()
-        if self._neon_tx_res.is_valid() or self._is_canceled or self._has_waiting_tx_list():
-            pass
-        elif self._has_good_receipt_list() and (len(tx_list) == 0):
-            # send additional iteration to complete tx
-            LOG.debug('No receipt -> execute additional iteration')
-            return self._strategy.build_tx_list(0, 1)
-
-        return tx_list
-
-    def _cancel(self, e: Exception) -> List[SolTx]:
-        if (not self._has_good_receipt_list()) or self._is_canceled:
-            raise e
-
-        LOG.debug('Cancel the transaction')
-        self.clear()
-        self._is_canceled = True
-        return [self._strategy.build_cancel_tx()]
-
-
 class IterativeNeonTxStrategy(BaseNeonTxStrategy):
     name = 'TxStepFromData'
+    _cancel_name = 'CancelWithHash'
 
-    def __init__(self, ctx: NeonTxSendCtx) -> None:
-        super().__init__(ctx)
-        self._uniq_idx = 0
+    def complete_init(self) -> None:
+        super().complete_init()
+        self._ctx.set_holder_usage(True)
+
+    def execute(self) -> NeonTxResultInfo:
+        self._sol_tx_list_sender.clear()
+
+        assert self.is_valid()
+
+        self._send_tx_list([self.name], self._build_execute_tx_list())
+
+        # Not enough iterations, try `retry_on_fail` times to complete the Neon Tx
+        retry_on_fail = self._ctx.config.retry_on_fail
+        for retry in range(retry_on_fail):
+            neon_tx_res = self._decode_neon_tx_result()
+            if neon_tx_res.is_valid():
+                return neon_tx_res
+
+            self._send_tx_list([], self._build_complete_tx_list())
+
+        raise NoMoreRetriesError()
+
+    def cancel(self) -> None:
+        self._send_tx_list([self._cancel_name], self._build_cancel_tx_list())
+
+    def _build_execute_tx_list(self) -> Generator[List[SolTx], None, None]:
+        LOG.debug(
+            f'Total EVM steps {self._ctx.emulated_evm_step_cnt}, '
+            f'total resize iterations {self._ctx.resize_iter_cnt}'
+        )
+
+        emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._evm_step_cnt)
+        additional_iter_cnt = self._ctx.resize_iter_cnt
+        additional_iter_cnt += 2  # `begin` and `finalization` iterations
+
+        yield from self._build_tx_list_impl(emulated_step_cnt, additional_iter_cnt)
+
+    def _build_complete_tx_list(self) -> Generator[List[SolTx], None, None]:
+        LOG.debug('No receipt -> execute additional iteration')
+        yield from self._build_tx_list_impl(0, 1)
+
+    def _build_tx_list_impl(self, total_evm_step_cnt: int, add_iter_cnt: int) -> Generator[List[SolTx], None, None]:
+        tx_list: List[SolTx] = list()
+
+        for _ in range(add_iter_cnt):
+            tx_list.append(self._build_tx())
+
+        remain_evm_step_cnt = total_evm_step_cnt
+        while remain_evm_step_cnt > 0:
+            remain_evm_step_cnt -= self._evm_step_cnt
+            tx_list.append(self._build_tx())
+
+        LOG.debug(
+            f'Total iterations: {len(tx_list)}, '
+            f'additional iterations: {add_iter_cnt}, '
+            f'total EVM steps: {total_evm_step_cnt}, '
+            f'EVM steps per iteration: {self._evm_step_cnt}'
+        )
+        yield tx_list
 
     def _validate(self) -> bool:
         return self._validate_tx_has_chainid()
 
-    def build_cancel_tx(self) -> SolLegacyTx:
-        return self._build_cancel_tx()
-
     def _build_tx(self) -> SolLegacyTx:
-        self._uniq_idx += 1
-        return self._build_cu_tx(self._ctx.ix_builder.make_tx_step_from_data_ix(self._evm_step_cnt, self._uniq_idx))
+        uniq_idx = self._ctx.sol_tx_cnt
+        builder = self._ctx.ix_builder
+        return self._build_cu_tx(builder.make_tx_step_from_data_ix(self._evm_step_cnt, uniq_idx))
 
-    def build_tx_list(self, total_evm_step_cnt: int, add_iter_cnt: int) -> List[SolTx]:
-        def build_tx(step_cnt: int) -> SolTx:
-            tx = self._build_tx()
-            setattr(tx, 'evm_step_cnt', step_cnt)
-            return tx
+    def _build_cancel_tx(self) -> SolLegacyTx:
+        return self._build_cu_tx(name='CancelWithHash', ix=self._ctx.ix_builder.make_cancel_ix())
 
-        tx_list: List[SolTx] = []
-        save_evm_step_cnt = total_evm_step_cnt
+    def _decode_neon_tx_result(self) -> NeonTxResultInfo:
+        neon_tx_res = NeonTxResultInfo()
+        tx_send_state_list = self._sol_tx_list_sender.tx_state_list
+        neon_total_gas_used = 0
+        has_already_finalized = False
+        status = SolTxSendState.Status
 
-        for _ in range(add_iter_cnt):
-            tx_list.append(build_tx(self._evm_step_cnt))
+        for tx_send_state in tx_send_state_list:
+            if tx_send_state.status == status.AlreadyFinalizedError:
+                has_already_finalized = True
+                continue
+            elif tx_send_state.status != status.GoodReceipt:
+                continue
 
-        while total_evm_step_cnt > 0:
-            evm_step_cnt = self._evm_step_cnt if total_evm_step_cnt > self._evm_step_cnt else total_evm_step_cnt
-            total_evm_step_cnt -= evm_step_cnt
+            sol_neon_ix = self._find_sol_neon_ix(tx_send_state)
+            if sol_neon_ix is None:
+                continue
 
-            tx_list.append(build_tx(evm_step_cnt))
+            neon_total_gas_used = max(neon_total_gas_used, sol_neon_ix.neon_total_gas_used)
 
-        LOG.debug(f'Total iterations {len(tx_list)} for {save_evm_step_cnt} ({self._evm_step_cnt}) EVM steps')
-        return tx_list
+            ret = sol_neon_ix.neon_tx_return
+            if ret is None:
+                continue
 
-    def execute(self) -> NeonTxResultInfo:
-        assert self.is_valid()
+            neon_tx_res.set_res(status=ret.status, gas_used=ret.gas_used)
+            LOG.debug(f'Set Neon tx result: {neon_tx_res}')
+            return neon_tx_res
 
-        emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._evm_step_cnt)
-        additional_iter_cnt = self._ctx.neon_tx_exec_cfg.resize_iter_cnt
-        additional_iter_cnt += 2  # begin + finalization
-        tx_list = self.build_tx_list(emulated_step_cnt, additional_iter_cnt)
-        tx_sender = IterativeNeonTxSender(self, self._ctx.solana, self._ctx.signer)
-        tx_sender.send(tx_list)
-        if not tx_sender.neon_tx_res.is_valid():
-            raise NoMoreRetriesError()
-        return tx_sender.neon_tx_res
+        if has_already_finalized:
+            neon_tx_res.set_lost_res(neon_total_gas_used)
+            LOG.debug(f'Set lost Neon tx result: {neon_tx_res}')
+
+        return neon_tx_res
+
+    def _build_cancel_tx_list(self) -> Generator[List[SolTx], None, None]:
+        yield [self._build_cancel_tx()]
 
 
 @alt_strategy

@@ -4,12 +4,14 @@ import threading
 import logging
 from typing import Callable, Optional, Dict, Any, Union
 
-from .mempool_api import MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPTxRequest
-from .mempool_api import MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
+from .mempool_api import (
+    MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPTxRequest,
+    MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
+)
 
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.errors import EthereumError
-from ..common_neon.eth_proto import NeonTx
+from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.pickable_data_server import AddrPickableDataClient
 
 
@@ -66,11 +68,8 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def send_raw_transaction(self, req_id: str, neon_sig: str, neon_tx: NeonTx,
-                             neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxSendResult:
-        mempool_tx_request = MPTxRequest(
-            req_id=req_id, sig=neon_sig, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
-        )
+    def send_raw_transaction(self, req_id: str, neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxSendResult:
+        mempool_tx_request = MPTxRequest(req_id=req_id, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg)
         return self._pickable_data_client.send_data(mempool_tx_request)
 
     @_guard_conn

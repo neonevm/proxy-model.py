@@ -1,30 +1,26 @@
 import json
-import struct
 import logging
-from typing import Union, Dict, Any, Tuple
+from typing import Union, Dict, Any, Tuple, Optional
 
 from eth_account.signers.local import LocalAccount as NeonAccount
 
-import spl.token.instructions as spl_token
 from spl.token.client import Token
-from spl.token.constants import TOKEN_PROGRAM_ID
 
 from solana.rpc.types import TxOpts
 from solana.rpc.commitment import Confirmed
 
-from solcx import install_solc
+from solcx import install_solc, compile_source
 
-from ..common_neon.solana_tx import SolTxIx, SolAccountMeta, SolAccount, SolPubKey
-from ..common_neon.solana_tx_legacy import SolLegacyTx
-from ..common_neon.address import NeonAddress
-from ..common_neon.constants import ACCOUNT_SEED_VERSION
-from ..common_neon.eth_proto import NeonTx
-from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.web3 import NeonWeb3, ChecksumAddress
+from .solana_tx import SolAccountMeta, SolAccount, SolPubKey
+from .address import NeonAddress, neon_2program
+from .constants import ACCOUNT_SEED_VERSION
+from .utils.eth_proto import NeonTx
+from .neon_instruction import NeonIxBuilder
+from .web3 import NeonWeb3, ChecksumAddress
+from .config import Config
+
 
 install_solc(version='0.7.6')
-from solcx import compile_source
-
 
 LOG = logging.getLogger(__name__)
 
@@ -72,36 +68,33 @@ class ERC20Wrapper:
     token: Token
     admin: NeonAccount
     mint_authority: SolAccount
-    evm_loader_id: SolPubKey
     neon_contract_address: ChecksumAddress
     solana_contract_address: SolPubKey
     interface: Dict
     wrapper: Dict
 
-    def __init__(self, proxy: NeonWeb3,
+    def __init__(self, config: Config,
+                 proxy: NeonWeb3,
                  name: str, symbol: str,
                  token: Token,
                  admin: NeonAccount,
-                 mint_authority: SolAccount,
-                 evm_loader_id: SolPubKey):
+                 mint_authority: SolAccount):
+        self._config = config
+        self.evm_program_id = config.evm_program_id
         self.proxy = proxy
         self.name = name
         self.symbol = symbol
         self.token = token
         self.admin = admin
         self.mint_authority = mint_authority
-        self.evm_loader_id = evm_loader_id
-
-    def get_neon_account_address(self, neon_account_address: str) -> SolPubKey:
-        neon_account_addressbytes = bytes.fromhex(neon_account_address[2:])
-        return SolPubKey.find_program_address([ACCOUNT_SEED_VERSION, neon_account_addressbytes], self.evm_loader_id)[0]
 
     def get_auth_account_address(self, neon_account_address: str) -> SolPubKey:
         neon_account_addressbytes = bytes(12) + bytes.fromhex(neon_account_address[2:])
         neon_contract_addressbytes = bytes.fromhex(self.neon_contract_address[2:])
         return SolPubKey.find_program_address(
             [ACCOUNT_SEED_VERSION, b"AUTH", neon_contract_addressbytes, neon_account_addressbytes],
-            self.evm_loader_id)[0]
+            self.evm_program_id
+        )[0]
 
     def _deploy_wrapper(self, contract: str, init_args: Tuple):
         compiled_interface = compile_source(ERC20FORSPL_INTERFACE_SOURCE)
@@ -117,8 +110,7 @@ class ERC20Wrapper:
 
         erc20 = self.proxy.eth.contract(abi=self.wrapper['abi'], bytecode=wrapper_interface['bin'])
         nonce = self.proxy.eth.get_transaction_count(self.admin.address)
-        tx = {'nonce': nonce, 'from': self.admin.address}
-        tx_constructor = erc20.constructor(*init_args).build_transaction(tx)
+        tx_constructor = erc20.constructor(*init_args).build_transaction({'nonce': nonce, 'from': self.admin.address})
         tx_deploy = self.proxy.eth.account.sign_transaction(tx_constructor, self.admin.key)
         tx_deploy_hash = self.proxy.eth.send_raw_transaction(tx_deploy.rawTransaction)
         LOG.debug(f'tx_deploy_hash: {tx_deploy_hash.hex()}')
@@ -126,7 +118,7 @@ class ERC20Wrapper:
         LOG.debug(f'tx_deploy_receipt: {tx_deploy_receipt}')
         LOG.debug(f'deploy status: {tx_deploy_receipt.status}')
         self.neon_contract_address = ChecksumAddress(tx_deploy_receipt.contractAddress)
-        self.solana_contract_address = self.get_neon_account_address(self.neon_contract_address)
+        self.solana_contract_address, _ = neon_2program(self.evm_program_id, self.neon_contract_address)
 
         self.erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
 
@@ -147,43 +139,35 @@ class ERC20Wrapper:
             neon_contract_address_bytes,
             neon_account_address_bytes,
         ]
-        return SolPubKey.find_program_address(seeds, self.evm_loader_id)[0]
+        return SolPubKey.find_program_address(seeds, self.evm_program_id)[0]
 
-    def create_associated_token_account(self, owner: SolPubKey, payer: SolAccount):
-        # Construct transaction
-        # This part of code is based on original implementation of Token.create_associated_token_account
-        # except that skip_preflight is set to True
-        tx = SolLegacyTx(instructions=[
-            spl_token.create_associated_token_account(
-                payer=payer.pubkey(), owner=owner, mint=self.token.pubkey
-            )
-        ]).low_level_tx
-        self.token._conn.send_transaction(tx, payer, opts=TxOpts(skip_preflight=True, skip_confirmation=False))
-        return tx.instructions[0].accounts[1].pubkey
+    def create_associated_token_account(self, owner: SolPubKey):
+        return self.token.create_associated_token_account(owner)
 
-    def create_claim_instruction(self, owner: SolPubKey, from_acc: SolPubKey, to_acc: NeonAccount, amount: int):
+    def create_claim_to_ix(self, owner: SolPubKey,
+                           from_acct: SolPubKey,
+                           to_acct: NeonAccount,
+                           amount: int,
+                           signer_acct: NeonAccount,
+                           nonce: Optional[int] = None):
         erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
-        nonce = self.proxy.eth.get_transaction_count(to_acc.address)
-        claim_tx = erc20.functions.claim(bytes(from_acc), amount).build_transaction({'nonce': nonce, 'gasPrice': 0})
-        return self._create_builder(claim_tx, owner, to_acc)
+        if nonce is None:
+            nonce = self.proxy.eth.get_transaction_count(signer_acct.address)
 
-    def create_claim_to_instruction(self, owner: SolPubKey,
-                                    from_acc: SolPubKey,
-                                    to_acc: NeonAccount,
-                                    amount: int,
-                                    signer_acc: NeonAccount):
-        erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
-        nonce = self.proxy.eth.get_transaction_count(signer_acc.address)
-        claim_tx = erc20.functions.claimTo(bytes(from_acc), to_acc.address, amount).build_transaction(
+        claim_tx = erc20.functions.claimTo(
+            bytes(from_acct),
+            to_acct.address,
+            amount
+        ).build_transaction(
             {'nonce': nonce, 'gasPrice': 0}
         )
-        return self._create_builder(claim_tx, owner, signer_acc)
+        return self._create_builder(claim_tx, owner, signer_acct)
 
-    def _create_builder(self, claim_tx, owner: SolPubKey, signer_acc: NeonAccount):
-        claim_tx = self.proxy.eth.account.sign_transaction(claim_tx, signer_acc.key)
+    def _create_builder(self, tx, owner: SolPubKey, signer_acct: NeonAccount):
+        tx = self.proxy.eth.account.sign_transaction(tx, signer_acct.key)
 
-        neon_tx = bytearray.fromhex(claim_tx.rawTransaction.hex()[2:])
-        emulating_result = self.proxy.neon.emulate(neon_tx)
+        neon_tx = bytearray.fromhex(tx.rawTransaction.hex()[2:])
+        emulating_result = self.proxy.neon.neon_emulate(neon_tx)
 
         neon_account_dict = dict()
         for account in emulating_result['accounts']:
@@ -198,26 +182,11 @@ class ERC20Wrapper:
 
         neon_account_dict = list(neon_account_dict.values())
 
-        neon = NeonIxBuilder(owner)
-        neon.init_operator_neon(NeonAddress(signer_acc.address))
+        neon = NeonIxBuilder(self._config, owner)
+        neon.init_operator_neon(NeonAddress(signer_acct.address))
         neon.init_neon_tx(NeonTx.from_string(neon_tx))
         neon.init_neon_account_list(neon_account_dict)
         return neon
-
-    def create_input_liquidity_instruction(self, payer: SolPubKey,
-                                           from_address: SolPubKey,
-                                           to_address: str,
-                                           amount: int):
-        to_address = self.get_neon_erc20_account_address(to_address)
-        return SolTxIx(
-            program_id=TOKEN_PROGRAM_ID,
-            data=b'\3' + struct.pack('<Q', amount),
-            accounts=[
-                SolAccountMeta(pubkey=from_address, is_signer=False, is_writable=True),
-                SolAccountMeta(pubkey=to_address, is_signer=False, is_writable=True),
-                SolAccountMeta(pubkey=payer, is_signer=True, is_writable=False)
-            ]
-        )
 
     def mint_to(self, destination: Union[SolPubKey, str], amount: int) -> RPCResponse:
         """

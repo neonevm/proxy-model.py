@@ -2,7 +2,7 @@ import logging
 
 from .indexer import Indexer
 from ..common_neon.config import Config
-from ..statistic import IndexerStatService
+from ..statistic.indexer_service import IndexerStatService
 from ..common.logger import Logger
 
 

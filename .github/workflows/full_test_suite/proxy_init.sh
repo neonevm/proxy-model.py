@@ -19,7 +19,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 
 # Get docker-compose file
 cd /opt
-curl -O https://raw.githubusercontent.com/neonlabsorg/proxy-model.py/${branch}/proxy/docker-compose-test.yml
+curl -O https://raw.githubusercontent.com/neonlabsorg/proxy-model.py/${branch}/docker-compose/docker-compose-test.yml
 
 
 # Set required environment variables
@@ -56,7 +56,7 @@ EOF
 
 
 # Get list of services
-SERVICES=$(docker-compose -f docker-compose-test.yml config --services | grep -vP "solana|airdropper|prometheus|neon_test_invoke_program_loader")
+SERVICES=$(docker-compose -f docker-compose-test.yml config --services | grep -vP "solana|gas_tank|neon_test_invoke_program_loader|hashicorp")
 
 
 # Pull latest versions
@@ -64,14 +64,19 @@ docker-compose -f docker-compose-test.yml -f docker-compose-test.override.yml pu
 
 
 # Check if Solana is available, max attepts is 100(each for 2 seconds)
-CHECK_COMMAND=`curl $SOLANA_URL -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getHealth"}'`
+CHECK_COMMAND='curl $SOLANA_URL -X POST -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"id\":1, \"method\":\"getHealth\"}" 2> /dev/null'
 MAX_COUNT=100
 CURRENT_ATTEMPT=1
-while [[ "$CHECK_COMMAND" != "{\"jsonrpc\":\"2.0\",\"result\":\"ok\",\"id\":1}" && $CURRENT_ATTEMPT -lt $MAX_COUNT ]]
+while [[ $CURRENT_ATTEMPT -lt $MAX_COUNT ]]
 do
-  CHECK_COMMAND=`curl $SOLANA_URL -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getHealth"}'`
-  echo $CHECK_COMMAND >> /tmp/output.txt
-  echo "attempt: $CURRENT_ATTEMPT" 1>&2
+  echo "solana attempt: $CURRENT_ATTEMPT" 1>&2
+  CHECK_COMMAND_RESULT=$(eval $CHECK_COMMAND)
+  echo $CHECK_COMMAND_RESULT >> /tmp/output.txt
+  if [[ "$CHECK_COMMAND_RESULT" == "{\"jsonrpc\":\"2.0\",\"result\":\"ok\",\"id\":1}" ]]; then
+    echo 'solana is up' 1>&2
+    break
+  fi
+
   ((CURRENT_ATTEMPT=CURRENT_ATTEMPT+1))
   sleep 2
 done;

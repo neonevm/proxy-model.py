@@ -1,7 +1,7 @@
 from aioprometheus import Counter, Gauge, Histogram
 
-from proxy.statistic.data import NeonTxStatData, NeonBlockStatData
-from proxy.statistic.middleware import StatService
+from ..statistic.data import NeonTxStatData, NeonBlockStatData
+from ..statistic.middleware import StatService
 
 
 class IndexerStatService(StatService):
@@ -39,7 +39,7 @@ class IndexerStatService(StatService):
         )
 
         self._metr_tx_sol_tx_per_neon_tx = Histogram(
-            'tx_sol_tx_per_neon_tx', 'Count of solana txs within by type(single|iter|holder)',
+            'tx_sol_per_neon_tx', 'Count of solana txs within by type(single|iter|holder)',
             registry=self._registry
         )
         self._metr_tx_bpf_per_iter = Histogram(

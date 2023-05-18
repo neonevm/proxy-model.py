@@ -1,22 +1,17 @@
-import struct
-from enum import IntEnum
-from construct import Bytes, Flag, Int8ul
-from construct import Struct as cStruct  # type: ignore
+from construct import (
+    Struct,
+    Bytes, PascalString, PrefixedArray,
+    Const, Flag, Byte,
+    Int32ul, Int16ul, Int64ul,
+    Subconstruct, Enum
+)
+
 from solders.pubkey import Pubkey
 from solana.transaction import AccountMeta, Instruction
-import base58
+
+import enum
 import base64
-
-MAX_NAME_LENGTH = 32
-MAX_SYMBOL_LENGTH = 10
-MAX_URI_LENGTH = 200
-MAX_CREATOR_LENGTH = 34
-MAX_CREATOR_LIMIT = 5
-
-
-class InstructionType(IntEnum):
-    CREATE_METADATA = 0
-    UPDATE_METADATA = 1
+import base58
 
 
 METADATA_PROGRAM_ID = Pubkey.from_string('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s')
@@ -24,6 +19,173 @@ SYSTEM_PROGRAM_ID = Pubkey.from_string('11111111111111111111111111111111')
 SYSVAR_RENT_PUBKEY = Pubkey.from_string('SysvarRent111111111111111111111111111111111')
 ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID = Pubkey.from_string('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
 TOKEN_PROGRAM_ID = Pubkey.from_string('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
+
+
+class MetadataLimit(enum.IntEnum):
+    MaxNameLen = 32
+    MaxSymbolLen = 10
+    MaxUriLen = 200
+    MaxCreatorLen = 34
+    MaxCreatorCnt = 5
+
+
+class UseMethodType(enum.IntEnum):
+    Burn = 0
+    Multiple = 1
+    Single = 2
+
+
+class TokenStandardType(enum.IntEnum):
+    NonFungible = 0
+    FungibleAsset = 1
+    Fungible = 2
+    NonFungibleEdition = 3
+    ProgrammableNonFungible = 4
+
+
+class PrintSupplyType(enum.IntEnum):
+    Zero = 0
+    Limited = 1  # TODO: Int64ul
+    Unlimited = 2
+
+
+class MetadataKeyType(enum.IntEnum):
+    Uninitialized = 0
+    EditionV1 = 1
+    MasterEditionV1 = 2
+    ReservationListV1 = 3
+    MetadataV1 = 4
+    ReservationListV2 = 5
+    MasterEditionV2 = 6
+    EditionMarker = 7
+    UseAuthorityRecord = 8
+    CollectionAuthorityRecord = 9
+    TokenOwnedEscrow = 10
+    TokenRecord = 11
+    MetadataDelegate = 12
+
+
+class Option(Subconstruct):
+    def __init__(self, subcon):
+        super().__init__(subcon)
+        self._flag = Flag
+
+    def _parse(self, stream, context, path):
+        has_value = self._flag._parsereport(stream, context, path)
+        if not has_value:
+            return None
+        return self.subcon._parsereport(stream, context, path)
+
+    def _build(self, obj, stream, context, path):
+        has_value = obj is not None
+        self._flag._build(has_value, stream, context, path)
+
+        if not has_value:
+            return
+        self.subcon._build(obj, stream, context, path)
+
+
+Utf8String = PascalString(Int32ul, "utf8")
+Address = Bytes(32)
+Base58Address = Utf8String  # TODO: deserialize as base58
+
+Creator = Struct(
+    "address" / Address,
+    "verified" / Flag,
+    "share" / Byte
+)
+
+Collection = Struct(
+    "verified" / Flag,
+    "key" / Address
+)
+
+Uses = Struct(
+    "use_method" / Enum(Byte, UseMethodType),
+    "remaining" / Int64ul,
+    "total" / Int64ul
+)
+
+CollectionDetails = Struct(
+    "ver" / Const(b'\x00'),
+    "size" / Int64ul
+)
+
+AssetData = Struct(
+    "name" / Utf8String,
+    "symbol" / Utf8String,
+    "uri" / Utf8String,
+    "seller_fee_basis_points" / Int16ul,
+    "creators" / Option(PrefixedArray(Int32ul, Creator)),
+    "primary_sale_happened" / Flag,
+    "is_mutable" / Flag,
+    "token_standard" / Enum(Byte, TokenStandardType),
+    "collection" / Option(Collection),
+    "uses" / Option(Uses),
+    "collection_details" / Option(CollectionDetails),
+    "rule_set" / Option(Base58Address)
+)
+
+ProgrammableConfig = Struct(
+    "ver" / Const(b'\x00'),
+    "rule_set" / Option(Base58Address)
+)
+
+Data = Struct(
+    "name" / Utf8String,
+    "symbol" / Utf8String,
+    "uri" / Utf8String,
+    "seller_fee_basis_points" / Int16ul,
+    "creators" / Option(PrefixedArray(Int32ul, Creator))
+)
+
+DataV2 = Struct(
+    "name" / Utf8String,
+    "symbol" / Utf8String,
+    "uri" / Utf8String,
+    "seller_fee_basis_points" / Int16ul,
+    "creators" / Option(PrefixedArray(Int32ul, Creator)),
+    "collection" / Option(Collection),
+    "uses" / Option(Uses)
+)
+
+MetadataAccount = Struct(
+    "key" / Enum(Byte, MetadataKeyType),
+    "update_authority" / Address,
+    "mint" / Address,
+    "data" / Data,
+    "primary_sale_happened" / Flag,
+    "is_mutable" / Flag,
+    "edition_nonce" / Option(Byte),
+    "token_standard" / Option(Enum(Byte, TokenStandardType)),
+    "collection" / Option(Collection),
+    "uses" / Option(Uses),
+    "collection_details" / Option(CollectionDetails),
+    "programmable_config" / Option(ProgrammableConfig),
+)
+
+CreateMetadataV3Args = Struct(
+    "data" / DataV2,
+    "is_mutable" / Flag,
+    "collection_details" / Option(CollectionDetails)
+)
+
+CreateMetadataV3Instruction = Struct(
+    "instruction" / Const(b'\x21'),
+    "args" / CreateMetadataV3Args
+)
+
+CreateArgs = Struct(
+    "ver" / Const(b'\x00'),
+    "asset_data" / AssetData,
+    "decimals" / Option(Byte),
+    "print_supply" / Option(Enum(Byte, PrintSupplyType))
+)
+
+CreateInstruction = Struct(
+    "instruction" / Const(b'\x2a'),
+    "args" / CreateArgs
+)
 
 
 def get_metadata_account(mint_key: Pubkey):
@@ -53,141 +215,80 @@ def create_associated_token_account_instruction(associated_token_account, payer,
     return Instruction(accounts=keys, program_id=ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID, data=b'')
 
 
-def _get_data_buffer(name, symbol, uri, fee, creators, verified=None, share=None):
-    if isinstance(share, list):
-        assert (len(share) == len(creators))
-    if isinstance(verified, list):
-        assert (len(verified) == len(creators))
-    args = [
-        len(name),
-        *list(name.encode()),
-        len(symbol),
-        *list(symbol.encode()),
-        len(uri),
-        *list(uri.encode()),
-        fee,
-    ]
+def create_metadata_instruction_data(name: str, symbol: str, uri='', fee=0):
+    assert len(name) <= MetadataLimit.MaxNameLen
+    assert len(symbol) <= MetadataLimit.MaxSymbolLen
+    assert len(uri) <= MetadataLimit.MaxUriLen
 
-    byte_fmt = "<"
-    byte_fmt += "I" + "B" * len(name)
-    byte_fmt += "I" + "B" * len(symbol)
-    byte_fmt += "I" + "B" * len(uri)
-    byte_fmt += "h"
-    byte_fmt += "B"
-    if creators:
-        args.append(1)
-        byte_fmt += "I"
-        args.append(len(creators))
-        for i, creator in enumerate(creators):
-            byte_fmt += "B" * 32 + "B" + "B"
-            args.extend(list(base58.b58decode(creator)))
-            if isinstance(verified, list):
-                args.append(verified[i])
-            else:
-                args.append(1)
-            if isinstance(share, list):
-                args.append(share[i])
-            else:
-                args.append(100)
-    else:
-        args.append(0)
-    buffer = struct.pack(byte_fmt, *args)
-    return buffer
-
-
-def create_metadata_instruction_data(name, symbol, fee, creators):
-    _data = _get_data_buffer(name, symbol, " " * 64, fee, creators)
-    metadata_args_layout = cStruct(
-        "data" / Bytes(len(_data)),
-        "is_mutable" / Flag,
-    )
-    _create_metadata_args = dict(data=_data, is_mutable=True)
-    instruction_layout = cStruct(
-        "instruction_type" / Int8ul,
-        "args" / metadata_args_layout,
-    )
-    return instruction_layout.build(
-        dict(
-            instruction_type=InstructionType.CREATE_METADATA,
-            args=_create_metadata_args,
+    # return CreateInstruction.build(dict(
+    #     args=dict(
+    #         asset_data=dict(
+    #             name=name,
+    #             symbol=symbol,
+    #             uri=uri,
+    #             seller_fee_basis_points=fee,
+    #             primary_sale_happened=False,
+    #             is_mutable=True,
+    #             token_standard=TokenStandardType.Fungible,
+    #             creators=None,
+    #             collection=None,
+    #             uses=None,
+    #             collection_details=None,
+    #             rule_set=None
+    #         ),
+    #         decimals=None,
+    #         print_supply=None
+    #     )
+    # ))
+    return CreateMetadataV3Instruction.build(dict(
+        args=dict(
+            data=dict(
+                name=name,
+                symbol=symbol,
+                uri=uri,
+                seller_fee_basis_points=fee,
+                creators=None,
+                collection=None,
+                uses=None,
+            ),
+            is_mutable=True,
+            collection_details=None
         )
-    )
+    ))
 
 
 def create_metadata_instruction(data, update_authority, mint_key, mint_authority_key, payer):
     metadata_account = get_metadata_account(mint_key)
+    # master_edition_account = get_edition(mint_key)
     keys = [
         AccountMeta(pubkey=metadata_account, is_signer=False, is_writable=True),
+        # AccountMeta(pubkey=master_edition_account, is_signer=False, is_writable=True),
         AccountMeta(pubkey=mint_key, is_signer=False, is_writable=False),
         AccountMeta(pubkey=mint_authority_key, is_signer=True, is_writable=False),
         AccountMeta(pubkey=payer, is_signer=True, is_writable=False),
         AccountMeta(pubkey=update_authority, is_signer=False, is_writable=False),
         AccountMeta(pubkey=SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
         AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
+        # AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False)
     ]
     return Instruction(accounts=keys, program_id=METADATA_PROGRAM_ID, data=data)
-
-
-def unpack_metadata_account(data):
-    assert (data[0] == 4)
-    i = 1
-    source_account = base58.b58encode(bytes(struct.unpack('<' + "B" * 32, data[i:i + 32])))
-    i += 32
-    mint_account = base58.b58encode(bytes(struct.unpack('<' + "B" * 32, data[i:i + 32])))
-    i += 32
-    name_len = struct.unpack('<I', data[i:i + 4])[0]
-    i += 4
-    name = struct.unpack('<' + "B" * name_len, data[i:i + name_len])
-    i += name_len
-    symbol_len = struct.unpack('<I', data[i:i + 4])[0]
-    i += 4
-    symbol = struct.unpack('<' + "B" * symbol_len, data[i:i + symbol_len])
-    i += symbol_len
-    uri_len = struct.unpack('<I', data[i:i + 4])[0]
-    i += 4
-    uri = struct.unpack('<' + "B" * uri_len, data[i:i + uri_len])
-    i += uri_len
-    fee = struct.unpack('<h', data[i:i + 2])[0]
-    i += 2
-    has_creator = data[i]
-    i += 1
-    creators = []
-    verified = []
-    share = []
-    if has_creator:
-        creator_len = struct.unpack('<I', data[i:i + 4])[0]
-        i += 4
-        for _ in range(creator_len):
-            creator = base58.b58encode(bytes(struct.unpack('<' + "B" * 32, data[i:i + 32])))
-            creators.append(creator)
-            i += 32
-            verified.append(data[i])
-            i += 1
-            share.append(data[i])
-            i += 1
-    primary_sale_happened = bool(data[i])
-    i += 1
-    is_mutable = bool(data[i])
-    metadata = {
-        "update_authority": source_account,
-        "mint": mint_account,
-        "data": {
-            "name": bytes(name).decode("utf-8").strip("\x00"),
-            "symbol": bytes(symbol).decode("utf-8").strip("\x00"),
-            "uri": bytes(uri).decode("utf-8").strip("\x00"),
-            "seller_fee_basis_points": fee,
-            "creators": creators,
-            "verified": verified,
-            "share": share,
-        },
-        "primary_sale_happened": primary_sale_happened,
-        "is_mutable": is_mutable,
-    }
-    return metadata
 
 
 def get_metadata(client, mint_key):
     metadata_account = get_metadata_account(mint_key)
     data = base64.b64decode(client.get_account_info(metadata_account)['result']['value']['data'][0])
-    metadata = unpack_metadata_account(data)
+
+    metadata = MetadataAccount.parse(data)
+
+    def _strip_utf8(value) -> str:
+        return bytes(value).decode("utf-8").strip("\x00")
+
+    object.__setattr__(metadata.data, "name", _strip_utf8(metadata.data.name))
+    object.__setattr__(metadata.data, "symbol", _strip_utf8(metadata.data.symbol))
+    object.__setattr__(metadata.data, "uri", _strip_utf8(metadata.data.uri))
+
+    if metadata.data.creators:
+        creators = [base58.b58encode(creator) for creator in metadata.data.creators]
+        object.__setattr__(metadata.data, "creators", creators)
+
     return metadata
