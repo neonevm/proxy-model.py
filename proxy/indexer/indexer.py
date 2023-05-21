@@ -271,7 +271,7 @@ class Indexer(IndexerBase):
                 neon_block: NeonIndexedBlockInfo = self._locate_neon_block(state, sol_tx_meta)
                 if neon_block.is_completed:
                     continue
-                elif neon_block.checked_add_sol_sig(sol_tx_meta.sol_sig):
+                elif not neon_block.checked_add_sol_sig(sol_tx_meta.sol_sig):
                     LOG.warning(f'Trying to parse the already parsed tx: {sol_tx_meta.sol_sig}')
                     continue
 

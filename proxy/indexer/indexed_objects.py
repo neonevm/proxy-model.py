@@ -364,6 +364,7 @@ class NeonIndexedBlockInfo:
         if sol_sig in self._sol_sig_set:
             return False
         self._sol_sig_set.add(sol_sig)
+        return True
 
     def find_neon_tx_holder(self, account: str, sol_neon_ix: SolNeonIxReceiptInfo) -> Optional[NeonIndexedHolderInfo]:
         key = NeonIndexedHolderInfo.Key(account, sol_neon_ix.neon_tx_sig)
