@@ -178,20 +178,8 @@ class SolClient(SolInteractor):
         tx_sig = sent_resp.result
         print(f'-> success send solana tx {tx.name}: {tx_sig}')
 
-        valid_block_height = recent_resp.last_valid_block_height
-        confirm_set = SolCommit.upper_set(SolCommit.Confirmed)
-
-        elapsed_time = 0.0
-        confirm_timeout = 32 * 0.4
-        confirm_check_delay = 0.1
-
-        while elapsed_time < confirm_timeout:
-            is_confirmed = self.check_confirm_of_tx_sig_list([tx_sig], confirm_set, valid_block_height)
-            if is_confirmed:
-                break
-
-            time.sleep(confirm_check_delay)
-            elapsed_time += confirm_check_delay
+        confirm_timeout_sec = 32 * 0.4
+        self.check_confirm_of_tx_sig_list([tx_sig], SolCommit.Confirmed, confirm_timeout_sec)
 
         tx_receipt = self.get_tx_receipt_list([tx_sig], SolCommit.Confirmed)
         print(f'-> solana receipt: {tx_receipt}')

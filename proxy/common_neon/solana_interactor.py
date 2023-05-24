@@ -4,11 +4,13 @@ import base64
 from dataclasses import dataclass
 import itertools
 import json
+import threading
 import time
 from typing import Dict, Union, Any, List, Optional, Set, cast
 import logging
 import base58
 import requests
+import websockets.sync.client
 
 from .address import NeonAddress, neon_2program
 from .config import Config
@@ -544,36 +546,50 @@ class SolInteractor:
         return self._get_block_status(block_slot, finalized_block_info, response)
 
     def check_confirm_of_tx_sig_list(self, tx_sig_list: List[str],
-                                     commit_set: Set[SolCommit.Type],
-                                     valid_block_height: int) -> bool:
-        if len(tx_sig_list) == 0:
+                                     commitment: SolCommit.Type,
+                                     timeout_sec: float) -> bool:
+        if not tx_sig_list:
             return True
 
-        block_height = self.get_block_height()
-        if block_height >= valid_block_height:
-            search_in_history = True
-        else:
-            search_in_history = False
+        all_sigs_confirmed = False
+        with websockets.sync.client.connect(self._config.solana_websocket_url) as websocket:
+            requests: Dict[int, bool] = {}
+            for tx_sig in tx_sig_list:
+                request = self._build_rpc_request('signatureSubscribe', tx_sig, {
+                    'commitment': commitment
+                })
+                requests[request['id']] = False
+                websocket.send(json.dumps(request))
 
-        opts = {
-            'searchTransactionHistory': search_in_history
-        }
-        limit = 100
+            timeout_timer = threading.Timer(timeout_sec, lambda: websocket.close())
+            timeout_timer.start()
 
-        while len(tx_sig_list) > 0:
-            (part_tx_sig_list, tx_sig_list) = (tx_sig_list[:limit], tx_sig_list[limit:])
-            response = self._send_rpc_request('getSignatureStatuses', part_tx_sig_list, opts)
+            subscriptions: Dict[int, bool] = {}
+            for response in websocket:
+                response = json.loads(response)
 
-            status_list = response.get('result', dict()).get('value', list())
-            if len(status_list) == 0:
-                return False
+                result = response.get('result', None)
+                id_ = response.get('id', None)
+                if result is not None and id_ is not None:
+                    requests[id_] = True
+                    subscriptions[result] = False
+                elif response.get('method', '') == 'signatureNotification':
+                    params = response.get('params', None)
+                    if params is not None:
+                        subscription = params.get('subscription', None)
+                        if subscription is not None:
+                            subscriptions[subscription] = True
 
-            for status in status_list:
-                if not status:
-                    return False
-                elif status.get('confirmationStatus', '') not in commit_set:
-                    return False
-        return True
+                if (len(tx_sig_list) == len(subscriptions)
+                    and all(requests.values()) and all(subscriptions.values())):
+                    all_sigs_confirmed = True
+                    websocket.close()
+                    break
+
+            timeout_timer.cancel()
+            timeout_timer.join()
+
+        return all_sigs_confirmed
 
     def get_tx_receipt_list(self, tx_sig_list: List[str],
                             commitment: SolCommit.Type) -> List[Optional[Dict[str, Any]]]:

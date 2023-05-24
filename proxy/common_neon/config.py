@@ -3,10 +3,28 @@ import os
 
 from decimal import Decimal
 from typing import Optional
+from urllib.parse import urlparse
 
 from .db.db_config import DBConfig
 from .environment_data import EVM_LOADER_ID
 from .solana_tx import SolPubKey, SolCommit
+
+
+def parse_solana_websocket_url(solana_url: str) -> str:
+    parsed_solana_url = urlparse(solana_url)
+    scheme = "wss" if parsed_solana_url.scheme == "https" else "ws"
+
+    if parsed_solana_url.port is not None:
+        port = parsed_solana_url.port + 1
+        netloc = f"{parsed_solana_url.hostname}:{port}"
+    else:
+        netloc = parsed_solana_url.netloc
+
+    parsed_solana_websocket_url = parsed_solana_url._replace(
+        scheme=scheme,
+        netloc=netloc)
+
+    return parsed_solana_websocket_url.geturl()
 
 
 class Config(DBConfig):
@@ -16,6 +34,7 @@ class Config(DBConfig):
     def __init__(self):
         super().__init__()
         self._solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
+        self._solana_websocket_url = parse_solana_websocket_url(self._solana_url)
         self._pp_solana_url = os.environ.get("PP_SOLANA_URL", self._solana_url)
         self._evm_program_id = SolPubKey.from_string(EVM_LOADER_ID)
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
@@ -53,7 +72,6 @@ class Config(DBConfig):
         self._max_tx_account_cnt = self._env_int("MAX_TX_ACCOUNT_COUNT", 20, 62)
         self._fuzz_fail_pct = self._env_int("FUZZ_FAIL_PCT", 0, 0)
         self._confirm_timeout_sec = self._env_int("CONFIRM_TIMEOUT_SEC", 4, math.ceil(self._min_finalize_sec))
-        self._confirm_check_msec = self._env_int("CONFIRM_CHECK_MSEC", 10, 100)
         self._max_evm_step_cnt_emulate = self._env_int("MAX_EVM_STEP_COUNT_TO_EMULATE", 1000, 500000)
         self._neon_cli_timeout = self._env_decimal("NEON_CLI_TIMEOUT", "2.5")
         self._neon_cli_debug_log = self._env_bool("NEON_CLI_DEBUG_LOG", False)
@@ -111,6 +129,10 @@ class Config(DBConfig):
     @property
     def solana_url(self) -> str:
         return self._solana_url
+
+    @property
+    def solana_websocket_url(self) -> str:
+        return self._solana_websocket_url
 
     @property
     def mempool_capacity(self) -> int:
@@ -268,10 +290,6 @@ class Config(DBConfig):
         return self._confirm_timeout_sec
 
     @property
-    def confirm_check_msec(self) -> int:
-        return self._confirm_check_msec
-
-    @property
     def max_evm_step_cnt_emulate(self) -> int:
         return self._max_evm_step_cnt_emulate
 
@@ -366,7 +384,6 @@ class Config(DBConfig):
             'MAX_TX_ACCOUNT_COUNT': self.max_tx_account_cnt,
             'FUZZ_FAIL_PCT': self.fuzz_fail_pct,
             'CONFIRM_TIMEOUT_SEC': self.confirm_timeout_sec,
-            'CONFIRM_CHECK_MSEC': self.confirm_check_msec,
             'MAX_EVM_STEP_COUNT_TO_EMULATE': self.max_evm_step_cnt_emulate,
             'NEON_CLI_TIMEOUT': self.neon_cli_timeout,
             'NEON_CLI_DEBUG_LOG': self.neon_cli_debug_log,

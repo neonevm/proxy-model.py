@@ -75,7 +75,6 @@ class SolTxSendState:
 
 
 class SolTxListSender:
-    _commit_set = SolCommit.upper_set(SolCommit.Confirmed)
     _big_block_height = 2 ** 64 - 1
     _big_block_slot = 2 ** 64 - 1
 
@@ -371,33 +370,21 @@ class SolTxListSender:
 
         tx_sig_list: List[str] = list()
         tx_list: List[SolTx] = list()
-        valid_block_height = self._big_block_height
         for tx_state in tx_state_list:
             tx_sig_list.append(tx_state.sig)
             tx_list.append(tx_state.tx)
-            valid_block_height = min(valid_block_height, tx_state.valid_block_height)
 
-        self._wait_for_confirm_of_tx_list(tx_sig_list, valid_block_height)
+        self._solana.check_confirm_of_tx_sig_list(
+            tx_sig_list,
+            SolCommit.Confirmed,
+            self._config.confirm_timeout_sec)
+
         self._get_tx_receipt_list(tx_sig_list, tx_list)
 
     def _get_tx_receipt_list(self, tx_sig_list: Optional[List[str]], tx_list: List[SolTx]) -> None:
         tx_receipt_list = self._solana.get_tx_receipt_list(tx_sig_list, SolCommit.Confirmed)
         for tx, tx_receipt in zip(tx_list, tx_receipt_list):
             self._add_tx_state(tx, tx_receipt, SolTxSendState.Status.NoReceiptError)
-
-    def _wait_for_confirm_of_tx_list(self, tx_sig_list: List[str], valid_block_height: int) -> None:
-        confirm_timeout = self._config.confirm_timeout_sec
-        confirm_check_delay = float(self._config.confirm_check_msec) / 1000
-        elapsed_time = 0.0
-        commit_set = self._commit_set
-
-        while elapsed_time < confirm_timeout:
-            is_confirmed = self._solana.check_confirm_of_tx_sig_list(tx_sig_list, commit_set, valid_block_height)
-            if is_confirmed:
-                return
-
-            time.sleep(confirm_check_delay)
-            elapsed_time += confirm_check_delay
 
     @dataclass(frozen=True)
     class _DecodeResult:
