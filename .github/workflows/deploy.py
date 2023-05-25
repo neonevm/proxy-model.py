@@ -2,6 +2,7 @@ import os
 import re
 import time
 import sys
+
 import docker
 import subprocess
 import pathlib
@@ -12,6 +13,7 @@ from urllib.parse import urlparse
 from python_terraform import Terraform
 from paramiko import SSHClient
 from scp import SCPClient
+from github_api_client import GithubClient
 
 try:
     import click
@@ -424,6 +426,35 @@ def run_uniswap_test():
         raise RuntimeError(f"Uniswap tests failed. Err: {out.stderr}")
 
 
+@cli.command(name="trigger_dapps_tests", help="Run dapps tests workflow")
+@click.option("--solana_ip", help="solana ip")
+@click.option("--proxy_ip", help="proxy ip")
+@click.option('--token', help="github token")
+def trigger_dapps_tests(solana_ip, proxy_ip, token):
+    github = GithubClient(token)
+
+    runs_before = github.get_dapps_runs_list()
+    runs_count_before = github.get_dapps_runs_count()
+    proxy_url = f"http://{proxy_ip}:9090/solana"
+    solana_url = f"http://{solana_ip}:8899/"
+    faucet_url = f"http://{proxy_ip}:3333/"
+
+    github.run_dapps_dispatches(proxy_url, solana_url, faucet_url)
+    wait_condition(lambda: github.get_dapps_runs_count() > runs_count_before)
+
+    runs_after = github.get_dapps_runs_list()
+    run_id = list(set(runs_after) - set(runs_before))[0]
+    link = f"https://github.com/neonlabsorg/neon-tests/actions/runs/{run_id}"
+    click.echo(f"Dapps tests run link: {link}")
+    click.echo("Waiting completed status...")
+    wait_condition(lambda: github.get_dapps_run_info(run_id)["status"] == "completed", timeout_sec=7200, delay=5)
+
+    if github.get_dapps_run_info(run_id)["conclusion"] == "success":
+        click.echo("Dapps tests passed successfully")
+    else:
+        raise RuntimeError(f"Dapps tests failed! See {link}")
+
+
 @cli.command(name="send_notification", help="Send notification to slack")
 @click.option("-u", "--url", help="slack app endpoint url.")
 @click.option("-b", "--build_url", help="github action test build url.")
@@ -439,6 +470,19 @@ def send_notification(url, build_url):
         f"\n<{build_url}|View builosetd details>"
     )
     requests.post(url=url, data=json.dumps(tpl))
+
+
+def wait_condition(func_cond, timeout_sec=60, delay=0.5):
+    start_time = time.time()
+    while True:
+        if time.time() - start_time > timeout_sec:
+            raise RuntimeError(f"The condition not reached within {timeout_sec} sec")
+        try:
+            if func_cond():
+                break
+        except:
+            raise
+        time.sleep(delay)
 
 
 def process_output(output):

@@ -40,6 +40,8 @@ jobs:
       is_version_proxy_branch: ${{ steps.is_version_proxy_branch.outputs.value }}
     steps:
       - uses: actions/checkout@v3
+        with:
+           fetch-depth: 0
       - name: output branches name
         run: |
           echo "neon_evm_branch = ${{ github.event.inputs.neon_evm_branch }}"
@@ -239,11 +241,29 @@ jobs:
         if: always()
         run: docker rm -f ${{ env.CONTAINER }}
 
+  dapps-tests:
+    needs:
+      - prepare-infrastructure
+    runs-on: test-runner
+    env:
+      SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
+      PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Trigger dapps tests build
+        run: |
+          python3 ./.github/workflows/deploy.py trigger_dapps_tests \
+          --solana_ip=${{env.SOLANA_IP}} \
+          --proxy_ip=${{ env.PROXY_IP }} \
+          --token=${{secrets.GHTOKEN}}
+
+
   destroy-terraform:
     needs:
       - prepare-infrastructure
       - openzeppelin-tests
       - basic-tests
+      - dapps-tests
     runs-on: test-runner
     if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
     env:
@@ -277,11 +297,12 @@ jobs:
       - prepare-infrastructure
       - openzeppelin-tests
       - basic-tests
+      - dapps-tests
       - deploy-check
     if: |
       always() &&
       needs.deploy-check.result == 'success' &&
-      ((needs.openzeppelin-tests.result == 'success' && needs.basic-tests.result == 'success') ||
+      ((needs.openzeppelin-tests.result == 'success' && needs.basic-tests.result == 'success' && needs.dapps-tests.result == 'success') ||
       needs.prepare-infrastructure.result == 'skipped')
     steps:
       - uses: actions/checkout@v3
@@ -301,6 +322,7 @@ jobs:
       - finalize-image
       - openzeppelin-tests
       - basic-tests
+      - dapps-tests
       - deploy-check
       - build-image
     if: |
