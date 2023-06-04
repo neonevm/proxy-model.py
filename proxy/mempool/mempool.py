@@ -4,7 +4,7 @@ import math
 import time
 
 from collections import deque
-from typing import List, Tuple, Optional, Any, Dict, cast, Iterator, Union, Deque
+from typing import List, Tuple, Optional, Any, Dict, cast, Generator, Union, Deque
 
 from .mempool_api import (
     MPRequest, MPRequestType, MPTask, MPTxRequestList,
@@ -123,9 +123,6 @@ class MemPool:
 
         finally:
             await self._kick_tx_schedule()
-
-    def get_pending_tx_count(self, sender_addr: str) -> int:
-        return self._tx_schedule.get_pending_tx_count(sender_addr)
 
     def get_pending_tx_nonce(self, sender_addr: str) -> int:
         return self._tx_schedule.get_pending_tx_nonce(sender_addr)
@@ -407,8 +404,8 @@ class MemPool:
     def is_active(self) -> bool:
         return self._is_active
 
-    def get_taking_out_tx_list_iter(self) -> Iterator[Tuple[str, MPTxRequestList]]:
-        return self._tx_schedule.taking_out_tx_list_iter
+    def iter_taking_out_tx_list(self) -> Generator[Tuple[str, MPTxRequestList], None, None]:
+        return self._tx_schedule.iter_taking_out_tx_list
 
     def take_in_tx_list(self, sender_addr: str, mp_tx_request_list: MPTxRequestList):
         self._tx_schedule.take_in_tx_list(sender_addr, mp_tx_request_list)
