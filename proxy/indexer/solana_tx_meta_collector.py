@@ -29,15 +29,15 @@ class SolTxMetaDict:
     def has_sig(self, sig_slot: SolTxSigSlotInfo) -> bool:
         return sig_slot in self._tx_meta_dict
 
-    def add(self, sig_slot: SolTxSigSlotInfo, tx_meta: Dict[str, Any]) -> None:
-        if tx_meta is None:
+    def add(self, sig_slot: SolTxSigSlotInfo, tx_receipt: Dict[str, Any]) -> None:
+        if tx_receipt is None:
             raise SolHistoryNotFound(f'Solana receipt {sig_slot} not found')
 
-        block_slot = tx_meta['slot']
-        sol_sig = tx_meta['transaction']['signatures'][0]
+        block_slot = tx_receipt['slot']
+        sol_sig = tx_receipt['transaction']['signatures'][0]
         if block_slot != sig_slot.block_slot:
             raise SolHistoryNotFound(f'Solana receipt {sig_slot} on another history branch: {sol_sig}:{block_slot}')
-        self._tx_meta_dict[sig_slot] = SolTxMetaInfo.from_response(sig_slot, tx_meta)
+        self._tx_meta_dict[sig_slot] = SolTxMetaInfo.from_tx_receipt(block_slot, tx_receipt)
 
     def get(self, sig_slot: SolTxSigSlotInfo) -> Optional[SolTxMetaInfo]:
         tx_meta = self._tx_meta_dict.get(sig_slot, None)

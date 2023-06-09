@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from .utils import str_fmt_object
 
@@ -15,6 +15,7 @@ class SolBlockInfo:
     parent_block_slot: Optional[int] = None
     parent_block_hash: str = None
     is_finalized: bool = False
+    tx_receipt_list: List[Dict[str, Any]] = None
 
     _str = ''
 

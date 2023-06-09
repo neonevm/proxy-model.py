@@ -261,11 +261,13 @@ class GasTank(IndexerBase):
     # Note: this implementation analyzes only the final step in case of iterative execution. It simplifies it
     # but does not process events generated from the Solidity contract.
     def _process_neon_ix(self, tx: Dict[str, Any]):
-        tx_receipt_info = SolTxReceiptInfo.from_tx_receipt(tx)
+        block_slot = tx['slot']
+        tx_receipt_info = SolTxReceiptInfo.from_tx_receipt(block_slot, tx)
 
         self._process_finalized_tx_list(tx_receipt_info.block_slot)
 
-        for sol_neon_ix in tx_receipt_info.iter_sol_ix(self._config.evm_program_id):
+        evm_program_id = str(self._config.evm_program_id)
+        for sol_neon_ix in tx_receipt_info.iter_sol_ix(evm_program_id):
             ix_code = sol_neon_ix.ix_data[0]
             LOG.debug(f'instruction: {ix_code} {sol_neon_ix.neon_tx_sig}')
             if ix_code == EVM_PROGRAM_HOLDER_WRITE:

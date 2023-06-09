@@ -10,7 +10,7 @@ from typing import Optional, Dict, Union, Iterator, List, Any, Tuple, cast
 import base58
 
 from .utils.evm_log_decoder import decode_log_list, NeonLogTxReturn, NeonLogTxEvent
-from .solana_tx import SolTxReceipt, SolPubKey
+from .solana_tx import SolTxReceipt
 from .utils import str_fmt_object
 
 
@@ -54,8 +54,10 @@ class SolTxMetaInfo:
         return SolTxMetaInfo(ident, block_slot, ident.sol_sig, dict(), '', '')
 
     @staticmethod
-    def from_response(sig_slot: SolTxSigSlotInfo, response: Dict[str, Any]) -> SolTxMetaInfo:
-        return SolTxMetaInfo(sig_slot, sig_slot.block_slot, sig_slot.sol_sig, response, '', '')
+    def from_tx_receipt(block_slot: int, tx_receipt: Dict[str, Any]) -> SolTxMetaInfo:
+        sol_sig = tx_receipt['transaction']['signatures'][0]
+        sol_sig_slot = SolTxSigSlotInfo(sol_sig=sol_sig, block_slot=block_slot)
+        return SolTxMetaInfo(sol_sig_slot, block_slot, sol_sig, tx_receipt, '', '')
 
     def __str__(self) -> str:
         if self._str == '':
@@ -490,11 +492,8 @@ class SolTxReceiptInfo(SolTxMetaInfo):
     _ix_log_msg_list: List[SolIxLogState]
 
     @staticmethod
-    def from_tx_receipt(tx: SolTxReceipt) -> SolTxReceiptInfo:
-        block_slot = tx['slot']
-        sol_sig = tx['transaction']['signatures'][0]
-        sol_sig_slot = SolTxSigSlotInfo(sol_sig=sol_sig, block_slot=block_slot)
-        tx_meta = SolTxMetaInfo.from_response(sol_sig_slot, tx)
+    def from_tx_receipt(block_slot: int, tx: SolTxReceipt) -> SolTxReceiptInfo:
+        tx_meta = SolTxMetaInfo.from_tx_receipt(block_slot, tx)
         return SolTxReceiptInfo.from_tx_meta(tx_meta)
 
     @staticmethod
@@ -619,8 +618,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
                 return inner_ix['instructions']
         return list()
 
-    def iter_sol_ix(self, evm_program_id: SolPubKey) -> Iterator[SolNeonIxReceiptInfo]:
-        evm_program_id = str(evm_program_id)
+    def iter_sol_ix(self, evm_program_id: str) -> Iterator[SolNeonIxReceiptInfo]:
         for ix_idx, ix in enumerate(self._ix_list):
             if self._is_program(ix, evm_program_id) and self._has_ix_data(ix):
                 log_state = self.get_log_state(ix_idx, None)

@@ -381,14 +381,16 @@ class SolInteractor:
             block_hash='0x' + base58.b58decode(net_block.get('blockhash', '')).hex().lower(),
             block_time=net_block.get('blockTime', None),
             block_height=net_block.get('blockHeight', None),
-            parent_block_slot=net_block.get('parentSlot', None)
+            parent_block_slot=net_block.get('parentSlot', None),
+            tx_receipt_list=net_block.get('transactions', list())
         )
 
-    def get_block_info(self, block_slot: int, commitment=SolCommit.Confirmed) -> SolBlockInfo:
+    def get_block_info(self, block_slot: int, commitment=SolCommit.Confirmed, full=False) -> SolBlockInfo:
         opts = {
             'commitment': SolCommit.to_solana(commitment),
             'encoding': 'json',
-            'transactionDetails': 'none',
+            'transactionDetails': 'full' if full else 'none',
+            'maxSupportedTransactionVersion': 0,
             'rewards': False
         }
 

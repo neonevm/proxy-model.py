@@ -45,6 +45,7 @@ class NPTxParser:
     def __init__(self, tx: NPSolTx):
         self.acct_key_list = self._get_acct_key_list(tx)
         self._tx = tx
+        self._block_slot = tx['slot']
         self._ix_list: List[NPSolIx] = tx['transaction']['message']['instructions']
         self._inner_ix_dict: List[NPSolIx] = tx['meta']['innerInstructions']
         self._tx_receipt_info: Optional[SolTxReceiptInfo] = None
@@ -87,7 +88,7 @@ class NPTxParser:
 
     def find_neon_tx_receipt(self, ix_idx: int) -> Optional[NeonLogTxReturn]:
         if self._tx_receipt_info is None:
-            self._tx_receipt_info = SolTxReceiptInfo.from_tx_receipt(self._tx)
+            self._tx_receipt_info = SolTxReceiptInfo.from_tx_receipt(self._block_slot, self._tx)
         log_state = self._tx_receipt_info.get_log_state(ix_idx, None)
         if log_state is None:
             return None

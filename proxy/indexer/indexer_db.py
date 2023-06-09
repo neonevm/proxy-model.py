@@ -54,7 +54,7 @@ class IndexerDB:
         )
 
     def activate_block_list(self, iter_neon_block: Iterator[NeonIndexedBlockInfo]) -> None:
-        block_slot_list = [b.block_slot for n in iter_neon_block for b in n.iter_history_block() if not n.is_finalized]
+        block_slot_list = [b.block_slot for b in iter_neon_block]
         if not len(block_slot_list):
             return
 
@@ -63,7 +63,7 @@ class IndexerDB:
         )
 
     def _submit_block(self, neon_block: NeonIndexedBlockInfo) -> None:
-        self._sol_blocks_db.set_block_list(neon_block.iter_history_block())
+        self._sol_blocks_db.set_block(neon_block.sol_block)
         if neon_block.is_finalized:
             self._finalize_block(neon_block)
         self._neon_txs_db.set_tx_list(neon_block.iter_done_neon_tx())
@@ -75,7 +75,7 @@ class IndexerDB:
             self._constants_db['starting_block_slot'] = neon_block.block_slot
 
     def _finalize_block(self, neon_block: NeonIndexedBlockInfo) -> None:
-        block_slot_list = [block.block_slot for block in neon_block.iter_history_block()]
+        block_slot_list = [neon_block.block_slot]
         if len(block_slot_list) > 0:
             for db_table in self._db_table_list:
                 db_table.finalize_block_list(self._finalized_block_slot, block_slot_list)
