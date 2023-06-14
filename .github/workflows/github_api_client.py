@@ -30,6 +30,7 @@ class GithubClient():
                            "solana_url": solana_url,
                            "faucet_url": faucet_url,
                            "network_id": network_id,
+                           "dapps": "aave,saddle,uniswap-v3",
                            "network": "custom"}
                 }
         response = requests.post(
