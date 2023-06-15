@@ -226,6 +226,10 @@ jobs:
           docker pull ${{ env.NEON_TEST_IMAGE }}
           docker run -i -d -e PROXY_IP=${{ env.PROXY_IP }} -e SOLANA_IP=${{ env.SOLANA_IP }} \
           --name=${{ env.CONTAINER }} ${{ env.NEON_TEST_IMAGE }} /bin/bash
+      - name: Update contracts in the container
+        run: |
+          docker exec -i ${{ env.CONTAINER }} \
+            ./clickfile.py update-contracts --branch ${{ github.head_ref }}
       - name: Wait until proxy is ready
         timeout-minutes: 5
         run: |

@@ -79,15 +79,23 @@ def check_neon_evm_tag(tag):
             f"evm_loader image with {tag} tag isn't found. Response: {response.json()}")
 
 
-def update_neon_evm_tag_if_same_branch_exists(branch, neon_evm_tag):
-    if branch != "":
+def is_neon_evm_branch_exist(branch):
+    if branch:
         proxy_branches_obj = requests.get(
             "https://api.github.com/repos/neonlabsorg/neon-evm/branches?per_page=100").json()
         proxy_branches = [item["name"] for item in proxy_branches_obj]
+
         if branch in proxy_branches:
             click.echo(f"The same branch {branch} is found in neon_evm repository")
-            neon_evm_tag = branch.split('/')[-1]
-            check_neon_evm_tag(neon_evm_tag)
+            return True
+    else:
+        return False
+
+
+def update_neon_evm_tag_if_same_branch_exists(branch, neon_evm_tag):
+    if is_neon_evm_branch_exist(branch):
+        neon_evm_tag = branch.split('/')[-1]
+        check_neon_evm_tag(neon_evm_tag)
     return neon_evm_tag
 
 
@@ -97,8 +105,7 @@ def update_neon_evm_tag_if_same_branch_exists(branch, neon_evm_tag):
 @click.option('--head_ref_branch')
 @click.option('--skip_pull', is_flag=True, default=False, help="skip pulling of docker images from the docker-hub")
 def build_docker_image(neon_evm_tag, proxy_tag, head_ref_branch, skip_pull):
-    if head_ref_branch is not None:
-        neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
+    neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
     neon_evm_image = f'neonlabsorg/evm_loader:{neon_evm_tag}'
     click.echo(f"neon-evm image: {neon_evm_image}")
     neon_test_invoke_program_image = "neonlabsorg/neon_test_invoke_program:develop"
