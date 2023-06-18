@@ -22,6 +22,7 @@ from ..common_neon.solana_tx import SolCommit
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.utils import SolBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
 from ..common_neon.db.db_connect import DBConnection
+from ..common_neon.layouts import NeonAccountInfo
 
 from ..indexer.indexer_db import IndexerDB
 from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
@@ -287,13 +288,19 @@ class NeonRpcApiWorker:
                 commitment = SolCommit.Confirmed
 
             neon_account_info = self._solana.get_neon_account_info(account, commitment)
-            if neon_account_info is None:
-                return hex(0)
+            if (neon_account_info is None) or (neon_account_info.balance == 0):
+                return self._get_zero_balance(account, neon_account_info)
 
             return hex(neon_account_info.balance)
         except (Exception,):
             # LOG.debug(f"eth_getBalance: Can't get account info: {err}")
             return hex(0)
+
+    def _get_zero_balance(self, account: str, neon_account_info: Optional[NeonAccountInfo]) -> str:
+        nonce = neon_account_info.nonce if neon_account_info is not None else 0
+        if self._has_gas_less_tx_permit(account, nonce, 0):
+            return hex(1)
+        return hex(0)
 
     @staticmethod
     def _update_event_type(log_rec: Dict[str, Any]) -> None:
@@ -449,8 +456,8 @@ class NeonRpcApiWorker:
 
         result = {
             "difficulty": '0x0',
-            "totalDifficulty": '0x0',
-            "extraData": "0x" + '0' * 63 + '1',
+            "totalDifficulty": None,
+            "extraData": "0x",
             "logsBloom": '0x' + '0' * 512,
             "gasLimit": '0xec8563e271ac',
             "transactionsRoot": '0x' + '0' * 63 + '1',
@@ -920,7 +927,7 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message='data is not hex string')
 
-        return keccak_256(data).hexdigest()
+        return '0x' + keccak_256(data).hexdigest()
 
     @staticmethod
     def eth_mining() -> bool:
