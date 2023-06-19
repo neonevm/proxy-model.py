@@ -229,7 +229,7 @@ jobs:
       - name: Update contracts in the container
         run: |
           docker exec -i ${{ env.CONTAINER }} \
-            ./clickfile.py update-contracts --branch ${{ github.head_ref }}
+            ./clickfile.py update-contracts --branch ${{ github.head_ref || github.ref_name }}
       - name: Wait until proxy is ready
         timeout-minutes: 5
         run: |
