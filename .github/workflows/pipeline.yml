@@ -26,7 +26,7 @@ env:
   DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
   DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
   BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-  NEON_TEST_IMAGE:  neonlabsorg/neon_tests:latest
+  NEON_TEST_IMAGE:  neonlabsorg/neon_tests
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.inputs.neon_evm_commit }}
@@ -211,6 +211,7 @@ jobs:
     if: ${{needs.prepare-infrastructure.result != 'skipped'}}
     needs:
       - prepare-infrastructure
+      - build-image
     runs-on: test-runner
     env:
       SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
@@ -221,11 +222,29 @@ jobs:
       NETWORK: aws
     steps:
       - uses: actions/checkout@v3
+      - name: Define test image tag
+        id: neon_test_tag
+        run: |
+          if ${{ needs.build-image.outputs.is_version_proxy_branch }}; then
+            tag=${github_ref/refs\/heads\//}
+
+          elif [[ $github_ref == *"refs/tags/"* ]]; then
+            tag=${github_ref/refs\/tags\//}
+
+          elif [[ "${{ github.base_ref }}" =~ "refs/heads/"[vt][0-9]+\.[0-9]+\.x ]]; then # pr to version branch
+            tag=${base_ref/refs\/heads\//}
+
+          else
+            tag='latest'
+          fi
+          echo "value=${tag}"
+          echo "value=${tag}" >> $GITHUB_OUTPUT
       - name: Run docker container
         run: |
-          docker pull ${{ env.NEON_TEST_IMAGE }}
+          image="${{ env.NEON_TEST_IMAGE }}:${{ steps.neon_test_tag.outputs.value }}"
+          docker pull $image
           docker run -i -d -e PROXY_IP=${{ env.PROXY_IP }} -e SOLANA_IP=${{ env.SOLANA_IP }} \
-          --name=${{ env.CONTAINER }} ${{ env.NEON_TEST_IMAGE }} /bin/bash
+          --name=${{ env.CONTAINER }} $image /bin/bash
       - name: Update contracts in the container
         run: |
           docker exec -i ${{ env.CONTAINER }} \
