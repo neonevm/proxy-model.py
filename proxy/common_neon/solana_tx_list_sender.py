@@ -105,7 +105,7 @@ class SolTxListSender:
         self._tx_state_list_dict: Dict[SolTxSendState.Status, List[SolTxSendState]] = dict()
 
     def send(self, tx_list: List[SolTx]) -> bool:
-        self.clear()
+        assert not len(self._tx_list)
         if len(tx_list) == 0:
             return False
 
@@ -113,9 +113,12 @@ class SolTxListSender:
         return self._send()
 
     def recheck(self, tx_list: List[SolTx]) -> bool:
-        self.clear()
+        assert not len(self._tx_list)
         if len(tx_list) == 0:
             return False
+
+        for tx in self._tx_list:
+            LOG.debug(f'Recheck {tx.name}: {str(tx.sig)}')
 
         # We should check all (failed too) txs again, because the state can be changed
         tx_sig_list = [str(tx.sig) for tx in tx_list]

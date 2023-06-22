@@ -4,6 +4,7 @@ import os
 from decimal import Decimal
 from typing import Optional
 from urllib.parse import urlparse
+from typing import Optional, Set
 
 from .db.db_config import DBConfig
 from .environment_data import EVM_LOADER_ID
@@ -41,7 +42,7 @@ class Config(DBConfig):
         self._mempool_executor_limit_cnt = self._env_int('MEMPOOL_EXECUTOR_LIMIT_CNT', 4, 1024)
         self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 30 * 60)
         self._accept_reverted_tx_into_mempool = self._env_bool('ACCEPT_REVERTED_TX_INTO_MEMPOOL', False)
-        self._holder_size = self._env_int("HOLDER_SIZE", 1024, 131072)  # 128*1024
+        self._holder_size = self._env_int("HOLDER_SIZE", 1024, 262144)  # 256*1024
         self._min_op_balance_to_warn = self._env_int("MIN_OPERATOR_BALANCE_TO_WARN", 9000000000, 9000000000)
         self._min_op_balance_to_err = self._env_int("MIN_OPERATOR_BALANCE_TO_ERR", 1000000000, 1000000000)
         self._perm_account_id = self._env_int("PERM_ACCOUNT_ID", 1, 1)
@@ -75,9 +76,8 @@ class Config(DBConfig):
         self._max_evm_step_cnt_emulate = self._env_int("MAX_EVM_STEP_COUNT_TO_EMULATE", 1000, 500000)
         self._neon_cli_timeout = self._env_decimal("NEON_CLI_TIMEOUT", "2.5")
         self._neon_cli_debug_log = self._env_bool("NEON_CLI_DEBUG_LOG", False)
-        self._cancel_timeout = self._env_int("CANCEL_TIMEOUT", 1, 60)
-        self._skip_cancel_timeout = self._env_int("SKIP_CANCEL_TIMEOUT", 1, 1000)
-        self._holder_timeout = self._env_int("HOLDER_TIMEOUT", 1, 216000)  # 1 day by default
+        self._stuck_obj_blockout = self._env_int('STUCK_OBJECT_BLOCKOUT', 16, 64)
+        self._stuck_obj_validate_blockout = self._env_int('STUCK_OBJECT_VALIDATE_BLOCKOUT', 512, 1024)
         self._gather_statistics = self._env_bool("GATHER_STATISTICS", False)
         self._hvac_url = os.environ.get('HVAC_URL', None)
         self._hvac_token = os.environ.get('HVAC_TOKEN', None)
@@ -94,6 +94,9 @@ class Config(DBConfig):
             self._pyth_mapping_account = None
         self._update_pyth_mapping_period_sec = self._env_int('UPDATE_PYTH_MAPPING_PERIOD_SEC', 10, 60 * 60)
 
+        op_acct_list = os.environ.get('OPERATOR_ACCOUNT_LIST', '')
+        self._op_acct_set = set([acct for acct in op_acct_list.split(' ;,') if len(acct) > 0])
+
         self._validate()
 
     def _validate(self) -> None:
@@ -105,6 +108,10 @@ class Config(DBConfig):
         assert (self._extra_gas_pct >= 0) and (self._extra_gas_pct < 1)
         assert (self._slot_processing_delay < 32)
         assert (self._fuzz_fail_pct >= 0) and (self._fuzz_fail_pct < 100)
+
+        for acct in self._op_acct_set:
+            pubkey = SolPubKey.from_string(acct)
+            assert pubkey.string() == acct, f'Invalid operator account {acct}'
 
     @staticmethod
     def _env_bool(name: str, default_value: bool) -> bool:
@@ -302,16 +309,16 @@ class Config(DBConfig):
         return self._neon_cli_debug_log
 
     @property
-    def cancel_timeout(self) -> int:
-        return self._cancel_timeout
+    def stuck_object_blockout(self) -> int:
+        return self._stuck_obj_blockout
 
     @property
-    def skip_cancel_timeout(self) -> int:
-        return self._skip_cancel_timeout
+    def stuck_object_validate_blockout(self) -> int:
+        return self._stuck_obj_validate_blockout
 
     @property
-    def holder_timeout(self) -> int:
-        return self._holder_timeout
+    def operator_account_set(self) -> Set[str]:
+        return self._op_acct_set
 
     @property
     def gather_statistics(self) -> bool:
@@ -387,12 +394,12 @@ class Config(DBConfig):
             'MAX_EVM_STEP_COUNT_TO_EMULATE': self.max_evm_step_cnt_emulate,
             'NEON_CLI_TIMEOUT': self.neon_cli_timeout,
             'NEON_CLI_DEBUG_LOG': self.neon_cli_debug_log,
-            'CANCEL_TIMEOUT': self.cancel_timeout,
-            'SKIP_CANCEL_TIMEOUT': self.skip_cancel_timeout,
-            'HOLDER_TIMOUT': self.holder_timeout,
+            'STUCK_OBJECT_BLOCKOUT': self.stuck_object_blockout,
+            'STUCK_OBJECT_VALIDATE_BLOCKOUT': self.stuck_object_validate_blockout,
+            'OPERATOR_ACCOUNT_LIST': ';'.join(list(self.operator_account_set)),
             'GATHER_STATISTICS': self.gather_statistics,
 
-            'GENESIS_BLOCK_TIMESTAMP': self.genesis_timestamp,
+            'GENESIS_BLOCK_TIMESTAMP=': self.genesis_timestamp,
             'COMMIT_LEVEL': self.commit_level,
 
             # Don't print accesses to the logs

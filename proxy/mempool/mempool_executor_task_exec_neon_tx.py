@@ -1,13 +1,13 @@
 import logging
 
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.errors import RescheduleError, NonceTooLowError, NonceTooHighError, BadResourceError
+from ..common_neon.errors import RescheduleError, NonceTooLowError, NonceTooHighError, BadResourceError, StuckTxError
+from ..common_neon.operator_resource_info import OpResInfo
 
-from ..mempool.mempool_api import MPTxExecRequest, MPTxExecResult, MPTxExecResultCode
-from ..mempool.mempool_executor_task_base import MPExecutorBaseTask
-from ..mempool.neon_tx_sender import NeonTxSendStrategyExecutor
-from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
-from ..mempool.operator_resource_mng import OpResInfo
+from .mempool_api import MPTxExecRequest, MPTxExecResult, MPTxExecResultCode
+from .mempool_executor_task_base import MPExecutorBaseTask
+from .neon_tx_sender import NeonTxSendStrategyExecutor
+from .neon_tx_sender_ctx import NeonTxSendCtx
 
 
 LOG = logging.getLogger(__name__)
@@ -35,6 +35,10 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
             LOG.debug(f'Reschedule tx {mp_tx_req.sig}, reason: {str(exc)}')
             return MPTxExecResult(MPTxExecResultCode.Reschedule, neon_tx_exec_cfg)
 
+        except StuckTxError as exc:
+            LOG.debug(f'Reschedule tx {mp_tx_req.sig }, reason: {str(exc)}')
+            return MPTxExecResult(MPTxExecResultCode.StuckTx, exc)
+
         except BaseException as exc:
             LOG.error(f'Failed to execute tx {mp_tx_req.sig}', exc_info=exc)
             return MPTxExecResult(MPTxExecResultCode.Failed, exc)
@@ -46,8 +50,6 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
 
         resource = OpResInfo.from_ident(mp_tx_req.res_ident)
 
-        neon_tx = mp_tx_req.neon_tx
-        neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
-        strategy_ctx = NeonTxSendCtx(self._config, self._solana, resource, neon_tx, neon_tx_exec_cfg)
+        strategy_ctx = NeonTxSendCtx(self._config, self._solana, resource, mp_tx_req)
         strategy_executor = NeonTxSendStrategyExecutor(strategy_ctx)
         strategy_executor.execute()

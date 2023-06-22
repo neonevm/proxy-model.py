@@ -7,7 +7,8 @@ from typing import Optional, Any, cast
 from .mempool_api import (
     MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest,
     MPOpResInitRequest, MPGasPriceRequest,
-    MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPElfParamDictRequest
+    MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPElfParamDictRequest,
+    MPGetStuckTxListRequest
 )
 
 from .mempool_executor_task_elf_params import MPExecutorElfParamsTask
@@ -16,6 +17,7 @@ from .mempool_executor_task_free_alt_queue import MPExecutorFreeALTQueueTask
 from .mempool_executor_task_gas_price import MPExecutorGasPriceTask
 from .mempool_executor_task_op_res import MPExecutorOpResTask
 from .mempool_executor_task_state_tx_cnt import MPExecutorStateTxCntTask
+from .mempool_executor_task_stuck_tx import MPExecutorStuckTxListTask
 
 from ..common.logger import Logger
 from ..common_neon.config import Config
@@ -47,6 +49,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._state_tx_cnt_task: Optional[MPExecutorStateTxCntTask] = None
         self._exec_neon_tx_task: Optional[MPExecutorExecNeonTxTask] = None
         self._free_alt_task: Optional[MPExecutorFreeALTQueueTask] = None
+        self._stuck_tx_task: Optional[MPExecutorStuckTxListTask] = None
 
         mp.Process.__init__(self)
 
@@ -68,6 +71,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         self._state_tx_cnt_task = MPExecutorStateTxCntTask(self._config, self._solana)
         self._exec_neon_tx_task = MPExecutorExecNeonTxTask(self._config, self._solana)
         self._free_alt_task = MPExecutorFreeALTQueueTask(self._config, self._solana)
+        self._stuck_tx_task = MPExecutorStuckTxListTask(self._config, self._solana)
 
     async def on_data_received(self, data: Any) -> Any:
         try:
@@ -113,6 +117,10 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         elif mp_req.type == MPRequestType.CloseALTList:
             mp_close_req = cast(MPCloseALTListRequest, mp_req)
             return self._free_alt_task.close_alt_list(mp_close_req)
+
+        elif mp_req.type == MPRequestType.GetStuckTxList:
+            mp_stuck_tx_req = cast(MPGetStuckTxListRequest, mp_req)
+            return self._stuck_tx_task.read_stuck_tx_list(mp_stuck_tx_req)
 
         LOG.error(f'Failed to process mp_request, unknown type: {mp_req.type}')
 

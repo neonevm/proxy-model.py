@@ -8,6 +8,7 @@ from typing import Dict, Iterator, Optional, Any, Tuple, Union, List
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
+from ..common_neon.neon_instruction import EvmIxCode
 from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
 from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
@@ -19,14 +20,14 @@ LOG = logging.getLogger(__name__)
 
 
 class GasTankTxInfo(NeonIndexedTxInfo):
-    def __init__(self, tx_type: NeonIndexedTxInfo.Type, key: NeonIndexedTxInfo.Key, neon_tx: NeonTxInfo,
-                 operator: str, holder: str, iter_blocked_account: Iterator[str]):
-        super().__init__(tx_type, key, neon_tx, holder, iter_blocked_account)
+    def __init__(self, ix_code: EvmIxCode, key: NeonIndexedTxInfo.Key, neon_tx: NeonTxInfo,
+                 operator: str, holder: str, blocked_acct_list: List[str]):
+        super().__init__(ix_code, key, neon_tx, holder, blocked_acct_list)
         self.operator = operator
         self.iterations: Dict[int, int] = {}
 
     @staticmethod
-    def create_tx_info(neon_tx_sig: str, message: bytes, tx_type: NeonIndexedTxInfo.Type, key: NeonIndexedTxInfo.Key,
+    def create_tx_info(neon_tx_sig: str, message: bytes, ix_code: EvmIxCode, key: NeonIndexedTxInfo.Key,
                        operator: str, holder: str, iter_blocked_account: Iterator[str]) -> Optional[GasTankTxInfo]:
         neon_tx = NeonTxInfo.from_sig_data(message)
         if neon_tx.error:
@@ -36,7 +37,8 @@ class GasTankTxInfo(NeonIndexedTxInfo):
             LOG.warning(f'Neon tx hash {neon_tx.sig} != {neon_tx_sig}')
             return None
 
-        return GasTankTxInfo(tx_type, key, neon_tx, operator, holder, iter_blocked_account)
+        blocked_account_list = list(iter_blocked_account)
+        return GasTankTxInfo(ix_code, key, neon_tx, operator, holder, blocked_account_list)
 
     def append_receipt(self, ix: SolNeonIxReceiptInfo):
         self.iterations[ix.neon_total_gas_used] = ix.neon_gas_used
@@ -62,7 +64,7 @@ class GasTankTxInfo(NeonIndexedTxInfo):
                 total_gas_used=ix.neon_tx_return.gas_used + 5000,
                 sol_sig=ix.sol_sig, idx=ix.idx, inner_idx=ix.inner_idx
             ))
-            self.set_status(GasTankTxInfo.Status.Done, ix.block_slot)
+            self.mark_done(ix.block_slot)
 
     def finalize(self):
         total_gas_used = 0

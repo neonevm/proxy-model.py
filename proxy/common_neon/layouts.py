@@ -14,19 +14,19 @@ from .solana_tx import SolPubKey
 
 HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,
-    "owner" / Bytes(32),
+    "operator" / Bytes(32),
     "neon_tx_sig" / Bytes(32)
 )
 
 ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,
-    "owner" / Bytes(32),
+    "operator" / Bytes(32),
     "neon_tx_sig" / Bytes(32),
     "caller" / Bytes(20),
     "gas_limit" / Bytes(32),
     "gas_price" / Bytes(32),
     "gas_used" / Bytes(32),
-    "operator" / Bytes(32),
+    "last_operator" / Bytes(32),
     "block_slot" / Int64ul,
     "account_list_len" / Int64ul,
     "evm_state_len" / Int64ul,
@@ -35,7 +35,7 @@ ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
 
 FINALIZED_HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,
-    "owner" / Bytes(32),
+    "operator" / Bytes(32),
     "neon_tx_sig" / Bytes(32)
 )
 
@@ -119,21 +119,30 @@ class NeonAccountInfo:
         )
 
 
+@dataclass(frozen=True)
+class HolderMetaAccountInfo:
+    pubkey: str
+    is_writable: bool
+    is_exists: bool
+
+
 @dataclass
 class HolderAccountInfo:
     holder_account: SolPubKey
-    tag: int
+    lamports: int
     owner: SolPubKey
+    tag: int
+    operator: SolPubKey
     neon_tx_sig: str
     neon_tx_data: Optional[bytes]
     caller: Optional[str]
     gas_limit: Optional[int]
     gas_price: Optional[int]
     gas_used: Optional[int]
-    operator: Optional[SolPubKey]
+    last_operator: Optional[SolPubKey]
     block_slot: Optional[int]
     account_list_len: Optional[int]
-    account_list: Optional[List[Tuple[bool, bool, str]]]
+    account_list: Optional[List[HolderMetaAccountInfo]]
 
     @staticmethod
     def from_account_info(info: AccountInfo) -> Optional[HolderAccountInfo]:
@@ -155,31 +164,37 @@ class HolderAccountInfo:
 
         storage = ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT.parse(info.data)
 
-        account_list: List[Tuple[bool, bool, str]] = []
+        account_list: List[HolderMetaAccountInfo] = list()
         offset = ACTIVE_HOLDER_ACCOUNT_INFO_LAYOUT.sizeof()
         for _ in range(storage.account_list_len):
-            writable = (info.data[offset] > 0)
+            is_writable = (info.data[offset] > 0)
             offset += 1
 
-            exists = (info.data[offset] > 0)
+            is_exists = (info.data[offset] > 0)
             offset += 1
 
             some_pubkey = SolPubKey.from_bytes(info.data[offset:offset + SolPubKey.LENGTH])
             offset += SolPubKey.LENGTH
 
-            account_list.append((writable, exists, str(some_pubkey)))
+            account_list.append(HolderMetaAccountInfo(
+                pubkey=str(some_pubkey),
+                is_exists=is_exists,
+                is_writable=is_writable
+            ))
 
         return HolderAccountInfo(
             holder_account=info.address,
+            lamports=info.lamports,
+            owner=info.owner,
             tag=storage.tag,
-            owner=SolPubKey.from_bytes(storage.owner),
+            operator=SolPubKey.from_bytes(storage.operator),
             neon_tx_sig='0x' + storage.neon_tx_sig.hex().lower(),
             neon_tx_data=None,
-            caller=storage.caller.hex(),
+            caller='0x' + storage.caller.hex(),
             gas_limit=int.from_bytes(storage.gas_limit, "little"),
             gas_price=int.from_bytes(storage.gas_price, "little"),
             gas_used=int.from_bytes(storage.gas_used, "little"),
-            operator=SolPubKey.from_bytes(storage.operator),
+            last_operator=SolPubKey.from_bytes(storage.last_operator),
             block_slot=storage.block_slot,
             account_list_len=storage.account_list_len,
             account_list=account_list
@@ -194,15 +209,17 @@ class HolderAccountInfo:
 
         return HolderAccountInfo(
             holder_account=info.address,
+            lamports=info.lamports,
+            owner=info.owner,
             tag=storage.tag,
-            owner=SolPubKey.from_bytes(storage.owner),
+            operator=SolPubKey.from_bytes(storage.operator),
             neon_tx_sig='0x' + storage.neon_tx_sig.hex().lower(),
             neon_tx_data=None,
             caller=None,
             gas_limit=None,
             gas_price=None,
             gas_used=None,
-            operator=None,
+            last_operator=None,
             block_slot=None,
             account_list_len=None,
             account_list=None
@@ -220,15 +237,17 @@ class HolderAccountInfo:
 
         return HolderAccountInfo(
             holder_account=info.address,
+            lamports=info.lamports,
+            owner=info.owner,
             tag=holder.tag,
-            owner=SolPubKey.from_bytes(holder.owner),
+            operator=SolPubKey.from_bytes(holder.operator),
             neon_tx_sig='0x' + holder.neon_tx_sig.hex().lower(),
             neon_tx_data=neon_tx_data,
             caller=None,
             gas_limit=None,
             gas_price=None,
             gas_used=None,
-            operator=None,
+            last_operator=None,
             block_slot=None,
             account_list_len=None,
             account_list=None

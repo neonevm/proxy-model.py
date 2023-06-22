@@ -1,17 +1,20 @@
 import logging
+
 from typing import List, Type, Callable, Dict, cast
+
+from .executor_mng import MPExecutorMng
 
 from .mempool_api import (
     MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest,
     MPRequest, MPRequestType, MPALTAddress, MPALTInfo, MPALTListResult
 )
 
-from .executor_mng import MPExecutorMng
 from .mempool_periodic_task import MPPeriodicTaskLoop
-from .operator_resource_mng import OpResMng
 from .sorted_queue import SortedQueue
 
+from ..common_neon.operator_resource_mng import OpResMng
 from ..common_neon.solana_alt import ALTAddress
+
 
 LOG = logging.getLogger(__name__)
 

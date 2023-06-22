@@ -34,8 +34,12 @@ class DBConnection:
 
         kwargs = {}
         if self._config.postgres_timeout > 0:
-            kwargs['options'] = f'-c statement_timeout={self._config.postgres_timeout * 1000}'
-            LOG.debug(f'add statement timeout {self._config.postgres_timeout * 1000}')
+            wait_ms = self._config.postgres_timeout * 1000
+            kwargs['options'] = (
+                f'-c statement_timeout={wait_ms} ' +
+                f'-c idle_in_transaction_session_timeout={wait_ms-500} '
+            )
+            LOG.debug(f'add statement timeout {wait_ms}')
 
         self._conn = psycopg2.connect(
             dbname=self._config.postgres_db,

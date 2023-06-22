@@ -176,7 +176,6 @@ class NeonTxValidator:
     def _prevalidate_account_cnt(self, emulator_json: Dict[str, Any]):
         account_cnt = (
             len(emulator_json.get("accounts", [])) +
-            len(emulator_json.get("token_accounts", [])) +
             len(emulator_json.get("solana_accounts", []))
         )
         if account_cnt > self._config.max_tx_account_cnt:

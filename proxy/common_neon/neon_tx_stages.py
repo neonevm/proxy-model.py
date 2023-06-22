@@ -6,11 +6,11 @@ from typing import Optional, Dict, Any
 
 import base58
 
-from ..common_neon.address import account_with_seed
-from ..common_neon.layouts import ACCOUNT_INFO_LAYOUT
-from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_tx import SolTxIx, SolPubKey
-from ..common_neon.solana_tx_legacy import SolLegacyTx
+from .address import account_with_seed
+from .layouts import ACCOUNT_INFO_LAYOUT
+from .neon_instruction import NeonIxBuilder
+from .solana_tx import SolTxIx, SolPubKey
+from .solana_tx_legacy import SolLegacyTx
 
 
 LOG = logging.getLogger(__name__)

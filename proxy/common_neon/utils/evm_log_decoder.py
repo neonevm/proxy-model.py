@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import base64
 import enum
 import logging
 import re
 
-from dataclasses import dataclass
-from typing import List, Iterator, Optional, Tuple
+from dataclasses import dataclass, asdict as dataclass_asdict
+from typing import List, Iterator, Optional, Tuple, Dict, Any
 
 
 LOG = logging.getLogger(__name__)
@@ -62,6 +64,25 @@ class NeonLogTxEvent:
     is_reverted: bool = False
     event_level: int = 0
     event_order: int = 0
+
+    @staticmethod
+    def from_dict(src: Dict[str, Any]) -> NeonLogTxEvent:
+        src.update(dict(
+            address=bytes.fromhex(src['address']),
+            data=bytes.fromhex(src['data']),
+            topic_list=[bytes.fromhex(t) for t in src['topic_list']]
+        ))
+        return NeonLogTxEvent(**src)
+
+    def as_dict(self) -> Dict[str, Any]:
+        res = dataclass_asdict(self)
+        res.update(dict(
+            address=self.address.hex(),
+            data=self.data.hex(),
+            topic_list=[t.hex() for t in self.topic_list]
+        ))
+
+        return res
 
     def is_exit_event_type(self) -> bool:
         return self.event_type in {

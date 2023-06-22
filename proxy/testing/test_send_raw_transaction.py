@@ -51,7 +51,7 @@ class TestDistributorContract(unittest.TestCase):
             raw_tx, name, account = prebuilt_tx
             tx_hash = self.proxy.conn.send_raw_transaction(raw_tx)
             print(
-                f"Send `set_address_fn(\"{name}\", {account.address[2:]}` "
+                f"Send `set_address_fn(\"{name}\", {account.address[2:]}`) "
                 f"tx with nonce: {nonce}, tx_hash: {tx_hash.hex()}"
             )
             tx_hashes.append(tx_hash)

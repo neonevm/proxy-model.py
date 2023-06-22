@@ -124,9 +124,10 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             resp_time_ms
         )
 
-        is_error_resp = 'error' in response
-        stat = NeonMethodData(name=rpc_method, is_error=is_error_resp, latency=resp_time_ms)
-        self._stat_client.commit_request_and_timeout(stat)
+        if self._config.gather_statistics:
+            is_error_resp = 'error' in response
+            stat = NeonMethodData(name=rpc_method, is_error=is_error_resp, latency=resp_time_ms)
+            self._stat_client.commit_request_and_timeout(stat)
 
         return response
 

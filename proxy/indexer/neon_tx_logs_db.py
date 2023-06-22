@@ -36,8 +36,7 @@ class NeonTxLogsDB(BaseDBTable):
         }
 
         self._hex_field_set = {
-            'blockNumber', 'transactionIndex', 'transactionLogIndex', 'logIndex',
-            'neonIxIdx', 'neonInnerIxIdx', 'neonEventLevel', 'neonEventOrder'
+            'blockNumber', 'transactionIndex', 'transactionLogIndex', 'logIndex'
         }
 
         self._topic_column_list = ['log_topic1', 'log_topic2', 'log_topic3', 'log_topic4']

@@ -136,6 +136,7 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
+      POSTGRES_TIMEOUT: 15
       SOLANA_URL: ${SOLANA_URL}
       INDEXER_ERC20_WRAPPER_WHITELIST: ANY
       START_SLOT: LATEST
@@ -158,6 +159,7 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
+      POSTGRES_TIMEOUT: 15
       GATHER_STATISTICS: "YES"
       LOG_FULL_OBJECT_INFO: "NO"
       CONFIG: ci

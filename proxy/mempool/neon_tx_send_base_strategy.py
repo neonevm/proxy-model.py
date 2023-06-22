@@ -43,7 +43,6 @@ class BaseNeonTxStrategy(abc.ABC):
     def __init__(self, ctx: NeonTxSendCtx):
         self._validation_error_msg: Optional[str] = None
         self._prep_stage_list: List[BaseNeonTxPrepStage] = list()
-        self._prep_tx_name_list: List[str] = list()
         self._ctx = ctx
         self._evm_step_cnt = ElfParams().neon_evm_steps
         self.__sol_tx_list_sender: Optional[SolTxListSender] = None
@@ -76,17 +75,20 @@ class BaseNeonTxStrategy(abc.ABC):
     def complete_init(self) -> None:
         assert self.is_valid()
 
-        self._prep_tx_name_list.clear()
         for stage in self._prep_stage_list:
             stage.complete_init()
-            self._prep_tx_name_list.extend(stage.get_tx_name_list())
 
     def prep_before_emulate(self) -> bool:
         assert self.is_valid()
 
-        tx_name_list = self._prep_tx_name_list
-        self._prep_tx_name_list.clear()
-        return self._send_tx_list(tx_name_list, self._build_prep_tx_list())
+        # recheck already sent transactions
+        tx_name_list: List[str] = list()
+        for stage in self._prep_stage_list:
+            tx_name_list.extend(stage.get_tx_name_list())
+        self._recheck_tx_list(tx_name_list)
+
+        # generate the new transaction
+        return self._send_tx_list(self._build_prep_tx_list())
 
     def update_after_emulate(self) -> None:
         assert self.is_valid()
@@ -105,6 +107,24 @@ class BaseNeonTxStrategy(abc.ABC):
     def cancel(self) -> None:
         pass
 
+    def _validate_tx_size(self) -> bool:
+        self._build_tx().validate(self._ctx.signer)  # <- there will be exception
+        return True
+
+    def _validate_tx_has_chainid(self) -> bool:
+        if self._ctx.neon_tx_info.has_chain_id():
+            return True
+
+        self._validation_error_msg = 'Transaction without chain-id'
+        return False
+
+    def _validate_stuck_tx(self) -> bool:
+        if not self._ctx.is_stuck_tx():
+            return True
+
+        self._validation_error_msg = 'Stuck transaction'
+        return False
+
     def _build_prep_tx_list(self) -> Generator[List[SolTx], None, None]:
         tx_list_list: List[List[SolTx]] = list()
 
@@ -118,31 +138,37 @@ class BaseNeonTxStrategy(abc.ABC):
 
         yield from tx_list_list
 
-    def _validate_tx_size(self) -> bool:
-        self._build_tx().validate(self._ctx.signer)  # <- there will be exception
-        return True
-
-    def _validate_tx_has_chainid(self) -> bool:
-        if self._ctx.neon_tx.has_chain_id():
-            return True
-
-        self._validation_error_msg = 'Transaction without chain-id'
-        return False
-
-    def _send_tx_list(self, tx_name_list: List[str], tx_list_generator: Generator[List[SolTx], None, None]) -> bool:
-        tx_list_sender = self._sol_tx_list_sender
+    def _recheck_tx_list(self, tx_name_list: List[str]) -> bool:
         tx_list = self._ctx.pop_sol_tx_list(tx_name_list)
-        try:
-            if tx_list_sender.recheck(tx_list):
-                return True
+        if len(tx_list) == 0:
+            return False
 
+        tx_list_sender = self._sol_tx_list_sender
+        tx_list_sender.clear()
+        try:
+            return tx_list_sender.recheck(tx_list)
+        finally:
+            self._store_sol_tx_list()
+
+    def _send_tx_list(self, tx_list_generator: Generator[List[SolTx], None, None]) -> bool:
+        tx_list_sender = self._sol_tx_list_sender
+        tx_list_sender.clear()
+        try:
             has_tx_list = False
-            for tx_list in tx_list_generator:
-                if tx_list_sender.send(tx_list):
+            if tx_list_generator:
+                for tx_list in tx_list_generator:
+                    if len(tx_list) == 0:
+                        continue
+
                     has_tx_list = True
+                    tx_list_sender.send(tx_list)
             return has_tx_list
         finally:
-            self._ctx.add_sol_tx_list([tx_state.tx for tx_state in tx_list_sender.tx_state_list])
+            self._store_sol_tx_list()
+
+    def _store_sol_tx_list(self):
+        tx_list_sender = self._sol_tx_list_sender
+        self._ctx.add_sol_tx_list([tx_state.tx for tx_state in tx_list_sender.tx_state_list])
 
     @property
     def _sol_tx_list_sender(self) -> SolTxListSender:

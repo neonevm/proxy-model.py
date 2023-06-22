@@ -8,7 +8,7 @@ class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
     name = 'TxStepFromAccountNoChainId'
 
     def _validate(self) -> bool:
-        if self._ctx.neon_tx.has_chain_id():
+        if self._ctx.neon_tx_info.has_chain_id():
             self._validation_error_msg = 'Normal transaction'
             return False
         return True

@@ -12,6 +12,7 @@ from .mempool_api import (
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.errors import EthereumError
 from ..common_neon.utils.eth_proto import NeonTx
+from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.pickable_data_server import AddrPickableDataClient
 
 
@@ -69,7 +70,7 @@ class MemPoolClient:
     @_guard_conn
     @_reconnecting
     def send_raw_transaction(self, req_id: str, neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxSendResult:
-        mempool_tx_request = MPTxRequest(req_id=req_id, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg)
+        mempool_tx_request = MPTxRequest.from_neon_tx(req_id, neon_tx, neon_tx_exec_cfg)
         return self._pickable_data_client.send_data(mempool_tx_request)
 
     @_guard_conn
@@ -86,7 +87,7 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def get_pending_tx_by_hash(self, req_id: str, tx_hash: str) -> Union[NeonTx, EthereumError, None]:
+    def get_pending_tx_by_hash(self, req_id: str, tx_hash: str) -> Union[NeonTxInfo, EthereumError, None]:
         mempool_pending_tx_by_hash_req = MPPendingTxByHashRequest(req_id=req_id, tx_hash=tx_hash)
         return self._pickable_data_client.send_data(mempool_pending_tx_by_hash_req)
 

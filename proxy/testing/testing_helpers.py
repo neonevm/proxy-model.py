@@ -169,7 +169,8 @@ class SolClient(SolInteractor):
 
         tx.recent_block_hash = recent_resp.block_hash
         tx.sign(signer)
-        print(f'-> send solana tx {tx.name}: {tx.sig}')
+        now = time.time()
+        print(f'-> {now} send solana tx {tx.name}: {tx.sig}')
         sent_resp = self.send_tx_list([tx], skip_preflight=skip_preflight)[0]
         if sent_resp.result is None:
             print(f'-> fail to send tx: {sent_resp.error}')

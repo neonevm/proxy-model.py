@@ -20,7 +20,7 @@ class IndexerApp:
 def run_indexer():
     config = Config()
     Logger.setup()
-    LOG.info(f"Running indexer with params: {str(config)}")
+    LOG.info(f"Running indexer with params: {config.as_dict()}")
     IndexerApp(config)
 
 

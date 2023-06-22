@@ -5,7 +5,7 @@ import enum
 
 from typing import List, Dict, Set, Optional, Tuple, Generator, cast
 
-from ..common_neon.utils.eth_proto import NeonTx
+from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.json_logger import logging_context
 
 from .mempool_api import MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData, MPTxRequestList
@@ -57,8 +57,8 @@ class MPTxRequestDict:
         self._tx_sender_nonce_dict.pop(sender_nonce)
         return self._tx_hash_dict.pop(tx.sig, None)
 
-    def get_tx_by_hash(self, tx_hash: str) -> Optional[MPTxRequest]:
-        return self._tx_hash_dict.get(tx_hash, None)
+    def get_tx_by_hash(self, neon_sig: str) -> Optional[MPTxRequest]:
+        return self._tx_hash_dict.get(neon_sig, None)
 
     def get_tx_by_sender_nonce(self, tx: MPTxRequest) -> Optional[MPTxRequest]:
         return self._tx_sender_nonce_dict.get(self._sender_nonce(tx), None)
@@ -147,8 +147,9 @@ class MPSenderTxPool:
     def top_tx(self) -> Optional[MPTxRequest]:
         return self._tx_nonce_queue[self._top_index]
 
-    def acquire_tx(self) -> MPTxRequest:
+    def acquire_tx(self, tx: MPTxRequest) -> MPTxRequest:
         assert not self._is_processing()
+        assert tx.sig == self.top_tx.sig
 
         self._processing_tx = self.top_tx
         self.sync_state()
@@ -263,19 +264,17 @@ class MPTxSchedule:
         return cast(MPSenderTxPool, sender_pool)
 
     def _schedule_sender_pool(self, sender_pool: MPSenderTxPool, state_tx_cnt: int) -> None:
-        self._set_sender_tx_cnt(sender_pool, state_tx_cnt)
+        if sender_pool.state_tx_cnt != state_tx_cnt:
+            self._set_sender_tx_cnt(sender_pool, state_tx_cnt)
         self._sync_sender_state(sender_pool)
 
     def _set_sender_tx_cnt(self, sender_pool: MPSenderTxPool, state_tx_cnt: int) -> None:
-        if sender_pool.state_tx_cnt == state_tx_cnt:
-            return
-
         while not sender_pool.is_empty():
-            tx = sender_pool.top_tx
-            if tx.nonce >= state_tx_cnt:
+            top_tx = sender_pool.top_tx
+            if top_tx.nonce >= state_tx_cnt:
                 break
 
-            self._drop_tx_from_sender_pool(sender_pool, tx)
+            self._drop_tx_from_sender_pool(sender_pool, top_tx)
 
         sender_pool.set_state_tx_cnt(state_tx_cnt)
 
@@ -348,6 +347,19 @@ class MPTxSchedule:
         self._check_oversized_and_reduce(tx)
         return MPTxSendResult(code=MPTxSendResultCode.Success, state_tx_cnt=None)
 
+    def drop_stuck_tx(self, neon_sig: str) -> bool:
+        tx = self._tx_dict.get_tx_by_hash(neon_sig)
+        if tx is None:
+            return True
+
+        sender_pool = self._get_sender_pool(tx.sender_address)
+        if sender_pool.state == sender_pool.State.Processing:
+            return False
+
+        self._set_sender_tx_cnt(sender_pool, tx.nonce)
+        self._drop_tx_from_sender_pool(sender_pool, tx)
+        return True
+
     @property
     def _tx_cnt(self) -> int:
         return len(self._tx_dict)
@@ -376,14 +388,17 @@ class MPTxSchedule:
             sender_pool = self._get_sender_pool(sender_address)
             self._sync_sender_state(sender_pool)
 
-    def peek_tx(self) -> Optional[MPTxRequest]:
+    def peek_top_tx(self) -> Optional[MPTxRequest]:
         if len(self._sender_pool_queue) == 0:
             return None
         return self._sender_pool_queue[self._top_index].top_tx
 
-    def acquire_tx(self) -> Optional[MPTxRequest]:
-        sender_pool = self._sender_pool_queue.pop(self._top_index)
-        tx = sender_pool.acquire_tx()
+    def acquire_tx(self, tx: MPTxRequest) -> Optional[MPTxRequest]:
+        sender_pool = self._get_sender_pool(tx.sender_address)
+        assert sender_pool.state == sender_pool.State.Queued
+
+        self._sender_pool_queue.pop(sender_pool)
+        sender_pool.acquire_tx(tx)
         self._tx_dict.acquire_tx(tx)
         return tx
 
@@ -395,9 +410,9 @@ class MPTxSchedule:
         sender_pool = self._find_sender_pool(sender_address)
         return None if sender_pool is None else sender_pool.last_nonce
 
-    def get_pending_tx_by_hash(self, tx_hash: str) -> Optional[NeonTx]:
-        tx = self._tx_dict.get_tx_by_hash(tx_hash)
-        return None if tx is None else tx.neon_tx
+    def get_pending_tx_by_hash(self, neon_sig: str) -> Optional[NeonTxInfo]:
+        tx = self._tx_dict.get_tx_by_hash(neon_sig)
+        return None if tx is None else tx.neon_tx_info
 
     def _done_tx(self, tx: MPTxRequest) -> None:
         LOG.debug(f'Done tx {tx.sig} in pool {tx.sender_address}')

@@ -18,11 +18,11 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     name = 'TxExecFromData'
 
     def execute(self) -> NeonTxResultInfo:
-        self._sol_tx_list_sender.clear()
-
         assert self.is_valid()
 
-        self._send_tx_list([self.name], self._build_tx_list())
+        if not self._recheck_tx_list([self.name]):
+            self._send_tx_list(self._build_tx_list())
+
         tx_send_state_list = self._sol_tx_list_sender.tx_state_list
         tx_state = tx_send_state_list[0]
         neon_tx_res = NeonTxResultInfo()
@@ -55,6 +55,7 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
 
     def _validate(self) -> bool:
         return (
+            self._validate_stuck_tx() and
             self._validate_tx_has_chainid() and
             self._validate_no_resize_iter_cnt()
         )

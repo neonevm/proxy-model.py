@@ -179,6 +179,7 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
+      POSTGRES_TIMEOUT: 15
       SOLANA_URL: http://solana:8899
       INDEXER_ERC20_WRAPPER_WHITELIST: ANY
       START_SLOT: LATEST
@@ -203,10 +204,12 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
+      POSTGRES_TIMEOUT: 15
       GATHER_STATISTICS: "YES"
       LOG_FULL_OBJECT_INFO: "NO"
       CONFIG: ci
       EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
+      START_SLOT: continue
     hostname: indexer
     depends_on:
       solana:

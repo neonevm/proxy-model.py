@@ -9,7 +9,7 @@ class DBConfig:
         self._postgres_db = os.environ['POSTGRES_DB']
         self._postgres_user = os.environ['POSTGRES_USER']
         self._postgres_password = os.environ['POSTGRES_PASSWORD']
-        self._postgres_timeout = int(os.environ.get('POSTGRES_STATEMENT_TIMEOUT', "10"), 10)
+        self._postgres_timeout = int(os.environ.get('POSTGRES_STATEMENT_TIMEOUT', "0"), 10)
 
     @property
     def postgres_host(self) -> str:

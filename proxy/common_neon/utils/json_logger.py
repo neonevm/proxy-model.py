@@ -3,6 +3,7 @@ import logging
 import threading
 import contextlib
 import traceback
+import copy
 from logging import LogRecord, Filter
 from datetime import datetime
 
@@ -49,10 +50,8 @@ class JSONFormatter(logging.Formatter):
 class ContextFilter(Filter):
     def filter(self, record: LogRecord) -> bool:
         thread = threading.current_thread()
-        log_context = {}
         if hasattr(thread, "log_context"):
-            log_context = thread.log_context
-        record.context = log_context
+            record.context = thread.log_context
         return True
 
 
@@ -63,7 +62,7 @@ def logging_context(**kwargs):
     if not hasattr(thread, "log_context"):
         thread.log_context = {}
     else:
-        old_log_context = thread.log_context
+        old_log_context = copy.deepcopy(thread.log_context)
     thread.log_context.update(kwargs)
     yield
     thread.log_context = old_log_context

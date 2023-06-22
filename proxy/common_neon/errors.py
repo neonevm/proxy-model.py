@@ -37,14 +37,41 @@ class BadResourceError(RescheduleError):
     pass
 
 
-class NotCompletedNeonTxError(RescheduleError):
-    def __init__(self, holder_account: str) -> None:
-        super().__init__(holder_account)
-
-        self._holder_account = holder_account
+class StuckTxError(BaseException):
+    def __init__(self, neon_tx_sig: str, holder_account: str):
+        super().__init__(neon_tx_sig, holder_account)
+        self._neon_tx_sig = neon_tx_sig
+        self._holder_acct = holder_account
 
     def __str__(self) -> str:
-        return f'Holder account {self._holder_account} contains not-completed Neon tx'
+        return f'Holder account {self._holder_acct} contains stuck tx: {self._neon_tx_sig}'
+
+    @property
+    def neon_tx_sig(self) -> str:
+        return self._neon_tx_sig
+
+    @property
+    def holder_account(self) -> str:
+        return self._holder_acct
+
+
+class HolderContentError(RescheduleError):
+    def __init__(self, holder_account: str) -> None:
+        super().__init__(holder_account)
+        self._holder_acct = holder_account
+
+    def __str__(self) -> str:
+        return f'Holder account {self._holder_acct} is not synced yet'
+
+
+class ALTContentError(RescheduleError):
+    def __init__(self, alt_table: str, msg: str):
+        super().__init__(alt_table, msg)
+        self._alt_table = alt_table
+        self._msg = msg
+
+    def __str__(self) -> str:
+        return f'ALT {self._alt_table}: {self._msg}'
 
 
 class BlockedAccountError(RescheduleError):

@@ -4,7 +4,7 @@ import time
 
 from typing import Optional, List
 
-from .errors import ALTError
+from .errors import ALTContentError
 from .neon_instruction import NeonIxBuilder
 from .solana_alt import ALTInfo
 from .solana_alt_limit import ALTLimit
@@ -126,5 +126,5 @@ class ALTTxBuilder:
         for alt_info in alt_info_list:
             alt_acct_info = self._solana.get_account_lookup_table_info(alt_info.table_account)
             if alt_acct_info is None:
-                raise ALTError(f'Cannot read lookup table {str(alt_info.table_account)}')
+                raise ALTContentError(str(alt_info.table_account), 'cannot read lookup table')
             alt_info.update_from_account(alt_acct_info)
