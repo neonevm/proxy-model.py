@@ -264,11 +264,15 @@ class MPTxSchedule:
         return cast(MPSenderTxPool, sender_pool)
 
     def _schedule_sender_pool(self, sender_pool: MPSenderTxPool, state_tx_cnt: int) -> None:
-        if sender_pool.state_tx_cnt != state_tx_cnt:
-            self._set_sender_tx_cnt(sender_pool, state_tx_cnt)
+        self._set_sender_tx_cnt(sender_pool, state_tx_cnt)
         self._sync_sender_state(sender_pool)
 
     def _set_sender_tx_cnt(self, sender_pool: MPSenderTxPool, state_tx_cnt: int) -> None:
+        if sender_pool.state_tx_cnt == state_tx_cnt:
+            return
+        elif sender_pool.state == sender_pool.State.Processing:
+            return
+
         while not sender_pool.is_empty():
             top_tx = sender_pool.top_tx
             if top_tx.nonce >= state_tx_cnt:
