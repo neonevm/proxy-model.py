@@ -6,16 +6,23 @@ from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxSendState
 from ..common_neon.utils import NeonTxResultInfo
 from ..common_neon.solana_tx_error_parser import SolTxError
+from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName
 
-from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
-from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
+from .neon_tx_sender_ctx import NeonTxSendCtx
+from .neon_tx_send_base_strategy import BaseNeonTxStrategy
+from .neon_tx_send_strategy_alt_stage import alt_strategy
+from .neon_tx_send_strategy_newaccount_stage import NewAccountNeonTxPrepStage
 
 
 LOG = logging.getLogger(__name__)
 
 
 class SimpleNeonTxStrategy(BaseNeonTxStrategy):
-    name = 'TxExecFromData'
+    name = EvmIxCodeName().get(EvmIxCode.TxExecFromData)
+
+    def __init__(self, ctx: NeonTxSendCtx) -> None:
+        super().__init__(ctx)
+        self._prep_stage_list.append(NewAccountNeonTxPrepStage(ctx))
 
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()

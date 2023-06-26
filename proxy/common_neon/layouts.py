@@ -1,16 +1,26 @@
 from __future__ import annotations
 
 import math
+import logging
 
 from dataclasses import dataclass
-from typing import Optional, List, Tuple
+from typing import Optional, List
 
 from construct import Bytes, Int8ul, Int16ul, Int32ul, Int64ul
 from construct import Struct
 
-from .constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG, LOOKUP_ACCOUNT_TAG, NEON_ACCOUNT_TAG
+from .constants import (
+    ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG,
+    LOOKUP_ACCOUNT_TAG, NEON_ACCOUNT_TAG,
+    ADDRESS_LOOKUP_TABLE_ID
+)
+
 from .elf_params import ElfParams
 from .solana_tx import SolPubKey
+
+
+LOG = logging.getLogger(__name__)
+
 
 HOLDER_ACCOUNT_INFO_LAYOUT = Struct(
     "tag" / Int8ul,
@@ -266,11 +276,15 @@ class ALTAccountInfo:
 
     @staticmethod
     def from_account_info(info: AccountInfo) -> Optional[ALTAccountInfo]:
-        if len(info.data) < ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof():
-            raise RuntimeError(
-                f"Wrong data length for lookup table data {str(info.address)}: "
-                f"{len(info.data)} < {ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof()}"
+        if info.owner != ADDRESS_LOOKUP_TABLE_ID:
+            LOG.warning(f'Wrong owner {str(info.owner)} of account {str(info.address)}')
+            return None
+        elif len(info.data) < ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof():
+            LOG.warning(
+                f'Wrong data length for lookup table data {str(info.address)}: '
+                f'{len(info.data)} < {ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof()}'
             )
+            return None
 
         lookup = ACCOUNT_LOOKUP_TABLE_LAYOUT.parse(info.data)
         if lookup.type != LOOKUP_ACCOUNT_TAG:

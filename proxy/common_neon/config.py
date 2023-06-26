@@ -54,17 +54,15 @@ class Config(DBConfig):
         self._enable_send_tx_api = self._env_bool("ENABLE_SEND_TX_API", True)
         self._use_earliest_block_if_0_passed = self._env_bool("USE_EARLIEST_BLOCK_IF_0_PASSED", False)
         self._account_permission_update_int = self._env_int("ACCOUNT_PERMISSION_UPDATE_INT", 10, 60 * 5)
-        self._allow_underpriced_tx_wo_chainid = self._env_bool("ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID", False)
-        self._extra_gas_pct = self._env_decimal("EXTRA_GAS_PCT", "0.0")
-        self._operator_fee = self._env_decimal("OPERATOR_FEE", "0.1")
+        self._allow_underpriced_tx_wo_chainid = self._env_bool('ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID', False)
+        self._operator_fee = self._env_decimal('OPERATOR_FEE', "0.1")
+        self._gas_price_slippage = self._env_decimal('GAS_PRICE_SLIPPAGE', "0.01")
         self._slot_processing_delay = self._env_int("SLOT_PROCESSING_DELAY", 0, 0)
-        self._gas_price_suggested_pct = self._env_decimal("GAS_PRICE_SUGGEST_PCT", "0.01")
         self._min_gas_price = self._env_int("MINIMAL_GAS_PRICE", 0, 1) * (10 ** 9)
         self._min_wo_chainid_gas_price = self._env_int("MINIMAL_WO_CHAINID_GAS_PRICE", 0, 10) * (10 ** 9)
         self._gas_less_tx_max_nonce = self._env_int("GAS_LESS_MAX_TX_NONCE", 0, 5)
         self._gas_less_tx_max_gas = self._env_int("GAS_LESS_MAX_GAS", 0, 20_000_000)  # Estimated gas on Mora = 18 mln
         self._neon_price_usd = Decimal('0.25')
-        self._neon_decimals = self._env_int('NEON_DECIMALS', 1, 9)
         self._start_slot = os.environ.get('START_SLOT', '0')
         self._indexer_parallel_request_cnt = self._env_int("INDEXER_PARALLEL_REQUEST_COUNT", 1, 10)
         self._indexer_poll_cnt = self._env_int("INDEXER_POLL_COUNT", 1, 1000)
@@ -78,6 +76,7 @@ class Config(DBConfig):
         self._neon_cli_debug_log = self._env_bool("NEON_CLI_DEBUG_LOG", False)
         self._stuck_obj_blockout = self._env_int('STUCK_OBJECT_BLOCKOUT', 16, 64)
         self._stuck_obj_validate_blockout = self._env_int('STUCK_OBJECT_VALIDATE_BLOCKOUT', 512, 1024)
+        self._alt_freeing_depth = self._env_int('ALT_FREEING_DEPTH', 512, 512 + 16)
         self._gather_statistics = self._env_bool("GATHER_STATISTICS", False)
         self._hvac_url = os.environ.get('HVAC_URL', None)
         self._hvac_token = os.environ.get('HVAC_TOKEN', None)
@@ -104,14 +103,13 @@ class Config(DBConfig):
         assert SolCommit.level(self._commit_level) >= SolCommit.level(SolCommit.Confirmed)
 
         assert (self._operator_fee > 0) and (self._operator_fee < 1)
-        assert (self._gas_price_suggested_pct >= 0) and (self._gas_price_suggested_pct < 1)
-        assert (self._extra_gas_pct >= 0) and (self._extra_gas_pct < 1)
+        assert (self._gas_price_slippage >= 0) and (self._gas_price_slippage < 1)
         assert (self._slot_processing_delay < 32)
         assert (self._fuzz_fail_pct >= 0) and (self._fuzz_fail_pct < 100)
 
         for acct in self._op_acct_set:
             pubkey = SolPubKey.from_string(acct)
-            assert pubkey.string() == acct, f'Invalid operator account {acct}'
+            assert str(pubkey) == acct, f'Invalid operator account {acct}'
 
     @staticmethod
     def _env_bool(name: str, default_value: bool) -> bool:
@@ -222,21 +220,17 @@ class Config(DBConfig):
         return self._allow_underpriced_tx_wo_chainid
 
     @property
-    def extra_gas_pct(self) -> Decimal:
-        return self._extra_gas_pct
-
-    @property
     def operator_fee(self) -> Decimal:
         return self._operator_fee
+
+    @property
+    def gas_price_slippage(self) -> Decimal:
+        return self._gas_price_slippage
 
     @property
     def slot_processing_delay(self) -> int:
         """Slot processing delay relative to the last confirmed slot on Tracer API node"""
         return self._slot_processing_delay
-
-    @property
-    def gas_price_suggested_pct(self) -> Decimal:
-        return self._gas_price_suggested_pct
 
     @property
     def min_gas_price(self) -> int:
@@ -259,10 +253,6 @@ class Config(DBConfig):
     @property
     def neon_price_usd(self) -> Decimal:
         return self._neon_price_usd
-
-    @property
-    def neon_decimals(self) -> int:
-        return self._neon_decimals
 
     @property
     def start_slot(self) -> str:
@@ -315,6 +305,10 @@ class Config(DBConfig):
     @property
     def stuck_object_validate_blockout(self) -> int:
         return self._stuck_obj_validate_blockout
+
+    @property
+    def alt_freeing_depth(self) -> int:
+        return self._alt_freeing_depth
 
     @property
     def operator_account_set(self) -> Set[str]:
@@ -373,16 +367,14 @@ class Config(DBConfig):
             'ENABLE_SEND_TX_API': self.enable_send_tx_api,
             'USE_EARLIEST_BLOCK_IF_0_PASSED': self.use_earliest_block_if_0_passed,
             'ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID': self.allow_underpriced_tx_wo_chainid,
-            'EXTRA_GAS_PCT': self.extra_gas_pct,
             'OPERATOR_FEE': self.operator_fee,
             'SLOT_PROCESSING_DELAY': self.slot_processing_delay,
-            'GAS_PRICE_SUGGEST_PCT': self.gas_price_suggested_pct,
+            'GAS_PRICE_SLIPPAGE': self.gas_price_slippage,
             'MINIMAL_GAS_PRICE': self.min_gas_price,
             'MINIMAL_WO_CHAINID_GAS_PRICE': self.min_wo_chainid_gas_price,
             'GAS_LESS_MAX_TX_NONCE': self.gas_less_tx_max_nonce,
             'GAS_LESS_MAX_GAS': self.gas_less_tx_max_gas,
             'NEON_PRICE_USD': self.neon_price_usd,
-            'NEON_DECIMALS': self.neon_decimals,
             'START_SLOT': self.start_slot,
             'INDEXER_PARALLEL_REQUEST_COUNT': self.indexer_parallel_request_cnt,
             'INDEXER_POLL_COUNT': self.indexer_poll_cnt,
@@ -396,6 +388,7 @@ class Config(DBConfig):
             'NEON_CLI_DEBUG_LOG': self.neon_cli_debug_log,
             'STUCK_OBJECT_BLOCKOUT': self.stuck_object_blockout,
             'STUCK_OBJECT_VALIDATE_BLOCKOUT': self.stuck_object_validate_blockout,
+            'ALT_FREEING_DEPTH': self.alt_freeing_depth,
             'OPERATOR_ACCOUNT_LIST': ';'.join(list(self.operator_account_set)),
             'GATHER_STATISTICS': self.gather_statistics,
 

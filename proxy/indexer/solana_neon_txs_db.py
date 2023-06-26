@@ -49,7 +49,7 @@ class SolNeonTxsDB(BaseDBTable):
                 ON b.block_slot = a.block_slot
                AND b.is_active = True
              WHERE a.neon_sig = %s
-          ORDER BY a.block_slot, a.neon_total_gas_used
+          ORDER BY a.block_slot, a.neon_total_gas_used, a.sol_sig
         '''
 
         row_list = self._db.fetch_all(request, (neon_sig,))
@@ -74,7 +74,7 @@ class SolNeonTxsDB(BaseDBTable):
                 ON b.block_slot = a.block_slot
                AND b.is_active = True
              WHERE a.neon_sig = %s
-          ORDER BY a.neon_total_gas_used
+          ORDER BY a.block_slot, a.neon_total_gas_used
         '''
 
         row_list = self._db.fetch_all(request, (neon_sig,))

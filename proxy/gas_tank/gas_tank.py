@@ -159,7 +159,7 @@ class GasTank(IndexerBase):
         tx_info = GasTankTxInfo.create_tx_info(
             sol_neon_ix.neon_tx_sig, holder.data, ix_code, key,
             sol_neon_ix.sol_tx_cost.operator,
-            sol_neon_ix.get_account(0), sol_neon_ix.iter_account(first_blocked_account)
+            sol_neon_ix.get_account(0), sol_neon_ix.iter_account_key(first_blocked_account)
         )
         if tx_info is None:
             return
@@ -206,7 +206,7 @@ class GasTank(IndexerBase):
                 sol_neon_ix.neon_tx_sig, sol_neon_ix.ix_data[13:],
                 EvmIxCode.TxStepFromAccountNoChainId, key,
                 sol_neon_ix.sol_tx_cost.operator,
-                sol_neon_ix.get_account(0), sol_neon_ix.iter_account(first_blocked_account)
+                sol_neon_ix.get_account(0), sol_neon_ix.iter_account_key(first_blocked_account)
             )
             if tx_info is None:
                 return

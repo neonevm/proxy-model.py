@@ -182,6 +182,21 @@
     CREATE UNIQUE INDEX IF NOT EXISTS idx_neon_transactions_neon_sig_block ON neon_transactions(neon_sig, block_slot);
     CREATE INDEX IF NOT EXISTS idx_neon_transactions_block_slot_tx_idx ON neon_transactions(block_slot, tx_idx);
 
+    CREATE TABLE IF NOT EXISTS solana_alt_transactions (
+        sol_sig TEXT,
+        block_slot BIGINT,
+        idx INT,
+        ix_code INT,
+        alt_address TEXT,
+        is_success BOOLEAN,
+
+        neon_sig TEXT
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_alt_transactions_sig_slot_idx ON solana_alt_transactions(sol_sig, block_slot, idx);
+    CREATE INDEX IF NOT EXISTS idx_solana_alt_transactions_neon_sig ON solana_alt_transactions(neon_sig, block_slot);
+    CREATE INDEX IF NOT EXISTS idx_solana_alt_transactions_slot ON solana_alt_transactions(block_slot);
+
     CREATE TABLE IF NOT EXISTS solana_transaction_costs (
         sol_sig TEXT,
         block_slot BIGINT,
@@ -211,3 +226,9 @@
         json_data_list TEXT
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_stuck_neon_transactions_block ON stuck_neon_transactions(is_finalized, block_slot);
+
+    CREATE TABLE IF NOT EXISTS solana_alt_infos (
+        block_slot BIGINT,
+        json_data_list TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_alt_infos_block ON solana_alt_infos(block_slot);

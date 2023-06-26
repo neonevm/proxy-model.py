@@ -7,17 +7,24 @@ from ..common_neon.solana_tx import SolTx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxSendState
 from ..common_neon.utils import NeonTxResultInfo
+from ..common_neon.neon_instruction import EvmIxCodeName, EvmIxCode
 
-from ..mempool.neon_tx_send_base_strategy import BaseNeonTxStrategy
-from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
+from .neon_tx_sender_ctx import NeonTxSendCtx
+from .neon_tx_send_base_strategy import BaseNeonTxStrategy
+from .neon_tx_send_strategy_alt_stage import alt_strategy
+from .neon_tx_send_strategy_newaccount_stage import NewAccountNeonTxPrepStage
 
 
 LOG = logging.getLogger(__name__)
 
 
 class IterativeNeonTxStrategy(BaseNeonTxStrategy):
-    name = 'TxStepFromData'
-    _cancel_name = 'CancelWithHash'
+    name = EvmIxCodeName().get(EvmIxCode.TxStepFromData)
+    _cancel_name = EvmIxCodeName().get(EvmIxCode.CancelWithHash)
+
+    def __init__(self, ctx: NeonTxSendCtx) -> None:
+        super().__init__(ctx)
+        self._prep_stage_list.append(NewAccountNeonTxPrepStage(ctx))
 
     def complete_init(self) -> None:
         super().complete_init()

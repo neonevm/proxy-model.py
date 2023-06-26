@@ -72,7 +72,7 @@ class MemPool:
 
         self._op_res_get_list_task_loop = MPOpResGetListTaskLoop(executor_mng, self._op_res_mng)
         self._op_res_init_task_loop = MPInitOpResTaskLoop(executor_mng, self._op_res_mng, self._stuck_tx_dict)
-        self._free_alt_queue_task_loop = MPFreeALTQueueTaskLoop(executor_mng, self._op_res_mng)
+        self._free_alt_queue_task_loop = MPFreeALTQueueTaskLoop(config, executor_mng, self._op_res_mng)
         self._stuck_list_task_loop = MPStuckTxListLoop(executor_mng, self._stuck_tx_dict)
 
         self._process_tx_result_task_loop = asyncio.get_event_loop().create_task(self._process_tx_result_loop())
@@ -222,7 +222,7 @@ class MemPool:
     def _acquire_scheduled_tx(self, tx: Optional[MPTxRequest] = None) -> Tuple[NeonTxBeginCode, Optional[MPTxExecRequest]]:
         if tx is None:
             tx = self._tx_schedule.peek_top_tx()
-            if (tx is None) or (tx.gas_price < self._gas_price.min_gas_price):
+            if (tx is None) or (tx.gas_price < self._gas_price.min_executable_gas_price):
                 return NeonTxBeginCode.Failed, None
 
             tx = self._attach_resource_to_tx(tx)

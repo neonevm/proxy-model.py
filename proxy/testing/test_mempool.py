@@ -172,10 +172,18 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
 
         price_result = MPGasPriceResult(
             suggested_gas_price=1,
-            min_gas_price=1,
+            min_executable_gas_price=1,
+            min_acceptable_gas_price=1,
             last_update_mapping_sec=0,
+            sol_price_usd=1000,
+            neon_price_usd=25,
             sol_price_account=SolPubKey.new_unique(),
-            neon_price_account=SolPubKey.new_unique()
+            neon_price_account=SolPubKey.new_unique(),
+            gas_price_slippage=1,
+            operator_fee=10,
+            accept_reverted_tx_into_mempool=True,
+            allow_underpriced_tx_wo_chainid=True,
+            min_wo_chainid_acceptable_gas_price=1
         )
         task = MPTask(1, MockTask(result=None, is_done=False), MPRequest('1'))
         self._mempool._gas_price_task_loop._task = task

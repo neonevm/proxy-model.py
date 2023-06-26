@@ -1,11 +1,12 @@
 from ..common_neon.solana_tx_legacy import SolLegacyTx
+from ..common_neon.neon_instruction import EvmIxCodeName, EvmIxCode
 
-from ..mempool.neon_tx_send_holder_strategy import HolderNeonTxStrategy
-from ..mempool.neon_tx_send_strategy_base_stages import alt_strategy
+from .neon_tx_send_holder_strategy import HolderNeonTxStrategy
+from .neon_tx_send_strategy_alt_stage import alt_strategy
 
 
 class NoChainIdNeonTxStrategy(HolderNeonTxStrategy):
-    name = 'TxStepFromAccountNoChainId'
+    name = EvmIxCodeName().get(EvmIxCode.TxStepFromAccountNoChainId)
 
     def _validate(self) -> bool:
         if self._ctx.neon_tx_info.has_chain_id():

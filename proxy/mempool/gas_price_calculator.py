@@ -94,7 +94,7 @@ class GasPriceCalculator:
                 raise RuntimeError('SOL price status is not tradable')
             self._sol_price_usd = Decimal(sol_price['price'])
 
-            return (self._sol_price_usd / self._neon_price_usd) * pow(Decimal(10), 9)
+            return round((self._sol_price_usd / self._neon_price_usd) * pow(Decimal(10), 9))
         except BaseException as exc:
             LOG.error('Failed to retrieve SOL price.', exc_info=exc)
             return None
@@ -105,7 +105,7 @@ class GasPriceCalculator:
 
     @property
     def gas_price_suggested_pct(self) -> Decimal:
-        return self._config.operator_fee + self._config.gas_price_suggested_pct
+        return self._config.operator_fee + self._config.gas_price_slippage
 
     @property
     def sol_price_account(self) -> Optional[SolPubKey]:

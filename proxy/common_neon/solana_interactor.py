@@ -229,7 +229,7 @@ class SolInteractor:
 
         raw_account = result.get('result', dict()).get('value', None)
         if raw_account is None:
-            LOG.debug(f"Can't get information about {str(pubkey)}")
+            # LOG.debug(f"Can't get information about {str(pubkey)}")
             return None
 
         return self._decode_account_info(pubkey, raw_account)

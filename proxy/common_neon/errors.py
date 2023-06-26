@@ -74,6 +74,15 @@ class ALTContentError(RescheduleError):
         return f'ALT {self._alt_table}: {self._msg}'
 
 
+class SenderAccountNotExists(RescheduleError):
+    def __init__(self, sender_addr: str):
+        super().__init__(sender_addr)
+        self._sender_addr = sender_addr
+
+    def __str__(self) -> str:
+        return f'Sender account {self._sender_addr} is not exist yet'
+
+
 class BlockedAccountError(RescheduleError):
     pass
 

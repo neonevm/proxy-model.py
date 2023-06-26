@@ -52,6 +52,28 @@ class EvmIxCodeName:
         return value
 
 
+class AltIxCode(IntEnum):
+    Create = 0
+    Freeze = 1
+    Extend = 2
+    Deactivate = 3
+    Close = 4
+
+
+@singleton
+class AltIxCodeName:
+    def __init__(self):
+        self._ix_code_dict: Dict[int, str] = dict()
+        for ix_code in list(AltIxCode):
+            self._ix_code_dict[ix_code.value] = str_enum(ix_code)
+
+    def get(self, ix_code: int, default=None) -> str:
+        value = self._ix_code_dict.get(ix_code, default)
+        if value is None:
+            return hex(ix_code)
+        return value
+
+
 def create_account_layout(ether):
     return (
         EvmIxCode.CreateAccountV03.value.to_bytes(1, byteorder='little') +
@@ -273,7 +295,7 @@ class NeonIxBuilder:
                                     recent_block_slot: int,
                                     seed: int) -> SolTxIx:
         data = b''.join([
-            int(0).to_bytes(4, byteorder='little'),
+            int(AltIxCode.Create).to_bytes(4, byteorder='little'),
             recent_block_slot.to_bytes(8, byteorder='little'),
             seed.to_bytes(1, byteorder='little')
         ])
@@ -292,7 +314,7 @@ class NeonIxBuilder:
                                     account_list: List[SolPubKey]) -> SolTxIx:
         data = b"".join(
             [
-                int(2).to_bytes(4, byteorder='little'),
+                int(AltIxCode.Extend).to_bytes(4, byteorder='little'),
                 len(account_list).to_bytes(8, byteorder='little')
             ] +
             [bytes(pubkey) for pubkey in account_list]
@@ -310,7 +332,7 @@ class NeonIxBuilder:
         )
 
     def make_deactivate_lookup_table_ix(self, table_account: SolPubKey) -> SolTxIx:
-        data = int(3).to_bytes(4, byteorder='little')
+        data = int(AltIxCode.Deactivate).to_bytes(4, byteorder='little')
         return SolTxIx(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,
@@ -321,7 +343,7 @@ class NeonIxBuilder:
         )
 
     def make_close_lookup_table_ix(self, table_account: SolPubKey) -> SolTxIx:
-        data = int(4).to_bytes(4, byteorder='little')
+        data = int(AltIxCode.Close).to_bytes(4, byteorder='little')
         return SolTxIx(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
             data=data,

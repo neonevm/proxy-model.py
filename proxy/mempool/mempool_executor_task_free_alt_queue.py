@@ -1,36 +1,44 @@
 import logging
 from typing import List, Optional, Callable, Dict, cast
 
-from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
-from ..common_neon.layouts import ACCOUNT_LOOKUP_TABLE_LAYOUT, ALTAccountInfo, AccountInfo
-from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.solana_tx import SolAccount, SolPubKey, SolTxIx, SolTx, SolCommit
-from ..common_neon.solana_tx_legacy import SolLegacyTx
-from ..common_neon.solana_tx_list_sender import SolTxListSender
-from ..common_neon.errors import RescheduleError
-
 from .mempool_api import MPALTListResult
 from .mempool_api import MPGetALTList, MPALTInfo, MPDeactivateALTListRequest, MPCloseALTListRequest
 from .mempool_executor_task_base import MPExecutorBaseTask
 
+from ..common_neon.config import Config
+from ..common_neon.db.db_connect import DBConnection
+from ..common_neon.errors import RescheduleError
+from ..common_neon.layouts import ACCOUNT_LOOKUP_TABLE_LAYOUT, ALTAccountInfo
+from ..common_neon.neon_instruction import NeonIxBuilder
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_tx import SolAccount, SolPubKey, SolTxIx, SolTx, SolCommit
+from ..common_neon.solana_tx_legacy import SolLegacyTx
+from ..common_neon.solana_tx_list_sender import SolTxListSender
+
+from ..indexer.indexed_objects import NeonIndexedAltInfo
+from ..indexer.solana_alt_infos_db import SolAltInfosDB
 
 LOG = logging.getLogger(__name__)
 
 
 class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._auth_offset = 0
-        for sc in ACCOUNT_LOOKUP_TABLE_LAYOUT.subcons:
-            if sc.name == 'authority':
-                break
-            self._auth_offset += sc.sizeof()
+    def __init__(self, config: Config, solana: SolInteractor):
+        super().__init__(config, solana)
+        db = DBConnection(config)
+        self._alt_infos_db = SolAltInfosDB(db)
 
     def _get_block_height(self) -> int:
         return self._solana.get_block_height(commitment=SolCommit.Finalized)
 
-    def _decode_alt_info(self, account_info: Optional[AccountInfo], secret: bytes) -> Optional[MPALTInfo]:
+    def _decode_alt_info(self, alt_table_acct: str,
+                         secret: Optional[bytes],
+                         secret_dict: Dict[SolPubKey, bytes]) -> Optional[MPALTInfo]:
         try:
+            account_info = self._solana.get_account_info(
+                SolPubKey.from_string(alt_table_acct),
+                length=ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof(),
+                commitment=SolCommit.Finalized
+            )
             if account_info is None:
                 return None
 
@@ -43,6 +51,17 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
                 ),
                 commitment=SolCommit.Finalized
             )
+
+            if alt_info.authority is None:
+                LOG.warning(f'ALT table {str(alt_info.table_account)} is frozen')
+                return None
+
+            if secret is None:
+                secret = secret_dict.get(alt_info.authority, None)
+
+            if secret is None:
+                LOG.warning(f'ALT table {str(alt_info.table_account)} has unknown owner')
+                return None
 
             mp_alt_info = MPALTInfo(
                 last_extended_slot=alt_info.last_extended_slot,
@@ -60,36 +79,29 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
     def get_alt_list(self, mp_req: MPGetALTList) -> MPALTListResult:
         mp_alt_info_dict: Dict[str, MPALTInfo] = dict()
 
-        for alt_address in mp_req.alt_address_list:
-            account_info = self._solana.get_account_info(
-                SolPubKey.from_string(alt_address.table_account),
-                length=ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof(),
-                commitment=SolCommit.Finalized
-            )
+        secret_dict: Dict[SolPubKey, bytes] = dict()
+        for secret in mp_req.secret_list:
+            op_acct = SolAccount.from_seed(secret)
+            secret_dict[op_acct.pubkey()] = secret
 
-            mp_alt_info = self._decode_alt_info(account_info, alt_address.secret)
+        for alt_address in mp_req.alt_address_list:
+            mp_alt_info = self._decode_alt_info(alt_address.table_account, alt_address.secret, secret_dict)
             if mp_alt_info is not None:
                 mp_alt_info_dict[alt_address.table_account] = mp_alt_info
 
-        for secret in mp_req.secret_list:
-            operator_account = SolAccount.from_seed(secret)
+        block_slot = self._solana.get_block_slot(SolCommit.Confirmed)
+        _, alt_dict_list = self._alt_infos_db.get_alt_list(block_slot)
 
-            account_info_list = self._solana.get_program_account_info_list(
-                program=ADDRESS_LOOKUP_TABLE_ID,
-                offset=0,
-                length=ACCOUNT_LOOKUP_TABLE_LAYOUT.sizeof(),
-                data_offset=self._auth_offset,
-                data=bytes(operator_account.pubkey()),
-                commitment=SolCommit.Finalized
-            )
+        for alt_dict in alt_dict_list:
+            alt_info = NeonIndexedAltInfo.from_dict(alt_dict)
+            if not alt_info.is_stuck:
+                continue
+            elif alt_info.alt_key in mp_alt_info_dict:
+                continue
 
-            for account_info in account_info_list:
-                if str(account_info.address) in mp_alt_info_dict:
-                    continue
-
-                mp_alt_info = self._decode_alt_info(account_info, secret)
-                if mp_alt_info is not None:
-                    mp_alt_info_dict[mp_alt_info.table_account] = mp_alt_info
+            mp_alt_info = self._decode_alt_info(alt_info.alt_key, None, secret_dict)
+            if mp_alt_info is not None:
+                mp_alt_info_dict[alt_info.alt_key] = mp_alt_info
 
         block_height = self._get_block_height()
         return MPALTListResult(block_height=block_height, alt_info_list=list(mp_alt_info_dict.values()))
@@ -117,13 +129,15 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
         block_height: Optional[int] = None
 
         for alt_info in alt_info_list:
-            operator_key = alt_info.operator_key
+            if not self._decode_alt_info(alt_info.table_account, b'hello', dict()):
+                continue
 
-            if (signer is not None) and (signer.secret() != operator_key):
+            op_key = alt_info.operator_key
+            if (signer is not None) and (signer.secret() != op_key):
                 _send_tx_list()
 
             if len(tx_list) == 0:
-                signer = SolAccount.from_seed(operator_key)
+                signer = SolAccount.from_seed(op_key)
                 ix_builder = NeonIxBuilder(self._config, signer.pubkey())
                 block_height = self._get_block_height()
 

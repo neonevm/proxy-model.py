@@ -301,8 +301,19 @@ class MPTxSendResult:
 
 @dataclass(frozen=True)
 class MPGasPriceResult:
+    sol_price_usd: int
+    neon_price_usd: int
+    operator_fee: int
+    gas_price_slippage: int
+
     suggested_gas_price: int
-    min_gas_price: int
+    min_acceptable_gas_price: int
+    min_executable_gas_price: int
+
+    min_wo_chainid_acceptable_gas_price: int
+    allow_underpriced_tx_wo_chainid: bool
+    accept_reverted_tx_into_mempool: bool
+
     last_update_mapping_sec: int
     sol_price_account: SolPubKey
     neon_price_account: SolPubKey

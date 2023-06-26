@@ -56,16 +56,19 @@ class SolTxMetaInfo:
     _ix_list: Optional[List[Dict[str, Any]]]
     _inner_ix_list: Optional[List[Dict[str, Any]]]
     _account_key_list: Optional[List[str]]
+    _alt_key_list: Optional[List[str]]
     _signer: str
 
     _str: str
     _req_id: str
 
     @staticmethod
-    def from_tx_receipt(block_slot: int, tx_receipt: Dict[str, Any]) -> SolTxMetaInfo:
+    def from_tx_receipt(block_slot: Optional[int], tx_receipt: Dict[str, Any]) -> SolTxMetaInfo:
+        if block_slot is None:
+            block_slot = tx_receipt['slot']
         sol_sig = tx_receipt['transaction']['signatures'][0]
         sol_sig_slot = SolTxSigSlotInfo(sol_sig=sol_sig, block_slot=block_slot)
-        return SolTxMetaInfo(sol_sig_slot, block_slot, sol_sig, tx_receipt, None, None, None, '', '', '')
+        return SolTxMetaInfo(sol_sig_slot, block_slot, sol_sig, tx_receipt, None, None, None, None, '', '', '')
 
     def __str__(self) -> str:
         if not len(self._str):
@@ -108,6 +111,20 @@ class SolTxMetaInfo:
 
         object.__setattr__(self, '_account_key_list', account_key_list)
         return account_key_list
+
+    @property
+    def alt_key_list(self) -> List[str]:
+        if self._alt_key_list is not None:
+            return self._alt_key_list
+
+        msg = self.tx['transaction']['message']
+        alt_key_list: List[str] = list()
+        alt_info_list: List[Dict[str, Any]] = msg.get('addressTableLookups', list())
+        for alt_info in alt_info_list:
+            alt_key_list.append(alt_info.get('accountKey'))
+
+        object.__setattr__(self, '_alt_key_list', alt_key_list)
+        return alt_key_list
 
     @property
     def signer(self) -> str:
@@ -335,7 +352,7 @@ class ComputeBudgetInfo:
 
 
 @dataclass(frozen=True)
-class SolIxMetaInfo:
+class SolNeonIxMetaInfo:
     class Status(Enum):
         Unknown = 0
         Success = 1
@@ -366,7 +383,7 @@ class SolIxMetaInfo:
     @staticmethod
     def from_log_state(ix: Dict[str, Any], idx: int,
                        inner_idx: Optional[int],
-                       log_state: SolIxLogState) -> SolIxMetaInfo:
+                       log_state: SolIxLogState) -> SolNeonIxMetaInfo:
         log_info = decode_log_list(log_state.iter_str_log_msg())
 
         neon_tx_sig = ''
@@ -379,13 +396,13 @@ class SolIxMetaInfo:
             neon_ix_gas_usage = log_info.neon_tx_ix.gas_used
             neon_ix_total_gas_usage = log_info.neon_tx_ix.total_gas_used
 
-        status = SolIxMetaInfo.Status.Unknown
+        status = SolNeonIxMetaInfo.Status.Unknown
         if log_state.status == SolIxLogState.Status.Failed:
-            status = SolIxMetaInfo.Status.Failed
+            status = SolNeonIxMetaInfo.Status.Failed
         elif log_state.status == SolIxLogState.Status.Success:
-            status = SolIxMetaInfo.Status.Success
+            status = SolNeonIxMetaInfo.Status.Success
 
-        return SolIxMetaInfo(
+        return SolNeonIxMetaInfo(
             ix=ix,
             idx=idx,
             inner_idx=inner_idx,
@@ -437,6 +454,46 @@ class SolTxCostInfo:
 
 
 @dataclass(frozen=True)
+class SolAltIxInfo:
+    block_slot: int
+    sol_sig: str
+    idx: int
+    is_success: bool
+    ix_code: int
+    alt_address: str
+
+    neon_tx_sig: str
+
+    sol_tx_cost: SolTxCostInfo
+
+    _str: str = ''
+
+    @staticmethod
+    def from_tx_meta(tx_meta: SolTxMetaInfo,
+                     idx: int, ix_code: int,
+                     alt_address: str,
+                     neon_tx_sig: str) -> SolAltIxInfo:
+        is_success = tx_meta.tx.get('meta').get('err', None) is None
+
+        return SolAltIxInfo(
+            block_slot=tx_meta.block_slot,
+            sol_sig=tx_meta.sol_sig,
+            idx=idx,
+            is_success=is_success,
+            ix_code=ix_code,
+            alt_address=alt_address,
+            neon_tx_sig=neon_tx_sig,
+            sol_tx_cost=SolTxCostInfo.from_tx_meta(tx_meta)
+        )
+
+    def __str__(self) -> str:
+        if self._str == '':
+            _str = str_fmt_object(self)
+            object.__setattr__(self, '_str', _str)
+        return self._str
+
+
+@dataclass(frozen=True)
 class SolNeonIxReceiptShortInfo:
     sol_sig: str
     block_slot: int
@@ -460,7 +517,7 @@ class _SolIxData:
 
 
 @dataclass(frozen=True)
-class SolNeonIxReceiptInfo(SolIxMetaInfo):
+class SolNeonIxReceiptInfo(SolNeonIxMetaInfo):
     sol_sig: str
     block_slot: int
 
@@ -478,12 +535,13 @@ class SolNeonIxReceiptInfo(SolIxMetaInfo):
     _req_id: str
     _account_list: List[int]
     _account_key_list: List[str]
+    _alt_key_list: List[str]
 
     @staticmethod
     def from_ix(tx_meta: SolTxMetaInfo,
                 tx_cost: SolTxCostInfo,
                 compute_budget: ComputeBudgetInfo,
-                ix_meta: SolIxMetaInfo) -> SolNeonIxReceiptInfo:
+                ix_meta: SolNeonIxMetaInfo) -> SolNeonIxReceiptInfo:
         account_list = ix_meta.ix['accounts']
 
         if ix_meta.inner_idx is None:
@@ -538,6 +596,7 @@ class SolNeonIxReceiptInfo(SolIxMetaInfo):
             _req_id='',
             _account_list=account_list,
             _account_key_list=tx_meta.account_key_list,
+            _alt_key_list=tx_meta.alt_key_list
         )
 
     def __str__(self) -> str:
@@ -584,9 +643,12 @@ class SolNeonIxReceiptInfo(SolIxMetaInfo):
                 return self._account_key_list[key_idx]
         return ''
 
-    def iter_account(self, start_idx: int) -> Generator[str, None, None]:
+    def iter_account_key(self, start_idx: int) -> Generator[str, None, None]:
         for idx in self._account_list[start_idx:]:
             yield self._account_key_list[idx]
+
+    def iter_alt_key(self) -> Iterator[str]:
+        return iter(self._alt_key_list)
 
 
 @dataclass(frozen=True)
@@ -611,6 +673,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
             _ix_list=None,
             _inner_ix_list=None,
             _account_key_list=None,
+            _alt_key_list=None,
             _str='',
             _req_id='',
             _signer='',
@@ -717,7 +780,7 @@ class SolTxReceiptInfo(SolTxMetaInfo):
             if self.is_program(ix, evm_program_id) and self._has_ix_data(ix):
                 log_state = self.get_log_state(ix_idx, None)
                 if log_state is not None:
-                    ix_meta = SolIxMetaInfo.from_log_state(ix, ix_idx, None, log_state)
+                    ix_meta = SolNeonIxMetaInfo.from_log_state(ix, ix_idx, None, log_state)
                     yield SolNeonIxReceiptInfo.from_ix(self, self.sol_tx_cost, self.compute_budget, ix_meta)
 
             inner_ix_list = self._get_inner_ix_list(ix_idx)
@@ -725,5 +788,5 @@ class SolTxReceiptInfo(SolTxMetaInfo):
                 if self.is_program(inner_ix, evm_program_id) and self._has_ix_data(inner_ix):
                     log_state = self.get_log_state(ix_idx, inner_idx)
                     if log_state is not None:
-                        ix_meta = SolIxMetaInfo.from_log_state(inner_ix, ix_idx, inner_idx, log_state)
+                        ix_meta = SolNeonIxMetaInfo.from_log_state(inner_ix, ix_idx, inner_idx, log_state)
                         yield SolNeonIxReceiptInfo.from_ix(self, self.sol_tx_cost, self.compute_budget, ix_meta)

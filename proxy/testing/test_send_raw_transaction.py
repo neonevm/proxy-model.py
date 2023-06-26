@@ -27,8 +27,8 @@ class TestDistributorContract(unittest.TestCase):
         tx_built["value"] = 12
         distribute_fn_msg = signer.sign_transaction(tx_built)
         tx_hash = self.proxy.conn.send_raw_transaction(distribute_fn_msg.rawTransaction)
-        print(f"Send `distribute_value_fn()` tx with nonce: {nonce}, tx_hash: {tx_hash}")
-        print(f"Wait for `distribute_value_fn` receipt by hash: {tx_hash.hex()}")
+        print(f"Send `distribute_value_fn()` tx with nonce: {nonce}, tx_hash: 0x{tx_hash.hex()}")
+        print(f"Wait for `distribute_value_fn` receipt by hash: 0x{tx_hash.hex()}")
         tx_receipt = self.proxy.conn.wait_for_transaction_receipt(
             tx_hash,
             timeout=self.WAITING_DISTRIBUTE_RECEIPT_TIMEOUT_SEC

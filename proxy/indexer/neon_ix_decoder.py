@@ -338,7 +338,7 @@ class BaseTxStepIxDecoder(BaseTxIxDecoder):
             self._decoding_skip(f'no enough SolIx.Accounts(len={ix.account_cnt}) to get NeonTx.BlockedAccounts')
             return None
 
-        return ix.iter_account(self._first_blocked_account_idx)
+        return ix.iter_account_key(self._first_blocked_account_idx)
 
     def decode_failed_neon_tx_event_list(self) -> None:
         ix = self.state.sol_neon_ix

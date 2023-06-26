@@ -4,7 +4,7 @@ from ..common_neon.utils import NeonTxReceiptInfo, SolBlockInfo
 from ..common_neon.db.db_connect import DBConnection
 from ..common_neon.db.sql_dict import SQLDict
 from ..common_neon.config import Config
-from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptShortInfo, SolTxCostInfo
+from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptShortInfo, SolTxCostInfo, SolAltIxInfo
 
 from .indexed_objects import NeonIndexedBlockInfo
 from .neon_tx_logs_db import NeonTxLogsDB
@@ -14,6 +14,8 @@ from .solana_neon_txs_db import SolNeonTxsDB
 from .solana_tx_costs_db import SolTxCostsDB
 from .stuck_neon_holders_db import StuckNeonHoldersDB
 from .stuck_neon_txs_db import StuckNeonTxsDB
+from .solana_alt_infos_db import SolAltInfosDB
+from .solana_alt_txs_db import SolAltTxsDB
 
 
 class IndexerDB:
@@ -23,9 +25,11 @@ class IndexerDB:
         self._sol_tx_costs_db = SolTxCostsDB(self._db)
         self._neon_txs_db = NeonTxsDB(self._db)
         self._sol_neon_txs_db = SolNeonTxsDB(self._db)
+        self._sol_alt_txs_db = SolAltTxsDB(self._db)
         self._neon_tx_logs_db = NeonTxLogsDB(self._db)
         self._stuck_neon_holders_db = StuckNeonHoldersDB(self._db)
         self._stuck_neon_txs_db = StuckNeonTxsDB(self._db)
+        self._sol_alt_infos_db = SolAltInfosDB(self._db)
 
         self._db_table_list = [
             self._sol_blocks_db,
@@ -75,6 +79,7 @@ class IndexerDB:
         self._neon_txs_db.set_tx_list(neon_block.iter_done_neon_tx())
         self._neon_tx_logs_db.set_tx_list(neon_block.iter_done_neon_tx())
         self._sol_neon_txs_db.set_tx_list(neon_block.iter_sol_neon_ix())
+        self._sol_alt_txs_db.set_tx_list(neon_block.iter_sol_alt_ix())
         self._sol_tx_costs_db.set_cost_list(neon_block.iter_sol_tx_cost())
 
         if self.get_starting_block().block_slot == 0:
@@ -87,6 +92,7 @@ class IndexerDB:
 
         self._stuck_neon_holders_db.set_holder_list(neon_block.stuck_block_slot, neon_block.iter_stuck_neon_holder())
         self._stuck_neon_txs_db.set_tx_list(True, neon_block.stuck_block_slot, neon_block.iter_stuck_neon_tx())
+        self._sol_alt_infos_db.set_alt_list(neon_block.stuck_block_slot, neon_block.iter_alt_info())
 
         self._finalized_block_slot = neon_block.block_slot
         self._constants_db['finalized_block_slot'] = neon_block.block_slot
@@ -172,6 +178,9 @@ class IndexerDB:
     def get_sol_ix_info_list_by_neon_sig(self, neon_sig: str) -> List[SolNeonIxReceiptShortInfo]:
         return self._sol_neon_txs_db.get_sol_ix_info_list_by_neon_sig(neon_sig)
 
+    def get_sol_alt_tx_list_by_neon_sig(self, neon_sig: str) -> List[SolAltIxInfo]:
+        return self._sol_alt_txs_db.get_alt_ix_list_by_neon_sig(neon_sig)
+
     def get_cost_list_by_sol_sig_list(self, sol_sig_list: List[str]) -> List[SolTxCostInfo]:
         return self._sol_tx_costs_db.get_cost_list_by_sol_sig_list(sol_sig_list)
 
@@ -180,3 +189,6 @@ class IndexerDB:
 
     def get_stuck_neon_tx_list(self, is_finalized: bool, block_slot: int) -> Tuple[Optional[int], List[Dict[str, Any]]]:
         return self._stuck_neon_txs_db.get_tx_list(is_finalized, block_slot)
+
+    def get_sol_alt_info_list(self, block_slot: int) -> Tuple[Optional[int], List[Dict[str, Any]]]:
+        return self._sol_alt_infos_db.get_alt_list(block_slot)

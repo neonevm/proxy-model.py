@@ -193,9 +193,6 @@ class GasEstimate:
         alt_cost = self._alt_cost()
 
         gas = execution_cost + tx_size_cost + overhead_cost + alt_cost
-        extra_gas_pct = self._config.extra_gas_pct
-        if extra_gas_pct > 0:
-            gas = math.ceil(gas * (1 + extra_gas_pct))
         if gas < 21000:
             gas = 21000
 
@@ -204,7 +201,6 @@ class GasEstimate:
             f'tx_size_cost: {tx_size_cost}, '
             f'iterative_overhead_cost: {overhead_cost}, '
             f'alt_cost: {alt_cost}, '
-            f'extra_gas_pct: {extra_gas_pct}, '
             f'estimated gas: {gas}'
         )
 
