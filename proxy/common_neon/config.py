@@ -102,7 +102,7 @@ class Config(DBConfig):
         self._commit_level = SolCommit.Type(self._commit_level.lower())
         assert SolCommit.level(self._commit_level) >= SolCommit.level(SolCommit.Confirmed)
 
-        assert (self._operator_fee > 0) and (self._operator_fee < 1)
+        assert (self._operator_fee > 0) and (self._operator_fee <= 1)
         assert (self._gas_price_slippage >= 0) and (self._gas_price_slippage < 1)
         assert (self._slot_processing_delay < 32)
         assert (self._fuzz_fail_pct >= 0) and (self._fuzz_fail_pct < 100)
