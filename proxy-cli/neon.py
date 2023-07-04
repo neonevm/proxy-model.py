@@ -139,7 +139,7 @@ class NeonHandler:
 
             amount = amount * 1_000_000_000 * 1_000_000_000
         elif a_type == 'PERCENT':
-            amount = total_balance * 100 / amount
+            amount = math.floor(total_balance * amount / 100)
 
         total_amount = 0
         for neon_addr, balance in neon_acct_dict.items():
