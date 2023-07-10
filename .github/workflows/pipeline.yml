@@ -101,7 +101,7 @@ jobs:
           --head_ref_branch=${{ github.head_ref }}
       - name: Dump docker logs
         if: always()
-        run: python3 ./.github/workflows/deploy.py dump_apps_logs
+        run: python3 ./.github/workflows/deploy.py dump_apps_logs --proxy_tag=${{ needs.build-image.outputs.proxy_tag }}
       - uses: actions/upload-artifact@v3
         if: always()
         with:
@@ -109,7 +109,7 @@ jobs:
           path: ./*.log
       - name: Stop containers
         if: always()
-        run: python3 ./.github/workflows/deploy.py stop_containers
+        run: python3 ./.github/workflows/deploy.py stop_containers --proxy_tag=${{ needs.build-image.outputs.proxy_tag }}
 
   prepare-infrastructure:
     needs:

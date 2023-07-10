@@ -45,7 +45,7 @@ TFSTATE_KEY_PREFIX = "tests/test-"
 TFSTATE_REGION = "us-east-2"
 IMAGE_NAME = "neonlabsorg/proxy"
 
-UNISWAP_V2_CORE_COMMIT = 'stable'
+UNISWAP_V2_CORE_COMMIT = 'latest'
 UNISWAP_V2_CORE_IMAGE = f'neonlabsorg/uniswap-v2-core:{UNISWAP_V2_CORE_COMMIT}'
 
 FAUCET_COMMIT = 'latest'
@@ -272,21 +272,22 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
     if head_ref_branch is not None:
         neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
 
+
     os.environ["REVISION"] = proxy_tag
     os.environ["NEON_EVM_COMMIT"] = neon_evm_tag
     os.environ["FAUCET_COMMIT"] = FAUCET_COMMIT
-
-    cleanup_docker()
+    project_name = proxy_tag
+    cleanup_docker(project_name)
 
     if not skip_pull:
         click.echo('pull docker images...')
-        out = docker_compose(f"-f docker-compose/docker-compose-test.yml pull")
+        out = docker_compose(f"-p {project_name} -f docker-compose/docker-compose-ci.yml pull")
         click.echo(out)
     else:
         click.echo('skip pulling of docker images')
 
     try:
-        docker_compose(f"-f docker-compose/docker-compose-test.yml up -d")
+        docker_compose(f"-p {project_name} -f docker-compose/docker-compose-ci.yml up -d")
     except:
         raise RuntimeError("Docker-compose failed to start")
 
@@ -295,48 +296,48 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
     click.echo(f"Running containers: {containers}")
 
     for service_name in ['SOLANA', 'PROXY', 'FAUCET']:
-        wait_for_service(service_name)
+        wait_for_service(project_name, service_name)
 
     if not skip_uniswap:
-        run_uniswap_test()
+        run_uniswap_test(project_name)
 
     if test_files is None:
-        test_list = get_test_list()
+        test_list = get_test_list(project_name)
     else:
         test_list = test_files.split(',')
 
-    prepare_run_test()
+    prepare_run_test(project_name)
 
     errors_count = 0
     for file in test_list:
-        errors_count += run_test(file)
+        errors_count += run_test(project_name, file)
 
     if errors_count > 0:
         raise RuntimeError(f"Tests failed! Errors count: {errors_count}")
 
 
-def get_test_list():
+def get_test_list(project_name):
     inst = docker_client.exec_create(
-        "proxy", 'find . -type f -name "test_*.py" -printf "%f\n"')
+        f"{project_name}_proxy_1", 'find . -type f -name "test_*.py" -printf "%f\n"')
     out = docker_client.exec_start(inst['Id'])
     test_list = out.decode('utf-8').strip().split('\n')
     return test_list
 
 
-def prepare_run_test():
+def prepare_run_test(project_name):
     inst = docker_client.exec_create(
-        "proxy", './proxy/prepare-deploy-test.sh')
+        f"{project_name}_proxy_1", './proxy/prepare-deploy-test.sh')
     out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
     test_logs = test_logs.decode('utf-8')
     click.echo(out)
     click.echo(test_logs)
 
 
-def run_test(file_name):
+def run_test(project_name, file_name):
     click.echo(f"Running {file_name} tests")
     env = {"SKIP_PREPARE_DEPLOY_TEST": "YES", "TESTNAME": file_name}
     inst = docker_client.exec_create(
-        "proxy", './proxy/deploy-test.sh', environment=env)
+        f"{project_name}_proxy_1", './proxy/deploy-test.sh', environment=env)
     out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
     test_logs = test_logs.decode('utf-8')
     click.echo(out)
@@ -349,8 +350,9 @@ def run_test(file_name):
 
 
 @cli.command(name="dump_apps_logs")
-def dump_apps_logs():
-    for container in CONTAINERS:
+@click.option('--proxy_tag', help="the neonlabsorg/proxy image tag")
+def dump_apps_logs(proxy_tag):
+    for container in [f"{proxy_tag}_{item}_1" for item in CONTAINERS]:
         dump_docker_logs(container)
 
 
@@ -364,20 +366,16 @@ def dump_docker_logs(container):
 
 
 @cli.command(name="stop_containers")
-def stop_containers():
-    cleanup_docker()
+@click.option('--proxy_tag', help="the neonlabsorg/proxy image tag")
+def stop_containers(proxy_tag):
+    cleanup_docker(proxy_tag)
 
 
-def cleanup_docker():
+def cleanup_docker(project_name):
     click.echo(f"Cleanup docker-compose...")
 
-    docker_compose("-f docker-compose/docker-compose-test.yml down -t 1")
+    docker_compose(f"-p {project_name} -f docker-compose/docker-compose-ci.yml down -t 1")
     click.echo(f"Cleanup docker-compose done.")
-
-    click.echo(f"Cleanup old docker containers...")
-    command = "sudo docker ps -a | awk '/Created|Exited/{s=\"sudo docker rm \" $(NF); print(s); system(s)}'"
-    subprocess.run(command, shell=True)
-    click.echo(f"Cleanup old docker containers done.")
 
     click.echo(f"Removing temporary data volumes...")
     command = "docker volume prune -f"
@@ -385,8 +383,8 @@ def cleanup_docker():
     click.echo(f"Removing temporary data done.")
 
 
-def get_service_url(service_name: str):
-    inspect_out = docker_client.inspect_container("proxy")
+def get_service_url(project_name: str, service_name: str):
+    inspect_out = docker_client.inspect_container(f"{project_name}_proxy_1")
     env = inspect_out["Config"]["Env"]
     service_url = ""
     for item in env:
@@ -397,12 +395,12 @@ def get_service_url(service_name: str):
     return service_url
 
 
-def wait_for_service(service_name: str):
-    service_url = get_service_url(service_name)
+def wait_for_service(project_name: str, service_name: str):
+    service_url = get_service_url(project_name, service_name)
     service_info = urlparse(service_url)
     service_ip, service_port = service_info.hostname, service_info.port
 
-    command = f'docker exec proxy nc -zvw1 {service_ip} {service_port}'
+    command = f'docker exec {project_name}_proxy_1 nc -zvw1 {service_ip} {service_port}'
     timeout_sec = 120
     start_time = time.time()
     while True:
@@ -419,13 +417,13 @@ def wait_for_service(service_name: str):
         time.sleep(1)
 
 
-def run_uniswap_test():
+def run_uniswap_test(project_name):
     faucet_name = 'FAUCET'
-    faucet_url = get_service_url(faucet_name)
+    faucet_url = get_service_url(project_name, faucet_name)
     os.environ[f'{faucet_name}_URL'] = faucet_url
 
     docker_client.pull(UNISWAP_V2_CORE_IMAGE)
-    command = f'docker run --rm --network=container:proxy -e {faucet_name}_URL \
+    command = f'docker run --rm --network=container:{project_name}_proxy_1 -e {faucet_name}_URL \
         --entrypoint ./deploy-test.sh {UNISWAP_V2_CORE_IMAGE} all 2>&1'
     out = subprocess.run(command, shell=True)
     click.echo("return code: " + str(out.returncode))
