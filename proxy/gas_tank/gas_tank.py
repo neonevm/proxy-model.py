@@ -4,8 +4,8 @@ import logging
 from typing import Dict, Any, Union, List, Tuple
 
 from .gas_less_accounts_db import GasLessAccountsDB
-from .gas_less_usages_db import GasLessUsagesDB
-from .gas_tank_types import GasTankNeonTxAnalyzer, GasTankSolTxAnalyzer, GasTankTxInfo, GasLessPermit, GasLessUsage
+from .gas_tank_types import GasTankNeonTxAnalyzer, GasTankSolTxAnalyzer, GasTankTxInfo, GasLessPermit
+from .solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
@@ -20,7 +20,6 @@ from ..common_neon.utils.neon_tx_info import NeonTxInfo
 
 from ..indexer.indexed_objects import NeonIndexedHolderInfo
 from ..indexer.indexer_base import IndexerBase
-from ..indexer.solana_tx_meta_collector import SolTxMetaDict, FinalizedSolTxMetaCollector
 
 LOG = logging.getLogger(__name__)
 
@@ -33,9 +32,6 @@ class GasTank(IndexerBase):
         self._gas_less_account_db = GasLessAccountsDB(self._db)
         self._gas_less_account_dict: Dict[str, GasLessPermit] = dict()
 
-        self._gas_less_usage_db = GasLessUsagesDB(self._db)
-        self._gas_less_usage_list: List[GasLessUsage] = list()
-
         solana = SolInteractor(config, config.solana_url)
         last_known_slot = self._constant_db.get('latest_gas_tank_slot', None)
         super().__init__(config, solana, last_known_slot)
@@ -43,10 +39,12 @@ class GasTank(IndexerBase):
         self._latest_gas_tank_slot = self._start_slot
         self._current_slot = 0
 
-        self._counted_logger = MetricsLogger()
+        self._counted_logger = MetricsLogger(config)
 
         sol_tx_meta_dict = SolTxMetaDict()
-        self._sol_tx_collector = FinalizedSolTxMetaCollector(config, self._solana, sol_tx_meta_dict, self._start_slot)
+        self._sol_tx_collector = FinalizedSolTxMetaCollector(
+            self._db, config, self._solana, sol_tx_meta_dict, self._start_slot
+        )
 
         self._neon_holder_dict: Dict[str, NeonIndexedHolderInfo] = dict()
         self._neon_processed_tx_dict: Dict[str, GasTankTxInfo] = dict()
@@ -76,7 +74,6 @@ class GasTank(IndexerBase):
             tx_info.finalize()
 
             self._process_neon_tx_analyzer(tx_info)
-            self._process_gas_less_tx(tx_info)
 
         except Exception as error:
             LOG.warning(f'failed to process {tx_info.key}: {str(error)}')
@@ -103,26 +100,6 @@ class GasTank(IndexerBase):
             return
         LOG.debug(f'NeonTx analyzer {neon_tx_analyzer.name} success')
         self._allow_gas_less_tx(account, neon_tx)
-
-    def _process_gas_less_tx(self, tx_info: GasTankTxInfo) -> None:
-        neon_tx = tx_info.neon_tx
-        if neon_tx.gas_price != 0:
-            return
-
-        LOG.debug(f'gas-less tx: {neon_tx}')
-
-        gas_less_usage = GasLessUsage(
-            account=NeonAddress(neon_tx.addr),
-            block_slot=self._current_slot,
-            neon_sig=neon_tx.sig,
-            nonce=neon_tx.nonce,
-            to_addr=NeonAddress(neon_tx.to_addr) if neon_tx.to_addr is not None else None,
-            neon_total_gas_usage=tx_info.neon_tx_res.gas_used,
-            operator=tx_info.operator
-        )
-        self._gas_less_usage_list.append(gas_less_usage)
-        if len(self._gas_less_usage_list) > 1000:
-            self._save_cached_data()
 
     def _process_write_holder_ix(self, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
         key = NeonIndexedHolderInfo.Key(sol_neon_ix.get_account(0), sol_neon_ix.neon_tx_sig)
@@ -193,7 +170,7 @@ class GasTank(IndexerBase):
 
         self._process_neon_tx(tx_info)
 
-    def _process_step_nochain_id_ix(self, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
+    def _process_step_nochainid_ix(self, sol_neon_ix: SolNeonIxReceiptInfo) -> None:
         key = GasTankTxInfo.Key(sol_neon_ix.neon_tx_sig)
         tx_info = self._neon_processed_tx_dict.get(key.value, None)
         if tx_info is None:
@@ -256,8 +233,7 @@ class GasTank(IndexerBase):
 
         self._process_finalized_tx_list(tx_receipt_info.block_slot)
 
-        evm_program_id = str(self._config.evm_program_id)
-        for sol_neon_ix in tx_receipt_info.iter_sol_ix(evm_program_id):
+        for sol_neon_ix in tx_receipt_info.iter_sol_ix(self._config.evm_program_id):
             ix_code = sol_neon_ix.ix_data[0]
             LOG.debug(f'instruction: {ix_code} {sol_neon_ix.neon_tx_sig}')
             if ix_code == EvmIxCode.HolderWrite:
@@ -272,7 +248,7 @@ class GasTank(IndexerBase):
                 self._process_call_raw_tx(sol_neon_ix)
 
             elif ix_code == EvmIxCode.TxStepFromAccount:
-                self._process_step_nochain_id_ix(sol_neon_ix)
+                self._process_step_nochainid_ix(sol_neon_ix)
 
             elif ix_code == EvmIxCode.CancelWithHash:
                 self._process_cancel(sol_neon_ix)
@@ -335,7 +311,6 @@ class GasTank(IndexerBase):
 
         with logging_context(ident='stat'):
             self._counted_logger.print(
-                self._config,
                 list_value_dict={},
                 latest_value_dict={
                     'Latest slot': self._last_block_slot,
@@ -385,13 +360,10 @@ class GasTank(IndexerBase):
         self._constant_db['latest_gas_tank_slot'] = self._latest_gas_tank_slot
 
     def _save_cached_data(self) -> None:
-        if (len(self._gas_less_account_dict) == 0) and (len(self._gas_less_usage_list) == 0):
+        if not len(self._gas_less_account_dict):
             return
 
-        def _run_tx():
-            self._gas_less_account_db.add_gas_less_permit_list(iter(self._gas_less_account_dict.values()))
-            self._gas_less_usage_db.add_gas_less_usage_list(iter(self._gas_less_usage_list))
-        self._db.run_tx(_run_tx)
-
+        self._db.run_tx(
+            lambda: self._gas_less_account_db.add_gas_less_permit_list(iter(self._gas_less_account_dict.values()))
+        )
         self._gas_less_account_dict.clear()
-        self._gas_less_usage_list.clear()

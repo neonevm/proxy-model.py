@@ -70,7 +70,7 @@ class FakeConfig(Config):
         return 1
 
 
-class CancelTest(unittest.TestCase):
+class CompleteTest(unittest.TestCase):
     proxy: Proxy
     config: FakeConfig
     solana: SolClient
@@ -306,8 +306,8 @@ class CancelTest(unittest.TestCase):
         cls.solana.send_tx(tx, signer)
 
     # @unittest.skip("a.i.")
-    def test_01_canceled(self):
-        print("\ntest_01_canceled")
+    def test_01_completed(self):
+        print("\ntest_01_completed")
         trx_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash)
         print('trx_receipt:', trx_receipt)
         self.assertEqual(trx_receipt['status'], 0)

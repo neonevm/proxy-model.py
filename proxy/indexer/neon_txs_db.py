@@ -1,10 +1,10 @@
-from typing import Optional, List, Any, Iterator
+from typing import Optional, List, Any
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo
 from ..common_neon.db.base_db_table import BaseDBTable
 from ..common_neon.db.db_connect import DBConnection
 
-from ..indexer.indexed_objects import NeonIndexedTxInfo
+from ..indexer.indexed_objects import NeonIndexedBlockInfo
 
 
 class NeonTxsDB(BaseDBTable):
@@ -74,30 +74,31 @@ class NeonTxsDB(BaseDBTable):
         object.__setattr__(neon_tx_res, 'block_hash', value_list[-1])
         return NeonTxReceiptInfo(neon_tx=neon_tx, neon_tx_res=neon_tx_res)
 
-    def set_tx_list(self, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
-        value_list_list: List[List[Any]] = []
-        for tx in iter_neon_tx:
-            value_list: List[Any] = []
-            for idx, column in enumerate(self._column_list):
-                if column == 'neon_sig':
-                    value_list.append(tx.neon_tx.sig)
-                elif column == 'from_addr':
-                    value_list.append(tx.neon_tx.addr)
-                elif column == 'logs':
-                    value_list.append(self._encode_list(tx.neon_tx_res.log_list))
-                elif column in self._hex_tx_column_set:
-                    value_list.append(hex(getattr(tx.neon_tx, column)))
-                elif column in self._hex_res_column_set:
-                    value_list.append(hex(getattr(tx.neon_tx_res, column)))
-                elif hasattr(tx.neon_tx, column):
-                    value_list.append(getattr(tx.neon_tx, column))
-                elif hasattr(tx.neon_tx_res, column):
-                    value_list.append(getattr(tx.neon_tx_res, column))
-                else:
-                    raise RuntimeError(f'Wrong usage {self._table_name}: {idx} -> {column}!')
-            value_list_list.append(value_list)
+    def set_tx_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:
+        row_list: List[List[Any]] = []
+        for neon_block in neon_block_queue:
+            for tx in neon_block.iter_done_neon_tx():
+                value_list: List[Any] = []
+                for idx, column in enumerate(self._column_list):
+                    if column == 'neon_sig':
+                        value_list.append(tx.neon_tx.sig)
+                    elif column == 'from_addr':
+                        value_list.append(tx.neon_tx.addr)
+                    elif column == 'logs':
+                        value_list.append(self._encode_list(tx.neon_tx_res.log_list))
+                    elif column in self._hex_tx_column_set:
+                        value_list.append(hex(getattr(tx.neon_tx, column)))
+                    elif column in self._hex_res_column_set:
+                        value_list.append(hex(getattr(tx.neon_tx_res, column)))
+                    elif hasattr(tx.neon_tx, column):
+                        value_list.append(getattr(tx.neon_tx, column))
+                    elif hasattr(tx.neon_tx_res, column):
+                        value_list.append(getattr(tx.neon_tx_res, column))
+                    else:
+                        raise RuntimeError(f'Wrong usage {self._table_name}: {idx} -> {column}!')
+                row_list.append(value_list)
 
-        self._insert_row_list(value_list_list)
+        self._insert_row_list(row_list)
 
     def get_tx_by_neon_sig(self, neon_sig: str) -> Optional[NeonTxReceiptInfo]:
         request = self._base_request_hdr + '''

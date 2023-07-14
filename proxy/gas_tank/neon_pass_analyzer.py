@@ -8,11 +8,11 @@ from .gas_tank_types import GasTankSolTxAnalyzer
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
-from ..common_neon.constants import ACCOUNT_SEED_VERSION
+from ..common_neon.constants import ACCOUNT_SEED_VERSION, TOKEN_PROGRAM_ID
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils import NeonTxInfo
 from ..common_neon.solana_tx import SolPubKey
-from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo
+from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo, SolIxMetaInfo
 from ..common_neon.utils.evm_log_decoder import decode_log_list, NeonLogTxReturn
 
 
@@ -21,7 +21,6 @@ LOG = logging.getLogger(__name__)
 EVM_PROGRAM_CREATE_ACCT = 0x28
 EVM_PROGRAM_CALL_FROM_RAW_TRX = 0x1f
 
-TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
 TOKEN_APPROVE = 0x04
 TOKEN_INIT_ACCT_2 = 0x10
 TOKEN_TRANSFER = 0x03
@@ -58,17 +57,17 @@ class NPTxParser:
             acct_key_list += lookup_key_list['writable'] + lookup_key_list['readonly']
         return acct_key_list
 
-    def _is_req_ix(self, ix: NPSolIx, req_prg_id: str, req_tag_id: int) -> bool:
-        prg_id = self.acct_key_list[ix['programIdIndex']]
+    def _is_req_ix(self, ix: NPSolIx, req_prg_id: SolPubKey, req_tag_id: int) -> bool:
+        prg_id = SolPubKey.from_string(self.acct_key_list[ix['programIdIndex']])
         return prg_id == req_prg_id and base58.b58decode(ix['data'])[0] == req_tag_id
 
-    def find_ix_list(self, caption: str, prg_id: str, tag_id: int) -> List[Tuple[int, NPSolIx]]:
+    def find_ix_list(self, caption: str, prg_id: SolPubKey, tag_id: int) -> List[Tuple[int, NPSolIx]]:
         ix_list = [(idx, ix) for idx, ix in enumerate(self._ix_list) if self._is_req_ix(ix, prg_id, tag_id)]
         if len(ix_list) == 0:
-            LOG.debug(f'instructions for instruction {caption} not found')
+            LOG.debug(f'instructions for {caption} not found')
         return ix_list
 
-    def find_inner_ix(self, caption: str, ix_idx: int, prg_id: str, tag_id: int) -> Optional[NPSolIx]:
+    def find_inner_ix(self, caption: str, ix_idx: int, prg_id: SolPubKey, tag_id: int) -> Optional[NPSolIx]:
         inner_ix_list = None
         for entry in self._inner_ix_dict:
             if entry['index'] == ix_idx:
@@ -89,7 +88,8 @@ class NPTxParser:
     def find_neon_tx_receipt(self, ix_idx: int) -> Optional[NeonLogTxReturn]:
         if self._tx_receipt_info is None:
             self._tx_receipt_info = SolTxReceiptInfo.from_tx_receipt(self._block_slot, self._tx)
-        log_state = self._tx_receipt_info.get_log_state(ix_idx, None)
+        ix_meta = SolIxMetaInfo.from_tx_meta(self._tx_receipt_info, ix_idx, None, dict())
+        log_state = self._tx_receipt_info.get_log_state(ix_meta)
         if log_state is None:
             return None
         log_info = decode_log_list(log_state.iter_str_log_msg())
@@ -98,10 +98,6 @@ class NPTxParser:
 
 class NeonPassAnalyzer(GasTankSolTxAnalyzer):
     name = 'NeonPass'
-
-    def __init__(self, config: Config, token_whitelist: Union[bool, Dict[str, int]]):
-        super().__init__(config, token_whitelist)
-        self._evm_program_id = str(config.evm_program_id)
 
     def _check_on_neon_pass_tx(self, tx: NPSolTx) -> List[Tuple[NeonAddress, NeonTxInfo]]:
         tx_parser = NPTxParser(tx)
@@ -155,7 +151,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
         return approved_list
 
     def _find_evm_ix_list(self, tx_parser: NPTxParser, caption: str, tag_id: int) -> List[Tuple[int, NPSolIx]]:
-        return tx_parser.find_ix_list(caption, self._evm_program_id, tag_id)
+        return tx_parser.find_ix_list(caption, self._config.evm_program_id, tag_id)
 
     @staticmethod
     def _find_token_ix_list(tx_parser: NPTxParser, caption: str, tag_id: int) -> List[Tuple[int, NPSolIx]]:

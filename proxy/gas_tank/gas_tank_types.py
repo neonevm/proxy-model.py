@@ -22,8 +22,7 @@ LOG = logging.getLogger(__name__)
 class GasTankTxInfo(NeonIndexedTxInfo):
     def __init__(self, ix_code: EvmIxCode, key: NeonIndexedTxInfo.Key, neon_tx: NeonTxInfo,
                  operator: str, holder: str, blocked_acct_list: List[str]):
-        super().__init__(ix_code, key, neon_tx, holder, blocked_acct_list)
-        self.operator = operator
+        super().__init__(ix_code, key, neon_tx, holder, blocked_acct_list, operator)
         self.iterations: Dict[int, int] = {}
 
     @staticmethod
@@ -143,14 +142,3 @@ class GasLessPermit:
     neon_sig: str
     nonce: int = 0
     contract: Optional[NeonAddress] = None
-
-
-@dataclasses.dataclass(frozen=True)
-class GasLessUsage:
-    account: NeonAddress
-    block_slot: int
-    neon_sig: str
-    nonce: int
-    to_addr: Optional[NeonAddress]
-    neon_total_gas_usage: int
-    operator: str

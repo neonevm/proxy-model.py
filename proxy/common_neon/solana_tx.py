@@ -11,6 +11,8 @@ import solders.instruction
 import solders.signature
 import solders.transaction
 
+from .errors import SolTxSizeError
+
 
 SolTxIx = solders.instruction.Instruction
 SolAccountMeta = solders.instruction.AccountMeta
@@ -64,16 +66,6 @@ class SolCommit:
             return commitment
 
         assert False, 'Wrong commitment'
-
-
-class SolTxSizeError(AttributeError):
-    def __init__(self, current_len: int, max_len: int):
-        super().__init__(current_len, max_len)
-        self._current_len = current_len
-        self._max_len = max_len
-
-    def __str__(self) -> str:
-        return f'Transaction size is exceeded {self._current_len} > {self._max_len}'
 
 
 class SolTx(abc.ABC):

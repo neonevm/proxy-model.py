@@ -7,7 +7,7 @@ from ..common_neon.utils import NeonTxInfo
 from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName
 from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
 
-from ..indexer.indexed_objects import NeonIndexedTxInfo, NeonIndexedHolderInfo, NeonAccountInfo, SolNeonTxDecoderState
+from ..indexer.indexed_objects import NeonIndexedTxInfo, NeonIndexedHolderInfo, NeonAccountInfo, SolNeonDecoderState
 
 
 LOG = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ class DummyIxDecoder:
     _ix_code = 0xFF
     _is_deprecated = True
 
-    def __init__(self, state: SolNeonTxDecoderState):
+    def __init__(self, state: SolNeonDecoderState):
         self._state = state
         LOG.debug(f'{self} ...')
 
@@ -50,7 +50,7 @@ class DummyIxDecoder:
         pass
 
     @property
-    def state(self) -> SolNeonTxDecoderState:
+    def state(self) -> SolNeonDecoderState:
         return self._state
 
     @staticmethod

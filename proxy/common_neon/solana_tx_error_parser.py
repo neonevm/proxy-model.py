@@ -8,6 +8,7 @@ from typing import Union, Optional, Any, Tuple, List, cast
 from .solana_tx import SolTxReceipt, SolPubKey
 from .utils import get_from_dict
 from .solana_neon_tx_receipt import SolTxLogDecoder, SolIxLogState
+from .constants import ADDRESS_LOOKUP_TABLE_ID, COMPUTE_BUDGET_ID, SYS_PROGRAM_ID, METAPLEX_PROGRAM_ID, TOKEN_PROGRAM_ID
 
 
 class SolTxError(BaseException):
@@ -15,7 +16,7 @@ class SolTxError(BaseException):
         super().__init__(evm_program_id, receipt)
 
         self._receipt = receipt
-        self._evm_program_id = str(evm_program_id)
+        self._evm_program_id = evm_program_id
 
         log_list = self._filter_raw_log_list(receipt)
         if len(log_list) == 0:
@@ -33,20 +34,20 @@ class SolTxError(BaseException):
         self._filter_log_msg_list(ix_log_state, log_msg_list)
         return log_msg_list
 
-    def _get_program_name(self, uid: str) -> str:
-        if uid == 'ComputeBudget111111111111111111111111111111':
+    def _get_program_name(self, uid: SolPubKey) -> str:
+        if uid == COMPUTE_BUDGET_ID:
             return 'ComputeBudget'
-        elif uid == '11111111111111111111111111111111':
+        elif uid == SYS_PROGRAM_ID:
             return 'System'
-        elif uid == 'AddressLookupTab1e1111111111111111111111111':
+        elif uid == ADDRESS_LOOKUP_TABLE_ID:
             return 'AddressLookupTable'
-        elif uid == 'p1exdMJcjVao65QdewkaZRUnU6VPSXhus9n2GzWfh98':
+        elif uid == METAPLEX_PROGRAM_ID:
             return 'Metaplex'
-        elif uid == 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA':
+        elif uid == TOKEN_PROGRAM_ID:
             return 'Token'
         elif uid == self._evm_program_id:
             return 'NeonEVM'
-        return uid
+        return str(uid)
 
     class _LevelChangeType(enum.Enum):
         Up = 1,
@@ -197,7 +198,7 @@ class SolTxErrorParser:
         else:
             self._receipt = receipt
 
-        self._evm_program_id = str(evm_program_id)
+        self._evm_program_id = evm_program_id
         self._log_list: Optional[List[str]] = None
         self._evm_log_list: Optional[List[str]] = None
 

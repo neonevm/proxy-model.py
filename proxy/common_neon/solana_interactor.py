@@ -6,7 +6,7 @@ import itertools
 import json
 import threading
 import time
-from typing import Dict, Union, Any, List, Optional, Set, cast
+from typing import Dict, Union, Any, List, Optional, cast
 import logging
 import base58
 import requests
@@ -89,12 +89,14 @@ class SolInteractor:
                 # Hide the Solana URL
                 str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
 
-                if retry <= self._config.retry_on_fail:
+                if retry <= 3600:
                     LOG.debug(
                         f'Receive connection error {str_err} on connection to Solana. '
                         f'Attempt {retry + 1} to send the request to Solana node...'
                     )
                     time.sleep(1)
+                    self._session = requests.sessions.Session()
+                    self._request_cnt = itertools.count()
                     continue
 
                 LOG.warning(f'Connection exception on send request to Solana. Retry {retry}: {str_err}')
@@ -176,7 +178,7 @@ class SolInteractor:
         status = self._send_rpc_request('getHealth').get('result', 'bad')
         return status == 'ok'
 
-    def get_sig_list_for_address(self, address: SolPubKey, before: Optional[str], limit: int,
+    def get_sig_list_for_address(self, address: Union[str, SolPubKey], before: Optional[str], limit: int,
                                  commitment=SolCommit.Confirmed) -> List[Dict[str, Any]]:
         opts = {
             'limit': limit,
@@ -201,14 +203,16 @@ class SolInteractor:
         return self._send_rpc_request('getSlot', opts).get('result', 0)
 
     @staticmethod
-    def _decode_account_info(address: SolPubKey, raw_account: Dict[str, Any]) -> AccountInfo:
+    def _decode_account_info(address: Union[str, SolPubKey], raw_account: Dict[str, Any]) -> AccountInfo:
         data = base64.b64decode(raw_account.get('data', None)[0])
         account_tag = data[0] if len(data) > 0 else 0
         lamports = raw_account.get('lamports', 0)
         owner = SolPubKey.from_string(raw_account.get('owner', None))
+        if isinstance(address, str):
+            address = SolPubKey.from_string(address)
         return AccountInfo(address, account_tag, lamports, owner, data)
 
-    def get_account_info(self, pubkey: SolPubKey, length: Optional[int] = None,
+    def get_account_info(self, pubkey: Union[str, SolPubKey], length: Optional[int] = None,
                          commitment=SolCommit.Confirmed) -> Optional[AccountInfo]:
         opts = {
             'encoding': 'base64',
@@ -262,7 +266,7 @@ class SolInteractor:
                 if info is None:
                     account_info_list.append(None)
                 else:
-                    account_info_list.append(self._decode_account_info(SolPubKey.from_string(pubkey), info))
+                    account_info_list.append(self._decode_account_info(pubkey, info))
         return account_info_list
 
     def get_program_account_info_list(self, program: SolPubKey, offset: int, length: int,
@@ -298,8 +302,7 @@ class SolInteractor:
         raw_account_list = response.get('result', list())
         account_info_list: List[AccountInfo] = list()
         for raw_account in raw_account_list:
-            address = SolPubKey.from_string(raw_account.get('pubkey'))
-            account_info = self._decode_account_info(address, raw_account.get('account', dict()))
+            account_info = self._decode_account_info(raw_account.get('pubkey'), raw_account.get('account', dict()))
             account_info_list.append(account_info)
         return account_info_list
 

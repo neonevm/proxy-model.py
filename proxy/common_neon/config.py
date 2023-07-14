@@ -64,10 +64,11 @@ class Config(DBConfig):
         self._gas_less_tx_max_gas = self._env_int("GAS_LESS_MAX_GAS", 0, 20_000_000)  # Estimated gas on Mora = 18 mln
         self._neon_price_usd = Decimal('0.25')
         self._start_slot = os.environ.get('START_SLOT', '0')
-        self._indexer_parallel_request_cnt = self._env_int("INDEXER_PARALLEL_REQUEST_COUNT", 1, 10)
-        self._indexer_poll_cnt = self._env_int("INDEXER_POLL_COUNT", 1, 1000)
-        self._indexer_log_skip_cnt = self._env_int("INDEXER_LOG_SKIP_COUNT", 1, 1000)
+        self._gas_tank_parallel_request_cnt = self._env_int("GAS_TANK_PARALLEL_REQUEST_COUNT", 1, 10)
+        self._gas_tank_poll_tx_cnt = self._env_int('GAS_TANK_POLL_TX_COUNT', 1, 1000)
+        self._indexer_poll_block_cnt = self._env_int('INDEXER_POLL_BLOCK_COUNT', 1, 32)
         self._indexer_check_msec = self._env_int('INDEXER_CHECK_MSEC', 50, 200)
+        self._metrics_log_skip_cnt = self._env_int('METRICS_LOG_SKIP_COUNT', 1, 1000)
         self._max_tx_account_cnt = self._env_int("MAX_TX_ACCOUNT_COUNT", 20, 62)
         self._fuzz_fail_pct = self._env_int("FUZZ_FAIL_PCT", 0, 0)
         self._confirm_timeout_sec = self._env_int("CONFIRM_TIMEOUT_SEC", 4, math.ceil(self._min_finalize_sec))
@@ -259,20 +260,24 @@ class Config(DBConfig):
         return self._start_slot
 
     @property
-    def indexer_parallel_request_cnt(self) -> int:
-        return self._indexer_parallel_request_cnt
+    def gas_tank_parallel_request_cnt(self) -> int:
+        return self._gas_tank_parallel_request_cnt
 
     @property
-    def indexer_poll_cnt(self) -> int:
-        return self._indexer_poll_cnt
+    def gas_tank_poll_tx_cnt(self) -> int:
+        return self._gas_tank_poll_tx_cnt
 
     @property
-    def indexer_log_skip_cnt(self) -> int:
-        return self._indexer_log_skip_cnt
+    def indexer_poll_block_cnt(self) -> int:
+        return self._indexer_poll_block_cnt
 
     @property
     def indexer_check_msec(self) -> int:
         return self._indexer_check_msec
+
+    @property
+    def metrics_log_skip_cnt(self) -> int:
+        return self._metrics_log_skip_cnt
 
     @property
     def max_tx_account_cnt(self) -> int:
@@ -376,10 +381,11 @@ class Config(DBConfig):
             'GAS_LESS_MAX_GAS': self.gas_less_tx_max_gas,
             'NEON_PRICE_USD': self.neon_price_usd,
             'START_SLOT': self.start_slot,
-            'INDEXER_PARALLEL_REQUEST_COUNT': self.indexer_parallel_request_cnt,
-            'INDEXER_POLL_COUNT': self.indexer_poll_cnt,
-            'INDEXER_LOG_SKIP_COUNT': self.indexer_log_skip_cnt,
+            'GAS_TANK_PARALLEL_REQUEST_COUNT': self.gas_tank_parallel_request_cnt,
+            'GAS_TANK_POLL_TX_COUNT': self.gas_tank_poll_tx_cnt,
+            'INDEXER_POLL_BLOCK_COUNT': self.indexer_poll_block_cnt,
             'INDEXER_CHECK_MSEC': self.indexer_check_msec,
+            'METRICS_LOG_SKIP_COUNT': self.metrics_log_skip_cnt,
             'MAX_TX_ACCOUNT_COUNT': self.max_tx_account_cnt,
             'FUZZ_FAIL_PCT': self.fuzz_fail_pct,
             'CONFIRM_TIMEOUT_SEC': self.confirm_timeout_sec,

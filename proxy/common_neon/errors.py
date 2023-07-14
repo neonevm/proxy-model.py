@@ -183,3 +183,13 @@ class InvalidIxDataError(WrongStrategyError):
 class RequireResizeIterError(WrongStrategyError):
     def __str__(self) -> str:
         return 'Transaction requires resize iterations'
+
+
+class SolTxSizeError(WrongStrategyError):
+    def __init__(self, current_len: int, max_len: int):
+        super().__init__(current_len, max_len)
+        self._current_len = current_len
+        self._max_len = max_len
+
+    def __str__(self) -> str:
+        return f'Transaction size is exceeded {self._current_len} > {self._max_len}'

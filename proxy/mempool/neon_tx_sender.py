@@ -30,8 +30,7 @@ class NeonTxSendStrategyExecutor:
         self._ctx = ctx
 
     def execute(self) -> NeonTxResultInfo:
-        if not self._ctx.has_completed_receipt():
-            self._validate_nonce()
+        self._validate_nonce()
 
         start = self._ctx.strategy_idx
         end = len(self._strategy_list)
@@ -53,7 +52,8 @@ class NeonTxSendStrategyExecutor:
                 self._cancel(strategy)
                 raise
 
-            except BaseException:
+            except BaseException as exc:
+                LOG.warning('Fail on execute tx', exc_info=exc)
                 self._cancel(strategy)
                 raise
 
@@ -102,10 +102,12 @@ class NeonTxSendStrategyExecutor:
             raise
 
         except BaseException as exc:
-            LOG.error(f'Failed to cancel tx', exc_info=exc)
+            LOG.error('Failed to cancel tx', exc_info=exc)
 
     def _init_state_tx_cnt(self) -> None:
         state_tx_cnt = self._ctx.solana.get_state_tx_cnt(self._ctx.neon_tx_info.addr)
+        if self._ctx.has_completed_receipt():
+            state_tx_cnt = max(state_tx_cnt, self._ctx.neon_tx_info.nonce)
         self._ctx.set_state_tx_cnt(state_tx_cnt)
 
     def _emulate_neon_tx(self) -> None:

@@ -131,7 +131,7 @@ class NeonAccountInfo:
 
 @dataclass(frozen=True)
 class HolderMetaAccountInfo:
-    pubkey: str
+    pubkey: SolPubKey
     is_writable: bool
     is_exists: bool
 
@@ -187,7 +187,7 @@ class HolderAccountInfo:
             offset += SolPubKey.LENGTH
 
             account_list.append(HolderMetaAccountInfo(
-                pubkey=str(some_pubkey),
+                pubkey=some_pubkey,
                 is_exists=is_exists,
                 is_writable=is_writable
             ))

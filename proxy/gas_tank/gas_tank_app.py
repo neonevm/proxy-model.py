@@ -20,7 +20,7 @@ class GasTankApp:
         Logger.setup()
         LOG.info('GasTank application is starting ...')
         self._config = Config()
-        LOG.info(f'Construct GasTank with params: {str(self._config)}')
+        LOG.info(f'Construct GasTank with params: {str(self._config.as_dict())}')
 
         self._gas_tank = GasTank(self._config)
         self._get_sol_tx_analyzer_cfg('INDEXER_ERC20_WRAPPER_WHITELIST', NeonPassAnalyzer)

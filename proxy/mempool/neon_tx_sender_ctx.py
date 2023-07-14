@@ -1,6 +1,6 @@
 import logging
 
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from ..common_neon.config import Config
 from ..common_neon.data import NeonAccountDict, NeonEmulatedResult
@@ -34,26 +34,27 @@ class NeonTxSendCtx:
         else:
             self._ix_builder.init_neon_tx_sig(mp_tx_req.sig)
 
-        self._neon_meta_dict: Dict[str, SolAccountMeta] = dict()
+        self._neon_meta_dict: Dict[SolPubKey, SolAccountMeta] = dict()
         if not mp_tx_req.is_stuck_tx():
             self._build_account_list(self._neon_tx_exec_cfg.account_dict)
 
-    def _add_meta(self, pubkey: SolPubKey, is_writable: bool) -> None:
-        key = str(pubkey)
-        meta = self._neon_meta_dict.get(key, None)
+    def _add_meta(self, pubkey: Union[str, SolPubKey], is_writable: bool) -> None:
+        if isinstance(pubkey, str):
+            pubkey = SolPubKey.from_string(pubkey)
+        meta = self._neon_meta_dict.get(pubkey, None)
         if meta is not None:
             is_writable |= meta.is_writable
-        self._neon_meta_dict[key] = SolAccountMeta(pubkey=pubkey, is_signer=False, is_writable=is_writable)
+        self._neon_meta_dict[pubkey] = SolAccountMeta(pubkey=pubkey, is_signer=False, is_writable=is_writable)
 
     def _build_account_list(self, emulated_account_dict: NeonAccountDict) -> None:
         self._neon_meta_dict.clear()
 
         # Parse information from the emulator output
         for account_desc in emulated_account_dict['accounts']:
-            self._add_meta(SolPubKey.from_string(account_desc['account']), True)
+            self._add_meta(account_desc['account'], True)
 
         for account_desc in emulated_account_dict['solana_accounts']:
-            self._add_meta(SolPubKey.from_string(account_desc['pubkey']), account_desc['is_writable'])
+            self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
 
         neon_meta_list = list(self._neon_meta_dict.values())
         LOG.debug(

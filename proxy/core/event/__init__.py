@@ -20,5 +20,5 @@ __all__ = [
     'EventQueue',
     'EventDispatcher',
     'EventSubscriber',
-    'EventManager',
+    # 'EventManager',
 ]

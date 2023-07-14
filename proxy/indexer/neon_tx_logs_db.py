@@ -1,9 +1,9 @@
-from typing import List, Any, Optional, Dict, Iterator
+from typing import List, Any, Optional, Dict
 
 from ..common_neon.db.base_db_table import BaseDBTable
 from ..common_neon.db.db_connect import DBConnection
 
-from ..indexer.indexed_objects import NeonIndexedTxInfo
+from ..indexer.indexed_objects import NeonIndexedBlockInfo
 
 
 class NeonTxLogsDB(BaseDBTable):
@@ -41,35 +41,36 @@ class NeonTxLogsDB(BaseDBTable):
 
         self._topic_column_list = ['log_topic1', 'log_topic2', 'log_topic3', 'log_topic4']
 
-    def set_tx_list(self, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
-        value_list_list: List[List[Any]] = list()
-        for tx in iter_neon_tx:
-            for log in tx.neon_tx_res.log_list:
-                topic_list = log['topics']
-                if log['neonIsHidden'] or (len(topic_list) == 0):
-                    continue
+    def set_tx_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:
+        row_list: List[List[Any]] = list()
+        for neon_block in neon_block_queue:
+            for tx in neon_block.iter_done_neon_tx():
+                for log in tx.neon_tx_res.log_list:
+                    topic_list = log['topics']
+                    if log['neonIsHidden'] or (len(topic_list) == 0):
+                        continue
 
-                value_list: List[Any] = list()
-                for key, topic_value in zip(self._topic_column_list, topic_list):
-                    value_list.append(topic_value)
+                    value_list: List[Any] = list()
+                    for key, topic_value in zip(self._topic_column_list, topic_list):
+                        value_list.append(topic_value)
 
-                while len(value_list) < len(self._topic_column_list):
-                    value_list.append(None)
+                    while len(value_list) < len(self._topic_column_list):
+                        value_list.append(None)
 
-                for idx, column in enumerate(self._column_list):
-                    if column in self._topic_column_list:
-                        assert idx < len(self._topic_column_list)
-                    elif column == 'log_topic_cnt':
-                        value_list.append(len(topic_list))
-                    else:
-                        key = self._column2field_dict.get(column, None)
-                        value = log.get(key, None)
-                        if (value is not None) and (key in self._hex_field_set):
-                            value = int(value[2:], 16)
-                        value_list.append(value)
-                value_list_list.append(value_list)
+                    for idx, column in enumerate(self._column_list):
+                        if column in self._topic_column_list:
+                            assert idx < len(self._topic_column_list)
+                        elif column == 'log_topic_cnt':
+                            value_list.append(len(topic_list))
+                        else:
+                            key = self._column2field_dict.get(column, None)
+                            value = log.get(key, None)
+                            if (value is not None) and (key in self._hex_field_set):
+                                value = int(value[2:], 16)
+                            value_list.append(value)
+                    row_list.append(value_list)
 
-        self._insert_row_list(value_list_list)
+        self._insert_row_list(row_list)
 
     def _log_from_value(self, value_list: List[Any]) -> Optional[Dict[str, Any]]:
         log: Dict[str, Any] = dict()

@@ -2,28 +2,23 @@ from __future__ import annotations
 
 import logging
 import time
-import base58
 
-from typing import List, Optional, Dict, Type, Any
+from typing import List, Optional, Dict, Type
 
-from .indexed_objects import (
-    NeonIndexedBlockInfo, NeonIndexedBlockDict, SolNeonTxDecoderState,
-    NeonIndexedHolderInfo, NeonIndexedTxInfo, NeonIndexedAltInfo
-)
+from .indexed_objects import NeonIndexedBlockInfo, NeonIndexedBlockDict, SolNeonDecoderState, SolNeonDecoderStat
 from .indexer_base import IndexerBase
 from .indexer_db import IndexerDB
 from .neon_ix_decoder import DummyIxDecoder, get_neon_ix_decoder_list
 from .neon_ix_decoder_deprecate import get_neon_ix_decoder_deprecated_list
-from .solana_tx_meta_collector import SolHistoryNotFound
 from .tracer_api_client import TracerAPIClient
+from .solana_block_net_cache import SolBlockNetCache
+from .indexer_validate_stuck_objs import StuckObjectValidator
+from .indexer_alt_ix_collector import AltIxCollector
 
 from ..common_neon.config import Config
-from ..common_neon.constants import FINALIZED_HOLDER_TAG, ADDRESS_LOOKUP_TABLE_ID
-from ..common_neon.layouts import ALTAccountInfo
 from ..common_neon.metrics_logger import MetricsLogger
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_neon_tx_receipt import SolAltIxInfo, SolTxMetaInfo
-from ..common_neon.solana_tx import SolPubKey, SolCommit
+from ..common_neon.solana_tx import SolCommit
 from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.utils.solana_block import SolBlockInfo
@@ -35,6 +30,10 @@ from ..statistic.indexer_client import IndexerStatClient
 LOG = logging.getLogger(__name__)
 
 
+class SolHistoryNotFound(RuntimeError):
+    pass
+
+
 class Indexer(IndexerBase):
     def __init__(self, config: Config):
         solana = SolInteractor(config, config.solana_url)
@@ -44,17 +43,22 @@ class Indexer(IndexerBase):
 
         self._tracer_api = TracerAPIClient(config)
 
-        self._counted_logger = MetricsLogger()
+        self._counted_logger = MetricsLogger(config)
         self._stat_client = IndexerStatClient(config)
         self._stat_client.start()
         self._last_stat_time = 0.0
 
-        self._stuck_objs_last_validate_slot = 0
         self._confirmed_block_slot: Optional[int] = None
 
         self._last_confirmed_block_slot = 0
         self._last_finalized_block_slot = 0
         self._neon_block_dict = NeonIndexedBlockDict()
+
+        self._stuck_obj_validator = StuckObjectValidator(config, self._solana)
+        self._alt_ix_collector = AltIxCollector(config, self._solana)
+        self._sol_block_net_cache = SolBlockNetCache(config, self._solana)
+
+        self._decoder_stat = SolNeonDecoderStat()
 
         sol_neon_ix_decoder_list: List[Type[DummyIxDecoder]] = list()
         sol_neon_ix_decoder_list.extend(get_neon_ix_decoder_list())
@@ -66,195 +70,61 @@ class Indexer(IndexerBase):
             assert ix_code not in self._sol_neon_ix_decoder_dict
             self._sol_neon_ix_decoder_dict[ix_code] = decoder
 
-    def _validate_stuck_objs(self, neon_block: NeonIndexedBlockInfo) -> None:
-        block_slot = neon_block.block_slot
-        last_block_slot = block_slot - self._config.stuck_object_validate_blockout
-        if last_block_slot < self._stuck_objs_last_validate_slot:
-            return
-        elif self._stuck_objs_last_validate_slot == 0:
-            self._stuck_objs_last_validate_slot = block_slot
-            return
-        elif neon_block.stuck_block_slot > neon_block.block_slot:
-            self._stuck_objs_last_validate_slot = block_slot
+    def _save_checkpoint(self, state: SolNeonDecoderState) -> None:
+        if state.is_neon_block_queue_empty():
             return
 
-        failed_holder_list: List[NeonIndexedHolderInfo] = list()
-        for holder in neon_block.iter_stuck_neon_holder():
-            if holder.last_block_slot > last_block_slot:
-                pass
-            elif not self._is_valid_holder(holder.account, holder.neon_tx_sig):
-                failed_holder_list.append(holder)
+        neon_block_queue = state.neon_block_queue
+        neon_block = neon_block_queue[-1]
+        self._alt_ix_collector.collect_in_block(neon_block)
 
-        failed_tx_list: List[NeonIndexedTxInfo] = list()
-        for tx in neon_block.iter_stuck_neon_tx():
-            if tx.last_block_slot > last_block_slot:
-                continue
-            elif not self._is_valid_holder(tx.holder_account, tx.neon_tx.sig):
-                failed_tx_list.append(tx)
+        # validate stuck objects only on the last confirmed block
+        if not neon_block.is_finalized:
+            self._stuck_obj_validator.validate_block(neon_block)
+        else:
+            self._neon_block_dict.finalize_neon_block(neon_block)
+            self._sol_block_net_cache.finalize_block(neon_block.block_slot)
 
-        neon_block.fail_neon_holder_list(failed_holder_list)
-        neon_block.fail_neon_tx_list(failed_tx_list)
-        self._stuck_objs_last_validate_slot = block_slot
-
-    def _is_valid_holder(self, holder_acct: str, neon_tx_sig: str) -> bool:
-        holder_info = self._solana.get_holder_account_info(SolPubKey.from_string(holder_acct))
-        if holder_info is None:
-            return False
-
-        if holder_info.neon_tx_sig == neon_tx_sig:
-            return holder_info.tag != FINALIZED_HOLDER_TAG
-        return False
-
-    def _collect_alt_ixs(self, neon_block: NeonIndexedBlockInfo) -> None:
-        freeing_depth = self._config.alt_freeing_depth * 2
-        check_slot = neon_block.block_slot - freeing_depth
-        check_done_slot = neon_block.block_slot - 64
-        if check_slot < 0:
-            return
-
-        for alt_info in list(neon_block.iter_alt_info()):
-            if alt_info.block_slot > check_slot:
-                continue
-            elif alt_info.done_block_slot > check_done_slot:
-                continue
-            elif alt_info.done_block_slot > 0:
-                pass
-            elif not self._is_done_alt(neon_block, alt_info):
-                continue
-            else:
-                # wait for transaction indexing
-                alt_info.set_done_block_slot(neon_block.block_slot)
-                continue
-
-            alt_key = SolPubKey.from_string(alt_info.alt_key)
-            sig_block_list = self._solana.get_sig_list_for_address(alt_key, None, 1000, SolCommit.Finalized)
-            sig_list = [sig_block.get('signature', None) for sig_block in sig_block_list]
-            tx_receipt_list = self._solana.get_tx_receipt_list(sig_list, SolCommit.Finalized)
-
-            alt_ix_list = self._decode_alt_ixs(alt_info, tx_receipt_list)
-            neon_block.done_alt_info(alt_info, alt_ix_list)
-
-    def _is_done_alt(self, neon_block: NeonIndexedBlockInfo, alt_info: NeonIndexedAltInfo) -> bool:
-        alt_address = SolPubKey.from_string(alt_info.alt_key)
-        acct_info = self._solana.get_account_info(alt_address, commitment=SolCommit.Finalized)
-        if acct_info is None:
-            return True
-
-        alt_acct_info = ALTAccountInfo.from_account_info(acct_info)
-        if alt_acct_info is None:
-            return True
-        elif alt_acct_info.authority is None:
-            LOG.warning(f'ALT {alt_info.alt_key} is frozen')
-            return True
-
-        if alt_acct_info.authority in self._config.operator_account_set:
-            return False
-
-        # don't wait for ALTs from other operators
-        check_block_slot = neon_block.block_slot - self._config.alt_freeing_depth * 10
-        if alt_info.block_slot < check_block_slot:
-            return True
-        return False
-
-    @staticmethod
-    def _decode_alt_ixs(alt_info: NeonIndexedAltInfo, tx_receipt_list: List[Dict[str, Any]]) -> List[SolAltIxInfo]:
-        alt_program_key = str(ADDRESS_LOOKUP_TABLE_ID)
-        alt_ix_list: List[SolAltIxInfo] = list()
-        for tx_receipt in tx_receipt_list:
-            if tx_receipt is None:
-                continue
-
-            has_alt_ix = False
-            tx_meta = SolTxMetaInfo.from_tx_receipt(None, tx_receipt)
-            for idx, ix in enumerate(tx_meta.ix_list):
-                if not tx_meta.is_program(ix, alt_program_key):
-                    continue
-
-                try:
-                    ix_data = base58.b58decode(ix.get('data', None))
-                    ix_code = int.from_bytes(ix_data[:4], 'little')
-                    has_alt_ix = True
-                except BaseException as exc:
-                    LOG.warning(
-                        f'failed to decode ALT instruction data '
-                        f'in Solana tx {tx_meta.sol_sig}:{tx_meta.block_slot}',
-                        exc_info=exc
-                    )
-                    continue
-
-                alt_ix_info = SolAltIxInfo.from_tx_meta(
-                    tx_meta, idx, ix_code, alt_info.alt_key,
-                    alt_info.neon_tx_sig
-                )
-                alt_ix_list.append(alt_ix_info)
-
-            if not has_alt_ix:
-                LOG.warning(f'ALT instruction does not exist in Solana tx {tx_meta.sol_sig}:{tx_meta.block_slot}')
-        return alt_ix_list
-
-    def _save_checkpoint(self) -> None:
         cache_stat = self._neon_block_dict.stat
-        self._db.set_min_receipt_block_slot(cache_stat.min_block_slot)
+        self._db.submit_block_list(cache_stat.min_block_slot, neon_block_queue)
+        state.clear_neon_block_queue()
 
-    def _complete_neon_block(self, state: SolNeonTxDecoderState) -> None:
+    def _complete_neon_block(self, state: SolNeonDecoderState) -> None:
         if not state.has_neon_block():
+            return
+
+        is_finalized = state.is_finalized()
+        neon_block = state.neon_block
+        if is_finalized:
+            neon_block.mark_finalized()
+
+        state.complete_neon_block()
+        neon_block.complete_block()
+        self._neon_block_dict.add_neon_block(neon_block)
+
+        # collect all blocks for confirmed mode
+        if is_finalized and state.is_neon_block_queue_full():
+            self._save_checkpoint(state)
+
+        self._print_stat(state)
+        self._commit_stat(state)
+
+    def _commit_stat(self, state: SolNeonDecoderState):
+        if not self._config.gather_statistics:
             return
 
         neon_block = state.neon_block
         if neon_block.is_finalized:
-            return
+            for tx_stat in neon_block.iter_stat_neon_tx(self._config):
+                self._stat_client.commit_neon_tx_result(tx_stat)
 
-        is_last_confirmed = state.is_last_block(neon_block) and not state.is_finalized()
-
-        is_finalized = state.is_neon_block_finalized()
-        neon_block.set_finalized(is_finalized)
-        if not neon_block.is_completed:
-            self._collect_alt_ixs(neon_block)
-            neon_block.done_block(self._config)
-
-            if is_last_confirmed:
-                self._validate_stuck_objs(neon_block)
-                self._db.submit_block(neon_block, state.iter_neon_block())
-            else:
-                self._db.submit_block(neon_block, None)
-
-            neon_block.complete_block()
-        elif is_finalized:
-            # the confirmed block becomes finalized
-            self._db.finalize_block(neon_block)
-
-        # Add block to cache only after indexing and applying last changes to DB
-        self._neon_block_dict.add_neon_block(neon_block)
-        if is_finalized:
-            self._neon_block_dict.finalize_neon_block(neon_block)
-            self._commit_tx_stat(neon_block)
-            self._save_checkpoint()
-
-        self._commit_block_stat(neon_block)
-        self._commit_status_stat()
-
-    def _commit_tx_stat(self, neon_block: NeonIndexedBlockInfo) -> None:
-        if not self._config.gather_statistics:
-            return
-
-        for tx_stat in neon_block.iter_stat_neon_tx():
-            self._stat_client.commit_neon_tx_result(tx_stat)
-
-    def _commit_block_stat(self, neon_block: NeonIndexedBlockInfo) -> None:
-        if not self._config.gather_statistics:
-            return
-
-        stat = NeonBlockStatData(
+        block_stat = NeonBlockStatData(
             start_block=self._start_slot,
             parsed_block=neon_block.block_slot,
             finalized_block=self._last_finalized_block_slot,
             confirmed_block=self._last_confirmed_block_slot
         )
-        self._stat_client.commit_block_stat(stat)
-
-    def _commit_status_stat(self) -> None:
-        if not self._config.gather_statistics:
-            return
+        self._stat_client.commit_block_stat(block_stat)
 
         now = time.time()
         if abs(now - self._last_stat_time) < 1:
@@ -264,7 +134,7 @@ class Indexer(IndexerBase):
         self._stat_client.commit_db_health(self._db.is_healthy())
         self._stat_client.commit_solana_rpc_health(self._solana.is_healthy())
 
-    def _new_neon_block(self, state: SolNeonTxDecoderState, sol_block: SolBlockInfo) -> NeonIndexedBlockInfo:
+    def _new_neon_block(self, state: SolNeonDecoderState, sol_block: SolBlockInfo) -> NeonIndexedBlockInfo:
         if not state.is_finalized():
             return NeonIndexedBlockInfo(sol_block)
 
@@ -277,8 +147,11 @@ class Indexer(IndexerBase):
             LOG.warning(f'Holder stuck block {holder_block_slot} != tx stuck block {tx_block_slot}')
             neon_holder_list.clear()
             neon_tx_list.clear()
+            alt_info_list.clear()
+
         elif tx_block_slot is not None:
             stuck_block_slot = tx_block_slot
+
         elif holder_block_slot is not None:
             stuck_block_slot = holder_block_slot
 
@@ -288,26 +161,23 @@ class Indexer(IndexerBase):
         )
 
     @staticmethod
-    def _clone_neon_block(state: SolNeonTxDecoderState, sol_block: SolBlockInfo) -> NeonIndexedBlockInfo:
+    def _clone_neon_block(state: SolNeonDecoderState, sol_block: SolBlockInfo) -> NeonIndexedBlockInfo:
         if sol_block.parent_block_slot != state.neon_block.block_slot:
             raise SolHistoryNotFound(f'Bad child {sol_block.block_slot} for the block {state.neon_block.block_slot}')
 
         return NeonIndexedBlockInfo.from_block(state.neon_block, sol_block)
 
-    def _locate_neon_block(self, state: SolNeonTxDecoderState, block_slot: int) -> Optional[NeonIndexedBlockInfo]:
+    def _locate_neon_block(self, state: SolNeonDecoderState, block_slot: int) -> Optional[NeonIndexedBlockInfo]:
         # The same block
-        if state.has_neon_block():
-            if state.neon_block.block_slot == block_slot:
-                return state.neon_block
-            # The next step, the indexer chooses another block, that is why here is saving of block in DB, cache ...
-            self._complete_neon_block(state)
+        if state.has_neon_block() and (state.neon_block.block_slot == block_slot):
+            return state.neon_block
 
         neon_block = self._neon_block_dict.find_neon_block(block_slot)
         if neon_block:
             pass  # The parsed block from cache
         else:
             # A new block with history from the Solana network
-            sol_block = self._solana.get_block_info(block_slot, state.sol_commit, True)
+            sol_block = self._sol_block_net_cache.get_block_info(block_slot, state.stop_block_slot, state.sol_commit)
             if sol_block.is_empty():
                 return None
 
@@ -316,15 +186,19 @@ class Indexer(IndexerBase):
             else:
                 neon_block = self._new_neon_block(state, sol_block)
 
+        if state.has_neon_block():
+            # The next step, the indexer chooses the next block and saves of the current block in DB, cache ...
+            self._complete_neon_block(state)
+
         state.set_neon_block(neon_block)
         return neon_block
 
-    def _collect_neon_txs(self, state: SolNeonTxDecoderState, tracer_max_slot: Optional[int]) -> None:
-        stop_block_slot = self._solana.get_block_slot(state.sol_commit)
+    def _collect_neon_txs(self, state: SolNeonDecoderState, sol_commit: SolCommit.Type, tracer_max_slot: Optional[int]):
+        stop_block_slot = self._solana.get_block_slot(sol_commit)
         if tracer_max_slot is not None:
             stop_block_slot = max(stop_block_slot, tracer_max_slot)
 
-        state.set_stop_block_slot(stop_block_slot)
+        state.shift_to_commit(sol_commit, stop_block_slot)
         if stop_block_slot < state.start_block_slot:
             return
 
@@ -351,22 +225,17 @@ class Indexer(IndexerBase):
                             # LOG.debug('failed tx')
                             continue
                         sol_neon_ix_decoder.execute()
-            else:
-                self._print_stat(state)
 
-        with logging_context(ident=f'end-{state.start_block_slot}-{state.sol_commit}'):
-            self._locate_neon_block(state, state.stop_block_slot)
+        with logging_context(sol_neon_ix=f'end-{state.sol_commit[:3]}-{state.stop_block_slot}'):
             self._complete_neon_block(state)
+            self._save_checkpoint(state)
 
     def _refresh_block_slots(self) -> None:
         self._last_confirmed_block_slot = self._solana.get_block_slot(SolCommit.Confirmed)
         self._last_finalized_block_slot = self._solana.get_block_slot(SolCommit.Finalized)
 
     def _has_new_blocks(self) -> bool:
-        if self._confirmed_block_slot is None:
-            return True
-
-        return self._confirmed_block_slot != self._last_confirmed_block_slot
+        return (self._confirmed_block_slot is None) or (self._confirmed_block_slot != self._last_confirmed_block_slot)
 
     def process_functions(self):
         self._refresh_block_slots()
@@ -374,60 +243,81 @@ class Indexer(IndexerBase):
             return
 
         tracer_max_slot = self._tracer_api.max_slot()
-        start_block_slot = self._start_slot
+        try:
+            self._decoder_stat.start_timer()
+            self._process_solana_blocks(tracer_max_slot)
+        finally:
+            self._decoder_stat.commit_timer()
+
+    def _process_solana_blocks(self, tracer_max_slot: int) -> None:
         finalized_neon_block = self._neon_block_dict.finalized_neon_block
         if finalized_neon_block is not None:
-            start_block_slot = finalized_neon_block.block_slot + 1
+            self._start_slot = finalized_neon_block.block_slot + 1
 
+        state = SolNeonDecoderState(self._config, self._decoder_stat, self._start_slot)
+        state.set_neon_block(finalized_neon_block)
         try:
-            state = SolNeonTxDecoderState(self._config, SolCommit.Finalized, start_block_slot, finalized_neon_block)
-            self._collect_neon_txs(state, tracer_max_slot)
+            self._collect_neon_txs(state, SolCommit.Finalized, tracer_max_slot)
+
         except SolHistoryNotFound as err:
+            self._save_checkpoint(state)  # store all parsed finalized blocks
+            self._sol_block_net_cache.clear()  # indexer faced with error of absent block
+
             first_slot = self._solana.get_first_available_block()
             LOG.warning(f'first slot: {first_slot}, skip parsing of finalized history: {str(err)}')
 
+            first_slot += 512
+            if self._start_slot < first_slot:
+                self._start_slot = first_slot
+
             # Skip history if it was cleaned by the Solana Node
             finalized_neon_block = self._neon_block_dict.finalized_neon_block
-            if finalized_neon_block is None:
-                return
-
-            if first_slot > finalized_neon_block.block_slot:
+            if (finalized_neon_block is not None) and (first_slot > finalized_neon_block.block_slot):
                 self._neon_block_dict.clear()
-                self._start_slot = first_slot + 512
             return
 
         # If there were a lot of transactions in the finalized state,
         # the head of finalized blocks will go forward
         # and there are no reason to parse confirmed blocks,
         # because on next iteration there will be the next portion of finalized blocks
-        finalized_block_slot = self._solana.get_block_slot(state.sol_commit)
+        finalized_block_slot = self._solana.get_block_slot(SolCommit.Finalized)
         if (finalized_block_slot - state.stop_block_slot) < 3:
-            state.shift_to_commit(SolCommit.Confirmed)
             try:
-                self._collect_neon_txs(state, tracer_max_slot)
+                self._collect_neon_txs(state, SolCommit.Confirmed, tracer_max_slot)
                 # Save confirmed block only after successfully parsing
                 self._confirmed_block_slot = state.stop_block_slot
+
             except SolHistoryNotFound as err:
+                self._sol_block_net_cache.mark_recache_block_list()  # indexer faced with error of absent block
                 LOG.debug(f'skip parsing of confirmed history: {str(err)}')
 
-    def _print_stat(self, state: SolNeonTxDecoderState) -> None:
+    def _print_stat(self, state: SolNeonDecoderState) -> None:
+        latest_value_dict = dict()
         cache_stat = self._neon_block_dict.stat
+        if self._counted_logger.is_print_time():
+            state_stat = state.stat
+            latest_value_dict = {
+                'processing ms': state_stat.processing_time_ms,
+                'start block slot': self._start_slot,
+                'confirmed block slot': self._last_confirmed_block_slot,
+                'finalized block slot': self._last_finalized_block_slot,
+                'current block slot': state.neon_block.block_slot,
+                'min used block slot': cache_stat.min_block_slot,
+                'processed solana blocks': state_stat.sol_block_cnt,
+                'corrupted neon blocks': state_stat.neon_corrupted_block_cnt,
+                'processed solana transactions': state_stat.sol_tx_meta_cnt,
+                'processed neon instructions': state_stat.sol_neon_ix_cnt,
+            }
+            state_stat.reset()
 
         with logging_context(ident='stat'):
             self._counted_logger.print(
-                self._config,
                 list_value_dict={
-                    'receipts processing ms': state.process_time_ms,
-                    'processed neon blocks': state.neon_block_cnt,
-                    'processed solana transactions': state.sol_tx_meta_cnt,
-                    'processed solana instructions': state.sol_neon_ix_cnt
-                },
-                latest_value_dict={
                     'neon blocks': cache_stat.neon_block_cnt,
                     'neon holders': cache_stat.neon_holder_cnt,
                     'neon transactions': cache_stat.neon_tx_cnt,
                     'solana instructions': cache_stat.sol_neon_ix_cnt,
-                    'indexed block slot': state.stop_block_slot,
-                    'min used block slot': cache_stat.min_block_slot
-                }
+                    'solana alt infos': cache_stat.sol_alt_info_cnt,
+                },
+                latest_value_dict=latest_value_dict
             )

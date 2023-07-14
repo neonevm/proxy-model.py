@@ -1,12 +1,14 @@
 import math
 import logging
 
-from typing import Optional, List, Any, Iterator, cast
+from typing import Optional, List, Any, cast
 
 from ..common_neon.utils import SolBlockInfo
 from ..common_neon.db.base_db_table import BaseDBTable
 from ..common_neon.db.db_connect import DBConnection
 from ..common_neon.config import Config
+
+from .indexed_objects import NeonIndexedBlockInfo
 
 
 LOG = logging.getLogger(__name__)
@@ -162,12 +164,20 @@ class SolBlocksDB(BaseDBTable):
         value_list = self._db.fetch_one(request, (block_hash,))
         return self._block_from_value(None, value_list)
 
-    def set_block(self, block: SolBlockInfo) -> None:
-        value_list = [
-            block.block_slot, block.block_hash, block.block_time, block.parent_block_slot,
-            block.is_finalized, block.is_finalized
-        ]
-        self._insert_row(value_list)
+    def set_block_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:
+        row_list: List[List[Any]] = list()
+
+        for neon_block in neon_block_queue:
+            block = neon_block.sol_block
+            row_list.append([
+                block.block_slot,
+                block.block_hash,
+                block.block_time,
+                block.parent_block_slot,
+                block.is_finalized,
+                block.is_finalized
+            ])
+        self._insert_row_list(row_list)
 
     def finalize_block_list(self, base_block_slot: int, block_slot_list: List[int]):
         request = f'''

@@ -32,7 +32,7 @@ services:
     entrypoint: /opt/neon-test-invoke-program.sh
 
   postgres:
-    image: postgres:14.0
+    image: postgres:15.3
     command: postgres -c 'max_connections=1000'
     environment:
       POSTGRES_DB: neon-db
@@ -157,8 +157,9 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
-      POSTGRES_TIMEOUT: 15
+      POSTGRES_TIMEOUT: 5
       SOLANA_URL: http://solana:8899
+      EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
       INDEXER_ERC20_WRAPPER_WHITELIST: ANY
       START_SLOT: LATEST
     hostname: gas_tank
@@ -181,7 +182,7 @@ services:
       POSTGRES_USER: neon-proxy
       POSTGRES_PASSWORD: neon-proxy-pass
       POSTGRES_HOST: postgres
-      POSTGRES_TIMEOUT: 15
+      POSTGRES_TIMEOUT: 5
       GATHER_STATISTICS: "YES"
       LOG_FULL_OBJECT_INFO: "NO"
       CONFIG: ci

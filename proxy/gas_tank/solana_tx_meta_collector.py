@@ -5,14 +5,14 @@ from abc import ABC, abstractmethod
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, Iterator, List, Any
 
-from ..common_neon.config import Config
-from ..common_neon.solana_tx import SolCommit
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
-from ..common_neon.db.db_connect import DBConnection
+from proxy.common_neon.config import Config
+from proxy.common_neon.solana_tx import SolCommit
+from proxy.common_neon.solana_interactor import SolInteractor
+from proxy.common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
+from proxy.common_neon.db.db_connect import DBConnection
 
 
-from .solana_signatures_db import SolSigsDB
+from proxy.indexer.solana_signatures_db import SolSigsDB
 
 
 LOG = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ class SolTxMetaCollector(ABC):
         self._commitment = commitment
         self._is_finalized = is_finalized
         self._tx_meta_dict = tx_meta_dict
-        self._thread_pool = ThreadPool(config.indexer_parallel_request_cnt)
+        self._thread_pool = ThreadPool(config.gas_tank_parallel_request_cnt)
 
     @property
     def commitment(self) -> str:
@@ -103,7 +103,7 @@ class SolTxMetaCollector(ABC):
         while response_list_len:
             response_list = self._solana.get_sig_list_for_address(
                 self._config.evm_program_id,
-                start_sig, self._config.indexer_poll_cnt, self._commitment
+                start_sig, self._config.gas_tank_poll_tx_cnt, self._commitment
             )
             response_list_len = len(response_list)
             if response_list_len == 0:
@@ -121,11 +121,11 @@ class SolTxMetaCollector(ABC):
 
 
 class FinalizedSolTxMetaCollector(SolTxMetaCollector):
-    def __init__(self, config: Config, solana: SolInteractor, tx_meta_dict: SolTxMetaDict, stop_slot: int):
+    def __init__(self, db: DBConnection, config: Config, solana: SolInteractor,
+                 tx_meta_dict: SolTxMetaDict, stop_slot: int):
         super().__init__(config, solana, tx_meta_dict, commitment=SolCommit.Finalized, is_finalized=True)
         LOG.debug(f'Finalized commitment: {self._commitment}')
-        self._db = DBConnection(config)
-        self._sigs_db = SolSigsDB(self._db)
+        self._sigs_db = SolSigsDB(db)
         self._stop_slot = stop_slot
         self._sig_cnt = 0
         self._last_info: Optional[SolTxSigSlotInfo] = None
@@ -143,7 +143,7 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
 
     def _save_checkpoint(self, info: SolTxSigSlotInfo, cnt: int = 1) -> None:
         self._sig_cnt += cnt
-        if self._sig_cnt < self._config.indexer_poll_cnt:
+        if self._sig_cnt < self._config.gas_tank_poll_tx_cnt:
             return
         elif self._last_info is None or self._last_info.block_slot == info.block_slot:
             self._last_info = info
@@ -201,15 +201,3 @@ class FinalizedSolTxMetaCollector(SolTxMetaCollector):
             for tx_meta in self._iter_tx_meta(sig_slot_list):
                 self._tx_meta_dict.pop(tx_meta.ident)
                 yield tx_meta
-
-
-class ConfirmedSolTxMetaCollector(SolTxMetaCollector):
-    def __init__(self, config: Config, solana: SolInteractor, tx_meta_dict: SolTxMetaDict):
-        super().__init__(config, solana, tx_meta_dict, commitment=SolCommit.Confirmed, is_finalized=False)
-        LOG.debug(f'Confirmed commitment: {self._commitment}')
-
-    def iter_tx_meta(self, start_slot: int, stop_slot: int) -> Iterator[SolTxMetaInfo]:
-        assert start_slot >= stop_slot
-
-        sig_slot_list = list(self._iter_sig_slot(None, start_slot, stop_slot))
-        return self._iter_tx_meta(sig_slot_list)

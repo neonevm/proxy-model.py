@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Callable, Dict, cast
+from typing import List, Optional, Callable, Dict, Any, cast
 
 from .mempool_api import MPALTListResult
 from .mempool_api import MPGetALTList, MPALTInfo, MPDeactivateALTListRequest, MPCloseALTListRequest
@@ -22,11 +22,6 @@ LOG = logging.getLogger(__name__)
 
 
 class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
-    def __init__(self, config: Config, solana: SolInteractor):
-        super().__init__(config, solana)
-        db = DBConnection(config)
-        self._alt_infos_db = SolAltInfosDB(db)
-
     def _get_block_height(self) -> int:
         return self._solana.get_block_height(commitment=SolCommit.Finalized)
 
@@ -89,8 +84,8 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             if mp_alt_info is not None:
                 mp_alt_info_dict[alt_address.table_account] = mp_alt_info
 
-        block_slot = self._solana.get_block_slot(SolCommit.Confirmed)
-        _, alt_dict_list = self._alt_infos_db.get_alt_list(block_slot)
+        block_slot = self._solana.get_block_slot(SolCommit.Confirmed) - 3
+        alt_dict_list = self._get_alt_list(block_slot)
 
         for alt_dict in alt_dict_list:
             alt_info = NeonIndexedAltInfo.from_dict(alt_dict)
@@ -105,6 +100,13 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
 
         block_height = self._get_block_height()
         return MPALTListResult(block_height=block_height, alt_info_list=list(mp_alt_info_dict.values()))
+
+    def _get_alt_list(self, block_slot: int) -> List[Dict[str, Any]]:
+        db = DBConnection(self._config)
+        alt_infos_db = SolAltInfosDB(db)
+
+        _, alt_dict_list = alt_infos_db.get_alt_list(block_slot)
+        return alt_dict_list
 
     def _free_alt_list(self, alt_info_list: List[MPALTInfo], name: str,
                        make_ix: Callable[[NeonIxBuilder, SolPubKey], SolTxIx]) -> MPALTListResult:

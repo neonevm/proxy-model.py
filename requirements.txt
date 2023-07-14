@@ -1,4 +1,4 @@
-typing-extensions==4.6.3
+typing-extensions==4.7.1
 ecdsa==0.18.0
 pysha3==1.0.2
 eth-keys==0.4.0
@@ -8,13 +8,13 @@ solders==0.18.1
 psycopg2-binary
 ethereum
 py-solc-x==1.1.1
-hvac==1.1.0
+hvac==1.1.1
 requests
 base58
 pysha3
 construct
-web3==6.4.0
+web3==6.6.1
 aioprometheus==23.3.0
 singleton-decorator==1.0.0
-clickhouse-connect==0.6.1
+clickhouse-connect==0.6.6
 websockets==11.0.3
