@@ -500,11 +500,13 @@ class NeonRpcApiWorker:
 
         # by default - maximum BPF cycles in Solana block
         max_gas_used = max(48_000_000, total_gas_used)
+        empty_root = '0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421'
+        root = empty_root if len(tx_list) == 0 else '0x' + '0' * 63 + '1'
 
         result = {
             "logsBloom": '0x' + '0' * 512,
-            "transactionsRoot": '0x' + '0' * 63 + '1',
-            "receiptsRoot": '0x' + '0' * 63 + '1',
+            "transactionsRoot": root,
+            "receiptsRoot": root,
             "stateRoot": '0x' + '0' * 63 + '1',
 
 
