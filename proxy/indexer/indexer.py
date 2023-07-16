@@ -178,13 +178,12 @@ class Indexer(IndexerBase):
         state.set_neon_block(neon_block)
         return neon_block
 
-    def _collect_neon_txs(self, state: SolNeonDecoderState, sol_commit: SolCommit.Type) -> None:
+    def _collect_neon_txs(self, state: SolNeonDecoderState, stop_slot: int, sol_commit: SolCommit.Type) -> None:
         start_slot = self._start_slot
         root_neon_block = self._neon_block_dict.finalized_neon_block
         if root_neon_block:
             start_slot = root_neon_block.block_slot
 
-        stop_slot = self._solana.get_block_slot(sol_commit)
         if self._last_tracer_slot is not None:
             stop_slot = min(stop_slot, self._last_tracer_slot)
         if stop_slot < start_slot:
@@ -238,26 +237,16 @@ class Indexer(IndexerBase):
     def _process_solana_blocks(self) -> None:
         state = SolNeonDecoderState(self._config, self._decoder_stat)
         try:
-            self._collect_neon_txs(state, SolCommit.Finalized)
+            self._collect_neon_txs(state, self._last_finalized_slot, SolCommit.Finalized)
 
         except SolHistoryNotFound as err:
-            first_slot = self._solana.get_first_available_block()
+            first_slot = self._check_first_slot()
             LOG.warning(
                 f'first slot: {first_slot}, '
                 f'start slot: {state.start_slot}, '
                 f'stop slot: {state.stop_slot}, '
-                f'skip parsing of finalized history: {str(err)}',
-                exc_info=err
+                f'skip parsing of finalized history: {str(err)}'
             )
-
-            first_slot += 512
-            if self._start_slot < first_slot:
-                self._start_slot = first_slot
-
-            # Skip history if it was cleaned by the Solana Node
-            finalized_neon_block = self._neon_block_dict.finalized_neon_block
-            if (finalized_neon_block is not None) and (first_slot > finalized_neon_block.block_slot):
-                self._neon_block_dict.clear()
             return
 
         # If there were a lot of transactions in the finalized state,
@@ -269,7 +258,7 @@ class Indexer(IndexerBase):
             return
 
         try:
-            self._collect_neon_txs(state, SolCommit.Confirmed)
+            self._collect_neon_txs(state, self._last_confirmed_slot, SolCommit.Confirmed)
 
             # Save confirmed block only after successfully parsing,
             #  otherwise try to parse blocks again
@@ -277,6 +266,18 @@ class Indexer(IndexerBase):
 
         except SolHistoryNotFound as err:
             LOG.debug(f'skip parsing of confirmed history: {str(err)}')
+
+    def _check_first_slot(self) -> int:
+        first_slot = self._solana.get_first_available_block()
+        start_slot = first_slot + 512
+        if self._start_slot < start_slot:
+            self._start_slot = start_slot
+
+        # Skip history if it was cleaned by the Solana Node
+        finalized_neon_block = self._neon_block_dict.finalized_neon_block
+        if (finalized_neon_block is not None) and (start_slot > finalized_neon_block.block_slot):
+            self._neon_block_dict.clear()
+        return first_slot
 
     def _print_stat(self, state: SolNeonDecoderState) -> None:
         cache_stat = self._neon_block_dict.stat

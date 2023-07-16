@@ -47,28 +47,35 @@ class SolBlockNetCache:
             if not len(block_queue):
                 continue
 
+            root_slot, block_queue = block_queue[0].block_slot, block_queue[1:]
             for sol_block in reversed(block_queue):
                 yield sol_block
-            root_slot = block_queue[0].block_slot
 
         if root_slot != state.stop_slot:
-            self._raise_sol_history_error(state, f'Fail to get head {root_slot}: {str(state)}')
+            self._raise_sol_history_error(state, f'Fail to get head {root_slot}')
 
     def _build_block_queue(self, state: SolNeonDecoderState, root_slot: int, slot: int) -> List[SolBlockInfo]:
         block_queue: List[SolBlockInfo] = list()
         while slot >= root_slot:
-            idx = self._calc_idx(slot)
-            sol_block = self._block_list[idx]
-            assert sol_block.block_slot == slot
+            sol_block = self._get_sol_block(slot)
             if sol_block.is_empty():
-                self._raise_sol_history_error(state, f'Cannot find block {slot}: {str(state)}')
+                if not len(block_queue):
+                    slot -= 1
+                    continue
+                self._raise_sol_history_error(state, f'Failed to get block {slot}')
 
             block_queue.append(sol_block)
             if slot == root_slot:
                 return block_queue
             slot = sol_block.parent_block_slot
 
-        raise SolHistoryNotFound(state, f'Fail to get root {root_slot}: {str(state)}')
+        self._raise_sol_history_error(state, f'Fail to get root {root_slot}')
+
+    def _get_sol_block(self, slot: int) -> SolBlockInfo:
+        idx = self._calc_idx(slot)
+        sol_block = self._block_list[idx]
+        assert sol_block.block_slot == slot
+        return sol_block
 
     def _raise_sol_history_error(self, state: SolNeonDecoderState, msg: str) -> None:
         if state.sol_commit == SolCommit.Confirmed:
