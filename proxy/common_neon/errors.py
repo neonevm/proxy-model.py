@@ -193,3 +193,7 @@ class SolTxSizeError(WrongStrategyError):
 
     def __str__(self) -> str:
         return f'Transaction size is exceeded {self._current_len} > {self._max_len}'
+
+
+class SolHistoryNotFound(RuntimeError):
+    pass

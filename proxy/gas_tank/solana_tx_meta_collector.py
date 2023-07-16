@@ -5,21 +5,17 @@ from abc import ABC, abstractmethod
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, Iterator, List, Any
 
-from proxy.common_neon.config import Config
-from proxy.common_neon.solana_tx import SolCommit
-from proxy.common_neon.solana_interactor import SolInteractor
-from proxy.common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
-from proxy.common_neon.db.db_connect import DBConnection
+from ..common_neon.config import Config
+from ..common_neon.solana_tx import SolCommit
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
+from ..common_neon.db.db_connect import DBConnection
+from ..common_neon.errors import SolHistoryNotFound
 
-
-from proxy.indexer.solana_signatures_db import SolSigsDB
+from ..indexer.solana_signatures_db import SolSigsDB
 
 
 LOG = logging.getLogger(__name__)
-
-
-class SolHistoryNotFound(RuntimeError):
-    pass
 
 
 class SolTxMetaDict:

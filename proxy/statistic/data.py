@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 from enum import Enum, auto as enum_auto
 
 
@@ -132,3 +132,4 @@ class NeonBlockStatData:
     parsed_block: int
     finalized_block: int
     confirmed_block: int
+    tracer_block: Optional[int]

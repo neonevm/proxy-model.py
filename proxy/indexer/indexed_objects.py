@@ -786,8 +786,7 @@ class NeonIndexedBlockInfo:
                 stat.op_sol_spent += sol_spent
 
     def complete_block(self) -> None:
-        if self._is_completed:
-            return
+        assert not self._is_completed
         self._is_completed = True
         self._finalize_log_list()
 
@@ -1026,14 +1025,12 @@ class SolNeonDecoderState:
     #           for solana_ix in solana_tx.solana_ix_list:
     #               solana_ix.level <- level in stack of calls
     #  ....
-    def __init__(self, config: Config,
-                 stat: SolNeonDecoderStat,
-                 start_block_slot: int):
+    def __init__(self, config: Config, stat: SolNeonDecoderStat):
         self._config = config
         self._stat = stat
 
-        self._start_block_slot = start_block_slot
-        self._stop_block_slot = start_block_slot - 1
+        self._start_slot = 0
+        self._stop_slot = 0
         self._sol_commit = SolCommit.NotProcessed
         self._is_finalized = False
 
@@ -1045,9 +1042,17 @@ class SolNeonDecoderState:
         self._neon_block: Optional[NeonIndexedBlockInfo] = None
         self._neon_block_queue: List[NeonIndexedBlockInfo] = list()
 
-    def shift_to_commit(self, sol_commit: SolCommit.Type, stop_block_slot: int):
-        self._start_block_slot = self._stop_block_slot + 1
-        self._stop_block_slot = stop_block_slot
+    def __str__(self) -> str:
+        return str_fmt_object(dict(
+            start_slot=self._start_slot,
+            stop_slot=self._stop_slot,
+            sol_commit=self._sol_commit,
+            block=self._neon_block.block_slot if self.has_neon_block() else None
+        ))
+
+    def set_slot_range(self, start_slot: int, stop_slot: int, sol_commit: SolCommit.Type) -> None:
+        self._start_slot = start_slot
+        self._stop_slot = stop_slot
         self._sol_commit = sol_commit
         self._is_finalized = sol_commit == SolCommit.Finalized
 
@@ -1059,12 +1064,12 @@ class SolNeonDecoderState:
         return self._stat
 
     @property
-    def start_block_slot(self) -> int:
-        return self._start_block_slot
+    def start_slot(self) -> int:
+        return self._start_slot
 
     @property
-    def stop_block_slot(self) -> int:
-        return self._stop_block_slot
+    def stop_slot(self) -> int:
+        return self._stop_slot
 
     @property
     def sol_commit(self) -> SolCommit.Type:
@@ -1083,13 +1088,17 @@ class SolNeonDecoderState:
 
     def complete_neon_block(self) -> None:
         def _last_neon_block_slot() -> int:
+            if not len(self._neon_block_queue):
+                return self._start_slot - 1
             return self._neon_block_queue[-1].block_slot
 
-        assert (not len(self._neon_block_queue)) or (self._neon_block.block_slot > _last_neon_block_slot())
+        assert self._neon_block.block_slot > _last_neon_block_slot()
         self._neon_block_queue.append(self._neon_block)
 
-        if (not self._neon_block.is_completed) and self._neon_block.is_corrupted:
+        if (not self._neon_block.is_done) and self._neon_block.is_corrupted:
             self._stat.inc_neon_corrupted_block_cnt()
+
+        self._neon_block = None
 
     def is_neon_block_queue_empty(self) -> bool:
         return len(self._neon_block_queue) == 0

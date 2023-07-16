@@ -1,10 +1,15 @@
-from collections import deque
-from typing import Optional, Deque
+from typing import List, Generator
+import logging
 
 from ..common_neon.utils.solana_block import SolBlockInfo
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolCommit
 from ..common_neon.config import Config
+from ..common_neon.errors import SolHistoryNotFound
+
+from .indexed_objects import SolNeonDecoderState
+
+LOG = logging.getLogger(__name__)
 
 
 class SolBlockNetCache:
@@ -13,66 +18,116 @@ class SolBlockNetCache:
         self._solana = solana
 
         self._need_to_recache_block_list = False
-        self._start_block_slot = 0
-        self._stop_block_slot = 0
-        self._block_list: Deque[Optional[SolBlockInfo]] = deque()
+        self._start_slot = -1
+        self._stop_slot = -1
+        self._block_list: List[SolBlockInfo] = list()
 
-    def finalize_block(self, block_slot: int) -> None:
-        assert block_slot >= self._start_block_slot
-        if block_slot > self._stop_block_slot:
-            self.clear()
+    def finalize_block(self, sol_block: SolBlockInfo) -> None:
+        if sol_block.block_slot > self._stop_slot:
+            LOG.debug(f'clear on finalized slot: {sol_block.block_slot}')
+            self._clear_cache()
+            return
+        elif sol_block.block_slot <= self._start_slot:
             return
 
-        while len(self._block_list) and (self._start_block_slot <= block_slot):
-            self._block_list.popleft()
-            self._start_block_slot += 1
+        idx = self._calc_idx(sol_block.block_slot)
+        self._block_list = self._block_list[idx:]
+        self._start_slot = sol_block.block_slot
 
-    def get_block_info(self, block_slot: int,
-                       stop_block_slot: int,
-                       sol_commit: SolCommit.Type) -> Optional[SolBlockInfo]:
+    def iter_block(self, state: SolNeonDecoderState) -> Generator[SolBlockInfo, None, None]:
+        root_slot = state.start_slot
+        start_slot = state.start_slot
+
+        while start_slot < state.stop_slot:
+            stop_slot = self._calc_stop_slot(state, start_slot)
+            self._cache_block_list(state, start_slot, stop_slot)
+            start_slot = stop_slot
+
+            block_queue = self._build_block_queue(state, root_slot, stop_slot)
+            if not len(block_queue):
+                continue
+
+            for sol_block in reversed(block_queue):
+                yield sol_block
+            root_slot = block_queue[0].block_slot
+
+        if root_slot != state.stop_slot:
+            self._raise_sol_history_error(state, f'Fail to get head {root_slot}: {str(state)}')
+
+    def _build_block_queue(self, state: SolNeonDecoderState, root_slot: int, slot: int) -> List[SolBlockInfo]:
+        block_queue: List[SolBlockInfo] = list()
+        while slot >= root_slot:
+            idx = self._calc_idx(slot)
+            sol_block = self._block_list[idx]
+            assert sol_block.block_slot == slot
+            if sol_block.is_empty():
+                self._raise_sol_history_error(state, f'Cannot find block {slot}: {str(state)}')
+
+            block_queue.append(sol_block)
+            if slot == root_slot:
+                return block_queue
+            slot = sol_block.parent_block_slot
+
+        raise SolHistoryNotFound(state, f'Fail to get root {root_slot}: {str(state)}')
+
+    def _raise_sol_history_error(self, state: SolNeonDecoderState, msg: str) -> None:
+        if state.sol_commit == SolCommit.Confirmed:
+            self._need_to_recache_block_list = True
+        else:
+            LOG.debug(f'clear on bad branch: {str(state)}')
+            self._clear_cache()
+        raise SolHistoryNotFound(msg)
+
+    def _cache_block_list(self, state: SolNeonDecoderState, start_slot: int, stop_slot: int) -> None:
         if self._need_to_recache_block_list:
-            self._recache_block_list(sol_commit)
+            self._recache_block_list(state)
 
-        if (block_slot > self._stop_block_slot) or (not len(self._block_list)):
-            assert block_slot >= self._stop_block_slot
-            self._cache_block_list(block_slot, stop_block_slot, sol_commit)
+        if (start_slot >= self._start_slot) and (stop_slot <= self._stop_slot):
+            return
 
-        idx = block_slot - self._start_block_slot
-        block_info = self._block_list[idx]
-        assert block_info.block_slot == block_slot
-        return block_info
+        start_slot = max(start_slot, self._stop_slot + 1)
+        if start_slot != self._stop_slot + 1:
+            LOG.debug(f'clear on start slot: {str(state)}')
+            self._clear_cache()
 
-    def mark_recache_block_list(self) -> None:
-        self._need_to_recache_block_list = True
-
-    def clear(self) -> None:
-        self._start_block_slot = 0
-        self._stop_block_slot = 0
-        self._block_list.clear()
-
-    def _cache_block_list(self, block_slot: int, stop_block_slot: int, sol_commit: SolCommit.Type) -> None:
-        max_block_slot = min(
-            block_slot + self._config.indexer_poll_block_cnt,
-            stop_block_slot
-        )
-
-        self._stop_block_slot = max_block_slot
         if not len(self._block_list):
-            self._start_block_slot = block_slot
+            self._start_slot = start_slot
 
-        block_slot_list = [i for i in range(block_slot, max_block_slot + 1)]
-        block_info_list = self._solana.get_block_info_list(block_slot_list, sol_commit, True)
-        self._block_list.extend(block_info_list)
+        slot_list = [slot for slot in range(start_slot, stop_slot + 1)]
+        assert len(slot_list)
 
-    def _recache_block_list(self, commitment: SolCommit.Type) -> None:
+        block_list = self._solana.get_block_info_list(slot_list, state.sol_commit, full=True)
+        self._block_list.extend(block_list)
+        self._stop_slot = stop_slot
+
+    def _recache_block_list(self, state: SolNeonDecoderState) -> None:
+        LOG.debug(f'recache: {str(state)}')
         self._need_to_recache_block_list = False
 
-        start_slot = self._start_block_slot
-        block_slot_list = [start_slot + i for i in range(len(self._block_list)) if self._block_list[i] is None]
-        if not len(block_slot_list):
+        slot_list = [block.block_slot for block in self._block_list if block.is_empty()]
+        if not len(slot_list):
             return
 
-        block_info_list = self._solana.get_block_info_list(block_slot_list, commitment, True)
-        for block_info in block_info_list:
-            if block_info is not None:
-                self._block_list[start_slot + block_info.block_slot] = block_info
+        block_list = self._solana.get_block_info_list(slot_list, state.sol_commit, full=True)
+        for block in block_list:
+            if not block.is_empty():
+                idx = self._calc_idx(block.block_slot)
+                self._block_list[idx] = block
+
+    def _clear_cache(self) -> None:
+        self._need_to_recache_block_list = False
+        self._start_slot = -1
+        self._stop_slot = -1
+        self._block_list.clear()
+
+    def _calc_idx(self, slot: int) -> int:
+        return slot - self._start_slot
+
+    def _calc_stop_slot(self, state: SolNeonDecoderState, start_slot: int) -> int:
+        if state.sol_commit != SolCommit.Finalized:
+            return state.stop_slot
+
+        return min(
+            start_slot + self._config.indexer_poll_block_cnt,
+            state.stop_slot
+        )
