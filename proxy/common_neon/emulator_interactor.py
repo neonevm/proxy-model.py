@@ -99,6 +99,10 @@ def emulator(config: Config, contract: str, sender: str, data: Optional[str], va
     neon_token_mint = ElfParams().neon_token_mint
     chain_id = ElfParams().chain_id
     max_evm_steps_to_execute = config.max_evm_step_cnt_emulate
+    if data is not None:
+        if not data.startswith("0x"):
+            data = "0x" + data
+        data = {"data": data}
     try:
         return NeonCli(config).call(
             'emulate',
