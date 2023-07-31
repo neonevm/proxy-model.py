@@ -6,7 +6,7 @@ import itertools
 import json
 import threading
 import time
-from typing import Dict, Union, Any, List, Optional, cast
+from typing import Dict, Union, Any, List, Optional, Set, cast
 import logging
 import base58
 import requests
@@ -564,45 +564,35 @@ class SolInteractor:
         if not tx_sig_list:
             return True
 
-        all_sigs_confirmed = False
+        is_done = False
         with websockets.sync.client.connect(self._config.solana_websocket_url) as websocket:
-            requests: Dict[int, bool] = {}
             for tx_sig in tx_sig_list:
                 request = self._build_rpc_request('signatureSubscribe', tx_sig, {
                     'commitment': commitment
                 })
-                requests[request['id']] = False
                 websocket.send(json.dumps(request))
 
             timeout_timer = threading.Timer(timeout_sec, lambda: websocket.close())
             timeout_timer.start()
 
-            subscriptions: Dict[int, bool] = {}
+            sub_set: Set[int, bool] = set()
             for response in websocket:
                 response = json.loads(response)
 
-                result = response.get('result', None)
-                id_ = response.get('id', None)
-                if result is not None and id_ is not None:
-                    requests[id_] = True
-                    subscriptions[result] = False
-                elif response.get('method', '') == 'signatureNotification':
-                    params = response.get('params', None)
-                    if params is not None:
-                        subscription = params.get('subscription', None)
-                        if subscription is not None:
-                            subscriptions[subscription] = True
+                if response.get('method', '') == 'signatureNotification':
+                    sub_id = response.get('params', dict()).get('subscription', None)
+                    if sub_id is not None:
+                        sub_set.add(sub_id)
 
-                if (len(tx_sig_list) == len(subscriptions)
-                    and all(requests.values()) and all(subscriptions.values())):
-                    all_sigs_confirmed = True
+                if len(tx_sig_list) == len(sub_set):
+                    is_done = True
                     websocket.close()
                     break
 
             timeout_timer.cancel()
             timeout_timer.join()
 
-        return all_sigs_confirmed
+        return is_done
 
     def get_tx_receipt_list(self, tx_sig_list: List[str],
                             commitment: SolCommit.Type) -> List[Optional[Dict[str, Any]]]:

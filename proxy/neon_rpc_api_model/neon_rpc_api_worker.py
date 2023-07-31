@@ -750,7 +750,7 @@ class NeonRpcApiWorker:
                 'svmHeapSizeLimit': hex(neon_ix.max_heap_size),
                 'svmHeapSizeUsed': hex(neon_ix.used_heap_size),
                 'svmCyclesLimit': hex(neon_ix.max_bpf_cycle_cnt),
-                'svmCyclesUsed ': hex(neon_ix.used_bpf_cycle_cnt),
+                'svmCyclesUsed': hex(neon_ix.used_bpf_cycle_cnt),
                 'neonInstructionCode': hex(neon_ix.ix_code),
                 'neonInstructionName': EvmIxCodeName().get(neon_ix.ix_code),
                 'neonStepLimit': hex(neon_ix.neon_step_cnt) if neon_ix.neon_step_cnt > 0 else None,
