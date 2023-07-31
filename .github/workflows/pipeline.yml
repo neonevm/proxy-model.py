@@ -287,6 +287,7 @@ jobs:
       - openzeppelin-tests
       - basic-tests
       - dapps-tests
+      - build-image
     runs-on: test-runner
     if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
     env:
@@ -307,6 +308,10 @@ jobs:
         with:
           name: Terraform infrastructure logs
           path: ./terraform.log
+      - name: Add private key
+        run: |
+          echo "${{ secrets.CI_STANDS_KEY }}" > ${HOME}/.ssh/ci-stands
+          chmod 644 ${HOME}/.ssh/ci-stands
       - name: Destroy terraform infrastructure
         if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
         run: |

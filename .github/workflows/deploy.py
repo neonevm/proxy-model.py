@@ -445,7 +445,7 @@ def trigger_dapps_tests(solana_ip, proxy_ip, token):
     faucet_url = f"http://{proxy_ip}:3333/"
 
     github.run_dapps_dispatches(proxy_url, solana_url, faucet_url)
-    wait_condition(lambda: github.get_dapps_runs_count() > runs_count_before)
+    wait_condition(lambda: github.get_dapps_runs_count() > runs_count_before, timeout_sec=180)
 
     runs_after = github.get_dapps_runs_list()
     run_id = list(set(runs_after) - set(runs_before))[0]
