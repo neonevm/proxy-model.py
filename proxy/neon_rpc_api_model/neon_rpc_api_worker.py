@@ -642,28 +642,33 @@ class NeonRpcApiWorker:
         try:
             LOG.debug(f'Get transaction count. Account: {account}, tag: {tag}')
 
-            pending_tx_nonce: Optional[int] = None
+            mempool_tx_nonce: Optional[int] = None
             commitment = SolCommit.Confirmed
             req_id = get_req_id_from_log()
 
             if tag == 'pending':
                 commitment = SolCommit.Processed
 
-                pending_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
-                LOG.debug(f'Pending tx count for: {account} - is: {pending_tx_nonce}')
+                mempool_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
+                LOG.debug(f'Pending tx count for: {account} - is: {mempool_tx_nonce}')
+
+            elif tag == 'mempool':
+                commitment = SolCommit.Processed
+
+                mempool_tx_nonce = self._mempool_client.get_mempool_tx_nonce(req_id=req_id, sender=account)
+                LOG.debug(f'Mempool tx count for: {account} - is: {mempool_tx_nonce}')
+
             elif tag == 'latest':
                 commitment = SolCommit.Processed
 
-                pending_tx_nonce = self._mempool_client.get_mempool_tx_nonce(req_id=req_id, sender=account)
-                LOG.debug(f'Mempool tx count for: {account} - is: {pending_tx_nonce}')
             elif tag in {'finalized', 'safe'}:
                 commitment = SolCommit.Finalized
 
-            if pending_tx_nonce is None:
-                pending_tx_nonce = 0
+            if mempool_tx_nonce is None:
+                mempool_tx_nonce = 0
 
             tx_cnt = self._solana.get_state_tx_cnt(account, commitment)
-            tx_count = max(tx_cnt, pending_tx_nonce)
+            tx_count = max(tx_cnt, mempool_tx_nonce)
 
             return hex(tx_count)
         except (Exception,):
