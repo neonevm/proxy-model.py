@@ -472,7 +472,7 @@ def send_notification(url, build_url):
 
     tpl["blocks"][0]["text"]["text"] = (
         f"*Build <{build_url}|`{build_id}`> of repository `{repo_name}` is failed.*"
-        f"\n<{build_url}|View builosetd details>"
+        f"\n<{build_url}|View build details>"
     )
     requests.post(url=url, data=json.dumps(tpl))
 

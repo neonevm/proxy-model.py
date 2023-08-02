@@ -202,7 +202,7 @@ jobs:
         if: always()
         with:
           name: FTS allure report
-          path: allure-reports.tar.gz
+          path: allure-results.tar.gz
       - name: Remove docker container
         if: always()
         run: docker rm -f ${{ env.CONTAINER }}
