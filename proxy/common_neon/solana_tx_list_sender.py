@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict, Set
 
 from .errors import (
-    BlockHashNotFound, NonceTooLowError,
+    BlockHashNotFound, NonceTooLowError, NonceTooHighError,
     CUBudgetExceededError, InvalidIxDataError, RequireResizeIterError,
     CommitLevelError, NodeBehindError, NoMoreRetriesError, BlockedAccountError,
     RescheduleError, WrongStrategyError
@@ -429,8 +429,12 @@ class SolTxListSender:
 
         state_tx_cnt, tx_nonce = tx_error_parser.get_nonce_error()
         if state_tx_cnt is not None:
-            # sender is unknown - should be replaced on upper stack level
-            return self._DecodeResult(status.BadNonceError, NonceTooLowError.init_no_sender(tx_nonce, state_tx_cnt))
+            if tx_nonce < state_tx_cnt:
+                # sender is unknown - should be replaced on upper stack level
+                return self._DecodeResult(status.BadNonceError, NonceTooLowError.init_no_sender(tx_nonce, state_tx_cnt))
+            else:
+                return self._DecodeResult(status.BadNonceError, NonceTooHighError(state_tx_cnt))
+
         elif tx_error_parser.check_if_error():
             LOG.debug(f'unknown error receipt {str(tx.sig)}: {tx_receipt}')
             # no exception: will be converted to DEFAULT EXCEPTION

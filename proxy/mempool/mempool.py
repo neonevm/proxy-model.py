@@ -12,7 +12,8 @@ from .mempool_api import (
     MPRequest, MPRequestType, MPTask, MPTxRequestList,
     MPResult, MPGasPriceResult,
     MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest, MPStuckTxInfo,
-    MPTxSendResult, MPTxSendResultCode
+    MPTxSendResult, MPTxSendResultCode,
+    MPTxPoolContentResult
 )
 
 from .mempool_neon_tx_dict import MPTxDict
@@ -152,6 +153,9 @@ class MemPool:
             return None
         return elf_params.elf_param_dict
 
+    def get_content(self) -> MPTxPoolContentResult:
+        return self._tx_schedule.get_content()
+
     async def _enqueue_tx_request(self) -> NeonTxBeginCode:
         code, tx = self._acquire_tx()
         if tx is None:
@@ -262,13 +266,11 @@ class MemPool:
                     stat = NeonTxBeginData()
                     while self._executor_mng.is_available():
                         code = await self._enqueue_tx_request()
-                        if code != NeonTxBeginCode.Failed:
-                            stat.add_value(code)
-                        else:
+                        if code == NeonTxBeginCode.Failed:
                             break
 
-                    if stat.has_value():
-                        self._stat_client.commit_tx_begin(stat)
+                    self._fill_mempool_stat(stat)
+                    self._stat_client.commit_tx_begin(stat)
 
             except asyncio.exceptions.CancelledError:
                 LOG.debug('Normal exit')
@@ -276,6 +278,13 @@ class MemPool:
 
             except BaseException as exc:
                 LOG.error('Fail on process schedule', exc_info=exc)
+
+    def _fill_mempool_stat(self, stat: Union[NeonTxBeginData, NeonTxEndData]) -> None:
+        stat.processing_stuck_cnt = self._stuck_tx_dict.processing_tx_cnt
+        stat.processing_cnt = len(self._processing_task_list) - stat.processing_stuck_cnt
+        stat.in_reschedule_queue_cnt = len(self._rescheduled_tx_queue)
+        stat.in_stuck_queue_cnt = self._stuck_tx_dict.tx_cnt
+        stat.in_mempool_cnt = self._tx_schedule.tx_cnt
 
     async def _process_tx_result_loop(self):
         while True:
@@ -292,10 +301,11 @@ class MemPool:
                     self._executor_mng.release_executor(mp_task.executor_id)
                     stat.add_value(code)
 
-            if stat.has_value():
-                self._stat_client.commit_tx_end(stat)
-
             self._processing_task_list = not_finished_task_list
+
+            self._fill_mempool_stat(stat)
+            self._stat_client.commit_tx_end(stat)
+
             await asyncio.sleep(self.check_task_timeout_sec)
 
     def _complete_task(self, mp_task: MPTask) -> NeonTxEndCode:
@@ -399,7 +409,7 @@ class MemPool:
         self._release_resource(tx)
         self._stuck_tx_dict.done_tx(tx.sig)
         LOG.debug(f'Stuck request {tx.sig} is done')
-        return NeonTxEndCode.Done
+        return NeonTxEndCode.StuckDone
 
     def _on_done_tx(self, tx: MPTxExecRequest) -> NeonTxEndCode:
         self._release_resource(tx)

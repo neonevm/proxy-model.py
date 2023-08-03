@@ -636,7 +636,8 @@ class NeonRpcApiWorker:
             raise
 
     def eth_getTransactionCount(self, account: str, tag: Union[str, int]) -> str:
-        self._validate_block_tag(tag)
+        if tag != 'mempool':
+            self._validate_block_tag(tag)
         account = self._normalize_address(account).lower()
 
         try:
@@ -935,6 +936,8 @@ class NeonRpcApiWorker:
                     fmt_tx[k] = v.hex()
                 else:
                     fmt_tx[k] = v
+
+            fmt_tx['sender'] = tx.sender.hex()
             return fmt_tx
 
         LOG.debug(f'sendRawTransaction {neon_tx.hex_tx_sig}: {_readable_tx(neon_tx)}')
@@ -1130,6 +1133,49 @@ class NeonRpcApiWorker:
     def net_listening() -> bool:
         return False
 
+    @staticmethod
+    def _mp_pool_tx(neon_tx_info: NeonTxInfo) -> Dict[str, Any]:
+        return {
+            'blockHash': '0x' + '0' * 64,
+            'blockNumber': None,
+            'transactionIndex': None,
+            'from': neon_tx_info.addr,
+            'gas': hex(neon_tx_info.gas_limit),
+            'gasPrice': hex(neon_tx_info.gas_price),
+            'hash': neon_tx_info.sig,
+            'input': neon_tx_info.calldata,
+            'nonce': hex(neon_tx_info.nonce),
+            'to': neon_tx_info.to_addr,
+            'value': hex(neon_tx_info.value)
+        }
+
+    def _mp_pool_queue(self, tx_list: List[NeonTxInfo]) -> Dict[str, Any]:
+        sender_addr = ''
+        sender_pool: Dict[int, Any] = dict()
+        sender_pool_dict: Dict[str, Any] = dict()
+        for tx in tx_list:
+            if sender_addr != tx.addr and len(sender_addr):
+                sender_pool_dict[sender_addr] = sender_pool
+                sender_pool = dict()
+
+            sender_addr = tx.addr
+            sender_pool[tx.nonce] = self._mp_pool_tx(tx)
+
+        if len(sender_addr):
+            sender_pool_dict[sender_addr] = sender_pool
+
+        return sender_pool_dict
+
+    def txpool_content(self) -> Dict[str, Any]:
+        result_dict: Dict[str, Any] = dict()
+
+        req_id = get_req_id_from_log()
+        content = self._mempool_client.get_content(req_id)
+
+        result_dict['pending'] = self._mp_pool_queue(content.pending_list)
+        result_dict['queued'] = self._mp_pool_queue(content.queued_list)
+        return result_dict
+
     def neon_getSolanaTransactionByNeonTransaction(
         self, neon_tx_id: str,
         full: bool = False
@@ -1164,7 +1210,7 @@ class NeonRpcApiWorker:
         return elf_param_dict
 
     def is_allowed_api(self, method_name: str) -> bool:
-        for prefix in ('eth_', 'net_', 'web3_', 'neon_'):
+        for prefix in ('eth_', 'net_', 'web3_', 'neon_', 'txpool_'):
             if method_name.startswith(prefix):
                 break
         else:
@@ -1210,6 +1256,7 @@ class NeonRpcApiWorker:
             "eth_sign",
             "eth_sendTransaction",
             "eth_signTransaction",
+            "txpool_content"
         }
 
         if method_name in private_method_set:

@@ -19,7 +19,15 @@ class MPStuckTxDict:
         self._completed_tx_dict = completed_tx_dict
         self._own_tx_dict: Dict[str, MPStuckTxInfo] = dict()
         self._external_tx_dict: Dict[str, MPStuckTxInfo] = dict()
-        self._processed_tx_dict: Dict[str, MPStuckTxInfo] = dict()
+        self._processing_tx_dict: Dict[str, MPStuckTxInfo] = dict()
+
+    @property
+    def tx_cnt(self) -> int:
+        return len(self._own_tx_dict) + len(self._external_tx_dict)
+
+    @property
+    def processing_tx_cnt(self) -> int:
+        return len(self._processing_tx_dict)
 
     def add_external_tx_list(self, stuck_tx_list: List[MPStuckTxInfo]) -> None:
         tx_dict: Dict[str, MPStuckTxInfo] = dict()
@@ -28,7 +36,7 @@ class MPStuckTxDict:
             if neon_tx_sig in self._own_tx_dict:
                 self._own_tx_dict[neon_tx_sig] = stuck_tx
 
-            elif neon_tx_sig in self._processed_tx_dict:
+            elif neon_tx_sig in self._processing_tx_dict:
                 continue
             elif neon_tx_sig in self._completed_tx_dict:
                 continue
@@ -40,7 +48,7 @@ class MPStuckTxDict:
 
     def add_own_tx(self, stuck_tx_error: StuckTxError) -> None:
         neon_tx_sig = stuck_tx_error.neon_tx_sig
-        if neon_tx_sig in self._processed_tx_dict:
+        if neon_tx_sig in self._processing_tx_dict:
             return
         elif neon_tx_sig in self._own_tx_dict:
             return
@@ -75,7 +83,7 @@ class MPStuckTxDict:
         )
         assert stuck_tx is not None
 
-        self._processed_tx_dict[neon_tx_sig] = stuck_tx
+        self._processing_tx_dict[neon_tx_sig] = stuck_tx
         LOG.debug(f'start processing of stuck tx {str(stuck_tx)}')
         return stuck_tx
 
@@ -85,12 +93,12 @@ class MPStuckTxDict:
             pass
         elif self._external_tx_dict.pop(neon_tx_sig, None):
             pass
-        elif self._processed_tx_dict.pop(neon_tx_sig, None):
+        elif self._processing_tx_dict.pop(neon_tx_sig, None):
             pass
         else:
             assert False, f'{neon_tx_sig} not found in the list of stuck txs'
         LOG.debug(f'skip stuck tx {str(stuck_tx)}')
 
     def done_tx(self, neon_sig: str) -> None:
-        stuck_tx = self._processed_tx_dict.pop(neon_sig)
+        stuck_tx = self._processing_tx_dict.pop(neon_sig)
         LOG.debug(f'done stuck tx {str(stuck_tx)}')

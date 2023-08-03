@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from decimal import Decimal
-from typing import List
+from typing import List, Union
 
 from aioprometheus import Counter, Histogram, Gauge
 
@@ -72,9 +72,14 @@ class ProxyStatService(StatService):
         self._metr_req_latency = Histogram('request_latency_seconds', 'Request latency', registry=self._registry)
 
         self._metr_tx_total = Counter('tx_total', 'Incoming TX Count', registry=self._registry)
+
         self._metr_tx_in_mempool = Gauge('tx_in_mempool', 'Count of Txs in mempool', registry=self._registry)
-        self._metr_tx_in_progress = Gauge('tx_in_progress', 'Count Of Processed Txs', registry=self._registry)
-        self._metr_tx_in_reschedule = Gauge('tx_in_reschedule', 'Count Of Rescheduled Txs', registry=self._registry)
+        self._metr_tx_in_progress = Gauge('tx_in_progress', 'Count Of Processing Txs', registry=self._registry)
+        self._metr_stuck_tx_in_progress = Gauge('stuck_tx_in_progress', 'Count Of Processing Stuck Txs', registry=self._registry)
+        self._metr_tx_in_reschedule = Gauge('tx_in_reschedule', 'Count Of Txs in Rescheduled Queue', registry=self._registry)
+        self._metr_tx_in_stuck = Gauge('tx_in_stuck', 'Count Of Txs in Stuck Queue', registry=self._registry)
+
+        self._metr_tx_canceled = Counter('tx_canceled_count', 'Count of Canceled Txs')
         self._metr_tx_success = Counter('tx_success_count', 'Count Of Succeeded Txs', registry=self._registry)
         self._metr_tx_failed = Counter('tx_failed_count', 'Count Of Failed Txs', registry=self._registry)
 
@@ -124,16 +129,21 @@ class ProxyStatService(StatService):
         self._metr_tx_in_mempool.inc({})
 
     def commit_tx_begin(self, stat: NeonTxBeginData) -> None:
-        self._metr_tx_in_progress.add({}, stat.started_cnt)
-        self._metr_tx_in_reschedule.sub({}, stat.restarted_cnt)
+        self._commit_mempool_stat(stat)
 
     def commit_tx_end(self, stat: NeonTxEndData) -> None:
-        total_done_cnt = stat.failed_cnt + stat.done_cnt
-        self._metr_tx_in_progress.sub({}, total_done_cnt + stat.canceled_cnt)
-        self._metr_tx_in_reschedule.add({}, stat.rescheduled_cnt)
-        self._metr_tx_in_mempool.sub({}, total_done_cnt)
+        self._metr_tx_canceled.add({}, stat.canceled_cnt)
         self._metr_tx_failed.add({}, stat.failed_cnt)
         self._metr_tx_success.add({}, stat.done_cnt)
+
+        self._commit_mempool_stat(stat)
+
+    def _commit_mempool_stat(self, stat: Union[NeonTxBeginData, NeonTxEndData]) -> None:
+        self._metr_tx_in_progress.set({}, stat.processing_cnt)
+        self._metr_stuck_tx_in_progress.set({}, stat.processing_stuck_cnt)
+        self._metr_tx_in_reschedule.set({}, stat.in_reschedule_queue_cnt)
+        self._metr_tx_in_stuck.set({}, stat.in_stuck_queue_cnt)
+        self._metr_tx_in_mempool.set({}, stat.in_mempool_cnt)
 
     def commit_db_health(self, status: bool) -> None:
         self._metr_db_health.set({}, 1 if status else 0)

@@ -155,7 +155,15 @@ class NonceTooLowError(BaseException):
         return f'nonce too low: address {self._sender}, tx: {self._tx_nonce} state: {self._state_tx_cnt}'
 
 
-class NonceTooHighError(BaseException):
+class NonceTooHighError(RescheduleError):
+    def __init__(self, state_tx_cnt: int):
+        super().__init__(state_tx_cnt)
+        self._state_tx_cnt = state_tx_cnt
+
+    @property
+    def state_tx_cnt(self) -> int:
+        return self._state_tx_cnt
+
     def __str__(self) -> str:
         return 'tx nonce is too high for execution'
 

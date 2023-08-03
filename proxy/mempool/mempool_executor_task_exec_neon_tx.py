@@ -23,8 +23,9 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
         except NonceTooLowError:
             LOG.debug(f'Skip {mp_tx_req}, reason: nonce too low')
 
-        except NonceTooHighError:
+        except NonceTooHighError as exc:
             LOG.debug(f'Reschedule tx {mp_tx_req}, reason: nonce too high')
+            neon_tx_exec_cfg.set_state_tx_cnt(exc.state_tx_cnt)
             return MPTxExecResult(MPTxExecResultCode.NonceTooHigh, neon_tx_exec_cfg)
 
         except BadResourceError as exc:

@@ -80,6 +80,8 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
                 return self._mempool.get_gas_price()
             elif mp_request.type == MPRequestType.GetElfParamDict:
                 return self._mempool.get_elf_param_dict()
+            elif mp_request.type == MPRequestType.TxPoolContent:
+                return self._mempool.get_content()
             LOG.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
 
     def process_maintenance_request(self, request: MaintenanceRequest) -> MPResult:

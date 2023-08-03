@@ -36,6 +36,7 @@ class MPRequestType(IntEnum):
     DeactivateALTList = 10
     CloseALTList = 11
     GetStuckTxList = 12
+    TxPoolContent = 13
     Unspecified = 255
 
 
@@ -267,6 +268,12 @@ class MPGetStuckTxListRequest(MPRequest):
         self.type = MPRequestType.GetStuckTxList
 
 
+@dataclass
+class MPTxPoolContentRequest(MPRequest):
+    def __post_init__(self):
+        self.type = MPRequestType.TxPoolContent
+
+
 class MPTxExecResultCode(IntEnum):
     Done = 0
     Reschedule = 1
@@ -366,3 +373,9 @@ class MPResult:
 
     def __repr__(self):
         return f"""Result({'' if self.error is None else '"' + self.error + '"'})"""
+
+
+@dataclass(frozen=True)
+class MPTxPoolContentResult:
+    pending_list: List[NeonTxInfo]
+    queued_list: List[NeonTxInfo]

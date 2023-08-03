@@ -363,7 +363,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         random.shuffle(req_list)
         for req in req_list:
             await self._mempool.enqueue_mp_request(req)
-        self.assertEqual(self._mempool._tx_schedule._tx_cnt, self._mempool._tx_schedule._capacity)
+        self.assertEqual(self._mempool._tx_schedule.tx_cnt, self._mempool._tx_schedule._capacity)
         self.assertEqual(submit_mp_request_mock.call_count, 0)
 
         is_available_mock.return_value = True
@@ -377,7 +377,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
                 update_tx_cnt_list.append(MPSenderTxCntData(sender=sender, state_tx_cnt=nonce))
             self._update_state_tx_cnt(update_tx_cnt_list)
 
-        self.assertEqual(self._mempool._tx_schedule._tx_cnt, 0)
+        self.assertEqual(self._mempool._tx_schedule.tx_cnt, 0)
         self.assertEqual(submit_mp_request_mock.call_count, self._mempool._tx_schedule._capacity)
 
     async def _enqueue_requests(self, req_data_list: List[Dict[str, Any]]) -> MPTxRequestList:
@@ -432,7 +432,7 @@ class TestMPSchedule(unittest.TestCase):
             schedule.add_tx(request)
         self.assertEqual(acct_list[2].address.lower(), schedule._sender_pool_queue[0].sender_address)
         self.assertIs(req_list[3], schedule._sender_pool_queue[0]._tx_nonce_queue[0])
-        self.assertEqual(5, schedule._tx_cnt)
+        self.assertEqual(5, schedule.tx_cnt)
         self.assertEqual(1, len(schedule._sender_pool_queue))
         self.assertEqual(2, self._get_pending_tx_count(schedule, acct_list[0].address.lower()))
         self.assertEqual(1, self._get_pending_tx_count(schedule, acct_list[1].address.lower()))
@@ -459,7 +459,7 @@ class TestMPSchedule(unittest.TestCase):
         random.shuffle(req_list)
         for req in req_list:
             schedule.add_tx(req)
-        self.assertEqual(mp_schedule_capacity, schedule._tx_cnt)
+        self.assertEqual(mp_schedule_capacity, schedule.tx_cnt)
 
     def test_take_out_txs(self):
         schedule = MPTxSchedule(100)

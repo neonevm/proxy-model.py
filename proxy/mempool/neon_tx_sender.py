@@ -43,7 +43,7 @@ class NeonTxSendStrategyExecutor:
 
                 return self._execute(strategy_idx, strategy)
 
-            except RescheduleError:
+            except (RescheduleError, NonceTooLowError):
                 raise
 
             except WrongStrategyError:
@@ -124,5 +124,5 @@ class NeonTxSendStrategyExecutor:
             return
 
         if self._ctx.state_tx_cnt < self._ctx.neon_tx_info.nonce:
-            raise NonceTooHighError()
+            raise NonceTooHighError(self._ctx.state_tx_cnt)
         raise NonceTooLowError(self._ctx.neon_tx_info.addr, self._ctx.neon_tx_info.nonce, self._ctx.state_tx_cnt)

@@ -8,7 +8,10 @@ from typing import List, Dict, Set, Optional, Tuple, Generator, cast
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.json_logger import logging_context
 
-from .mempool_api import MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData, MPTxRequestList
+from .mempool_api import (
+    MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData,
+    MPTxRequestList, MPTxPoolContentResult
+)
 from .sorted_queue import SortedQueue
 
 
@@ -221,6 +224,23 @@ class MPSenderTxPool:
         taken_out_tx_list = self._tx_nonce_queue.extract_list_from(_from)
         return taken_out_tx_list
 
+    @property
+    def pending_stop_pos(self) -> int:
+        if self.state in {self.State.Suspended, self.State.Empty}:
+            return 0
+
+        pending_pos = 0
+        pending_nonce = self._state_tx_cnt
+        for tx in reversed(self._tx_nonce_queue):
+            if tx.nonce != pending_nonce:
+                break
+            pending_nonce += 1
+            pending_pos += 1
+        return pending_pos
+
+    def tx_list(self) -> MPTxRequestList:
+        return list(reversed(self._tx_nonce_queue))
+
 
 class MPTxSchedule:
     _top_index = -1
@@ -237,7 +257,7 @@ class MPTxSchedule:
         self._suspended_sender_set: Set[str] = set()
 
     def _add_tx_to_sender_pool(self, sender_pool: MPSenderTxPool, tx: MPTxRequest) -> None:
-        LOG.debug(f'Add tx {tx.sig} to mempool with {self._tx_cnt} txs')
+        LOG.debug(f'Add tx {tx.sig} to mempool with {self.tx_cnt} txs')
 
         sender_pool.add_tx(tx)
         self._tx_dict.add(tx)
@@ -306,7 +326,7 @@ class MPTxSchedule:
             LOG.debug(f'Include sender {sender_pool.sender_address} into execution queue')
 
     def add_tx(self, tx: MPTxRequest) -> MPTxSendResult:
-        LOG.debug(f'Try to add tx {tx.sig} (gas price {tx.gas_price}) to mempool with {self._tx_cnt} txs')
+        LOG.debug(f'Try to add tx {tx.sig} (gas price {tx.gas_price}) to mempool with {self.tx_cnt} txs')
 
         old_tx = self._tx_dict.get_tx_by_hash(tx.sig)
         if old_tx is not None:
@@ -314,11 +334,11 @@ class MPTxSchedule:
             return MPTxSendResult(code=MPTxSendResultCode.AlreadyKnown, state_tx_cnt=None)
 
         old_tx = self._tx_dict.get_tx_by_sender_nonce(tx)
-        if (old_tx is not None) and (old_tx.gas_price > tx.gas_price):
+        if (old_tx is not None) and (old_tx.gas_price >= tx.gas_price):
             LOG.debug(f'Old tx {old_tx.sig} has higher gas price {old_tx.gas_price} > {tx.gas_price}')
             return MPTxSendResult(code=MPTxSendResultCode.Underprice, state_tx_cnt=None)
 
-        if self._tx_cnt >= self._capacity:
+        if self.tx_cnt >= self._capacity:
             lower_tx = self._tx_dict.peek_lower_tx()
             if (lower_tx is not None) and (lower_tx.gas_price > tx.gas_price):
                 LOG.debug(f'Lowermost tx {lower_tx.sig} has higher gas price {lower_tx.gas_price} > {tx.gas_price}')
@@ -367,11 +387,11 @@ class MPTxSchedule:
         return True
 
     @property
-    def _tx_cnt(self) -> int:
+    def tx_cnt(self) -> int:
         return len(self._tx_dict)
 
     def _check_oversized_and_reduce(self, new_tx: MPTxRequest) -> None:
-        tx_cnt_to_remove = self._tx_cnt - self._capacity
+        tx_cnt_to_remove = self.tx_cnt - self._capacity
         if tx_cnt_to_remove <= 0:
             return
 
@@ -470,3 +490,18 @@ class MPTxSchedule:
         LOG.debug(f'Take in mp_tx_request_list, sender_addr: {sender_address}, {len(mp_tx_request_list)} - txs')
         for mp_tx_request in mp_tx_request_list:
             self.add_tx(mp_tx_request)
+
+    def get_content(self) -> MPTxPoolContentResult:
+        pending_list: List[NeonTxInfo] = list()
+        queued_list: List[NeonTxInfo] = list()
+
+        for tx_pool in self._sender_pool_dict.values():
+            tx_list = tx_pool.tx_list()
+            pending_stop_pos = tx_pool.pending_stop_pos
+            pending_list.extend([tx.neon_tx_info for tx in tx_list[:pending_stop_pos]])
+            queued_list.extend([tx.neon_tx_info for tx in tx_list[pending_stop_pos:]])
+
+        return MPTxPoolContentResult(
+            pending_list=pending_list,
+            queued_list=queued_list
+        )

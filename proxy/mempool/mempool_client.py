@@ -6,7 +6,8 @@ from typing import Callable, Optional, Dict, Any, Union
 
 from .mempool_api import (
     MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPTxRequest,
-    MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
+    MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult,
+    MPTxPoolContentRequest, MPTxPoolContentResult
 )
 
 from ..common_neon.data import NeonTxExecCfg
@@ -102,3 +103,10 @@ class MemPoolClient:
     def get_elf_param_dict(self, req_id: str) -> Optional[Dict[str, Any]]:
         elf_param_dict_req = MPElfParamDictRequest(req_id=req_id, elf_param_dict={})
         return self._pickable_data_client.send_data(elf_param_dict_req)
+
+    @_guard_conn
+    @_reconnecting
+    def get_content(self, req_id: str) -> MPTxPoolContentResult:
+        content_req = MPTxPoolContentRequest(req_id=req_id)
+        return self._pickable_data_client.send_data(content_req)
+
