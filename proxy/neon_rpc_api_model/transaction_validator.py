@@ -9,7 +9,6 @@ from ..common_neon.emulator_interactor import call_tx_emulated, check_emulated_e
 from ..common_neon.errors import EthereumError, NonceTooLowError
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 
 from .estimate import GasEstimate
 
@@ -24,13 +23,16 @@ class NeonTxValidator:
         self._tx = tx
 
         self._neon_account_info = solana.get_neon_account_info(self._tx.sender)
+        self._state_tx_cnt = solana.get_state_tx_cnt(self._neon_account_info)
 
         self._has_gas_less_permit = gas_less_permit
         self._min_gas_price = min_gas_price
         self._estimated_gas = 0
 
         self._tx_gas_limit = self._tx.gasLimit
+        self._init_tx_gas_limit()
 
+    def _init_tx_gas_limit(self) -> None:
         if self._tx.has_chain_id() or (not self._config.allow_underpriced_tx_wo_chainid):
             return
 
@@ -47,21 +49,16 @@ class NeonTxValidator:
             return False
         return (self._tx.gasPrice < self._min_gas_price) or (self._tx.gasLimit < self._estimated_gas)
 
-    def precheck(self) -> NeonTxExecCfg:
-        try:
-            self._prevalidate_tx()
+    def validate(self) -> NeonTxExecCfg:
+        self._prevalidate_tx()
+        if self._config.accept_reverted_tx_into_mempool:
+            emulated_result: NeonEmulatedResult = dict()
+        else:
             emulated_result: NeonEmulatedResult = call_tx_emulated(self._config, self._tx)
-            self.prevalidate_emulator(emulated_result)
+            self._prevalidate_emulator(emulated_result)
 
-            state_tx_cnt = 0
-            if self._neon_account_info is not None:
-                state_tx_cnt = self._neon_account_info.tx_count
-
-            neon_tx_exec_cfg = NeonTxExecCfg().set_emulated_result(emulated_result).set_state_tx_cnt(state_tx_cnt)
-            return neon_tx_exec_cfg
-        except BaseException as exc:
-            self.extract_ethereum_error(exc)
-            raise
+        neon_tx_exec_cfg = NeonTxExecCfg().set_emulated_result(emulated_result).set_state_tx_cnt(self._state_tx_cnt)
+        return neon_tx_exec_cfg
 
     def _prevalidate_tx(self):
         self._prevalidate_sender_eoa()
@@ -70,19 +67,14 @@ class NeonTxValidator:
         self._prevalidate_tx_size()
         self._prevalidate_sender_balance()
         self._prevalidate_underpriced_tx_wo_chainid()
+        self._validate_nonce()
 
-    def prevalidate_emulator(self, emulator_json: Dict[str, Any]):
-        if not self._config.accept_reverted_tx_into_mempool:
-            check_emulated_exit_status(emulator_json)
-            self._prevalidate_gas_usage(emulator_json)
+    def _prevalidate_emulator(self, emulator_json: Dict[str, Any]):
+        check_emulated_exit_status(emulator_json)
+        self._prevalidate_gas_usage(emulator_json)
 
         self._prevalidate_account_sizes(emulator_json)
         self._prevalidate_account_cnt(emulator_json)
-
-    def extract_ethereum_error(self, e: BaseException):
-        receipt_parser = SolTxErrorParser(self._config.evm_program_id, e)
-        state_tx_cnt, tx_nonce = receipt_parser.get_nonce_error()
-        NonceTooLowError.raise_if_error(self._tx.hex_sender, tx_nonce, state_tx_cnt)
 
     def _prevalidate_tx_gas(self):
         if self._tx_gas_limit > self._max_u64:
@@ -117,7 +109,7 @@ class NeonTxValidator:
             return
 
         if self._neon_account_info.code_size > 0:
-            raise EthereumError("sender not an eoa")
+            raise EthereumError(message='sender not an eoa')
 
     def _prevalidate_sender_balance(self):
         if self._neon_account_info:
@@ -135,7 +127,7 @@ class NeonTxValidator:
         else:
             message = 'insufficient funds for gas * price + value'
 
-        raise EthereumError(f"{message}: address {self._tx.hex_sender} have {user_balance} want {required_balance}")
+        raise EthereumError(f'{message}: address {self._tx.hex_sender} have {user_balance} want {required_balance}')
 
     def _prevalidate_gas_usage(self, emulator_json: dict):
         request = {
@@ -153,7 +145,7 @@ class NeonTxValidator:
             return
 
         message = 'gas limit reached'
-        raise EthereumError(f"{message}: have {self._tx_gas_limit} want {self._estimated_gas}")
+        raise EthereumError(f'{message}: have {self._tx_gas_limit} want {self._estimated_gas}')
 
     def _prevalidate_underpriced_tx_wo_chainid(self):
         if not self.is_underpriced_tx_wo_chainid():
@@ -161,7 +153,7 @@ class NeonTxValidator:
         if self._config.allow_underpriced_tx_wo_chainid:
             return
 
-        raise EthereumError(f"proxy configuration doesn't allow underpriced transaction without chain-id")
+        raise EthereumError("proxy configuration doesn't allow underpriced transaction without chain-id")
 
     @staticmethod
     def _prevalidate_account_sizes(emulator_json: Dict[str, Any]):
@@ -175,8 +167,22 @@ class NeonTxValidator:
 
     def _prevalidate_account_cnt(self, emulator_json: Dict[str, Any]):
         account_cnt = (
-            len(emulator_json.get("accounts", [])) +
-            len(emulator_json.get("solana_accounts", []))
+            len(emulator_json.get('accounts', list())) +
+            len(emulator_json.get('solana_accounts', list()))
         )
+
         if account_cnt > self._config.max_tx_account_cnt:
-            raise EthereumError(f"transaction requires too lot of accounts {account_cnt}")
+            raise EthereumError(f'transaction requires too lot of accounts {account_cnt}')
+
+    def _validate_nonce(self) -> None:
+        tx_nonce = int(self._tx.nonce)
+        tx_sender = self._tx.hex_sender
+        state_tx_cnt = self._state_tx_cnt
+
+        if self._max_u64 in (self._state_tx_cnt, tx_nonce):
+            raise EthereumError(
+                code=NonceTooLowError.eth_error_code,
+                message=f'nonce has max value: address {tx_sender}, tx: {tx_nonce} state: {state_tx_cnt}'
+            )
+
+        NonceTooLowError.raise_if_error(tx_sender, tx_nonce, state_tx_cnt)

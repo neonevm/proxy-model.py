@@ -13,7 +13,8 @@ from .mempool_api import (
     MPResult, MPGasPriceResult,
     MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest, MPStuckTxInfo,
     MPTxSendResult, MPTxSendResultCode,
-    MPTxPoolContentResult
+    MPTxPoolContentResult,
+    MPNeonTxResult
 )
 
 from .mempool_neon_tx_dict import MPTxDict
@@ -30,10 +31,9 @@ from .mempool_schedule import MPTxSchedule
 from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.errors import EthereumError, StuckTxError
+from ..common_neon.errors import StuckTxError
 from ..common_neon.operator_resource_info import OpResIdent
 from ..common_neon.operator_resource_mng import OpResMng
-from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.json_logger import logging_context
 
 from ..statistic.data import NeonTxBeginCode, NeonTxBeginData, NeonTxEndCode, NeonTxEndData
@@ -110,7 +110,7 @@ class MemPool:
 
     async def schedule_mp_tx_request(self, tx: MPTxRequest) -> MPTxSendResult:
         try:
-            if self._completed_tx_dict.get_tx(tx.sig) is not None:
+            if self._completed_tx_dict.get_tx_by_hash(tx.sig) is not None:
                 LOG.debug('Tx is already processed')
                 return MPTxSendResult(MPTxSendResultCode.AlreadyKnown, state_tx_cnt=None)
 
@@ -137,11 +137,17 @@ class MemPool:
     def get_last_tx_nonce(self, sender_addr: str) -> int:
         return self._tx_schedule.get_last_tx_nonce(sender_addr)
 
-    def get_pending_tx_by_hash(self, tx_hash: str) -> Union[NeonTxInfo, EthereumError, None]:
+    def get_pending_tx_by_hash(self, tx_hash: str) -> MPNeonTxResult:
         neon_tx_info = self._tx_schedule.get_pending_tx_by_hash(tx_hash)
         if neon_tx_info is not None:
             return neon_tx_info
-        return self._completed_tx_dict.get_tx(tx_hash)
+        return self._completed_tx_dict.get_tx_by_hash(tx_hash)
+
+    def get_pending_tx_by_sender_nonce(self, sender_addr: str, tx_nonce: int) -> MPNeonTxResult:
+        neon_tx_info = self._tx_schedule.get_pending_tx_by_sender_nonce(sender_addr, tx_nonce)
+        if neon_tx_info is not None:
+            return neon_tx_info
+        return self._completed_tx_dict.get_tx_by_sender_nonce(sender_addr, tx_nonce)
 
     def get_gas_price(self) -> Optional[MPGasPriceResult]:
         return self._gas_price

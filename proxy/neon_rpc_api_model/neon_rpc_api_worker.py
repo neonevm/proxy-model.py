@@ -19,20 +19,22 @@ from ..common_neon.environment_utils import NeonCli
 from ..common_neon.errors import EthereumError, InvalidParamError, RescheduleError, NonceTooLowError
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptShortInfo, SolTxCostInfo, SolAltIxInfo
+from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptShortInfo, SolAltIxInfo
 from ..common_neon.solana_tx import SolCommit
 from ..common_neon.utils import SolBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
 from ..common_neon.layouts import NeonAccountInfo
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.neon_instruction import EvmIxCodeName, AltIxCodeName
 
-from ..mempool import MemPoolClient, MP_SERVICE_ADDR, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
+from ..mempool import (
+    MemPoolClient, MP_SERVICE_ADDR,
+    MPNeonTxResult, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
+)
 
 from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
 from ..indexer.indexer_db import IndexerDB
 
 from .estimate import GasEstimate
-from .nonce_validator import NeonTxNonceValidator
 from .transaction_validator import NeonTxValidator
 
 
@@ -879,6 +881,30 @@ class NeonRpcApiWorker:
             neon_tx_receipt = NeonTxReceiptInfo(neon_tx, NeonTxResultInfo())
         return self._get_transaction(neon_tx_receipt)
 
+    def neon_getTransactionBySenderNonce(self, address: str, nonce: Union[int, str]) -> Optional[Dict[str, Any]]:
+        sender_addr = self._normalize_address(address).lower()
+        if isinstance(nonce, str):
+            nonce = nonce.lower()
+            if nonce[:2] == '0x':
+                tx_nonce = int(nonce, 16)
+            else:
+                tx_nonce = int(nonce, 10)
+        else:
+            tx_nonce = nonce
+
+        neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_sender_nonce(sender_addr, tx_nonce)
+        if neon_tx_receipt is None:
+            neon_tx: MPNeonTxResult = self._mempool_client.get_pending_tx_by_sender_nonce(
+                get_req_id_from_log(), sender_addr, tx_nonce
+            )
+            if neon_tx is None:
+                LOG.debug("Not found receipt")
+                return None
+            elif isinstance(neon_tx, EthereumError):
+                raise neon_tx
+
+        return self._get_transaction(neon_tx_receipt)
+
     def eth_getCode(self, account: str, tag: Union[str, int]) -> str:
         self._validate_block_tag(tag)
         account = self._normalize_address(account)
@@ -894,11 +920,11 @@ class NeonRpcApiWorker:
 
     def eth_sendRawTransaction(self, raw_tx: str) -> str:
         neon_tx: NeonTx = self._decode_neon_raw_tx(raw_tx)
-        try:
-            # validate that tx was executed 2 times (second in the except section)
-            if self._is_neon_tx_exist(neon_tx):
-                return neon_tx.hex_tx_sig
+        # validate that tx was executed 2 times (second in the except section)
+        if self._is_neon_tx_exist(neon_tx):
+            return neon_tx.hex_tx_sig
 
+        try:
             neon_tx_exec_cfg: NeonTxExecCfg = self._get_neon_tx_exec_cfg(neon_tx)
 
             result: MPTxSendResult = self._mempool_client.send_raw_transaction(
@@ -917,8 +943,11 @@ class NeonRpcApiWorker:
             # revalidate that tx was executed
             if self._is_neon_tx_exist(neon_tx):
                 return neon_tx.hex_tx_sig
+            elif isinstance(exc, NonceTooLowError):
+                self._validate_old_nonce(neon_tx)
+                return neon_tx.hex_tx_sig
 
-            if not isinstance(exc, (EthereumError, NonceTooLowError)):
+            if not isinstance(exc, EthereumError):
                 LOG.error('Failed to process eth_sendRawTransaction', exc_info=exc)
             raise
 
@@ -944,18 +973,23 @@ class NeonRpcApiWorker:
         return neon_tx
 
     def _is_neon_tx_exist(self, neon_tx: NeonTx) -> bool:
-        # only if tx was indexed by the Indexer
         neon_tx_receipt = self._db.get_tx_by_neon_sig(neon_tx.hex_tx_sig)
         if neon_tx_receipt is not None:
-            raise EthereumError(message='already known')
-
-        # only if the Proxy mempool knows about tx
-        neon_tx_or_error = self._mempool_client.get_pending_tx_by_hash(get_req_id_from_log(), neon_tx.hex_tx_sig)
-        if neon_tx_or_error is not None:
+            if neon_tx_receipt.neon_tx_res.block_slot <= self._db.get_finalized_block_slot():
+                raise EthereumError(message='already known')
             return True
 
-        NeonTxNonceValidator(self._solana, neon_tx).precheck()
-        return False
+        neon_tx_or_error = self._mempool_client.get_pending_tx_by_hash(get_req_id_from_log(), neon_tx.hex_tx_sig)
+        return neon_tx_or_error is not None
+
+    def _validate_old_nonce(self, neon_tx: NeonTx) -> None:
+        # There are several Proxies in the network with independent mempools,
+        #   the network can switch between branches
+        #   so the Proxy returns the good result if Neon Tx wasn't finalized
+        tx_sender = neon_tx.hex_sender
+        tx_nonce = int(neon_tx.nonce)
+        state_tx_cnt = self._solana.get_state_tx_cnt(tx_sender, SolCommit.Finalized)
+        NonceTooLowError.raise_if_error(tx_sender, tx_nonce, state_tx_cnt)
 
     def _get_neon_tx_exec_cfg(self, neon_tx: NeonTx) -> NeonTxExecCfg:
         gas_less_permit = False
@@ -964,7 +998,7 @@ class NeonRpcApiWorker:
 
         min_gas_price = self._gas_price.min_executable_gas_price
         neon_tx_validator = NeonTxValidator(self._config, self._solana, neon_tx, gas_less_permit, min_gas_price)
-        neon_tx_exec_cfg = neon_tx_validator.precheck()
+        neon_tx_exec_cfg = neon_tx_validator.validate()
 
         return neon_tx_exec_cfg
 

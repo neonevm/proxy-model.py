@@ -213,6 +213,9 @@ class IndexerDB:
     def get_tx_by_neon_sig(self, neon_sig: str) -> Optional[NeonTxReceiptInfo]:
         return self._neon_txs_db.get_tx_by_neon_sig(neon_sig)
 
+    def get_tx_by_sender_nonce(self, sender: str, tx_nonce: int) -> Optional[NeonTxReceiptInfo]:
+        return self._neon_txs_db.get_tx_by_sender_nonce(sender, tx_nonce)
+
     def get_tx_by_block_slot_tx_idx(self, block_slot: int, tx_idx: int) -> Optional[NeonTxReceiptInfo]:
         return self._neon_txs_db.get_tx_by_block_slot_tx_idx(block_slot, tx_idx)
 

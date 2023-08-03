@@ -340,8 +340,12 @@ class SolInteractor:
 
         return NeonAccountInfo.from_account_info(info)
 
-    def get_state_tx_cnt(self, neon_account: Union[str, bytes, NeonAddress], commitment=SolCommit.Confirmed) -> int:
-        neon_account_info = self.get_neon_account_info(neon_account, commitment)
+    def get_state_tx_cnt(self, neon_account: Union[str, bytes, NeonAddress, NeonAccountInfo, None],
+                         commitment=SolCommit.Confirmed) -> int:
+        if (neon_account is None) or isinstance(neon_account, NeonAccountInfo):
+            neon_account_info = neon_account
+        else:
+            neon_account_info = self.get_neon_account_info(neon_account, commitment)
         return neon_account_info.tx_count if neon_account_info is not None else 0
 
     def get_neon_account_info_list(self, neon_account_list: List[Union[NeonAddress, str]],

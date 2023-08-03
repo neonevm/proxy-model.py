@@ -5,10 +5,11 @@ import time
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List, Dict, Union
 
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.operator_resource_info import OpResIdent
+from ..common_neon.errors import EthereumError
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.utils import str_fmt_object
 from ..common_neon.utils.eth_proto import NeonTx
@@ -37,6 +38,7 @@ class MPRequestType(IntEnum):
     CloseALTList = 11
     GetStuckTxList = 12
     TxPoolContent = 13
+    GetTxBySenderNonce = 14
     Unspecified = 255
 
 
@@ -176,6 +178,15 @@ class MPPendingTxByHashRequest(MPRequest):
 
     def __post_init__(self):
         self.type = MPRequestType.GetTxByHash
+
+
+@dataclass
+class MPPendingTxBySenderNonceRequest(MPRequest):
+    sender: str = None
+    tx_nonce: int = 0
+
+    def __post_init__(self):
+        self.type = MPRequestType.GetTxBySenderNonce
 
 
 @dataclass
@@ -359,6 +370,9 @@ class MPOpResInitResult:
 class MPALTListResult:
     block_height: int
     alt_info_list: List[MPALTInfo]
+
+
+MPNeonTxResult = Union[NeonTxInfo, EthereumError, None]
 
 
 @dataclass(frozen=True)

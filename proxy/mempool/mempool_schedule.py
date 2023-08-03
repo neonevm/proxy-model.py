@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import enum
 
-from typing import List, Dict, Set, Optional, Tuple, Generator, cast
+from typing import List, Dict, Set, Optional, Tuple, Union, Generator, cast
 
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.json_logger import logging_context
@@ -33,8 +33,14 @@ class MPTxRequestDict:
         return len(self._tx_hash_dict)
 
     @staticmethod
-    def _sender_nonce(tx: MPTxRequest) -> str:
-        return f'{tx.sender_address}:{tx.nonce}'
+    def _sender_nonce(tx: Union[MPTxRequest, Tuple[str, int]]) -> str:
+        if isinstance(tx, MPTxRequest):
+            sender_addr = tx.sender_address
+            tx_nonce = tx.nonce
+        else:
+            sender_addr = tx[0]
+            tx_nonce = tx[1]
+        return f'{sender_addr}:{tx_nonce}'
 
     def add(self, tx: MPTxRequest) -> None:
         sender_nonce = self._sender_nonce(tx)
@@ -63,8 +69,8 @@ class MPTxRequestDict:
     def get_tx_by_hash(self, neon_sig: str) -> Optional[MPTxRequest]:
         return self._tx_hash_dict.get(neon_sig, None)
 
-    def get_tx_by_sender_nonce(self, tx: MPTxRequest) -> Optional[MPTxRequest]:
-        return self._tx_sender_nonce_dict.get(self._sender_nonce(tx), None)
+    def get_tx_by_sender_nonce(self, sender_addr: str, tx_nonce: int) -> Optional[MPTxRequest]:
+        return self._tx_sender_nonce_dict.get(self._sender_nonce((sender_addr, tx_nonce)), None)
 
     def acquire_tx(self, tx: MPTxRequest) -> None:
         self._tx_gas_price_queue.pop(tx)
@@ -333,7 +339,7 @@ class MPTxSchedule:
             LOG.debug(f'Tx {tx.sig} is already in mempool')
             return MPTxSendResult(code=MPTxSendResultCode.AlreadyKnown, state_tx_cnt=None)
 
-        old_tx = self._tx_dict.get_tx_by_sender_nonce(tx)
+        old_tx = self._tx_dict.get_tx_by_sender_nonce(tx.sender_address, tx.nonce)
         if (old_tx is not None) and (old_tx.gas_price >= tx.gas_price):
             LOG.debug(f'Old tx {old_tx.sig} has higher gas price {old_tx.gas_price} > {tx.gas_price}')
             return MPTxSendResult(code=MPTxSendResultCode.Underprice, state_tx_cnt=None)
@@ -351,7 +357,7 @@ class MPTxSchedule:
             top_tx = sender_pool.top_tx
             if top_tx.nonce == tx.nonce:
                 LOG.debug(f'Old tx {top_tx.sig} (gas price {top_tx.gas_price}) is processing')
-                return MPTxSendResult(code=MPTxSendResultCode.NonceTooLow, state_tx_cnt=top_tx.nonce)
+                return MPTxSendResult(code=MPTxSendResultCode.NonceTooLow, state_tx_cnt=top_tx.nonce + 1)
 
         # this condition checks the processing tx too
         state_tx_cnt = max(tx.neon_tx_exec_cfg.state_tx_cnt, sender_pool.state_tx_cnt)
@@ -438,6 +444,10 @@ class MPTxSchedule:
 
     def get_pending_tx_by_hash(self, neon_sig: str) -> Optional[NeonTxInfo]:
         tx = self._tx_dict.get_tx_by_hash(neon_sig)
+        return None if tx is None else tx.neon_tx_info
+
+    def get_pending_tx_by_sender_nonce(self, sender_addr: str, tx_nonce: int) -> Optional[NeonTxInfo]:
+        tx = self._tx_dict.get_tx_by_sender_nonce(sender_addr, tx_nonce)
         return None if tx is None else tx.neon_tx_info
 
     def _done_tx(self, tx: MPTxRequest) -> None:

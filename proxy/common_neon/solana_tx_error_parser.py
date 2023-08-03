@@ -165,6 +165,7 @@ class SolTxErrorParser:
     _already_process_msg = 'AlreadyProcessed'
 
     _exceeded_cu_number_log = 'Program failed to complete: exceeded maximum number of instructions allowed'
+    _exceeded_cu_number_log_v2 = 'Program failed to complete: exceeded CUs meter at BPF instruction'
     _read_write_blocked_log = 'trying to execute transaction on rw locked account'
     _already_finalized_log = 'Program log: Storage Account is finalized'
 
@@ -329,6 +330,8 @@ class SolTxErrorParser:
         log_list = self._get_log_list()
         for log_rec in reversed(log_list):
             if log_rec.startswith(self._exceeded_cu_number_log):
+                return True
+            elif log_rec.startswith(self._exceeded_cu_number_log_v2):
                 return True
             elif log_rec == self._log_truncated_log:
                 return True

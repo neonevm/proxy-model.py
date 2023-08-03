@@ -14,7 +14,6 @@ from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.utils.eth_proto import NeonTx
-from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.operator_resource_mng import OpResMng
 
@@ -597,7 +596,7 @@ class TestMPSchedule(unittest.TestCase):
 
         processing_req, res = _add_tx(req_data, req_id='processing', gas_price=tx.gas_price + 1)
         self.assertEqual(res.code, MPTxSendResultCode.NonceTooLow)
-        self.assertEqual(res.state_tx_cnt, tx.nonce)
+        self.assertEqual(res.state_tx_cnt, tx.nonce + 1)
 
         req, res = _add_tx(req_data, req_id='new-nonce', nonce=tx.nonce + 1)
         self.assertEqual(res.code, MPTxSendResultCode.Success)

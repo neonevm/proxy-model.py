@@ -9,7 +9,7 @@ from .mempool import MemPool
 
 from .mempool_api import (
     MPResult, MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest,
-    MPPendingTxNonceRequest, MPMempoolTxNonceRequest
+    MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxBySenderNonceRequest
 )
 
 from .mempool_replicator import MemPoolReplicator
@@ -76,6 +76,9 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             elif mp_request.type == MPRequestType.GetTxByHash:
                 pending_tx_by_hash_req = cast(MPPendingTxByHashRequest, mp_request)
                 return self._mempool.get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
+            elif mp_request.type == MPRequestType.GetTxBySenderNonce:
+                req = cast(MPPendingTxBySenderNonceRequest, mp_request)
+                return self._mempool.get_pending_tx_by_sender_nonce(req.sender, req.tx_nonce)
             elif mp_request.type == MPRequestType.GetGasPrice:
                 return self._mempool.get_gas_price()
             elif mp_request.type == MPRequestType.GetElfParamDict:

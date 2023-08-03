@@ -54,7 +54,7 @@ class NeonTxExecCfg:
         return self._holder_account
 
     def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> NeonTxExecCfg:
-        account_dict = {k: emulated_result.get(k, None) for k in ['accounts', 'solana_accounts']}
+        account_dict = {k: emulated_result.get(k, list()) for k in ['accounts', 'solana_accounts']}
         evm_step_cnt = emulated_result.get('steps_executed', 0)
         self._account_dict = account_dict
         self._evm_step_cnt = evm_step_cnt

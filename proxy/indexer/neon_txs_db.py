@@ -107,6 +107,14 @@ class NeonTxsDB(BaseDBTable):
         '''
         return self._tx_from_value(self._db.fetch_one(request, (neon_sig,)))
 
+    def get_tx_by_sender_nonce(self, sender: str, tx_nonce: int) -> Optional[NeonTxReceiptInfo]:
+        request = self._base_request_hdr + '''
+               AND b.is_active = True
+             WHERE a.from_addr = %s
+               AND a.nonce = %s
+        '''
+        return self._tx_from_value(self._db.fetch_one(request, (sender, hex(tx_nonce))))
+
     def get_tx_list_by_block_slot(self, block_slot: int) -> List[NeonTxReceiptInfo]:
         request = self._base_request_hdr + '''
              WHERE a.block_slot = %s
