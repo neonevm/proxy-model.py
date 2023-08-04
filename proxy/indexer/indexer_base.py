@@ -13,9 +13,13 @@ class IndexerBase:
     def __init__(self, config: Config, solana: SolInteractor, last_slot: int):
         self._solana = solana
         self._config = config
-        self._start_slot = self._init_start_slot('receipt', last_slot)
 
-    def _init_start_slot(self, name: str, last_known_slot: int) -> int:
+        start_slot = self._get_start_slot(last_slot)
+        first_slot = solana.get_first_available_block()
+        self._start_slot = max(start_slot, first_slot)
+        LOG.info(f'FIRST_AVAILABLE_SLOT={first_slot}: started the receipt slot from {self._start_slot}')
+
+    def _get_start_slot(self, last_known_slot: int) -> int:
         """
         This function allow to skip some part of history.
         - LATEST - start from the last block slot from Solana
@@ -25,10 +29,9 @@ class IndexerBase:
         last_known_slot = 0 if not isinstance(last_known_slot, int) else last_known_slot
         latest_slot = self._solana.get_block_slot(SolCommit.Finalized)
         start_int_slot = 0
-        name = f'{name} slot'
 
         start_slot = self._config.start_slot
-        LOG.info(f'Starting {name} with LATEST_KNOWN_LOST={last_known_slot} and START_SLOT={start_slot}')
+        LOG.info(f'Starting the receipt slot with LATEST_KNOWN_SLOT={last_known_slot} and START_SLOT={start_slot}')
 
         if start_slot not in {'CONTINUE', 'LATEST'}:
             try:
@@ -38,24 +41,21 @@ class IndexerBase:
 
         if start_slot == 'CONTINUE':
             if last_known_slot > 0:
-                LOG.info(f'START_SLOT={start_slot}: started the {name} from previous run {last_known_slot}')
+                LOG.info(f'START_SLOT={start_slot}: started the receipt slot from previous run {last_known_slot}')
                 return last_known_slot
             else:
-                LOG.info(f'START_SLOT={start_slot}: forced the {name} from the latest Solana slot')
+                LOG.info(f'START_SLOT={start_slot}: forced the receipt slot from the latest Solana slot')
                 start_slot = 'LATEST'
 
         if start_slot == 'LATEST':
-            LOG.info(f'START_SLOT={start_slot}: started the {name} from the latest Solana slot {latest_slot}')
+            LOG.info(f'START_SLOT={start_slot}: started the receipt slot from the latest Solana slot {latest_slot}')
             return latest_slot
 
         if start_int_slot < last_known_slot:
-            LOG.info(
-                f'START_SLOT={start_slot}: started the {name} from previous run, ' +
-                f'because {start_int_slot} < {last_known_slot}'
-            )
+            LOG.info(f'START_SLOT={start_slot}: started the receipt slot from previous run {last_known_slot}')
             return last_known_slot
 
-        LOG.info(f'START_SLOT={start_slot}: started the {name} from {start_int_slot}')
+        LOG.info(f'START_SLOT={start_slot}: started the receipt slot from {start_int_slot}')
         return start_int_slot
 
     def run(self):

@@ -70,6 +70,8 @@ class NeonCli(CliBase):
 
             if data is None:
                 data = ""
+            else:
+                data = json.dumps(data)
 
             result = subprocess.run(
                 cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,

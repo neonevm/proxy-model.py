@@ -21,7 +21,7 @@ class GasPriceCalculator:
         self._config = config
         self._pyth_network_client = PythNetworkClient(solana)
         self._sol_price_usd: Optional[Decimal] = None
-        self._neon_price_usd = self._config.neon_price_usd
+        self._neon_price_usd: Optional[Decimal] = None
         self._min_gas_price: Optional[int] = None
         self._suggested_gas_price: Optional[int] = None
 
@@ -81,23 +81,21 @@ class GasPriceCalculator:
             return None
 
         try:
-            neon_price = self._pyth_network_client.get_price(self._neon_price_symbol)
-            if (neon_price is not None) and (neon_price.get('status', 0) == 1) and ('price' in neon_price):
-                self._neon_price_usd = Decimal(neon_price['price'])
-            else:
-                self._neon_price_usd = self._config.neon_price_usd
+            self._neon_price_usd = self._get_token_price(self._neon_price_symbol)
+            self._sol_price_usd = self._get_token_price(self._sol_price_symbol)
 
-            sol_price = self._pyth_network_client.get_price(self._sol_price_symbol)
-            if sol_price is None:
-                raise RuntimeError('SOL price is absent in the pyth.network list')
-            if sol_price.get('status', 0) != 1:  # tradable
-                raise RuntimeError('SOL price status is not tradable')
-            self._sol_price_usd = Decimal(sol_price['price'])
-
-            return (self._sol_price_usd / self._neon_price_usd) * pow(Decimal(10), 9)
+            return round((self._sol_price_usd / self._neon_price_usd) * pow(Decimal(10), 9))
         except BaseException as exc:
-            LOG.error('Failed to retrieve SOL price.', exc_info=exc)
+            LOG.error('Failed to retrieve SOL price', exc_info=exc)
             return None
+
+    def _get_token_price(self, symbol: str) -> Decimal:
+        price = self._pyth_network_client.get_price(symbol)
+        if price is None:
+            raise RuntimeError(f'{symbol} price is absent in the pyth.network list')
+        if price.get('status', 0) != 1:  # tradable
+            raise RuntimeError(f'{symbol} price status is not tradable')
+        return Decimal(price['price'])
 
     @property
     def operator_fee(self) -> Decimal:
@@ -105,7 +103,7 @@ class GasPriceCalculator:
 
     @property
     def gas_price_suggested_pct(self) -> Decimal:
-        return self._config.operator_fee + self._config.gas_price_suggested_pct
+        return self._config.operator_fee + self._config.gas_price_slippage
 
     @property
     def sol_price_account(self) -> Optional[SolPubKey]:

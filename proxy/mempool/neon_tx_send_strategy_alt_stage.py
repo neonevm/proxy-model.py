@@ -1,11 +1,8 @@
-import copy
 import logging
 
 from typing import List, Optional, Dict
 
-from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
-from ..common_neon.elf_params import ElfParams
-from ..common_neon.errors import BadResourceError
+from ..common_neon.errors import ALTContentError
 from ..common_neon.solana_alt import ALTInfo
 from ..common_neon.solana_alt_limit import ALTLimit
 from ..common_neon.solana_alt_builder import ALTTxBuilder, ALTTxSet
@@ -13,80 +10,17 @@ from ..common_neon.solana_tx import SolTx, SolTxSizeError
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_v0 import SolV0Tx
 
-from ..mempool.neon_tx_send_base_strategy import BaseNeonTxPrepStage
-from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
+from .neon_tx_send_base_strategy import BaseNeonTxPrepStage
+from .neon_tx_sender_ctx import NeonTxSendCtx
 
 
 LOG = logging.getLogger(__name__)
 
 
-class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
-    name = 'WriteHolderAccount'
-
-    def complete_init(self) -> None:
-        self._ctx.set_holder_usage(True)
-
-        if self._ctx.is_holder_completed() is not None:
-            return
-
-        is_holder_completed = self._is_holder_completed()
-        self._ctx.set_holder_completed(is_holder_completed)
-
-    def _is_holder_completed(self) -> bool:
-        solana = self._ctx.solana
-        holder = self._ctx.holder
-        builder = self._ctx.ix_builder
-
-        holder_info = solana.get_holder_account_info(holder)
-        if holder_info is None:
-            raise BadResourceError(f'Bad holder account {str(holder)}')
-
-        elif holder_info.tag == ACTIVE_HOLDER_TAG:
-            if holder_info.neon_tx_sig != self._ctx.neon_tx.hex_tx_sig:
-                raise BadResourceError(f'Holder account {str(holder)} has another neon tx: {holder_info.neon_tx_sig}')
-            return True
-
-        elif holder_info.tag == FINALIZED_HOLDER_TAG:
-            return holder_info.neon_tx_sig == self._ctx.neon_tx.hex_tx_sig
-
-        elif holder_info.tag == HOLDER_TAG:
-            holder_msg_len = len(builder.holder_msg)
-            return builder.holder_msg == holder_info.neon_tx_data[:holder_msg_len]
-
-        raise BadResourceError(f'Holder account has bad tag: {holder_info.tag}')
-
-    def get_tx_name_list(self) -> List[str]:
-        return [self.name]
-
-    def build_tx_list(self) -> List[List[SolTx]]:
-        if self._ctx.is_holder_completed():
-            return list()
-
-        builder = self._ctx.ix_builder
-
-        tx_list: List[SolTx] = list()
-        holder_msg_offset = 0
-        holder_msg = copy.copy(builder.holder_msg)
-
-        holder_msg_size = ElfParams().holder_msg_size
-        while len(holder_msg):
-            (holder_msg_part, holder_msg) = (holder_msg[:holder_msg_size], holder_msg[holder_msg_size:])
-            tx = SolLegacyTx(
-                name='WriteHolderAccount',
-                ix_list=[builder.make_write_ix(holder_msg_offset, holder_msg_part)]
-            )
-            tx_list.append(tx)
-            holder_msg_offset += holder_msg_size
-
-        return [tx_list]
-
-    def update_after_emulate(self) -> None:
-        self._ctx.set_holder_completed(True)
-
-
 class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
     def __init__(self, ctx: NeonTxSendCtx):
         super().__init__(ctx)
+        self._test_legacy_tx: Optional[SolLegacyTx] = None
         self._actual_alt_info: Optional[ALTInfo] = None
         self._alt_info_dict: Dict[str, ALTInfo] = dict()
         self._alt_builder = ALTTxBuilder(self._ctx.solana, self._ctx.ix_builder, self._ctx.signer)
@@ -97,7 +31,7 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
         return list(self._alt_info_dict.values())
 
     def complete_init(self) -> None:
-        self._ctx.set_holder_usage(True)  # using of the operator key for ALTs
+        self._ctx.mark_resource_use()  # using of the operator key for ALTs
 
     def _tx_has_valid_size(self, legacy_tx: SolLegacyTx) -> bool:
         try:
@@ -108,6 +42,7 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
 
     def init_alt_info(self, legacy_tx: SolLegacyTx) -> bool:
         self._alt_info_dict.clear()
+        self._test_legacy_tx = legacy_tx
         actual_alt_info = self._alt_builder.build_alt_info(legacy_tx)
 
         alt_info_list = self._filter_alt_info_list(actual_alt_info)
@@ -148,8 +83,10 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
         else:
             LOG.debug(f'Use new ALT: {alt_info.alt_address.table_account}')
 
-    @staticmethod
-    def _extend_alt_info(actual_alt_info: ALTInfo, alt_info_list: List[ALTInfo]) -> ALTInfo:
+    def _extend_alt_info(self, actual_alt_info: ALTInfo, alt_info_list: List[ALTInfo]) -> ALTInfo:
+        if self._ctx.is_stuck_tx():
+            return actual_alt_info
+
         for alt_info in alt_info_list:
             if actual_alt_info.len_account_key_list + alt_info.len_account_key_list >= ALTLimit.max_alt_account_cnt:
                 continue
@@ -173,9 +110,18 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
         return self._alt_builder.build_prep_alt_list(self._alt_tx_set)
 
     def update_after_emulate(self) -> None:
-        self._alt_builder.update_alt_info_list(self._alt_info_list)
+        alt_info = self._actual_alt_info
+        legacy_tx = self._test_legacy_tx
+
         self._alt_tx_set.clear()
         self._actual_alt_info = None
+        self._test_legacy_tx = None
+
+        self._alt_builder.update_alt_info_list(self._alt_info_list)
+        if (legacy_tx is None) or (alt_info is None):
+            pass
+        elif not self._tx_has_valid_size(legacy_tx):
+            raise ALTContentError(str(alt_info.alt_address), 'is not synced yet')
 
     def build_tx(self, legacy_tx: SolLegacyTx) -> SolV0Tx:
         return SolV0Tx(name=legacy_tx.name, ix_list=legacy_tx.ix_list, alt_info_list=self._alt_info_list)

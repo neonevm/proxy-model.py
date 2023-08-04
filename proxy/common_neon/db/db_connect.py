@@ -32,11 +32,21 @@ class DBConnection:
         if self._conn is not None:
             return
 
+        kwargs = {}
+        if self._config.postgres_timeout > 0:
+            wait_ms = self._config.postgres_timeout * 1000
+            kwargs['options'] = (
+                f'-c statement_timeout={wait_ms} ' +
+                f'-c idle_in_transaction_session_timeout={wait_ms-500} '
+            )
+            LOG.debug(f'add statement timeout {wait_ms}')
+
         self._conn = psycopg2.connect(
             dbname=self._config.postgres_db,
             user=self._config.postgres_user,
             password=self._config.postgres_password,
-            host=self._config.postgres_host
+            host=self._config.postgres_host,
+            **kwargs
         )
         self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_READ_COMMITTED)
 

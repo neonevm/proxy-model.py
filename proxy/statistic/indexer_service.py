@@ -55,6 +55,7 @@ class IndexerStatService(StatService):
         self._metr_block_confirmed = Gauge('block_confirmed', 'Last confirmed block numer', registry=self._registry)
         self._metr_block_finalized = Gauge('block_finalized', 'Last finalized block numer', registry=self._registry)
         self._metr_block_parsed = Gauge('block_parsed', 'Last parsed block numer', registry=self._registry)
+        self._metr_block_tracer = Gauge('block_tracer', 'Last tracer block numer', registry=self._registry)
 
         self._metr_db_health = Gauge('db_health', 'DB status', registry=self._registry)
         self._metr_solana_rpc_health = Gauge('solana_rpc_health', 'Solana Node status', registry=self._registry)
@@ -70,6 +71,8 @@ class IndexerStatService(StatService):
         self._metr_block_confirmed.set({}, block_stat.confirmed_block)
         self._metr_block_finalized.set({}, block_stat.finalized_block)
         self._metr_block_parsed.set({}, block_stat.parsed_block)
+        if block_stat.tracer_block is not None:
+            self._metr_block_tracer.set({}, block_stat.tracer_block)
 
     def commit_neon_tx_result(self, tx_stat: NeonTxStatData):
         self._metr_tx_count.add({}, tx_stat.completed_neon_tx_cnt)

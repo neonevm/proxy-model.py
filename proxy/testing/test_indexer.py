@@ -12,8 +12,9 @@ from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolPubKey, SolA
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.common_neon.utils.eth_proto import NeonTx
 from proxy.common_neon.address import neon_2program
+from proxy.common_neon.operator_resource_info import OpResInfo, OpResIdent
 
-from proxy.mempool.operator_resource_mng import OpResInfo, OpResInit, OpResIdent
+from proxy.mempool.mempool_executor_task_op_res import OpResInit
 
 from proxy.testing.testing_helpers import Proxy, SolClient, NeonLocalAccount
 from proxy.testing.solana_utils import WalletAccount, wallet_path
@@ -69,7 +70,7 @@ class FakeConfig(Config):
         return 1
 
 
-class CancelTest(unittest.TestCase):
+class CompleteTest(unittest.TestCase):
     proxy: Proxy
     config: FakeConfig
     solana: SolClient
@@ -145,7 +146,7 @@ class CancelTest(unittest.TestCase):
         neon_ix_builder.init_neon_tx(neon_tx)
         neon_ix_builder.init_neon_account_list(neon_account_list)
 
-        neon_ix_builder.init_iterative(resource.holder)
+        neon_ix_builder.init_iterative(resource.holder_account)
 
         return neon_ix_builder, resource.signer
 
@@ -305,8 +306,8 @@ class CancelTest(unittest.TestCase):
         cls.solana.send_tx(tx, signer)
 
     # @unittest.skip("a.i.")
-    def test_01_canceled(self):
-        print("\ntest_01_canceled")
+    def test_01_completed(self):
+        print("\ntest_01_completed")
         trx_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash)
         print('trx_receipt:', trx_receipt)
         self.assertEqual(trx_receipt['status'], 0)

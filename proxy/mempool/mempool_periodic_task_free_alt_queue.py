@@ -1,30 +1,31 @@
 import logging
+
 from typing import List, Type, Callable, Dict, cast
 
+from .executor_mng import MPExecutorMng
 from .mempool_api import (
     MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest,
     MPRequest, MPRequestType, MPALTAddress, MPALTInfo, MPALTListResult
 )
-
-from .executor_mng import MPExecutorMng
 from .mempool_periodic_task import MPPeriodicTaskLoop
-from .operator_resource_mng import OpResMng
 from .sorted_queue import SortedQueue
 
+from ..common_neon.config import Config
+from ..common_neon.operator_resource_mng import OpResMng
 from ..common_neon.solana_alt import ALTAddress
+
 
 LOG = logging.getLogger(__name__)
 
 
 class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
-    _default_sleep_sec = 30
-    _freeing_depth = 512 + 32
+    _default_sleep_sec = 15
 
-    def __init__(self, executor_mng: MPExecutorMng, op_res_mng: OpResMng) -> None:
+    def __init__(self, config: Config, executor_mng: MPExecutorMng, op_res_mng: OpResMng) -> None:
         super().__init__(name='alt', sleep_sec=self._default_sleep_sec, executor_mng=executor_mng)
+        self._config = config
         self._op_res_mng = op_res_mng
         self._iteration = 0
-        self._get_list_iteration = 0
         self._block_height = 0
         self._deactivate_alt_queue = self._new_queue(lambda a: cast(int, a.last_extended_slot))
         self._close_alt_queue = self._new_queue(lambda a: a.deactivation_slot)
@@ -51,14 +52,7 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
         self._iteration += 1
 
     def _submit_get_list_request(self) -> None:
-        self._get_list_iteration += 1
-
-        if self._get_list_iteration == 60:
-            secret_list = self._op_res_mng.get_secret_list()
-            self._get_list_iteration = 0
-        else:
-            secret_list = list()
-
+        secret_list = self._op_res_mng.get_secret_list()
         mp_req = MPGetALTList(
             req_id=self._generate_req_id('get-alt'),
             secret_list=secret_list,
@@ -67,7 +61,7 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
         self._submit_request_to_executor(mp_req)
 
     def _submit_free_list_request(self, queue, mp_req_type: Type) -> None:
-        block_height = max(self._block_height - self._freeing_depth, 0)
+        block_height = max(self._block_height - self._config.alt_freeing_depth, 0)
         alt_info_list: List[MPALTInfo] = []
         for alt_info in queue:
             if alt_info.block_height > block_height:

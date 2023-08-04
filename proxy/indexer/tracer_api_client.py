@@ -57,8 +57,7 @@ class TracerAPIClient:
                     ch_conn.ch_client = ch_get_client(dsn=ch_conn.ch_dsn)
 
                 slot = ch_conn.ch_client.query(request).result_set[0][0]
-                LOG.debug(f'!!!SLOT {slot}')
-                return None
+                return slot
             except BaseException as exc:
                 LOG.error('Unknown fail to fetch slot from ClickHouse', exc_info=exc)
                 time.sleep(1)

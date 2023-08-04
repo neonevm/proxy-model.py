@@ -4,11 +4,13 @@ import base64
 from dataclasses import dataclass
 import itertools
 import json
+import threading
 import time
 from typing import Dict, Union, Any, List, Optional, Set, cast
 import logging
 import base58
 import requests
+import websockets.sync.client
 
 from .address import NeonAddress, neon_2program
 from .config import Config
@@ -87,12 +89,14 @@ class SolInteractor:
                 # Hide the Solana URL
                 str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
 
-                if retry <= self._config.retry_on_fail:
+                if retry <= 3600:
                     LOG.debug(
                         f'Receive connection error {str_err} on connection to Solana. '
                         f'Attempt {retry + 1} to send the request to Solana node...'
                     )
                     time.sleep(1)
+                    self._session = requests.sessions.Session()
+                    self._request_cnt = itertools.count()
                     continue
 
                 LOG.warning(f'Connection exception on send request to Solana. Retry {retry}: {str_err}')
@@ -157,6 +161,9 @@ class SolInteractor:
     def get_cluster_nodes(self) -> List[Dict[str, Any]]:
         return self._send_rpc_request('getClusterNodes').get('result', list())
 
+    def get_solana_version(self) -> str:
+        return self._send_rpc_request('getVersion').get('result', dict()).get('solana-core', 'Unknown')
+
     def get_slots_behind(self) -> Optional[int]:
         response = self._send_rpc_request('getHealth')
         status = response.get('result', None)
@@ -171,7 +178,7 @@ class SolInteractor:
         status = self._send_rpc_request('getHealth').get('result', 'bad')
         return status == 'ok'
 
-    def get_sig_list_for_address(self, address: SolPubKey, before: Optional[str], limit: int,
+    def get_sig_list_for_address(self, address: Union[str, SolPubKey], before: Optional[str], limit: int,
                                  commitment=SolCommit.Confirmed) -> List[Dict[str, Any]]:
         opts = {
             'limit': limit,
@@ -196,14 +203,16 @@ class SolInteractor:
         return self._send_rpc_request('getSlot', opts).get('result', 0)
 
     @staticmethod
-    def _decode_account_info(address: SolPubKey, raw_account: Dict[str, Any]) -> AccountInfo:
+    def _decode_account_info(address: Union[str, SolPubKey], raw_account: Dict[str, Any]) -> AccountInfo:
         data = base64.b64decode(raw_account.get('data', None)[0])
         account_tag = data[0] if len(data) > 0 else 0
         lamports = raw_account.get('lamports', 0)
         owner = SolPubKey.from_string(raw_account.get('owner', None))
+        if isinstance(address, str):
+            address = SolPubKey.from_string(address)
         return AccountInfo(address, account_tag, lamports, owner, data)
 
-    def get_account_info(self, pubkey: SolPubKey, length: Optional[int] = None,
+    def get_account_info(self, pubkey: Union[str, SolPubKey], length: Optional[int] = None,
                          commitment=SolCommit.Confirmed) -> Optional[AccountInfo]:
         opts = {
             'encoding': 'base64',
@@ -224,7 +233,7 @@ class SolInteractor:
 
         raw_account = result.get('result', dict()).get('value', None)
         if raw_account is None:
-            LOG.debug(f"Can't get information about {str(pubkey)}")
+            # LOG.debug(f"Can't get information about {str(pubkey)}")
             return None
 
         return self._decode_account_info(pubkey, raw_account)
@@ -257,7 +266,7 @@ class SolInteractor:
                 if info is None:
                     account_info_list.append(None)
                 else:
-                    account_info_list.append(self._decode_account_info(SolPubKey.from_string(pubkey), info))
+                    account_info_list.append(self._decode_account_info(pubkey, info))
         return account_info_list
 
     def get_program_account_info_list(self, program: SolPubKey, offset: int, length: int,
@@ -293,8 +302,7 @@ class SolInteractor:
         raw_account_list = response.get('result', list())
         account_info_list: List[AccountInfo] = list()
         for raw_account in raw_account_list:
-            address = SolPubKey.from_string(raw_account.get('pubkey'))
-            account_info = self._decode_account_info(address, raw_account.get('account', dict()))
+            account_info = self._decode_account_info(raw_account.get('pubkey'), raw_account.get('account', dict()))
             account_info_list.append(account_info)
         return account_info_list
 
@@ -332,8 +340,12 @@ class SolInteractor:
 
         return NeonAccountInfo.from_account_info(info)
 
-    def get_state_tx_cnt(self, neon_account: Union[str, bytes, NeonAddress], commitment=SolCommit.Confirmed) -> int:
-        neon_account_info = self.get_neon_account_info(neon_account, commitment)
+    def get_state_tx_cnt(self, neon_account: Union[str, bytes, NeonAddress, NeonAccountInfo, None],
+                         commitment=SolCommit.Confirmed) -> int:
+        if (neon_account is None) or isinstance(neon_account, NeonAccountInfo):
+            neon_account_info = neon_account
+        else:
+            neon_account_info = self.get_neon_account_info(neon_account, commitment)
         return neon_account_info.tx_count if neon_account_info is not None else 0
 
     def get_neon_account_info_list(self, neon_account_list: List[Union[NeonAddress, str]],
@@ -379,14 +391,20 @@ class SolInteractor:
             block_hash='0x' + base58.b58decode(net_block.get('blockhash', '')).hex().lower(),
             block_time=net_block.get('blockTime', None),
             block_height=net_block.get('blockHeight', None),
-            parent_block_slot=net_block.get('parentSlot', None)
+            parent_block_slot=net_block.get('parentSlot', None),
+            tx_receipt_list=net_block.get('transactions', list())
         )
 
-    def get_block_info(self, block_slot: int, commitment=SolCommit.Confirmed) -> SolBlockInfo:
+    def get_first_available_block(self) -> int:
+        response = self._send_rpc_request('getFirstAvailableBlock')
+        return response.get('result', 0)
+
+    def get_block_info(self, block_slot: int, commitment=SolCommit.Confirmed, full=False) -> SolBlockInfo:
         opts = {
             'commitment': SolCommit.to_solana(commitment),
             'encoding': 'json',
-            'transactionDetails': 'none',
+            'transactionDetails': 'full' if full else 'none',
+            'maxSupportedTransactionVersion': 0,
             'rewards': False
         }
 
@@ -397,7 +415,7 @@ class SolInteractor:
 
         return self._decode_block_info(block_slot, net_block)
 
-    def get_block_info_list(self, block_slot_list: List[int], commitment=SolCommit.Confirmed) -> List[SolBlockInfo]:
+    def get_block_info_list(self, block_slot_list: List[int], commitment=SolCommit.Confirmed, full=False) -> List[SolBlockInfo]:
         block_list = list()
         if len(block_slot_list) == 0:
             return block_list
@@ -405,7 +423,8 @@ class SolInteractor:
         opts = {
             'commitment': SolCommit.to_solana(commitment),
             'encoding': 'json',
-            'transactionDetails': 'none',
+            'transactionDetails': 'full' if full else 'none',
+            'maxSupportedTransactionVersion': 0,
             'rewards': False
         }
 
@@ -544,36 +563,40 @@ class SolInteractor:
         return self._get_block_status(block_slot, finalized_block_info, response)
 
     def check_confirm_of_tx_sig_list(self, tx_sig_list: List[str],
-                                     commit_set: Set[SolCommit.Type],
-                                     valid_block_height: int) -> bool:
-        if len(tx_sig_list) == 0:
+                                     commitment: SolCommit.Type,
+                                     timeout_sec: float) -> bool:
+        if not tx_sig_list:
             return True
 
-        block_height = self.get_block_height()
-        if block_height >= valid_block_height:
-            search_in_history = True
-        else:
-            search_in_history = False
+        is_done = False
+        with websockets.sync.client.connect(self._config.solana_websocket_url) as websocket:
+            for tx_sig in tx_sig_list:
+                request = self._build_rpc_request('signatureSubscribe', tx_sig, {
+                    'commitment': commitment
+                })
+                websocket.send(json.dumps(request))
 
-        opts = {
-            'searchTransactionHistory': search_in_history
-        }
-        limit = 100
+            timeout_timer = threading.Timer(timeout_sec, lambda: websocket.close())
+            timeout_timer.start()
 
-        while len(tx_sig_list) > 0:
-            (part_tx_sig_list, tx_sig_list) = (tx_sig_list[:limit], tx_sig_list[limit:])
-            response = self._send_rpc_request('getSignatureStatuses', part_tx_sig_list, opts)
+            sub_set: Set[int, bool] = set()
+            for response in websocket:
+                response = json.loads(response)
 
-            status_list = response.get('result', dict()).get('value', list())
-            if len(status_list) == 0:
-                return False
+                if response.get('method', '') == 'signatureNotification':
+                    sub_id = response.get('params', dict()).get('subscription', None)
+                    if sub_id is not None:
+                        sub_set.add(sub_id)
 
-            for status in status_list:
-                if not status:
-                    return False
-                elif status.get('confirmationStatus', '') not in commit_set:
-                    return False
-        return True
+                if len(tx_sig_list) == len(sub_set):
+                    is_done = True
+                    websocket.close()
+                    break
+
+            timeout_timer.cancel()
+            timeout_timer.join()
+
+        return is_done
 
     def get_tx_receipt_list(self, tx_sig_list: List[str],
                             commitment: SolCommit.Type) -> List[Optional[Dict[str, Any]]]:

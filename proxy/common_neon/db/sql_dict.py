@@ -7,7 +7,7 @@ from .base_db_table import BaseDBTable
 
 class SQLDict(MutableMapping, BaseDBTable):
     def __init__(self, db_conn: DBConnection, table_name: str):
-        super().__init__(db_conn, table_name, ['key', 'value'], {'key'})
+        super().__init__(db_conn, table_name, ['key', 'value'], ['key'])
 
     def __len__(self) -> int:
         request = f'SELECT COUNT(*) FROM {self._table_name}'

@@ -23,7 +23,7 @@ class AccountHandler:
         h.list_parser.add_argument('--private-key', action='store_true')
         h.import_parser = h.subparsers.add_parser('import')
         h.import_parser.add_argument('--private-key', type=str, nargs=1, help='private-key as parameter')
-        h.import_parser.add_argument('file', metavar='file', type=str, nargs='?', help='an input file with private key')
+        h.import_parser.add_argument('file', type=str, nargs='?', help='an input file with private key')
         return h
 
     def execute(self, args):
@@ -38,7 +38,7 @@ class AccountHandler:
         else:
             print(f'Unknown command {args.subcommand} for account', file=sys.stderr)
 
-    def _execute_new(self, args):
+    def _execute_new(self, _):
         eth_address = self._storage.generate_new()
         print(f'Address: {{{ str(eth_address)[2:] }}}')
 

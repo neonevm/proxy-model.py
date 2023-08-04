@@ -2,8 +2,8 @@ from typing import List
 
 from ..common_neon.address import NeonAddress
 
-from ..mempool.mempool_api import MPSenderTxCntRequest, MPSenderTxCntResult, MPSenderTxCntData
-from ..mempool.mempool_executor_task_base import MPExecutorBaseTask
+from .mempool_api import MPSenderTxCntRequest, MPSenderTxCntResult, MPSenderTxCntData
+from .mempool_executor_task_base import MPExecutorBaseTask
 
 
 class MPExecutorStateTxCntTask(MPExecutorBaseTask):

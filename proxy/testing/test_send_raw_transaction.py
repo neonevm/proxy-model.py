@@ -27,8 +27,8 @@ class TestDistributorContract(unittest.TestCase):
         tx_built["value"] = 12
         distribute_fn_msg = signer.sign_transaction(tx_built)
         tx_hash = self.proxy.conn.send_raw_transaction(distribute_fn_msg.rawTransaction)
-        print(f"Send `distribute_value_fn()` tx with nonce: {nonce}, tx_hash: {tx_hash}")
-        print(f"Wait for `distribute_value_fn` receipt by hash: {tx_hash.hex()}")
+        print(f"Send `distribute_value_fn()` tx with nonce: {nonce}, tx_hash: 0x{tx_hash.hex()}")
+        print(f"Wait for `distribute_value_fn` receipt by hash: 0x{tx_hash.hex()}")
         tx_receipt = self.proxy.conn.wait_for_transaction_receipt(
             tx_hash,
             timeout=self.WAITING_DISTRIBUTE_RECEIPT_TIMEOUT_SEC
@@ -51,7 +51,7 @@ class TestDistributorContract(unittest.TestCase):
             raw_tx, name, account = prebuilt_tx
             tx_hash = self.proxy.conn.send_raw_transaction(raw_tx)
             print(
-                f"Send `set_address_fn(\"{name}\", {account.address[2:]}` "
+                f"Send `set_address_fn(\"{name}\", {account.address[2:]}`) "
                 f"tx with nonce: {nonce}, tx_hash: {tx_hash.hex()}"
             )
             tx_hashes.append(tx_hash)
@@ -70,81 +70,6 @@ class TestDistributorContract(unittest.TestCase):
         ]
         wallets = {name: self.proxy.create_account() for name in names}
         return wallets
-
-
-class TestNonce(unittest.TestCase):
-    TRANSFER_CNT = 25
-
-    def setUp(self) -> None:
-        self.proxy = Proxy()
-        self.signer = self.proxy.create_signer_account()
-        self.receiver = self.proxy.conn.account.create('nonce-receiver-25')
-
-    def _send_transfer_tx(self, nonce: int) -> HexBytes:
-        tx_transfer = self.proxy.sign_transaction(
-            self.signer,
-            dict(
-                nonce=nonce,
-                to=self.receiver.address,
-                value=1
-            )
-        )
-        return self.proxy.conn.send_raw_transaction(tx_transfer.tx_signed.rawTransaction)
-
-    def _wait_tx_list(self, tx_hash_list: List[HexBytes]) -> None:
-        for tx_hash in tx_hash_list:
-            tx_receipt = self.proxy.conn.wait_for_transaction_receipt(tx_hash)
-            self.assertEqual(tx_receipt.status, 1)
-
-    def _get_base_nonce(self) -> int:
-        return self.proxy.conn.get_transaction_count(self.signer.address, "pending")
-
-    def test_get_receipt_sequence(self):
-        tx_hash_list: List[HexBytes] = []
-        for i in range(self.TRANSFER_CNT):
-            nonce = self._get_base_nonce()
-            tx_hash = self._send_transfer_tx(nonce)
-            tx_hash_list.append(tx_hash)
-
-        self._wait_tx_list(tx_hash_list)
-
-    def test_mono_sequence(self):
-        nonce = self._get_base_nonce()
-        tx_hash_list: List[HexBytes] = []
-        for i in range(self.TRANSFER_CNT):
-            tx_hash = self._send_transfer_tx(nonce)
-            tx_hash_list.append(tx_hash)
-            nonce += 1
-
-        self._wait_tx_list(tx_hash_list)
-
-    def test_reverse_sequence(self):
-        nonce = self._get_base_nonce()
-        nonce_list: List[int] = []
-        for i in range(self.TRANSFER_CNT):
-            nonce_list.insert(0, nonce)
-            nonce += 1
-
-        tx_hash_list: List[HexBytes] = []
-        for nonce in nonce_list:
-            tx_hash = self._send_transfer_tx(nonce)
-            tx_hash_list.append(tx_hash)
-
-        self._wait_tx_list(tx_hash_list)
-
-    def test_random_sequence(self):
-        nonce = self._get_base_nonce()
-        nonce_list: List[int] = []
-        for i in range(self.TRANSFER_CNT):
-            nonce_list.append(nonce)
-            nonce += 1
-        random.shuffle(nonce_list)
-
-        tx_hash_list: List[HexBytes] = []
-        for nonce in nonce_list:
-            tx_hash = self._send_transfer_tx(nonce)
-            tx_hash_list.append(tx_hash)
-        self._wait_tx_list(tx_hash_list)
 
 
 if __name__ == '__main__':

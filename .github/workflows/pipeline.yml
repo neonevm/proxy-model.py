@@ -26,7 +26,7 @@ env:
   DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
   DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
   BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-  NEON_TEST_IMAGE:  neonlabsorg/neon_tests:latest
+  NEON_TEST_IMAGE:  neonlabsorg/neon_tests
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.inputs.neon_evm_commit }}
@@ -40,6 +40,8 @@ jobs:
       is_version_proxy_branch: ${{ steps.is_version_proxy_branch.outputs.value }}
     steps:
       - uses: actions/checkout@v3
+        with:
+           fetch-depth: 0
       - name: output branches name
         run: |
           echo "neon_evm_branch = ${{ github.event.inputs.neon_evm_branch }}"
@@ -99,7 +101,7 @@ jobs:
           --head_ref_branch=${{ github.head_ref }}
       - name: Dump docker logs
         if: always()
-        run: python3 ./.github/workflows/deploy.py dump_apps_logs
+        run: python3 ./.github/workflows/deploy.py dump_apps_logs --proxy_tag=${{ needs.build-image.outputs.proxy_tag }}
       - uses: actions/upload-artifact@v3
         if: always()
         with:
@@ -107,7 +109,7 @@ jobs:
           path: ./*.log
       - name: Stop containers
         if: always()
-        run: python3 ./.github/workflows/deploy.py stop_containers
+        run: python3 ./.github/workflows/deploy.py stop_containers --proxy_tag=${{ needs.build-image.outputs.proxy_tag }}
 
   prepare-infrastructure:
     needs:
@@ -200,7 +202,7 @@ jobs:
         if: always()
         with:
           name: FTS allure report
-          path: allure-reports.tar.gz
+          path: allure-results.tar.gz
       - name: Remove docker container
         if: always()
         run: docker rm -f ${{ env.CONTAINER }}
@@ -209,6 +211,7 @@ jobs:
     if: ${{needs.prepare-infrastructure.result != 'skipped'}}
     needs:
       - prepare-infrastructure
+      - build-image
     runs-on: test-runner
     env:
       SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
@@ -219,11 +222,33 @@ jobs:
       NETWORK: aws
     steps:
       - uses: actions/checkout@v3
+      - name: Define test image tag
+        id: neon_test_tag
+        run: |
+          if ${{ needs.build-image.outputs.is_version_proxy_branch }}; then
+            tag=${GITHUB_REF/refs\/heads\//}
+
+          elif [[ $github_ref == *"refs/tags/"* ]]; then
+            tag=${GITHUB_REF/refs\/tags\//}
+
+          elif [[ "${{ github.base_ref }}" =~ "refs/heads/"[vt][0-9]+\.[0-9]+\.x ]]; then # pr to version branch
+            tag=${GITHUB_BASE_REF/refs\/heads\//}
+
+          else
+            tag='latest'
+          fi
+          echo "value=${tag}"
+          echo "value=${tag}" >> $GITHUB_OUTPUT
       - name: Run docker container
         run: |
-          docker pull ${{ env.NEON_TEST_IMAGE }}
+          image="${{ env.NEON_TEST_IMAGE }}:${{ steps.neon_test_tag.outputs.value }}"
+          docker pull $image
           docker run -i -d -e PROXY_IP=${{ env.PROXY_IP }} -e SOLANA_IP=${{ env.SOLANA_IP }} \
-          --name=${{ env.CONTAINER }} ${{ env.NEON_TEST_IMAGE }} /bin/bash
+          --name=${{ env.CONTAINER }} $image /bin/bash
+      - name: Update contracts in the container
+        run: |
+          docker exec -i ${{ env.CONTAINER }} \
+            ./clickfile.py update-contracts --branch ${{ github.head_ref || github.ref_name }}
       - name: Wait until proxy is ready
         timeout-minutes: 5
         run: |
@@ -239,11 +264,30 @@ jobs:
         if: always()
         run: docker rm -f ${{ env.CONTAINER }}
 
+  dapps-tests:
+    needs:
+      - prepare-infrastructure
+    runs-on: test-runner
+    env:
+      SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
+      PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Trigger dapps tests build
+        run: |
+          python3 ./.github/workflows/deploy.py trigger_dapps_tests \
+          --solana_ip=${{env.SOLANA_IP}} \
+          --proxy_ip=${{ env.PROXY_IP }} \
+          --token=${{secrets.GHTOKEN}}
+
+
   destroy-terraform:
     needs:
       - prepare-infrastructure
       - openzeppelin-tests
       - basic-tests
+      - dapps-tests
+      - build-image
     runs-on: test-runner
     if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
     env:
@@ -264,6 +308,10 @@ jobs:
         with:
           name: Terraform infrastructure logs
           path: ./terraform.log
+      - name: Add private key
+        run: |
+          echo "${{ secrets.CI_STANDS_KEY }}" > ${HOME}/.ssh/ci-stands
+          chmod 644 ${HOME}/.ssh/ci-stands
       - name: Destroy terraform infrastructure
         if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
         run: |
@@ -277,11 +325,12 @@ jobs:
       - prepare-infrastructure
       - openzeppelin-tests
       - basic-tests
+      - dapps-tests
       - deploy-check
     if: |
       always() &&
       needs.deploy-check.result == 'success' &&
-      ((needs.openzeppelin-tests.result == 'success' && needs.basic-tests.result == 'success') ||
+      ((needs.openzeppelin-tests.result == 'success' && needs.basic-tests.result == 'success' && needs.dapps-tests.result == 'success') ||
       needs.prepare-infrastructure.result == 'skipped')
     steps:
       - uses: actions/checkout@v3
@@ -301,6 +350,7 @@ jobs:
       - finalize-image
       - openzeppelin-tests
       - basic-tests
+      - dapps-tests
       - deploy-check
       - build-image
     if: |

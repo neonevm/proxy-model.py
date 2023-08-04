@@ -57,6 +57,7 @@
         operator TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_gas_less_usages ON gas_less_usages(address);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_gas_less_usages_neon_sig ON gas_less_usages(neon_sig);
 
     CREATE TABLE IF NOT EXISTS solana_blocks (
         block_slot BIGINT,
@@ -108,18 +109,20 @@
         block_slot BIGINT,
         idx INT,
         inner_idx INT,
+        ix_code INT,
+        is_success BOOLEAN,
 
         neon_sig TEXT,
         neon_step_cnt INT,
-        neon_income BIGINT,
+        neon_gas_used BIGINT,
+        neon_total_gas_used BIGINT,
 
-        heap_size INT,
+        max_heap_size INT,
+        used_heap_size INT,
 
         max_bpf_cycle_cnt INT,
         used_bpf_cycle_cnt INT
     );
-    ALTER TABLE solana_neon_transactions ADD COLUMN IF NOT EXISTS neon_gas_used BIGINT;
-    ALTER TABLE solana_neon_transactions ADD COLUMN IF NOT EXISTS neon_total_gas_used BIGINT;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_neon_transactions_neon_sol_idx_inner ON solana_neon_transactions(sol_sig, block_slot, idx, inner_idx);
     CREATE INDEX IF NOT EXISTS idx_solana_neon_transactions_neon_sig ON solana_neon_transactions(neon_sig, block_slot);
@@ -127,6 +130,7 @@
 
     CREATE TABLE IF NOT EXISTS neon_transactions (
         neon_sig TEXT,
+        tx_type INT,
         from_addr TEXT,
 
         sol_sig TEXT,
@@ -140,13 +144,14 @@
         gas_limit TEXT,
         value TEXT,
         gas_used TEXT,
+        sum_gas_used TEXT,
 
         to_addr TEXT,
         contract TEXT,
 
         status TEXT,
-
-        return_value TEXT,
+        is_canceled BOOLEAN,
+        is_completed BOOLEAN,
 
         v TEXT,
         r TEXT,
@@ -157,7 +162,25 @@
     );
     CREATE INDEX IF NOT EXISTS idx_neon_transactions_sol_sig_block ON neon_transactions(sol_sig, block_slot);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_neon_transactions_neon_sig_block ON neon_transactions(neon_sig, block_slot);
+    CREATE INDEX IF NOT EXISTS idx_neon_transactions_sender_nonce_block ON neon_transactions(from_addr, nonce, block_slot);
     CREATE INDEX IF NOT EXISTS idx_neon_transactions_block_slot_tx_idx ON neon_transactions(block_slot, tx_idx);
+
+    CREATE TABLE IF NOT EXISTS solana_alt_transactions (
+        sol_sig TEXT,
+        block_slot BIGINT,
+        idx INT,
+        inner_idx INT DEFAULT -1,
+        ix_code INT,
+        alt_address TEXT,
+        is_success BOOLEAN,
+
+        neon_sig TEXT
+    );
+    ALTER TABLE solana_alt_transactions ADD COLUMN IF NOT EXISTS inner_idx INT DEFAULT -1;
+    DROP INDEX IF EXISTS idx_solana_alt_transactions_sig_slot_idx;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_alt_transactions_sig_slot_idx_inner ON solana_alt_transactions(sol_sig, block_slot, idx, inner_idx);
+    CREATE INDEX IF NOT EXISTS idx_solana_alt_transactions_neon_sig ON solana_alt_transactions(neon_sig, block_slot);
+    CREATE INDEX IF NOT EXISTS idx_solana_alt_transactions_slot ON solana_alt_transactions(block_slot);
 
     CREATE TABLE IF NOT EXISTS solana_transaction_costs (
         sol_sig TEXT,
@@ -175,3 +198,22 @@
         signature   TEXT
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_transaction_signatures_sig ON solana_transaction_signatures(block_slot);
+
+    CREATE TABLE IF NOT EXISTS stuck_neon_holders (
+        block_slot BIGINT,
+        json_data_list TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_stuck_neon_holders_block ON stuck_neon_holders(block_slot);
+
+    CREATE TABLE IF NOT EXISTS stuck_neon_transactions (
+        is_finalized BOOLEAN,
+        block_slot BIGINT,
+        json_data_list TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_stuck_neon_transactions_block ON stuck_neon_transactions(is_finalized, block_slot);
+
+    CREATE TABLE IF NOT EXISTS solana_alt_infos (
+        block_slot BIGINT,
+        json_data_list TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_solana_alt_infos_block ON solana_alt_infos(block_slot);

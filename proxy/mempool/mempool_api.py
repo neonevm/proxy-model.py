@@ -5,15 +5,18 @@ import time
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List, Dict, Union
 
 from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.operator_resource_info import OpResIdent
+from ..common_neon.errors import EthereumError
+from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.utils import str_fmt_object
 from ..common_neon.utils.eth_proto import NeonTx
-from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.utils.neon_tx_info import NeonTxInfo
 
 
-@dataclass
+@dataclass(frozen=True)
 class MPTask:
     executor_id: int
     aio_task: asyncio.Task
@@ -33,6 +36,9 @@ class MPRequestType(IntEnum):
     GetALTList = 9
     DeactivateALTList = 10
     CloseALTList = 11
+    GetStuckTxList = 12
+    TxPoolContent = 13
+    GetTxBySenderNonce = 14
     Unspecified = 255
 
 
@@ -45,58 +51,66 @@ class MPRequest:
         return str_fmt_object(self)
 
 
+@dataclass(frozen=True)
+class MPStuckTxInfo:
+    neon_tx: NeonTxInfo
+    holder_account: SolPubKey
+    alt_addr_list: List[str]
+    start_time: int
+
+    def __str__(self) -> str:
+        return str_fmt_object(self)
+
+    @property
+    def sig(self) -> str:
+        return self.neon_tx.sig
+
+    @property
+    def req_id(self) -> str:
+        return self.neon_tx.sig[2:10]
+
+
+@dataclass(frozen=True)
+class MPGetStuckTxListResponse:
+    stuck_tx_list: List[MPStuckTxInfo]
+
+
 @dataclass
 class MPTxRequest(MPRequest):
     neon_tx: Optional[NeonTx] = None
+    neon_tx_info: Optional[NeonTxInfo] = None
     neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
     gas_price: int = 0
     start_time: int = 0
 
+    @staticmethod
+    def from_neon_tx(req_id: str, neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxRequest:
+        return MPTxRequest(
+            req_id=req_id,
+            neon_tx=neon_tx,
+            neon_tx_info=NeonTxInfo.from_neon_tx(neon_tx),
+            neon_tx_exec_cfg=neon_tx_exec_cfg,
+            gas_price=neon_tx.gasPrice,
+            start_time=time.time_ns()
+        )
+
     def __post_init__(self):
         self.type = MPRequestType.SendTransaction
 
-        if self.gas_price == 0:
-            self.gas_price = self.neon_tx.gasPrice
-        if self.start_time == 0:
-            self.start_time = time.time_ns()
-
     @property
     def sig(self) -> str:
-        return self.neon_tx.hex_tx_sig
+        return self.neon_tx_info.sig
 
     @property
     def sender_address(self) -> str:
-        return self.neon_tx.hex_sender
+        return self.neon_tx_info.addr
 
     @property
     def nonce(self) -> int:
-        return self.neon_tx.nonce
+        return self.neon_tx_info.nonce
 
     def has_chain_id(self) -> bool:
-        return self.neon_tx.has_chain_id()
-
-
-@dataclass(frozen=True)
-class OpResIdent:
-    evm_program_id: SolPubKey
-    public_key: str
-    private_key: bytes
-    res_id: int = -1
-
-    _str = ''
-    _hash = 0
-
-    def __str__(self) -> str:
-        if self._str == '':
-            _str = f'{self.public_key}:{self.res_id}'
-            object.__setattr__(self, '_str', _str)
-        return self._str
-
-    def __hash__(self) -> int:
-        if self._hash == 0:
-            _hash = hash(str(self))
-            object.__setattr__(self, '_hash', _hash)
-        return self._hash
+        return self.neon_tx_info.has_chain_id()
 
 
 @dataclass
@@ -104,17 +118,39 @@ class MPTxExecRequest(MPTxRequest):
     elf_param_dict: Dict[str, str] = None
     res_ident: OpResIdent = None
 
+    def is_stuck_tx(self) -> bool:
+        return self.neon_tx is None
+
     @staticmethod
-    def clone(tx: MPTxRequest, res_ident: OpResIdent, elf_param_dict: Dict[str, str]):
-        req = MPTxExecRequest(
+    def from_tx_req(tx: MPTxRequest,
+                    res_ident: OpResIdent,
+                    elf_param_dict: Dict[str, str]) -> MPTxExecRequest:
+        return MPTxExecRequest(
             req_id=tx.req_id,
             neon_tx=tx.neon_tx,
+            neon_tx_info=tx.neon_tx_info,
             neon_tx_exec_cfg=tx.neon_tx_exec_cfg,
+            gas_price=tx.gas_price,
             start_time=tx.start_time,
             elf_param_dict=elf_param_dict,
             res_ident=res_ident
         )
-        return req
+
+    @staticmethod
+    def from_stuck_tx(stuck_tx: MPStuckTxInfo,
+                      neon_tx_exec_cfg: NeonTxExecCfg,
+                      res_ident: OpResIdent,
+                      elf_param_dict: Dict[str, str]) -> MPTxExecRequest:
+        return MPTxExecRequest(
+            req_id=stuck_tx.req_id,
+            neon_tx=None,
+            neon_tx_info=stuck_tx.neon_tx,
+            neon_tx_exec_cfg=neon_tx_exec_cfg,
+            gas_price=stuck_tx.neon_tx.gas_price,
+            start_time=stuck_tx.start_time,
+            res_ident=res_ident,
+            elf_param_dict=elf_param_dict
+        )
 
 
 MPTxRequestList = List[MPTxRequest]
@@ -142,6 +178,15 @@ class MPPendingTxByHashRequest(MPRequest):
 
     def __post_init__(self):
         self.type = MPRequestType.GetTxByHash
+
+
+@dataclass
+class MPPendingTxBySenderNonceRequest(MPRequest):
+    sender: str = None
+    tx_nonce: int = 0
+
+    def __post_init__(self):
+        self.type = MPRequestType.GetTxBySenderNonce
 
 
 @dataclass
@@ -228,12 +273,25 @@ class MPCloseALTListRequest(MPRequest):
         self.type = MPRequestType.CloseALTList
 
 
+@dataclass
+class MPGetStuckTxListRequest(MPRequest):
+    def __post_init__(self):
+        self.type = MPRequestType.GetStuckTxList
+
+
+@dataclass
+class MPTxPoolContentRequest(MPRequest):
+    def __post_init__(self):
+        self.type = MPRequestType.TxPoolContent
+
+
 class MPTxExecResultCode(IntEnum):
     Done = 0
     Reschedule = 1
     Failed = 2
     BadResource = 3
     NonceTooHigh = 4
+    StuckTx = 5
 
 
 @dataclass(frozen=True)
@@ -261,8 +319,19 @@ class MPTxSendResult:
 
 @dataclass(frozen=True)
 class MPGasPriceResult:
+    sol_price_usd: int
+    neon_price_usd: int
+    operator_fee: int
+    gas_price_slippage: int
+
     suggested_gas_price: int
-    min_gas_price: int
+    min_acceptable_gas_price: int
+    min_executable_gas_price: int
+
+    min_wo_chainid_acceptable_gas_price: int
+    allow_underpriced_tx_wo_chainid: bool
+    accept_reverted_tx_into_mempool: bool
+
     last_update_mapping_sec: int
     sol_price_account: SolPubKey
     neon_price_account: SolPubKey
@@ -283,6 +352,7 @@ class MPOpResInitResultCode(IntEnum):
     Success = 0
     Failed = 1
     Reschedule = 2
+    StuckTx = 3
 
 
 @dataclass(frozen=True)
@@ -293,12 +363,16 @@ class MPOpResGetListResult:
 @dataclass(frozen=True)
 class MPOpResInitResult:
     code: MPOpResInitResultCode
+    exc: Optional[BaseException]
 
 
 @dataclass(frozen=True)
 class MPALTListResult:
     block_height: int
     alt_info_list: List[MPALTInfo]
+
+
+MPNeonTxResult = Union[NeonTxInfo, EthereumError, None]
 
 
 @dataclass(frozen=True)
@@ -313,3 +387,9 @@ class MPResult:
 
     def __repr__(self):
         return f"""Result({'' if self.error is None else '"' + self.error + '"'})"""
+
+
+@dataclass(frozen=True)
+class MPTxPoolContentResult:
+    pending_list: List[NeonTxInfo]
+    queued_list: List[NeonTxInfo]

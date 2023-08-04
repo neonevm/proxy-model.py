@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict, Set
 
 from .errors import (
-    BlockHashNotFound, NonceTooLowError,
+    BlockHashNotFound, NonceTooLowError, NonceTooHighError,
     CUBudgetExceededError, InvalidIxDataError, RequireResizeIterError,
     CommitLevelError, NodeBehindError, NoMoreRetriesError, BlockedAccountError,
     RescheduleError, WrongStrategyError
@@ -75,7 +75,6 @@ class SolTxSendState:
 
 
 class SolTxListSender:
-    _commit_set = SolCommit.upper_set(SolCommit.Confirmed)
     _big_block_height = 2 ** 64 - 1
     _big_block_slot = 2 ** 64 - 1
 
@@ -106,7 +105,7 @@ class SolTxListSender:
         self._tx_state_list_dict: Dict[SolTxSendState.Status, List[SolTxSendState]] = dict()
 
     def send(self, tx_list: List[SolTx]) -> bool:
-        self.clear()
+        assert not len(self._tx_list)
         if len(tx_list) == 0:
             return False
 
@@ -114,9 +113,12 @@ class SolTxListSender:
         return self._send()
 
     def recheck(self, tx_list: List[SolTx]) -> bool:
-        self.clear()
+        assert not len(self._tx_list)
         if len(tx_list) == 0:
             return False
+
+        for tx in self._tx_list:
+            LOG.debug(f'Recheck {tx.name}: {str(tx.sig)}')
 
         # We should check all (failed too) txs again, because the state can be changed
         tx_sig_list = [str(tx.sig) for tx in tx_list]
@@ -371,33 +373,21 @@ class SolTxListSender:
 
         tx_sig_list: List[str] = list()
         tx_list: List[SolTx] = list()
-        valid_block_height = self._big_block_height
         for tx_state in tx_state_list:
             tx_sig_list.append(tx_state.sig)
             tx_list.append(tx_state.tx)
-            valid_block_height = min(valid_block_height, tx_state.valid_block_height)
 
-        self._wait_for_confirm_of_tx_list(tx_sig_list, valid_block_height)
+        self._solana.check_confirm_of_tx_sig_list(
+            tx_sig_list,
+            SolCommit.Confirmed,
+            self._config.confirm_timeout_sec)
+
         self._get_tx_receipt_list(tx_sig_list, tx_list)
 
     def _get_tx_receipt_list(self, tx_sig_list: Optional[List[str]], tx_list: List[SolTx]) -> None:
         tx_receipt_list = self._solana.get_tx_receipt_list(tx_sig_list, SolCommit.Confirmed)
         for tx, tx_receipt in zip(tx_list, tx_receipt_list):
             self._add_tx_state(tx, tx_receipt, SolTxSendState.Status.NoReceiptError)
-
-    def _wait_for_confirm_of_tx_list(self, tx_sig_list: List[str], valid_block_height: int) -> None:
-        confirm_timeout = self._config.confirm_timeout_sec
-        confirm_check_delay = float(self._config.confirm_check_msec) / 1000
-        elapsed_time = 0.0
-        commit_set = self._commit_set
-
-        while elapsed_time < confirm_timeout:
-            is_confirmed = self._solana.check_confirm_of_tx_sig_list(tx_sig_list, commit_set, valid_block_height)
-            if is_confirmed:
-                return
-
-            time.sleep(confirm_check_delay)
-            elapsed_time += confirm_check_delay
 
     @dataclass(frozen=True)
     class _DecodeResult:
@@ -439,8 +429,12 @@ class SolTxListSender:
 
         state_tx_cnt, tx_nonce = tx_error_parser.get_nonce_error()
         if state_tx_cnt is not None:
-            # sender is unknown - should be replaced on upper stack level
-            return self._DecodeResult(status.BadNonceError, NonceTooLowError.init_no_sender(tx_nonce, state_tx_cnt))
+            if tx_nonce < state_tx_cnt:
+                # sender is unknown - should be replaced on upper stack level
+                return self._DecodeResult(status.BadNonceError, NonceTooLowError.init_no_sender(tx_nonce, state_tx_cnt))
+            else:
+                return self._DecodeResult(status.BadNonceError, NonceTooHighError(state_tx_cnt))
+
         elif tx_error_parser.check_if_error():
             LOG.debug(f'unknown error receipt {str(tx.sig)}: {tx_receipt}')
             # no exception: will be converted to DEFAULT EXCEPTION

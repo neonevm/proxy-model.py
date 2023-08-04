@@ -37,14 +37,50 @@ class BadResourceError(RescheduleError):
     pass
 
 
-class NotCompletedNeonTxError(RescheduleError):
-    def __init__(self, holder_account: str) -> None:
-        super().__init__(holder_account)
-
-        self._holder_account = holder_account
+class StuckTxError(BaseException):
+    def __init__(self, neon_tx_sig: str, holder_account: str):
+        super().__init__(neon_tx_sig, holder_account)
+        self._neon_tx_sig = neon_tx_sig
+        self._holder_acct = holder_account
 
     def __str__(self) -> str:
-        return f'Holder account {self._holder_account} contains not-completed Neon tx'
+        return f'Holder account {self._holder_acct} contains stuck tx: {self._neon_tx_sig}'
+
+    @property
+    def neon_tx_sig(self) -> str:
+        return self._neon_tx_sig
+
+    @property
+    def holder_account(self) -> str:
+        return self._holder_acct
+
+
+class HolderContentError(RescheduleError):
+    def __init__(self, holder_account: str) -> None:
+        super().__init__(holder_account)
+        self._holder_acct = holder_account
+
+    def __str__(self) -> str:
+        return f'Holder account {self._holder_acct} is not synced yet'
+
+
+class ALTContentError(RescheduleError):
+    def __init__(self, alt_table: str, msg: str):
+        super().__init__(alt_table, msg)
+        self._alt_table = alt_table
+        self._msg = msg
+
+    def __str__(self) -> str:
+        return f'ALT {self._alt_table}: {self._msg}'
+
+
+class SenderAccountNotExists(RescheduleError):
+    def __init__(self, sender_addr: str):
+        super().__init__(sender_addr)
+        self._sender_addr = sender_addr
+
+    def __str__(self) -> str:
+        return f'Sender account {self._sender_addr} is not exist yet'
 
 
 class BlockedAccountError(RescheduleError):
@@ -119,7 +155,15 @@ class NonceTooLowError(BaseException):
         return f'nonce too low: address {self._sender}, tx: {self._tx_nonce} state: {self._state_tx_cnt}'
 
 
-class NonceTooHighError(BaseException):
+class NonceTooHighError(RescheduleError):
+    def __init__(self, state_tx_cnt: int):
+        super().__init__(state_tx_cnt)
+        self._state_tx_cnt = state_tx_cnt
+
+    @property
+    def state_tx_cnt(self) -> int:
+        return self._state_tx_cnt
+
     def __str__(self) -> str:
         return 'tx nonce is too high for execution'
 
@@ -147,3 +191,17 @@ class InvalidIxDataError(WrongStrategyError):
 class RequireResizeIterError(WrongStrategyError):
     def __str__(self) -> str:
         return 'Transaction requires resize iterations'
+
+
+class SolTxSizeError(WrongStrategyError):
+    def __init__(self, current_len: int, max_len: int):
+        super().__init__(current_len, max_len)
+        self._current_len = current_len
+        self._max_len = max_len
+
+    def __str__(self) -> str:
+        return f'Transaction size is exceeded {self._current_len} > {self._max_len}'
+
+
+class SolHistoryNotFound(RuntimeError):
+    pass

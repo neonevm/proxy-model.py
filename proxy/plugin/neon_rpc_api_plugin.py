@@ -93,7 +93,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         try:
             rpc_method = self._get_request_value(request, 'method')
             if (not hasattr(self._model, rpc_method)) or (not self._model.is_allowed_api(rpc_method)):
-                response['error'] = {'code': -32601, 'message': f'method {rpc_method} is not supported'}
+                response['error'] = {'code': -32601, 'message': f'method {rpc_method} does not exist/is not available'}
             else:
                 method = getattr(self._model, rpc_method)
                 param_object = []
@@ -124,9 +124,10 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             resp_time_ms
         )
 
-        is_error_resp = 'error' in response
-        stat = NeonMethodData(name=rpc_method, is_error=is_error_resp, latency=resp_time_ms)
-        self._stat_client.commit_request_and_timeout(stat)
+        if self._config.gather_statistics:
+            is_error_resp = 'error' in response
+            stat = NeonMethodData(name=rpc_method, is_error=is_error_resp, latency=resp_time_ms)
+            self._stat_client.commit_request_and_timeout(stat)
 
         return response
 

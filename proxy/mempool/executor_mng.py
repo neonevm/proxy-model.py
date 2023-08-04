@@ -101,7 +101,7 @@ class MPExecutorMng:
 
     def _get_executor(self) -> Tuple[int, MPExecutorClient]:
         executor_id = self._available_executor_pool.pop()
-        LOG.debug(f"Acquire executor: {executor_id}")
+        # LOG.debug(f"Acquire executor: {executor_id}")
         self._busy_executor_pool.add(executor_id)
         self._commit_stat()
 
@@ -111,7 +111,7 @@ class MPExecutorMng:
     def release_executor(self, executor_id: int):
         self._busy_executor_pool.remove(executor_id)
         if executor_id in self._executor_dict:
-            LOG.debug(f"Release executor: {executor_id}")
+            # LOG.debug(f"Release executor: {executor_id}")
             self._available_executor_pool.appendleft(executor_id)
             self._user.on_executor_released(executor_id)
         else:

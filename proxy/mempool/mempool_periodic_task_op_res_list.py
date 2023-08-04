@@ -1,7 +1,8 @@
 from .executor_mng import MPExecutorMng
 from .mempool_api import MPOpResGetListRequest, MPOpResGetListResult
 from .mempool_periodic_task import MPPeriodicTaskLoop
-from .operator_resource_mng import OpResMng
+
+from ..common_neon.operator_resource_mng import OpResMng
 
 
 class MPOpResGetListTaskLoop(MPPeriodicTaskLoop[MPOpResGetListRequest, MPOpResGetListResult]):

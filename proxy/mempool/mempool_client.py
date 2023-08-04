@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import threading
 import logging
-from typing import Callable, Optional, Dict, Any, Union
+from typing import Callable, Optional, Dict, Any
 
 from .mempool_api import (
     MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPTxRequest,
-    MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult
+    MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult,
+    MPTxPoolContentRequest, MPTxPoolContentResult, MPPendingTxBySenderNonceRequest, MPNeonTxResult
 )
 
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.errors import EthereumError
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.pickable_data_server import AddrPickableDataClient
 
@@ -69,7 +69,7 @@ class MemPoolClient:
     @_guard_conn
     @_reconnecting
     def send_raw_transaction(self, req_id: str, neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxSendResult:
-        mempool_tx_request = MPTxRequest(req_id=req_id, neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg)
+        mempool_tx_request = MPTxRequest.from_neon_tx(req_id, neon_tx, neon_tx_exec_cfg)
         return self._pickable_data_client.send_data(mempool_tx_request)
 
     @_guard_conn
@@ -81,14 +81,20 @@ class MemPoolClient:
     @_guard_conn
     @_reconnecting
     def get_mempool_tx_nonce(self, req_id: str, sender: str) -> int:
-        mempool_tx_nonce_req = MPMempoolTxNonceRequest(req_id=req_id, sender=sender)
-        return self._pickable_data_client.send_data(mempool_tx_nonce_req)
+        req = MPMempoolTxNonceRequest(req_id=req_id, sender=sender)
+        return self._pickable_data_client.send_data(req)
 
     @_guard_conn
     @_reconnecting
-    def get_pending_tx_by_hash(self, req_id: str, tx_hash: str) -> Union[NeonTx, EthereumError, None]:
-        mempool_pending_tx_by_hash_req = MPPendingTxByHashRequest(req_id=req_id, tx_hash=tx_hash)
-        return self._pickable_data_client.send_data(mempool_pending_tx_by_hash_req)
+    def get_pending_tx_by_hash(self, req_id: str, tx_hash: str) -> MPNeonTxResult:
+        req = MPPendingTxByHashRequest(req_id=req_id, tx_hash=tx_hash)
+        return self._pickable_data_client.send_data(req)
+
+    @_guard_conn
+    @_reconnecting
+    def get_pending_tx_by_sender_nonce(self, req_id, sender: str, tx_nonce: int) -> MPNeonTxResult:
+        req = MPPendingTxBySenderNonceRequest(req_id=req_id, sender=sender, tx_nonce=tx_nonce)
+        return self._pickable_data_client.send_data(req)
 
     @_guard_conn
     @_reconnecting
@@ -101,3 +107,10 @@ class MemPoolClient:
     def get_elf_param_dict(self, req_id: str) -> Optional[Dict[str, Any]]:
         elf_param_dict_req = MPElfParamDictRequest(req_id=req_id, elf_param_dict={})
         return self._pickable_data_client.send_data(elf_param_dict_req)
+
+    @_guard_conn
+    @_reconnecting
+    def get_content(self, req_id: str) -> MPTxPoolContentResult:
+        content_req = MPTxPoolContentRequest(req_id=req_id)
+        return self._pickable_data_client.send_data(content_req)
+

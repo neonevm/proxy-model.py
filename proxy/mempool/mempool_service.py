@@ -1,23 +1,25 @@
 import asyncio
 import logging
+
 from multiprocessing import Process
 from typing import Any, Optional, cast, Union
 
-from .mempool_api import (
-    MPResult, MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest,
-    MPPendingTxNonceRequest, MPMempoolTxNonceRequest
-)
-
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 from .mempool import MemPool
+
+from .mempool_api import (
+    MPResult, MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest,
+    MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxBySenderNonceRequest
+)
+
 from .mempool_replicator import MemPoolReplicator
-from .operator_resource_mng import OpResMng
 
 from ..common.logger import Logger
 from ..common_neon.config import Config
-from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.maintenance_api import MaintenanceRequest, MaintenanceCommand, ReplicationRequest, ReplicationBunch
+from ..common_neon.operator_resource_mng import OpResMng
 from ..common_neon.pickable_data_server import AddrPickableDataSrv, IPickableDataServerUser
+from ..common_neon.utils.json_logger import logging_context
 
 from ..statistic.proxy_client import ProxyStatClient
 
@@ -74,10 +76,15 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             elif mp_request.type == MPRequestType.GetTxByHash:
                 pending_tx_by_hash_req = cast(MPPendingTxByHashRequest, mp_request)
                 return self._mempool.get_pending_tx_by_hash(pending_tx_by_hash_req.tx_hash)
+            elif mp_request.type == MPRequestType.GetTxBySenderNonce:
+                req = cast(MPPendingTxBySenderNonceRequest, mp_request)
+                return self._mempool.get_pending_tx_by_sender_nonce(req.sender, req.tx_nonce)
             elif mp_request.type == MPRequestType.GetGasPrice:
                 return self._mempool.get_gas_price()
             elif mp_request.type == MPRequestType.GetElfParamDict:
                 return self._mempool.get_elf_param_dict()
+            elif mp_request.type == MPRequestType.TxPoolContent:
+                return self._mempool.get_content()
             LOG.error(f"Failed to process mp_request, unknown type: {mp_request.type}")
 
     def process_maintenance_request(self, request: MaintenanceRequest) -> MPResult:

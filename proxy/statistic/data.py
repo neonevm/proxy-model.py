@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 from enum import Enum, auto as enum_auto
 
 
@@ -11,6 +11,7 @@ class NeonMethodData:
     latency: float
 
 
+@dataclass
 class NeonTxStatData:
     tx_type: str
     completed_neon_tx_cnt: int = 0
@@ -39,57 +40,47 @@ class NeonTxBeginCode(Enum):
     Failed = enum_auto()
     Started = enum_auto()
     Restarted = enum_auto()
+    StuckPushed = enum_auto()
 
 
+@dataclass
 class NeonTxBeginData:
-    started_cnt: int = 0
-    restarted_cnt: int = 0
-    total_cnt: int = 0
-
-    def add_value(self, code: NeonTxBeginCode) -> None:
-        if code == NeonTxBeginCode.Started:
-            self.started_cnt += 1
-        elif code == NeonTxBeginCode.Restarted:
-            self.restarted_cnt += 1
-        else:
-            return
-        self.total_cnt += 1
-
-    def has_value(self) -> bool:
-        return self.total_cnt > 0
+    processing_cnt: int = 0
+    processing_stuck_cnt: int = 0
+    in_reschedule_queue_cnt: int = 0
+    in_stuck_queue_cnt: int = 0
+    in_mempool_cnt: int = 0
 
 
 class NeonTxEndCode(Enum):
     Unspecified = enum_auto()
     Unfinished = enum_auto()
     Done = enum_auto()
+    StuckDone = enum_auto()
     Failed = enum_auto()
     Rescheduled = enum_auto()
     Canceled = enum_auto()
 
 
+@dataclass
 class NeonTxEndData:
     done_cnt: int = 0
     failed_cnt: int = 0
-    rescheduled_cnt: int = 0
     canceled_cnt: int = 0
-    total_cnt: int = 0
+
+    processing_cnt: int = 0
+    processing_stuck_cnt: int = 0
+    in_reschedule_queue_cnt: int = 0
+    in_stuck_queue_cnt: int = 0
+    in_waiting_queue_cnt: int = 0
 
     def add_value(self, code: NeonTxEndCode) -> None:
-        if code == NeonTxEndCode.Done:
+        if code in {NeonTxEndCode.Done, NeonTxEndCode.StuckDone}:
             self.done_cnt += 1
         elif code == NeonTxEndCode.Failed:
             self.failed_cnt += 1
-        elif code == NeonTxEndCode.Rescheduled:
-            self.rescheduled_cnt += 1
         elif code == NeonTxEndCode.Canceled:
             self.canceled_cnt += 1
-        else:
-            return
-        self.total_cnt += 1
-
-    def has_value(self) -> bool:
-        return self.total_cnt > 0
 
 
 @dataclass(frozen=True)
@@ -121,3 +112,4 @@ class NeonBlockStatData:
     parsed_block: int
     finalized_block: int
     confirmed_block: int
+    tracer_block: Optional[int]

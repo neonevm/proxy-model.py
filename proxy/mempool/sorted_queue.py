@@ -44,13 +44,19 @@ class SortedQueue(Generic[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]):
     def __len__(self) -> int:
         return len(self._impl)
 
+    def __iter__(self) -> Iterator[SortedQueueItem]:
+        return iter(self._impl)
+
     def add(self, item: SortedQueueItem) -> None:
-        assert self.find(item) is None, 'item is already in the queue'
         pos = self._impl.bisect_left(item)
+        assert self.find_from_pos(pos, item) is None, 'item is already in the queue'
         self._impl.queue.insert(pos, item)
 
     def find(self, item: SortedQueueItem) -> Optional[int]:
         start_pos = self._impl.bisect_left(item)
+        return self.find_from_pos(start_pos, item)
+
+    def find_from_pos(self, start_pos: int, item: SortedQueueItem):
         for index in range(start_pos, len(self)):
             if self._impl.lt_key_func(item) != self._impl.lt_key_func(self._impl.queue[index]):
                 break
@@ -66,12 +72,5 @@ class SortedQueue(Generic[SortedQueueItem, SortedQueueLtKey, SortedQueueEqKey]):
 
         return self._impl.queue.pop(index)
 
-    def remove_if(self, predict: Callable[[SortedQueueItem], bool]) -> None:
-        self._impl.queue = [item for item in self._impl.queue if not predict(item)]
-
     def clear(self) -> None:
         self._impl.queue.clear()
-
-    def __iter__(self):
-        return iter(self._impl)
-

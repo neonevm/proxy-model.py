@@ -21,7 +21,7 @@ class MemPoolReplicator:
     def replicate(self, peers: List[Peer]) -> MPResult:
         LOG.debug(f"Replicate, peers: {peers}")
         conn_it = cycle([AddrPickableDataClient(peer.address) for peer in peers])
-        tx_list_it = self._mempool.get_taking_out_tx_list_iter()
+        tx_list_it = self._mempool.iter_taking_out_tx_list()
         for conn, (sender_addr, mp_tx_req_list) in zip(conn_it, tx_list_it):
             replication_bunch = ReplicationBunch(sender_addr=sender_addr, mp_tx_requests=mp_tx_req_list)
             LOG.debug(

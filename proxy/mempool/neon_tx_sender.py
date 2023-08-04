@@ -30,8 +30,7 @@ class NeonTxSendStrategyExecutor:
         self._ctx = ctx
 
     def execute(self) -> NeonTxResultInfo:
-        if not self._ctx.has_completed_receipt():
-            self._validate_nonce()
+        self._validate_nonce()
 
         start = self._ctx.strategy_idx
         end = len(self._strategy_list)
@@ -44,7 +43,7 @@ class NeonTxSendStrategyExecutor:
 
                 return self._execute(strategy_idx, strategy)
 
-            except RescheduleError:
+            except (RescheduleError, NonceTooLowError):
                 raise
 
             except WrongStrategyError:
@@ -53,7 +52,8 @@ class NeonTxSendStrategyExecutor:
                 self._cancel(strategy)
                 raise
 
-            except BaseException:
+            except BaseException as exc:
+                LOG.warning('Fail on execute tx', exc_info=exc)
                 self._cancel(strategy)
                 raise
 
@@ -102,22 +102,27 @@ class NeonTxSendStrategyExecutor:
             raise
 
         except BaseException as exc:
-            LOG.error(f'Failed to cancel tx', exc_info=exc)
+            LOG.error('Failed to cancel tx', exc_info=exc)
 
     def _init_state_tx_cnt(self) -> None:
-        state_tx_cnt = self._ctx.solana.get_state_tx_cnt(self._ctx.neon_tx.sender)
+        state_tx_cnt = self._ctx.solana.get_state_tx_cnt(self._ctx.neon_tx_info.addr)
+        if self._ctx.has_completed_receipt():
+            state_tx_cnt = max(state_tx_cnt, self._ctx.neon_tx_info.nonce)
         self._ctx.set_state_tx_cnt(state_tx_cnt)
 
     def _emulate_neon_tx(self) -> None:
+        if self._ctx.is_stuck_tx():
+            return
+
         emulated_result = call_tx_emulated(self._ctx.config, self._ctx.neon_tx)
         self._ctx.set_emulated_result(emulated_result)
         self._validate_nonce()
 
     def _validate_nonce(self) -> None:
         self._init_state_tx_cnt()
-        if self._ctx.state_tx_cnt == self._ctx.neon_tx.nonce:
+        if self._ctx.state_tx_cnt == self._ctx.neon_tx_info.nonce:
             return
 
-        if self._ctx.state_tx_cnt < self._ctx.neon_tx.nonce:
-            raise NonceTooHighError()
-        raise NonceTooLowError(self._ctx.neon_tx.hex_sender, self._ctx.neon_tx.nonce, self._ctx.state_tx_cnt)
+        if self._ctx.state_tx_cnt < self._ctx.neon_tx_info.nonce:
+            raise NonceTooHighError(self._ctx.state_tx_cnt)
+        raise NonceTooLowError(self._ctx.neon_tx_info.addr, self._ctx.neon_tx_info.nonce, self._ctx.state_tx_cnt)

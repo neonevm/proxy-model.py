@@ -8,8 +8,9 @@ from proxy.common_neon.address import NeonAddress, neon_2program
 from proxy.common_neon.config import Config
 from proxy.common_neon.solana_tx import SolAccountMeta
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
+from proxy.common_neon.operator_resource_info import OpResInfo, OpResIdent
 
-from proxy.mempool.operator_resource_mng import OpResInfo, OpResInit, OpResIdent
+from proxy.mempool.mempool_executor_task_op_res import OpResInit
 
 from proxy.testing.solana_utils import wallet_path, WalletAccount
 from proxy.testing.testing_helpers import Proxy, NeonLocalAccount, SolClient
@@ -122,7 +123,7 @@ class BlockedTest(unittest.TestCase):
             SolAccountMeta(pubkey=self.caller, is_signer=False, is_writable=True)
         ])
 
-        neon_ix_builder.init_iterative(resource.holder)
+        neon_ix_builder.init_iterative(resource.holder_account)
 
         sol_tx = SolLegacyTx(
             name='BlockAccount',
