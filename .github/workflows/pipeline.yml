@@ -183,16 +183,16 @@ jobs:
           done
       - name: Run OpenZeppelin tests
         run: |
-          docker exec -i ${{ env.CONTAINER }} ./clickfile.py run oz \
+          docker exec -i ${{ env.CONTAINER }} python3 ./clickfile.py run oz \
             --network ${{ env.NETWORK_NAME }} \
             --jobs 8 \
             --users 10
       - name: Print OpenZeppelin report
         run: |
-          docker exec -i ${{ env.CONTAINER }} ./clickfile.py ozreport
+          docker exec -i ${{ env.CONTAINER }} python3 ./clickfile.py ozreport
       - name: Analyze tests results
         run: |
-          docker exec -i ${{ env.CONTAINER }} ./clickfile.py analyze-openzeppelin-results
+          docker exec -i ${{ env.CONTAINER }} python3  ./clickfile.py analyze-openzeppelin-results
       - name: "Archive report"
         if: always()
         run: |
@@ -248,7 +248,7 @@ jobs:
       - name: Update contracts in the container
         run: |
           docker exec -i ${{ env.CONTAINER }} \
-            ./clickfile.py update-contracts --branch ${{ github.head_ref || github.ref_name }}
+            python3 ./clickfile.py update-contracts --branch ${{ github.head_ref || github.ref_name }}
       - name: Wait until proxy is ready
         timeout-minutes: 5
         run: |
@@ -259,7 +259,7 @@ jobs:
       - name: Run basic tests
         run: |
           docker exec -i ${{ env.CONTAINER }} \
-            ./clickfile.py run basic -n ${{ env.NETWORK }} --numprocesses ${{ env.NUMPROCESSES }}
+            python3 ./clickfile.py run basic -n ${{ env.NETWORK }} --numprocesses ${{ env.NUMPROCESSES }}
       - name: Remove docker container
         if: always()
         run: docker rm -f ${{ env.CONTAINER }}
