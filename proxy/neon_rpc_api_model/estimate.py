@@ -86,7 +86,6 @@ class GasEstimate:
         self._elf_params = ElfParams()
 
         self._cached_tx_cost_size: Optional[int] = None
-        self._cached_overhead_cost: Optional[int] = None
         self._cached_alt_cost: Optional[int] = None
 
         self._account_list: List[SolAccountMeta] = list()
@@ -138,32 +137,24 @@ class GasEstimate:
     def _execution_cost(self) -> int:
         return self.emulator_json.get('used_gas', 0)
 
-    def _emulated_step_cnt(self) -> int:
-        return self.emulator_json.get('steps_executed', 0)
-
-    def _iterative_overhead_cost(self) -> int:
-        if self._cached_overhead_cost is not None:
-            return self._cached_overhead_cost
-
-        execution_cost = self._execution_cost()
-        tx_size_cost = self._tx_size_cost()
-        step_cnt = self._emulated_step_cnt()
-        limit_step_cnt = self._elf_params.neon_evm_steps
-
-        if (tx_size_cost > 0) or (execution_cost > self._small_gas_limit) or (step_cnt > limit_step_cnt):
-            last_iteration_cost = 5000
-            cancel_cost = 5000
-            self._cached_overhead_cost = last_iteration_cost + cancel_cost
-        else:
-            self._cached_overhead_cost = 0
-
-        return self._cached_overhead_cost
+    @staticmethod
+    def _iterative_overhead_cost() -> int:
+        """
+        if the transaction fails on the simple execution in one iteration,
+        it is executed in iterative mode to store the Neon receipt on Solana
+        """
+        last_iteration_cost = 5000
+        cancel_cost = 5000
+        return last_iteration_cost + cancel_cost
 
     def _alt_cost(self) -> int:
+        """
+        Costs to create->extend->deactivate->close an Address Lookup Table
+        """
         if self._cached_alt_cost is not None:
             return self._cached_alt_cost
 
-        # ALT used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
+        # ALT is used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
         acc_cnt = len(self._account_list) + 6
         if acc_cnt > ALTLimit.max_tx_account_cnt:
             self._cached_alt_cost = 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
@@ -182,7 +173,6 @@ class GasEstimate:
 
     def estimate(self):
         self._cached_tx_cost_size = None
-        self._cached_overhead_cost = None
         self._cached_alt_cost = None
 
         self._build_account_list()
@@ -192,9 +182,8 @@ class GasEstimate:
         overhead_cost = self._iterative_overhead_cost()
         alt_cost = self._alt_cost()
 
-        gas = execution_cost + tx_size_cost + overhead_cost + alt_cost
-        if gas < 21000:
-            gas = 21000
+        # Ethereum wallets don't accept gas limit less than 21000
+        gas = max(execution_cost + tx_size_cost + overhead_cost + alt_cost, 21000)
 
         LOG.debug(
             f'execution_cost: {execution_cost}, '

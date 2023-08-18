@@ -7,6 +7,7 @@ from ..common_neon.solana_tx_list_sender import SolTxSendState
 from ..common_neon.utils import NeonTxResultInfo
 from ..common_neon.solana_tx_error_parser import SolTxError
 from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName
+from ..common_neon.errors import WrongStrategyError
 
 from .neon_tx_sender_ctx import NeonTxSendCtx
 from .neon_tx_send_base_strategy import BaseNeonTxStrategy
@@ -27,8 +28,16 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     def execute(self) -> NeonTxResultInfo:
         assert self.is_valid()
 
-        if not self._recheck_tx_list([self.name]):
-            self._send_tx_list(self._build_tx_list())
+        try:
+            if not self._recheck_tx_list([self.name]):
+                self._send_tx_list(self._build_tx_list())
+
+        except SolTxError as err:
+            LOG.debug(f'Got error {str(err)}, use another strategy for execution')
+            raise WrongStrategyError()
+
+        except (BaseException,):
+            raise
 
         tx_send_state_list = self._sol_tx_list_sender.tx_state_list
         tx_state = tx_send_state_list[0]
@@ -47,7 +56,8 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
                 LOG.debug(f'Set truncated Neon tx result: {neon_tx_res}')
 
         else:
-            raise SolTxError(self._ctx.config.evm_program_id, tx_state.receipt)
+            LOG.debug(f'Cannot find NeonTx receipt, use another strategy for execution')
+            raise WrongStrategyError()
 
         return neon_tx_res
 
