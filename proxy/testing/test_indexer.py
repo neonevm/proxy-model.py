@@ -310,7 +310,7 @@ class CompleteTest(unittest.TestCase):
         print("\ntest_01_completed")
         trx_receipt = self.proxy.conn.wait_for_transaction_receipt(self.tx_hash)
         print('trx_receipt:', trx_receipt)
-        self.assertEqual(trx_receipt['status'], 0)
+        self.assertEqual(trx_receipt['status'], 1)
 
     # def test_02_get_code_from_indexer(self):
     #     print("\ntest_02_get_code_from_indexer")

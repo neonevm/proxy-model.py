@@ -157,7 +157,6 @@ class SolTxErrorParser:
     _simulation_failed_hdr = f'Transaction simulation failed: Error processing Instruction {_neon_evm_ix_idx}: '
 
     _computation_budget_exceeded_type = 'ComputationalBudgetExceeded'
-    _program_failed_to_complete_type = 'ProgramFailedToComplete'
 
     _invalid_ix_data_msg = _simulation_failed_hdr + 'invalid instruction data'
     _program_failed_msg = _simulation_failed_hdr + 'Program failed to complete'
@@ -165,7 +164,9 @@ class SolTxErrorParser:
     _already_process_msg = 'AlreadyProcessed'
 
     _exceeded_cu_number_log = 'Program failed to complete: exceeded maximum number of instructions allowed'
-    _exceeded_cu_number_log_v2 = 'Program failed to complete: exceeded CUs meter at BPF instruction'
+    _exceeded_cu_number_re = re.compile(
+        r'Program (\w+) failed: exceeded CUs meter at BPF instruction #(\d+)$'
+    )
     _read_write_blocked_log = 'trying to execute transaction on rw locked account'
     _already_finalized_log = 'Program log: Storage Account is finalized'
 
@@ -324,14 +325,11 @@ class SolTxErrorParser:
         if error_type == self._computation_budget_exceeded_type:
             return True
 
-        if error_type != self._program_failed_to_complete_type:
-            return False
-
         log_list = self._get_log_list()
         for log_rec in reversed(log_list):
             if log_rec.startswith(self._exceeded_cu_number_log):
                 return True
-            elif log_rec.startswith(self._exceeded_cu_number_log_v2):
+            elif self._exceeded_cu_number_re.match(log_rec) is not None:
                 return True
             elif log_rec == self._log_truncated_log:
                 return True
