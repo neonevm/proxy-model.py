@@ -142,6 +142,7 @@ class HolderAccountInfo:
     lamports: int
     owner: SolPubKey
     tag: int
+    data_size: int
     operator: SolPubKey
     neon_tx_sig: str
     neon_tx_data: Optional[bytes]
@@ -197,6 +198,7 @@ class HolderAccountInfo:
             lamports=info.lamports,
             owner=info.owner,
             tag=storage.tag,
+            data_size=len(info.data),
             operator=SolPubKey.from_bytes(storage.operator),
             neon_tx_sig='0x' + storage.neon_tx_sig.hex().lower(),
             neon_tx_data=None,
@@ -222,6 +224,7 @@ class HolderAccountInfo:
             lamports=info.lamports,
             owner=info.owner,
             tag=storage.tag,
+            data_size=len(info.data),
             operator=SolPubKey.from_bytes(storage.operator),
             neon_tx_sig='0x' + storage.neon_tx_sig.hex().lower(),
             neon_tx_data=None,
@@ -250,6 +253,7 @@ class HolderAccountInfo:
             lamports=info.lamports,
             owner=info.owner,
             tag=holder.tag,
+            data_size=len(info.data),
             operator=SolPubKey.from_bytes(holder.operator),
             neon_tx_sig='0x' + holder.neon_tx_sig.hex().lower(),
             neon_tx_data=neon_tx_data,
