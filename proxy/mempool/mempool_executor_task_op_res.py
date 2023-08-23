@@ -96,8 +96,12 @@ class OpResInit:
             LOG.debug(f'Create account {holder_address} for resource {resource}')
             self._execute_stage(NeonCreateHolderAccountStage(builder, resource.holder_seed, size, balance), resource)
 
-        elif holder_info.lamports < balance:
-            LOG.debug(f'Resize account {holder_address} for resource {resource}')
+        elif (holder_info.lamports < balance) or (holder_info.data_size != size):
+            LOG.debug(
+                f'Resize account {holder_address} '
+                f'(balance: {holder_info.lamports}, size: {holder_info.data_size}) '
+                f'for resource {resource}'
+            )
             self._recreate_holder(builder, resource, balance)
 
         elif holder_info.owner != self._config.evm_program_id:
