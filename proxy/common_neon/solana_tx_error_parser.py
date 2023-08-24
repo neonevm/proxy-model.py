@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import enum
+import functools
 from typing import Union, Optional, Any, Tuple, List, cast
 
 from .solana_tx import SolTxReceipt, SolPubKey
@@ -192,6 +193,10 @@ class SolTxErrorParser:
         r'Program log: Invalid Nonce, origin \w+ nonce (\d+) != Transaction nonce (\d+)'
     )
 
+    _out_of_gas_re = re.compile(
+        r'Program log: Out of Gas, limit = (\d+), required = (\d+)'
+    )
+
     def __init__(self, evm_program_id: SolPubKey, receipt: Union[SolTxReceipt, BaseException, str]):
         assert isinstance(receipt, dict) or isinstance(receipt, BaseException) or isinstance(receipt, str)
 
@@ -201,14 +206,6 @@ class SolTxErrorParser:
             self._receipt = receipt
 
         self._evm_program_id = evm_program_id
-        self._log_list: Optional[List[str]] = None
-        self._evm_log_list: Optional[List[str]] = None
-
-        self._error: Union[str, list, None] = None
-        self._is_error_init = False
-
-        self._error_code_msg: Optional[Tuple[int, str]] = None
-        self._is_error_code_msg_init = False
 
     def _get_value(self, *path) -> Any:
         if not self._receipt:
@@ -218,7 +215,8 @@ class SolTxErrorParser:
 
         return get_from_dict(self._receipt, *path)
 
-    def _get_error_impl(self) -> Union[str, list, None]:
+    @functools.lru_cache(1)
+    def _get_error(self) -> Union[str, list, None]:
         if not self._receipt:
             return None
         if isinstance(self._receipt, BaseException):
@@ -246,13 +244,8 @@ class SolTxErrorParser:
 
         return None
 
-    def _get_error(self) -> Union[str, list, None]:
-        if not self._is_error_init:
-            self._is_error_init = True
-            self._error = self._get_error_impl()
-        return self._error
-
-    def _get_error_code_msg_impl(self) -> Optional[Tuple[int, str]]:
+    @functools.lru_cache(1)
+    def _get_error_code_msg(self) -> Optional[Tuple[int, str]]:
         if not self._receipt:
             return None
         if isinstance(self._receipt, BaseException):
@@ -265,13 +258,8 @@ class SolTxErrorParser:
             return None
         return code, msg
 
-    def _get_error_code_msg(self) -> Optional[Tuple[int, str]]:
-        if not self._is_error_code_msg_init:
-            self._is_error_code_msg_init = True
-            self._error_code_msg = self._get_error_code_msg_impl()
-        return self._error_code_msg
-
-    def _get_log_list_impl(self) -> List[str]:
+    @functools.lru_cache(1)
+    def _get_log_list(self) -> List[str]:
         if not self._receipt:
             return list()
         if isinstance(self._receipt, BaseException):
@@ -279,13 +267,8 @@ class SolTxErrorParser:
 
         return get_log_list(self._receipt)
 
-    def _get_log_list(self) -> List[str]:
-        if self._log_list is None:
-            self._log_list = self._get_log_list_impl()
-
-        return self._log_list
-
-    def _get_evm_log_list_impl(self) -> List[str]:
+    @functools.lru_cache(1)
+    def _get_evm_log_list(self) -> List[str]:
         log_list: List[str] = list()
         if not self._receipt:
             return log_list
@@ -300,18 +283,15 @@ class SolTxErrorParser:
             log_list.extend(ix_log_msg.iter_str_log_msg())
         return log_list
 
-    def _get_evm_log_list(self) -> List[str]:
-        if self._evm_log_list is None:
-            self._evm_log_list = self._get_evm_log_list_impl()
-
-        return self._evm_log_list
-
+    @functools.lru_cache(1)
     def check_if_error(self) -> bool:
         return (self._get_error() is not None) or (self._get_error_code_msg() is not None)
 
+    @functools.lru_cache(1)
     def check_if_invalid_ix_data(self) -> bool:
         return self._get_error_code_msg() == (-32002, self._invalid_ix_data_msg)
 
+    @functools.lru_cache(1)
     def check_if_budget_exceeded(self) -> bool:
         error_type = self._get_error()
         if not error_type:
@@ -336,6 +316,7 @@ class SolTxErrorParser:
 
         return False
 
+    @functools.lru_cache(1)
     def check_if_require_resize_iter(self) -> bool:
         if self._get_error_code_msg() != (-32002, self._program_failed_msg):
             return False
@@ -346,6 +327,7 @@ class SolTxErrorParser:
                 return True
         return False
 
+    @functools.lru_cache(1)
     def check_if_account_already_exists(self) -> bool:
         evm_log_list = self._get_evm_log_list()
         for log_rec in evm_log_list:
@@ -359,6 +341,7 @@ class SolTxErrorParser:
 
         return False
 
+    @functools.lru_cache(1)
     def check_if_already_finalized(self) -> bool:
         log_list = self._get_evm_log_list()
         for log_rec in log_list:
@@ -366,6 +349,7 @@ class SolTxErrorParser:
                 return True
         return False
 
+    @functools.lru_cache(1)
     def check_if_accounts_blocked(self) -> bool:
         log_list = self._get_evm_log_list()
         for log_rec in log_list:
@@ -373,26 +357,32 @@ class SolTxErrorParser:
                 return True
         return False
 
+    @functools.lru_cache(1)
     def check_if_block_hash_notfound(self) -> bool:
         if self._receipt is None:
             return True
         return self._get_error() == self._block_hash_notfound_err
 
+    @functools.lru_cache(1)
     def check_if_alt_uses_invalid_index(self) -> bool:
         return self._get_error_code_msg() == (-32602, self._alt_invalid_idx_msg)
 
+    @functools.lru_cache(1)
     def check_if_already_processed(self) -> bool:
         return self._get_value('data', 'err') == self._already_process_msg
 
+    @functools.lru_cache(1)
     def check_if_preprocessed_error(self) -> bool:
         error_code_msg = self._get_error_code_msg()
         if error_code_msg is None:
             return False
         return error_code_msg[1].startswith(self._simulation_failed_hdr)
 
+    @functools.lru_cache(1)
     def get_slots_behind(self) -> Optional[int]:
         return self._get_value('data', self._numslots_behind_data)
 
+    @functools.lru_cache(1)
     def get_nonce_error(self) -> Tuple[Optional[int], Optional[int]]:
         log_list = self._get_evm_log_list()
         for log_rec in log_list:
@@ -400,4 +390,14 @@ class SolTxErrorParser:
             if match is not None:
                 state_tx_cnt, tx_nonce = match[1], match[2]
                 return int(state_tx_cnt), int(tx_nonce)
+        return None, None
+
+    @functools.lru_cache(1)
+    def get_out_of_gas_error(self) -> Tuple[Optional[int], Optional[int]]:
+        log_list = self._get_evm_log_list()
+        for log_rec in log_list:
+            match = self._out_of_gas_re.match(log_rec)
+            if match is not None:
+                has_gas_limit, req_gas_limit = match[1], match[2]
+                return int(has_gas_limit), int(req_gas_limit)
         return None, None

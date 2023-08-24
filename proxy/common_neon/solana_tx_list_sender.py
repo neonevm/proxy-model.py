@@ -10,7 +10,7 @@ from .errors import (
     BlockHashNotFound, NonceTooLowError, NonceTooHighError,
     CUBudgetExceededError, InvalidIxDataError, RequireResizeIterError,
     CommitLevelError, NodeBehindError, NoMoreRetriesError, BlockedAccountError,
-    RescheduleError, WrongStrategyError
+    RescheduleError, WrongStrategyError, OutOfGasError
 )
 
 from .config import Config
@@ -51,6 +51,7 @@ class SolTxSendState:
 
         # Fail errors
         BadNonceError = enum.auto()
+        OutOfGasError = enum.auto()
         UnknownError = enum.auto()
 
     status: Status
@@ -426,6 +427,10 @@ class SolTxListSender:
             return self._DecodeResult(status.CUBudgetExceededError, CUBudgetExceededError())
         elif tx_error_parser.check_if_require_resize_iter():
             return self._DecodeResult(status.RequireResizeIterError, RequireResizeIterError())
+
+        has_gas_limit, req_gas_limit = tx_error_parser.get_out_of_gas_error()
+        if has_gas_limit is not None:
+            return self._DecodeResult(status.OutOfGasError, OutOfGasError(has_gas_limit, req_gas_limit))
 
         state_tx_cnt, tx_nonce = tx_error_parser.get_nonce_error()
         if state_tx_cnt is not None:
