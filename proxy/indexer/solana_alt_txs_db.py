@@ -50,7 +50,7 @@ class SolAltTxsDB(BaseDBTable):
         self._insert_row_list(row_list)
 
     def get_alt_ix_list_by_neon_sig(self, neon_sig: str) -> List[SolAltIxInfo]:
-        row_list = self._db.fetch_all(self._select_request, (neon_sig,))
+        row_list = self._fetch_all(self._select_request, (neon_sig,))
 
         alt_ix_list: List[SolAltIxInfo] = list()
 
@@ -92,7 +92,7 @@ class SolAltTxsDB(BaseDBTable):
           ORDER BY a.block_slot, a.sol_sig
         '''
 
-        row_list = self._db.fetch_all(request, (neon_sig,))
+        row_list = self._fetch_all(request, (neon_sig,))
 
         alt_sig_list: List[str] = list()
         for value_list in row_list:

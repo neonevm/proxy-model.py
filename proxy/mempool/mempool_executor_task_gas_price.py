@@ -48,7 +48,6 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
             min_gas_price=self._gas_price_calculator.min_gas_price,
             sol_price_usd=self._gas_price_calculator.sol_price_usd,
             neon_price_usd=self._gas_price_calculator.neon_price_usd,
-            operator_fee=self._gas_price_calculator.operator_fee
         )
         self._stat_client.commit_gas_price(stat)
 
@@ -59,6 +58,7 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
             gas_price_slippage=math.ceil(self._config.gas_price_slippage * 10000),
 
             suggested_gas_price=self._gas_price_calculator.suggested_gas_price,
+            is_const_gas_price=self._gas_price_calculator.is_const_gas_price,
             min_executable_gas_price=self._gas_price_calculator.min_gas_price,
             min_acceptable_gas_price=self._config.min_gas_price,
             min_wo_chainid_acceptable_gas_price=self._config.min_wo_chainid_gas_price,
@@ -70,8 +70,8 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
             neon_price_account=self._gas_price_calculator.neon_price_account,
         )
 
-        LOG.debug(
-            f'suggested_gas_price: {gas_price.suggested_gas_price}, '
-            f'min_executable_gas_price: {gas_price.min_executable_gas_price}'
-        )
+        # LOG.debug(
+        #     f'suggested_gas_price: {gas_price.suggested_gas_price}, '
+        #     f'min_executable_gas_price: {gas_price.min_executable_gas_price}'
+        # )
         return gas_price

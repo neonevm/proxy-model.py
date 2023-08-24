@@ -12,14 +12,16 @@ LOG = logging.getLogger(__name__)
 
 
 class CliBase:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, enable_logging: bool):
         self._config = config
+        self._enable_logging = enable_logging
 
     def _hide_solana_url(self, cmd: List[str]) -> str:
         return ' '.join([item.replace(self._config.solana_url, 'XXXX') for item in cmd])
 
     def run_cli(self, cmd: List[str], **kwargs) -> str:
-        LOG.debug(f'Calling: {self._hide_solana_url(cmd)}')
+        if self._enable_logging:
+            LOG.debug(f'Calling: {self._hide_solana_url(cmd)}')
 
         result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
         if result.stderr is not None:
@@ -66,7 +68,8 @@ class NeonCli(CliBase):
             ]
             cmd.extend(['-vvv'] if self._config.neon_cli_debug_log else [])
             cmd.extend(list(args))
-            LOG.info(f'Calling neon-cli: {self._hide_solana_url(cmd)}')
+            if self._enable_logging:
+                LOG.debug(f'Calling neon-cli: {self._hide_solana_url(cmd)}')
 
             if data is None:
                 data = ""
@@ -89,12 +92,13 @@ class NeonCli(CliBase):
                     error = result.stdout
                 raise subprocess.CalledProcessError(result.returncode, cmd, stderr=error)
 
-            for log in output.get('logs', []):
-                LOG.debug(log)
+            if self._enable_logging:
+                for log in output.get('logs', []):
+                    LOG.debug(log)
 
             if 'error' in output:
                 error = output.get('error')
-                LOG.error(f'ERR: neon-cli error value f{error}')
+                LOG.error(f'neon-cli error value f{error}')
                 raise subprocess.CalledProcessError(result.returncode, cmd, stderr=error)
 
             return output.get('value', '')
@@ -105,6 +109,9 @@ class NeonCli(CliBase):
 
     @property
     def _emulator_logging_level(self):
+        if self._config.neon_cli_debug_log:
+            return 'trace'
+
         level = LOG.getEffectiveLevel()
         cli_level = self.EMULATOR_LOGLEVEL.get(level, 'warn')
         return cli_level

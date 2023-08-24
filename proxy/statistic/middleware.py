@@ -126,7 +126,7 @@ class StatClient:
     _stat_address = ("127.0.0.1", 9093)
 
     def __init__(self, config: Config):
-        LOG.info(f'Init statistic middleware client, enabled: {config.gather_statistics}')
+        # LOG.info(f'Init statistic middleware client, enabled: {config.gather_statistics}')
         self._is_enabled = config.gather_statistics
         if not self._is_enabled:
             return
@@ -166,7 +166,7 @@ class StatClient:
             return True
 
         try:
-            LOG.debug(f'Connect statistic middleware server: {self._stat_address}')
+            # LOG.debug(f'Connect statistic middleware server: {self._stat_address}')
             self._stat_mng_client = AddrPickableDataClient(self._stat_address)
             return True
         except BaseException as exc:

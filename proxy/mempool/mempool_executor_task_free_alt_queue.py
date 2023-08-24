@@ -84,7 +84,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
             if mp_alt_info is not None:
                 mp_alt_info_dict[alt_address.table_account] = mp_alt_info
 
-        block_slot = self._solana.get_block_slot(SolCommit.Confirmed) - 3
+        block_slot = self._solana.get_confirmed_slot() - 3
         alt_dict_list = self._get_alt_list(block_slot)
 
         for alt_dict in alt_dict_list:
@@ -102,10 +102,10 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
         return MPALTListResult(block_height=block_height, alt_info_list=list(mp_alt_info_dict.values()))
 
     def _get_alt_list(self, block_slot: int) -> List[Dict[str, Any]]:
-        db = DBConnection(self._config)
-        alt_infos_db = SolAltInfosDB(db)
+        db_conn = DBConnection(self._config)
+        alt_infos_db = SolAltInfosDB(db_conn)
 
-        _, alt_dict_list = alt_infos_db.get_alt_list(block_slot)
+        _, alt_dict_list = alt_infos_db.get_alt_list(block_slot, (2 ** 64 - 1))
         return alt_dict_list
 
     def _free_alt_list(self, alt_info_list: List[MPALTInfo], name: str,

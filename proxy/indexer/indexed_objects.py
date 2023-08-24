@@ -481,7 +481,6 @@ class NeonIndexedBlockInfo:
                         neon_holder_list: List[Dict[str, Any]],
                         neon_tx_list: List[Dict[str, Any]],
                         alt_info_list: List[Dict[str, Any]]) -> NeonIndexedBlockInfo:
-        assert sol_block.block_slot <= stuck_block_slot
 
         new_block = NeonIndexedBlockInfo(sol_block)
         new_block._stuck_block_slot = stuck_block_slot
@@ -640,12 +639,12 @@ class NeonIndexedBlockInfo:
             self._sol_alt_ix_list.append(alt_ix)
             alt_info.set_last_ix_slot(alt_ix.block_slot)
 
-    def iter_stuck_neon_holder(self, config: Config) -> Iterator[NeonIndexedHolderInfo]:
-        self._check_stuck_objs(config)
+    def iter_stuck_neon_holder(self) -> Iterator[NeonIndexedHolderInfo]:
+        assert self._is_stuck_completed
         return iter(self._stuck_neon_holder_list)
 
-    def iter_stuck_neon_tx(self, config: Config) -> Iterator[NeonIndexedTxInfo]:
-        self._check_stuck_objs(config)
+    def iter_stuck_neon_tx(self) -> Iterator[NeonIndexedTxInfo]:
+        assert self._is_stuck_completed
         return iter(self._stuck_neon_tx_list)
 
     def fail_neon_holder_list(self, failed_holder_list: List[NeonIndexedHolderInfo]) -> None:
@@ -808,13 +807,23 @@ class NeonIndexedBlockInfo:
             log_idx = tx.neon_tx_res.set_block_info(self._sol_block, tx.neon_tx.sig, tx_idx, log_idx, sum_gas_used)
             tx_idx += 1
 
-    def _check_stuck_objs(self, config: Config) -> None:
+    def check_stuck_objs(self, config: Config) -> None:
         if self._is_stuck_completed:
             return
+
         self._is_stuck_completed = True
         self._check_stuck_holders(config)
         self._check_stuck_txs(config)
         self._check_stuck_alts(config)
+
+    def has_stuck_objs(self) -> bool:
+        assert self._is_stuck_completed
+
+        return (
+            len(self._stuck_neon_tx_list) or
+            len(self._stuck_neon_holder_list) or
+            len(self._sol_alt_info_dict)
+        )
 
     def _check_stuck_holders(self, config: Config) -> None:
         # there were the restart with stuck holders
@@ -881,65 +890,23 @@ class NeonIndexedBlockInfo:
 
 
 class NeonIndexedBlockDict:
-    @dataclass(frozen=True)
-    class Stat:
-        neon_holder_cnt: int
-        neon_tx_cnt: int
-        sol_neon_ix_cnt: int
-        sol_alt_info_cnt: int
-        neon_block_cnt: int = 1
-        min_block_slot: int = 0
-
-        def __str__(self) -> str:
-            return str_fmt_object(self, False)
-
-        @staticmethod
-        def init_empty() -> NeonIndexedBlockDict.Stat:
-            return NeonIndexedBlockDict.Stat(0, 0, 0, 0)
-
-        @staticmethod
-        def from_block(neon_block: NeonIndexedBlockInfo) -> NeonIndexedBlockDict.Stat:
-            return NeonIndexedBlockDict.Stat(
-                neon_holder_cnt=neon_block.neon_holder_cnt,
-                neon_tx_cnt=neon_block.neon_tx_cnt,
-                sol_neon_ix_cnt=neon_block.sol_neon_ix_cnt,
-                sol_alt_info_cnt=neon_block.sol_alt_info_cnt
-            )
-
-        def set_min_block_slot(self, block_slot: int) -> None:
-            object.__setattr__(self, 'min_block_slot', block_slot)
-
-        def add_stat(self, src: NeonIndexedBlockDict.Stat) -> None:
-            object.__setattr__(self, 'neon_block_cnt', self.neon_block_cnt + src.neon_block_cnt)
-            object.__setattr__(self, 'neon_holder_cnt', self.neon_holder_cnt + src.neon_holder_cnt)
-            object.__setattr__(self, 'neon_tx_cnt', self.neon_tx_cnt + src.neon_tx_cnt)
-            object.__setattr__(self, 'sol_neon_ix_cnt', self.sol_neon_ix_cnt + src.sol_neon_ix_cnt)
-            object.__setattr__(self, 'sol_neon_ix_cnt', self.sol_alt_info_cnt + src.sol_alt_info_cnt)
-
-        def del_stat(self, src: NeonIndexedBlockDict.Stat) -> None:
-            object.__setattr__(self, 'neon_block_cnt', self.neon_block_cnt - src.neon_block_cnt)
-            object.__setattr__(self, 'neon_holder_cnt', self.neon_holder_cnt - src.neon_holder_cnt)
-            object.__setattr__(self, 'neon_tx_cnt', self.neon_tx_cnt - src.neon_tx_cnt)
-            object.__setattr__(self, 'sol_neon_ix_cnt', self.sol_neon_ix_cnt - src.sol_neon_ix_cnt)
-            object.__setattr__(self, 'sol_neon_ix_cnt', self.sol_alt_info_cnt - src.sol_alt_info_cnt)
-
     def __init__(self):
         self._neon_block_dict: Dict[int, NeonIndexedBlockInfo] = dict()
         self._finalized_neon_block: Optional[NeonIndexedBlockInfo] = None
-        self._stat = NeonIndexedBlockDict.Stat.init_empty()
+        self._min_block_slot = 0
 
     @property
     def finalized_neon_block(self) -> Optional[NeonIndexedBlockInfo]:
         return self._finalized_neon_block
 
     @property
-    def stat(self) -> NeonIndexedBlockDict.Stat:
-        return self._stat
+    def min_block_slot(self) -> int:
+        return self._min_block_slot
 
     def clear(self):
         self._neon_block_dict.clear()
         self._finalized_neon_block = None
-        self._stat = NeonIndexedBlockDict.Stat.init_empty()
+        self._min_block_slot = 0
 
     def find_neon_block(self, block_slot: int) -> Optional[NeonIndexedBlockInfo]:
         return self._neon_block_dict.get(block_slot, None)
@@ -948,28 +915,21 @@ class NeonIndexedBlockDict:
         if neon_block.block_slot in self._neon_block_dict:
             return
 
-        stat = NeonIndexedBlockDict.Stat.from_block(neon_block)
-        self._stat.add_stat(stat)
         self._neon_block_dict[neon_block.block_slot] = neon_block
-        # LOG.debug(f'add block {neon_block.block_slot}: {stat}')
+        # LOG.debug(f'add block {neon_block.block_slot}')
 
     def finalize_neon_block(self, neon_block: NeonIndexedBlockInfo) -> None:
         assert neon_block.block_slot in self._neon_block_dict
 
         if self._finalized_neon_block is not None:
             for block_slot in range(self._finalized_neon_block.block_slot, neon_block.block_slot):
-                old_neon_block = self._neon_block_dict.pop(block_slot, None)
-                if old_neon_block is not None:
-                    stat = NeonIndexedBlockDict.Stat.from_block(old_neon_block)
-                    self._stat.del_stat(stat)
-                    # LOG.debug(f'delete block {old_neon_block.block_slot}: {stat}')
+                self._neon_block_dict.pop(block_slot, None)
 
         # LOG.debug(f'finalize block {neon_block.block_slot}')
         self._finalized_neon_block = neon_block
-        self._stat.set_min_block_slot(neon_block.min_block_slot)
+        self._min_block_slot = neon_block.min_block_slot
 
 
-@dataclass(frozen=True)
 class SolNeonDecoderStat:
     sol_tx_meta_cnt: int = 0
     sol_neon_ix_cnt: int = 0
@@ -981,44 +941,44 @@ class SolNeonDecoderStat:
     _total_time: float = 0.0
 
     def reset(self) -> None:
-        object.__setattr__(self, '_start_time', time.time())
-        object.__setattr__(self, '_total_time', 0.0)
-        object.__setattr__(self, 'sol_neon_ix_cnt', 0)
-        object.__setattr__(self, 'sol_tx_meta_cnt', 0)
-        object.__setattr__(self, 'sol_block_cnt', 0)
-        object.__setattr__(self, 'neon_corrupted_block_cnt', 0)
+        self._start_time = time.time()
+        self._total_time = 0.0
+        self.sol_neon_ix_cnt = 0
+        self.sol_tx_meta_cnt = 0
+        self.sol_block_cnt = 0
+        self.neon_corrupted_block_cnt = 0
 
     def start_timer(self) -> None:
         self.commit_timer()
-        object.__setattr__(self, '_in_process', True)
-        object.__setattr__(self, '_start_time', time.time())
+        self._in_process = True
+        self._start_time = time.time()
 
     def commit_timer(self) -> None:
         if self._in_process:
-            object.__setattr__(self, '_total_time', self.processing_time_ms)
-            object.__setattr__(self, '_in_process', False)
+            self._total_time = self.processing_time_ms
+            self._in_process = False
 
     @property
     def processing_time_ms(self) -> float:
-        time_diff = 0.0
+        time_diff = self._total_time
         if self._in_process:
             time_diff += (time.time() - self._start_time) * 1000
-        return self._total_time + time_diff
+        return time_diff
 
     def inc_sol_neon_ix_cnt(self) -> None:
-        object.__setattr__(self, 'sol_neon_ix_cnt', self.sol_neon_ix_cnt + 1)
+        self.sol_neon_ix_cnt += 1
 
     def inc_sol_tx_meta_cnt(self) -> None:
-        object.__setattr__(self, 'sol_tx_meta_cnt', self.sol_tx_meta_cnt + 1)
+        self.sol_tx_meta_cnt += 1
 
     def inc_sol_block_cnt(self) -> None:
-        object.__setattr__(self, 'sol_block_cnt', self.sol_block_cnt + 1)
+        self.sol_block_cnt += 1
 
     def inc_neon_corrupted_block_cnt(self) -> None:
-        object.__setattr__(self, 'neon_corrupted_block_cnt', self.neon_corrupted_block_cnt + 1)
+        self.neon_corrupted_block_cnt += 1
 
 
-class SolNeonDecoderState:
+class SolNeonDecoderCtx:
     # Iterate:
     #   for solana_block in block_range(start_block_slot, stop_block_slot):
     #       for solana_tx in solana_block.solana_tx_list:
@@ -1058,10 +1018,6 @@ class SolNeonDecoderState:
 
     def set_neon_block(self, neon_block: NeonIndexedBlockInfo) -> None:
         self._neon_block = neon_block
-
-    @property
-    def stat(self) -> SolNeonDecoderStat:
-        return self._stat
 
     @property
     def start_slot(self) -> int:

@@ -28,7 +28,7 @@ class SolSigsDB(BaseDBTable):
           ORDER BY block_slot
              LIMIT 1
         '''
-        value_list = self._db.fetch_one(request, (block_slot,))
+        value_list = self._fetch_one(request, (block_slot,))
         if not len(value_list):
             return None
         return SolTxSigSlotInfo(sol_sig=value_list[0], block_slot=value_list[1])
@@ -42,7 +42,7 @@ class SolSigsDB(BaseDBTable):
              LIMIT 1
         '''
 
-        value_list = self._db.fetch_one(request, ())
+        value_list = self._fetch_one(request, ())
         if not len(value_list):
             return None
         return SolTxSigSlotInfo(sol_sig=value_list[0], block_slot=value_list[1])

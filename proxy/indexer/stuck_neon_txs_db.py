@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Iterator, Tuple, Optional
 from ..common_neon.db.base_db_table import BaseDBTable
 from ..common_neon.db.db_connect import DBConnection
 
-from .indexed_objects import NeonIndexedTxInfo
+from .indexed_objects import NeonIndexedBlockInfo
 
 
 class StuckNeonTxsDB(BaseDBTable):
@@ -21,27 +21,32 @@ class StuckNeonTxsDB(BaseDBTable):
             SELECT {', '.join(['a.' + c for c in self._column_list])}
               FROM {self._table_name} AS a
              WHERE a.is_finalized = %s
-               AND a.block_slot > %s
+               AND a.block_slot >= %s
+               AND a.block_slot <= %s
         '''
 
         self._delete_request = f'''
             DELETE FROM {self._table_name}
              WHERE is_finalized = %s
-               AND block_slot != %s
+               AND block_slot >= %s
+               AND block_slot <= %s
         '''
 
-    def set_tx_list(self, is_finalized: bool, block_slot: int, iter_neon_tx: Iterator[NeonIndexedTxInfo]) -> None:
-        self._db.update_row(self._delete_request, (is_finalized, block_slot,))
+    def set_tx_list(self, start_slot: int, stop_slot: int, neon_block: NeonIndexedBlockInfo) -> None:
+        self._update_row(self._delete_request, (neon_block.is_finalized, start_slot, stop_slot,))
+        if stop_slot <= neon_block.block_slot:
+            return
 
-        neon_tx_list = [tx.as_dict() for tx in iter_neon_tx]
+        neon_tx_list = [tx.as_dict() for tx in neon_block.iter_stuck_neon_tx()]
         if not len(neon_tx_list):
             return
 
         json_data = json.dumps(neon_tx_list)
-        self._insert_row([is_finalized, block_slot, json_data])
+        self._insert_row((neon_block.is_finalized, neon_block.stuck_block_slot, json_data))
 
-    def get_tx_list(self, is_finalized: bool, block_slot: int) -> Tuple[Optional[int], List[Dict[str, Any]]]:
-        value_list = self._db.fetch_one(self._select_request, (is_finalized, block_slot,))
+    def get_tx_list(self, is_finalized: bool,
+                    start_slot: int, stop_slot: int) -> Tuple[Optional[int], List[Dict[str, Any]]]:
+        value_list = self._fetch_one(self._select_request, (is_finalized, start_slot, stop_slot,))
 
         tx_list: List[Dict[str, Any]] = list()
         tx_block_slot: Optional[int] = None
