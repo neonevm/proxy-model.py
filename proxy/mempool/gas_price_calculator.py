@@ -22,6 +22,7 @@ class GasPriceCalculator:
         self._pyth_network_client = PythNetworkClient(solana)
         self._sol_price_usd: Optional[Decimal] = None
         self._neon_price_usd: Optional[Decimal] = None
+        self._is_const_gas_price = True
         self._min_gas_price: Optional[int] = None
         self._suggested_gas_price: Optional[int] = None
 
@@ -60,19 +61,28 @@ class GasPriceCalculator:
 
     def update_gas_price(self) -> bool:
         min_gas_price = self._config.min_gas_price
+        const_gas_price = self._config.const_gas_price
         gas_price = self._get_gas_price_from_network()
-        if gas_price is None:
-            if (min_gas_price is not None) and (self._config.pyth_mapping_account is None) and (not self.is_valid()):
-                self._suggested_gas_price = min_gas_price
-                self._min_gas_price = min_gas_price
+
+        if const_gas_price is not None:
+            self._is_const_gas_price = True
+            self._suggested_gas_price = const_gas_price
+            self._min_gas_price = const_gas_price
             return False
+
+        elif (gas_price is None) and (self._config.pyth_mapping_account is None) and (not self.is_valid()):
+            self._is_const_gas_price = True
+            self._suggested_gas_price = min_gas_price
+            self._min_gas_price = min_gas_price
+            return False
+
+        self._is_const_gas_price = False
 
         self._suggested_gas_price = math.ceil(gas_price * (1 + self.gas_price_suggested_pct))
         self._min_gas_price = math.ceil(gas_price * (1 + self.operator_fee))
 
-        if min_gas_price is not None:
-            self._suggested_gas_price = max(self._suggested_gas_price, min_gas_price)
-            self._min_gas_price = max(self._min_gas_price, min_gas_price)
+        self._suggested_gas_price = max(self._suggested_gas_price, min_gas_price)
+        self._min_gas_price = max(self._min_gas_price, min_gas_price)
 
         return True
 
@@ -102,8 +112,16 @@ class GasPriceCalculator:
         return self._config.operator_fee
 
     @property
+    def gas_price_slippage(self) -> Decimal:
+        return self._config.gas_price_slippage
+
+    @property
+    def is_const_gas_price(self) -> bool:
+        return self._is_const_gas_price
+
+    @property
     def gas_price_suggested_pct(self) -> Decimal:
-        return self._config.operator_fee + self._config.gas_price_slippage
+        return self.operator_fee + self.gas_price_slippage
 
     @property
     def sol_price_account(self) -> Optional[SolPubKey]:

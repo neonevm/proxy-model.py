@@ -2,7 +2,6 @@ import math
 import os
 
 from decimal import Decimal
-from typing import Optional
 from urllib.parse import urlparse
 from typing import Optional, Set
 
@@ -29,9 +28,6 @@ def parse_solana_websocket_url(solana_url: str) -> str:
 
 
 class Config(DBConfig):
-    _one_block_sec = 0.4
-    _min_finalize_sec = _one_block_sec * 32
-
     def __init__(self):
         super().__init__()
         self._solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
@@ -53,38 +49,58 @@ class Config(DBConfig):
         self._enable_private_api = self._env_bool("ENABLE_PRIVATE_API", False)
         self._enable_send_tx_api = self._env_bool("ENABLE_SEND_TX_API", True)
         self._use_earliest_block_if_0_passed = self._env_bool("USE_EARLIEST_BLOCK_IF_0_PASSED", False)
-        self._account_permission_update_int = self._env_int("ACCOUNT_PERMISSION_UPDATE_INT", 10, 60 * 5)
         self._allow_underpriced_tx_wo_chainid = self._env_bool('ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID', False)
         self._operator_fee = self._env_decimal('OPERATOR_FEE', "0.1")
         self._gas_price_slippage = self._env_decimal('GAS_PRICE_SLIPPAGE', "0.01")
-        self._slot_processing_delay = self._env_int("SLOT_PROCESSING_DELAY", 0, 0)
         self._min_gas_price = self._env_int("MINIMAL_GAS_PRICE", 0, 1) * (10 ** 9)
         self._min_wo_chainid_gas_price = self._env_int("MINIMAL_WO_CHAINID_GAS_PRICE", 0, 10) * (10 ** 9)
-        self._gas_less_tx_max_nonce = self._env_int("GAS_LESS_MAX_TX_NONCE", 0, 5)
-        self._gas_less_tx_max_gas = self._env_int("GAS_LESS_MAX_GAS", 0, 20_000_000)  # Estimated gas on Mora = 18 mln
-        self._start_slot = os.environ.get('START_SLOT', '0')
-        self._gas_tank_parallel_request_cnt = self._env_int("GAS_TANK_PARALLEL_REQUEST_COUNT", 1, 10)
-        self._gas_tank_poll_tx_cnt = self._env_int('GAS_TANK_POLL_TX_COUNT', 1, 1000)
+        self._const_gas_price = self._env_int('CONST_GAS_PRICE', -1, -1) * (10 ** 9)
+
+        # Indexing settings
+        self._start_slot = os.environ.get(self.start_slot_name, '0').upper().strip()
         self._indexer_poll_block_cnt = self._env_int('INDEXER_POLL_BLOCK_COUNT', 1, 32)
         self._indexer_check_msec = self._env_int('INDEXER_CHECK_MSEC', 50, 200)
-        self._metrics_log_skip_cnt = self._env_int('METRICS_LOG_SKIP_COUNT', 1, 1000)
-        self._max_tx_account_cnt = self._env_int("MAX_TX_ACCOUNT_COUNT", 20, 62)
-        self._fuzz_fail_pct = self._env_int("FUZZ_FAIL_PCT", 0, 0)
-        self._confirm_timeout_sec = self._env_int("CONFIRM_TIMEOUT_SEC", 4, math.ceil(self._min_finalize_sec))
-        self._max_evm_step_cnt_emulate = self._env_int("MAX_EVM_STEP_COUNT_TO_EMULATE", 1000, 500000)
-        self._neon_cli_timeout = self._env_decimal("NEON_CLI_TIMEOUT", "2.5")
-        self._neon_cli_debug_log = self._env_bool("NEON_CLI_DEBUG_LOG", False)
         self._stuck_obj_blockout = self._env_int('STUCK_OBJECT_BLOCKOUT', 16, 64)
         self._stuck_obj_validate_blockout = self._env_int('STUCK_OBJECT_VALIDATE_BLOCKOUT', 512, 1024)
         self._alt_freeing_depth = self._env_int('ALT_FREEING_DEPTH', 512, 512 + 16)
+        self._metrics_log_skip_cnt = self._env_int('METRICS_LOG_SKIP_COUNT', 1, 1000)
+        self._genesis_timestamp = self._env_int('GENESIS_BLOCK_TIMESTAMP', 0, 0)
+
+        op_acct_list = os.environ.get('OPERATOR_ACCOUNT_LIST', '')
+        self._op_acct_set = set([acct for acct in op_acct_list.split(' ;,') if len(acct) > 0])
+
+        # Integration Indexer with Tracer API
+        self._slot_processing_delay = self._env_int('SLOT_PROCESSING_DELAY', 0, 0)
+        self._ch_dsn_list = os.environ.get('CLICKHOUSE_DSN_LIST', '')
+
+        # Reindexing settings
+        self._reindex_start_slot = os.environ.get(self.reindex_start_slot_name, '').upper().strip()
+        self._reindex_thread_cnt = self._env_int(self.reindex_thread_cnt_name, 0, 1)
+        self._reindex_range_len = self._env_int(
+            'REINDEX_BLOCK_COUNT_IN_RANGE',
+            int(10 * 60 / self.one_block_sec),  # 10 minutes
+            int(60 * 60 / self.one_block_sec)   # 1  hour
+        )
+        self._reindex_max_range_cnt = self._env_int('REINDEX_MAX_RANGE_COUNT', 1, 128)
+
+        # Gas-less configuration
+        self._gas_tank_parallel_request_cnt = self._env_int('GAS_TANK_PARALLEL_REQUEST_COUNT', 1, 10)
+        self._gas_tank_poll_tx_cnt = self._env_int('GAS_TANK_POLL_TX_COUNT', 1, 1000)
+        self._gas_less_tx_max_nonce = self._env_int('GAS_LESS_MAX_TX_NONCE', 0, 5)
+        self._gas_less_tx_max_gas = self._env_int('GAS_LESS_MAX_GAS', 0, 20_000_000)  # Estimated gas on Mora = 18 mln
+
+        self._max_tx_account_cnt = self._env_int("MAX_TX_ACCOUNT_COUNT", 20, 62)
+        self._fuzz_fail_pct = self._env_int("FUZZ_FAIL_PCT", 0, 0)
+        self._confirm_timeout_sec = self._env_int("CONFIRM_TIMEOUT_SEC", 4, math.ceil(self.min_finalize_sec))
+        self._max_evm_step_cnt_emulate = self._env_int("MAX_EVM_STEP_COUNT_TO_EMULATE", 1000, 500000)
+        self._neon_cli_timeout = self._env_decimal("NEON_CLI_TIMEOUT", "2.5")
+        self._neon_cli_debug_log = self._env_bool("NEON_CLI_DEBUG_LOG", False)
         self._gather_statistics = self._env_bool("GATHER_STATISTICS", False)
         self._hvac_url = os.environ.get('HVAC_URL', None)
         self._hvac_token = os.environ.get('HVAC_TOKEN', None)
         self._hvac_mount = os.environ.get('HVAC_MOUNT', None)
         self._hvac_path = os.environ.get('HVAC_PATH', '')
-        self._genesis_timestamp = self._env_int('GENESIS_BLOCK_TIMESTAMP', 0, 0)
         self._commit_level = os.environ.get('COMMIT_LEVEL', SolCommit.Confirmed)
-        self._ch_dsn_list = os.environ.get('CLICKHOUSE_DSN_LIST', '')
 
         pyth_mapping_account = os.environ.get('PYTH_MAPPING_ACCOUNT', None)
         if pyth_mapping_account is not None:
@@ -93,16 +109,16 @@ class Config(DBConfig):
             self._pyth_mapping_account = None
         self._update_pyth_mapping_period_sec = self._env_int('UPDATE_PYTH_MAPPING_PERIOD_SEC', 10, 60 * 60)
 
-        op_acct_list = os.environ.get('OPERATOR_ACCOUNT_LIST', '')
-        self._op_acct_set = set([acct for acct in op_acct_list.split(' ;,') if len(acct) > 0])
-
         self._validate()
 
     def _validate(self) -> None:
         self._commit_level = SolCommit.Type(self._commit_level.lower())
         assert SolCommit.level(self._commit_level) >= SolCommit.level(SolCommit.Confirmed)
 
-        assert (self._operator_fee > 0) and (self._operator_fee <= 1)
+        assert (self._operator_fee > 0) and (self._operator_fee <= 100)
+        assert (self._min_gas_price >= 0)
+        assert (self._min_wo_chainid_gas_price >= 0)
+        assert (self._const_gas_price < 0) or (self._const_gas_price >= self._min_gas_price)
         assert (self._gas_price_slippage >= 0) and (self._gas_price_slippage < 1)
         assert (self._slot_processing_delay < 32)
         assert (self._fuzz_fail_pct >= 0) and (self._fuzz_fail_pct < 100)
@@ -113,7 +129,9 @@ class Config(DBConfig):
 
     @staticmethod
     def _env_bool(name: str, default_value: bool) -> bool:
-        return os.environ.get(name, "YES" if default_value else "NO") == "YES"
+        value = os.environ.get(name, 'YES' if default_value else 'NO').upper().strip()
+        assert value in ('YES', 'ON', 'TRUE', 'NO', 'OFF', 'FALSE')
+        return value in ('YES', 'ON', 'TRUE')
 
     @staticmethod
     def _env_int(name: str, min_value: int, default_value: int) -> int:
@@ -125,11 +143,11 @@ class Config(DBConfig):
 
     @property
     def one_block_sec(self) -> float:
-        return self._one_block_sec
+        return 0.4
 
     @property
     def min_finalize_sec(self) -> float:
-        return self._min_finalize_sec
+        return self.one_block_sec * 32
 
     @property
     def solana_url(self) -> str:
@@ -228,11 +246,6 @@ class Config(DBConfig):
         return self._gas_price_slippage
 
     @property
-    def slot_processing_delay(self) -> int:
-        """Slot processing delay relative to the last confirmed slot on Tracer API node"""
-        return self._slot_processing_delay
-
-    @property
     def min_gas_price(self) -> int:
         """Minimal gas price to accept tx into the mempool"""
         return self._min_gas_price
@@ -243,24 +256,33 @@ class Config(DBConfig):
         return self._min_wo_chainid_gas_price
 
     @property
-    def gas_less_tx_max_nonce(self) -> int:
-        return self._gas_less_tx_max_nonce
+    def const_gas_price(self) -> Optional[int]:
+        if self._const_gas_price < 0:
+            return None
+        return self._const_gas_price
+
+    ####################
+    # Indexing settings
 
     @property
-    def gas_less_tx_max_gas(self) -> int:
-        return self._gas_less_tx_max_gas
+    def start_slot_name(self) -> str:
+        return 'START_SLOT'
+
+    @property
+    def continue_slot_name(self) -> str:
+        return 'CONTINUE'
+
+    @property
+    def latest_slot_name(self) -> str:
+        return 'LATEST'
+
+    @property
+    def disable_slot_name(self) -> str:
+        return 'DISABLE'
 
     @property
     def start_slot(self) -> str:
         return self._start_slot
-
-    @property
-    def gas_tank_parallel_request_cnt(self) -> int:
-        return self._gas_tank_parallel_request_cnt
-
-    @property
-    def gas_tank_poll_tx_cnt(self) -> int:
-        return self._gas_tank_poll_tx_cnt
 
     @property
     def indexer_poll_block_cnt(self) -> int:
@@ -271,8 +293,84 @@ class Config(DBConfig):
         return self._indexer_check_msec
 
     @property
+    def stuck_object_blockout(self) -> int:
+        return self._stuck_obj_blockout
+
+    @property
+    def stuck_object_validate_blockout(self) -> int:
+        return self._stuck_obj_validate_blockout
+
+    @property
+    def alt_freeing_depth(self) -> int:
+        return self._alt_freeing_depth
+
+    @property
     def metrics_log_skip_cnt(self) -> int:
         return self._metrics_log_skip_cnt
+
+    @property
+    def genesis_timestamp(self) -> int:
+        return self._genesis_timestamp
+
+    @property
+    def operator_account_set(self) -> Set[str]:
+        return self._op_acct_set
+
+    @property
+    def slot_processing_delay(self) -> int:
+        """Slot processing delay relative to the last confirmed slot on Tracer API node"""
+        return self._slot_processing_delay
+
+    @property
+    def ch_dsn_list(self) -> str:
+        """List of DSN addresses of clickhouse servers used by Tracer API node"""
+        return self._ch_dsn_list
+
+    # ########################
+    # ReIndexing configuration
+
+    @property
+    def reindex_start_slot_name(self) -> str:
+        return 'REINDEX_START_SLOT'
+
+    @property
+    def reindex_start_slot(self) -> str:
+        return self._reindex_start_slot
+
+    @property
+    def reindex_thread_cnt_name(self) -> str:
+        return 'REINDEX_THREAD_COUNT'
+
+    @property
+    def reindex_thread_cnt(self) -> int:
+        return self._reindex_thread_cnt
+
+    @property
+    def reindex_range_len(self) -> int:
+        return self._reindex_range_len
+
+    @property
+    def reindex_max_range_cnt(self) -> int:
+        return self._reindex_max_range_cnt
+
+    #####################################
+    # gas-less transactions configuration
+
+    @property
+    def gas_tank_parallel_request_cnt(self) -> int:
+        return self._gas_tank_parallel_request_cnt
+
+    @property
+    def gas_tank_poll_tx_cnt(self) -> int:
+        return self._gas_tank_poll_tx_cnt
+
+    @property
+    def gas_less_tx_max_nonce(self) -> int:
+        return self._gas_less_tx_max_nonce
+
+    @property
+    def gas_less_tx_max_gas(self) -> int:
+        return self._gas_less_tx_max_gas
 
     @property
     def max_tx_account_cnt(self) -> int:
@@ -299,22 +397,6 @@ class Config(DBConfig):
         return self._neon_cli_debug_log
 
     @property
-    def stuck_object_blockout(self) -> int:
-        return self._stuck_obj_blockout
-
-    @property
-    def stuck_object_validate_blockout(self) -> int:
-        return self._stuck_obj_validate_blockout
-
-    @property
-    def alt_freeing_depth(self) -> int:
-        return self._alt_freeing_depth
-
-    @property
-    def operator_account_set(self) -> Set[str]:
-        return self._op_acct_set
-
-    @property
     def gather_statistics(self) -> bool:
         return self._gather_statistics
 
@@ -335,16 +417,8 @@ class Config(DBConfig):
         return self._hvac_path
 
     @property
-    def genesis_timestamp(self) -> int:
-        return self._genesis_timestamp
-
-    @property
     def commit_level(self) -> SolCommit.Type:
         return self._commit_level
-
-    @property
-    def ch_dsn_list(self) -> str:
-        return self._ch_dsn_list
 
     def as_dict(self) -> dict:
         config_dict = {
@@ -368,31 +442,46 @@ class Config(DBConfig):
             'USE_EARLIEST_BLOCK_IF_0_PASSED': self.use_earliest_block_if_0_passed,
             'ALLOW_UNDERPRICED_TX_WITHOUT_CHAINID': self.allow_underpriced_tx_wo_chainid,
             'OPERATOR_FEE': self.operator_fee,
-            'SLOT_PROCESSING_DELAY': self.slot_processing_delay,
             'GAS_PRICE_SLIPPAGE': self.gas_price_slippage,
             'MINIMAL_GAS_PRICE': self.min_gas_price,
             'MINIMAL_WO_CHAINID_GAS_PRICE': self.min_wo_chainid_gas_price,
-            'GAS_LESS_MAX_TX_NONCE': self.gas_less_tx_max_nonce,
-            'GAS_LESS_MAX_GAS': self.gas_less_tx_max_gas,
-            'START_SLOT': self.start_slot,
-            'GAS_TANK_PARALLEL_REQUEST_COUNT': self.gas_tank_parallel_request_cnt,
-            'GAS_TANK_POLL_TX_COUNT': self.gas_tank_poll_tx_cnt,
+            'CONST_GAS_PRICE': self.const_gas_price,
+
+            # Indexing settings
+            self.start_slot_name: self.start_slot,
             'INDEXER_POLL_BLOCK_COUNT': self.indexer_poll_block_cnt,
             'INDEXER_CHECK_MSEC': self.indexer_check_msec,
+            'STUCK_OBJECT_BLOCKOUT': self.stuck_object_blockout,
+            'STUCK_OBJECT_VALIDATE_BLOCKOUT': self.stuck_object_validate_blockout,
+            'ALT_FREEING_DEPTH': self.alt_freeing_depth,
             'METRICS_LOG_SKIP_COUNT': self.metrics_log_skip_cnt,
+            'OPERATOR_ACCOUNT_LIST': ';'.join(list(self.operator_account_set)),
+
+            # Integration Indexer with Tracer API
+            'SLOT_PROCESSING_DELAY': self.slot_processing_delay,
+            # 'CLICKHOUSE_DSN_LIST': self.ch_dsn_list,
+
+            # Reindexing settings
+            self.reindex_start_slot_name: self.reindex_start_slot,
+            self.reindex_thread_cnt_name: self.reindex_thread_cnt,
+            'REINDEX_BLOCK_COUNT_IN_RANGE': self.reindex_range_len,
+            'REINDEX_MAX_RANGE_COUNT': self.reindex_max_range_cnt,
+
+            # Gas-less transaction configuration
+            'GAS_TANK_PARALLEL_REQUEST_COUNT': self.gas_tank_parallel_request_cnt,
+            'GAS_TANK_POLL_TX_COUNT': self.gas_tank_poll_tx_cnt,
+            'GAS_LESS_MAX_TX_NONCE': self.gas_less_tx_max_nonce,
+            'GAS_LESS_MAX_GAS': self.gas_less_tx_max_gas,
+
             'MAX_TX_ACCOUNT_COUNT': self.max_tx_account_cnt,
             'FUZZ_FAIL_PCT': self.fuzz_fail_pct,
             'CONFIRM_TIMEOUT_SEC': self.confirm_timeout_sec,
             'MAX_EVM_STEP_COUNT_TO_EMULATE': self.max_evm_step_cnt_emulate,
             'NEON_CLI_TIMEOUT': self.neon_cli_timeout,
             'NEON_CLI_DEBUG_LOG': self.neon_cli_debug_log,
-            'STUCK_OBJECT_BLOCKOUT': self.stuck_object_blockout,
-            'STUCK_OBJECT_VALIDATE_BLOCKOUT': self.stuck_object_validate_blockout,
-            'ALT_FREEING_DEPTH': self.alt_freeing_depth,
-            'OPERATOR_ACCOUNT_LIST': ';'.join(list(self.operator_account_set)),
             'GATHER_STATISTICS': self.gather_statistics,
 
-            'GENESIS_BLOCK_TIMESTAMP=': self.genesis_timestamp,
+            'GENESIS_BLOCK_TIMESTAMP': self.genesis_timestamp,
             'COMMIT_LEVEL': self.commit_level,
 
             # Don't print accesses to the logs
@@ -403,9 +492,7 @@ class Config(DBConfig):
             # 'HVAC_URL': self.hvac_url,
             # 'HVAC_TOKEN': self.hvac_token,
             # 'HVAC_PATH': self.hvac_path,
-            # 'HVAC_MOUNT': self.hvac_mount,
-
-            # 'CLICKHOUSE_DSN_LIST': self.ch_dsn_list,
+            # 'HVAC_MOUNT': self.hvac_mount,ga
         }
         config_dict.update(super().as_dict())
         return config_dict

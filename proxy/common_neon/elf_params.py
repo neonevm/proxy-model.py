@@ -105,7 +105,7 @@ class ElfParams:
         if not self.has_params():
             LOG.debug("Read ELF params")
         elf_param_dict: Dict[str, str] = {}
-        params = NeonCli(config).call("neon-elf-params")
+        params = NeonCli(config, False).call("neon-elf-params")
         for param in params:
             if param.startswith('NEON_'):
                 elf_param_dict.setdefault(param, params[param])

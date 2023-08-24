@@ -325,6 +325,7 @@ class MPGasPriceResult:
     gas_price_slippage: int
 
     suggested_gas_price: int
+    is_const_gas_price: bool
     min_acceptable_gas_price: int
     min_executable_gas_price: int
 

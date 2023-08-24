@@ -1,4 +1,4 @@
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Tuple
 
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo
 from ..common_neon.db.base_db_table import BaseDBTable
@@ -105,7 +105,7 @@ class NeonTxsDB(BaseDBTable):
                AND b.is_active = True
              WHERE a.neon_sig = %s
         '''
-        return self._tx_from_value(self._db.fetch_one(request, (neon_sig,)))
+        return self._tx_from_value(self._fetch_one(request, (neon_sig,)))
 
     def get_tx_by_sender_nonce(self, sender: str, tx_nonce: int) -> Optional[NeonTxReceiptInfo]:
         request = self._base_request_hdr + '''
@@ -113,14 +113,14 @@ class NeonTxsDB(BaseDBTable):
              WHERE a.from_addr = %s
                AND a.nonce = %s
         '''
-        return self._tx_from_value(self._db.fetch_one(request, (sender, hex(tx_nonce))))
+        return self._tx_from_value(self._fetch_one(request, (sender, hex(tx_nonce))))
 
     def get_tx_list_by_block_slot(self, block_slot: int) -> List[NeonTxReceiptInfo]:
         request = self._base_request_hdr + '''
              WHERE a.block_slot = %s
           ORDER BY a.tx_idx ASC
         '''
-        row_list = self._db.fetch_all(request, (block_slot,))
+        row_list = self._fetch_all(request, (block_slot,))
         if not row_list:
             return list()
 
@@ -131,14 +131,14 @@ class NeonTxsDB(BaseDBTable):
              WHERE a.block_slot = %s
                AND a.tx_idx = %s
         '''
-        value_list = self._db.fetch_one(request, (block_slot, tx_idx))
+        value_list = self._fetch_one(request, (block_slot, tx_idx))
         return self._tx_from_value(value_list)
 
-    def finalize_block_list(self, base_block_slot: int, block_slot_list: List[int]) -> None:
+    def finalize_block_list(self, from_slot: int, to_slot: int, slot_list: Tuple[int, ...]) -> None:
         request = f'''
             DELETE FROM {self._table_name}
                   WHERE block_slot > %s
-                    AND block_slot < %s
-                    AND block_slot NOT IN ({','.join(["%s" for _ in block_slot_list])})
+                    AND block_slot <= %s
+                    AND block_slot NOT IN %s
             '''
-        self._db.update_row(request, [base_block_slot, block_slot_list[-1]] + block_slot_list)
+        self._update_row(request, (from_slot, to_slot, slot_list))

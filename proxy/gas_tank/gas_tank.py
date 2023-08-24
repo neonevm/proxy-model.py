@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import time
+
 from typing import Dict, Any, Union, List, Tuple
 
 from .gas_less_accounts_db import GasLessAccountsDB
@@ -11,7 +13,7 @@ from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.neon_instruction import EvmIxCode
 from ..common_neon.db.db_connect import DBConnection
-from ..common_neon.db.sql_dict import SQLDict
+from ..common_neon.db.constats_db import ConstantsDB
 from ..common_neon.metrics_logger import MetricsLogger
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo, SolNeonIxReceiptInfo
@@ -19,22 +21,27 @@ from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 
 from ..indexer.indexed_objects import NeonIndexedHolderInfo
-from ..indexer.indexer_base import IndexerBase
+from ..indexer.indexer_utils import get_config_start_slot
 
 LOG = logging.getLogger(__name__)
 
 
-class GasTank(IndexerBase):
+class GasTank:
     def __init__(self, config: Config):
-        self._db = DBConnection(config)
-        self._constant_db = SQLDict(self._db, table_name='constants')
+        self._db_conn = DBConnection(config)
+        self._constant_db = ConstantsDB(self._db_conn)
 
-        self._gas_less_account_db = GasLessAccountsDB(self._db)
+        self._gas_less_account_db = GasLessAccountsDB(self._db_conn)
         self._gas_less_account_dict: Dict[str, GasLessPermit] = dict()
 
-        solana = SolInteractor(config, config.solana_url)
+        self._solana = SolInteractor(config, config.solana_url)
+        self._config = config
+
+        first_slot = self._solana.get_first_available_slot()
+        finalized_slot = self._solana.get_finalized_slot()
         last_known_slot = self._constant_db.get('latest_gas_tank_slot', None)
-        super().__init__(config, solana, last_known_slot)
+
+        self._start_slot = get_config_start_slot(config, first_slot, finalized_slot, last_known_slot)
         self._last_block_slot = self._start_slot
         self._latest_gas_tank_slot = self._start_slot
         self._current_slot = 0
@@ -43,12 +50,12 @@ class GasTank(IndexerBase):
 
         sol_tx_meta_dict = SolTxMetaDict()
         self._sol_tx_collector = FinalizedSolTxMetaCollector(
-            self._db, config, self._solana, sol_tx_meta_dict, self._start_slot
+            self._db_conn, config, self._solana, sol_tx_meta_dict, self._start_slot
         )
 
         self._neon_holder_dict: Dict[str, NeonIndexedHolderInfo] = dict()
         self._neon_processed_tx_dict: Dict[str, GasTankTxInfo] = dict()
-        self._last_finalized_slot: int = 0
+        self._last_finalized_slot = 0
 
         self._neon_tx_analyzer_dict: Dict[Union[NeonAddress, bool], GasTankNeonTxAnalyzer] = dict()
         self._sol_tx_analyzer_dict: Dict[str, GasTankSolTxAnalyzer] = dict()
@@ -270,12 +277,15 @@ class GasTank(IndexerBase):
         if len(self._gas_less_account_dict) > 1000:
             self._save_cached_data()
 
-    def process_functions(self) -> None:
-        """
-        Overrides IndexerBase.process_functions
-        """
-        super().process_functions()
-        self._process_receipts()
+    def run(self):
+        check_sec = float(self._config.indexer_check_msec) / 1000
+        while True:
+            try:
+                self._process_receipts()
+            except BaseException as exc:
+                LOG.warning('Exception on receipts processing.', exc_info=exc)
+
+            time.sleep(check_sec)
 
     def _process_sol_tx(self, tx: Dict[str, Any]) -> bool:
         for sol_analyzer in self._sol_tx_analyzer_dict.values():
@@ -363,7 +373,7 @@ class GasTank(IndexerBase):
         if not len(self._gas_less_account_dict):
             return
 
-        self._db.run_tx(
+        self._db_conn.run_tx(
             lambda: self._gas_less_account_db.add_gas_less_permit_list(iter(self._gas_less_account_dict.values()))
         )
         self._gas_less_account_dict.clear()

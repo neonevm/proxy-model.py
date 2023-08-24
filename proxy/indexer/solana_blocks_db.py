@@ -1,7 +1,7 @@
 import math
 import logging
 
-from typing import Optional, List, Any, cast
+from typing import Optional, List, Any, Tuple, cast
 
 from ..common_neon.utils import SolBlockInfo
 from ..common_neon.db.base_db_table import BaseDBTable
@@ -64,7 +64,7 @@ class SolBlocksDB(BaseDBTable):
              WHERE block_slot >= %s
           ORDER BY block_slot LIMIT 1)
         '''
-        value_list = self._db.fetch_one(request, (block_slot, block_slot,))
+        value_list = self._fetch_one(request, (block_slot, block_slot,))
         if not len(value_list):
             LOG.warning(f'Failed to get nearest blocks for block {block_slot}. Calculate based on genesis')
             return math.ceil(block_slot * one_block_sec) + self._config.genesis_timestamp
@@ -140,7 +140,7 @@ class SolBlocksDB(BaseDBTable):
                   LIMIT 1)
         '''
 
-        value_list = self._db.fetch_one(request, (block_slot - 1, block_slot, block_slot, block_slot - 1))
+        value_list = self._fetch_one(request, (block_slot - 1, block_slot, block_slot, block_slot - 1))
         return self._block_from_value(block_slot, value_list)
 
     def get_block_by_hash(self, block_hash: str, latest_block_slot: int) -> SolBlockInfo:
@@ -161,7 +161,7 @@ class SolBlocksDB(BaseDBTable):
                     AND b.is_active = True
                   WHERE a.block_hash = %s
         '''
-        value_list = self._db.fetch_one(request, (block_hash,))
+        value_list = self._fetch_one(request, (block_hash,))
         return self._block_from_value(None, value_list)
 
     def set_block_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:
@@ -179,34 +179,34 @@ class SolBlocksDB(BaseDBTable):
             ])
         self._insert_row_list(row_list)
 
-    def finalize_block_list(self, base_block_slot: int, block_slot_list: List[int]):
+    def finalize_block_list(self, from_slot: int, to_slot: int, slot_list: Tuple[int, ...]) -> None:
         request = f'''
             UPDATE {self._table_name}
                SET is_finalized = True,
                    is_active = True
-             WHERE block_slot IN ({', '.join(['%s' for _ in block_slot_list])})
-            '''
-        self._db.update_row(request, block_slot_list)
+             WHERE block_slot IN %s
+        '''
+        self._update_row(request, (slot_list,))
 
         request = f'''
             DELETE FROM {self._table_name}
                   WHERE block_slot > %s
-                    AND block_slot < %s
-                    AND is_active = False
-            '''
-        self._db.update_row(request, (base_block_slot, block_slot_list[-1]))
+                    AND block_slot <= %s
+                    AND block_slot NOT IN %s
+        '''
+        self._update_row(request, (from_slot, to_slot, slot_list))
 
-    def activate_block_list(self, base_block_slot: int, block_slot_list: List[int]) -> None:
+    def activate_block_list(self, from_slot: int, slot_list: Tuple[int, ...]) -> None:
         request = f'''
             UPDATE {self._table_name}
                SET is_active = False
              WHERE block_slot > %s
-            '''
-        self._db.update_row(request, (base_block_slot,))
+        '''
+        self._update_row(request, (from_slot,))
 
         request = f'''
             UPDATE {self._table_name}
                SET is_active = True
-             WHERE block_slot IN ({', '.join(['%s' for _ in block_slot_list])})
-            '''
-        self._db.update_row(request, block_slot_list)
+             WHERE block_slot IN %s
+        '''
+        self._update_row(request, (slot_list,))

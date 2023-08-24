@@ -28,15 +28,16 @@ class StuckObjectValidator:
             return
         self._last_slot = block_slot
 
+        neon_block.check_stuck_objs(self._config)
         failed_holder_list: List[NeonIndexedHolderInfo] = list()
-        for holder in neon_block.iter_stuck_neon_holder(self._config):
+        for holder in neon_block.iter_stuck_neon_holder():
             if holder.last_block_slot > last_block_slot:
                 pass
             elif not self._is_valid_holder(holder.account, holder.neon_tx_sig):
                 failed_holder_list.append(holder)
 
         failed_tx_list: List[NeonIndexedTxInfo] = list()
-        for tx in neon_block.iter_stuck_neon_tx(self._config):
+        for tx in neon_block.iter_stuck_neon_tx():
             if tx.last_block_slot > last_block_slot:
                 continue
             elif not self._is_valid_holder(tx.holder_account, tx.neon_tx.sig):
