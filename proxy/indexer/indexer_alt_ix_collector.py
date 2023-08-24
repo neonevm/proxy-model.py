@@ -26,12 +26,16 @@ class AltIxCollector:
         self._solana = solana
         self._next_check_slot = self._block_step_cnt
 
+    @property
+    def check_depth(self) -> int:
+        return self._config.alt_freeing_depth * 10
+
     def collect_in_block(self, neon_block: NeonIndexedBlockInfo) -> None:
         if neon_block.block_slot < self._next_check_slot:
             return
 
         next_check_slot = neon_block.block_slot + self._block_step_cnt
-        fail_check_slot = neon_block.block_slot - self._config.alt_freeing_depth * 10
+        fail_check_slot = neon_block.block_slot - self.check_depth
 
         self._next_check_slot = next_check_slot
 

@@ -22,7 +22,7 @@ def str_fmt_object(obj: Any, skip_underling=True, name='') -> str:
         result = result[result.rfind('.') + 1:-2]
         class_prefix = '<class '
         if result.startswith(class_prefix):
-            result = result[len(class_prefix):]
+            result = result[len(class_prefix) + 1:]
         return result
 
     def _lookup_dict_as_value(value_type: str, value: Dict[str, Any]) -> Tuple[bool, str]:

@@ -14,7 +14,7 @@ from ..indexer.stuck_neon_txs_db import StuckNeonTxsDB
 
 class MPExecutorStuckTxListTask(MPExecutorBaseTask):
     def read_stuck_tx_list(self, _: MPGetStuckTxListRequest) -> MPGetStuckTxListResponse:
-        block_slot = self._solana.get_block_slot(SolCommit.Confirmed) - 3
+        block_slot = self._solana.get_confirmed_slot() - 3
         src_tx_list = self._get_tx_list(block_slot)
 
         dst_tx_list = [
@@ -29,7 +29,7 @@ class MPExecutorStuckTxListTask(MPExecutorBaseTask):
         return MPGetStuckTxListResponse(stuck_tx_list=dst_tx_list)
 
     def _get_tx_list(self, block_slot: int) -> List[Dict[str, Any]]:
-        db = DBConnection(self._config)
-        stuck_txs_db = StuckNeonTxsDB(db)
-        _, src_tx_list = stuck_txs_db.get_tx_list(False, block_slot)
+        db_conn = DBConnection(self._config)
+        stuck_txs_db = StuckNeonTxsDB(db_conn)
+        _, src_tx_list = stuck_txs_db.get_tx_list(False, block_slot, (2 ** 64 - 1))
         return src_tx_list

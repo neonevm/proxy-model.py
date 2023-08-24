@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass
+from typing import Dict, Union, Any, List, Optional, Set, cast
+
+import base64
 import itertools
 import json
 import threading
 import time
-from typing import Dict, Union, Any, List, Optional, Set, cast
 import logging
 import base58
 import requests
@@ -65,50 +66,55 @@ class SolInteractor:
         self._config = config
         self._request_cnt = itertools.count()
         self._endpoint_uri = solana_url
-        self._session = requests.sessions.Session()
-
-    def _simple_send_post_request(self, request) -> requests.Response:
-        headers = {
+        self._session: Optional[requests.sessions.Session] = None
+        self._headers = {
             'Content-Type': 'application/json'
         }
 
-        raw_response = self._session.post(self._endpoint_uri, headers=headers, json=request)
-        raw_response.raise_for_status()
-        return raw_response
+    def _send_post_request_impl(self, request: Union[List[Dict[str, Any]], Dict[str, Any]]) -> requests.Response:
+
+        if self._session is None:
+            self._session = requests.sessions.Session()
+
+        try:
+            raw_response = self._session.post(self._endpoint_uri, headers=self._headers, json=request)
+            raw_response.raise_for_status()
+
+            return raw_response
+
+        except (BaseException, ):
+            self._session = None
+            raise
 
     def _send_post_request(self, request: Union[List[Dict[str, Any]], Dict[str, Any]]) -> requests.Response:
         """This method is used to make retries to send request to Solana"""
 
-        retry = 0
-        while True:
+        def _clean_solana_err(exc: BaseException) -> str:
+            return str(exc).replace(self._endpoint_uri, 'XXXXX')
+
+        for retry in itertools.count():
             try:
-                retry += 1
-                return self._simple_send_post_request(request)
+                return self._send_post_request_impl(request)
 
             except requests.exceptions.RequestException as exc:
-                # Hide the Solana URL
-                str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
-
-                if retry <= 3600:
+                if retry > 1:
+                    str_err = _clean_solana_err(exc)
                     LOG.debug(
                         f'Receive connection error {str_err} on connection to Solana. '
                         f'Attempt {retry + 1} to send the request to Solana node...'
                     )
-                    time.sleep(1)
-                    self._session = requests.sessions.Session()
-                    self._request_cnt = itertools.count()
-                    continue
 
-                LOG.warning(f'Connection exception on send request to Solana. Retry {retry}: {str_err}')
-                raise SolanaUnavailableError(str_err)
+                time.sleep(1)
 
             except BaseException as exc:
-                str_err = str(exc).replace(self._endpoint_uri, 'XXXXX')
+                str_err = _clean_solana_err(exc)
                 LOG.error(f'Unknown exception on send request to Solana: {str_err}')
                 raise SolanaUnavailableError(str_err)
 
     def _build_rpc_request(self, method: str, *param_list: Any) -> Dict[str, Any]:
         request_id = next(self._request_cnt) + 1
+        if request_id >= 100_000:
+            self._request_cnt = itertools.count()
 
         return {
             'jsonrpc': '2.0',
@@ -122,31 +128,27 @@ class SolInteractor:
         raw_response = self._send_post_request(request)
         return cast(RPCResponse, raw_response.json())
 
-    def _simple_send_rpc_request(self, method: str, *param_list: Any) -> RPCResponse:
-        request = self._build_rpc_request(method, *param_list)
-        raw_response = self._simple_send_post_request(request)
-        return cast(RPCResponse, raw_response.json())
-
     def _send_rpc_batch_request(self, method: str, params_list: List[Any]) -> List[RPCResponse]:
-        full_request_list = list()
+        request_cnt = len(params_list)
+        request_size = 0
         full_response_list = list()
         request_list = list()
-        request_data = ''
 
         for params in params_list:
             request = self._build_rpc_request(method, *params)
             request_list.append(request)
-            request_data += ', ' + json.dumps(request)
-            full_request_list.append(request)
+
+            request_cnt -= 1
+            request_size += len(json.dumps(request)) + 2
 
             # Protection from big payload
-            if len(request_data) >= 48 * 1024 or len(full_request_list) == len(params_list):
+            if request_size >= 48 * 1024 or request_cnt == 0:
                 raw_response = self._send_post_request(request_list)
-                response_data = cast(List[RPCResponse], raw_response.json())
+                response_list = cast(List[RPCResponse], raw_response.json())
+                full_response_list += response_list
 
-                full_response_list += response_data
-                request_list.clear()
-                request_data = ''
+                request_list = list()
+                request_size = 0
 
         full_response_list.sort(key=lambda r: r['id'])
 
@@ -157,6 +159,20 @@ class SolInteractor:
         #         raise RuntimeError(f'Invalid RPC response: request {request} response {response}')
 
         return full_response_list
+
+    def is_healthy(self) -> Optional[bool]:
+        """Ask Solana node about the status.
+        The method should return immediately without attempts to repeat the request."""
+        request = self._build_rpc_request('getHealth', )
+
+        try:
+            raw_response = self._send_post_request_impl(request)
+            json_response = cast(RPCResponse, raw_response.json())
+            status = json_response.get('result', 'bad')
+            return status == 'ok'
+
+        except (BaseException, ):
+            return None
 
     def get_cluster_nodes(self) -> List[Dict[str, Any]]:
         return self._send_rpc_request('getClusterNodes').get('result', list())
@@ -169,14 +185,11 @@ class SolInteractor:
         status = response.get('result', None)
         if status == 'ok':
             return 0
+
         slots_behind = SolTxErrorParser(self._config.evm_program_id, response).get_slots_behind()
         if slots_behind is not None:
             return int(slots_behind)
         return None
-
-    def is_healthy(self) -> bool:
-        status = self._send_rpc_request('getHealth').get('result', 'bad')
-        return status == 'ok'
 
     def get_sig_list_for_address(self, address: Union[str, SolPubKey], before: Optional[str], limit: int,
                                  commitment=SolCommit.Confirmed) -> List[Dict[str, Any]]:
@@ -201,6 +214,12 @@ class SolInteractor:
             'commitment': SolCommit.to_solana(commitment)
         }
         return self._send_rpc_request('getSlot', opts).get('result', 0)
+
+    def get_finalized_slot(self) -> int:
+        return self.get_block_slot(SolCommit.Finalized)
+
+    def get_confirmed_slot(self) -> int:
+        return self.get_block_slot(SolCommit.Confirmed)
 
     @staticmethod
     def _decode_account_info(address: Union[str, SolPubKey], raw_account: Dict[str, Any]) -> AccountInfo:
@@ -267,43 +286,6 @@ class SolInteractor:
                     account_info_list.append(None)
                 else:
                     account_info_list.append(self._decode_account_info(pubkey, info))
-        return account_info_list
-
-    def get_program_account_info_list(self, program: SolPubKey, offset: int, length: int,
-                                      data_offset: int, data: bytes,
-                                      commitment=SolCommit.Confirmed) -> List[AccountInfo]:
-        opts = {
-            'encoding': 'base64',
-            'commitment': SolCommit.to_solana(commitment),
-            'dataSlice': {
-                'offset': offset,
-                'length': length
-            },
-            'filters': [{
-                'memcmp': {
-                    'offset': data_offset,
-                    'bytes': base58.b58encode(data).decode('utf-8'),  # TODO: replace to base64 for version >= 1.14
-                    'encoding': 'base58'
-                }
-            }]
-        }
-
-        try:
-            response = self._simple_send_rpc_request('getProgramAccounts', str(program), opts)
-        except (BaseException, ):
-            LOG.debug('error on get program accounts')
-            return list()
-
-        error = response.get('error', None)
-        if error is not None:
-            LOG.debug(f'fail to get program accounts: {error}')
-            return list()
-
-        raw_account_list = response.get('result', list())
-        account_info_list: List[AccountInfo] = list()
-        for raw_account in raw_account_list:
-            account_info = self._decode_account_info(raw_account.get('pubkey'), raw_account.get('account', dict()))
-            account_info_list.append(account_info)
         return account_info_list
 
     def get_sol_balance(self, account: Union[str, SolPubKey], commitment=SolCommit.Confirmed) -> int:
@@ -395,18 +377,31 @@ class SolInteractor:
             tx_receipt_list=net_block.get('transactions', list())
         )
 
-    def get_first_available_block(self) -> int:
+    def get_first_available_slot(self) -> int:
         response = self._send_rpc_request('getFirstAvailableBlock')
-        return response.get('result', 0)
+        slot = response.get('result', 0)
+        LOG.debug(f"Solana's first slot {slot}")
+        if slot > 0:
+            slot += 512
+
+        while self.get_block_info(slot).is_empty():
+            LOG.debug(f'Skip block {slot}...')
+            slot += 1
+
+        return slot
+
+    @staticmethod
+    def _get_block_info_opts(commitment=SolCommit.Confirmed, full=False) -> Dict[str, Any]:
+        return dict(
+            commitment=SolCommit.to_solana(commitment),
+            encoding='json',
+            transactionDetails=('full' if full else 'none'),
+            maxSupportedTransactionVersion=0,
+            rewards=False
+        )
 
     def get_block_info(self, block_slot: int, commitment=SolCommit.Confirmed, full=False) -> SolBlockInfo:
-        opts = {
-            'commitment': SolCommit.to_solana(commitment),
-            'encoding': 'json',
-            'transactionDetails': 'full' if full else 'none',
-            'maxSupportedTransactionVersion': 0,
-            'rewards': False
-        }
+        opts = self._get_block_info_opts(commitment, full)
 
         response = self._send_rpc_request('getBlock', block_slot, opts)
         net_block = response.get('result', None)
@@ -415,19 +410,13 @@ class SolInteractor:
 
         return self._decode_block_info(block_slot, net_block)
 
-    def get_block_info_list(self, block_slot_list: List[int], commitment=SolCommit.Confirmed, full=False) -> List[SolBlockInfo]:
+    def get_block_info_list(self, block_slot_list: List[int],
+                            commitment=SolCommit.Confirmed, full=False) -> List[SolBlockInfo]:
         block_list = list()
         if len(block_slot_list) == 0:
             return block_list
 
-        opts = {
-            'commitment': SolCommit.to_solana(commitment),
-            'encoding': 'json',
-            'transactionDetails': 'full' if full else 'none',
-            'maxSupportedTransactionVersion': 0,
-            'rewards': False
-        }
-
+        opts = self._get_block_info_opts(commitment, full)
         request_list = [[slot, opts] for slot in block_slot_list]
 
         response_list = self._send_rpc_batch_request('getBlock', request_list)
@@ -512,9 +501,7 @@ class SolInteractor:
             raw_result = response.get('result', None)
 
             result = None
-            if isinstance(raw_result, dict):
-                LOG.debug(f'Got strange result on transaction execution: {raw_result}')
-            elif isinstance(raw_result, str):
+            if isinstance(raw_result, str):
                 result = base58.b58encode(base58.b58decode(raw_result)).decode('utf-8')
             elif isinstance(raw_result, bytes):
                 result = base58.b58encode(raw_result).decode('utf-8')

@@ -11,4 +11,4 @@ export INDEXER_MODE='true'
 
 source proxy/run-set-env.sh
 
-python3 -m proxy
+python3 -m proxy.indexer

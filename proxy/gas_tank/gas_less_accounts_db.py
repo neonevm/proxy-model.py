@@ -29,7 +29,7 @@ class GasLessAccountsDB(BaseDBTable):
         if isinstance(address, NeonAddress):
             address = str(address)
 
-        value_list = self._db.fetch_one(request, (address,))
+        value_list = self._fetch_one(request, (address,))
         return len(value_list) > 0
 
     def add_gas_less_permit_list(self, permit_list: Iterator[GasLessPermit]) -> None:

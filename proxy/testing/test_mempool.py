@@ -170,6 +170,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self._mempool = MemPool(self._config, stat_client, self._op_res_mng, self._executor)
 
         price_result = MPGasPriceResult(
+            is_const_gas_price=True,
             suggested_gas_price=1,
             min_executable_gas_price=1,
             min_acceptable_gas_price=1,

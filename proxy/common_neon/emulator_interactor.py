@@ -104,7 +104,7 @@ def emulator(config: Config, contract: str, sender: str, data: Optional[str], va
             data = "0x" + data
         data = {"data": data}
     try:
-        return NeonCli(config).call(
+        return NeonCli(config, True).call(
             'emulate',
             '--token_mint', str(neon_token_mint),
             '--chain_id', str(chain_id),

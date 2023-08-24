@@ -25,6 +25,7 @@ from ..common_neon.utils import SolBlockInfo, NeonTxReceiptInfo, NeonTxInfo, Neo
 from ..common_neon.layouts import NeonAccountInfo
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.neon_instruction import EvmIxCodeName, AltIxCodeName
+from ..common_neon.db.db_connect import DBConnection
 
 from ..mempool import (
     MemPoolClient, MP_SERVICE_ADDR,
@@ -61,8 +62,11 @@ class NeonRpcApiWorker:
     def __init__(self, config: Config):
         self._config = config
         self._solana = SolInteractor(config, config.solana_url)
-        self._db = IndexerDB(config)
-        self._gas_tank = GasLessAccountsDB(self._db.db_connection)
+
+        db_conn = DBConnection(config)
+        self._db = IndexerDB.from_db(config, db_conn)
+        self._gas_tank = GasLessAccountsDB(db_conn)
+
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price_value: Optional[MPGasPriceResult] = None
@@ -107,7 +111,7 @@ class NeonRpcApiWorker:
         return 'Neon/v' + ElfParams().neon_evm_version + '-' + ElfParams().neon_evm_revision
 
     def neon_cliVersion(self) -> str:
-        return NeonCli(self._config).version()
+        return NeonCli(self._config, False).version()
 
     def neon_solanaVersion(self) -> str:
         return 'Solana/v' + self._solana.get_solana_version()
@@ -170,6 +174,7 @@ class NeonRpcApiWorker:
         return dict(
             gas_price=hex(gas_price),
             suggested_gas_price=hex(gas_price_info.suggested_gas_price),
+            is_const_gas_price=gas_price_info.is_const_gas_price,
             min_acceptable_gas_price=hex(gas_price_info.min_acceptable_gas_price),
             min_executable_gas_price=hex(gas_price_info.min_executable_gas_price),
             min_wo_chainid_acceptable_gas_price=hex(gas_price_info.min_wo_chainid_acceptable_gas_price),
@@ -228,14 +233,13 @@ class NeonRpcApiWorker:
         return str(self.__dict__)
 
     def _should_return_starting_block(self, tag: Union[str, int]) -> bool:
-        return tag == 'earliest' \
-            or ((tag == '0x0' or str(tag) == '0') and self._config.use_earliest_block_if_0_passed)
+        return (tag == '0x0' or str(tag) == '0') and self._config.use_earliest_block_if_0_passed
 
     def _process_block_tag(self, tag: Union[str, int]) -> SolBlockInfo:
         if tag == 'latest':
-            block = self._db.get_latest_block()
+            block = self._db.latest_block
         elif tag == 'pending':
-            latest_block = self._db.get_latest_block()
+            latest_block = self._db.latest_block
             block = SolBlockInfo(
                 block_slot=latest_block.block_slot + 1,
                 block_time=latest_block.block_time,
@@ -243,9 +247,9 @@ class NeonRpcApiWorker:
                 parent_block_slot=latest_block.block_slot
             )
         elif tag in {'finalized', 'safe'}:
-            block = self._db.get_finalized_block()
-        elif self._should_return_starting_block(tag):
-            block = self._db.get_starting_block()
+            block = self._db.finalized_block
+        elif (tag == 'earliest') or self._should_return_starting_block(tag):
+            block = self._db.earliest_block
         elif isinstance(tag, str):
             try:
                 block = SolBlockInfo(block_slot=int(tag.strip(), 16))
@@ -327,7 +331,7 @@ class NeonRpcApiWorker:
         return block
 
     def eth_blockNumber(self) -> str:
-        slot = self._db.get_latest_block_slot()
+        slot = self._db.latest_slot
         return hex(slot)
 
     def eth_getBalance(self, account: str, tag: Union[int, str]) -> str:
@@ -543,7 +547,7 @@ class NeonRpcApiWorker:
         account = self._normalize_address(account)
 
         try:
-            value = NeonCli(self._config).call('get-storage-at', account, position)
+            value = NeonCli(self._config, False).call('get-storage-at', account, position)
             return '0x' + (value or 64 * '0')
         except (Exception,):
             # LOG.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
@@ -975,7 +979,7 @@ class NeonRpcApiWorker:
     def _is_neon_tx_exist(self, neon_tx: NeonTx) -> bool:
         neon_tx_receipt = self._db.get_tx_by_neon_sig(neon_tx.hex_tx_sig)
         if neon_tx_receipt is not None:
-            if neon_tx_receipt.neon_tx_res.block_slot <= self._db.get_finalized_block_slot():
+            if neon_tx_receipt.neon_tx_res.block_slot <= self._db.finalized_slot:
                 raise EthereumError(message='already known')
             return True
 
@@ -1144,8 +1148,8 @@ class NeonRpcApiWorker:
     def eth_syncing(self) -> Union[bool, dict]:
         try:
             slots_behind = self._solana.get_slots_behind()
-            latest_slot = self._db.get_latest_block_slot()
-            first_slot = self._db.get_starting_block_slot()
+            latest_slot = self._db.latest_slot
+            first_slot = self._db.earliest_slot
 
             LOG.debug(f'slots_behind: {slots_behind}, latest_slot: {latest_slot}, first_slot: {first_slot}')
             if (slots_behind == 0) or (slots_behind is None) or (latest_slot is None) or (first_slot is None):
@@ -1234,7 +1238,11 @@ class NeonRpcApiWorker:
         return emulation_result
 
     def neon_finalizedBlockNumber(self) -> str:
-        slot = self._db.get_finalized_block_slot()
+        slot = self._db.finalized_slot
+        return hex(slot)
+
+    def neon_earliestBlockNumber(self) -> str:
+        slot = self._db.earliest_slot
         return hex(slot)
 
     def neon_getEvmParams(self) -> Dict[str, str]:

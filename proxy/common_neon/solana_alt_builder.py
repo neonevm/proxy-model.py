@@ -9,7 +9,7 @@ from .neon_instruction import NeonIxBuilder
 from .solana_alt import ALTInfo
 from .solana_alt_limit import ALTLimit
 from .solana_interactor import SolInteractor
-from .solana_tx import SolTx, SolAccount, SolCommit
+from .solana_tx import SolTx, SolAccount
 from .solana_tx_legacy import SolLegacyTx
 
 
@@ -44,7 +44,7 @@ class ALTTxBuilder:
 
     def _get_recent_block_slot(self) -> int:
         while True:
-            recent_block_slot = self._solana.get_block_slot(SolCommit.Finalized)
+            recent_block_slot = self._solana.get_finalized_slot()
             if recent_block_slot == self._recent_block_slot:
                 time.sleep(0.1)  # To make unique address for Address Lookup Table
                 continue

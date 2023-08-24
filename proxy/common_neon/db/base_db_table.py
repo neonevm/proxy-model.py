@@ -8,6 +8,7 @@ from typing import List, Tuple, Dict, Any, Optional, Union, Set
 import psycopg2
 
 from .db_connect import DBConnection
+from .db_config import DBConfig
 
 
 LOG = logging.getLogger(__name__)
@@ -78,9 +79,12 @@ class BaseDBTable:
     def _encode_list(self, v: List[Any]) -> Optional[bytes]:
         return None if (not v) or (len(v) == 0) else self._encode(v)
 
-    def _insert_row(self, value_list: Union[Tuple[Any, ...], List[Any]]) -> None:
+    def _insert_row(self, value_list: Tuple[Any, ...]) -> None:
         assert len(self._column_list) == len(value_list)
         self._db.update_row(self._insert_row_request, value_list)
+
+    def _update_row(self, update_row_request: str, value_list: Tuple[Any, ...]) -> None:
+        self._db.update_row(update_row_request, value_list)
 
     def _remove_dups(self, row_list: List[List[Any]]) -> List[List[Any]]:
         if not len(self._key_set):
@@ -109,3 +113,10 @@ class BaseDBTable:
 
         row_list = self._remove_dups(row_list)
         self._db.update_row_list(self._insert_row_list_request, row_list)
+
+    def _fetch_one(self, request: str, *args) -> List[Any]:
+        row_list = self._db.fetch_cnt(1, request, *args)
+        return list() if not len(row_list) else row_list[0]
+
+    def _fetch_all(self, request: str, *args) -> List[List[Any]]:
+        return self._db.fetch_cnt(10000, request, *args)

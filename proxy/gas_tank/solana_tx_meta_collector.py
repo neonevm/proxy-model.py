@@ -117,11 +117,11 @@ class SolTxMetaCollector(ABC):
 
 
 class FinalizedSolTxMetaCollector(SolTxMetaCollector):
-    def __init__(self, db: DBConnection, config: Config, solana: SolInteractor,
+    def __init__(self, db_conn: DBConnection, config: Config, solana: SolInteractor,
                  tx_meta_dict: SolTxMetaDict, stop_slot: int):
         super().__init__(config, solana, tx_meta_dict, commitment=SolCommit.Finalized, is_finalized=True)
         LOG.debug(f'Finalized commitment: {self._commitment}')
-        self._sigs_db = SolSigsDB(db)
+        self._sigs_db = SolSigsDB(db_conn)
         self._stop_slot = stop_slot
         self._sig_cnt = 0
         self._last_info: Optional[SolTxSigSlotInfo] = None

@@ -10,17 +10,9 @@
 """
 
 
-import os
 from .neon_proxy_app import NeonProxyApp
-from .indexer.indexer_app import run_indexer
 
 
 if __name__ == '__main__':
-    indexer_mode = os.environ.get('INDEXER_MODE', 'False').lower() in [1, 'true', 'True']
-
-    if indexer_mode:
-        print("Will run in indexer mode")
-        run_indexer()
-    else:
-        neon_proxy_app = NeonProxyApp()
-        neon_proxy_app.start()
+    neon_proxy_app = NeonProxyApp()
+    neon_proxy_app.start()

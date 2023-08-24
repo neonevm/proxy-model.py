@@ -171,6 +171,7 @@ class MPSenderTxPool:
             return None
 
         pending_nonce = self._state_tx_cnt
+        LOG.debug(f'state_tx_cnt = {self._state_tx_cnt}, pending_tx_cnt = {len(self._tx_nonce_queue)}')
         for tx in reversed(self._tx_nonce_queue):
             if tx.nonce != pending_nonce:
                 LOG.debug(f'tx.nonce ({tx.nonce}) != pending_nonce {pending_nonce}, state_tx_cnt {self._state_tx_cnt}')

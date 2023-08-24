@@ -1,4 +1,4 @@
-from typing import List, Generator
+from typing import List, Generator, Optional
 import logging
 
 from ..common_neon.utils.solana_block import SolBlockInfo
@@ -7,7 +7,7 @@ from ..common_neon.solana_tx import SolCommit
 from ..common_neon.config import Config
 from ..common_neon.errors import SolHistoryNotFound
 
-from .indexed_objects import SolNeonDecoderState
+from .indexed_objects import SolNeonDecoderCtx
 
 LOG = logging.getLogger(__name__)
 
@@ -34,7 +34,8 @@ class SolBlockNetCache:
         self._block_list = self._block_list[idx:]
         self._start_slot = sol_block.block_slot
 
-    def iter_block(self, state: SolNeonDecoderState) -> Generator[SolBlockInfo, None, None]:
+    def iter_block(self, state: SolNeonDecoderCtx) -> Generator[SolBlockInfo, None, None]:
+        root_block: Optional[SolBlockInfo] = None
         root_slot = state.start_slot
         start_slot = state.start_slot
 
@@ -47,14 +48,20 @@ class SolBlockNetCache:
             if not len(block_queue):
                 continue
 
-            root_slot, block_queue = block_queue[0].block_slot, block_queue[1:]
+            # skip the root-slot, include it in the next queue (like start-slot)
+            root_block, block_queue = block_queue[0], block_queue[1:]
             for sol_block in reversed(block_queue):
                 yield sol_block
+            root_slot = root_block.block_slot
 
         if root_slot != state.stop_slot:
             self._raise_sol_history_error(state, f'Fail to get head {root_slot}')
 
-    def _build_block_queue(self, state: SolNeonDecoderState, root_slot: int, slot: int) -> List[SolBlockInfo]:
+        # in the loop there were the skipping of the root-slot, now return last one
+        if root_block is not None:
+            yield root_block
+
+    def _build_block_queue(self, state: SolNeonDecoderCtx, root_slot: int, slot: int) -> List[SolBlockInfo]:
         block_queue: List[SolBlockInfo] = list()
         while slot >= root_slot:
             sol_block = self._get_sol_block(slot)
@@ -77,7 +84,7 @@ class SolBlockNetCache:
         assert sol_block.block_slot == slot
         return sol_block
 
-    def _raise_sol_history_error(self, state: SolNeonDecoderState, msg: str) -> None:
+    def _raise_sol_history_error(self, state: SolNeonDecoderCtx, msg: str) -> None:
         if state.sol_commit == SolCommit.Confirmed:
             self._need_to_recache_block_list = True
         else:
@@ -85,7 +92,7 @@ class SolBlockNetCache:
             self._clear_cache()
         raise SolHistoryNotFound(msg)
 
-    def _cache_block_list(self, state: SolNeonDecoderState, start_slot: int, stop_slot: int) -> None:
+    def _cache_block_list(self, state: SolNeonDecoderCtx, start_slot: int, stop_slot: int) -> None:
         if self._need_to_recache_block_list:
             self._recache_block_list(state)
 
@@ -107,7 +114,7 @@ class SolBlockNetCache:
         self._block_list.extend(block_list)
         self._stop_slot = stop_slot
 
-    def _recache_block_list(self, state: SolNeonDecoderState) -> None:
+    def _recache_block_list(self, state: SolNeonDecoderCtx) -> None:
         LOG.debug(f'recache: {str(state)}')
         self._need_to_recache_block_list = False
 
@@ -130,7 +137,7 @@ class SolBlockNetCache:
     def _calc_idx(self, slot: int) -> int:
         return slot - self._start_slot
 
-    def _calc_stop_slot(self, state: SolNeonDecoderState, start_slot: int) -> int:
+    def _calc_stop_slot(self, state: SolNeonDecoderCtx, start_slot: int) -> int:
         if state.sol_commit != SolCommit.Finalized:
             return state.stop_slot
 
