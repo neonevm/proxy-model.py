@@ -63,7 +63,6 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
             min_acceptable_gas_price=self._config.min_gas_price,
             min_wo_chainid_acceptable_gas_price=self._config.min_wo_chainid_gas_price,
             allow_underpriced_tx_wo_chainid=self._config.allow_underpriced_tx_wo_chainid,
-            accept_reverted_tx_into_mempool=self._config.accept_reverted_tx_into_mempool,
 
             last_update_mapping_sec=self._last_update_mapping_sec,
             sol_price_account=self._gas_price_calculator.sol_price_account,

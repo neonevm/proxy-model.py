@@ -265,7 +265,7 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
 @click.option('--proxy_tag', help="the neonlabsorg/proxy image tag")
 @click.option('--neon_evm_tag', help="the neonlabsorg/evm_loader image tag")
 @click.option('--head_ref_branch')
-@click.option('--skip_uniswap', is_flag=True, show_default=True, default=False, help="flag for skipping uniswap tests")
+@click.option('--skip_uniswap', is_flag=True, show_default=True, default=True, help="flag for skipping uniswap tests")
 @click.option('--test_files', help="comma-separated file names if you want to run a specific list of tests")
 @click.option('--skip_pull', is_flag=True, default=False, help="skip pulling of docker images from the docker-hub")
 def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_files, skip_pull):

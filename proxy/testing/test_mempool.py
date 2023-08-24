@@ -181,7 +181,6 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
             neon_price_account=SolPubKey.new_unique(),
             gas_price_slippage=1,
             operator_fee=10,
-            accept_reverted_tx_into_mempool=True,
             allow_underpriced_tx_wo_chainid=True,
             min_wo_chainid_acceptable_gas_price=1
         )

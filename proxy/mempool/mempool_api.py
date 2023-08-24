@@ -331,8 +331,6 @@ class MPGasPriceResult:
 
     min_wo_chainid_acceptable_gas_price: int
     allow_underpriced_tx_wo_chainid: bool
-    accept_reverted_tx_into_mempool: bool
-
     last_update_mapping_sec: int
     sol_price_account: SolPubKey
     neon_price_account: SolPubKey
