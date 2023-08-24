@@ -167,6 +167,15 @@ class NonceTooHighError(RescheduleError):
     def __str__(self) -> str:
         return 'tx nonce is too high for execution'
 
+class OutOfGasError(BaseException):
+    def __init__(self, has_gas_limit: int, req_gas_limit: int):
+        super().__init__(has_gas_limit, req_gas_limit)
+        self._has_gas_limit = has_gas_limit
+        self._req_gas_limit = req_gas_limit
+
+    def __str__(self) -> str:
+        return 'gas limit reached'
+
 
 class BigTxError(BaseException):
     def __str__(self) -> str:

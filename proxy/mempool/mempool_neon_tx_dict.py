@@ -76,4 +76,4 @@ class MPTxDict:
         while (len(self._neon_tx_queue) > 0) and (self._neon_tx_queue[0].last_time < last_time):
             item = self._neon_tx_queue.popleft()
             self._neon_tx_dict.pop(item.neon_tx.sig, None)
-            self._neon_tx_dict.pop(self._sender_nonce(item.neon_tx))
+            self._neon_tx_dict.pop(self._sender_nonce(item.neon_tx), None)
