@@ -61,7 +61,7 @@ class NeonRpcApiWorker:
 
     def __init__(self, config: Config):
         self._config = config
-        self._solana = SolInteractor(config, config.solana_url)
+        self._solana = SolInteractor(config)
 
         db_conn = DBConnection(config)
         self._db = IndexerDB.from_db(config, db_conn)

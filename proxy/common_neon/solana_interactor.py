@@ -62,10 +62,10 @@ class SolBlockStatus:
 
 
 class SolInteractor:
-    def __init__(self, config: Config, solana_url: str) -> None:
+    def __init__(self, config: Config, solana_url: Optional[str] = None) -> None:
         self._config = config
         self._request_cnt = itertools.count()
-        self._endpoint_uri = solana_url
+        self._solana_url = solana_url or config.solana_url
         self._session: Optional[requests.sessions.Session] = None
         self._headers = {
             'Content-Type': 'application/json'
@@ -77,7 +77,7 @@ class SolInteractor:
             self._session = requests.sessions.Session()
 
         try:
-            raw_response = self._session.post(self._endpoint_uri, headers=self._headers, json=request)
+            raw_response = self._session.post(self._solana_url, headers=self._headers, json=request)
             raw_response.raise_for_status()
 
             return raw_response
@@ -90,7 +90,7 @@ class SolInteractor:
         """This method is used to make retries to send request to Solana"""
 
         def _clean_solana_err(exc: BaseException) -> str:
-            return str(exc).replace(self._endpoint_uri, 'XXXXX')
+            return str(exc).replace(self._solana_url, 'XXXXX')
 
         for retry in itertools.count():
             try:
@@ -378,15 +378,25 @@ class SolInteractor:
         )
 
     def get_first_available_slot(self) -> int:
+        """Get first available slot from Solana"""
         response = self._send_rpc_request('getFirstAvailableBlock')
         slot = response.get('result', 0)
         LOG.debug(f"Solana's first slot {slot}")
         if slot > 0:
             slot += 512
 
+        return self.find_exist_block_slot(slot)
+
+    def find_exist_block_slot(self, start_slot: int) -> int:
+        """Find slot with block"""
+        slot = start_slot
         while self.get_block_info(slot).is_empty():
-            LOG.debug(f'Skip block {slot}...')
+            if (slot == start_slot) or (slot % 100 == 0):
+                LOG.debug(f'Skip block {slot}...')
             slot += 1
+
+        if slot != start_slot:
+            LOG.debug(f'Found not-empty slot {slot}')
 
         return slot
 

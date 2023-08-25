@@ -26,7 +26,7 @@ class DecimalEncoder(json.JSONEncoder):
 class InfoHandler:
     def __init__(self):
         self._config = Config()
-        self._solana = SolInteractor(self._config, self._config.solana_url)
+        self._solana = SolInteractor(self._config)
         self.command = 'info'
 
     @staticmethod

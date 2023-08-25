@@ -18,7 +18,7 @@ from .secret import get_res_ident_list
 class HolderHandler:
     def __init__(self):
         self._config = Config()
-        self._solana = SolInteractor(self._config, self._config.solana_url)
+        self._solana = SolInteractor(self._config)
         self.command = 'holder-account'
 
     @staticmethod

@@ -34,7 +34,7 @@ class GasTank:
         self._gas_less_account_db = GasLessAccountsDB(self._db_conn)
         self._gas_less_account_dict: Dict[str, GasLessPermit] = dict()
 
-        self._solana = SolInteractor(config, config.solana_url)
+        self._solana = SolInteractor(config)
         self._config = config
 
         first_slot = self._solana.get_first_available_slot()
