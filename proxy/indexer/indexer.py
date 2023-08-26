@@ -34,7 +34,7 @@ class Indexer:
     def __init__(self, config: Config, db: IndexerDB):
         self._config = config
         self._db = db
-        self._solana = SolInteractor(config, config.solana_url)
+        self._solana = SolInteractor(config)
 
         self._tracer_api = TracerAPIClient(config)
 
@@ -233,7 +233,7 @@ class Indexer:
             for sol_tx_meta in dctx.iter_sol_tx_meta(sol_block):
                 sol_tx_cost = dctx.sol_tx_cost
                 neon_block.add_sol_tx_cost(sol_tx_cost)
-                is_error = SolTxErrorParser(self._config.evm_program_id, sol_tx_meta.tx).check_if_error()
+                is_error = SolTxErrorParser(sol_tx_meta.tx).check_if_error()
 
                 for sol_neon_ix in dctx.iter_sol_neon_ix():
                     with logging_context(sol_neon_ix=sol_neon_ix.req_id):
@@ -307,7 +307,7 @@ class Indexer:
         try:
             self._collect_neon_txs(dctx, self._last_finalized_slot, SolCommit.Finalized)
         except SolHistoryNotFound as err:
-            self._check_first_slot()
+            self._check_start_slot()
             LOG.debug(f'block branch: {str(dctx)}, skip parsing of finalized history: {str(err)}')
             return
 
@@ -332,8 +332,8 @@ class Indexer:
             # LOG.debug(f'skip parsing of not-finalized history: {str(err)}')
             pass
 
-    def _check_first_slot(self) -> None:
-        first_slot = self._solana.get_first_available_slot()
+    def _check_start_slot(self) -> None:
+        first_slot = self._solana.find_exist_block_slot(self._db.start_slot)
         if self._db.start_slot < first_slot:
             self._db.set_start_slot(first_slot)
 

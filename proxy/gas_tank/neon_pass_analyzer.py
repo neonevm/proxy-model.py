@@ -2,13 +2,12 @@ import logging
 import base58
 
 from construct import Struct, Bytes, BytesInteger
-from typing import Dict, Any, List, Tuple, Optional, Union
+from typing import Dict, Any, List, Tuple, Optional
 
 from .gas_tank_types import GasTankSolTxAnalyzer
 
 from ..common_neon.address import NeonAddress
-from ..common_neon.config import Config
-from ..common_neon.constants import ACCOUNT_SEED_VERSION, TOKEN_PROGRAM_ID
+from ..common_neon.constants import ACCOUNT_SEED_VERSION, EVM_PROGRAM_ID, TOKEN_PROGRAM_ID
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils import NeonTxInfo
 from ..common_neon.solana_tx import SolPubKey
@@ -151,7 +150,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
         return approved_list
 
     def _find_evm_ix_list(self, tx_parser: NPTxParser, caption: str, tag_id: int) -> List[Tuple[int, NPSolIx]]:
-        return tx_parser.find_ix_list(caption, self._config.evm_program_id, tag_id)
+        return tx_parser.find_ix_list(caption, EVM_PROGRAM_ID, tag_id)
 
     @staticmethod
     def _find_token_ix_list(tx_parser: NPTxParser, caption: str, tag_id: int) -> List[Tuple[int, NPSolIx]]:
@@ -203,7 +202,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
 
         sol_caller, _ = SolPubKey.find_program_address(
             [ACCOUNT_SEED_VERSION, b'AUTH', erc20, bytes(12) + neon_tx.sender],
-            self._config.evm_program_id
+            EVM_PROGRAM_ID
         )
         if SolPubKey.from_string(tx_parser.acct_key_list[approve_ix['accounts'][1]]) != sol_caller:
             LOG.debug(f"{tx_parser.acct_key_list[approve_ix['accounts'][1]]} != {sol_caller}")

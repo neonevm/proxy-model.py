@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from typing import Optional, Set
 
 from .db.db_config import DBConfig
-from .environment_data import EVM_LOADER_ID
+from .constants import EVM_PROGRAM_ID_STR
 from .solana_tx import SolPubKey, SolCommit
 
 
@@ -33,7 +33,6 @@ class Config(DBConfig):
         self._solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
         self._solana_websocket_url = parse_solana_websocket_url(self._solana_url)
         self._pp_solana_url = os.environ.get("PP_SOLANA_URL", self._solana_url)
-        self._evm_program_id = SolPubKey.from_string(EVM_LOADER_ID)
         self._mempool_capacity = self._env_int("MEMPOOL_CAPACITY", 10, 4096)
         self._mempool_executor_limit_cnt = self._env_int('MEMPOOL_EXECUTOR_LIMIT_CNT', 4, 1024)
         self._mempool_cache_life_sec = self._env_int('MEMPOOL_CACHE_LIFE_SEC', 15, 30 * 60)
@@ -179,10 +178,6 @@ class Config(DBConfig):
     @property
     def pyth_solana_url(self) -> str:
         return self._pp_solana_url
-
-    @property
-    def evm_program_id(self) -> SolPubKey:
-        return self._evm_program_id
 
     @property
     def holder_size(self) -> int:
@@ -417,7 +412,7 @@ class Config(DBConfig):
 
     def as_dict(self) -> dict:
         config_dict = {
-            'EVM_LOADER_ID': str(self.evm_program_id),
+            'EVM_LOADER_ID': EVM_PROGRAM_ID_STR,
             'PYTH_MAPPING_ACCOUNT': str(self.pyth_mapping_account),
             'UPDATE_PYTH_MAPPING_PERIOD_SEC': self.update_pyth_mapping_period_sec,
             'MEMPOOL_CAPACITY': self.mempool_capacity,

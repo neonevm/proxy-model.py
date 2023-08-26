@@ -9,15 +9,17 @@ from typing import Union, Optional, Any, Tuple, List, cast
 from .solana_tx import SolTxReceipt, SolPubKey
 from .utils import get_from_dict
 from .solana_neon_tx_receipt import SolTxLogDecoder, SolIxLogState
-from .constants import ADDRESS_LOOKUP_TABLE_ID, COMPUTE_BUDGET_ID, SYS_PROGRAM_ID, METAPLEX_PROGRAM_ID, TOKEN_PROGRAM_ID
+from .constants import (
+    ADDRESS_LOOKUP_TABLE_ID, COMPUTE_BUDGET_ID, SYS_PROGRAM_ID, METAPLEX_PROGRAM_ID, TOKEN_PROGRAM_ID,
+    EVM_PROGRAM_ID
+)
 
 
 class SolTxError(BaseException):
-    def __init__(self, evm_program_id: SolPubKey, receipt: SolTxReceipt):
-        super().__init__(evm_program_id, receipt)
+    def __init__(self, receipt: SolTxReceipt):
+        super().__init__(receipt)
 
         self._receipt = receipt
-        self._evm_program_id = evm_program_id
 
         log_list = self._filter_raw_log_list(receipt)
         if len(log_list) == 0:
@@ -46,7 +48,7 @@ class SolTxError(BaseException):
             return 'Metaplex'
         elif uid == TOKEN_PROGRAM_ID:
             return 'Token'
-        elif uid == self._evm_program_id:
+        elif uid == EVM_PROGRAM_ID:
             return 'NeonEVM'
         return str(uid)
 
@@ -197,15 +199,13 @@ class SolTxErrorParser:
         r'Program log: Out of Gas, limit = (\d+), required = (\d+)'
     )
 
-    def __init__(self, evm_program_id: SolPubKey, receipt: Union[SolTxReceipt, BaseException, str]):
+    def __init__(self, receipt: Union[SolTxReceipt, BaseException, str]):
         assert isinstance(receipt, dict) or isinstance(receipt, BaseException) or isinstance(receipt, str)
 
         if isinstance(receipt, SolTxError):
             self._receipt = cast(SolTxError, receipt).receipt
         else:
             self._receipt = receipt
-
-        self._evm_program_id = evm_program_id
 
     def _get_value(self, *path) -> Any:
         if not self._receipt:
@@ -278,7 +278,7 @@ class SolTxErrorParser:
         raw_log_msg_list = self._get_log_list()
         ix_log_state = SolTxLogDecoder().decode(raw_log_msg_list)
         for ix_log_msg in ix_log_state.inner_log_list:
-            if ix_log_msg.program != self._evm_program_id:
+            if ix_log_msg.program != EVM_PROGRAM_ID:
                 continue
             log_list.extend(ix_log_msg.iter_str_log_msg())
         return log_list

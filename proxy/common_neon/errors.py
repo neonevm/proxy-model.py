@@ -189,7 +189,7 @@ class WrongStrategyError(BaseException):
 
 class CUBudgetExceededError(WrongStrategyError):
     def __str__(self) -> str:
-        return 'The Neon transaction is too complicated. Solana\'s computing budget is exceeded'
+        return "The Neon transaction is too complicated. Solana's computing budget is exceeded"
 
 
 class InvalidIxDataError(WrongStrategyError):

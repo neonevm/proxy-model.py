@@ -62,10 +62,10 @@ class SolBlockStatus:
 
 
 class SolInteractor:
-    def __init__(self, config: Config, solana_url: str) -> None:
+    def __init__(self, config: Config, solana_url: Optional[str] = None) -> None:
         self._config = config
         self._request_cnt = itertools.count()
-        self._endpoint_uri = solana_url
+        self._solana_url = solana_url or config.solana_url
         self._session: Optional[requests.sessions.Session] = None
         self._headers = {
             'Content-Type': 'application/json'
@@ -77,7 +77,7 @@ class SolInteractor:
             self._session = requests.sessions.Session()
 
         try:
-            raw_response = self._session.post(self._endpoint_uri, headers=self._headers, json=request)
+            raw_response = self._session.post(self._solana_url, headers=self._headers, json=request)
             raw_response.raise_for_status()
 
             return raw_response
@@ -90,7 +90,7 @@ class SolInteractor:
         """This method is used to make retries to send request to Solana"""
 
         def _clean_solana_err(exc: BaseException) -> str:
-            return str(exc).replace(self._endpoint_uri, 'XXXXX')
+            return str(exc).replace(self._solana_url, 'XXXXX')
 
         for retry in itertools.count():
             try:
@@ -186,7 +186,7 @@ class SolInteractor:
         if status == 'ok':
             return 0
 
-        slots_behind = SolTxErrorParser(self._config.evm_program_id, response).get_slots_behind()
+        slots_behind = SolTxErrorParser(response).get_slots_behind()
         if slots_behind is not None:
             return int(slots_behind)
         return None
@@ -315,7 +315,7 @@ class SolInteractor:
                               commitment=SolCommit.Confirmed) -> Optional[NeonAccountInfo]:
         if not isinstance(neon_account, NeonAddress):
             neon_account = NeonAddress(neon_account)
-        account_sol, nonce = neon_2program(self._config.evm_program_id, neon_account)
+        account_sol, nonce = neon_2program(neon_account)
         info = self.get_account_info(account_sol, commitment=commitment)
         if info is None:
             return None
@@ -334,7 +334,7 @@ class SolInteractor:
                                    commitment=SolCommit.Confirmed) -> List[Optional[NeonAccountInfo]]:
         requests_list = list()
         for neon_account in neon_account_list:
-            account_sol, _nonce = neon_2program(self._config.evm_program_id, neon_account)
+            account_sol, _nonce = neon_2program(neon_account)
             requests_list.append(account_sol)
         responses_list = self.get_account_info_list(requests_list, commitment=commitment)
         accounts_list = list()
@@ -378,15 +378,25 @@ class SolInteractor:
         )
 
     def get_first_available_slot(self) -> int:
+        """Get first available slot from Solana"""
         response = self._send_rpc_request('getFirstAvailableBlock')
         slot = response.get('result', 0)
         LOG.debug(f"Solana's first slot {slot}")
         if slot > 0:
             slot += 512
 
+        return self.find_exist_block_slot(slot)
+
+    def find_exist_block_slot(self, start_slot: int) -> int:
+        """Find slot with block"""
+        slot = start_slot
         while self.get_block_info(slot).is_empty():
-            LOG.debug(f'Skip block {slot}...')
+            if (slot == start_slot) or (slot % 100 == 0):
+                LOG.debug(f'Skip block {slot}...')
             slot += 1
+
+        if slot != start_slot:
+            LOG.debug(f'Found not-empty slot {slot}')
 
         return slot
 
@@ -510,7 +520,7 @@ class SolInteractor:
 
             error = response.get('error', None)
             if error:
-                if SolTxErrorParser(self._config.evm_program_id, error).check_if_already_processed():
+                if SolTxErrorParser(error).check_if_already_processed():
                     result = str(tx.sig)
                     LOG.debug(f'Transaction is already processed: {str(result)}')
                     error = None

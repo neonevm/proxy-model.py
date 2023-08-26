@@ -60,7 +60,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
         asyncio.set_event_loop(self._event_loop)
 
         self._pickable_data_srv = PipePickableDataSrv(user=self, srv_sock=self._srv_sock)
-        self._solana = SolInteractor(self._config, self._config.solana_url)
+        self._solana = SolInteractor(self._config)
 
         self._stat_client = ProxyStatClient(self._config)
         self._stat_client.start()

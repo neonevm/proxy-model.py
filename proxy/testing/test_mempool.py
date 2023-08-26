@@ -57,7 +57,7 @@ def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: 
             neon_tx=neon_tx,
             neon_tx_exec_cfg=neon_tx_exec_cfg
         ),
-        res_ident=OpResIdent(evm_program_id=evm_program_id, public_key='test', private_key=b'test'),
+        res_ident=OpResIdent(public_key='test', private_key=b'test'),
         elf_param_dict=ElfParams().elf_param_dict
     )
     return mp_tx_req
@@ -113,7 +113,7 @@ class MockResourceManager(OpResMng):
         pass
 
     def get_resource(self, ident: str) -> OpResIdent:
-        return OpResIdent(self._config.evm_program_id, public_key='test', private_key=b'test')
+        return OpResIdent(public_key='test', private_key=b'test')
 
     def enable_resource(self, ident: OpResIdent) -> None:
         pass
