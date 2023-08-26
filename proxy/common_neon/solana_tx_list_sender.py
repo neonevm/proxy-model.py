@@ -363,7 +363,7 @@ class SolTxListSender:
                 return True
 
         tx_state = tx_state_list[0]
-        error = tx_state.error or SolTxError(self._config.evm_program_id, tx_state.receipt)
+        error = tx_state.error or SolTxError(tx_state.receipt)
         raise error
 
     def _wait_for_tx_receipt_list(self) -> None:
@@ -397,7 +397,7 @@ class SolTxListSender:
 
     def _decode_tx_status(self, tx: SolTx, tx_receipt: Optional[SolTxReceipt]) -> _DecodeResult:
         status = SolTxSendState.Status
-        tx_error_parser = SolTxErrorParser(self._config.evm_program_id, tx_receipt)
+        tx_error_parser = SolTxErrorParser(tx_receipt)
 
         slots_behind = tx_error_parser.get_slots_behind()
         if slots_behind is not None:

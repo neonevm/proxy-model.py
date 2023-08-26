@@ -26,7 +26,7 @@ class NeonTxSendCtx:
         self._solana = solana
         self._resource = resource
 
-        self._ix_builder = NeonIxBuilder(config, resource.public_key)
+        self._ix_builder = NeonIxBuilder(resource.public_key)
         self._ix_builder.init_operator_neon(self._resource.neon_address)
         self._ix_builder.init_iterative(self.holder_account)
         if not mp_tx_req.is_stuck_tx():

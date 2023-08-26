@@ -12,7 +12,7 @@ import base58
 from .utils.evm_log_decoder import decode_log_list, NeonLogTxReturn, NeonLogTxEvent
 from .utils.utils import str_fmt_object
 from .solana_tx import SolTxReceipt, SolPubKey
-from .constants import COMPUTE_BUDGET_ID
+from .constants import COMPUTE_BUDGET_ID_STR, EVM_PROGRAM_ID_STR
 
 
 LOG = logging.getLogger(__name__)
@@ -423,7 +423,7 @@ class ComputeBudgetInfo:
         max_heap_size = 32 * 1024
 
         for ix_meta in tx_meta.ix_meta_list:
-            if not ix_meta.is_program(COMPUTE_BUDGET_ID):
+            if not ix_meta.is_program(COMPUTE_BUDGET_ID_STR):
                 continue
 
             try:
@@ -803,15 +803,15 @@ class SolTxReceiptInfo(SolTxMetaInfo):
             return None
         return ix_log_list.inner_log_list[ix_meta.inner_idx]
 
-    def iter_sol_ix(self, evm_program_id: Union[SolPubKey, str]) -> Generator[SolNeonIxReceiptInfo, None, None]:
+    def iter_sol_ix(self) -> Generator[SolNeonIxReceiptInfo, None, None]:
         for ix_meta in self.ix_meta_list:
-            if ix_meta.is_program(evm_program_id) and ix_meta.has_ix_data():
+            if ix_meta.is_program(EVM_PROGRAM_ID_STR) and ix_meta.has_ix_data():
                 log_state = self.get_log_state(ix_meta)
                 if log_state is not None:
                     yield SolNeonIxReceiptInfo.from_tx_meta(self, ix_meta, log_state)
 
             for inner_ix_meta in self.inner_ix_meta_list(ix_meta):
-                if inner_ix_meta.is_program(evm_program_id) and inner_ix_meta.has_ix_data():
+                if inner_ix_meta.is_program(EVM_PROGRAM_ID_STR) and inner_ix_meta.has_ix_data():
                     log_state = self.get_log_state(inner_ix_meta)
                     if log_state is not None:
                         yield SolNeonIxReceiptInfo.from_tx_meta(self, inner_ix_meta, log_state)

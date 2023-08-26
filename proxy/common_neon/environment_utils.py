@@ -6,6 +6,7 @@ from typing import List
 import logging
 
 from .config import Config
+from .constants import EVM_PROGRAM_ID_STR
 
 
 LOG = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ class NeonCli(CliBase):
                 'neon-cli',
                 '--commitment=recent',
                 '--url', self._config.solana_url,
-                '--evm_loader', f'{str(self._config.evm_program_id)}',
+                '--evm_loader', EVM_PROGRAM_ID_STR,
                 '--loglevel',  f'{self._emulator_logging_level}'
             ]
             cmd.extend(['-vvv'] if self._config.neon_cli_debug_log else [])

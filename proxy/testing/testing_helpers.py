@@ -162,7 +162,7 @@ class Proxy:
 
 class SolClient(SolInteractor):
     def __init__(self, config: Config):
-        super().__init__(config, config.solana_url)
+        super().__init__(config)
 
     def send_tx(self, tx: SolTx, signer: SolAccount, skip_preflight=False) -> Optional[SolSig]:
         recent_resp = self.get_recent_block_hash(SolCommit.Finalized)

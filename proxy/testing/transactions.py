@@ -1,8 +1,8 @@
-from ..common_neon.environment_data import EVM_LOADER_ID
+from ..common_neon.constants import EVM_PROGRAM_ID_STR
 
 
 token_program = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
-evm_program = EVM_LOADER_ID
+evm_program = EVM_PROGRAM_ID_STR
 
 neon_pass_erc20_for_spl = '0x04b27acb0013a31822ec1624c1a3066b023e3a93'
 neon_pass_gas_less_account = '0x4136faa9cae6c9afde37045a255b087f2ccfee75'
