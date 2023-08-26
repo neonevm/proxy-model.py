@@ -6,7 +6,7 @@ from .mempool_executor_task_base import MPExecutorBaseTask
 
 from ..common_neon.address import neon_2program
 from ..common_neon.config import Config
-from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
+from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG, EVM_PROGRAM_ID
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import BadResourceError, RescheduleError, StuckTxError
 from ..common_neon.neon_instruction import NeonIxBuilder
@@ -39,7 +39,7 @@ class OpResInit:
         try:
             self._validate_operator_balance(resource)
 
-            builder = NeonIxBuilder(self._config, resource.public_key)
+            builder = NeonIxBuilder(resource.public_key)
             self._create_holder_account(builder, resource)
             self._create_neon_account(builder, resource)
         except (RescheduleError, StuckTxError):
@@ -74,7 +74,7 @@ class OpResInit:
         tx_sender.send([stage.tx])
 
     def _create_neon_account(self, builder: NeonIxBuilder, resource: OpResInfo):
-        solana_address = neon_2program(builder.evm_program_id, resource.neon_address)[0]
+        solana_address = neon_2program(resource.neon_address)[0]
 
         account_info = self._solana.get_account_info(solana_address)
         if account_info is not None:
@@ -104,7 +104,7 @@ class OpResInit:
             )
             self._recreate_holder(builder, resource, balance)
 
-        elif holder_info.owner != self._config.evm_program_id:
+        elif holder_info.owner != EVM_PROGRAM_ID:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
 
         elif holder_info.tag == ACTIVE_HOLDER_TAG:

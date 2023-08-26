@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Iterator, Generator, List, Optional, Dict, Set, Any, cast
 
 from ..common_neon.config import Config
+from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName, AltIxCodeName
 from ..common_neon.solana_neon_tx_receipt import (
     SolTxMetaInfo, SolTxCostInfo, SolTxReceiptInfo,
@@ -820,9 +821,9 @@ class NeonIndexedBlockInfo:
         assert self._is_stuck_completed
 
         return (
-            len(self._stuck_neon_tx_list) or
-            len(self._stuck_neon_holder_list) or
-            len(self._sol_alt_info_dict)
+            len(self._stuck_neon_tx_list) > 0 or
+            len(self._stuck_neon_holder_list) > 0 or
+            len(self._sol_alt_info_dict) > 0
         )
 
     def _check_stuck_holders(self, config: Config) -> None:
@@ -1085,7 +1086,7 @@ class SolNeonDecoderCtx:
 
         account_key_list = msg.get('accountKeys', list())
         for account_idx, account in enumerate(account_key_list):
-            if account == str(self._config.evm_program_id):
+            if account == EVM_PROGRAM_ID_STR:
                 evm_program_idx = account_idx
                 break
         else:
@@ -1126,7 +1127,7 @@ class SolNeonDecoderCtx:
         try:
             sol_tx_cost = self.sol_tx_cost
             self._sol_tx = SolTxReceiptInfo.from_tx_meta(self._sol_tx_meta, sol_tx_cost)
-            for self._sol_neon_ix in self._sol_tx.iter_sol_ix(self._config.evm_program_id):
+            for self._sol_neon_ix in self._sol_tx.iter_sol_ix():
                 self._stat.inc_sol_neon_ix_cnt()
                 yield self._sol_neon_ix
         finally:

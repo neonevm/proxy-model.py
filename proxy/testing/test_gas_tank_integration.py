@@ -20,7 +20,7 @@ from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from proxy.common_neon.config import Config
 from proxy.common_neon.elf_params import ElfParams
 from proxy.common_neon.address import neon_2program
-from proxy.common_neon.constants import COMPUTE_BUDGET_ID
+from proxy.common_neon.constants import COMPUTE_BUDGET_ID, EVM_PROGRAM_ID
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 
 from proxy.testing.testing_helpers import Proxy, SolClient, NeonLocalAccount
@@ -105,7 +105,6 @@ class TestGasTankIntegration(TestCase):
     @classmethod
     def deploy_erc20_for_spl(cls):
         cls.erc20_for_spl = ERC20Wrapper(
-            cls.config,
             cls.proxy.web3,
             NAME,
             SYMBOL,
@@ -117,9 +116,9 @@ class TestGasTankIntegration(TestCase):
 
     @classmethod
     def create_account_instruction(cls, neon_address: str, payer: SolPubKey):
-        dest_address_solana, nonce = neon_2program(cls.config.evm_program_id, neon_address)
+        dest_address_solana, nonce = neon_2program(neon_address)
         return SolTxIx(
-            program_id=cls.config.evm_program_id,
+            program_id=EVM_PROGRAM_ID,
             data=create_account_layout(bytes.fromhex(neon_address[2:])),
             accounts=[
                 SolAccountMeta(pubkey=payer, is_signer=True, is_writable=True),

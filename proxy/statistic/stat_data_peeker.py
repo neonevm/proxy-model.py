@@ -23,7 +23,7 @@ class IHealthStatService(abc.ABC):
 class StatDataPeeker:
     def __init__(self, config: Config, stat_srv: IHealthStatService):
         self._stat_service = stat_srv
-        self._solana = SolInteractor(config, config.solana_url)
+        self._solana = SolInteractor(config)
         self._db_conn = DBConnection(config)
 
     async def run(self) -> None:

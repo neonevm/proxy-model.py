@@ -140,7 +140,7 @@ class MPExecutorFreeALTQueueTask(MPExecutorBaseTask):
 
             if len(tx_list) == 0:
                 signer = SolAccount.from_seed(op_key)
-                ix_builder = NeonIxBuilder(self._config, signer.pubkey())
+                ix_builder = NeonIxBuilder(signer.pubkey())
                 block_height = self._get_block_height()
 
             alt_info.block_height = block_height

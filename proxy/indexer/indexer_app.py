@@ -60,7 +60,7 @@ class NeonIndexerApp:
         db.drop_not_finalized_history()
 
     def _init_slot_range(self, constants_db: ConstantsDB) -> None:
-        solana = SolInteractor(self._config, self._config.solana_url)
+        solana = SolInteractor(self._config)
 
         self._last_known_slot = last_known_slot = constants_db.get(IndexerDB.base_min_used_slot_name, 0)
         self._first_slot = first_slot = solana.get_first_available_slot()
@@ -173,6 +173,8 @@ class NeonIndexerApp:
         Check that the number of ranges is not exceeded.
         """
 
+        solana = SolInteractor(self._config)
+
         total_len = self._reindex_stop_slot - self._reindex_start_slot + 1
         avail_cnt = max(1, self._config.reindex_max_range_cnt - len(db_list))
         need_cnt = int(total_len / self._config.reindex_range_len) + 1
@@ -185,6 +187,7 @@ class NeonIndexerApp:
             # For example: CONTINUE:213456789
             ident = ':'.join([self._reindex_ident, str(start_slot)])
             stop_slot = min(start_slot + range_len, self._reindex_stop_slot)
+            start_slot = solana.find_exist_block_slot(start_slot)
             db = IndexerDB.from_range(self._config, DBConnection(self._config), start_slot, ident, stop_slot)
             new_db_list.append(db)
             start_slot = stop_slot
