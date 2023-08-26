@@ -6,7 +6,7 @@ import json
 import base58
 from typing import Dict, Any, List
 
-from proxy.common_neon.address import NeonAddress, account_with_seed, perm_account_seed
+from proxy.common_neon.address import NeonAddress, neon_account_with_seed, perm_account_seed
 from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.operator_resource_info import OpResInfo, OpResIdent
 from proxy.common_neon.solana_tx import SolAccount, SolPubKey
@@ -173,7 +173,7 @@ class InfoHandler:
 
     def _generate_resource_address(self, base_address: SolPubKey, prefix: bytes, rid: int) -> SolPubKey:
         seed = perm_account_seed(prefix, rid)
-        return account_with_seed(self._config.evm_program_id, base_address, seed)
+        return neon_account_with_seed(base_address, seed)
 
     def _get_neon_balance(self, neon_address: NeonAddress) -> Decimal:
         neon_layout = self._solana.get_neon_account_info(neon_address)

@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 
 import base58
 
-from .address import account_with_seed
+from .address import neon_account_with_seed
 from .layouts import ACCOUNT_INFO_LAYOUT
 from .neon_instruction import NeonIxBuilder
 from .solana_tx import SolTxIx, SolPubKey
@@ -61,9 +61,7 @@ class NeonCreateAccountWithSeedStage(NeonTxStage, abc.ABC):
         assert len(self._seed_base) > 0
 
         self._seed = base58.b58encode(self._seed_base)
-        self._sol_account = account_with_seed(
-            self._ix_builder.evm_program_id, self._ix_builder.operator_account, self._seed
-        )
+        self._sol_account = neon_account_with_seed(self._ix_builder.operator_account, self._seed)
 
     @property
     def sol_account(self) -> SolPubKey:
@@ -106,9 +104,7 @@ class NeonCreateHolderAccountStage(NeonCreateAccountWithSeedStage):
 
     def _init_sol_account(self):
         assert len(self._seed) > 0
-        self._sol_account = account_with_seed(
-            self._ix_builder.evm_program_id, self._ix_builder.operator_account, self._seed
-        )
+        self._sol_account = neon_account_with_seed(self._ix_builder.operator_account, self._seed)
 
     def build(self):
         assert self._is_empty()
@@ -129,8 +125,7 @@ class NeonDeleteHolderAccountStage(NeonTxStage):
 
     def _init_sol_account(self):
         assert len(self._seed) > 0
-        self._sol_account = account_with_seed(
-            self._ix_builder.evm_program_id, self._ix_builder.operator_account, self._seed
+        self._sol_account = neon_account_with_seed(self._ix_builder.operator_account, self._seed
         )
 
     def _delete_account(self):

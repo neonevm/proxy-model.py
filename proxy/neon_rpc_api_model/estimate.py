@@ -35,7 +35,7 @@ class _GasTxBuilder:
         neon_address = NeonAddress.from_private_key(operator_key)
         self._block_hash = SolBlockHash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
 
-        self._neon_ix_builder = NeonIxBuilder(Config(), self._signer.pubkey())
+        self._neon_ix_builder = NeonIxBuilder(self._signer.pubkey())
         self._neon_ix_builder.init_iterative(holder.pubkey())
         self._neon_ix_builder.init_operator_neon(neon_address)
 

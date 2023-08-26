@@ -6,6 +6,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, Iterator, List, Any
 
 from ..common_neon.config import Config
+from ..common_neon.constants import EVM_PROGRAM_ID
 from ..common_neon.solana_tx import SolCommit
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolTxMetaInfo, SolTxSigSlotInfo
@@ -98,7 +99,7 @@ class SolTxMetaCollector(ABC):
         response_list_len = 1
         while response_list_len:
             response_list = self._solana.get_sig_list_for_address(
-                self._config.evm_program_id,
+                EVM_PROGRAM_ID,
                 start_sig, self._config.gas_tank_poll_tx_cnt, self._commitment
             )
             response_list_len = len(response_list)

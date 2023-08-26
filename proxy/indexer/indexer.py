@@ -233,7 +233,7 @@ class Indexer:
             for sol_tx_meta in dctx.iter_sol_tx_meta(sol_block):
                 sol_tx_cost = dctx.sol_tx_cost
                 neon_block.add_sol_tx_cost(sol_tx_cost)
-                is_error = SolTxErrorParser(self._config.evm_program_id, sol_tx_meta.tx).check_if_error()
+                is_error = SolTxErrorParser(sol_tx_meta.tx).check_if_error()
 
                 for sol_neon_ix in dctx.iter_sol_neon_ix():
                     with logging_context(sol_neon_ix=sol_neon_ix.req_id):

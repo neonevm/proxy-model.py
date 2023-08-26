@@ -13,11 +13,10 @@ from solcx import install_solc, compile_source
 
 from .solana_tx import SolAccountMeta, SolAccount, SolPubKey
 from .address import NeonAddress, neon_2program
-from .constants import ACCOUNT_SEED_VERSION
+from .constants import ACCOUNT_SEED_VERSION, EVM_PROGRAM_ID
 from .utils.eth_proto import NeonTx
 from .neon_instruction import NeonIxBuilder
 from .web3 import NeonWeb3, ChecksumAddress
-from .config import Config
 
 
 install_solc(version='0.7.6')
@@ -73,14 +72,12 @@ class ERC20Wrapper:
     interface: Dict
     wrapper: Dict
 
-    def __init__(self, config: Config,
+    def __init__(self,
                  proxy: NeonWeb3,
                  name: str, symbol: str,
                  token: Token,
                  admin: NeonAccount,
                  mint_authority: SolAccount):
-        self._config = config
-        self.evm_program_id = config.evm_program_id
         self.proxy = proxy
         self.name = name
         self.symbol = symbol
@@ -93,7 +90,7 @@ class ERC20Wrapper:
         neon_contract_addressbytes = bytes.fromhex(self.neon_contract_address[2:])
         return SolPubKey.find_program_address(
             [ACCOUNT_SEED_VERSION, b"AUTH", neon_contract_addressbytes, neon_account_addressbytes],
-            self.evm_program_id
+            EVM_PROGRAM_ID
         )[0]
 
     def _deploy_wrapper(self, contract: str, init_args: Tuple):
@@ -118,7 +115,7 @@ class ERC20Wrapper:
         LOG.debug(f'tx_deploy_receipt: {tx_deploy_receipt}')
         LOG.debug(f'deploy status: {tx_deploy_receipt.status}')
         self.neon_contract_address = ChecksumAddress(tx_deploy_receipt.contractAddress)
-        self.solana_contract_address, _ = neon_2program(self.evm_program_id, self.neon_contract_address)
+        self.solana_contract_address, _ = neon_2program(self.neon_contract_address)
 
         self.erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
 
@@ -139,7 +136,7 @@ class ERC20Wrapper:
             neon_contract_address_bytes,
             neon_account_address_bytes,
         ]
-        return SolPubKey.find_program_address(seeds, self.evm_program_id)[0]
+        return SolPubKey.find_program_address(seeds, EVM_PROGRAM_ID)[0]
 
     def create_associated_token_account(self, owner: SolPubKey):
         return self.token.create_associated_token_account(owner)
@@ -182,7 +179,7 @@ class ERC20Wrapper:
 
         neon_account_dict = list(neon_account_dict.values())
 
-        neon = NeonIxBuilder(self._config, owner)
+        neon = NeonIxBuilder(owner)
         neon.init_operator_neon(NeonAddress(signer_acct.address))
         neon.init_neon_tx(NeonTx.from_string(neon_tx))
         neon.init_neon_account_list(neon_account_dict)

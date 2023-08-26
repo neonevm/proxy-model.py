@@ -240,7 +240,7 @@ class GasTank:
 
         self._process_finalized_tx_list(tx_receipt_info.block_slot)
 
-        for sol_neon_ix in tx_receipt_info.iter_sol_ix(self._config.evm_program_id):
+        for sol_neon_ix in tx_receipt_info.iter_sol_ix():
             ix_code = sol_neon_ix.ix_data[0]
             LOG.debug(f'instruction: {ix_code} {sol_neon_ix.neon_tx_sig}')
             if ix_code == EvmIxCode.HolderWrite:

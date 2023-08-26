@@ -12,6 +12,7 @@ from eth_account import Account as NeonAccount
 from sha3 import keccak_256
 
 from ..common_neon.config import Config
+from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status, call_tx_emulated
@@ -1244,7 +1245,7 @@ class NeonRpcApiWorker:
     def neon_getEvmParams(self) -> Dict[str, str]:
         """Returns map of Neon-EVM parameters"""
         elf_param_dict = ElfParams().elf_param_dict
-        elf_param_dict['NEON_EVM_ID'] = str(self._config.evm_program_id)
+        elf_param_dict['NEON_EVM_ID'] = EVM_PROGRAM_ID_STR
         return elf_param_dict
 
     def is_allowed_api(self, method_name: str) -> bool:
