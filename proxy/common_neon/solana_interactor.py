@@ -111,9 +111,9 @@ class SolInteractor:
                 LOG.error(f'Unknown exception on send request to Solana: {str_err}')
                 raise SolanaUnavailableError(str_err)
 
-    def _build_rpc_request(self, method: str, *param_list: Any) -> Dict[str, Any]:
+    def _build_rpc_request(self, method: str, can_flush_id: bool, *param_list: Any) -> Dict[str, Any]:
         request_id = next(self._request_cnt) + 1
-        if request_id >= 100_000:
+        if can_flush_id and (request_id >= 100_000):
             self._request_cnt = itertools.count()
 
         return {
@@ -124,7 +124,7 @@ class SolInteractor:
         }
 
     def _send_rpc_request(self, method: str, *param_list: Any) -> RPCResponse:
-        request = self._build_rpc_request(method, *param_list)
+        request = self._build_rpc_request(method, True, *param_list)
         raw_response = self._send_post_request(request)
         return cast(RPCResponse, raw_response.json())
 
@@ -135,7 +135,7 @@ class SolInteractor:
         request_list = list()
 
         for params in params_list:
-            request = self._build_rpc_request(method, *params)
+            request = self._build_rpc_request(method, request_size == 0, *params)
             request_list.append(request)
 
             request_cnt -= 1
@@ -163,7 +163,7 @@ class SolInteractor:
     def is_healthy(self) -> Optional[bool]:
         """Ask Solana node about the status.
         The method should return immediately without attempts to repeat the request."""
-        request = self._build_rpc_request('getHealth', )
+        request = self._build_rpc_request('getHealth', True)
 
         try:
             raw_response = self._send_post_request_impl(request)
@@ -565,12 +565,13 @@ class SolInteractor:
         if not tx_sig_list:
             return True
 
+        opts = {
+            'commitment': commitment
+        }
         is_done = False
         with websockets.sync.client.connect(self._config.solana_websocket_url) as websocket:
             for tx_sig in tx_sig_list:
-                request = self._build_rpc_request('signatureSubscribe', tx_sig, {
-                    'commitment': commitment
-                })
+                request = self._build_rpc_request('signatureSubscribe', False, tx_sig, opts)
                 websocket.send(json.dumps(request))
 
             timeout_timer = threading.Timer(timeout_sec, lambda: websocket.close())
