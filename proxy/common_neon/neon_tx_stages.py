@@ -111,7 +111,7 @@ class NeonCreateHolderAccountStage(NeonCreateAccountWithSeedStage):
 
         LOG.debug(f'Create perm account {self.sol_account}')
         self.tx.add(self._create_account_with_seed())
-        self.tx.add(self._ix_builder.create_holder_ix(self.sol_account))
+        self.tx.add(self._ix_builder.create_holder_ix(self.sol_account, self._seed))
 
 
 class NeonDeleteHolderAccountStage(NeonTxStage):
