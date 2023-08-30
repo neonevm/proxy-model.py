@@ -44,7 +44,7 @@ class DBConnection:
                 f'-c statement_timeout={wait_ms} ' +
                 f'-c idle_in_transaction_session_timeout={wait_ms-500} '
             )
-            LOG.debug(f'add statement timeout {wait_ms}')
+            # LOG.debug(f'add statement timeout {wait_ms}')
 
         self._conn = psycopg2.connect(**kwargs)
         self._conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_READ_COMMITTED)

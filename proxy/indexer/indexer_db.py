@@ -164,16 +164,17 @@ class IndexerDB:
         self._set_latest_slot(last_neon_block.block_slot)
 
     def _finalize_block_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:
-        last_neon_block = neon_block_queue[-1]
-        if last_neon_block.is_finalized:
-            self._submit_stuck_obj_list(last_neon_block)
-            self._set_finalized_slot(last_neon_block.block_slot)
-
         block_slot_list = tuple(
             block.block_slot
             for block in neon_block_queue
             if block.is_done and (block.block_slot > self._finalized_slot)
         )
+
+        last_neon_block = neon_block_queue[-1]
+        if last_neon_block.is_finalized:
+            self._submit_stuck_obj_list(last_neon_block)
+            self._set_finalized_slot(last_neon_block.block_slot)
+
         if len(block_slot_list) == 0:
             return
 
