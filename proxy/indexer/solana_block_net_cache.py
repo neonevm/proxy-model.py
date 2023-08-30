@@ -115,7 +115,7 @@ class SolBlockNetCache:
         self._stop_slot = stop_slot
 
     def _recache_block_list(self, state: SolNeonDecoderCtx) -> None:
-        LOG.debug(f'recache: {str(state)}')
+        # LOG.debug(f'recache: {str(state)}')
         self._need_to_recache_block_list = False
 
         slot_list = [block.block_slot for block in self._block_list if block.is_empty()]
