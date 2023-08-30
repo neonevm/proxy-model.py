@@ -161,7 +161,7 @@ class NeonIxBuilder:
             data=EvmIxCode.HolderDelete.value.to_bytes(1, byteorder='little'),
         )
 
-    def create_holder_ix(self, holder: SolPubKey) -> SolTxIx:
+    def create_holder_ix(self, holder: SolPubKey, seed: bytes) -> SolTxIx:
         LOG.debug(f'createHolderIx {self._operator_account} account({holder})')
         return SolTxIx(
             accounts=[
@@ -169,7 +169,8 @@ class NeonIxBuilder:
                 SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
             ],
             program_id=EVM_PROGRAM_ID,
-            data=EvmIxCode.HolderCreate.value.to_bytes(1, byteorder='little'),
+            data=EvmIxCode.HolderCreate.value.to_bytes(1, byteorder='little') +
+                len(seed).to_bytes(8, 'little') + seed
         )
 
     def make_create_neon_account_ix(self, neon_address: NeonAddress) -> SolTxIx:
