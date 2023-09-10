@@ -9,7 +9,7 @@ solders==0.18.1
 psycopg2-binary
 ethereum
 py-solc-x==1.1.1
-hvac==1.1.1
+hvac==1.2.1
 requests==2.31.0
 httpx==0.23.3
 h2==4.1.0
