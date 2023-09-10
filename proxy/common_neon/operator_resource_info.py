@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import List, Set
 from dataclasses import dataclass
 
+from .utils.utils import cached_method, cached_property
 from .config import Config
 from .solana_tx import SolAccount, SolPubKey
 from .address import NeonAddress, perm_account_seed, neon_account_with_seed
@@ -14,20 +15,13 @@ class OpResIdent:
     private_key: bytes
     res_id: int = -1
 
-    _str = ''
-    _hash = 0
-
+    @cached_method
     def __str__(self) -> str:
-        if self._str == '':
-            _str = f'{self.public_key}:{self.res_id}'
-            object.__setattr__(self, '_str', _str)
-        return self._str
+        return f'{self.public_key}:{self.res_id}'
 
+    @cached_method
     def __hash__(self) -> int:
-        if self._hash == 0:
-            _hash = hash(str(self))
-            object.__setattr__(self, '_hash', _hash)
-        return self._hash
+        return hash(str(self))
 
     def __eq__(self, other) -> bool:
         return (
@@ -67,11 +61,11 @@ class OpResInfo:
     def __str__(self) -> str:
         return str(self.ident)
 
-    @property
+    @cached_property
     def public_key(self) -> SolPubKey:
         return self.signer.pubkey()
 
-    @property
+    @cached_property
     def secret_key(self) -> bytes:
         return self.signer.secret()
 

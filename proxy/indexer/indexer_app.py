@@ -7,7 +7,7 @@ from multiprocessing import Process
 from ..common_neon.db.constats_db import ConstantsDB
 from ..common_neon.db.db_connect import DBConnection
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.config import Config
+from ..common_neon.config import Config, StartSlot
 from ..common.logger import Logger
 from ..common_neon.utils.json_logger import logging_context
 
@@ -22,9 +22,8 @@ LOG = logging.getLogger(__name__)
 
 
 class NeonIndexerApp:
-    _disabled_start_slot = -1
-
     def __init__(self):
+        Logger.setup()
         self._config = Config()
 
         self._db_conn: Optional[DBConnection] = None
@@ -40,7 +39,6 @@ class NeonIndexerApp:
         self._reindex_stop_slot = 0
 
     def start(self):
-        Logger.setup()
         LOG.info(f'Running indexer with params: {self._config.as_dict()}')
 
         self._stat_service = IndexerStatService(self._config)
@@ -62,12 +60,11 @@ class NeonIndexerApp:
     def _init_slot_range(self, constants_db: ConstantsDB) -> None:
         solana = SolInteractor(self._config)
 
-        self._last_known_slot = last_known_slot = constants_db.get(IndexerDB.base_min_used_slot_name, 0)
-        self._first_slot = first_slot = solana.get_first_available_slot()
         self._finalized_slot = finalized_slot = solana.get_finalized_slot()
+        self._first_slot = first_slot = solana.get_first_available_slot()
+        self._last_known_slot = last_known_slot = constants_db.get(IndexerDB.base_min_used_slot_name, 0)
 
-        if self._config.start_slot == self._config.disable_slot_name:
-            self._start_slot = self._disabled_start_slot
+        if self._config.start_slot == StartSlot.Disable:
             self._reindex_stop_slot = self._get_reindex_stop_on_finalized_slot(constants_db)
             LOG.debug(f'{self._config.start_slot_name}={self._config.start_slot}, skip indexing...')
             return
@@ -88,14 +85,15 @@ class NeonIndexerApp:
         return self._finalized_slot
 
     def _start_indexing(self) -> None:
-        if self._start_slot == self._disabled_start_slot:
+        if self._config.start_slot == StartSlot.Disable:
             return self._empty_run()
 
         db = IndexerDB.from_range(self._config, self._db_conn, self._start_slot)
         indexer = Indexer(self._config, db)
         indexer.run()
 
-    def _empty_run(self) -> None:
+    @staticmethod
+    def _empty_run() -> None:
         while True:
             time.sleep(0.5)
 
@@ -120,7 +118,7 @@ class NeonIndexerApp:
     def _is_reindex_completed(self, constants_db: ConstantsDB, db_list: List[IndexerDB]) -> bool:
         reindex_ident_name = 'reindex_ident'
 
-        if self._reindex_ident == self._config.continue_slot_name:
+        if self._reindex_ident == StartSlot.Continue:
             # every restart reindex slots from the last parsed slot to the current finalized slot
             constants_db[reindex_ident_name] = self._reindex_ident
             return False
@@ -149,16 +147,16 @@ class NeonIndexerApp:
             db_key = ':'.join((reindex_ident, start_slot))
             db = IndexerDB.from_db(self._config, DBConnection(self._config), db_key)
             if self._reindex_ident != reindex_ident:
-                LOG.info(f'Skip old REINDEX {reindex_ident}')
+                LOG.info(f'Skip old REINDEX {db_key}')
                 db.done()
             elif self._first_slot > db.stop_slot:
                 LOG.info(
-                    f'Skip lost REINDEX {reindex_ident}: '
+                    f'Skip lost REINDEX {db_key}: '
                     f'first slot ({self._first_slot}) > db.stop_slot {db.stop_slot}'
                 )
                 db.done()
             else:
-                LOG.info(f'Load REINDEX {reindex_ident}')
+                LOG.info(f'Load REINDEX {db_key}')
                 db_list.append(db)
 
         return db_list
@@ -217,44 +215,44 @@ class NeonIndexerApp:
         REINDEXER_START_SLOT=10123456, START_SLOT=100
         """
         reindex_ident = self._config.reindex_start_slot
-        if not len(reindex_ident):
+
+        if isinstance(reindex_ident, int):
+            if reindex_ident >= self._finalized_slot:
+                LOG.error(f'{self._config.reindex_start_slot_name}={reindex_ident} is too big, skip reindexing...')
+                return None, ''
+
+            # start from the slot which Solana knows
+            start_slot = max(self._first_slot, int(reindex_ident))
+
+            LOG.info(
+                f'{self._config.reindex_start_slot_name}={reindex_ident}: '
+                f'started reindexing from the slot: {start_slot}'
+            )
+            return start_slot, str(reindex_ident)
+
+        elif reindex_ident == StartSlot.Disable:
             return None, ''
 
-        if reindex_ident == self._config.continue_slot_name:
-            if self._config.start_slot not in {self._config.latest_slot_name, self._config.disable_slot_name}:
+        elif reindex_ident == StartSlot.Continue:
+            if self._config.start_slot not in (StartSlot.Latest, StartSlot.Disable):
                 LOG.error(
-                    f'Wrong value {self._config.reindex_start_slot_name}={self._config.continue_slot_name}, '
-                    f'it is valid only for {self._config.start_slot_name}='
-                    f'({self._config.latest_slot_name}, {self._config.disable_slot_name}): '
+                    f'Wrong value {self._config.reindex_start_slot_name}={StartSlot.Continue}, '
+                    f'it is valid only for {self._config.start_slot_name}=({StartSlot.Latest, StartSlot.Disable}): '
                     f'forced to disable {self._config.reindex_start_slot_name}'
                 )
                 return None, ''
 
-            LOG.info(
-                f'{self._config.reindex_start_slot_name}={self._config.continue_slot_name}: '
-                f'started reindexing from the slot: {self._last_known_slot}'
-            )
-            return self._last_known_slot, reindex_ident
-
-        try:
-            reindex_int_slot = int(reindex_ident)
-            if reindex_int_slot >= self._finalized_slot:
-                raise ValueError('Too big value')
+            # self._last_known_slot = 0 - it happens if it is the first start
+            # and the ReIndexer cannot start from the slot which Solana doesn't know
+            start_slot = max(self._first_slot, (self._last_known_slot or self._finalized_slot))
 
             LOG.info(
-                f'{self._config.reindex_start_slot_name}={reindex_ident}: '
-                f'started reindexing from the slot: {reindex_int_slot}'
+                f'{self._config.reindex_start_slot_name}={StartSlot.Continue}: '
+                f'started reindexing from the slot: {start_slot}'
             )
+            return start_slot, reindex_ident
 
-            return reindex_int_slot, reindex_ident
-
-        except (Exception,):
-            LOG.error(
-                f'Wrong value {self._config.reindex_start_slot_name}={reindex_ident}, '
-                f'valid values are {self._config.latest_slot_name} or an INTEGER less than {self._finalized_slot},'
-                f'forced to disable {self._config.reindex_start_slot_name}'
-            )
-
+        LOG.error(f'{self._config.reindex_start_slot_name}={reindex_ident}: wrong value, skip reindexing...')
         return None, ''
 
     def _launch_reindex_threads(self, db_list: List[IndexerDB]) -> None:

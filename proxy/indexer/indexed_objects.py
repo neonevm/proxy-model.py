@@ -12,13 +12,14 @@ from ..common_neon.config import Config
 from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName, AltIxCodeName
 from ..common_neon.solana_neon_tx_receipt import (
-    SolTxMetaInfo, SolTxCostInfo, SolTxReceiptInfo,
+    SolTxMetaInfo, SolTxCostInfo, SolNeonTxReceiptInfo,
     SolNeonIxReceiptInfo,
     SolAltIxInfo
 )
 from ..common_neon.solana_tx import SolCommit
 from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolBlockInfo, str_fmt_object
 from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
+from ..common_neon.utils.utils import get_from_dict, cached_method
 
 from ..statistic.data import NeonTxStatData
 
@@ -78,17 +79,13 @@ class NeonIndexedHolderInfo(BaseNeonIndexedObjInfo):
         length: int
         data: bytes
 
-        _str: str = ''
-
         @staticmethod
         def init_empty() -> NeonIndexedHolderInfo.DataChunk:
             return NeonIndexedHolderInfo.DataChunk(offset=0, length=0, data=bytes())
 
+        @cached_method
         def __str__(self):
-            if self._str == '':
-                _str = str_fmt_object(dict(offset=self.offset, length=self.length))
-                object.__setattr__(self, '_str', _str)
-            return self._str
+            return str_fmt_object(dict(offset=self.offset, length=self.length))
 
         def is_valid(self) -> bool:
             return (self.length > 0) and (len(self.data) == self.length)
@@ -969,7 +966,7 @@ class SolNeonDecoderStat:
     def inc_sol_neon_ix_cnt(self) -> None:
         self.sol_neon_ix_cnt += 1
 
-    def inc_sol_tx_meta_cnt(self) -> None:
+    def add_sol_tx_meta_cnt(self, value: int) -> None:
         self.sol_tx_meta_cnt += 1
 
     def inc_sol_block_cnt(self) -> None:
@@ -995,9 +992,7 @@ class SolNeonDecoderCtx:
         self._sol_commit = SolCommit.NotProcessed
         self._is_finalized = False
 
-        self._sol_tx: Optional[SolTxReceiptInfo] = None
         self._sol_tx_meta: Optional[SolTxMetaInfo] = None
-        self._sol_tx_cost: Optional[SolTxCostInfo] = None
         self._sol_neon_ix: Optional[SolNeonIxReceiptInfo] = None
 
         self._neon_block: Optional[NeonIndexedBlockInfo] = None
@@ -1066,11 +1061,11 @@ class SolNeonDecoderCtx:
     def clear_neon_block_queue(self) -> None:
         self._neon_block_queue.clear()
 
-    def iter_sol_tx_meta(self, sol_block: SolBlockInfo) -> Generator[SolTxMetaInfo, None, None]:
+    def iter_sol_neon_tx_meta(self, sol_block: SolBlockInfo) -> Generator[SolTxMetaInfo, None, None]:
         try:
             self._stat.inc_sol_block_cnt()
+            self._stat.add_sol_tx_meta_cnt(len(sol_block.tx_receipt_list))
             for tx_receipt in sol_block.tx_receipt_list:
-                self._stat.inc_sol_tx_meta_cnt()
                 if not self._has_sol_neon_ix(tx_receipt):
                     continue
 
@@ -1079,60 +1074,44 @@ class SolNeonDecoderCtx:
         finally:
             self._sol_tx_meta = None
 
-    def _has_sol_neon_ix(self, tx_receipt: Dict[str, Any]) -> bool:
-        msg = tx_receipt.get('transaction', dict()).get('message', None)
+    @staticmethod
+    def _has_sol_neon_ix(tx_receipt: Dict[str, Any]) -> bool:
+        """Programs can be only in the read-only part of the message:accountKeys"""
+        msg = get_from_dict(tx_receipt, ('transaction', 'message'), None)
         if msg is None:
             return False
 
-        account_key_list = msg.get('accountKeys', list())
-        for account_idx, account in enumerate(account_key_list):
-            if account == EVM_PROGRAM_ID_STR:
-                evm_program_idx = account_idx
-                break
-        else:
+        ro_key_cnt = get_from_dict(msg, ('header', 'numReadonlyUnsignedAccounts'), 0)
+        if ro_key_cnt == 0:
             return False
 
-        ix_list: List[Dict[str, Any]] = msg.get('instructions', list())
-        for ix in ix_list:
-            if ix.get('programIdIndex', -1) == evm_program_idx:
+        acct_key_list = msg.get('accountKeys', None)
+        if acct_key_list is None:
+            return False
+
+        key_list_len = len(acct_key_list)
+        start_ro_pos = key_list_len - ro_key_cnt
+
+        for acct_idx, acct in enumerate(acct_key_list[start_ro_pos:]):
+            if acct == EVM_PROGRAM_ID_STR:
                 return True
 
-        meta = tx_receipt.get('meta', None)
-        if meta is None:
-            return False
-
-        inner_ix_info_list: List[Dict[str, Any]] = meta.get('innerInstructions', list())
-        for inner_ix_info in inner_ix_info_list:
-            ix_list: List[Dict[str, Any]] = inner_ix_info.get('instructions', list())
-            for ix in ix_list:
-                if ix.get('programIdIndex', -1) == evm_program_idx:
-                    return True
         return False
 
     @property
     def sol_neon_ix(self) -> SolNeonIxReceiptInfo:
-        assert self._sol_neon_ix is not None
+        # assert self._sol_neon_ix is not None
         return cast(SolNeonIxReceiptInfo, self._sol_neon_ix)
 
-    @property
-    def sol_tx_cost(self) -> SolTxCostInfo:
-        assert self._sol_tx_meta is not None
-        if self._sol_tx_cost is None:
-            self._sol_tx_cost = SolTxCostInfo.from_tx_meta(self._sol_tx_meta)
-        return self._sol_tx_cost
-
     def iter_sol_neon_ix(self) -> Generator[SolNeonIxReceiptInfo, None, None]:
-        assert self._sol_tx_meta is not None
+        # assert self._sol_tx_meta is not None
 
         try:
-            sol_tx_cost = self.sol_tx_cost
-            self._sol_tx = SolTxReceiptInfo.from_tx_meta(self._sol_tx_meta, sol_tx_cost)
-            for self._sol_neon_ix in self._sol_tx.iter_sol_ix():
+            sol_neon_tx = SolNeonTxReceiptInfo.from_tx_meta(self._sol_tx_meta)
+            for self._sol_neon_ix in sol_neon_tx.iter_sol_neon_ix():
                 self._stat.inc_sol_neon_ix_cnt()
                 yield self._sol_neon_ix
         finally:
-            self._sol_tx = None
-            self._sol_tx_cost = None
             self._sol_neon_ix = None
 
     @property

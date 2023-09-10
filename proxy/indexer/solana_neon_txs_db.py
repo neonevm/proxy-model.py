@@ -2,7 +2,7 @@ from typing import List, Any, Set, Tuple
 
 from ..common_neon.db.base_db_table import BaseDBTable
 from ..common_neon.db.db_connect import DBConnection
-from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptShortInfo, SolTxCostInfo
+from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo, SolTxCostInfo
 
 from .indexed_objects import NeonIndexedBlockInfo
 
@@ -25,7 +25,6 @@ class SolNeonTxsDB(BaseDBTable):
         for neon_block in neon_block_queue:
             for ix in neon_block.iter_sol_neon_ix():
                 value_list: List[Any] = list()
-                is_success = (ix.status == ix.Status.Success)
                 for idx, column in enumerate(self._column_list):
                     if column == 'inner_idx':
                         # Postgres version < 14 doesn't work correctly with NULLs in UNIQUE keys
@@ -34,11 +33,9 @@ class SolNeonTxsDB(BaseDBTable):
                         value_list.append(ix.neon_tx_sig)
                     elif column == 'neon_total_gas_used':
                         neon_total_gas_used = ix.neon_total_gas_used
-                        if (ix.neon_total_gas_used == 0) and (not is_success):
+                        if (ix.neon_total_gas_used == 0) and (not ix.is_success):
                             neon_total_gas_used = 9199999999999999999
                         value_list.append(neon_total_gas_used)
-                    elif column == 'is_success':
-                        value_list.append(is_success)
                     elif hasattr(ix, column):
                         value_list.append(getattr(ix, column))
                     else:
@@ -72,7 +69,7 @@ class SolNeonTxsDB(BaseDBTable):
 
         return sol_sig_list
 
-    def get_sol_ix_info_list_by_neon_sig(self, neon_sig: str) -> List[SolNeonIxReceiptShortInfo]:
+    def get_sol_ix_info_list_by_neon_sig(self, neon_sig: str) -> List[SolNeonIxReceiptInfo]:
         request = f'''
             SELECT DISTINCT {', '.join(f'a.{c}' for c in self._column_list)},
                    c.operator, c.sol_spent
@@ -88,23 +85,27 @@ class SolNeonTxsDB(BaseDBTable):
 
         row_list = self._fetch_all(request, (neon_sig,))
 
-        sol_ix_list: List[SolNeonIxReceiptShortInfo] = list()
+        sol_ix_list: List[SolNeonIxReceiptInfo] = list()
 
         for value_list in row_list:
             sol_sig = self._get_column_value('sol_sig', value_list)
             block_slot = self._get_column_value('block_slot', value_list)
+            idx = self._get_column_value('idx', value_list)
             inner_idx = self._get_column_value('inner_idx', value_list)
             if inner_idx == -1:
                 inner_idx = None
             operator = value_list[-2]
             sol_spent = value_list[-1]
-            ix_info = SolNeonIxReceiptShortInfo(
+            ix_info = SolNeonIxReceiptInfo(
+                ident=(sol_sig, block_slot, idx, inner_idx),
                 sol_sig=sol_sig,
                 block_slot=block_slot,
-                idx=self._get_column_value('idx', value_list),
+                idx=idx,
                 inner_idx=inner_idx,
                 ix_code=self._get_column_value('ix_code', value_list),
+                ix_data=b'',
                 is_success=self._get_column_value('is_success', value_list),
+                neon_tx_sig=self._get_column_value('neon_sig', value_list),
                 neon_step_cnt=self._get_column_value('neon_step_cnt', value_list),
                 neon_gas_used=self._get_column_value('neon_gas_used', value_list),
                 neon_total_gas_used=self._get_column_value('neon_total_gas_used', value_list),

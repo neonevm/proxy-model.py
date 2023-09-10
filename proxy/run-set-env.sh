@@ -4,54 +4,6 @@ set -xeo pipefail
 
 echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} Init environment set"
 
-if [ "$CONFIG" == "ci" ]; then
-  [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="http://solana:8899"
-  [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="2.5"
-  [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
-  [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="postgres"
-  [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=60
-  [[ -z "$RETRY_ON_FAIL"                ]] && export RETRY_ON_FAIL=20
-  [[ -z "$START_SLOT"                   ]] && export START_SLOT="LATEST"
-  [[ -z "$CONFIRM_TIMEOUT_SEC"          ]] && export CONFIRM_TIMEOUT_SEC=10
-  [[ -z "$PERM_ACCOUNT_LIMIT"           ]] && export PERM_ACCOUNT_LIMIT=2
-  [[ -z "$RECHECK_RESOURCE_AFTER_USES_CNT" ]] && export RECHECK_RESOURCE_AFTER_USES_CNT=240
-  [[ -z "$RECHECK_USED_RESOURCE_SEC"    ]] && export RECHECK_USED_RESOURCE_SEC=240
-elif [ "$CONFIG" == "local" ]; then
-  [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="http://localhost:8899"
-  [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="2.5"
-  [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
-  [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="localhost"
-  [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=60
-  [[ -z "$RETRY_ON_FAIL"                ]] && export RETRY_ON_FAIL=10
-  [[ -z "$START_SLOT"                   ]] && export START_SLOT=0
-  [[ -z "$CONFIRM_TIMEOUT_SEC"          ]] && export CONFIRM_TIMEOUT_SEC=10
-  [[ -z "$PERM_ACCOUNT_LIMIT"           ]] && export PERM_ACCOUNT_LIMIT=2
-elif [ "$CONFIG" == "devnet" ]; then
-  [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="https://api.devnet.solana.com"
-  [[ -z "$EVM_LOADER"                   ]] && export EVM_LOADER=eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU
-  [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="10"
-  [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
-  [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="localhost"
-  [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=60
-  [[ -z "$RETRY_ON_FAIL"                ]] && export RETRY_ON_FAIL=10
-  [[ -z "$START_SLOT"                   ]] && export START_SLOT="LATEST"
-  [[ -z "$CONFIRM_TIMEOUT_SEC"          ]] && export CONFIRM_TIMEOUT_SEC=30
-  [[ -z "$PERM_ACCOUNT_LIMIT"           ]] && export PERM_ACCOUNT_LIMIT=16
-elif [ "$CONFIG" == "testnet" ]; then
-  [[ -z "$SOLANA_URL"                   ]] && export SOLANA_URL="https://api.testnet.solana.com"
-  [[ -z "$EVM_LOADER"                   ]] && export EVM_LOADER=eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU
-  [[ -z "$NEON_CLI_TIMEOUT"             ]] && export NEON_CLI_TIMEOUT="15"
-  [[ -z "$MINIMAL_GAS_PRICE"            ]] && export MINIMAL_GAS_PRICE=1
-  [[ -z "$POSTGRES_HOST"                ]] && export POSTGRES_HOST="localhost"
-  [[ -z "$CANCEL_TIMEOUT"               ]] && export CANCEL_TIMEOUT=60
-  [[ -z "$RETRY_ON_FAIL"                ]] && export RETRY_ON_FAIL=10
-  [[ -z "$START_SLOT"                   ]] && export START_SLOT="LATEST"
-  [[ -z "$CONFIRM_TIMEOUT_SEC"          ]] && export CONFIRM_TIMEOUT_SEC=30
-  [[ -z "$PERM_ACCOUNT_LIMIT"           ]] && export PERM_ACCOUNT_LIMIT=16
-elif [ "$CONFIG" != "custom" ]; then
-  exit 1
-fi
-
 [[ -z "$SOLANA_URL" ]] && echo "$(date "+%F %X.%3N") E $(basename $0):${LINENO} $$ ${COMPONENT}:StartScript {} SOLANA_URL is not set" && exit 1
 [[ -z "$EVM_LOADER" ]] && echo "$(date "+%F %X.%3N") E $(basename $0):${LINENO} $$ ${COMPONENT}:StartScript {} EVM_LOADER is not set" && exit 1
 

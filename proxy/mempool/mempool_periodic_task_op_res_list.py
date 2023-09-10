@@ -26,4 +26,7 @@ class MPOpResGetListTaskLoop(MPPeriodicTaskLoop[MPOpResGetListRequest, MPOpResGe
             self._sleep_sec = self._bad_recheck_sleep_sec
         else:
             self._sleep_sec = self._normal_recheck_sleep_sec
-            await self._executor_mng.set_executor_cnt(self._op_res_mng.resource_cnt)
+
+            # let's think that an executor can process a tx for 2 blocks
+            limit = max(int(self._op_res_mng.resource_cnt / 2), 1)
+            await self._executor_mng.set_executor_cnt(limit)

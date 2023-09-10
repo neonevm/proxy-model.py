@@ -24,16 +24,15 @@ class TracerAPIClient:
         self._config = config
         self._ch_conn_list: List[CHConnection] = list()
 
-        for ch_dsn in config.ch_dsn_list.split(';'):
-            ch_dsn = ch_dsn.strip()
-            if not len(ch_dsn):
-                continue
-
-            ch_conn = CHConnection(
-                ch_dsn=ch_dsn,
-                ch_client=ch_get_client(dsn=ch_dsn)
-            )
-            self._ch_conn_list.append(ch_conn)
+        for ch_dsn in config.ch_dsn_list:
+            try:
+                ch_conn = CHConnection(
+                    ch_dsn=ch_dsn,
+                    ch_client=ch_get_client(dsn=ch_dsn)
+                )
+                self._ch_conn_list.append(ch_conn)
+            except (BaseException, ):
+                LOG.error('Bad address in the clickhouse connection list')
 
         self._last_ch_conn_idx = 0
 
@@ -58,6 +57,7 @@ class TracerAPIClient:
 
                 slot = ch_conn.ch_client.query(request).result_set[0][0]
                 return slot
+
             except BaseException as exc:
                 LOG.error('Unknown fail to fetch slot from ClickHouse', exc_info=exc)
                 time.sleep(1)

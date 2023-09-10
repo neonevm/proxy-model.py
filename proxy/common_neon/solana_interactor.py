@@ -10,7 +10,7 @@ import threading
 import time
 import logging
 import base58
-import requests
+import httpx
 import websockets.sync.client
 
 from .address import NeonAddress, neon_2program
@@ -66,37 +66,47 @@ class SolInteractor:
         self._config = config
         self._request_cnt = itertools.count()
         self._solana_url = solana_url or config.solana_url
-        self._session: Optional[requests.sessions.Session] = None
+        self._client: Optional[httpx.Client] = None
         self._headers = {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept-Encoding': 'gzip'
         }
 
-    def _send_post_request_impl(self, request: Union[List[Dict[str, Any]], Dict[str, Any]]) -> requests.Response:
+    def __del__(self):
+        self._close()
 
-        if self._session is None:
-            self._session = requests.sessions.Session()
+    def _close(self) -> None:
+        if self._client is None:
+            return
+        self._client.close()
+        self._client = None
+
+    def _send_post_request_impl(self, request: Union[List[Dict[str, Any]], Dict[str, Any]]) -> httpx.Response:
+
+        if self._client is None:
+            self._client = httpx.Client(http2=True, headers=self._headers)
 
         try:
-            raw_response = self._session.post(self._solana_url, headers=self._headers, json=request)
+            raw_response = self._client.post(self._solana_url, json=request)
             raw_response.raise_for_status()
 
             return raw_response
 
         except (BaseException, ):
-            self._session = None
+            self._close()
             raise
 
-    def _send_post_request(self, request: Union[List[Dict[str, Any]], Dict[str, Any]]) -> requests.Response:
+    def _send_post_request(self, request: Union[List[Dict[str, Any]], Dict[str, Any]]) -> httpx.Response:
         """This method is used to make retries to send request to Solana"""
 
-        def _clean_solana_err(exc: BaseException) -> str:
-            return str(exc).replace(self._solana_url, 'XXXXX')
+        def _clean_solana_err(_exc: BaseException) -> str:
+            return str(_exc).replace(self._solana_url, 'XXXXX')
 
         for retry in itertools.count():
             try:
                 return self._send_post_request_impl(request)
 
-            except requests.exceptions.RequestException as exc:
+            except httpx.HTTPStatusError as exc:
                 if retry > 1:
                     str_err = _clean_solana_err(exc)
                     LOG.debug(
@@ -357,14 +367,12 @@ class SolInteractor:
             return None
         return ALTAccountInfo.from_account_info(info)
 
-    def get_multiple_rent_exempt_balances_for_size(self, size_list: List[int],
-                                                   commitment=SolCommit.Confirmed) -> List[int]:
+    def get_rent_exempt_balance_for_size(self, size: int, commitment=SolCommit.Confirmed) -> int:
         opts = {
             'commitment': SolCommit.to_solana(commitment)
         }
-        request_list = [[size, opts] for size in size_list]
-        response_list = self._send_rpc_batch_request('getMinimumBalanceForRentExemption', request_list)
-        return [r.get('result', 0) for r in response_list]
+        response = self._send_rpc_request('getMinimumBalanceForRentExemption', size, opts)
+        return response.get('result', 0)
 
     @staticmethod
     def _decode_block_info(block_slot: int, net_block: Dict[str, Any]) -> SolBlockInfo:
@@ -569,7 +577,7 @@ class SolInteractor:
             'commitment': commitment
         }
         is_done = False
-        with websockets.sync.client.connect(self._config.solana_websocket_url) as websocket:
+        with websockets.sync.client.connect(self._config.solana_ws_url) as websocket:
             for tx_sig in tx_sig_list:
                 request = self._build_rpc_request('signatureSubscribe', False, tx_sig, opts)
                 websocket.send(json.dumps(request))

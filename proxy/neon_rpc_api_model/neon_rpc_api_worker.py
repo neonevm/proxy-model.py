@@ -20,7 +20,7 @@ from ..common_neon.environment_utils import NeonCli
 from ..common_neon.errors import EthereumError, InvalidParamError, RescheduleError, NonceTooLowError
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptShortInfo, SolAltIxInfo
+from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo, SolAltIxInfo
 from ..common_neon.solana_tx import SolCommit
 from ..common_neon.utils import SolBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
 from ..common_neon.layouts import NeonAccountInfo
@@ -90,6 +90,7 @@ class NeonRpcApiWorker:
             gas_price = self._mempool_client.get_gas_price(get_req_id_from_log())
             if gas_price is not None:
                 self._gas_price_value = gas_price
+
         if self._gas_price_value is None:
             raise EthereumError(message='Failed to calculate gas price. Try again later')
         return cast(MPGasPriceResult, self._gas_price_value)
@@ -140,13 +141,9 @@ class NeonRpcApiWorker:
         return hex(self._gas_price.suggested_gas_price)
 
     def neon_gasPrice(self, param: Dict[str, Any]) -> str:
-        full = param.get('full', False)
-        if not isinstance(full, bool):
-            raise InvalidParamError('full has wrong type, not boolean')
-
         account = param.get('from', None)
         if account is None:
-            return self._format_gas_price(self._gas_price.suggested_gas_price, full)
+            return self._format_gas_price(self._gas_price.suggested_gas_price)
 
         account = self._normalize_address(account, 'from-address').lower()
 
@@ -163,14 +160,11 @@ class NeonRpcApiWorker:
         tx_gas = self._normalize_hex(tx_gas, 'gas')
 
         if self._has_gas_less_tx_permit(account, tx_nonce, tx_gas):
-            return self._format_gas_price(0, full)
+            return self._format_gas_price(0)
 
-        return self._format_gas_price(self._gas_price.suggested_gas_price, full)
+        return self._format_gas_price(self._gas_price.suggested_gas_price)
 
-    def _format_gas_price(self, gas_price: int, full: bool) -> Union[str, Dict[str, str]]:
-        if not full:
-            return hex(gas_price)
-
+    def _format_gas_price(self, gas_price: int) -> Union[str, Dict[str, str]]:
         gas_price_info = self._gas_price
         return dict(
             gas_price=hex(gas_price),
@@ -717,7 +711,7 @@ class NeonRpcApiWorker:
         receipt['solanaTransactions'] = result_tx_list
         receipt['neonCosts'] = result_cost_list
 
-        sol_neon_ix_list: List[SolNeonIxReceiptShortInfo] = self._db.get_sol_ix_info_list_by_neon_sig(tx.neon_tx.sig)
+        sol_neon_ix_list: List[SolNeonIxReceiptInfo] = self._db.get_sol_ix_info_list_by_neon_sig(tx.neon_tx.sig)
         if not len(sol_neon_ix_list):
             LOG.warning(f'Cannot find Solana txs for the Neon tx {tx.neon_tx.sig}')
             return
@@ -730,7 +724,7 @@ class NeonRpcApiWorker:
         result_ix_list: List[Dict[str, Any]] = list()
         result_cost_dict: Dict[str, OpCostInfo] = dict()
 
-        def _fill_sol_tx(ix: Union[SolNeonIxReceiptShortInfo, SolAltIxInfo]):
+        def _fill_sol_tx(ix: Union[SolNeonIxReceiptInfo, SolAltIxInfo]):
             tx_cost = ix.sol_tx_cost
             new_op_cost = result_cost_dict.setdefault(tx_cost.operator, OpCostInfo())
             new_op_cost.sol_spent += tx_cost.sol_spent
@@ -1242,7 +1236,8 @@ class NeonRpcApiWorker:
         slot = self._db.earliest_slot
         return hex(slot)
 
-    def neon_getEvmParams(self) -> Dict[str, str]:
+    @staticmethod
+    def neon_getEvmParams() -> Dict[str, str]:
         """Returns map of Neon-EVM parameters"""
         elf_param_dict = ElfParams().elf_param_dict
         elf_param_dict['NEON_EVM_ID'] = EVM_PROGRAM_ID_STR

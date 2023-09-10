@@ -168,13 +168,6 @@ class InfoHandler:
 
         return ret_js
 
-    def _generate_holder_address(self, base_address: SolPubKey, rid: int) -> SolPubKey:
-        return self._generate_resource_address(base_address, b'holder-', rid)
-
-    def _generate_resource_address(self, base_address: SolPubKey, prefix: bytes, rid: int) -> SolPubKey:
-        seed = perm_account_seed(prefix, rid)
-        return neon_account_with_seed(base_address, seed)
-
     def _get_neon_balance(self, neon_address: NeonAddress) -> Decimal:
         neon_layout = self._solana.get_neon_account_info(neon_address)
         return Decimal(neon_layout.balance) / 1_000_000_000 / 1_000_000_000 if neon_layout else 0

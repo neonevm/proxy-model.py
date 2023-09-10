@@ -8,6 +8,7 @@ from typing import Tuple, Union
 from eth_keys import keys as neon_keys
 from sha3 import keccak_256
 
+from .utils.utils import cached_method
 from .constants import ACCOUNT_SEED_VERSION, EVM_PROGRAM_ID
 from .solana_tx import SolPubKey
 
@@ -31,6 +32,7 @@ class NeonAddress:
         pk = neon_keys.PrivateKey(pk_data[:32])
         return NeonAddress(pk.public_key.to_canonical_address(), pk)
 
+    @cached_method
     def __str__(self):
         return '0x' + self.data.hex()
 
@@ -40,6 +42,7 @@ class NeonAddress:
     def __bytes__(self):
         return self.data
 
+    @cached_method
     def __hash__(self):
         return hash(self.data)
 

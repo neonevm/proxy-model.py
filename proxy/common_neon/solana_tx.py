@@ -36,10 +36,10 @@ class SolCommit:
     Safe = Type('safe')  # optimistic-finalized => 2/3 of validators
     Finalized = Type('finalized')
 
-    Order = [NotProcessed, Processed, Confirmed, Safe, Finalized]
+    Order = (NotProcessed, Processed, Confirmed, Safe, Finalized)
 
     @staticmethod
-    def level(commitment: Type) -> int:
+    def to_level(commitment: SolCommit.Type) -> int:
         for index, value in enumerate(SolCommit.Order):
             if value == commitment:
                 return index
@@ -47,14 +47,16 @@ class SolCommit:
         assert False, 'Wrong commitment'
 
     @staticmethod
-    def upper_set(commitment: Type) -> Set[Type]:
-        level = SolCommit.level(commitment)
-        return set(SolCommit.Order[level:])
+    def to_type(value: Union[int, str]) -> Type:
+        if isinstance(value, str):
+            commit_type = SolCommit.Type(value)
+            if commit_type in SolCommit.Order:
+                return commit_type
 
-    @staticmethod
-    def lower_set(commitment: Type) -> Set[Type]:
-        level = SolCommit.level(commitment)
-        return set(SolCommit.Order[:level])
+        elif 0 <= value < len(SolCommit.Order):
+            return SolCommit.Order[value]
+
+        assert False, 'Wrong commitment level'
 
     @staticmethod
     def to_solana(commitment: Type) -> Type:
@@ -62,7 +64,7 @@ class SolCommit:
             return SolCommit.Processed
         elif commitment == SolCommit.Safe:
             return SolCommit.Confirmed
-        elif commitment in {SolCommit.Processed, SolCommit.Confirmed, SolCommit.Finalized}:
+        elif commitment in (SolCommit.Processed, SolCommit.Confirmed, SolCommit.Finalized):
             return commitment
 
         assert False, 'Wrong commitment'

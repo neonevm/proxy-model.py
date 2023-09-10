@@ -4,7 +4,7 @@ from eth_utils import big_endian_to_int
 
 import dataclasses
 
-from .utils import str_fmt_object
+from .utils import str_fmt_object, cached_method
 from .eth_proto import NeonTx
 
 
@@ -25,12 +25,9 @@ class NeonTxInfo:
     s: int = 0
     error: Optional[Exception] = None
 
-    _str: str = ''
-
+    @cached_method
     def __str__(self) -> str:
-        if self._str == '':
-            object.__setattr__(self, '_str', str_fmt_object(self))
-        return self._str
+        return str_fmt_object(self)
 
     @staticmethod
     def from_dict(src: Dict[str, Any]) -> NeonTxInfo:

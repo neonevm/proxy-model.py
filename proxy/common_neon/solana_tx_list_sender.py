@@ -75,6 +75,8 @@ class SolTxSendState:
 
 
 class SolTxListSender:
+    _confirmed_level = SolCommit.to_level(SolCommit.Confirmed)
+
     _completed_tx_status_set = {
         SolTxSendState.Status.WaitForReceipt,
         SolTxSendState.Status.GoodReceipt,
@@ -194,7 +196,7 @@ class SolTxListSender:
 
     def _validate_commit_level(self) -> None:
         commit_level = self._config.commit_level
-        if commit_level == SolCommit.Confirmed:
+        if commit_level <= self._confirmed_level:
             return
 
         # find maximum block slot
@@ -209,8 +211,8 @@ class SolTxListSender:
             return
 
         max_block_status = self._solana.get_block_status(max_block_slot)
-        if SolCommit.level(max_block_status.commitment) < SolCommit.level(commit_level):
-            raise CommitLevelError(commit_level, max_block_status.commitment)
+        if SolCommit.to_level(max_block_status.commitment) < commit_level:
+            raise CommitLevelError(self._config.commit_type, max_block_status.commitment)
 
     def _fmt_stat(self) -> str:
         if not LOG.isEnabledFor(logging.DEBUG):

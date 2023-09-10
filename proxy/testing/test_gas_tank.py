@@ -2,9 +2,9 @@ import unittest
 import base58
 
 from unittest.mock import patch
-from typing import Optional
+from typing import Optional, Union
 
-from ..common_neon.config import Config
+from ..common_neon.config import Config, StartSlot
 from ..common_neon.utils import NeonTxInfo
 from ..common_neon.address import NeonAddress
 from ..common_neon.solana_tx import SolPubKey
@@ -44,7 +44,7 @@ class FakeConfig(Config):
 
 class TestGasTank(unittest.TestCase):
     @classmethod
-    def create_gas_tank(cls, start_slot: str) -> GasTank:
+    def create_gas_tank(cls, start_slot: Union[str, int]) -> GasTank:
         config = FakeConfig(start_slot)
         cls.config = config
         return GasTank(config=config)
@@ -71,7 +71,7 @@ class TestGasTank(unittest.TestCase):
     @patch.object(GasLessAccountsDB, 'add_gas_less_permit_list')
     def test_failed_permit_contract_not_in_whitelist(self, mock_add_gas_less_permit, mock_is_allowed_contract):
         """ Should not permit gas-less txs for contract that is not in whitelist """
-        gas_tank = self.create_gas_tank('0')
+        gas_tank = self.create_gas_tank(0)
         gas_tank._current_slot = 1
         self.add_neon_pass_analyzer(gas_tank)
         mock_is_allowed_contract.side_effect = [False]
@@ -86,7 +86,7 @@ class TestGasTank(unittest.TestCase):
     @patch.object(GasLessAccountsDB, 'add_gas_less_permit_list')
     def test_not_permit_for_already_processed_address(self, mock_add_gas_less_permit, mock_has_gas_less_tx_permit):
         """ Should not permit gas-less txs to repeated address """
-        gas_tank = self.create_gas_tank('0')
+        gas_tank = self.create_gas_tank(0)
         gas_tank._current_slot = 1
         self.add_neon_pass_analyzer(gas_tank)
         mock_has_gas_less_tx_permit.side_effect = [True]
@@ -100,7 +100,7 @@ class TestGasTank(unittest.TestCase):
     @patch.object(GasTank, '_allow_gas_less_tx')
     def test_neon_pass_simple_case(self, mock_allow_gas_less_tx):
         """ Should allow gas-less txs to liquidity transfer in simple case by NeonPass"""
-        gas_tank = self.create_gas_tank('0')
+        gas_tank = self.create_gas_tank(0)
         gas_tank._current_slot = 1
         self.add_neon_pass_analyzer(gas_tank)
 
@@ -115,7 +115,7 @@ class TestGasTank(unittest.TestCase):
     @patch.object(GasTank, '_allow_gas_less_tx')
     def test_wormhole_transaction_simple_case(self, mock_allow_gas_less_tx):
         """ Should allow gas-less txs to liquidity transfer in simple case by Wormhole"""
-        gas_tank = self.create_gas_tank('0')
+        gas_tank = self.create_gas_tank(0)
         gas_tank._current_slot = 2
         self.add_portal_analyzer(gas_tank)
 
@@ -131,7 +131,7 @@ class TestGasTank(unittest.TestCase):
     @patch.object(GasTank, '_allow_gas_less_tx')
     def test_erc20_transaction_simple_case(self, mock_allow_gas_less_tx):
         """ Should allow gas-less txs to liquidity transfer in simple case by ERC20"""
-        gas_tank = self.create_gas_tank('0')
+        gas_tank = self.create_gas_tank(0)
         gas_tank._current_slot = 2
         self.add_erc20_analyzer(gas_tank)
 
@@ -151,7 +151,7 @@ class TestGasTank(unittest.TestCase):
         mock_dict_get.side_effect = [start_slot - 1]
         mock_get_slot.side_effect = [start_slot + 1]
 
-        new_gas_tank = self.create_gas_tank(self.config.continue_slot_name)
+        new_gas_tank = self.create_gas_tank(StartSlot.Continue)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot - 1)
         mock_get_slot.assert_called_once_with('finalized')
@@ -164,7 +164,7 @@ class TestGasTank(unittest.TestCase):
         mock_dict_get.side_effect = [None]
         mock_get_slot.side_effect = [start_slot + 1]
 
-        new_gas_tank = self.create_gas_tank(self.config.continue_slot_name)
+        new_gas_tank = self.create_gas_tank(StartSlot.Continue)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot + 1)
         mock_get_slot.assert_called_once_with('finalized')
@@ -190,7 +190,7 @@ class TestGasTank(unittest.TestCase):
         mock_dict_get.side_effect = [start_slot - 1]
         mock_get_slot.side_effect = [start_slot + 1]
 
-        new_gas_tank = self.create_gas_tank(self.config.latest_slot_name)
+        new_gas_tank = self.create_gas_tank(StartSlot.Latest)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot + 1)
         mock_get_slot.assert_called_once_with('finalized')
@@ -203,7 +203,7 @@ class TestGasTank(unittest.TestCase):
         mock_dict_get.side_effect = [start_slot - 1]
         mock_get_slot.side_effect = [start_slot + 1]
 
-        new_gas_tank = self.create_gas_tank(str(start_slot))
+        new_gas_tank = self.create_gas_tank(start_slot)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot)
         mock_get_slot.assert_called_once_with('finalized')
@@ -216,7 +216,7 @@ class TestGasTank(unittest.TestCase):
         mock_dict_get.side_effect = [start_slot - 1]
         mock_get_slot.side_effect = [start_slot + 1]
 
-        new_gas_tank = self.create_gas_tank(str(start_slot + 100))
+        new_gas_tank = self.create_gas_tank(start_slot + 100)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot + 1)
         mock_get_slot.assert_called_once_with('finalized')
