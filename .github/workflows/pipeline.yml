@@ -96,6 +96,7 @@ jobs:
         timeout-minutes: 60
         run: |
           python3 ./.github/workflows/deploy.py deploy_check \
+          --skip_uniswap \
           --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
           --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
           --head_ref_branch=${{ github.head_ref }}

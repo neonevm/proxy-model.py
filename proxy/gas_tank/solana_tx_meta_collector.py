@@ -31,8 +31,8 @@ class SolTxMetaDict:
             raise SolHistoryNotFound(f'Solana receipt {sig_slot} not found')
 
         block_slot = tx_receipt['slot']
-        sol_sig = tx_receipt['transaction']['signatures'][0]
         if block_slot != sig_slot.block_slot:
+            sol_sig = tx_receipt['transaction']['signatures'][0]
             raise SolHistoryNotFound(f'Solana receipt {sig_slot} on another history branch: {sol_sig}:{block_slot}')
         self._tx_meta_dict[sig_slot] = SolTxMetaInfo.from_tx_receipt(block_slot, tx_receipt)
 

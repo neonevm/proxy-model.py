@@ -122,9 +122,9 @@ DEFAULT_HTTP_PORT = 80
 DEFAULT_HTTPS_PORT = 443
 DEFAULT_WORK_KLASS = 'proxy.http.HttpProtocolHandler'
 DEFAULT_ENABLE_PROXY_PROTOCOL = False
-# 10 milliseconds to keep the loops hot
-# Will consume ~0.3-0.6% CPU when idle.
-DEFAULT_SELECTOR_SELECT_TIMEOUT = 10 / 1000
+# 5 milliseconds to keep the loops hot
+# Will consume ~0.6-1.2% CPU when idle.
+DEFAULT_SELECTOR_SELECT_TIMEOUT = 5 / 1000
 DEFAULT_WAIT_FOR_TASKS_TIMEOUT = 1 / 1000
 DEFAULT_INACTIVE_CONN_CLEANUP_TIMEOUT = 1   # in seconds
 

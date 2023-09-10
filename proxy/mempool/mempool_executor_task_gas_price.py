@@ -18,8 +18,8 @@ LOG = logging.getLogger(__name__)
 
 
 class MPExecutorGasPriceTask(MPExecutorBaseTask):
-    def __init__(self, config: Config, solana: SolInteractor, stat_client: ProxyStatClient):
-        super().__init__(config, solana)
+    def __init__(self, config: Config, stat_client: ProxyStatClient):
+        super().__init__(config)
         self._stat_client = stat_client
         self._last_update_mapping_sec = 0
         self._gas_price_calculator = GasPriceCalculator(config, SolInteractor(config, config.pyth_solana_url))
@@ -44,18 +44,19 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
         if not self._gas_price_calculator.is_valid():
             return None
 
-        stat = NeonGasPriceData(
-            min_gas_price=self._gas_price_calculator.min_gas_price,
-            sol_price_usd=self._gas_price_calculator.sol_price_usd,
-            neon_price_usd=self._gas_price_calculator.neon_price_usd,
-        )
-        self._stat_client.commit_gas_price(stat)
+        if self._gas_price_calculator.has_price():
+            stat = NeonGasPriceData(
+                min_gas_price=self._gas_price_calculator.min_gas_price,
+                sol_price_usd=self._gas_price_calculator.sol_price_usd,
+                neon_price_usd=self._gas_price_calculator.neon_price_usd,
+            )
+            self._stat_client.commit_gas_price(stat)
 
         gas_price = MPGasPriceResult(
-            sol_price_usd=math.ceil(self._gas_price_calculator.sol_price_usd * 100),
-            neon_price_usd=math.ceil(self._gas_price_calculator.neon_price_usd * 100),
-            operator_fee=math.ceil(self._config.operator_fee * 10000),
-            gas_price_slippage=math.ceil(self._config.gas_price_slippage * 10000),
+            sol_price_usd=math.ceil(self._gas_price_calculator.sol_price_usd * 100000),
+            neon_price_usd=math.ceil(self._gas_price_calculator.neon_price_usd * 100000),
+            operator_fee=math.ceil(self._config.operator_fee * 100000),
+            gas_price_slippage=math.ceil(self._config.gas_price_slippage * 100000),
 
             suggested_gas_price=self._gas_price_calculator.suggested_gas_price,
             is_const_gas_price=self._gas_price_calculator.is_const_gas_price,

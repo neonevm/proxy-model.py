@@ -18,7 +18,6 @@ from ..common_neon.config import Config
 from ..common_neon.metrics_logger import MetricsLogger
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolCommit
-from ..common_neon.solana_tx_error_parser import SolTxErrorParser
 from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.utils.solana_block import SolBlockInfo
 from ..common_neon.errors import SolHistoryNotFound
@@ -191,7 +190,7 @@ class Indexer:
             stuck_slot = holder_slot
 
         return NeonIndexedBlockInfo.from_stuck_data(
-            sol_block, stuck_slot,
+            sol_block, stuck_slot + 1,
             neon_holder_list, neon_tx_list, alt_info_list
         )
 
@@ -230,10 +229,9 @@ class Indexer:
             if neon_block.is_completed:
                 continue
 
-            for sol_tx_meta in dctx.iter_sol_tx_meta(sol_block):
-                sol_tx_cost = dctx.sol_tx_cost
+            for sol_tx_meta in dctx.iter_sol_neon_tx_meta(sol_block):
+                sol_tx_cost = sol_tx_meta.sol_tx_cost
                 neon_block.add_sol_tx_cost(sol_tx_cost)
-                is_error = SolTxErrorParser(sol_tx_meta.tx).check_if_error()
 
                 for sol_neon_ix in dctx.iter_sol_neon_ix():
                     with logging_context(sol_neon_ix=sol_neon_ix.req_id):
@@ -243,7 +241,7 @@ class Indexer:
                             continue
 
                         neon_block.add_sol_neon_ix(sol_neon_ix)
-                        if is_error:
+                        if not sol_neon_ix.is_success:
                             sol_neon_ix_decoder.decode_failed_neon_tx_event_list()
                             # LOG.debug('failed tx')
                             continue

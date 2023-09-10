@@ -214,3 +214,7 @@ class SolTxSizeError(WrongStrategyError):
 
 class SolHistoryNotFound(RuntimeError):
     pass
+
+
+class PythNetworkError(RuntimeError):
+    pass

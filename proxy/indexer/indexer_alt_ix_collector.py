@@ -11,6 +11,7 @@ from ..common_neon.constants import ADDRESS_LOOKUP_TABLE_ID
 from ..common_neon.config import Config
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.neon_instruction import AltIxCode
+from ..common_neon.utils import cached_property
 
 from .indexed_objects import NeonIndexedBlockInfo, NeonIndexedAltInfo
 
@@ -26,7 +27,7 @@ class AltIxCollector:
         self._solana = solana
         self._next_check_slot = self._block_step_cnt
 
-    @property
+    @cached_property
     def check_depth(self) -> int:
         return self._config.alt_freeing_depth * 10
 

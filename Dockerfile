@@ -10,8 +10,18 @@ COPY ./requirements.txt /opt
 WORKDIR /opt
 
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y git software-properties-common openssl curl parallel netcat-openbsd \
-                                                      ca-certificates python3-pip python3-venv postgresql-client && \
+    DEBIAN_FRONTEND=noninteractive \
+        apt-get install -y \
+            git \
+            software-properties-common \
+            openssl \
+            curl \
+            parallel \
+            netcat-openbsd \
+            ca-certificates \
+            python3-pip \
+            python3-venv \
+            postgresql-client && \
     python3 -m venv venv && \
     pip3 install --upgrade pip && \
     /bin/bash -c "source venv/bin/activate" && \
@@ -21,20 +31,26 @@ RUN apt-get update && \
     apt-get remove -y git && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=spl /opt/solana/bin/solana \
-                /opt/solana/bin/solana-keygen \
-                /cli/bin/
+COPY --from=spl \
+    /opt/solana/bin/solana \
+    /opt/solana/bin/solana-keygen \
+    /cli/bin/
 
-COPY --from=spl /opt/spl-token \
-                /opt/create-test-accounts.sh \
-                /opt/neon-cli \
-                /opt/evm_loader-keypair.json \
-                /spl/bin/
+COPY --from=spl \
+    /opt/spl-token \
+    /opt/create-test-accounts.sh \
+    /opt/neon-cli \
+    /opt/evm_loader-keypair.json \
+    /spl/bin/
+RUN chmod +x /spl/bin/create-test-accounts.sh
 
-COPY --from=spl /opt/contracts/contracts/ /opt/contracts/
+COPY --from=spl \
+    /opt/contracts/contracts/ \
+    /opt/contracts/
 
-COPY --from=spl /opt/neon-cli /spl/bin/emulator
-COPY --from=neon_test_invoke_program /opt/neon_test_invoke_program-keypair.json /spl/bin/
+COPY --from=neon_test_invoke_program \
+    /opt/neon_test_invoke_program-keypair.json \
+    /spl/bin/
 
 COPY proxy/operator-keypairs/id.json /root/.config/solana/
 

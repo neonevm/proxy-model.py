@@ -16,9 +16,10 @@ from ..common_neon.db.db_connect import DBConnection
 from ..common_neon.db.constats_db import ConstantsDB
 from ..common_neon.metrics_logger import MetricsLogger
 from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_neon_tx_receipt import SolTxReceiptInfo, SolNeonIxReceiptInfo
+from ..common_neon.solana_neon_tx_receipt import SolNeonTxReceiptInfo, SolNeonIxReceiptInfo
 from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
+from ..common_neon.utils.utils import get_from_dict
 
 from ..indexer.indexed_objects import NeonIndexedHolderInfo
 from ..indexer.indexer_utils import get_config_start_slot
@@ -236,11 +237,11 @@ class GasTank:
     # but does not process events generated from the Solidity contract.
     def _process_neon_ix(self, tx: Dict[str, Any]):
         block_slot = tx['slot']
-        tx_receipt_info = SolTxReceiptInfo.from_tx_receipt(block_slot, tx)
 
-        self._process_finalized_tx_list(tx_receipt_info.block_slot)
+        self._process_finalized_tx_list(block_slot)
 
-        for sol_neon_ix in tx_receipt_info.iter_sol_ix():
+        sol_neon_tx = SolNeonTxReceiptInfo.from_tx_receipt(block_slot, tx)
+        for sol_neon_ix in sol_neon_tx.iter_sol_neon_ix():
             ix_code = sol_neon_ix.ix_data[0]
             LOG.debug(f'instruction: {ix_code} {sol_neon_ix.neon_tx_sig}')
             if ix_code == EvmIxCode.HolderWrite:
@@ -331,18 +332,7 @@ class GasTank:
 
     @staticmethod
     def _check_error(tx: Dict[str, Any]) -> bool:
-        if 'meta' not in tx:
-            return False
-
-        meta = tx['meta']
-        if 'err' not in meta:
-            return False
-
-        err = meta['err']
-        if err is None:
-            return False
-
-        return True
+        return get_from_dict(tx, ('meta', 'err'), None) is not None
 
     def _clear_old_data(self) -> None:
         self._latest_gas_tank_slot = self._sol_tx_collector.last_block_slot

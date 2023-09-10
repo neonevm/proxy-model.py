@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Set
 
+from .utils.utils import cached_property
+
 from .solana_tx import SolPubKey
 from .solana_tx_legacy import SolLegacyTx
 from .constants import ADDRESS_LOOKUP_TABLE_ID
@@ -38,7 +40,7 @@ class ALTInfo:
     def alt_address(self) -> ALTAddress:
         return self._alt_address
 
-    @property
+    @cached_property
     def table_account(self) -> SolPubKey:
         return SolPubKey.from_string(self._alt_address.table_account)
 

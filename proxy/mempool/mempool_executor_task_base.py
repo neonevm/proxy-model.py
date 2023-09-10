@@ -3,6 +3,6 @@ from ..common_neon.solana_interactor import SolInteractor
 
 
 class MPExecutorBaseTask:
-    def __init__(self, config: Config, solana: SolInteractor):
+    def __init__(self, config: Config):
         self._config = config
-        self._solana = solana
+        self._solana = SolInteractor(config)

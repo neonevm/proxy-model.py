@@ -183,7 +183,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_TIMEOUT: 5
       GATHER_STATISTICS: "YES"
-      LOG_FULL_OBJECT_INFO: "NO"
+      LOG_FULL_OBJECT_INFO: "YES"
       CONFIG: ci
       EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
       START_SLOT: latest

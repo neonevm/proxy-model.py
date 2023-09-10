@@ -12,7 +12,6 @@ from solders.system_program import CreateAccountWithSeedParams, create_account_w
 from .address import neon_2program, NeonAddress
 from .constants import INCINERATOR_ID, COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID, EVM_PROGRAM_ID
 from .elf_params import ElfParams
-from .config import Config
 from .utils.eth_proto import NeonTx
 from .utils.utils import str_enum
 from .layouts import CREATE_ACCOUNT_LAYOUT
@@ -65,6 +64,25 @@ class AltIxCodeName:
     def __init__(self):
         self._ix_code_dict: Dict[int, str] = dict()
         for ix_code in list(AltIxCode):
+            self._ix_code_dict[ix_code.value] = str_enum(ix_code)
+
+    def get(self, ix_code: int, default=None) -> str:
+        value = self._ix_code_dict.get(ix_code, default)
+        if value is None:
+            return hex(ix_code)
+        return value
+
+
+class ComputeBudgetIxCode(IntEnum):
+    HeapRequest = 1
+    CURequest = 2
+
+
+@singleton
+class ComputeBudgetIxCodeName:
+    def __init__(self):
+        self._ix_code_dict: Dict[int, str] = dict()
+        for ix_code in list(ComputeBudgetIxCode):
             self._ix_code_dict[ix_code.value] = str_enum(ix_code)
 
     def get(self, ix_code: int, default=None) -> str:
@@ -169,8 +187,10 @@ class NeonIxBuilder:
                 SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
             ],
             program_id=EVM_PROGRAM_ID,
-            data=EvmIxCode.HolderCreate.value.to_bytes(1, byteorder='little') +
+            data=(
+                EvmIxCode.HolderCreate.value.to_bytes(1, byteorder='little') +
                 len(seed).to_bytes(8, 'little') + seed
+            )
         )
 
     def make_create_neon_account_ix(self, neon_address: NeonAddress) -> SolTxIx:
@@ -352,16 +372,25 @@ class NeonIxBuilder:
 
     def make_compute_budget_heap_ix(self) -> SolTxIx:
         heap_frame_size = self._elf_params.neon_heap_frame
+        ix_data = (
+            int(ComputeBudgetIxCode.HeapRequest).to_bytes(1, 'little') +
+            heap_frame_size.to_bytes(4, 'little')
+        )
         return SolTxIx(
             program_id=COMPUTE_BUDGET_ID,
             accounts=[],
-            data=b'\x01' + heap_frame_size.to_bytes(4, 'little')
+            data=ix_data
+
         )
 
     def make_compute_budget_cu_ix(self) -> SolTxIx:
         compute_unit_cnt = self._elf_params.neon_compute_units
+        ix_data = (
+            int(ComputeBudgetIxCode.CURequest).to_bytes(1, 'little') +
+            compute_unit_cnt.to_bytes(4, 'little')
+        )
         return SolTxIx(
             program_id=COMPUTE_BUDGET_ID,
             accounts=[],
-            data=b'\x02' + compute_unit_cnt.to_bytes(4, 'little')
+            data=ix_data
         )
