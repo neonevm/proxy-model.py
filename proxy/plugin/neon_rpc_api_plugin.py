@@ -93,7 +93,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         try:
             rpc_method = self._get_request_value(request, 'method')
             if (not hasattr(self._model, rpc_method)) or (not self._model.is_allowed_api(rpc_method)):
-                response['error'] = {'code': -32601, 'message': f'method {rpc_method} does not exist/is not available'}
+                response['error'] = {'code': -32601, 'message': f'the method {rpc_method} does not exist/is not available'}
             else:
                 method = getattr(self._model, rpc_method)
                 param_object = []

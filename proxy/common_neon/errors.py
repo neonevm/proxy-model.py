@@ -99,10 +99,6 @@ class NodeBehindError(RescheduleError):
         return f'The Solana node is behind by {self._slots_behind} from the Solana cluster'
 
 
-class SolanaUnavailableError(RescheduleError):
-    pass
-
-
 class NoMoreRetriesError(RescheduleError):
     def __str__(self) -> str:
         return 'The Neon transaction is too complicated. No more retries to complete the Neon transaction'

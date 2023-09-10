@@ -115,3 +115,9 @@ class NeonBlockStatData:
     finalized_block: int
     confirmed_block: int
     tracer_block: Optional[int]
+
+
+@dataclass
+class NeonDoneBlockStatData:
+    reindex_ident: str
+    parsed_block: int

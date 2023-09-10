@@ -22,7 +22,7 @@ from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.utils.solana_block import SolBlockInfo
 from ..common_neon.errors import SolHistoryNotFound
 
-from ..statistic.data import NeonBlockStatData
+from ..statistic.data import NeonBlockStatData, NeonDoneBlockStatData
 from ..statistic.indexer_client import IndexerStatClient
 
 
@@ -266,6 +266,16 @@ class Indexer:
                 LOG.warning('Exception on transactions decoding', exc_info=exc)
             finally:
                 self._decoder_stat.commit_timer()
+
+        self._commit_done_block_stat()
+
+    def _commit_done_block_stat(self):
+        """Send done event to the prometheus"""
+        done_stat = NeonDoneBlockStatData(
+            reindex_ident=self._db.reindex_ident,
+            parsed_block=self._last_processed_slot
+        )
+        self._stat_client.commit_done_block_stat(done_stat)
 
     def _has_new_blocks(self) -> bool:
         if self._db.is_reindexing_mode():
