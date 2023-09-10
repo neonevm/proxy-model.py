@@ -82,19 +82,19 @@ class OpResInit:
             return
 
         LOG.debug(f'Create neon account {str(solana_address)}({str(resource.neon_address)}) for resource {resource}')
-        stage = NeonCreateAccountTxStage(builder, {'address': resource.neon_address})
-        stage.set_balance(self._solana.get_multiple_rent_exempt_balances_for_size([stage.size])[0])
+        stage = NeonCreateAccountTxStage(builder, resource.neon_address)
         self._execute_stage(stage, resource)
 
     def _create_holder_account(self, builder: NeonIxBuilder, resource: OpResInfo) -> None:
         holder_address = str(resource.holder_account)
         holder_info = self._solana.get_holder_account_info(resource.holder_account)
         size = self._config.holder_size
-        balance = self._solana.get_multiple_rent_exempt_balances_for_size([size])[0]
+        balance = self._solana.get_rent_exempt_balance_for_size(size)
 
         if holder_info is None:
             LOG.debug(f'Create account {holder_address} for resource {resource}')
-            self._execute_stage(NeonCreateHolderAccountStage(builder, resource.holder_seed, size, balance), resource)
+            stage = NeonCreateHolderAccountStage(builder, resource.holder_account, resource.holder_seed, size, balance)
+            self._execute_stage(stage, resource)
 
         elif (holder_info.lamports < balance) or (holder_info.data_size != size):
             LOG.debug(
@@ -119,13 +119,15 @@ class OpResInit:
 
     def _recreate_holder(self, builder: NeonIxBuilder, resource: OpResInfo, balance: int) -> None:
         size = self._config.holder_size
-        self._execute_stage(NeonDeleteHolderAccountStage(builder, resource.holder_seed), resource)
-        self._execute_stage(NeonCreateHolderAccountStage(builder, resource.holder_seed, size, balance), resource)
+        del_stage = NeonDeleteHolderAccountStage(builder, resource.holder_account)
+        new_stage = NeonCreateHolderAccountStage(builder, resource.holder_account, resource.holder_seed, size, balance)
+        self._execute_stage(del_stage, resource)
+        self._execute_stage(new_stage, resource)
 
 
 class MPExecutorOpResTask(MPExecutorBaseTask):
-    def __init__(self, config: Config, solana: SolInteractor, stat_client: ProxyStatClient):
-        super().__init__(config, solana)
+    def __init__(self, config: Config, stat_client: ProxyStatClient):
+        super().__init__(config)
         self._stat_client = stat_client
 
     def get_op_res_list(self) -> MPOpResGetListResult:

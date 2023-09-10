@@ -1,5 +1,5 @@
-import struct
 import logging
+import struct
 
 from decimal import Decimal
 from typing import List, Union, Dict, Any, Optional, Tuple
@@ -40,19 +40,19 @@ def read_dict(data: bytes) -> Dict[str, str]:
 def unpack(layout_descriptor: Dict[str, Any],
            raw_data: Optional[bytes], field_name: str, index=0) -> Union[SolPubKey, Dict[str, str], int]:
     if raw_data is None:
-        raise Exception(f"Field '{field_name}': raw_data is None")
+        raise ValueError(f'Field "{field_name}": raw_data is None')
 
     field = layout_descriptor.get(field_name, None)
     if field is None:
-        raise Exception(f'Unknown field name: {field_name}')
+        raise ValueError(f'Unknown field name: {field_name}')
 
     length = field['len']
     start_idx = field['pos'] + index * length
     stop_idx = start_idx + length
     if start_idx >= len(raw_data) or stop_idx > len(raw_data):
-        raise Exception(
-            f"Field '{field_name}': Index overflow: len(raw_data) = {len(raw_data)}, "
-            f"start_idx = {start_idx}, stop_idx = {stop_idx}"
+        raise ValueError(
+            f'Field "{field_name}": Index overflow: len(raw_data) = {len(raw_data)}, '
+            f'start_idx = {start_idx}, stop_idx = {stop_idx}'
         )
 
     if field['format'] == 'acc':  # special case for Solana account address
@@ -106,11 +106,11 @@ class PythNetworkClient:
         data = acct_info_value.data
         magic = unpack(self._base_account_layout, data, 'magic')
         if magic != self._PYTH_MAGIC:
-            raise RuntimeError(f'Wrong magic {magic} in account {acct_addr}')
+            raise ValueError(f'Wrong magic {magic} in account {acct_addr}')
 
         version = unpack(self._base_account_layout, data, 'ver')
         if version not in self._SUPPORTED_VERSION_SET:
-            raise RuntimeError(f'Pyth.Network version not supported: {version}')
+            raise ValueError(f'Pyth.Network version not supported: {version}')
 
         return data
 
@@ -128,7 +128,7 @@ class PythNetworkClient:
             return self.parse_pyth_account_data(acc_addr_list, acct_value)
 
         if not isinstance(acc_addr_list, list):
-            raise Exception(f'Unsupported argument to read_pyth_acct_data: {acc_addr_list}')
+            raise RuntimeError(f'Unsupported argument to read_pyth_acct_data: {acc_addr_list}')
 
         acct_value_list: List[Optional[AccountInfo]] = self._solana.get_account_info_list(acc_addr_list)
 
@@ -147,7 +147,7 @@ class PythNetworkClient:
         while acc_addr != SYS_PROGRAM_ID:
             data = self._read_pyth_acct_data(acc_addr)
             if data is None:
-                raise Exception(f"Failed to read mapping account {acc_addr}")
+                raise ValueError(f'Failed to read mapping account {acc_addr}')
 
             num_products = unpack(self._mapping_account_layout, data, 'num_products')
             acc_addr = unpack(self._mapping_account_layout, data, 'next')
@@ -164,16 +164,16 @@ class PythNetworkClient:
     def _parse_price_account(self, acc_addr: SolPubKey) -> Dict[str, Any]:
         data = self._read_pyth_acct_data(acc_addr)
         if data is None:
-            raise Exception(f"Failed to read price account {acc_addr}")
+            raise ValueError(f'Failed to read price account {acc_addr}')
 
         price = Decimal(unpack(self._price_account_layout, data, 'agg.price'))
         conf = Decimal(unpack(self._price_account_layout, data, 'agg.conf'))
         multiply = pow(Decimal(10), unpack(self._price_account_layout, data, 'expo'))
         return {
-            'valid_slot':   unpack(self._price_account_layout, data, 'valid_slot'),
-            'price':        price * multiply,
-            'conf':         conf * multiply,
-            'status':       unpack(self._price_account_layout, data, 'agg.status')
+            'valid_slot': unpack(self._price_account_layout, data, 'valid_slot'),
+            'price':      price * multiply,
+            'conf':       conf * multiply,
+            'status':     unpack(self._price_account_layout, data, 'agg.status')
         }
 
     def update_mapping(self, mapping_acc: SolPubKey):

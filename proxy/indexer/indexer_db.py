@@ -17,7 +17,7 @@ from .stuck_neon_txs_db import StuckNeonTxsDB
 from ..common_neon.config import Config
 from ..common_neon.db.constats_db import ConstantsDB
 from ..common_neon.db.db_connect import DBConnection
-from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptShortInfo, SolAltIxInfo
+from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo, SolAltIxInfo
 from ..common_neon.utils import NeonTxReceiptInfo, SolBlockInfo
 
 
@@ -317,7 +317,7 @@ class IndexerDB:
     def get_alt_sig_list_by_neon_sig(self, neon_sig: str) -> List[str]:
         return self._sol_alt_txs_db.get_alt_sig_list_by_neon_sig(neon_sig)
 
-    def get_sol_ix_info_list_by_neon_sig(self, neon_sig: str) -> List[SolNeonIxReceiptShortInfo]:
+    def get_sol_ix_info_list_by_neon_sig(self, neon_sig: str) -> List[SolNeonIxReceiptInfo]:
         return self._sol_neon_txs_db.get_sol_ix_info_list_by_neon_sig(neon_sig)
 
     def get_sol_alt_tx_list_by_neon_sig(self, neon_sig: str) -> List[SolAltIxInfo]:

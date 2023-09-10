@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass, asdict as dataclass_asdict
 from typing import List, Iterator, Optional, Tuple, Dict, Any
 
+from .utils import str_fmt_object, cached_method
+
 
 LOG = logging.getLogger(__name__)
 
@@ -64,6 +66,10 @@ class NeonLogTxEvent:
     is_reverted: bool = False
     event_level: int = 0
     event_order: int = 0
+
+    @cached_method
+    def __str__(self) -> str:
+        return str_fmt_object(self)
 
     @staticmethod
     def from_dict(src: Dict[str, Any]) -> NeonLogTxEvent:

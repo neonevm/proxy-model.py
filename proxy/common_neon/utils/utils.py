@@ -1,13 +1,55 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import time
+import os
+
 from enum import Enum
 from typing import Dict, Any, Tuple, List, Set, Union
 
-from ..environment_data import LOG_FULL_OBJECT_INFO
+
+LOG_FULL_OBJECT_INFO = os.environ.get('LOG_FULL_OBJECT_INFO', 'NO').upper() in ('YES', 'ON', 'TRUE')
+try:
+    LOG_OBJECT_INFO_LIMIT = int(os.environ.get('LOG_OBJECT_INFO_LIMIT', None))
+except (BaseException,):
+    LOG_OBJECT_INFO_LIMIT = 2 ** 64
 
 
+def cached_method(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # validate:
+        # class A:
+        #    def func(self):
+        #       ....
+        #
+        # assert len(args) == 1
+        # assert isinstance(args[0], object)
+
+        self = args[0]
+        try:
+            return getattr(self, wrapper._cached_value_name)
+        except AttributeError:
+            pass
+
+        value = func(*args, **kwargs)
+        object.__setattr__(self, wrapper._cached_value_name, value)
+        return value
+
+    def reset_cache(self):
+        if hasattr(self, wrapper._cached_value_name):
+            object.__delattr__(self, wrapper._cached_value_name)
+
+    wrapper._cached_value_name = '_cached_' + wrapper.__name__
+    wrapper.reset_cache = reset_cache
+    return wrapper
+
+
+cached_property = functools.cached_property
+
+
+@functools.lru_cache(maxsize=None)
 def str_enum(value: Enum) -> str:
     value = str(value)
     idx = value.find('.')
@@ -48,10 +90,12 @@ def str_fmt_object(obj: Any, skip_underling=True, name='') -> str:
         value_list_type = 'list' if isinstance(value_list, list) else 'set'
 
         if LOG_FULL_OBJECT_INFO:
+            idx = 0
             result = ''
             for item in value_list:
                 has_item, item = _decode_value(item)
-                if len(result) > 0:
+                idx += 1
+                if idx > 1:
                     result += ', '
                 result += (item if has_item else '?...')
             return True, value_list_type + '([' + result + '])'
@@ -88,22 +132,24 @@ def str_fmt_object(obj: Any, skip_underling=True, name='') -> str:
         return False, '?'
 
     def _lookup_dict(d: Dict[str, Any]) -> str:
-        result: str = ''
+        idx = 0
+        result = ''
         for key, value in d.items():
             if not isinstance(key, str):
                 key = str(key)
             if skip_underling and key.startswith('_'):
-                continue
-            if key == '_str':
                 continue
 
             has_value, value = _decode_value(value)
             if not has_value:
                 continue
 
-            if len(result) > 0:
+            if idx > 0:
                 result += ', '
             result += key.strip('_') + '=' + value
+            idx += 1
+            if (not LOG_FULL_OBJECT_INFO) and (idx >= LOG_OBJECT_INFO_LIMIT):
+                break
         return result
 
     if len(name) == 0:
@@ -116,19 +162,20 @@ def str_fmt_object(obj: Any, skip_underling=True, name='') -> str:
     else:
         content = None
 
-    return f'{name}({content})'
+    return name + '(' + content + ')'
 
 
-def get_from_dict(src: Dict, *path) -> Any:
+def get_from_dict(src: Dict, path: Tuple[Any, ...], default_value: Any) -> Any:
     """Provides smart getting values from python dictionary"""
-    val = src
+    value = src
     for key in path:
-        if not isinstance(val, dict):
-            return None
-        val = val.get(key)
-        if val is None:
-            return None
-    return val
+        if not isinstance(value, dict):
+            return default_value
+
+        value = value.get(key, None)
+        if value is None:
+            return default_value
+    return value
 
 
 def gen_unique_id():
