@@ -16,7 +16,6 @@ import websockets.sync.client
 from .address import NeonAddress, neon_2program
 from .config import Config
 from .constants import NEON_ACCOUNT_TAG
-from .errors import SolanaUnavailableError
 from .layouts import ACCOUNT_INFO_LAYOUT
 from .solana_tx import SolTx, SolBlockHash, SolPubKey, SolCommit
 from .solana_tx_error_parser import SolTxErrorParser
@@ -106,7 +105,7 @@ class SolInteractor:
             try:
                 return self._send_post_request_impl(request)
 
-            except httpx.HTTPStatusError as exc:
+            except BaseException as exc:
                 if retry > 1:
                     str_err = _clean_solana_err(exc)
                     LOG.debug(
@@ -115,11 +114,6 @@ class SolInteractor:
                     )
 
                 time.sleep(1)
-
-            except BaseException as exc:
-                str_err = _clean_solana_err(exc)
-                LOG.error(f'Unknown exception on send request to Solana: {str_err}')
-                raise SolanaUnavailableError(str_err)
 
     def _build_rpc_request(self, method: str, can_flush_id: bool, *param_list: Any) -> Dict[str, Any]:
         request_id = next(self._request_cnt) + 1

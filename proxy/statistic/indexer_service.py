@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from aioprometheus import Counter, Gauge, Histogram
 
-from .data import NeonTxStatData, NeonBlockStatData
+from .data import NeonTxStatData, NeonBlockStatData, NeonDoneBlockStatData
 from .middleware import StatService
 from .stat_data_peeker import StatDataPeeker, IHealthStatService
 
@@ -138,6 +138,10 @@ class IndexerStatService(StatService, IHealthStatService):
             self._metr_block_parsed.set({}, block_stat.parsed_block)
             if block_stat.tracer_block is not None:
                 self._metr_block_tracer.set({}, block_stat.tracer_block)
+
+    def commit_done_block_stat(self, done_stat: NeonDoneBlockStatData) -> None:
+        label = {'reindex': done_stat.reindex_ident, 'is_done': True}
+        self._metr_block_parsed.set(label, done_stat.parsed_block)
 
     def commit_neon_tx_result(self, tx_stat: NeonTxStatData):
         self._metr_tx_count.add({}, tx_stat.completed_neon_tx_cnt)

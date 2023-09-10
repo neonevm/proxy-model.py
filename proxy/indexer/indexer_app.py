@@ -98,7 +98,7 @@ class NeonIndexerApp:
             time.sleep(0.5)
 
     def _start_reindexing(self, constants_db: ConstantsDB) -> None:
-        self._reindex_start_slot, self._reindex_ident = self._get_reindex_start_slot()
+        self._reindex_start_slot, self._reindex_ident = self._get_cfg_reindex_start_slot()
 
         if (self._reindex_start_slot is None) or (not self._config.reindex_thread_cnt):
             LOG.info(
@@ -173,14 +173,18 @@ class NeonIndexerApp:
 
         solana = SolInteractor(self._config)
 
-        total_len = self._reindex_stop_slot - self._reindex_start_slot + 1
+        start_slot = max(self._reindex_start_slot, self._first_slot)
+        if len(db_list):
+            last_old_db = max(db_list, key=lambda x: x.start_slot)
+            start_slot = max(last_old_db.stop_slot, start_slot)
+
+        total_len = self._reindex_stop_slot - start_slot + 1
         avail_cnt = max(1, self._config.reindex_max_range_cnt - len(db_list))
         need_cnt = int(total_len / self._config.reindex_range_len) + 1
         avail_cnt = min(avail_cnt, need_cnt)
         range_len = int(total_len / avail_cnt) + 1
 
         new_db_list: List[IndexerDB] = list()
-        start_slot = self._reindex_start_slot
         while start_slot < self._reindex_stop_slot:
             # For example: CONTINUE:213456789
             ident = ':'.join([self._reindex_ident, str(start_slot)])
@@ -207,7 +211,7 @@ class NeonIndexerApp:
         last_old_db.set_stop_slot(first_new_db.stop_slot)
         return new_db_list[1:]
 
-    def _get_reindex_start_slot(self) -> Tuple[Optional[int], str]:
+    def _get_cfg_reindex_start_slot(self) -> Tuple[Optional[int], str]:
         """ Valid variants:
         REINDEXER_START_SLOT=CONTINUE, START_SLOT=LATEST
         REINDEXER_START_SLOT=10123456, START_SLOT=CONTINUE
@@ -222,13 +226,14 @@ class NeonIndexerApp:
                 return None, ''
 
             # start from the slot which Solana knows
-            start_slot = max(self._first_slot, int(reindex_ident))
+            start_slot = reindex_ident
+            reindex_ident = str(start_slot)
 
             LOG.info(
                 f'{self._config.reindex_start_slot_name}={reindex_ident}: '
                 f'started reindexing from the slot: {start_slot}'
             )
-            return start_slot, str(reindex_ident)
+            return start_slot, reindex_ident
 
         elif reindex_ident == StartSlot.Disable:
             return None, ''
