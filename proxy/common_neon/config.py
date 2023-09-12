@@ -60,8 +60,8 @@ class Config(DBConfig):
 
     def __init__(self):
         super().__init__()
-        self._solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899').lower()
-        self._solana_ws_url = os.environ.get('SOLANA_WS_URL', parse_solana_ws_url(self._solana_url)).lower()
+        self._solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
+        self._solana_ws_url = os.environ.get('SOLANA_WS_URL', parse_solana_ws_url(self._solana_url))
 
         self._enable_private_api = self._env_bool('ENABLE_PRIVATE_API', False)
         self._enable_send_tx_api = self._env_bool('ENABLE_SEND_TX_API', True)
@@ -92,7 +92,7 @@ class Config(DBConfig):
         self._max_tx_account_cnt = self._env_num('MAX_TX_ACCOUNT_COUNT', 62, 20, 256)
 
         # Gas-Price settings
-        self._pp_solana_url = os.environ.get('PP_SOLANA_URL', self._solana_url).lower()
+        self._pp_solana_url = os.environ.get('PP_SOLANA_URL', self._solana_url)
         self._pyth_mapping_acct = self._env_sol_acct('PYTH_MAPPING_ACCOUNT')
         self._update_pyth_mapping_period_sec = self._env_num(
             'UPDATE_PYTH_MAPPING_PERIOD_SEC',
