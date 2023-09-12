@@ -128,7 +128,7 @@ class Config(DBConfig):
         self._hvac_path = os.environ.get('HVAC_PATH', '')
 
         # Indexing settings
-        self._start_slot = self._env_start_slot(self.start_slot_name, 0)
+        self._start_slot = self._env_start_slot(self.start_slot_name, StartSlot.Latest)
         self._indexer_poll_block_cnt = self._env_num('INDEXER_POLL_BLOCK_COUNT', 32, 1, 1024)
         self._indexer_check_msec = self._env_num('INDEXER_CHECK_MSEC', 200, 50, 10_000)
         self._stuck_obj_blockout = self._env_num('STUCK_OBJECT_BLOCKOUT', 64, 16, 1024)
@@ -144,7 +144,7 @@ class Config(DBConfig):
         self._ch_dsn_list = self._env_dsn_list('CLICKHOUSE_DSN_LIST')
 
         # Reindexing settings
-        self._reindex_start_slot = self._env_start_slot(self.reindex_start_slot_name, StartSlot.Disable)
+        self._reindex_start_slot = self._env_start_slot(self.reindex_start_slot_name, StartSlot.Continue)
         self._reindex_thread_cnt = self._env_num(self.reindex_thread_cnt_name, 3, 0, 128)
         self._reindex_range_len = self._env_num(
             'REINDEX_BLOCK_COUNT_IN_RANGE',
