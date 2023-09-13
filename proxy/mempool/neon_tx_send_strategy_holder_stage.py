@@ -9,7 +9,7 @@ from ..common_neon.errors import BadResourceError, HolderContentError, StuckTxEr
 from ..common_neon.solana_tx import SolTx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.layouts import HolderAccountInfo
-from ..common_neon.data import NeonEmulatedResult
+from ..common_neon.data import NeonEmulatorResult
 from ..common_neon.neon_instruction import EvmIxCodeName, EvmIxCode
 
 from .neon_tx_send_base_strategy import BaseNeonTxPrepStage
@@ -77,20 +77,16 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
             LOG.debug(f'NeonTx in {str(holder_acct)} was finished...')
 
     def _read_blocked_account_list(self, holder_info: HolderAccountInfo) -> None:
-        acct_list: List[Dict[str, Union[bool, str]]] = list()
-        for acct in holder_info.account_list:
-            acct_list.append(dict(
-                pubkey=acct.pubkey,
-                is_writable=acct.is_writable
-            ))
+        acct_list = [
+            dict(pubkey=acct.pubkey, is_writable=acct.is_writable)
+            for acct in holder_info.account_list
+        ]
 
-        emulated_result: NeonEmulatedResult = dict(
-            accounts=list(),
-            solana_accounts=acct_list,
-            steps_executed=1
-        )
-
-        self._ctx.set_emulated_result(emulated_result)
+        emulator_result = NeonEmulatorResult(dict(
+            steps_executed=1,
+            solana_accounts=acct_list
+        ))
+        self._ctx.set_emulator_result(emulator_result)
 
     def _get_holder_account_info(self) -> HolderAccountInfo:
         holder_account = self._ctx.holder_account

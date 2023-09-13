@@ -1,8 +1,12 @@
 import logging
 
-from ..common_neon.emulator_interactor import call_tx_emulated
-from ..common_neon.errors import NonceTooLowError, NonceTooHighError, WrongStrategyError, RescheduleError, BigTxError
-from ..common_neon.errors import NoMoreRetriesError
+from ..common_neon.emulator_interactor import call_tx_emulator
+from ..common_neon.errors import (
+    NonceTooLowError, NonceTooHighError, WrongStrategyError, RescheduleError, BigTxError,
+    NoMoreRetriesError, TxAccountCntTooBig
+)
+
+from ..common_neon.data import NeonEmulatorResult
 from ..common_neon.utils import NeonTxResultInfo
 
 from .neon_tx_send_base_strategy import BaseNeonTxStrategy
@@ -114,9 +118,19 @@ class NeonTxSendStrategyExecutor:
         if self._ctx.is_stuck_tx():
             return
 
-        emulated_result = call_tx_emulated(self._ctx.config, self._ctx.neon_tx)
-        self._ctx.set_emulated_result(emulated_result)
+        emulator_result = call_tx_emulator(self._ctx.config, self._ctx.neon_tx)
+        self._validate_tx_acct_amount(emulator_result)
+        self._ctx.set_emulator_result(emulator_result)
         self._validate_nonce()
+
+    def _validate_tx_acct_amount(self, emulator_result: NeonEmulatorResult) -> None:
+        if self._ctx.has_emulator_result():
+            return
+
+        # 6 is the base number of account in Neon Instruction. see NeonIxBuilder
+        acct_cnt = len(emulator_result.account_list) + len(emulator_result.solana_account_list) + 6
+        if acct_cnt > self._ctx.config.max_tx_account_cnt:
+            raise TxAccountCntTooBig(acct_cnt, self._ctx.config.max_tx_account_cnt)
 
     def _validate_nonce(self) -> None:
         self._init_state_tx_cnt()

@@ -15,7 +15,7 @@ from ..common_neon.config import Config
 from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status, call_tx_emulated
+from ..common_neon.emulator_interactor import call_emulator, check_emulator_exit_status, call_tx_emulator
 from ..common_neon.environment_utils import NeonCli
 from ..common_neon.errors import EthereumError, InvalidParamError, RescheduleError, NonceTooLowError
 from ..common_neon.keys_storage import KeyStorage
@@ -618,9 +618,9 @@ class NeonRpcApiWorker:
             retry_on_fail = self._config.retry_on_fail
             while True:
                 try:
-                    emulator_json = call_emulated(self._config, contract_id, caller_id, data, value)
-                    check_emulated_exit_status(emulator_json)
-                    return '0x' + emulator_json['result']
+                    emulator_result = call_emulator(self._config, contract_id, caller_id, data, value)
+                    check_emulator_exit_status(emulator_result)
+                    return '0x' + emulator_result.result
 
                 except RescheduleError:
                     retry_idx += 1
@@ -1222,11 +1222,11 @@ class NeonRpcApiWorker:
 
     def neon_emulate(self, raw_signed_tx: str):
         """Executes emulator with given transaction"""
-        LOG.debug(f"Call neon_emulate: {raw_signed_tx}")
+        LOG.debug(f'Call neon_emulate: {raw_signed_tx}')
 
         neon_tx = NeonTx.from_string(bytearray.fromhex(raw_signed_tx))
-        emulation_result = call_tx_emulated(self._config, neon_tx)
-        return emulation_result
+        emulator_result = call_tx_emulator(self._config, neon_tx)
+        return emulator_result.full_dict
 
     def neon_finalizedBlockNumber(self) -> str:
         slot = self._db.finalized_slot

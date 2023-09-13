@@ -1,12 +1,12 @@
 import logging
-import math
 
 from typing import Dict, Any, List, Optional
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.emulator_interactor import call_emulated, check_emulated_exit_status
+from ..common_neon.emulator_interactor import call_emulator, check_emulator_exit_status
+from ..common_neon.data import NeonEmulatorResult
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt_limit import ALTLimit
@@ -89,14 +89,13 @@ class GasEstimate:
         self._cached_alt_cost: Optional[int] = None
 
         self._account_list: List[SolAccountMeta] = list()
-        self.emulator_json = dict()
+        self._emulator_result = NeonEmulatorResult()
 
     def execute(self):
-        emulator_json = call_emulated(self._config, self._contract or "deploy", self._sender, self._data, self._value)
-        LOG.debug(f'emulator returns: {emulator_json}')
-        check_emulated_exit_status(emulator_json)
+        emulator_result = call_emulator(self._config, self._contract or 'deploy', self._sender, self._data, self._value)
+        check_emulator_exit_status(emulator_result)
 
-        self.emulator_json = emulator_json
+        self._emulator_result = emulator_result
 
     def _tx_size_cost(self) -> int:
         if self._cached_tx_cost_size is not None:
@@ -135,7 +134,7 @@ class GasEstimate:
         return ((neon_tx_len // self._elf_params.holder_msg_size) + 1) * 5000
 
     def _execution_cost(self) -> int:
-        return self.emulator_json.get('used_gas', 0)
+        return self._emulator_result.used_gas
 
     @staticmethod
     def _iterative_overhead_cost() -> int:
@@ -165,10 +164,10 @@ class GasEstimate:
 
     def _build_account_list(self):
         self._account_list.clear()
-        for account in self.emulator_json.get('accounts', []):
+        for account in self._emulator_result.account_list:
             self._account_list.append(SolAccountMeta(SolPubKey.from_string(account['account']), False, True))
 
-        for account in self.emulator_json.get('solana_accounts', []):
+        for account in self._emulator_result.solana_account_list:
             self._account_list.append(SolAccountMeta(SolPubKey.from_string(account['pubkey']), False, True))
 
     def estimate(self):

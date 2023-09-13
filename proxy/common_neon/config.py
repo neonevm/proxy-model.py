@@ -88,7 +88,7 @@ class Config(DBConfig):
             SolCommit.Confirmed,
             SolCommit.Confirmed
         )
-        self._max_tx_account_cnt = self._env_num('MAX_TX_ACCOUNT_COUNT', 62, 20, 256)
+        self._max_tx_account_cnt = self._env_num('MAX_TX_ACCOUNT_COUNT', 64, 20, 256)
 
         # Gas-Price settings
         self._pp_solana_url = os.environ.get('PP_SOLANA_URL', self._solana_url)

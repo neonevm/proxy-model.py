@@ -3,7 +3,7 @@ import logging
 from typing import Dict, List, Union
 
 from ..common_neon.config import Config
-from ..common_neon.data import NeonAccountDict, NeonEmulatedResult
+from ..common_neon.data import NeonEmulatorResult
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.operator_resource_info import OpResInfo
 from ..common_neon.solana_alt import ALTAddress
@@ -36,7 +36,7 @@ class NeonTxSendCtx:
 
         self._neon_meta_dict: Dict[SolPubKey, SolAccountMeta] = dict()
         if not mp_tx_req.is_stuck_tx():
-            self._build_account_list(self._neon_tx_exec_cfg.account_dict)
+            self._build_account_list()
 
     def _add_meta(self, pubkey: Union[str, SolPubKey], is_writable: bool) -> None:
         if isinstance(pubkey, str):
@@ -46,14 +46,14 @@ class NeonTxSendCtx:
             is_writable |= meta.is_writable
         self._neon_meta_dict[pubkey] = SolAccountMeta(pubkey=pubkey, is_signer=False, is_writable=is_writable)
 
-    def _build_account_list(self, emulated_account_dict: NeonAccountDict) -> None:
+    def _build_account_list(self) -> None:
         self._neon_meta_dict.clear()
 
         # Parse information from the emulator output
-        for account_desc in emulated_account_dict['accounts']:
+        for account_desc in self._neon_tx_exec_cfg.emulator_result.account_list:
             self._add_meta(account_desc['account'], True)
 
-        for account_desc in emulated_account_dict['solana_accounts']:
+        for account_desc in self._neon_tx_exec_cfg.emulator_result.solana_account_list:
             self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
 
         neon_meta_list = list(self._neon_meta_dict.values())
@@ -72,9 +72,12 @@ class NeonTxSendCtx:
     def len_account_list(self) -> int:
         return len(self._neon_meta_dict)
 
-    def set_emulated_result(self, emulated_result: NeonEmulatedResult) -> None:
-        self._neon_tx_exec_cfg.set_emulated_result(emulated_result)
-        self._build_account_list(self._neon_tx_exec_cfg.account_dict)
+    def has_emulator_result(self) -> bool:
+        return not self._neon_tx_exec_cfg.emulator_result.is_empty()
+
+    def set_emulator_result(self, emulator_result: NeonEmulatorResult) -> None:
+        self._neon_tx_exec_cfg.set_emulator_result(emulator_result)
+        self._build_account_list()
 
     def set_state_tx_cnt(self, value: int) -> None:
         self._neon_tx_exec_cfg.set_state_tx_cnt(value)
@@ -115,13 +118,15 @@ class NeonTxSendCtx:
 
     @property
     def resize_iter_cnt(self) -> int:
-        assert self._neon_tx_exec_cfg.resize_iter_cnt >= 0
-        return self._neon_tx_exec_cfg.resize_iter_cnt
+        resize_iter_cnt = self._neon_tx_exec_cfg.emulator_result.resize_iter_cnt
+        assert resize_iter_cnt >= 0
+        return resize_iter_cnt
 
     @property
     def emulated_evm_step_cnt(self) -> int:
-        assert self._neon_tx_exec_cfg.evm_step_cnt >= 0
-        return self._neon_tx_exec_cfg.evm_step_cnt
+        evm_step_cnt = self._neon_tx_exec_cfg.emulator_result.evm_step_cnt
+        assert evm_step_cnt >= 0
+        return evm_step_cnt
 
     @property
     def state_tx_cnt(self) -> int:
