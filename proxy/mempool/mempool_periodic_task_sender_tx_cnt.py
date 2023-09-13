@@ -3,10 +3,12 @@ from .mempool_api import MPSenderTxCntRequest, MPSenderTxCntResult
 from .mempool_periodic_task import MPPeriodicTaskLoop
 from .mempool_schedule import MPTxSchedule
 
+from ..common_neon.constants import ONE_BLOCK_SEC
+
 
 class MPSenderTxCntTaskLoop(MPPeriodicTaskLoop[MPSenderTxCntRequest, MPSenderTxCntResult]):
     def __init__(self, executor_mng: MPExecutorMng, tx_schedule: MPTxSchedule) -> None:
-        super().__init__(name='state-tx-cnt', sleep_sec=self._one_block_sec, executor_mng=executor_mng)
+        super().__init__(name='state-tx-cnt', sleep_sec=ONE_BLOCK_SEC, executor_mng=executor_mng)
         self._tx_schedule = tx_schedule
 
     def _submit_request(self) -> None:

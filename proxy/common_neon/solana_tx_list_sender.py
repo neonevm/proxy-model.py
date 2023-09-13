@@ -18,6 +18,7 @@ from .solana_interactor import SolInteractor
 from .solana_tx import SolTx, SolBlockHash, SolTxReceipt, SolAccount, SolCommit
 from .solana_tx_error_parser import SolTxErrorParser, SolTxError
 from .utils import str_enum
+from .constants import ONE_BLOCK_SEC
 
 
 LOG = logging.getLogger(__name__)
@@ -347,7 +348,7 @@ class SolTxListSender:
             return False
 
         if tx_status == tx_status.AltInvalidIndexError:
-            time.sleep(self._config.one_block_sec)
+            time.sleep(ONE_BLOCK_SEC)
 
         if tx_status in self._resubmitted_tx_status_set:
             return True

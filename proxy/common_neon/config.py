@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from typing import Optional, Union, Set, List, Tuple, NewType
 
 from .db.db_config import DBConfig
-from .constants import EVM_PROGRAM_ID_STR
+from .constants import EVM_PROGRAM_ID_STR, ONE_BLOCK_SEC, MIN_FINALIZE_SEC
 from .solana_tx import SolPubKey, SolCommit
 
 LOG = logging.getLogger(__name__)
@@ -51,9 +51,6 @@ def parse_solana_ws_url(solana_url: str) -> str:
 
 
 class Config(DBConfig):
-    one_block_sec = 0.4
-    min_finalize_sec = one_block_sec * 32
-
     start_slot_name = 'START_SLOT'
     reindex_start_slot_name = 'REINDEX_START_SLOT'
     reindex_thread_cnt_name = 'REINDEX_THREAD_COUNT'
@@ -85,7 +82,7 @@ class Config(DBConfig):
 
         # Transaction execution settings
         self._retry_on_fail = self._env_num('RETRY_ON_FAIL', 10, 1, 50)
-        self._confirm_timeout_sec = self._env_num('CONFIRM_TIMEOUT_SEC', int(self.min_finalize_sec), 4, 32)
+        self._confirm_timeout_sec = self._env_num('CONFIRM_TIMEOUT_SEC', int(MIN_FINALIZE_SEC), 4, 32)
         self._commit_type, self._commit_level = self._env_commit_level(
             'COMMIT_LEVEL',
             SolCommit.Confirmed,
@@ -148,9 +145,9 @@ class Config(DBConfig):
         self._reindex_thread_cnt = self._env_num(self.reindex_thread_cnt_name, 3, 0, 128)
         self._reindex_range_len = self._env_num(
             'REINDEX_BLOCK_COUNT_IN_RANGE',
-            int(60 * 60 / self.one_block_sec),      # 1  hour
-            int(10 * 60 / self.one_block_sec),      # 10 minutes
-            int(24 * 60 * 60 / self.one_block_sec)  # 1 day
+            int(60 * 60 / ONE_BLOCK_SEC),      # 1  hour
+            int(10 * 60 / ONE_BLOCK_SEC),      # 10 minutes
+            int(24 * 60 * 60 / ONE_BLOCK_SEC)  # 1 day
         )
         self._reindex_max_range_cnt = self._env_num('REINDEX_MAX_RANGE_COUNT', 128, 1, 256)
 

@@ -35,13 +35,6 @@ class NeonGasPriceData:
     neon_price_usd: Decimal
 
 
-class NeonTxBeginCode(Enum):
-    Failed = enum_auto()
-    Started = enum_auto()
-    Restarted = enum_auto()
-    StuckPushed = enum_auto()
-
-
 @dataclass
 class NeonTxBeginData:
     processing_cnt: int = 0

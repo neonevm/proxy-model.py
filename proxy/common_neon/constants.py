@@ -4,6 +4,10 @@ from solders.system_program import ID as _SYS_PROGRAM_ID
 
 from .solana_tx import SolPubKey
 
+
+ONE_BLOCK_SEC = 0.4
+MIN_FINALIZE_SEC = ONE_BLOCK_SEC * 32
+
 INCINERATOR_ID = SolPubKey.from_string("1nc1nerator11111111111111111111111111111111")
 
 COMPUTE_BUDGET_ID = SolPubKey.from_string('ComputeBudget111111111111111111111111111111')
@@ -13,7 +17,6 @@ TOKEN_PROGRAM_ID = SolPubKey.from_string('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623
 
 EVM_PROGRAM_ID_STR = os.environ.get('EVM_LOADER')
 EVM_PROGRAM_ID = SolPubKey.from_string(EVM_PROGRAM_ID_STR)
-
 
 SYS_PROGRAM_ID = _SYS_PROGRAM_ID
 
