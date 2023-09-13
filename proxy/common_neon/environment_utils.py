@@ -1,7 +1,7 @@
 import json
 import subprocess
 import sys
-from typing import List
+from typing import List, Dict, Any
 
 import logging
 
@@ -52,15 +52,15 @@ class SolanaCli(CliBase):
 
 class NeonCli(CliBase):
     EMULATOR_LOGLEVEL = {
-        logging.CRITICAL: "off",
-        logging.ERROR: "error",
-        logging.WARNING: "warn",
-        logging.INFO: "info",
-        logging.DEBUG: "debug",
-        logging.NOTSET: "warn"
+        logging.CRITICAL: 'off',
+        logging.ERROR: 'error',
+        logging.WARNING: 'warn',
+        logging.INFO: 'info',
+        logging.DEBUG: 'debug',
+        logging.NOTSET: 'warn'
     }
 
-    def call(self, *args, data=None):
+    def call(self, *args, data=None) -> Dict[str, Any]:
         try:
             cmd = [
                 'neon-cli',
@@ -75,7 +75,7 @@ class NeonCli(CliBase):
                 LOG.debug(f'Calling neon-cli: {self._hide_solana_url(cmd)}')
 
             if data is None:
-                data = ""
+                data = ''
             else:
                 data = json.dumps(data)
 

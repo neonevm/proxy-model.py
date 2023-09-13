@@ -228,3 +228,16 @@ class SolHistoryCriticalNotFound(RuntimeError):
 
 class PythNetworkError(RuntimeError):
     pass
+
+
+class TxAccountCntTooBig(RuntimeError):
+    def __init__(self, current_cnt: int, limit_cnt: int):
+        super().__init__(current_cnt, limit_cnt)
+        self._current_cnt = current_cnt
+        self._limit_cnt = limit_cnt
+
+    def __str__(self) -> str:
+        return (
+            f'The transaction requests {self._current_cnt} accounts '
+            f'and exceeds the upper limit of {self._limit_cnt}'
+        )

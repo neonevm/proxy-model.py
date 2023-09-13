@@ -79,6 +79,12 @@ class SolTx(abc.ABC):
         self._is_cloned = False
         self._solders_legacy_tx = self._build_legacy_tx(recent_block_hash=None, ix_list=ix_list)
 
+    def __str__(self) -> str:
+        try:
+            return str(self.sig())
+        except (BaseException,):
+            return '<NO SIGNATURE>'
+
     @property
     def name(self) -> str:
         return self._name
