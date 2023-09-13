@@ -62,16 +62,13 @@ class NeonTx(rlp.Serializable):
 
     def __init__(self, *args, **kwargs):
         rlp.Serializable.__init__(self, *args, **kwargs)
-        self._hex_sender: Optional[str] = None
 
     @cached_method
     def __str__(self) -> str:
-        if len(self._str) == 0:
-            self._str = str_fmt_object(
-                {'sender': self.hex_sender, 'nonce': self.nonce, 'sig': self.hex_tx_sig},
-                name='NeonTx'
-            )
-        return self._str
+        return str_fmt_object(
+            {'sender': self.hex_sender, 'nonce': self.nonce, 'sig': self.hex_tx_sig},
+            name='NeonTx'
+        )
 
     @classmethod
     def from_string(cls, s) -> NeonTx:
