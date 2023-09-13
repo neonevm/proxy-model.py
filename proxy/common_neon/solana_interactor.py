@@ -99,7 +99,10 @@ class SolInteractor:
         """This method is used to make retries to send request to Solana"""
 
         def _clean_solana_err(_exc: BaseException) -> str:
-            return str(_exc).replace(self._solana_url, 'XXXXX')
+            s = str(_exc)
+            if self._config.hide_solana_url:
+                s = s.replace(self._solana_url, 'XXXXX')
+            return s
 
         for retry in itertools.count():
             try:
