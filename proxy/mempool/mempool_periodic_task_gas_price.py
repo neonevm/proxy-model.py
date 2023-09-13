@@ -4,9 +4,11 @@ from .executor_mng import MPExecutorMng
 from .mempool_api import MPGasPriceRequest, MPGasPriceResult
 from .mempool_periodic_task import MPPeriodicTaskLoop
 
+from ..common_neon.constants import ONE_BLOCK_SEC
+
 
 class MPGasPriceTaskLoop(MPPeriodicTaskLoop[MPGasPriceRequest, MPGasPriceResult]):
-    _default_sleep_sec = MPPeriodicTaskLoop._one_block_sec * 16
+    _default_sleep_sec = ONE_BLOCK_SEC * 16
 
     def __init__(self, executor_mng: MPExecutorMng) -> None:
         super().__init__(name='gas-price', sleep_sec=self._default_sleep_sec, executor_mng=executor_mng)

@@ -16,8 +16,7 @@ LOG = logging.getLogger(__name__)
 
 
 class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], abc.ABC):
-    _one_block_sec = 0.4
-    _check_sleep_sec = 0.01
+    _check_sleep_sec = 0.05
 
     def __init__(self, name: str, sleep_sec: float, executor_mng: MPExecutorMng):
         self._name = name
