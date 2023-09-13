@@ -2,37 +2,31 @@ import logging
 import re
 import subprocess
 
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from .config import Config
-from .data import NeonEmulatedResult
+from .data import NeonEmulatorResult, NeonEmulatorExitStatus
 from .elf_params import ElfParams
 from .environment_utils import NeonCli
 from .errors import EthereumError, NoMoreRetriesError
 from .utils import str_fmt_object
 from .utils.eth_proto import NeonTx
 
+
 LOG = logging.getLogger(__name__)
 
 
-def call_emulated(config: Config, contract_id, caller_id, data=None, value=None) -> NeonEmulatedResult:
-    LOG.debug(f'{str_fmt_object(dict(contract=contract_id, caller=caller_id, data=data, value=value), name="Call")}')
-    output = emulator(config, contract_id, caller_id, data, value)
-    LOG.debug(f'return: {output}')
-    return output
-
-
-def call_tx_emulated(config: Config, neon_tx: NeonTx) -> NeonEmulatedResult:
+def call_tx_emulator(config: Config, neon_tx: NeonTx) -> NeonEmulatorResult:
     sender = neon_tx.hex_sender
     contract = neon_tx.hex_contract
     dst = 'deploy' if contract else neon_tx.hex_to_address
-    return call_emulated(config, dst, sender, neon_tx.hex_call_data, hex(neon_tx.value))
+    return call_emulator(config, dst, sender, neon_tx.hex_call_data, hex(neon_tx.value))
 
 
-def check_emulated_exit_status(result: Dict[str, Any]):
-    exit_status = result['exit_status']
-    if exit_status == 'revert':
-        revert_data = result.get('result')
+def check_emulator_exit_status(result: NeonEmulatorResult):
+    exit_status = result.exit_status
+    if exit_status == NeonEmulatorExitStatus.Revert:
+        revert_data = result.revert_data
         LOG.debug(f"Got revert call emulated result with data: {revert_data}")
         result_value = decode_revert_message(revert_data)
         if result_value is None:
@@ -40,9 +34,9 @@ def check_emulated_exit_status(result: Dict[str, Any]):
         else:
             raise EthereumError(code=3, message='execution reverted: ' + result_value, data='0x' + revert_data)
 
-    if exit_status != "succeed":
+    if exit_status != NeonEmulatorExitStatus.Succeed:
         LOG.debug(f"Got not succeed emulate exit_status: {exit_status}")
-        reason = result.get('exit_reason')
+        reason = result.exit_reason
         if isinstance(reason, str):
             raise EthereumError(code=3, message=f'execution finished with error: {reason}')
         raise EthereumError(code=3, message=exit_status)
@@ -94,7 +88,11 @@ def convert_evm_error(msg: str) -> str:
     return ConvertEVMInsufficientBalanceParser().execute(msg)
 
 
-def emulator(config: Config, contract: str, sender: str, data: Optional[str], value: Optional[str]):
+def call_emulator(config: Config,
+                  contract: str, sender: str,
+                  data: Optional[str], value: Optional[str]) -> NeonEmulatorResult:
+    LOG.debug(f'{str_fmt_object(dict(contract=contract, caller=sender, data=data, value=value), name="Call")}')
+
     value = value or ""
     neon_token_mint = ElfParams().neon_token_mint
     chain_id = ElfParams().chain_id
@@ -104,7 +102,7 @@ def emulator(config: Config, contract: str, sender: str, data: Optional[str], va
             data = "0x" + data
         data = {"data": data}
     try:
-        return NeonCli(config, True).call(
+        res_dict = NeonCli(config, True).call(
             'emulate',
             '--token_mint', str(neon_token_mint),
             '--chain_id', str(chain_id),
@@ -114,6 +112,8 @@ def emulator(config: Config, contract: str, sender: str, data: Optional[str], va
             value,
             data=data
         )
+        LOG.debug(f'return: {res_dict}')
+        return NeonEmulatorResult(res_dict)
 
     except subprocess.TimeoutExpired:
         raise NoMoreRetriesError()
@@ -121,4 +121,3 @@ def emulator(config: Config, contract: str, sender: str, data: Optional[str], va
     except subprocess.CalledProcessError as err:
         msg = convert_evm_error(str(err.stderr))
         raise EthereumError(message=msg)
-
