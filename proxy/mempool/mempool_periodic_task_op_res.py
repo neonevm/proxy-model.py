@@ -8,10 +8,11 @@ from .mempool_stuck_tx_dict import MPStuckTxDict
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.operator_resource_mng import OpResMng
 from ..common_neon.errors import StuckTxError
+from ..common_neon.constants import ONE_BLOCK_SEC
 
 
 class MPInitOpResTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOpResInitResult]):
-    _default_sleep_sec = MPPeriodicTaskLoop._one_block_sec * 16
+    _default_sleep_sec = ONE_BLOCK_SEC * 16
 
     def __init__(self, executor_mng: MPExecutorMng, op_res_mng: OpResMng, stuck_tx_dict: MPStuckTxDict) -> None:
         super().__init__(name='op-res-init', sleep_sec=self._default_sleep_sec, executor_mng=executor_mng)

@@ -35,8 +35,9 @@ from ..common_neon.errors import StuckTxError
 from ..common_neon.operator_resource_info import OpResIdent
 from ..common_neon.operator_resource_mng import OpResMng
 from ..common_neon.utils.json_logger import logging_context
+from ..common_neon.constants import ONE_BLOCK_SEC
 
-from ..statistic.data import NeonTxBeginCode, NeonTxBeginData, NeonTxEndCode, NeonTxEndData
+from ..statistic.data import NeonTxBeginData, NeonTxEndCode, NeonTxEndData
 from ..statistic.proxy_client import ProxyStatClient
 
 
@@ -44,10 +45,6 @@ LOG = logging.getLogger(__name__)
 
 
 class MemPool:
-    _one_block_sec = 0.4
-    check_task_timeout_sec = 0.01
-    reschedule_timeout_sec = _one_block_sec * 3
-
     def __init__(self, config: Config, stat_client: ProxyStatClient, op_res_mng: OpResMng, executor_mng: MPExecutorMng):
         capacity = config.mempool_capacity
         LOG.info(f'Init mempool schedule with capacity: {capacity}')
@@ -67,6 +64,9 @@ class MemPool:
         self._elf_param_dict_task_loop = MPElfParamDictTaskLoop(executor_mng)
         self._gas_price_task_loop = MPGasPriceTaskLoop(executor_mng)
         self._state_tx_cnt_task_loop = MPSenderTxCntTaskLoop(executor_mng, self._tx_schedule)
+
+        self._reschedule_timeout_sec = ONE_BLOCK_SEC * 3
+        self._check_task_timeout_sec = 0.05
 
         if not config.enable_send_tx_api:
             return
@@ -162,44 +162,44 @@ class MemPool:
     def get_content(self) -> MPTxPoolContentResult:
         return self._tx_schedule.get_content()
 
-    async def _enqueue_tx_request(self) -> NeonTxBeginCode:
-        code, tx = self._acquire_tx()
+    async def _enqueue_tx_request(self) -> bool:
+        tx = self._acquire_tx()
         if tx is None:
-            return code
+            return False
 
         with logging_context(req_id=tx.req_id):
             try:
                 mp_task = self._executor_mng.submit_mp_request(tx)
                 self._processing_task_list.append(mp_task)
-                return code
+                return True
 
             except BaseException as exc:
                 LOG.error('Failed to enqueue to execute', exc_info=exc)
                 self._on_reschedule_tx(tx)
-                return NeonTxBeginCode.Failed
+                return False
 
-    def _acquire_tx(self) -> Tuple[NeonTxBeginCode, Optional[MPTxExecRequest]]:
+    def _acquire_tx(self) -> Optional[MPTxExecRequest]:
         try:
-            code, tx = self._acquire_stuck_tx()
+            tx = self._acquire_stuck_tx()
             if tx is not None:
-                return code, tx
+                return tx
 
-            code, tx = self._acquire_rescheduled_tx()
+            tx = self._acquire_rescheduled_tx()
             if tx is not None:
-                return code, tx
+                return tx
 
             return self._acquire_scheduled_tx()
 
         except BaseException as exc:
             LOG.error('Failed to get tx for execution', exc_info=exc)
 
-        return NeonTxBeginCode.Failed, None
+        return None
 
-    def _acquire_stuck_tx(self) -> Tuple[NeonTxBeginCode, Optional[MPTxExecRequest]]:
+    def _acquire_stuck_tx(self) -> Optional[MPTxExecRequest]:
         while True:
             stuck_tx = self._stuck_tx_dict.peek_tx()
             if stuck_tx is None:
-                return NeonTxBeginCode.Failed, None
+                return None
 
             if not self._tx_schedule.drop_stuck_tx(stuck_tx.sig):
                 self._stuck_tx_dict.skip_tx(stuck_tx)
@@ -207,43 +207,43 @@ class MemPool:
 
             tx = self._attach_resource_to_tx(stuck_tx)
             if tx is None:
-                return NeonTxBeginCode.Failed, None
+                return None
 
             with logging_context(req_id=tx.req_id):
                 LOG.debug('Got tx from stuck queue')
             self._stuck_tx_dict.acquire_tx(stuck_tx)
-            return NeonTxBeginCode.StuckPushed, tx
+            return tx
 
-    def _acquire_rescheduled_tx(self) -> Tuple[NeonTxBeginCode, Optional[MPTxExecRequest]]:
+    def _acquire_rescheduled_tx(self) -> Optional[MPTxExecRequest]:
         if len(self._rescheduled_tx_queue) == 0:
-            return NeonTxBeginCode.Failed, None
+            return None
 
         tx = self._rescheduled_tx_queue[0]
         tx = self._attach_resource_to_tx(tx)
         if tx is None:
-            return NeonTxBeginCode.Failed, None
+            return None
 
         with logging_context(req_id=tx.req_id):
             LOG.debug('Got tx from rescheduling queue')
 
         self._rescheduled_tx_queue.popleft()
-        return NeonTxBeginCode.Restarted, tx
+        return tx
 
-    def _acquire_scheduled_tx(self, tx: Optional[MPTxRequest] = None) -> Tuple[NeonTxBeginCode, Optional[MPTxExecRequest]]:
+    def _acquire_scheduled_tx(self, tx: Optional[MPTxRequest] = None) -> Optional[MPTxExecRequest]:
         if tx is None:
             tx = self._tx_schedule.peek_top_tx()
             if (tx is None) or (tx.gas_price < self._gas_price.min_executable_gas_price):
-                return NeonTxBeginCode.Failed, None
+                return None
 
             tx = self._attach_resource_to_tx(tx)
             if tx is None:
-                return NeonTxBeginCode.Failed, None
+                return None
 
         with logging_context(req_id=tx.req_id):
             LOG.debug('Got tx from schedule')
             self._tx_schedule.acquire_tx(tx)
 
-        return NeonTxBeginCode.Started, tx
+        return tx
 
     def _attach_resource_to_tx(self, tx: Union[MPTxRequest, MPStuckTxInfo]) -> Optional[MPTxExecRequest]:
         with logging_context(req_id=tx.req_id):
@@ -260,7 +260,7 @@ class MemPool:
 
     async def _process_tx_schedule_loop(self):
         while (not self.has_gas_price()) and (not ElfParams().has_params()):
-            await asyncio.sleep(self.check_task_timeout_sec)
+            await asyncio.sleep(self._check_task_timeout_sec)
 
         while True:
             try:
@@ -269,12 +269,11 @@ class MemPool:
                     await self._schedule_cond.wait_for(self.is_active)
                     # LOG.debug(f"Schedule processing got awake, condition: {self._schedule_cond.__repr__()}")
 
-                    stat = NeonTxBeginData()
                     while self._executor_mng.is_available():
-                        code = await self._enqueue_tx_request()
-                        if code == NeonTxBeginCode.Failed:
+                        if not await self._enqueue_tx_request():
                             break
 
+                    stat = NeonTxBeginData()
                     self._fill_mempool_stat(stat)
                     self._stat_client.commit_tx_begin(stat)
 
@@ -312,7 +311,7 @@ class MemPool:
             self._fill_mempool_stat(stat)
             self._stat_client.commit_tx_end(stat)
 
-            await asyncio.sleep(self.check_task_timeout_sec)
+            await asyncio.sleep(self._check_task_timeout_sec)
 
     def _complete_task(self, mp_task: MPTask) -> NeonTxEndCode:
         try:
@@ -393,9 +392,9 @@ class MemPool:
 
     async def _reschedule_tx(self, tx: MPTxExecRequest):
         with logging_context(req_id=tx.req_id):
-            LOG.debug(f'Tx will be rescheduled in {math.ceil(self.reschedule_timeout_sec * 1000)} msec')
+            LOG.debug(f'Tx will be rescheduled in {math.ceil(self._reschedule_timeout_sec * 1000)} msec')
 
-        await asyncio.sleep(self.reschedule_timeout_sec)
+        await asyncio.sleep(self._reschedule_timeout_sec)
 
         with logging_context(req_id=tx.req_id):
             try:
