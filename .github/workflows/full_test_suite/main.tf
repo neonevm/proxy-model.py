@@ -163,8 +163,9 @@ resource "aws_instance" "solana" {
   user_data = data.template_file.solana_init.rendered
 
   tags = {
-    Name    = "${var.branch}-test-stand-solana"
-    purpose = "ci-oz-full-tests"
+    Name       = "${var.branch}-test-stand-solana"
+    purpose    = "ci-oz-full-tests"
+    monitoring = "disabled"
   }
 }
 
@@ -180,8 +181,9 @@ resource "aws_instance" "proxy" {
   }
 
   tags = {
-    Name    = "${var.branch}-test-stand-proxy"
-    purpose = "ci-oz-full-tests"
+    Name       = "${var.branch}-test-stand-proxy"
+    purpose    = "ci-oz-full-tests"
+    monitoring = "disabled"
   }
 
   depends_on = [
