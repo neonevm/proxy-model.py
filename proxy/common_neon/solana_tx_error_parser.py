@@ -372,13 +372,6 @@ class SolTxErrorParser:
         return self._get_value(('data', 'err')) == self._already_process_msg
 
     @cached_method
-    def check_if_preprocessed_error(self) -> bool:
-        error_code_msg = self._get_error_code_msg()
-        if error_code_msg is None:
-            return False
-        return error_code_msg[1].startswith(self._simulation_failed_hdr)
-
-    @cached_method
     def get_slots_behind(self) -> Optional[int]:
         return self._get_value(('data', self._numslots_behind_data))
 

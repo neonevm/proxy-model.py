@@ -151,11 +151,11 @@ class NeonTxSendCtx:
     def sol_tx_cnt(self) -> int:
         return self._neon_tx_exec_cfg.sol_tx_cnt
 
-    def has_completed_receipt(self) -> bool:
+    def has_good_sol_tx_receipt(self) -> bool:
         return self._neon_tx_exec_cfg.has_completed_receipt()
 
-    def set_completed_receipt(self, value: bool) -> None:
-        self._neon_tx_exec_cfg.set_completed_receipt(value)
+    def mark_good_sol_tx_receipt(self) -> None:
+        self._neon_tx_exec_cfg.mark_good_sol_tx_receipt()
 
     def mark_resource_use(self) -> None:
         if self._neon_tx_exec_cfg.holder_account is None:
