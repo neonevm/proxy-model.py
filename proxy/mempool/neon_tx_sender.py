@@ -51,7 +51,7 @@ class NeonTxSendStrategyExecutor:
                 raise
 
             except WrongStrategyError:
-                if not self._ctx.has_completed_receipt():
+                if not self._ctx.has_good_sol_tx_receipt():
                     continue
                 self._cancel(strategy)
                 raise
@@ -78,7 +78,7 @@ class NeonTxSendStrategyExecutor:
             has_changes = strategy.prep_before_emulate()
             if has_changes or (retry == 0):
                 # no re-emulation for Neon tx with started state
-                if not self._ctx.has_completed_receipt():
+                if not self._ctx.has_good_sol_tx_receipt():
                     self._emulate_neon_tx()
                 strategy.update_after_emulate()
 
@@ -91,8 +91,8 @@ class NeonTxSendStrategyExecutor:
                 return strategy.execute()
 
             finally:
-                if strategy.has_completed_receipt():
-                    self._ctx.set_completed_receipt(True)
+                if strategy.has_good_sol_tx_receipt():
+                    self._ctx.mark_good_sol_tx_receipt()
 
         # Can't prepare Neon tx for execution in `retry_on_fail` attempts
         raise NoMoreRetriesError()
@@ -110,7 +110,7 @@ class NeonTxSendStrategyExecutor:
 
     def _init_state_tx_cnt(self) -> None:
         state_tx_cnt = self._ctx.solana.get_state_tx_cnt(self._ctx.neon_tx_info.addr)
-        if self._ctx.has_completed_receipt():
+        if self._ctx.has_good_sol_tx_receipt():
             state_tx_cnt = max(state_tx_cnt, self._ctx.neon_tx_info.nonce)
         self._ctx.set_state_tx_cnt(state_tx_cnt)
 

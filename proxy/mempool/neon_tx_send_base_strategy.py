@@ -95,8 +95,8 @@ class BaseNeonTxStrategy(abc.ABC):
         for stage in self._prep_stage_list:
             stage.update_after_emulate()
 
-    def has_completed_receipt(self) -> bool:
-        return self._sol_tx_list_sender.has_completed_receipt()
+    def has_good_sol_tx_receipt(self) -> bool:
+        return self._sol_tx_list_sender.has_good_sol_tx_receipt()
 
     @abc.abstractmethod
     def execute(self) -> NeonTxResultInfo:

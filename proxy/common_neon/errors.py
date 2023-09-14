@@ -84,8 +84,6 @@ class SenderAccountNotExists(RescheduleError):
 
 
 class BlockedAccountError(RescheduleError):
-    pass
-
     def __str__(self) -> str:
         return 'Blocked accounts error'
 
@@ -97,6 +95,11 @@ class NodeBehindError(RescheduleError):
 
     def __str__(self) -> str:
         return f'The Solana node is behind by {self._slots_behind} from the Solana cluster'
+
+
+class ALTInvalidIndexError(RescheduleError):
+    def __str__(self) -> str:
+        return 'ALT does not have index'
 
 
 class NoMoreRetriesError(RescheduleError):
