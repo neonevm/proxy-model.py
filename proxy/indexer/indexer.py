@@ -252,10 +252,15 @@ class Indexer:
             self._save_checkpoint(dctx)
 
     def run(self):
+        try:
+            self._run()
+        except BaseException as exc:
+            LOG.warning('Exception on run Indexer', exc_info=exc)
+
+    def _run(self):
         check_sec = float(self._config.indexer_check_msec) / 1000
         while not self._is_done_parsing():
             time.sleep(check_sec)
-
             if not self._has_new_blocks():
                 continue
 
@@ -328,7 +333,7 @@ class Indexer:
         # and there are no reason to parse confirmed blocks,
         # because on next iteration there will be the next portion of finalized blocks
         finalized_block_slot = self._solana.get_finalized_slot()
-        if (finalized_block_slot - dctx.stop_slot) >= 3:
+        if (finalized_block_slot - dctx.stop_slot) >= 5:
             LOG.debug(f'skip parsing of not-finalized history: {finalized_block_slot} > {dctx.stop_slot}')
             return
 
@@ -337,7 +342,7 @@ class Indexer:
         except SolHistoryNotFound as err:
             # There are a lot of reason for skipping not-finalized history on live systems
             # so uncomment the debug message only if you need investigate the root cause
-            # LOG.debug(f'skip parsing of not-finalized history: {str(err)}')
+            LOG.debug(f'skip parsing of not-finalized history: {str(err)}')
             pass
 
     def _check_start_slot(self) -> None:
@@ -349,4 +354,3 @@ class Indexer:
         finalized_neon_block = self._neon_block_dict.finalized_neon_block
         if (finalized_neon_block is not None) and (first_slot > finalized_neon_block.block_slot):
             self._neon_block_dict.clear()
-

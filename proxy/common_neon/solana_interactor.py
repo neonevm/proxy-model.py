@@ -65,6 +65,7 @@ class SolInteractor:
         self._config = config
         self._request_cnt = itertools.count()
         self._solana_url = solana_url or config.solana_url
+        self._solana_timeout = httpx.Timeout(config.solana_timeout)
         self._client: Optional[httpx.Client] = None
         self._headers = {
             'Content-Type': 'application/json',
@@ -83,7 +84,7 @@ class SolInteractor:
     def _send_post_request_impl(self, request: Union[List[Dict[str, Any]], Dict[str, Any]]) -> httpx.Response:
 
         if self._client is None:
-            self._client = httpx.Client(http2=True, headers=self._headers)
+            self._client = httpx.Client(http2=True, headers=self._headers, timeout=self._solana_timeout)
 
         try:
             raw_response = self._client.post(self._solana_url, json=request)
