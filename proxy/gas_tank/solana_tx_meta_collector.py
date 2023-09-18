@@ -63,7 +63,7 @@ class SolTxMetaCollector(ABC):
         self._thread_pool = ThreadPool(config.gas_tank_parallel_request_cnt)
 
     @property
-    def commitment(self) -> str:
+    def commitment(self) -> SolCommit.Type:
         return self._commitment
 
     @property

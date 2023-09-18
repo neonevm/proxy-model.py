@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Union, Any, List, Optional, Set, cast
+from typing import Dict, Union, Any, List, Optional, Set
 
 import base64
 import itertools
@@ -9,8 +9,8 @@ import json
 import threading
 import time
 import logging
+import requests
 import base58
-import httpx
 import websockets.sync.client
 
 from .address import NeonAddress, neon_2program
@@ -19,12 +19,15 @@ from .constants import NEON_ACCOUNT_TAG
 from .layouts import ACCOUNT_INFO_LAYOUT
 from .solana_tx import SolTx, SolBlockHash, SolPubKey, SolCommit
 from .solana_tx_error_parser import SolTxErrorParser
-from .utils import SolBlockInfo
+from .utils import SolBlockInfo, get_from_dict
 from .layouts import HolderAccountInfo, AccountInfo, NeonAccountInfo, ALTAccountInfo
 
 
 LOG = logging.getLogger(__name__)
+RPCRequest = Dict[str, Any]
+RPCRequestList = List[RPCRequest]
 RPCResponse = Dict[str, Any]
+RPCResponseList = List[Dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -65,11 +68,11 @@ class SolInteractor:
         self._config = config
         self._request_cnt = itertools.count()
         self._solana_url = solana_url or config.solana_url
-        self._solana_timeout = httpx.Timeout(config.solana_timeout)
-        self._client: Optional[httpx.Client] = None
+        self._solana_timeout = config.solana_timeout
+        self._client: Optional[requests.Session] = None
         self._headers = {
             'Content-Type': 'application/json',
-            'Accept-Encoding': 'gzip'
+            'Accept-Encoding': 'gzip,deflate'
         }
 
     def __del__(self):
@@ -81,22 +84,22 @@ class SolInteractor:
         self._client.close()
         self._client = None
 
-    def _send_post_request_impl(self, request: Union[List[Dict[str, Any]], Dict[str, Any]]) -> httpx.Response:
-
+    def _send_post_request_impl(self, req: Union[RPCRequest, RPCRequestList]) -> Union[RPCResponse, RPCResponseList]:
         if self._client is None:
-            self._client = httpx.Client(http2=True, headers=self._headers, timeout=self._solana_timeout)
+            self._client = requests.Session()
+            self._client.headers.update(self._headers)
 
         try:
-            raw_response = self._client.post(self._solana_url, json=request)
+            raw_response = self._client.post(self._solana_url, json=req, timeout=self._solana_timeout)
             raw_response.raise_for_status()
 
-            return raw_response
+            return raw_response.json()
 
         except (BaseException, ):
             self._close()
             raise
 
-    def _send_post_request(self, request: Union[List[Dict[str, Any]], Dict[str, Any]]) -> httpx.Response:
+    def _send_post_request(self, request: Union[RPCRequest, RPCRequestList]) -> Union[RPCResponse, RPCResponseList]:
         """This method is used to make retries to send request to Solana"""
 
         def _clean_solana_err(_exc: BaseException) -> str:
@@ -119,10 +122,8 @@ class SolInteractor:
 
                 time.sleep(1)
 
-    def _build_rpc_request(self, method: str, can_flush_id: bool, *param_list: Any) -> Dict[str, Any]:
+    def _build_rpc_request(self, method: str, *param_list: Any) -> RPCRequest:
         request_id = next(self._request_cnt) + 1
-        if can_flush_id and (request_id >= 100_000):
-            self._request_cnt = itertools.count()
 
         return {
             'jsonrpc': '2.0',
@@ -131,19 +132,18 @@ class SolInteractor:
             'params': list(param_list)
         }
 
-    def _send_rpc_request(self, method: str, *param_list: Any) -> RPCResponse:
-        request = self._build_rpc_request(method, True, *param_list)
-        raw_response = self._send_post_request(request)
-        return cast(RPCResponse, raw_response.json())
+    def _send_rpc_request(self, method: str, *param_list: Any) -> Union[RPCResponse, RPCResponseList]:
+        request = self._build_rpc_request(method, *param_list)
+        return self._send_post_request(request)
 
-    def _send_rpc_batch_request(self, method: str, params_list: List[Any]) -> List[RPCResponse]:
+    def _send_rpc_batch_request(self, method: str, params_list: List[Any]) -> RPCResponseList:
         request_cnt = len(params_list)
         request_size = 0
         full_response_list = list()
         request_list = list()
 
         for params in params_list:
-            request = self._build_rpc_request(method, request_size == 0, *params)
+            request = self._build_rpc_request(method, *params)
             request_list.append(request)
 
             request_cnt -= 1
@@ -151,8 +151,7 @@ class SolInteractor:
 
             # Protection from big payload
             if request_size >= 48 * 1024 or request_cnt == 0:
-                raw_response = self._send_post_request(request_list)
-                response_list = cast(List[RPCResponse], raw_response.json())
+                response_list = self._send_post_request(request_list)
                 full_response_list += response_list
 
                 request_list = list()
@@ -171,12 +170,11 @@ class SolInteractor:
     def is_healthy(self) -> Optional[bool]:
         """Ask Solana node about the status.
         The method should return immediately without attempts to repeat the request."""
-        request = self._build_rpc_request('getHealth', True)
+        request = self._build_rpc_request('getHealth')
 
         try:
-            raw_response = self._send_post_request_impl(request)
-            json_response = cast(RPCResponse, raw_response.json())
-            status = json_response.get('result', 'bad')
+            response = self._send_post_request_impl(request)
+            status = response.get('result', 'bad')
             return status == 'ok'
 
         except (BaseException, ):
@@ -186,7 +184,8 @@ class SolInteractor:
         return self._send_rpc_request('getClusterNodes').get('result', list())
 
     def get_solana_version(self) -> str:
-        return self._send_rpc_request('getVersion').get('result', dict()).get('solana-core', 'Unknown')
+        response = self._send_rpc_request('getVersion')
+        return get_from_dict(response, ('result', 'solana-core'), 'Unknown')
 
     def get_slots_behind(self) -> Optional[int]:
         response = self._send_rpc_request('getHealth')
@@ -210,18 +209,21 @@ class SolInteractor:
             opts['before'] = before
 
         response = self._send_rpc_request('getSignaturesForAddress', str(address), opts)
-
-        error = response.get('error', None)
-        if error is not None:
-            LOG.warning(f'fail to get solana signatures: {error}')
-
         return response.get('result', list())
 
-    def get_block_slot(self, commitment=SolCommit.Confirmed) -> int:
+    def get_block_slot(self, commitment: SolCommit.Type) -> int:
         opts = {
             'commitment': SolCommit.to_solana(commitment)
         }
-        return self._send_rpc_request('getSlot', opts).get('result', 0)
+        for retry in itertools.count():
+            response = self._send_rpc_request('getSlot', opts)
+            slot = response.get('result', -1)
+            if slot != -1:
+                return slot
+
+            if retry % 10 == 0:
+                LOG.debug(f'Retry {retry}, error on get slot: {json.dumps(response)}')
+            time.sleep(1)
 
     def get_finalized_slot(self) -> int:
         return self.get_block_slot(SolCommit.Finalized)
@@ -253,12 +255,7 @@ class SolInteractor:
             }
 
         result = self._send_rpc_request('getAccountInfo', str(pubkey), opts)
-        error = result.get('error')
-        if error is not None:
-            LOG.debug(f"Can't get information about account {str(pubkey)}: {error}")
-            return None
-
-        raw_account = result.get('result', dict()).get('value', None)
+        raw_account = get_from_dict(result, ('result', 'value'), None)
         if raw_account is None:
             # LOG.debug(f"Can't get information about {str(pubkey)}")
             return None
@@ -284,12 +281,7 @@ class SolInteractor:
             src_account_list = src_account_list[50:]
             result = self._send_rpc_request('getMultipleAccounts', account_list, opts)
 
-            error = result.get('error', None)
-            if error:
-                LOG.debug(f"Can't get information about accounts {account_list}: {error}")
-                return account_info_list
-
-            for pubkey, info in zip(account_list, result.get('result', dict()).get('value', None)):
+            for pubkey, info in zip(account_list, get_from_dict(result, ('result', 'value'), None)):
                 if info is None:
                     account_info_list.append(None)
                 else:
@@ -300,7 +292,8 @@ class SolInteractor:
         opts = {
             'commitment': SolCommit.to_solana(commitment)
         }
-        return self._send_rpc_request('getBalance', str(account), opts).get('result', dict()).get('value', 0)
+        response = self._send_rpc_request('getBalance', str(account), opts)
+        return get_from_dict(response, ('result', 'value'), 0)
 
     def get_sol_balance_list(self, accounts_list: List[Union[str, SolPubKey]],
                              commitment=SolCommit.Confirmed) -> List[int]:
@@ -314,7 +307,7 @@ class SolInteractor:
         balances_list = list()
         response_list = self._send_rpc_batch_request('getBalance', requests_list)
         for response in response_list:
-            balance = response.get('result', dict()).get('value', 0)
+            balance = get_from_dict(response, ('result', 'value'), 0)
             balances_list.append(balance)
 
         return balances_list
@@ -373,7 +366,15 @@ class SolInteractor:
         return response.get('result', 0)
 
     @staticmethod
-    def _decode_block_info(block_slot: int, net_block: Dict[str, Any]) -> SolBlockInfo:
+    def _decode_block_info(block_slot: int, response: Optional[RPCResponse]) -> SolBlockInfo:
+        if response is None:
+            return SolBlockInfo(block_slot=block_slot)
+
+        net_block = response.get('result', None)
+        if net_block is None:
+            error = get_from_dict(response, ('error', 'message'), None)
+            return SolBlockInfo(block_slot=block_slot, error=error)
+
         return SolBlockInfo(
             block_slot=block_slot,
             block_hash='0x' + base58.b58decode(net_block.get('blockhash', '')).hex().lower(),
@@ -385,8 +386,15 @@ class SolInteractor:
 
     def get_first_available_slot(self) -> int:
         """Get first available slot from Solana"""
-        response = self._send_rpc_request('getFirstAvailableBlock')
-        slot = response.get('result', 0)
+        slot = -1
+        for retry in itertools.count():
+            response = self._send_rpc_request('getFirstAvailableBlock')
+            slot = response.get('result', -1)
+            if slot != -1:
+                break
+            elif retry % 10 != 0:
+                LOG.debug(f"Retry {retry} on trying to get Solana's first slot...")
+
         LOG.debug(f"Solana's first slot {slot}")
         if slot > 0:
             slot += 512
@@ -420,11 +428,7 @@ class SolInteractor:
         opts = self._get_block_info_opts(commitment, full)
 
         response = self._send_rpc_request('getBlock', block_slot, opts)
-        net_block = response.get('result', None)
-        if not net_block:
-            return SolBlockInfo(block_slot=block_slot)
-
-        return self._decode_block_info(block_slot, net_block)
+        return self._decode_block_info(block_slot, response)
 
     def get_block_info_list(self, block_slot_list: List[int],
                             commitment=SolCommit.Confirmed, full=False) -> List[SolBlockInfo]:
@@ -437,14 +441,7 @@ class SolInteractor:
 
         response_list = self._send_rpc_batch_request('getBlock', request_list)
         for block_slot, response in zip(block_slot_list, response_list):
-            if response is None:
-                block = SolBlockInfo(block_slot=block_slot)
-            else:
-                net_block = response.get('result', None)
-                if net_block is None:
-                    block = SolBlockInfo(block_slot=block_slot)
-                else:
-                    block = self._decode_block_info(block_slot, net_block)
+            block = self._decode_block_info(block_slot, response)
             block_list.append(block)
         return block_list
 
@@ -459,7 +456,7 @@ class SolInteractor:
                 return default
             LOG.debug(f'{response}')
             raise RuntimeError('failed to get latest block hash')
-        return result.get('context', dict()).get('slot', 0)
+        return get_from_dict(result, ('context', 'slot'), 0)
 
     def get_recent_block_hash(self, commitment=SolCommit.Finalized) -> SolRecentBlockHash:
         opts = {
@@ -485,7 +482,7 @@ class SolInteractor:
         }
 
         block = self._send_rpc_request('getBlock', block_slot, block_opts)
-        return SolBlockHash.from_string(block.get('result', dict()).get('blockhash', None))
+        return SolBlockHash.from_string(get_from_dict(block, ('result', 'blockhash'), None))
 
     def get_block_height(self, block_slot: Optional[int] = None, commitment=SolCommit.Confirmed) -> int:
         opts = {
@@ -577,7 +574,7 @@ class SolInteractor:
         is_done = False
         with websockets.sync.client.connect(self._config.solana_ws_url) as websocket:
             for tx_sig in tx_sig_list:
-                request = self._build_rpc_request('signatureSubscribe', False, tx_sig, opts)
+                request = self._build_rpc_request('signatureSubscribe', tx_sig, opts)
                 websocket.send(json.dumps(request))
 
             timeout_timer = threading.Timer(timeout_sec, lambda: websocket.close())
@@ -588,7 +585,7 @@ class SolInteractor:
                 response = json.loads(response)
 
                 if response.get('method', '') == 'signatureNotification':
-                    sub_id = response.get('params', dict()).get('subscription', None)
+                    sub_id = get_from_dict(response, ('params', 'subscription'), None)
                     if sub_id is not None:
                         sub_set.add(sub_id)
 

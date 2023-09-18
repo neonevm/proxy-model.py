@@ -5,7 +5,7 @@ from ..common_neon.utils.solana_block import SolBlockInfo
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolCommit
 from ..common_neon.config import Config
-from ..common_neon.errors import SolHistoryNotFound
+from ..common_neon.errors import SolHistoryNotFound, SolHistoryCriticalNotFound
 
 from .indexed_objects import SolNeonDecoderCtx
 
@@ -55,13 +55,14 @@ class SolBlockNetCache:
                 yield sol_block
 
         if root_slot != state.stop_slot:
-            self._raise_sol_history_error(state, f'Fail to get head {root_slot}')
+            self._raise_error(state, f'Fail to get head {root_slot} (!= {state.stop_slot})')
 
         # in the loop there were the skipping of the root-slot, now return last one
         if head_block:
             yield head_block
 
     def _build_block_queue(self, state: SolNeonDecoderCtx, root_slot: int, slot: int) -> List[SolBlockInfo]:
+        child_slot = 0
         block_queue: List[SolBlockInfo] = list()
         while slot >= root_slot:
             sol_block = self._get_sol_block(slot)
@@ -69,14 +70,20 @@ class SolBlockNetCache:
                 if not len(block_queue):
                     slot -= 1
                     continue
-                self._raise_sol_history_error(state, f'Failed to get block {slot}')
+
+                msg = f'Fail to get block {slot} (for child {child_slot})'
+                if sol_block.has_error():
+                    self._raise_critical_error(state, sol_block.block_slot, msg + ': ' + sol_block.error)
+                else:
+                    self._raise_error(state, msg)
 
             block_queue.append(sol_block)
             if slot == root_slot:
                 return block_queue
             slot = sol_block.parent_block_slot
+            child_slot = sol_block.block_slot
 
-        self._raise_sol_history_error(state, f'Fail to get root {root_slot}')
+        self._raise_error(state, f'Fail to reach root {root_slot} (!= {slot})')
 
     def _get_sol_block(self, slot: int) -> SolBlockInfo:
         idx = self._calc_idx(slot)
@@ -84,13 +91,22 @@ class SolBlockNetCache:
         assert sol_block.block_slot == slot
         return sol_block
 
-    def _raise_sol_history_error(self, state: SolNeonDecoderCtx, msg: str) -> None:
+    def _prep_raise_error(self, state: SolNeonDecoderCtx):
         if state.sol_commit == SolCommit.Confirmed:
             self._need_to_recache_block_list = True
         else:
             LOG.debug(f'clear on bad branch: {str(state)}')
             self._clear_cache()
+
+    def _raise_error(self, state: SolNeonDecoderCtx, msg: str) -> None:
+        self._prep_raise_error(state)
         raise SolHistoryNotFound(msg)
+
+    def _raise_critical_error(self, state: SolNeonDecoderCtx, slot: int, msg: str) -> None:
+        self._prep_raise_error(state)
+        if state.sol_commit == SolCommit.Confirmed:
+            raise SolHistoryNotFound(msg)
+        raise SolHistoryCriticalNotFound(slot, msg)
 
     def _cache_block_list(self, state: SolNeonDecoderCtx, start_slot: int, stop_slot: int) -> None:
         if self._need_to_recache_block_list:

@@ -212,5 +212,19 @@ class SolHistoryNotFound(RuntimeError):
     pass
 
 
+class SolHistoryCriticalNotFound(RuntimeError):
+    def __init__(self, slot: int, msg: str):
+        super().__init__(slot, msg)
+        self._slot = slot
+        self._msg = msg
+
+    @property
+    def slot(self) -> int:
+        return self._slot
+
+    def __str__(self) -> str:
+        return self._msg
+
+
 class PythNetworkError(RuntimeError):
     pass
