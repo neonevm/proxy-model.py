@@ -9,13 +9,14 @@ from .utils import str_fmt_object, cached_method
 @dataclass(frozen=True)
 class SolBlockInfo:
     block_slot: int
-    block_hash: str = None
+    block_hash: Optional[str] = None
     block_time: Optional[int] = None
     block_height: Optional[int] = None
     parent_block_slot: Optional[int] = None
-    parent_block_hash: str = None
+    parent_block_hash: Optional[str] = None
     is_finalized: bool = False
     tx_receipt_list: List[Dict[str, Any]] = None
+    error: Optional[str] = None
 
     @cached_method
     def __str__(self) -> str:
@@ -31,3 +32,6 @@ class SolBlockInfo:
 
     def is_empty(self) -> bool:
         return self.block_time is None
+
+    def has_error(self) -> bool:
+        return self.error is not None
