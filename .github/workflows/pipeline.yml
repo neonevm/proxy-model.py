@@ -9,6 +9,8 @@ on:
         required: false
       neon_evm_branch:
         required: false
+      initial_pr:
+        required: false
   pull_request:
     types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
   push:
@@ -279,8 +281,8 @@ jobs:
           python3 ./.github/workflows/deploy.py trigger_dapps_tests \
           --solana_ip=${{env.SOLANA_IP}} \
           --proxy_ip=${{ env.PROXY_IP }} \
+          --pr_url_for_report=${{github.event.inputs.initial_pr}} \
           --token=${{secrets.GHTOKEN}}
-
 
   destroy-terraform:
     needs:
