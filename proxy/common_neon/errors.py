@@ -102,6 +102,11 @@ class ALTInvalidIndexError(RescheduleError):
         return 'ALT does not have index'
 
 
+class ALTAlreadyExistError(RescheduleError):
+    def __str__(self) -> str:
+        return 'ALT already exists'
+
+
 class NoMoreRetriesError(RescheduleError):
     def __str__(self) -> str:
         return 'The Neon transaction is too complicated. No more retries to complete the Neon transaction'
@@ -165,6 +170,7 @@ class NonceTooHighError(RescheduleError):
 
     def __str__(self) -> str:
         return 'tx nonce is too high for execution'
+
 
 class OutOfGasError(BaseException):
     def __init__(self, has_gas_limit: int, req_gas_limit: int):

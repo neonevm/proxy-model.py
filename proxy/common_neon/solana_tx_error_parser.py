@@ -166,6 +166,11 @@ class SolTxErrorParser:
     _alt_invalid_idx_msg = 'invalid transaction: Transaction address table lookup uses an invalid index'
     _already_process_msg = 'AlreadyProcessed'
 
+    _alt_already_exist_msg = [0, 'AccountAlreadyInitialized']
+    _alt_already_exist_log_msg = (
+        f'Program {ADDRESS_LOOKUP_TABLE_ID} failed: instruction requires an uninitialized account'
+    )
+
     _exceeded_cu_number_log = 'Program failed to complete: exceeded maximum number of instructions allowed'
     _exceeded_cu_number_re = re.compile(
         r'Program (\w+) failed: exceeded CUs meter at BPF instruction #(\d+)$'
@@ -366,6 +371,15 @@ class SolTxErrorParser:
     @cached_method
     def check_if_alt_uses_invalid_index(self) -> bool:
         return self._get_error_code_msg() == (-32602, self._alt_invalid_idx_msg)
+
+    @cached_method
+    def check_if_alt_already_exists(self) -> bool:
+        if self._get_value(('meta', 'err', 'InstructionError')) != self._alt_already_exist_msg:
+            return False
+        for log_msg in self._get_log_list():
+            if log_msg == self._alt_already_exist_log_msg:
+                return True
+        return False
 
     @cached_method
     def check_if_already_processed(self) -> bool:
