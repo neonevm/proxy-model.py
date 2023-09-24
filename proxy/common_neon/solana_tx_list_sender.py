@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Set
 from .errors import (
     BlockHashNotFound, NonceTooLowError, NonceTooHighError,
     CUBudgetExceededError, InvalidIxDataError, RequireResizeIterError,
-    CommitLevelError, NodeBehindError, NoMoreRetriesError, BlockedAccountError,
+    CommitLevelError, NodeBehindError, NoMoreRetriesError, BlockedAccountError, ALTAlreadyExistError,
     RescheduleError, WrongStrategyError, OutOfGasError, ALTInvalidIndexError
 )
 
@@ -41,6 +41,7 @@ class SolTxSendState:
         NodeBehindError = enum.auto()
         BlockedAccountError = enum.auto()
         AltInvalidIndexError = enum.auto()
+        AltAlreadyExistError = enum.auto()
 
         # Wrong strategy error
         CUBudgetExceededError = enum.auto()
@@ -93,6 +94,7 @@ class SolTxListSender:
         SolTxSendState.Status.NodeBehindError,
         SolTxSendState.Status.BlockedAccountError,
         SolTxSendState.Status.AltInvalidIndexError,
+        SolTxSendState.Status.AltAlreadyExistError
     )
 
     def __init__(self, config: Config, solana: SolInteractor, signer: SolAccount):
@@ -420,6 +422,8 @@ class SolTxListSender:
             return self._DecodeResult(status.BlockHashNotFoundError, None)
         elif tx_error_parser.check_if_alt_uses_invalid_index():
             return self._DecodeResult(status.AltInvalidIndexError, ALTInvalidIndexError())
+        elif tx_error_parser.check_if_alt_already_exists():
+            return self._DecodeResult(status.AltAlreadyExistError, ALTAlreadyExistError())
         elif tx_error_parser.check_if_already_finalized():
             # no exception: receipt exists - the goal is reached
             return self._DecodeResult(status.AlreadyFinalizedError, None)
