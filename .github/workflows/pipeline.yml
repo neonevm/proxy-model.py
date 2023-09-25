@@ -2,8 +2,8 @@ name: Build proxy docker image
 on:
   workflow_dispatch:
     inputs:
-      full_test_suite:
-        default: false
+      test_set:
+        default: "basic"
         required: true
       neon_evm_commit:
         required: false
@@ -40,6 +40,7 @@ jobs:
       proxy_tag: ${{ steps.tags.outputs.proxy }}
       neon_evm_tag: ${{ steps.tags.outputs.neon_evm }}
       is_version_proxy_branch: ${{ steps.is_version_proxy_branch.outputs.value }}
+      test_set: ${{ steps.test_set.outputs.value }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -78,6 +79,19 @@ jobs:
           fi;
           echo "proxy_tag=${proxy_tag}"
           echo "proxy=$proxy_tag" >> $GITHUB_OUTPUT
+      - name: Define test set
+        id: test_set
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'extendedFullTestSuite') }}" == 'true' && "${{ github.event.pull_request.draft }}" == 'false' || "${{ github.event.inputs.test_set }}" == "extendedFullTestSuite" ]]; then
+            value="extendedFullTestSuite"
+          elif [[ "(${{ contains(github.event.pull_request.labels.*.name, 'fullTestSuite') }}" == 'true' && "${{ github.event.pull_request.draft }}" == 'false' || "${{ github.event.inputs.test_set }}" == "fullTestSuite" ]]; then
+            value="fullTestSuite"
+          else
+            value="basic"
+          fi;
+          echo "value=${value}"
+          echo "value=${value}" >> $GITHUB_OUTPUT
+
       - name: Build docker image
         run: |
           python3 ./.github/workflows/deploy.py build_docker_image \
@@ -118,12 +132,12 @@ jobs:
     needs:
       - build-image
     if: |
+      contains(fromJSON('["extendedFullTestSuite", "fullTestSuite"]'), needs.build-image.outputs.test_set) ||
       (contains(github.event.pull_request.labels.*.name, 'FullTestSuite') && ! github.event.pull_request.draft) ||
       (github.ref_name =='develop' && !startsWith(github.event.inputs.neon_evm_branch , 'refs/pull')) ||
       github.ref_name =='master' ||
       startsWith(github.ref , 'refs/tags/') ||
-      (needs.build-image.outputs.is_version_proxy_branch == 'true' && github.event.inputs.neon_evm_commit == '') ||
-      github.event.inputs.full_test_suite == 'true'
+      (needs.build-image.outputs.is_version_proxy_branch == 'true' && github.event.inputs.neon_evm_commit == '')
     runs-on: test-runner
     steps:
       - uses: actions/checkout@v3
@@ -270,6 +284,7 @@ jobs:
   dapps-tests:
     needs:
       - prepare-infrastructure
+      - build-image
     runs-on: test-runner
     env:
       SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
@@ -282,7 +297,8 @@ jobs:
           --solana_ip=${{env.SOLANA_IP}} \
           --proxy_ip=${{ env.PROXY_IP }} \
           --pr_url_for_report=${{github.event.inputs.initial_pr}} \
-          --token=${{secrets.GHTOKEN}}
+          --token=${{secrets.GHTOKEN}} \
+          --test_set=${{needs.build-image.outputs.test_set }}
 
   destroy-terraform:
     needs:
