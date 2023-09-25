@@ -322,11 +322,10 @@ class Indexer:
         try:
             self._collect_neon_txs(dctx, self._last_finalized_slot, SolCommit.Finalized)
         except SolHistoryCriticalNotFound as err:
-            LOG.debug(f'block branch: {str(dctx)}, fail to parse finalized history: {str(err)}')
+            LOG.warning(f'block branch: {str(dctx)}, fail to parse finalized history: {str(err)}')
             self._check_start_slot(err.slot)
             return
         except SolHistoryNotFound as err:
-            self._check_start_slot(self._db.start_slot)
             LOG.debug(f'block branch: {str(dctx)}, skip parsing of finalized history: {str(err)}')
             return
 
@@ -340,7 +339,7 @@ class Indexer:
         # because on next iteration there will be the next portion of finalized blocks
         finalized_block_slot = self._solana.get_finalized_slot()
         if (finalized_block_slot - self._last_finalized_slot) >= 5:
-            LOG.debug(f'skip parsing of not-finalized history: {finalized_block_slot} > {dctx.stop_slot}')
+            LOG.debug(f'skip parsing of not-finalized history: {finalized_block_slot} > {self._last_finalized_slot}')
             return
 
         try:
@@ -351,10 +350,10 @@ class Indexer:
             LOG.debug(f'skip parsing of not-finalized history: {str(err)}')
             pass
 
-    def _check_start_slot(self, slot: int) -> None:
+    def _check_start_slot(self, base_slot: int) -> None:
         first_slot = self._solana.get_first_available_slot()
-        if first_slot < slot:
-            first_slot = self._solana.find_exist_block_slot(slot)
+        if first_slot < base_slot:
+            first_slot = self._solana.find_exist_block_slot(base_slot)
 
         if self._db.start_slot < first_slot:
             LOG.debug(f'Move start slot from {self._db.start_slot} to {first_slot}')

@@ -1,7 +1,7 @@
 import unittest
 import base58
 
-from unittest.mock import patch
+from unittest.mock import patch, call
 from typing import Optional, Union
 
 from ..common_neon.config import Config, StartSlot
@@ -149,12 +149,12 @@ class TestGasTank(unittest.TestCase):
     def test_init_gas_tank_slot_continue(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [start_slot + 1]
+        mock_get_slot.side_effect = [0, start_slot + 1]
 
         new_gas_tank = self.create_gas_tank(StartSlot.Continue)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot - 1)
-        mock_get_slot.assert_called_once_with('finalized')
+        mock_get_slot.assert_has_calls([call('finalized'), call('finalized')])
         mock_dict_get.assert_called()
 
     @patch.object(ConstantsDB, 'get')
@@ -162,12 +162,12 @@ class TestGasTank(unittest.TestCase):
     def test_init_gas_tank_slot_continue_recent_slot_not_found(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [None]
-        mock_get_slot.side_effect = [start_slot + 1]
+        mock_get_slot.side_effect = [0, start_slot + 1]
 
         new_gas_tank = self.create_gas_tank(StartSlot.Continue)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot + 1)
-        mock_get_slot.assert_called_once_with('finalized')
+        mock_get_slot.assert_has_calls([call('finalized'), call('finalized')])
         mock_dict_get.assert_called()
 
     @patch.object(ConstantsDB, 'get')
@@ -175,12 +175,12 @@ class TestGasTank(unittest.TestCase):
     def test_init_gas_tank_start_slot_parse_error(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [start_slot + 1]
+        mock_get_slot.side_effect = [0, start_slot + 1]
 
         new_gas_tank = self.create_gas_tank('Wrong value')
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot - 1)
-        mock_get_slot.assert_called_once_with('finalized')
+        mock_get_slot.assert_has_calls([call('finalized'), call('finalized')])
         mock_dict_get.assert_called()
 
     @patch.object(ConstantsDB, 'get')
@@ -188,12 +188,12 @@ class TestGasTank(unittest.TestCase):
     def test_init_gas_tank_slot_latest(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [start_slot + 1]
+        mock_get_slot.side_effect = [0, start_slot + 1]
 
         new_gas_tank = self.create_gas_tank(StartSlot.Latest)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot + 1)
-        mock_get_slot.assert_called_once_with('finalized')
+        mock_get_slot.assert_has_calls([call('finalized'), call('finalized')])
         mock_dict_get.assert_called()
 
     @patch.object(ConstantsDB, 'get')
@@ -201,12 +201,12 @@ class TestGasTank(unittest.TestCase):
     def test_init_gas_tank_slot_number(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [start_slot + 1]
+        mock_get_slot.side_effect = [0, start_slot + 1]
 
         new_gas_tank = self.create_gas_tank(start_slot)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot)
-        mock_get_slot.assert_called_once_with('finalized')
+        mock_get_slot.assert_has_calls([call('finalized'), call('finalized')])
         mock_dict_get.assert_called()
 
     @patch.object(ConstantsDB, 'get')
@@ -214,10 +214,10 @@ class TestGasTank(unittest.TestCase):
     def test_init_gas_tank_big_slot_number(self, mock_get_slot, mock_dict_get):
         start_slot = 1234
         mock_dict_get.side_effect = [start_slot - 1]
-        mock_get_slot.side_effect = [start_slot + 1]
+        mock_get_slot.side_effect = [0, start_slot + 1]
 
         new_gas_tank = self.create_gas_tank(start_slot + 100)
 
         self.assertEqual(new_gas_tank._latest_gas_tank_slot, start_slot + 1)
-        mock_get_slot.assert_called_once_with('finalized')
+        mock_get_slot.assert_has_calls([call('finalized'), call('finalized')])
         mock_dict_get.assert_called()
