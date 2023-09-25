@@ -401,18 +401,28 @@ class SolInteractor:
 
         return self.find_exist_block_slot(slot)
 
-    def find_exist_block_slot(self, start_slot: int) -> int:
+    def find_exist_block_slot(self, base_slot: int) -> int:
         """Find slot with block"""
-        slot = start_slot
-        while self.get_block_info(slot).is_empty():
-            if (slot == start_slot) or (slot % 100 == 0):
-                LOG.debug(f'Skip block {slot}...')
-            slot += 1
 
-        if slot != start_slot:
-            LOG.debug(f'Found not-empty slot {slot}')
+        retry = 0
+        start_slot = base_slot
+        finalized_slot = self.get_finalized_slot()
+        while start_slot < finalized_slot:
+            stop_slot = start_slot + 1024
+            slot_list = self.get_block_slot_list(start_slot, stop_slot, SolCommit.Finalized)
+            for slot in slot_list:
+                if not self.get_block_info(slot).is_empty():
+                    LOG.debug(f'Found not-empty slot {slot}')
+                    return slot
 
-        return slot
+                retry += 1
+                if retry % 100 == 0:
+                    LOG.debug(f'Skip block {slot}...')
+
+            start_slot = min(stop_slot, finalized_slot)
+
+        LOG.warning(f'Did not find not-empty slot from {base_slot}, force to use finalized slot {finalized_slot}')
+        return finalized_slot
 
     @staticmethod
     def _get_block_info_opts(commitment=SolCommit.Confirmed, full=False) -> Dict[str, Any]:
@@ -494,6 +504,14 @@ class SolInteractor:
         else:
             block_height = self.get_block_info(block_slot, commitment).block_height
         return block_height if block_height is not None else 0
+
+    def get_block_slot_list(self, start_slot: int, stop_slot: int, commitment: SolCommit.Finalized) -> List[int]:
+        opts = {
+            'commitment': SolCommit.to_solana(commitment)
+        }
+        response = self._send_rpc_request('getBlocks', start_slot, stop_slot, opts)
+        block_slot_list = response.get('result', list())
+        return block_slot_list
 
     def send_tx_list(self, tx_list: List[SolTx], skip_preflight: bool) -> List[SolSendResult]:
         opts = {
