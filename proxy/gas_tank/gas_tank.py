@@ -15,6 +15,7 @@ from ..common_neon.neon_instruction import EvmIxCode
 from ..common_neon.db.db_connect import DBConnection
 from ..common_neon.db.constats_db import ConstantsDB
 from ..common_neon.metrics_logger import MetricsLogger
+from ..common_neon.solana_not_empty_block import SolFirstBlockFinder
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolNeonTxReceiptInfo, SolNeonIxReceiptInfo
 from ..common_neon.utils.json_logger import logging_context
@@ -38,8 +39,9 @@ class GasTank:
         self._solana = SolInteractor(config)
         self._config = config
 
-        first_slot = self._solana.get_first_available_slot()
-        finalized_slot = self._solana.get_finalized_slot()
+        block_finder = SolFirstBlockFinder(self._solana)
+        first_slot = block_finder.find_slot()
+        finalized_slot = block_finder.finalized_slot
         last_known_slot = self._constant_db.get('latest_gas_tank_slot', None)
 
         self._start_slot = get_config_start_slot(config, first_slot, finalized_slot, last_known_slot)
