@@ -20,6 +20,10 @@ from .neon_instruction import ComputeBudgetIxCode
 LOG = logging.getLogger(__name__)
 
 
+def _def_SolPubKey() -> str:
+    return str(SolPubKey.default())
+
+
 @dataclass(frozen=True)
 class SolTxSigSlotInfo:
     sol_sig: str
@@ -52,8 +56,8 @@ class SolTxMetaInfo:
     @staticmethod
     def from_tx_receipt(block_slot: Optional[int], tx_receipt: Dict[str, Any]) -> SolTxMetaInfo:
         if block_slot is None:
-            block_slot = tx_receipt['slot']
-        sol_sig = tx_receipt['transaction']['signatures'][0]
+            block_slot = tx_receipt.get('slot', 0)
+        sol_sig = get_from_dict(tx_receipt, ('transaction', 'signatures', 0), _def_SolPubKey())
         sol_sig_slot = SolTxSigSlotInfo(sol_sig=sol_sig, block_slot=block_slot)
 
         return SolTxMetaInfo(
@@ -73,7 +77,10 @@ class SolTxMetaInfo:
 
     @cached_property
     def ix_meta_list(self) -> List[SolIxMetaInfo]:
-        raw_ix_list = self.tx['transaction']['message']['instructions']
+        raw_ix_list = get_from_dict(self.tx, ('transaction', 'message', 'instructions'), None)
+        if raw_ix_list is None:
+            return list()
+
         return [
             SolIxMetaInfo.from_tx_meta(self, idx, None, ix)
             for idx, ix in enumerate(raw_ix_list)
@@ -81,11 +88,17 @@ class SolTxMetaInfo:
 
     @cached_property
     def _inner_ix_meta_list(self) -> List[List[SolIxMetaInfo]]:
-        raw_inner_ix_list = self.tx['meta']['innerInstructions']
+        raw_inner_ix_list = get_from_dict(self.tx, ('meta', 'innerInstructions'), None)
+        if raw_inner_ix_list is None:
+            return list()
+
         inner_ix_meta_list: List[List[SolIxMetaInfo]] = [list() for _ in self.ix_meta_list]
         for raw_inner_ix in raw_inner_ix_list:
-            idx = raw_inner_ix['index']
-            raw_ix_list = raw_inner_ix['instructions']
+            idx = raw_inner_ix.get('index', None)
+            raw_ix_list = raw_inner_ix.get('instructions', None)
+            if (idx is None) or (raw_ix_list is None):
+                continue
+
             ix_meta_list = [
                 SolIxMetaInfo.from_tx_meta(self, idx, inner_idx, ix)
                 for inner_idx, ix in enumerate(raw_ix_list)
@@ -94,32 +107,39 @@ class SolTxMetaInfo:
         return inner_ix_meta_list
 
     def inner_ix_meta_list(self, ix_meta: SolIxMetaInfo) -> List[SolIxMetaInfo]:
-        return self._inner_ix_meta_list[ix_meta.idx]
+        inner_ix_meta_list = self._inner_ix_meta_list
+        if ix_meta.idx >= len(inner_ix_meta_list):
+            return list()
+
+        return inner_ix_meta_list[ix_meta.idx]
 
     @cached_property
     def account_key_list(self) -> List[str]:
-        msg = self.tx['transaction']['message']
-        meta = self.tx['meta']
+        acct_key_list = get_from_dict(self.tx, ('transaction', 'message', 'accountKeys'), None)
+        if acct_key_list is None:
+            return list()
 
-        account_key_list: List[str] = msg['accountKeys']
-        lookup_key_list: Optional[Dict[str, List[str]]] = meta.get('loadedAddresses', None)
+        lookup_key_list = get_from_dict(self.tx, ('meta', 'loadedAddresses'), None)
         if lookup_key_list is not None:
-            account_key_list.extend(lookup_key_list['writable'])
-            account_key_list.extend(lookup_key_list['readonly'])
+            acct_key_list.extend(lookup_key_list.get('writable', list()))
+            acct_key_list.extend(lookup_key_list.get('readonly', list()))
 
-        return account_key_list
+        return acct_key_list
 
     @cached_property
     def alt_key_list(self) -> List[str]:
-        msg = self.tx['transaction']['message']
-        alt_list: Optional[List[Dict[str, Any]]] = msg.get('addressTableLookups', None)
+        alt_list = get_from_dict(self.tx, ('transaction', 'message', 'addressTableLookups'), None)
         if alt_list is None:
             return list()
-        return [a.get('accountKey') for a in alt_list]
+
+        return [a.get('accountKey', _def_SolPubKey()) for a in alt_list]
 
     @cached_property
     def signer(self) -> str:
-        return self.account_key_list[0]
+        acct_key_list = self.account_key_list
+        if not len(acct_key_list):
+            return _def_SolPubKey()
+        return acct_key_list[0]
 
     @cached_property
     def sol_tx_cost(self) -> SolTxCostInfo:
@@ -399,13 +419,14 @@ class SolTxCostInfo:
 
     @staticmethod
     def from_tx_meta(tx_meta: SolTxMetaInfo) -> SolTxCostInfo:
-        meta = tx_meta.tx['meta']
+        pre_balance = get_from_dict(tx_meta.tx, ('meta', 'preBalances', 0), 0)
+        post_balance = get_from_dict(tx_meta.tx, ('meta', 'postBalances', 0), 0)
 
         return SolTxCostInfo(
             sol_sig=tx_meta.sol_sig,
             block_slot=tx_meta.block_slot,
             operator=tx_meta.signer,
-            sol_spent=(meta['preBalances'][0] - meta['postBalances'][0]),
+            sol_spent=(pre_balance - post_balance),
         )
 
     @cached_method
@@ -502,7 +523,7 @@ class SolNeonIxReceiptInfo:
             neon_ix_gas_usage = log_info.neon_tx_ix.gas_used
             neon_ix_total_gas_usage = log_info.neon_tx_ix.total_gas_used
 
-        acct_list = ix_meta.ix['accounts']
+        acct_list = ix_meta.ix.get('accounts', list())
 
         ix_data = SolNeonIxReceiptInfo._decode_ix_data(ix_meta)
 
@@ -593,7 +614,7 @@ class SolNeonIxReceiptInfo:
             acct_key_list = self._tx_meta.account_key_list
             if len(acct_key_list) > key_idx:
                 return acct_key_list[key_idx]
-        return ''
+        return _def_SolPubKey()
 
     def iter_account_key(self, start_idx: int) -> Generator[str, None, None]:
         assert self._tx_meta, 'Method available only on parsing data from Solana node'
@@ -652,7 +673,7 @@ class SolNeonTxReceiptInfo:
 
     @cached_property
     def _ix_log_msg_list(self) -> List[SolIxLogState]:
-        raw_log_msg_list = self._tx_meta.tx['meta'].get('logMessages', list())
+        raw_log_msg_list = get_from_dict(self._tx_meta.tx, ('meta', 'logMessages'), list())
         ix_log_msg_list: List[SolIxLogState] = list()
 
         log_state = SolTxLogDecoder().decode(raw_log_msg_list)
