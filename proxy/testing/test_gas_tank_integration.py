@@ -60,7 +60,7 @@ class TestGasTankIntegration(TestCase):
 
     @classmethod
     def create_token_mint(cls):
-        sol_client = RPCSolClient(Config().solana_url, commitment=RPCSolConfirmed)
+        sol_client = RPCSolClient(Config().random_solana_url, commitment=RPCSolConfirmed)
 
         with open("proxy/operator-keypairs/id2.json") as f:
             d = json.load(f)

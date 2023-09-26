@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import bisect
 from dataclasses import dataclass
 from typing import Dict, Union, Any, List, Optional, Set
 
@@ -64,13 +63,11 @@ class SolBlockStatus:
         return SolBlockStatus(block_slot=block_slot, commitment=SolCommit.NotProcessed)
 
 
-class SolInteractor:
-    def __init__(self, config: Config, solana_url: Optional[str] = None) -> None:
-        self._config = config
-        self._request_cnt = itertools.count()
-        self._solana_url = solana_url or config.solana_url
-        self._solana_timeout = config.solana_timeout
-        self._client: Optional[requests.Session] = None
+class SolClient:
+    def __init__(self, solana_url: str, solana_timeout: float):
+        self._solana_url = solana_url
+        self._solana_timeout = solana_timeout
+        self._session: Optional[requests.Session] = None
         self._headers = {
             'Content-Type': 'application/json',
             'Accept-Encoding': 'gzip,deflate'
@@ -79,44 +76,77 @@ class SolInteractor:
     def __del__(self):
         self._close()
 
-    def _close(self) -> None:
-        if self._client is None:
-            return
-        self._client.close()
-        self._client = None
+    @property
+    def solana_url(self) -> str:
+        return self._solana_url
 
-    def _send_post_request_impl(self, req: Union[RPCRequest, RPCRequestList]) -> Union[RPCResponse, RPCResponseList]:
-        if self._client is None:
-            self._client = requests.Session()
-            self._client.headers.update(self._headers)
-
+    def post(self, request: Union[RPCRequest, RPCRequestList]) -> Union[RPCResponse, RPCResponseList]:
         try:
-            raw_response = self._client.post(self._solana_url, json=req, timeout=self._solana_timeout)
+            if self._session is None:
+                self._session = requests.Session()
+                self._session.headers.update(self._headers)
+
+            raw_response = self._session.post(self._solana_url, json=request, timeout=self._solana_timeout)
             raw_response.raise_for_status()
 
             return raw_response.json()
 
-        except (BaseException, ):
+        except (BaseException,):
             self._close()
             raise
+
+    def _close(self) -> None:
+        if self._session is None:
+            return
+
+        self._session.close()
+        self._session = None
+
+
+class SolInteractor:
+    def __init__(self, config: Config, solana_url: Optional[str] = None) -> None:
+        self._config = config
+        self._request_cnt = itertools.count()
+
+        timeout = config.solana_timeout
+        solana_url_list = [solana_url] if solana_url else config.solana_url_list
+        self._client_list = [SolClient(url, timeout) for url in solana_url_list]
+        self._last_client_idx = 0
+
+    def __del__(self):
+        self._client_list = None
+
+    def _get_client(self) -> SolClient:
+        idx = self._last_client_idx
+
+        self._last_client_idx += 1
+        if self._last_client_idx >= len(self._client_list):
+            self._last_client_idx = 0
+
+        return self._client_list[idx]
 
     def _send_post_request(self, request: Union[RPCRequest, RPCRequestList]) -> Union[RPCResponse, RPCResponseList]:
         """This method is used to make retries to send request to Solana"""
 
-        def _clean_solana_err(_exc: BaseException) -> str:
+        def _clean_solana_err(_client: SolClient, _exc: BaseException) -> str:
             s = str(_exc)
             if self._config.hide_solana_url:
-                s = s.replace(self._solana_url, 'XXXXX')
+                s = s.replace(_client.solana_url, 'XXXXX')
             return s
 
-        for retry in itertools.count():
-            try:
-                return self._send_post_request_impl(request)
+        def _clean_solana_url(_client: SolClient) -> str:
+            if self._config.hide_solana_url:
+                return ''
+            return ' ' + _client.solana_url
 
+        for retry in itertools.count():
+            client = self._get_client()
+            try:
+                return client.post(request)
             except BaseException as exc:
                 if retry > 1:
-                    str_err = _clean_solana_err(exc)
-                    solana_url = _clean_solana_url()
+                    str_err = _clean_solana_err(client, exc)
+                    solana_url = _clean_solana_url(client)
                     LOG.warning(
                         f'Receive connection error {str_err} on connection to Solana{solana_url}. '
                         f'Attempt {retry + 1} to send the request to Solana node...'
@@ -175,9 +205,11 @@ class SolInteractor:
         request = self._build_rpc_request('getHealth')
 
         try:
-            response = self._send_post_request_impl(request)
-            status = response.get('result', 'bad')
-            return status == 'ok'
+            for cli in self._client_list:
+                response = cli.post(request)
+                if response.get('result', 'bad') != 'ok':
+                    return False
+            return True
 
         except (BaseException, ):
             return None
@@ -568,7 +600,7 @@ class SolInteractor:
             'commitment': commitment
         }
         is_done = False
-        with websockets.sync.client.connect(self._config.solana_ws_url) as websocket:
+        with websockets.sync.client.connect(self._config.random_solana_ws_url) as websocket:
             for tx_sig in tx_sig_list:
                 request = self._build_rpc_request('signatureSubscribe', tx_sig, opts)
                 websocket.send(json.dumps(request))
