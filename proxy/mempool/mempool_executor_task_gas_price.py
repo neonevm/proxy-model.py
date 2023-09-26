@@ -22,7 +22,7 @@ class MPExecutorGasPriceTask(MPExecutorBaseTask):
         super().__init__(config)
         self._stat_client = stat_client
         self._last_update_mapping_sec = 0
-        self._gas_price_calculator = GasPriceCalculator(config, SolInteractor(config, config.pyth_solana_url))
+        self._gas_price_calculator = GasPriceCalculator(config, SolInteractor(config, config.random_pyth_solana_url))
 
     def _update_gas_price_mapping(self) -> None:
         now = math.ceil(time.time())

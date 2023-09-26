@@ -1,4 +1,5 @@
 import os
+import random
 import re
 import logging
 
@@ -57,10 +58,19 @@ class Config(DBConfig):
 
     def __init__(self):
         super().__init__()
-        self._solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
+
+        self._solana_url_list = self._split_str(os.environ.get('SOLANA_URL', ''))
+        if not len(self._solana_url_list):
+            # LOG.warning('SOLANA_URL is not defined, force to use the default value')
+            self._solana_url_list = ['http://localhost:8899']
+
         self._solana_timeout = self._env_num('SOLANA_TIMEOUT', Decimal('15.0'), Decimal('1.0'), Decimal('3600'))
-        self._solana_ws_url = os.environ.get('SOLANA_WS_URL', parse_solana_ws_url(self._solana_url))
         self._hide_solana_url = self._env_bool('HIDE_SOLANA_URL', True)
+
+        self._solana_ws_url_list = self._split_str(os.environ.get('SOLANA_WS_URL', ''))
+        if not len(self._solana_ws_url_list):
+            # LOG.debug('SOLANA_WS_URL is not defined, force to use the default value calculated from the SOLANA_URL')
+            self._solana_ws_url_list = [parse_solana_ws_url(s) for s in self._solana_url_list]
 
         self._enable_private_api = self._env_bool('ENABLE_PRIVATE_API', False)
         self._enable_send_tx_api = self._env_bool('ENABLE_SEND_TX_API', True)
@@ -91,8 +101,13 @@ class Config(DBConfig):
         self._max_tx_account_cnt = self._env_num('MAX_TX_ACCOUNT_COUNT', 64, 20, 256)
 
         # Gas-Price settings
-        self._pp_solana_url = os.environ.get('PP_SOLANA_URL', self._solana_url)
         self._pyth_mapping_acct = self._env_sol_acct('PYTH_MAPPING_ACCOUNT')
+
+        self._pp_solana_url_list = self._split_str(os.environ.get('PP_SOLANA_URL', ''))
+        if (self._pyth_mapping_acct is not None) and (not len(self._pp_solana_url_list)):
+            # LOG.debug('PP_SOLANA_URL is not defined, force to use the default value (SOLANA_URL)')
+            self._pp_solana_url_list = self._solana_url_list
+
         self._update_pyth_mapping_period_sec = self._env_num(
             'UPDATE_PYTH_MAPPING_PERIOD_SEC',
             60 * 60,  # 1 hour
@@ -215,13 +230,9 @@ class Config(DBConfig):
 
         sol_acct_set: Set[SolPubKey] = set()
         try:
-            raw_acct_list = [acct for acct in re.split(r',|;|\s', raw_acct_list_str)]
+            raw_acct_list = self._split_str(raw_acct_list_str)
             for raw_acct in raw_acct_list:
-                acct = raw_acct.strip()
-                if not len(acct):
-                    continue
-
-                sol_acct = self._validate_sol_acct(name, acct)
+                sol_acct = self._validate_sol_acct(name, raw_acct)
                 if sol_acct is None:
                     continue
 
@@ -230,24 +241,22 @@ class Config(DBConfig):
             pass
         return sol_acct_set
 
-    @staticmethod
-    def _env_dsn_list(name: str) -> List[str]:
+    def _env_dsn_list(self, name: str) -> List[str]:
         raw_dsn_list_str = os.environ.get(name, None)
         if raw_dsn_list_str is None:
             return list()
 
         dsn_list: List[str] = list()
         try:
-            raw_dsn_list = re.split(r',|;|\s', raw_dsn_list_str)
-            for raw_dsn in raw_dsn_list:
-                dsn = raw_dsn.strip()
-                if not len(dsn):
-                    continue
-                dsn_list.append(dsn)
+            dsn_list = self._split_str(raw_dsn_list_str)
         except (BaseException,):
             LOG.error(f'{name} contains bad value')
 
         return dsn_list
+
+    @staticmethod
+    def _split_str(src: str) -> List[str]:
+        return [s.strip() for s in re.split(r',|;|\s', src) if len(s.strip())]
 
     @staticmethod
     def _env_start_slot(name: str, default_value: StartSlot.Type) -> StartSlot.Type:
@@ -302,18 +311,33 @@ class Config(DBConfig):
 
     ###################
     # Base settings
+    @property
+    def solana_url_list(self) -> List[str]:
+        return self._solana_url_list
 
     @property
-    def solana_url(self) -> str:
-        return self._solana_url
+    def random_solana_url(self) -> str:
+        return self._random_from_list(self.solana_url_list)
+
+    @staticmethod
+    def _random_from_list(src_list: List[str]) -> str:
+        if len(src_list) == 0:
+            return ''
+        elif len(src_list) == 1:
+            return src_list[0]
+        return src_list[random.randrange(0, len(src_list))]
 
     @property
     def solana_timeout(self) -> float:
         return float(self._solana_timeout)
 
     @property
-    def solana_ws_url(self) -> str:
-        return self._solana_ws_url
+    def solana_ws_url_list(self) -> List[str]:
+        return self._solana_ws_url_list
+
+    @property
+    def random_solana_ws_url(self) -> str:
+        return self._random_from_list(self.solana_ws_url_list)
 
     @property
     def hide_solana_url(self) -> bool:
@@ -387,10 +411,13 @@ class Config(DBConfig):
 
     #####################
     # Gas-Price settings
+    @property
+    def pyth_solana_url_list(self) -> List[str]:
+        return self._pp_solana_url_list
 
     @property
-    def pyth_solana_url(self) -> str:
-        return self._pp_solana_url
+    def random_pyth_solana_url(self) -> str:
+        return self._random_from_list(self.pyth_solana_url_list)
 
     @property
     def pyth_mapping_account(self) -> Optional[SolPubKey]:
@@ -660,8 +687,9 @@ class Config(DBConfig):
         }
         if not self.hide_solana_url:
             config_dict.update({
-                'SOLANA_URL': self.solana_url,
-                'SOLANA_WS_URL': self.solana_ws_url,
+                'SOLANA_URL': self.solana_url_list,
+                'SOLANA_WS_URL': self.solana_ws_url_list,
+                'PP_SOLANA_URL': self.pyth_solana_url_list
             })
         config_dict.update(super().as_dict())
         return config_dict

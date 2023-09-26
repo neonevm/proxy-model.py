@@ -15,11 +15,12 @@ LOG = logging.getLogger(__name__)
 class CliBase:
     def __init__(self, config: Config, enable_logging: bool):
         self._config = config
+        self._solana_url = config.random_solana_url
         self._enable_logging = enable_logging
 
     def _hide_solana_url(self, cmd: List[str]) -> str:
         if self._config.hide_solana_url:
-            return ' '.join([item.replace(self._config.solana_url, 'XXXX') for item in cmd])
+            return ' '.join([item.replace(self._solana_url, 'XXXX') for item in cmd])
         return ' '.join(cmd)
 
     def run_cli(self, cmd: List[str], **kwargs) -> str:
@@ -40,7 +41,7 @@ class SolanaCli(CliBase):
         try:
             cmd = [
                 'solana',
-                '--url', self._config.solana_url,
+                '--url', self._solana_url,
             ]
             cmd.extend(list(args))
 
@@ -65,7 +66,7 @@ class NeonCli(CliBase):
             cmd = [
                 'neon-cli',
                 '--commitment=recent',
-                '--url', self._config.solana_url,
+                '--url', self._solana_url,
                 '--evm_loader', EVM_PROGRAM_ID_STR,
                 '--loglevel',  f'{self._emulator_logging_level}'
             ]
