@@ -16,6 +16,7 @@ from .indexer_alt_ix_collector import AltIxCollector
 
 from ..common_neon.config import Config
 from ..common_neon.metrics_logger import MetricsLogger
+from ..common_neon.solana_not_empty_block import SolFirstBlockFinder, SolNotEmptyBlockFinder
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolCommit
 from ..common_neon.utils.json_logger import logging_context
@@ -120,7 +121,7 @@ class Indexer:
             self._stat_client.commit_neon_tx_result(tx_stat)
 
     def _commit_progress_stat(self) -> None:
-        """Send statistics current block's range"""
+        """Send statistics for the current block's range"""
         if not self._config.gather_statistics:
             return
 
@@ -351,12 +352,14 @@ class Indexer:
             pass
 
     def _check_start_slot(self, base_slot: int) -> None:
-        first_slot = self._solana.get_first_available_slot()
+        block_finder = SolFirstBlockFinder(self._solana)
+        first_slot = block_finder.find_slot()
+
         if first_slot < base_slot:
-            first_slot = self._solana.find_exist_block_slot(base_slot)
+            first_slot = SolNotEmptyBlockFinder(self._solana, base_slot, block_finder.finalized_slot).find_slot()
 
         if self._db.start_slot < first_slot:
-            LOG.debug(f'Move start slot from {self._db.start_slot} to {first_slot}')
+            LOG.debug(f'Move the start slot from {self._db.start_slot} to {first_slot}')
             self._db.set_start_slot(first_slot)
 
         # Skip history if it was cleaned by the Solana node

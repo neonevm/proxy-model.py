@@ -6,6 +6,7 @@ from multiprocessing import Process
 
 from ..common_neon.db.constats_db import ConstantsDB
 from ..common_neon.db.db_connect import DBConnection
+from ..common_neon.solana_not_empty_block import SolFirstBlockFinder, SolNotEmptyBlockFinder
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config, StartSlot
 from ..common.logger import Logger
@@ -60,8 +61,9 @@ class NeonIndexerApp:
     def _init_slot_range(self, constants_db: ConstantsDB) -> None:
         solana = SolInteractor(self._config)
 
-        self._finalized_slot = finalized_slot = solana.get_finalized_slot()
-        self._first_slot = first_slot = solana.get_first_available_slot()
+        block_finder = SolFirstBlockFinder(solana)
+        self._finalized_slot = finalized_slot = block_finder.finalized_slot
+        self._first_slot = first_slot = block_finder.find_slot()
         self._last_known_slot = last_known_slot = constants_db.get(IndexerDB.base_min_used_slot_name, 0)
 
         if self._config.start_slot == StartSlot.Disable:
@@ -152,7 +154,7 @@ class NeonIndexerApp:
             elif self._first_slot > db.stop_slot:
                 LOG.info(
                     f'Skip lost REINDEX {db_key}: '
-                    f'first slot ({self._first_slot}) > db.stop_slot {db.stop_slot}'
+                    f'first slot ({self._first_slot}) > db.stop_slot ({db.stop_slot})'
                 )
                 db.done()
             else:
@@ -189,7 +191,7 @@ class NeonIndexerApp:
             # For example: CONTINUE:213456789
             ident = ':'.join([self._reindex_ident, str(start_slot)])
             stop_slot = min(start_slot + range_len, self._reindex_stop_slot)
-            start_slot = solana.find_exist_block_slot(start_slot)
+            start_slot = SolNotEmptyBlockFinder(solana, start_slot, self._finalized_slot).find_slot()
             db = IndexerDB.from_range(self._config, DBConnection(self._config), start_slot, ident, stop_slot)
             new_db_list.append(db)
             start_slot = stop_slot

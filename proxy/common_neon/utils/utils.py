@@ -169,6 +169,9 @@ def get_from_dict(src: Dict, path: Tuple[Any, ...], default_value: Any) -> Any:
     """Provides smart getting values from python dictionary"""
     value = src
     for key in path:
+        if isinstance(value, list) and isinstance(key, int) and (0 <= key < len(value)):
+            return value[key]
+
         if not isinstance(value, dict):
             return default_value
 

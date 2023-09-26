@@ -93,7 +93,7 @@ class SolBlockNetCache:
 
     @staticmethod
     def _raise_error(ctx: SolNeonDecoderCtx, slot: int, msg: str) -> None:
-        if (not ctx.is_finalized()) or ((ctx.stop_slot - slot) < 1024):
+        if (not ctx.is_finalized()) or ((ctx.stop_slot - slot) < 512):
             raise SolHistoryNotFound(msg)
         raise SolHistoryCriticalNotFound(slot, msg)
 

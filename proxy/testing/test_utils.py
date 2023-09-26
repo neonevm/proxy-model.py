@@ -20,6 +20,11 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(1, get_from_dict(test_dict, ("a", "b", "c"), None))
         self.assertEqual({"b": {"c": 1}}, get_from_dict(test_dict, ("a", ), None))
 
+        test_dict_list = {"a": {"b": [10, 20]}}
+        self.assertEqual(get_from_dict(test_dict_list, ('a', 'b', 0), -1), 10)
+        self.assertEqual(get_from_dict(test_dict_list, ('a', 'b', 2), -1), -1)
+        self.assertEqual(get_from_dict(test_dict_list, ('a', 'b', -1), -1), -1)
+
         self.assertIsNone(get_from_dict(test_dict, ("b", "c", "a"), None))
         self.assertIsNone(get_from_dict(None, ("a",), None))
         self.assertIsNone(get_from_dict(555, ("a", ), None))

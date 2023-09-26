@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass
 from typing import Dict, Union, Any, List, Optional, Set
 
@@ -115,8 +116,9 @@ class SolInteractor:
             except BaseException as exc:
                 if retry > 1:
                     str_err = _clean_solana_err(exc)
-                    LOG.debug(
-                        f'Receive connection error {str_err} on connection to Solana. '
+                    solana_url = _clean_solana_url()
+                    LOG.warning(
+                        f'Receive connection error {str_err} on connection to Solana{solana_url}. '
                         f'Attempt {retry + 1} to send the request to Solana node...'
                     )
 
@@ -385,7 +387,9 @@ class SolInteractor:
         )
 
     def get_first_available_slot(self) -> int:
-        """Get first available slot from Solana"""
+        """Get the first available slot from Solana.
+        The method doesn't give guaranties that the Solana has a not empty block in the slot
+        """
         slot = -1
         for retry in itertools.count():
             response = self._send_rpc_request('getFirstAvailableBlock')
@@ -396,33 +400,7 @@ class SolInteractor:
                 LOG.debug(f"Retry {retry} on trying to get Solana's first slot...")
 
         LOG.debug(f"Solana's first slot {slot}")
-        if slot > 0:
-            slot += 512
-
-        return self.find_exist_block_slot(slot)
-
-    def find_exist_block_slot(self, base_slot: int) -> int:
-        """Find slot with block"""
-
-        retry = 0
-        start_slot = base_slot
-        finalized_slot = self.get_finalized_slot()
-        while start_slot < finalized_slot:
-            stop_slot = start_slot + 1024
-            slot_list = self.get_block_slot_list(start_slot, stop_slot, SolCommit.Finalized)
-            for slot in slot_list:
-                if not self.get_block_info(slot).is_empty():
-                    LOG.debug(f'Found not-empty slot {slot}')
-                    return slot
-
-                retry += 1
-                if retry % 100 == 0:
-                    LOG.debug(f'Skip block {slot}...')
-
-            start_slot = min(stop_slot, finalized_slot)
-
-        LOG.warning(f'Did not find not-empty slot from {base_slot}, force to use finalized slot {finalized_slot}')
-        return finalized_slot
+        return slot
 
     @staticmethod
     def _get_block_info_opts(commitment=SolCommit.Confirmed, full=False) -> Dict[str, Any]:
