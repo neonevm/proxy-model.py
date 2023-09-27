@@ -41,6 +41,7 @@ jobs:
       neon_evm_tag: ${{ steps.tags.outputs.neon_evm }}
       is_version_proxy_branch: ${{ steps.is_version_proxy_branch.outputs.value }}
       test_set: ${{ steps.test_set.outputs.value }}
+      neon_test_tag: ${{ steps.neon_test_tag.outputs.value }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -91,7 +92,23 @@ jobs:
           fi;
           echo "value=${value}"
           echo "value=${value}" >> $GITHUB_OUTPUT
+      - name: Define test image tag
+        id: neon_test_tag
+        run: |
+          if ${{ steps.is_version_proxy_branch.outputs.value }}; then
+            tag=${GITHUB_REF/refs\/heads\//}
 
+          elif [[ $github_ref == *"refs/tags/"* ]]; then
+            tag=${GITHUB_REF/refs\/tags\//}
+
+          elif [[ "${{ github.base_ref }}" =~ "refs/heads/"[vt][0-9]+\.[0-9]+\.x ]]; then # pr to version branch
+            tag=${GITHUB_BASE_REF/refs\/heads\//}
+
+          else
+            tag='latest'
+          fi
+          echo "value=${tag}"
+          echo "value=${tag}" >> $GITHUB_OUTPUT
       - name: Build docker image
         run: |
           python3 ./.github/workflows/deploy.py build_docker_image \
@@ -177,7 +194,6 @@ jobs:
       CONTAINER: oz-${{ github.run_id }}
       NETWORK_NAME: aws_custom
     steps:
-      - uses: actions/checkout@v3
       - name: Pull docker image
         run: docker pull ${{ env.NEON_TEST_IMAGE }}
       - name: Run docker container
@@ -238,27 +254,9 @@ jobs:
       CONTAINER: basic-${{ github.run_id }}
       NETWORK: aws
     steps:
-      - uses: actions/checkout@v3
-      - name: Define test image tag
-        id: neon_test_tag
-        run: |
-          if ${{ needs.build-image.outputs.is_version_proxy_branch }}; then
-            tag=${GITHUB_REF/refs\/heads\//}
-
-          elif [[ $github_ref == *"refs/tags/"* ]]; then
-            tag=${GITHUB_REF/refs\/tags\//}
-
-          elif [[ "${{ github.base_ref }}" =~ "refs/heads/"[vt][0-9]+\.[0-9]+\.x ]]; then # pr to version branch
-            tag=${GITHUB_BASE_REF/refs\/heads\//}
-
-          else
-            tag='latest'
-          fi
-          echo "value=${tag}"
-          echo "value=${tag}" >> $GITHUB_OUTPUT
       - name: Run docker container
         run: |
-          image="${{ env.NEON_TEST_IMAGE }}:${{ steps.neon_test_tag.outputs.value }}"
+          image="${{ env.NEON_TEST_IMAGE }}:${{ needs.build-image.outputs.neon_test_tag }}"
           docker pull $image
           docker run -i -d -e PROXY_IP=${{ env.PROXY_IP }} -e SOLANA_IP=${{ env.SOLANA_IP }} \
           --name=${{ env.CONTAINER }} $image /bin/bash
@@ -300,12 +298,44 @@ jobs:
           --token=${{secrets.GHTOKEN}} \
           --test_set=${{needs.build-image.outputs.test_set }}
 
+  economy-tests:
+    if: needs.build-image.outputs.test_set=='extendedFullTestSuite'
+    needs:
+      - prepare-infrastructure
+      - dapps-tests
+      - basic-tests
+      - openzeppelin-tests
+      - build-image
+    runs-on: test-runner
+    env:
+      SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
+      PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
+      IMAGE: neonlabsorg/neon_tests
+      CONTAINER: economy-${{ github.run_id }}
+      NETWORK: aws
+    steps:
+      - name: Run docker container
+        run: |
+          image="${{ env.NEON_TEST_IMAGE }}:${{ needs.build-image.outputs.neon_test_tag }}"
+          docker pull $image
+          docker run -i -d -e PROXY_IP=${{ env.PROXY_IP }} -e SOLANA_IP=${{ env.SOLANA_IP }} \
+          --name=${{ env.CONTAINER }} $image /bin/bash
+      - name: Run economy tests
+        run: |
+          docker exec -i ${{ env.CONTAINER }} \
+            python3 ./clickfile.py run economy -n ${{ env.NETWORK }}
+      - name: Remove docker container
+        if: always()
+        run: docker rm -f ${{ env.CONTAINER }}
+
+
   destroy-terraform:
     needs:
       - prepare-infrastructure
       - openzeppelin-tests
       - basic-tests
       - dapps-tests
+      - economy-tests
       - build-image
     runs-on: test-runner
     if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
@@ -345,11 +375,13 @@ jobs:
       - openzeppelin-tests
       - basic-tests
       - dapps-tests
+      - economy-tests
       - deploy-check
     if: |
       always() &&
       needs.deploy-check.result == 'success' &&
-      ((needs.openzeppelin-tests.result == 'success' && needs.basic-tests.result == 'success' && needs.dapps-tests.result == 'success') ||
+      ((needs.openzeppelin-tests.result == 'success' && needs.basic-tests.result == 'success'
+      && needs.dapps-tests.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.economy.result)) ||
       needs.prepare-infrastructure.result == 'skipped')
     steps:
       - uses: actions/checkout@v3
@@ -370,6 +402,7 @@ jobs:
       - openzeppelin-tests
       - basic-tests
       - dapps-tests
+      - economy-tests
       - deploy-check
       - build-image
     if: |
