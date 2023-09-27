@@ -66,7 +66,7 @@ class Indexer:
             assert ix_code not in self._sol_neon_ix_decoder_dict
             self._sol_neon_ix_decoder_dict[ix_code] = decoder
 
-        self._check_start_slot(self._db.start_slot)
+        self._check_start_slot(self._db.min_used_slot)
 
     def _save_checkpoint(self, dctx: SolNeonDecoderCtx) -> None:
         if dctx.is_neon_block_queue_empty():
@@ -216,7 +216,7 @@ class Indexer:
         return neon_block
 
     def _collect_neon_txs(self, dctx: SolNeonDecoderCtx, stop_slot: int, sol_commit: SolCommit.Type) -> None:
-        start_slot = self._db.start_slot
+        start_slot = self._db.min_used_slot
         root_neon_block = self._neon_block_dict.finalized_neon_block
         if root_neon_block:
             start_slot = root_neon_block.block_slot
@@ -358,8 +358,8 @@ class Indexer:
         if first_slot < base_slot:
             first_slot = SolNotEmptyBlockFinder(self._solana, base_slot, block_finder.finalized_slot).find_slot()
 
-        if self._db.start_slot < first_slot:
-            LOG.debug(f'Move the start slot from {self._db.start_slot} to {first_slot}')
+        if self._db.min_used_slot < first_slot:
+            LOG.debug(f'Move the min used slot from {self._db.min_used_slot} to {first_slot}')
             self._db.set_start_slot(first_slot)
 
         # Skip history if it was cleaned by the Solana node
