@@ -68,6 +68,7 @@ class SolClient:
         self._solana_url = solana_url
         self._solana_timeout = solana_timeout
         self._session: Optional[requests.Session] = None
+        self._has_fail = False
         self._headers = {
             'Content-Type': 'application/json',
             'Accept-Encoding': 'gzip,deflate'
@@ -82,9 +83,7 @@ class SolClient:
 
     def post(self, request: Union[RPCRequest, RPCRequestList]) -> Union[RPCResponse, RPCResponseList]:
         try:
-            if self._session is None:
-                self._session = requests.Session()
-                self._session.headers.update(self._headers)
+            self._init_client()
 
             raw_response = self._session.post(self._solana_url, json=request, timeout=self._solana_timeout)
             raw_response.raise_for_status()
@@ -92,6 +91,7 @@ class SolClient:
             return raw_response.json()
 
         except (BaseException,):
+            self._has_fail = True
             self._close()
             raise
 
@@ -101,6 +101,17 @@ class SolClient:
 
         self._session.close()
         self._session = None
+
+    def _init_client(self) -> None:
+        if self._session is not None:
+            return
+
+        if self._has_fail:
+            self._has_fail = False
+            time.sleep(15)
+
+        self._session = requests.Session()
+        self._session.headers.update(self._headers)
 
 
 class SolInteractor:
@@ -151,8 +162,6 @@ class SolInteractor:
                         f'Receive connection error {str_err} on connection to Solana{solana_url}. '
                         f'Attempt {retry + 1} to send the request to Solana node...'
                     )
-
-                time.sleep(1)
 
     def _build_rpc_request(self, method: str, *param_list: Any) -> RPCRequest:
         request_id = next(self._request_cnt) + 1
