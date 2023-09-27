@@ -64,7 +64,7 @@ class Config(DBConfig):
             # LOG.warning('SOLANA_URL is not defined, force to use the default value')
             self._solana_url_list = ['http://localhost:8899']
 
-        self._solana_timeout = self._env_num('SOLANA_TIMEOUT', Decimal('15.0'), Decimal('1.0'), Decimal('3600'))
+        self._solana_timeout = self._env_num('SOLANA_TIMEOUT', Decimal('60.0'), Decimal('1.0'), Decimal('3600'))
         self._hide_solana_url = self._env_bool('HIDE_SOLANA_URL', True)
 
         self._solana_ws_url_list = self._split_str(os.environ.get('SOLANA_WS_URL', ''))
@@ -141,8 +141,7 @@ class Config(DBConfig):
 
         # Indexing settings
         self._start_slot = self._env_start_slot(self.start_slot_name, StartSlot.Latest)
-        self._indexer_poll_block_cnt = self._env_num('INDEXER_POLL_BLOCK_COUNT', 32, 12, 1024)
-
+        self._indexer_poll_block_cnt = self._env_num('INDEXER_POLL_BLOCK_COUNT', 8, 3, 1024)
         self._indexer_check_msec = self._env_num('INDEXER_CHECK_MSEC', 200, 50, 10_000)
         self._stuck_obj_blockout = self._env_num('STUCK_OBJECT_BLOCKOUT', 64, 16, 1024)
         self._stuck_obj_validate_blockout = self._env_num('STUCK_OBJECT_VALIDATE_BLOCKOUT', 1024, 512, 1024 * 1024)
