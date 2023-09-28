@@ -155,13 +155,12 @@ class SolInteractor:
             try:
                 return client.post(request)
             except BaseException as exc:
-                if retry > 1:
-                    str_err = _clean_solana_err(client, exc)
-                    solana_url = _clean_solana_url(client)
-                    LOG.warning(
-                        f'Receive connection error {str_err} on connection to Solana{solana_url}. '
-                        f'Attempt {retry + 1} to send the request to Solana node...'
-                    )
+                str_err = _clean_solana_err(client, exc)
+                solana_url = _clean_solana_url(client)
+                LOG.warning(
+                    f'Receive connection error {str_err} on connection to Solana{solana_url}. '
+                    f'Attempt {retry + 1} to send the request to Solana node...'
+                )
 
     def _build_rpc_request(self, method: str, *param_list: Any) -> RPCRequest:
         request_id = next(self._request_cnt) + 1
