@@ -381,7 +381,7 @@ jobs:
       always() &&
       needs.deploy-check.result == 'success' &&
       ((needs.openzeppelin-tests.result == 'success' && needs.basic-tests.result == 'success'
-      && needs.dapps-tests.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.economy.result)) ||
+      && needs.dapps-tests.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.economy-tests.result)) ||
       needs.prepare-infrastructure.result == 'skipped')
     steps:
       - uses: actions/checkout@v3
