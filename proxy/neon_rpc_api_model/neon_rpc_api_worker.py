@@ -534,21 +534,22 @@ class NeonRpcApiWorker:
         }
         return result
 
-    def eth_getStorageAt(self, account: str, position, tag: Union[int, str]) -> str:
+    def eth_getStorageAt(self, contract: str, position: Union[int, str], tag: Union[int, str]) -> str:
         """
         Retrieves storage data by given position
         Currently supports only 'latest' block
         """
 
         self._validate_block_tag(tag)
-        account = self._normalize_address(account)
+        contract = self._normalize_address(contract)
+        position = hex(self._normalize_hex(position, 'position'))
+        default_value = '0x' + 64 * '0'
 
         try:
-            value = NeonCli(self._config, False).call('get-storage-at', account, position)
-            return '0x' + (value or 64 * '0')
-        except (Exception,):
-            # LOG.error(f"eth_getStorageAt: Neon-cli failed to execute: {err}")
-            return '0x' + 64 * '0'
+            return self._core_api_client.get_storage_at(contract, position, default_value)
+        except (Exception,) as err:
+            # LOG.error(f'eth_getStorageAt: Neon-cli failed to execute: {str(err)}')
+            return default_value
 
     def _get_block_by_hash(self, block_hash: str) -> SolBlockInfo:
         try:

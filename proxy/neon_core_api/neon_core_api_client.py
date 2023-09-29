@@ -55,10 +55,21 @@ class _NeonCoreApiClient:
         response = self._post(self._emulate_url, request)
         return NeonEmulatorResult(response.get('value'))
 
+    def get_storage_at(self, request: RPCRequest) -> Optional[str]:
+        response = self._get(self._get_storage_at_url, request)
+        value = response.get('value', None)
+        return bytes(value).hex() if value else None
+
     def _post(self, url: str, request: RPCRequest) -> RPCResponse:
+        return self._send_request(lambda: self._client.post(url, json=request))
+
+    def _get(self, url: str, request: RPCRequest) -> RPCResponse:
+        return self._send_request(lambda: self._client.get(url, params=request))
+
+    def _send_request(self, request) -> RPCResponse:
         raw_response: Optional[requests.Response] = None
         try:
-            raw_response = self._client.post(url, json=request)
+            raw_response = request()
             raw_response.raise_for_status()
             return raw_response.json()
         except (BaseException,):
@@ -136,6 +147,14 @@ class NeonCoreApiClient:
 
     def emulate_neon_tx(self, neon_tx: NeonTx) -> NeonEmulatorResult:
         return self.emulate(neon_tx.hex_to_address, neon_tx.hex_sender, neon_tx.hex_call_data, hex(neon_tx.value))
+
+    def get_storage_at(self, contract: str, position: str, default_value: str) -> str:
+        request = dict(
+            contract_id=contract,
+            index=position
+        )
+        value = self._call(_NeonCoreApiClient.get_storage_at, request)
+        return '0x' + value if value else default_value
 
     def _check_exit_status(self, result: NeonEmulatorResult):
         exit_status = result.exit_status
