@@ -15,7 +15,6 @@ from ..common_neon.config import Config
 from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.emulator_interactor import call_emulator, check_emulator_exit_status, call_tx_emulator
 from ..common_neon.environment_utils import NeonCli
 from ..common_neon.errors import EthereumError, InvalidParamError, RescheduleError, NonceTooLowError
 from ..common_neon.keys_storage import KeyStorage
@@ -32,6 +31,8 @@ from ..mempool import (
     MemPoolClient, MP_SERVICE_ADDR,
     MPNeonTxResult, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
 )
+
+from ..neon_core_api import NeonCoreApiClient
 
 from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
 from ..indexer.indexer_db import IndexerDB
@@ -67,6 +68,8 @@ class NeonRpcApiWorker:
         db_conn = DBConnection(config)
         self._db = IndexerDB.from_db(config, db_conn)
         self._gas_tank = GasLessAccountsDB(db_conn)
+
+        self._core_api_client = NeonCoreApiClient(config)
 
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
@@ -213,7 +216,7 @@ class NeonRpcApiWorker:
             param['to'] = self._normalize_address(param['to'], 'to-address')
 
         try:
-            calculator = GasEstimate(self._config, self._solana, param)
+            calculator = GasEstimate(self._core_api_client, param)
             calculator.execute()
             return hex(calculator.estimate())
 
@@ -609,17 +612,16 @@ class NeonRpcApiWorker:
             raise InvalidParamError(message="missing data")
 
         try:
-            caller_id = obj.get('from', "0x0000000000000000000000000000000000000000")
-            contract_id = obj.get('to', 'deploy')
-            data = obj.get('data', "None")
-            value = obj.get('value', '')
+            sender = obj.get('from')
+            contract = obj.get('to')
+            data = obj.get('data')
+            value = obj.get('value')
 
             retry_idx = 0
             retry_on_fail = self._config.retry_on_fail
             while True:
                 try:
-                    emulator_result = call_emulator(self._config, contract_id, caller_id, data, value)
-                    check_emulator_exit_status(emulator_result)
+                    emulator_result = self._core_api_client.emulate(contract, sender, data, value, check_result=True)
                     return '0x' + emulator_result.result
 
                 except RescheduleError:
@@ -1225,7 +1227,7 @@ class NeonRpcApiWorker:
         LOG.debug(f'Call neon_emulate: {raw_signed_tx}')
 
         neon_tx = NeonTx.from_string(bytearray.fromhex(raw_signed_tx))
-        emulator_result = call_tx_emulator(self._config, neon_tx)
+        emulator_result = self._core_api_client.emulate_neon_tx(neon_tx)
         return emulator_result.full_dict
 
     def neon_finalizedBlockNumber(self) -> str:

@@ -75,10 +75,9 @@ class Config(DBConfig):
         self._enable_private_api = self._env_bool('ENABLE_PRIVATE_API', False)
         self._enable_send_tx_api = self._env_bool('ENABLE_SEND_TX_API', True)
         self._use_earliest_block_if_0_passed = self._env_bool('USE_EARLIEST_BLOCK_IF_0_PASSED', False)
-        self._neon_cli_timeout = self._env_num('NEON_CLI_TIMEOUT', Decimal('2.5'), Decimal('1'), Decimal('20'))
         self._max_evm_step_cnt_emulate = self._env_num('MAX_EVM_STEP_COUNT_TO_EMULATE', 500_000, 1000, 4_000_000)
-        self._neon_cli_debug_log = self._env_bool('NEON_CLI_DEBUG_LOG', False)
         self._gather_statistics = self._env_bool('GATHER_STATISTICS', False)
+        self._neon_core_api_port = self._env_num('NEON_CORE_API_PORT', 9195, 8000, 12000)
 
         # Mempool limits
         self._mempool_capacity = self._env_num('MEMPOOL_CAPACITY', 4096, 10, 4096 * 1024)
@@ -355,20 +354,16 @@ class Config(DBConfig):
         return self._use_earliest_block_if_0_passed
 
     @property
-    def neon_cli_timeout(self) -> float:
-        return float(self._neon_cli_timeout)
-
-    @property
     def max_evm_step_cnt_emulate(self) -> int:
         return self._max_evm_step_cnt_emulate
 
     @property
-    def neon_cli_debug_log(self) -> bool:
-        return self._neon_cli_debug_log
-
-    @property
     def gather_statistics(self) -> bool:
         return self._gather_statistics
+
+    @property
+    def neon_core_api_port(self) -> int:
+        return self._neon_core_api_port
 
     #####################
     # Mempool settings
@@ -610,10 +605,9 @@ class Config(DBConfig):
             'ENABLE_PRIVATE_API': self.enable_private_api,
             'ENABLE_SEND_TX_API': self.enable_send_tx_api,
             'USE_EARLIEST_BLOCK_IF_0_PASSED': self.use_earliest_block_if_0_passed,
-            'NEON_CLI_TIMEOUT': self.neon_cli_timeout,
             'MAX_EVM_STEP_COUNT_TO_EMULATE': self.max_evm_step_cnt_emulate,
-            'NEON_CLI_DEBUG_LOG': self.neon_cli_debug_log,
             'GATHER_STATISTICS': self.gather_statistics,
+            'NEON_CORE_API_PORT': self.neon_core_api_port,
 
             # Mempool settings
             'MEMPOOL_CAPACITY': self.mempool_capacity,
