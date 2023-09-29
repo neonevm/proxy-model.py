@@ -1,24 +1,30 @@
 import logging
 
-from ..common_neon.elf_params import ElfParams
-from ..common_neon.errors import RescheduleError, NonceTooLowError, NonceTooHighError, BadResourceError, StuckTxError
-from ..common_neon.operator_resource_info import OpResInfo
-
 from .mempool_api import MPTxExecRequest, MPTxExecResult, MPTxExecResultCode
 from .mempool_executor_task_base import MPExecutorBaseTask
 from .neon_tx_sender import NeonTxSendStrategyExecutor
 from .neon_tx_sender_ctx import NeonTxSendCtx
+
+from ..common_neon.config import Config
+from ..common_neon.elf_params import ElfParams
+from ..common_neon.errors import RescheduleError, NonceTooLowError, NonceTooHighError, BadResourceError, StuckTxError
+
+from ..neon_core_api import NeonCoreApiClient
 
 
 LOG = logging.getLogger(__name__)
 
 
 class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
+    def __init__(self, config: Config, core_api_client: NeonCoreApiClient):
+        super().__init__(config)
+        self._core_api_client = core_api_client
+
     def execute_neon_tx(self, mp_tx_req: MPTxExecRequest) -> MPTxExecResult:
         neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
         try:
             assert neon_tx_exec_cfg is not None
-            self.execute_neon_tx_impl(mp_tx_req)
+            self._execute_neon_tx(mp_tx_req)
 
         except NonceTooLowError:
             LOG.debug(f'Skip {mp_tx_req}, reason: nonce too low')
@@ -46,11 +52,9 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
 
         return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)
 
-    def execute_neon_tx_impl(self, mp_tx_req: MPTxExecRequest):
+    def _execute_neon_tx(self, mp_tx_req: MPTxExecRequest):
         ElfParams().set_elf_param_dict(mp_tx_req.elf_param_dict)
 
-        resource = OpResInfo.from_ident(mp_tx_req.res_ident)
-
-        strategy_ctx = NeonTxSendCtx(self._config, self._solana, resource, mp_tx_req)
+        strategy_ctx = NeonTxSendCtx(self._config, self._solana, self._core_api_client, mp_tx_req)
         strategy_executor = NeonTxSendStrategyExecutor(strategy_ctx)
         strategy_executor.execute()

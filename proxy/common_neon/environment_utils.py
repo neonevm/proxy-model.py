@@ -70,7 +70,6 @@ class NeonCli(CliBase):
                 '--evm_loader', EVM_PROGRAM_ID_STR,
                 '--loglevel',  f'{self._emulator_logging_level}'
             ]
-            cmd.extend(['-vvv'] if self._config.neon_cli_debug_log else [])
             cmd.extend(list(args))
             if self._enable_logging:
                 LOG.debug(f'Calling neon-cli: {self._hide_solana_url(cmd)}')
@@ -82,7 +81,7 @@ class NeonCli(CliBase):
 
             result = subprocess.run(
                 cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                universal_newlines=True, timeout=self._config.neon_cli_timeout
+                universal_newlines=True
             )
 
             try:
@@ -113,9 +112,6 @@ class NeonCli(CliBase):
 
     @property
     def _emulator_logging_level(self):
-        if self._config.neon_cli_debug_log:
-            return 'trace'
-
         level = LOG.getEffectiveLevel()
         cli_level = self.EMULATOR_LOGLEVEL.get(level, 'warn')
         return cli_level
@@ -123,7 +119,7 @@ class NeonCli(CliBase):
     def version(self):
         try:
             cmd = ['neon-cli', '--version']
-            return self.run_cli(cmd, timeout=self._config.neon_cli_timeout, universal_newlines=True).split()[1]
+            return self.run_cli(cmd, universal_newlines=True).split()[1]
         except subprocess.CalledProcessError as err:
             LOG.error(f'ERR: neon-cli error {str(err)}')
             raise
