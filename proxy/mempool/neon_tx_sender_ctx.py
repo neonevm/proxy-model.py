@@ -12,6 +12,8 @@ from ..common_neon.solana_tx import SolTx, SolPubKey, SolAccountMeta, SolAccount
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.eth_proto import NeonTx
 
+from ..neon_core_api import NeonCoreApiClient
+
 from .mempool_api import MPTxExecRequest
 
 
@@ -19,14 +21,20 @@ LOG = logging.getLogger(__name__)
 
 
 class NeonTxSendCtx:
-    def __init__(self, config: Config, solana: SolInteractor, resource: OpResInfo, mp_tx_req: MPTxExecRequest):
+    def __init__(
+        self, config: Config,
+        solana: SolInteractor,
+        core_api_client: NeonCoreApiClient,
+        mp_tx_req: MPTxExecRequest
+    ):
         self._config = config
         self._mp_tx_req = mp_tx_req
         self._neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
         self._solana = solana
-        self._resource = resource
+        self._core_api_client = core_api_client
+        self._resource = OpResInfo.from_ident(mp_tx_req.res_ident)
 
-        self._ix_builder = NeonIxBuilder(resource.public_key)
+        self._ix_builder = NeonIxBuilder(self._resource.public_key)
         self._ix_builder.init_operator_neon(self._resource.neon_address)
         self._ix_builder.init_iterative(self.holder_account)
         if not mp_tx_req.is_stuck_tx():
@@ -74,6 +82,10 @@ class NeonTxSendCtx:
 
     def has_emulator_result(self) -> bool:
         return not self._neon_tx_exec_cfg.emulator_result.is_empty()
+
+    def emulate(self) -> None:
+        emulator_result = self._core_api_client.emulate_neon_tx(self.neon_tx)
+        self.set_emulator_result(emulator_result)
 
     def set_emulator_result(self, emulator_result: NeonEmulatorResult) -> None:
         self._neon_tx_exec_cfg.set_emulator_result(emulator_result)

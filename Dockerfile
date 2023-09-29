@@ -44,6 +44,9 @@ COPY --from=spl \
     /spl/bin/
 RUN chmod +x /spl/bin/create-test-accounts.sh
 
+# TODO: rename
+COPY --from=spl /opt/neon-api /spl/bin/neon-core-api
+
 COPY --from=spl \
     /opt/solidity/ \
     /opt/contracts/

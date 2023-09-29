@@ -24,6 +24,8 @@ from ..common_neon.config import Config
 from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.pickable_data_server import PipePickableDataSrv, IPickableDataServerUser
 
+from ..neon_core_api import NeonCoreApiClient
+
 from ..statistic.proxy_client import ProxyStatClient
 
 
@@ -39,6 +41,7 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
 
         self._pickable_data_srv: Optional[PipePickableDataSrv] = None
         self._stat_client: Optional[ProxyStatClient] = None
+        self._core_api_client: Optional[NeonCoreApiClient] = None
 
         mp.Process.__init__(self)
 
@@ -65,7 +68,9 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
     def _handle_request(self, mp_req: MPRequest) -> Any:
         if mp_req.type == MPRequestType.SendTransaction:
             mp_tx_req = cast(MPTxExecRequest, mp_req)
-            exec_neon_tx_task = MPExecutorExecNeonTxTask(self._config)
+            if self._core_api_client is None:
+                self._core_api_client = NeonCoreApiClient(self._config)
+            exec_neon_tx_task = MPExecutorExecNeonTxTask(self._config, self._core_api_client)
             return exec_neon_tx_task.execute_neon_tx(mp_tx_req)
 
         elif mp_req.type == MPRequestType.GetGasPrice:

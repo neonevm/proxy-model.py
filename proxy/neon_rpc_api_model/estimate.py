@@ -3,17 +3,15 @@ import logging
 from typing import Dict, Any, List, Optional
 
 from ..common_neon.address import NeonAddress
-from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.emulator_interactor import call_emulator, check_emulator_exit_status
 from ..common_neon.data import NeonEmulatorResult
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt_limit import ALTLimit
-from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockHash, SolTxSizeError
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 
+from ..neon_core_api import NeonCoreApiClient
 
 LOG = logging.getLogger(__name__)
 
@@ -66,24 +64,13 @@ class GasEstimate:
     _tx_builder = _GasTxBuilder()
     _u256_max = int.from_bytes(bytes([0xFF] * 32), "big")
 
-    def __init__(self, config: Config, solana: SolInteractor, request: Dict[str, Any]):
-        self._sender = request.get('from') or '0x0000000000000000000000000000000000000000'
-        if self._sender:
-            self._sender = self._sender[2:]
+    def __init__(self, core_api_client: NeonCoreApiClient, request: Dict[str, Any]):
+        self._sender = request.get('from')
+        self._contract = request.get('to')
+        self._data = request.get('data')
+        self._value = request.get('value')
 
-        self._contract = request.get('to') or ''
-        if self._contract:
-            self._contract = self._contract[2:]
-
-        self._data = request.get('data') or ''
-        if self._data:
-            self._data = self._data[2:]
-
-        self._value = request.get('value') or '0x00'
-
-        self._solana = solana
-        self._config = config
-        self._elf_params = ElfParams()
+        self._core_api_client = core_api_client
 
         self._cached_tx_cost_size: Optional[int] = None
         self._cached_alt_cost: Optional[int] = None
@@ -92,23 +79,27 @@ class GasEstimate:
         self._emulator_result = NeonEmulatorResult()
 
     def execute(self):
-        emulator_result = call_emulator(self._config, self._contract or 'deploy', self._sender, self._data, self._value)
-        check_emulator_exit_status(emulator_result)
-
-        self._emulator_result = emulator_result
+        self._emulator_result = self._core_api_client.emulate(
+            self._contract, self._sender, self._data, self._value,
+            check_result=True
+        )
 
     def _tx_size_cost(self) -> int:
         if self._cached_tx_cost_size is not None:
             return self._cached_tx_cost_size
 
+        to_addr = bytes.fromhex((self._contract or '0x')[2:])
+        data = bytes.fromhex((self._data or '0x')[2:])
+        value = int((self._value or '0x0')[2:], 16)
+
         neon_tx = NeonTx(
             nonce=self._u256_max,
             gasPrice=self._u256_max,
             gasLimit=self._u256_max,
-            toAddress=bytes.fromhex(self._contract),
-            value=int(self._value, 16),
-            callData=bytes.fromhex(self._data),
-            v=self._elf_params.chain_id * 2 + 35,
+            toAddress=to_addr,
+            value=value,
+            callData=data,
+            v=ElfParams().chain_id * 2 + 35,
             r=0x1820182018201820182018201820182018201820182018201820182018201820,
             s=0x1820182018201820182018201820182018201820182018201820182018201820
         )
@@ -131,7 +122,7 @@ class GasEstimate:
         return self._cached_tx_cost_size
 
     def _holder_tx_cost(self, neon_tx_len: int) -> int:
-        return ((neon_tx_len // self._elf_params.holder_msg_size) + 1) * 5000
+        return ((neon_tx_len // ElfParams().holder_msg_size) + 1) * 5000
 
     def _execution_cost(self) -> int:
         return self._emulator_result.used_gas
@@ -181,7 +172,7 @@ class GasEstimate:
         overhead_cost = self._iterative_overhead_cost()
         alt_cost = self._alt_cost()
 
-        # Ethereum wallets don't accept gas limit less than 21000
+        # Ethereum's wallets don't accept gas limit less than 21000
         gas = max(execution_cost + tx_size_cost + overhead_cost + alt_cost, 21000)
 
         LOG.debug(
