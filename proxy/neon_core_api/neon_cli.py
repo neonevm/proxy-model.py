@@ -2,13 +2,15 @@ import logging
 import subprocess
 import json
 
-from typing import Dict, Any, Union, Optional, List
+from typing import Dict, Any, Union, Optional, Tuple
 
 from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.environment_utils import CliBase
 from ..common_neon.address import NeonAddress
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_tx import SolPubKey
 
-from .neon_layouts import NeonAccountInfo
+from .neon_layouts import NeonAccountInfo, BPFLoader2ProgramInfo, BPFLoader2ExecutableInfo
 from .logging_level import NeonCoreApiLoggingLevel
 
 
@@ -60,7 +62,7 @@ class NeonCli(CliBase):
             LOG.error(f'ERR: neon-cli error {str(err)}')
             raise
 
-    def version(self):
+    def version(self) -> str:
         try:
             cmd = ['neon-cli', '--version']
             return self.run_cli(cmd, universal_newlines=True).split()[1]
@@ -80,3 +82,26 @@ class NeonCli(CliBase):
             return None
         return NeonAccountInfo.from_json(json_acct)
 
+    def read_elf_params(self, last_deployed_slot: int) -> Tuple[int, Dict[str, str]]:
+        solana = SolInteractor(self._config, self._solana_url)
+
+        account_info = solana.get_account_info(EVM_PROGRAM_ID_STR)
+        program_info = BPFLoader2ProgramInfo.from_data(account_info.data)
+        if program_info.executable_addr == SolPubKey.default():
+            return 0, {}
+
+        account_info = solana.get_account_info(program_info.executable_addr, BPFLoader2ExecutableInfo.minimum_size)
+        exec_info = BPFLoader2ExecutableInfo.from_data(account_info.data)
+        if exec_info.deployed_slot <= last_deployed_slot:
+            return 0, {}
+
+        LOG.debug(f'Read ELF params deployed on the slot {exec_info.deployed_slot}')
+
+        src_dict = self.call('neon-elf-params')
+        elf_param_dict: Dict[str, str] = dict()
+        for key, value in src_dict.items():
+            if key.startswith('NEON_') and (key not in elf_param_dict):
+                LOG.debug(f'Read ELF param: {key}: {value}')
+                elf_param_dict[key] = value
+
+        return exec_info.deployed_slot, elf_param_dict

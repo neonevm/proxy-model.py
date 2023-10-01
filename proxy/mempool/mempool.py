@@ -4,7 +4,7 @@ import math
 import time
 
 from collections import deque
-from typing import List, Tuple, Optional, Any, Dict, cast, Generator, Union, Deque
+from typing import List, Tuple, Optional, Any, cast, Generator, Union, Deque
 
 from .executor_mng import MPExecutorMng
 
@@ -14,7 +14,8 @@ from .mempool_api import (
     MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest, MPStuckTxInfo,
     MPTxSendResult, MPTxSendResultCode,
     MPTxPoolContentResult,
-    MPNeonTxResult
+    MPNeonTxResult,
+    MPElfParamDictResult
 )
 
 from .mempool_neon_tx_dict import MPTxDict
@@ -153,11 +154,11 @@ class MemPool:
         return self._gas_price
 
     @staticmethod
-    def get_elf_param_dict() -> Optional[Dict[str, str]]:
+    def get_elf_param_dict() -> Optional[MPElfParamDictResult]:
         elf_params = ElfParams()
         if not elf_params.has_params():
             return None
-        return elf_params.elf_param_dict
+        return MPElfParamDictResult(elf_params.last_deployed_slot, elf_params.elf_param_dict)
 
     def get_content(self) -> MPTxPoolContentResult:
         return self._tx_schedule.get_content()
