@@ -20,25 +20,16 @@ class ElfParams:
         self._elf_param_dict: Dict[str, any] = {}
 
     @property
-    def treasury_pool_max(self) -> int:
-        return int(self._elf_param_dict.get("NEON_POOL_COUNT"))
+    def treasury_pool_cnt(self) -> int:
+        return int(self._elf_param_dict.get('NEON_TREASURY_POOL_COUNT'))
 
     @property
-    def neon_heap_frame(self) -> int:
-        return int(self._elf_param_dict.get("NEON_HEAP_FRAME"))
-
-    @property
-    def neon_compute_units(self) -> int:
-        return 1_400_000  # <- for mainnet launch
-        # return int(self._elf_param_dict.get("NEON_COMPUTE_UNITS"))
+    def treasury_pool_seed(self) -> bytes:
+        return bytes(self._elf_param_dict.get('NEON_TREASURY_POOL_SEED'), 'utf8')
 
     @property
     def neon_evm_steps(self) -> int:
         return int(self._elf_param_dict.get("NEON_EVM_STEPS_MIN"))
-
-    @property
-    def neon_additional_fee(self):
-        return int(self._elf_param_dict.get("NEON_ADDITIONAL_FEE"))
 
     @property
     def neon_token_mint(self) -> SolPubKey:
@@ -47,10 +38,6 @@ class ElfParams:
     @property
     def chain_id(self) -> int:
         return int(self._elf_param_dict.get('NEON_CHAIN_ID'))
-
-    @property
-    def holder_msg_size(self) -> int:
-        return int(self._elf_param_dict.get("NEON_HOLDER_MSG_SIZE"))
 
     @property
     def neon_evm_version(self) -> Optional[str]:
@@ -63,26 +50,6 @@ class ElfParams:
     @property
     def neon_gas_limit_multiplier_no_chainid(self) -> int:
         return int(self._elf_param_dict.get('NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID'))
-
-    @property
-    def neon_minimal_client_allowance_balance(self) -> int:
-        return int(self._elf_param_dict.get("NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE", 0))
-
-    @property
-    def neon_minimal_contract_allowance_balance(self) -> int:
-        return int(self._elf_param_dict.get("NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE", 0))
-
-    @property
-    def allowance_token_addr(self) -> str:
-        return self._elf_param_dict.get("NEON_PERMISSION_ALLOWANCE_TOKEN", '')
-
-    @property
-    def denial_token_addr(self) -> str:
-        return self._elf_param_dict.get("NEON_PERMISSION_DENIAL_TOKEN", '')
-
-    @property
-    def storage_entries_in_contract_account(self) -> int:
-        return int(self._elf_param_dict.get("NEON_STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT", 0))
 
     def has_params(self) -> bool:
         return len(self._elf_param_dict) > 0

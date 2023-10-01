@@ -115,7 +115,7 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
         holder_msg_offset = 0
         holder_msg = copy.copy(builder.holder_msg)
 
-        holder_msg_size = ElfParams().holder_msg_size
+        holder_msg_size = 950
         while len(holder_msg):
             (holder_msg_part, holder_msg) = (holder_msg[:holder_msg_size], holder_msg[holder_msg_size:])
             tx = SolLegacyTx(

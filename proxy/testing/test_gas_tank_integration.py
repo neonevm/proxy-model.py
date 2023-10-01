@@ -15,7 +15,7 @@ import spl.token.instructions as SplTokenInstrutions
 
 from proxy.common_neon.metaplex import create_metadata_instruction_data, create_metadata_instruction
 from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolAccount, SolPubKey
-from proxy.common_neon.neon_instruction import create_account_layout
+from proxy.common_neon.neon_instruction import create_account_layout, NeonIxBuilder
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from proxy.common_neon.config import Config
 from proxy.common_neon.elf_params import ElfParams
@@ -56,7 +56,7 @@ class TestGasTankIntegration(TestCase):
         cls.create_token_mint()
         cls.deploy_erc20_for_spl()
         cls.acc_num = 0
-        cls.elf_params = ElfParams()
+        cls.neon_ix_builder = NeonIxBuilder(cls.mint_authority)
 
     @classmethod
     def create_token_mint(cls):
@@ -149,16 +149,8 @@ class TestGasTankIntegration(TestCase):
         return SolLegacyTx(
             name=name,
             ix_list=[
-                SolTxIx(
-                    program_id=COMPUTE_BUDGET_ID,
-                    accounts=[],
-                    data=bytes.fromhex("01") + self.elf_params.neon_heap_frame.to_bytes(4, "little")
-                ),
-                SolTxIx(
-                    program_id=COMPUTE_BUDGET_ID,
-                    accounts=[],
-                    data=bytes.fromhex("02") + self.elf_params.neon_compute_units.to_bytes(4, "little")
-                ),
+                self.neon_ix_builder.make_compute_budget_heap_ix(),
+                self.neon_ix_builder.make_compute_budget_cu_ix()
             ] + ix_list
         )
 
