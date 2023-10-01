@@ -390,10 +390,17 @@ class NeonRpcApiWorker:
             to_block = self._process_block_tag(obj['toBlock']).block_slot
 
         if obj.get('blockHash', None) is not None:
+            if ('fromBlock' in obj) or ('toBlock' in obj):
+                raise InvalidParamError(
+                    message='invalid filter: if blockHash is supplied fromBlock and toBlock must not be"',
+                    code=-32600
+                )
+
             block_hash = obj['blockHash']
             block = self._get_block_by_hash(block_hash)
             if block.is_empty():
                 raise InvalidParamError(message=f'block hash {block_hash} does not exist')
+
             from_block = block.block_slot
             to_block = block.block_slot
 
