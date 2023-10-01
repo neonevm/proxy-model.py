@@ -30,7 +30,7 @@ class SolNotEmptyBlockFinder(typing.Sequence[bool]):
             return False
 
         slot = slot_list[0]
-        result = not self._solana.get_block_info(slot).is_empty()
+        result = not self._solana.get_block_info(slot, SolCommit.Finalized).is_empty()
         if result:
             LOG.debug(f'{self._hdr}, FOUND the base slot {base_slot}, with the block at the slot {slot}...')
         else:
@@ -51,7 +51,7 @@ class SolNotEmptyBlockFinder(typing.Sequence[bool]):
             return self._stop_slot
 
         base_slot, slot_list = self._get_slot_range(0)
-        if len(slot_list) and (not self._solana.get_block_info(slot_list[0]).is_empty()):
+        if len(slot_list) and (not self._solana.get_block_info(slot_list[0], SolCommit.Finalized).is_empty()):
             slot = slot_list[0]
             LOG.debug(f'{self._hdr}, FOUND the slot {slot} with the block')
             return slot
@@ -60,7 +60,7 @@ class SolNotEmptyBlockFinder(typing.Sequence[bool]):
         offset = bisect.bisect_left(self, True)
         base_slot, slot_list = self._get_slot_range(offset)
         for slot in slot_list:
-            if not self._solana.get_block_info(slot).is_empty():
+            if not self._solana.get_block_info(slot, SolCommit.Finalized).is_empty():
                 LOG.debug(f'{self._hdr}, FOUND the slot {slot} with the block')
                 return slot
 

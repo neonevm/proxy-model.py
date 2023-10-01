@@ -1,6 +1,8 @@
 from typing import Optional, List, Any, Tuple
 
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo
+from ..common_neon.utils import NeonTxInfo
+from ..common_neon.neon_tx_result_info import NeonTxResultInfo
+from ..common_neon.neon_tx_receipt_info import NeonTxReceiptInfo
 from ..common_neon.db.base_db_table import BaseDBTable
 from ..common_neon.db.db_connect import DBConnection
 

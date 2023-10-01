@@ -9,7 +9,7 @@ from .mempool_executor_task_base import MPExecutorBaseTask
 class MPExecutorStateTxCntTask(MPExecutorBaseTask):
     def read_state_tx_cnt(self, mp_state_req: MPSenderTxCntRequest) -> MPSenderTxCntResult:
         neon_address_list = [NeonAddress(sender) for sender in mp_state_req.sender_list]
-        neon_account_list = self._solana.get_neon_account_info_list(neon_address_list)
+        neon_account_list = self._core_api_client.get_neon_account_info_list(neon_address_list)
 
         state_tx_cnt_list: List[MPSenderTxCntData] = []
         for address, neon_account in zip(mp_state_req.sender_list, neon_account_list):

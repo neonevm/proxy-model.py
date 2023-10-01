@@ -8,21 +8,16 @@ from multiprocessing import Process
 
 from ..common_neon.config import Config
 
+from .logging_level import NeonCoreApiLoggingLevel
+
 
 LOG = logging.getLogger(__name__)
 
 
 class _NeonCoreApiService:
-    _NEON_API_LOG_LEVEL = {
-        logging.CRITICAL: 'off',
-        logging.ERROR: 'error',
-        logging.WARNING: 'warn',
-        logging.INFO: 'info',
-        logging.DEBUG: 'debug',
-        logging.NOTSET: 'warn'
-    }
-
-    def __init__(self, port: int, solana_url: str):
+    def __init__(self, config: Config, idx: int, solana_url: str):
+        self._config = config
+        port = config.neon_core_api_port + idx
         self._host = f'127.0.0.1:{port}'
         self._solana_url = solana_url
 
@@ -31,7 +26,7 @@ class _NeonCoreApiService:
         process.start()
 
     def _create_env(self) -> Dict[str, Any]:
-        log_level = self._NEON_API_LOG_LEVEL.get(LOG.getEffectiveLevel(), 'warn')
+        log_level = NeonCoreApiLoggingLevel().level
 
         env = os.environ.copy()
 
@@ -42,9 +37,9 @@ class _NeonCoreApiService:
             SOLANA_URL=self._solana_url,
             NEON_API_LISTENER_ADDR=self._host,
             COMMITMENT='recent',
+            NEON_DB_CLICKHOUSE_URLS=';'.join(self._config.ch_dsn_list),
 
             # TODO: remove
-            NEON_DB_CLICKHOUSE_URLS='',
             KEYPAIR='',
             FEEPAIR=''
         ))
@@ -84,8 +79,7 @@ class _NeonCoreApiService:
 
 class NeonCoreApiService:
     def __init__(self, config: Config):
-        port = config.neon_core_api_port
-        self._service_list = [_NeonCoreApiService(port + idx, url) for idx, url in enumerate(config.solana_url_list)]
+        self._service_list = [_NeonCoreApiService(config, idx, url) for idx, url in enumerate(config.solana_url_list)]
 
     def start(self) -> None:
         for service in self._service_list:

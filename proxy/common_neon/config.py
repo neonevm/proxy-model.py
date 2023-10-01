@@ -146,7 +146,6 @@ class Config(DBConfig):
         self._stuck_obj_validate_blockout = self._env_num('STUCK_OBJECT_VALIDATE_BLOCKOUT', 1024, 512, 1024 * 1024)
         self._alt_freeing_depth = self._env_num('ALT_FREEING_DEPTH', 512 + 16, 512, 1024)
         self._metrics_log_skip_cnt = self._env_num('METRICS_LOG_SKIP_COUNT', 1000, 1, 100_000)
-        self._genesis_timestamp = self._env_num('GENESIS_BLOCK_TIMESTAMP', 0, 0)
 
         self._op_acct_set = self._env_sol_acct_set('OPERATOR_ACCOUNT_LIST')
 
@@ -531,10 +530,6 @@ class Config(DBConfig):
         return self._metrics_log_skip_cnt
 
     @property
-    def genesis_timestamp(self) -> int:
-        return self._genesis_timestamp
-
-    @property
     def operator_account_set(self) -> Set[str]:
         return self._op_acct_set
 
@@ -651,7 +646,6 @@ class Config(DBConfig):
             'ALT_FREEING_DEPTH': self.alt_freeing_depth,
             'METRICS_LOG_SKIP_COUNT': self.metrics_log_skip_cnt,
             'OPERATOR_ACCOUNT_LIST': ';'.join(list(self.operator_account_set)),
-            'GENESIS_BLOCK_TIMESTAMP': self.genesis_timestamp,
 
             # HashiCorp Vault settings
             # 'HVAC_URL': self.hvac_url,

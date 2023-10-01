@@ -1,12 +1,10 @@
-import json
 import subprocess
 import sys
-from typing import List, Dict, Any
+from typing import List
 
 import logging
 
 from .config import Config
-from .constants import EVM_PROGRAM_ID_STR
 
 
 LOG = logging.getLogger(__name__)
@@ -48,78 +46,4 @@ class SolanaCli(CliBase):
             return self.run_cli(cmd, universal_newlines=True)
         except subprocess.CalledProcessError as err:
             LOG.error(f'ERR: solana error {str(err)}')
-            raise
-
-
-class NeonCli(CliBase):
-    EMULATOR_LOGLEVEL = {
-        logging.CRITICAL: 'off',
-        logging.ERROR: 'error',
-        logging.WARNING: 'warn',
-        logging.INFO: 'info',
-        logging.DEBUG: 'debug',
-        logging.NOTSET: 'warn'
-    }
-
-    def call(self, *args, data=None) -> Dict[str, Any]:
-        try:
-            cmd = [
-                'neon-cli',
-                '--commitment=recent',
-                '--url', self._solana_url,
-                '--evm_loader', EVM_PROGRAM_ID_STR,
-                '--loglevel',  f'{self._emulator_logging_level}'
-            ]
-            cmd.extend(list(args))
-            if self._enable_logging:
-                LOG.debug(f'Calling neon-cli: {self._hide_solana_url(cmd)}')
-
-            if data is None:
-                data = ''
-            else:
-                data = json.dumps(data)
-
-            result = subprocess.run(
-                cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                universal_newlines=True
-            )
-
-            try:
-                output = json.loads(result.stdout)
-            except json.decoder.JSONDecodeError:
-                LOG.error(f'JSON, STDERR: {result.stderr}')
-                LOG.error(f'JSON, STDOUT: {result.stdout}')
-
-                error = result.stderr
-                if len(error) == 0:
-                    error = result.stdout
-                raise subprocess.CalledProcessError(result.returncode, cmd, stderr=error)
-
-            if self._enable_logging:
-                for log in output.get('logs', []):
-                    LOG.debug(log)
-
-            if 'error' in output:
-                error = output.get('error')
-                LOG.error(f'neon-cli error value f{error}')
-                raise subprocess.CalledProcessError(result.returncode, cmd, stderr=error)
-
-            return output.get('value', '')
-
-        except subprocess.CalledProcessError as err:
-            LOG.error(f'ERR: neon-cli error {str(err)}')
-            raise
-
-    @property
-    def _emulator_logging_level(self):
-        level = LOG.getEffectiveLevel()
-        cli_level = self.EMULATOR_LOGLEVEL.get(level, 'warn')
-        return cli_level
-
-    def version(self):
-        try:
-            cmd = ['neon-cli', '--version']
-            return self.run_cli(cmd, universal_newlines=True).split()[1]
-        except subprocess.CalledProcessError as err:
-            LOG.error(f'ERR: neon-cli error {str(err)}')
             raise

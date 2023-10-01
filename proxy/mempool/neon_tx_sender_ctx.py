@@ -12,7 +12,7 @@ from ..common_neon.solana_tx import SolTx, SolPubKey, SolAccountMeta, SolAccount
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.eth_proto import NeonTx
 
-from ..neon_core_api import NeonCoreApiClient
+from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 
 from .mempool_api import MPTxExecRequest
 
@@ -127,6 +127,10 @@ class NeonTxSendCtx:
     @property
     def solana(self) -> SolInteractor:
         return self._solana
+
+    @property
+    def core_api_client(self) -> NeonCoreApiClient:
+        return self._core_api_client
 
     @property
     def resize_iter_cnt(self) -> int:

@@ -11,7 +11,7 @@ from ..common_neon.solana_alt_limit import ALTLimit
 from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockHash, SolTxSizeError
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 
-from ..neon_core_api import NeonCoreApiClient
+from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 
 LOG = logging.getLogger(__name__)
 
