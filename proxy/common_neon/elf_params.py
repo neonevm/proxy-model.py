@@ -2,13 +2,9 @@ from __future__ import annotations
 
 import logging
 from typing import Optional, Dict
-
 from singleton_decorator import singleton
 
 from .solana_tx import SolPubKey
-from .config import Config
-
-from ..neon_core_api.neon_cli import NeonCli
 
 
 LOG = logging.getLogger(__name__)
@@ -17,7 +13,12 @@ LOG = logging.getLogger(__name__)
 @singleton
 class ElfParams:
     def __init__(self):
+        self._last_deployed_slot = 0
         self._elf_param_dict: Dict[str, any] = {}
+
+    @property
+    def last_deployed_slot(self) -> int:
+        return self._last_deployed_slot
 
     @property
     def treasury_pool_cnt(self) -> int:
@@ -69,21 +70,7 @@ class ElfParams:
     def elf_param_dict(self) -> Dict[str: str]:
         return self._elf_param_dict
 
-    def read_elf_param_dict_from_net(self, config: Config) -> ElfParams:
-        if not self.has_params():
-            LOG.debug("Read ELF params")
-        elf_param_dict: Dict[str, str] = {}
-        params = NeonCli(config, False).call("neon-elf-params")
-        for param in params:
-            if param.startswith('NEON_'):
-                elf_param_dict.setdefault(param, params[param])
-
-        for param, value in elf_param_dict.items():
-            if self._elf_param_dict.get(param) != value:
-                LOG.debug(f"new ELF param: {param}: {value}")
-        self.set_elf_param_dict(elf_param_dict)
-        return self
-
-    def set_elf_param_dict(self, elf_param_dict: Dict[str, str]) -> ElfParams:
+    def set_elf_param_dict(self, elf_param_dict: Dict[str, str], last_deployed_slot: int = 0) -> ElfParams:
+        self._last_deployed_slot = last_deployed_slot
         self._elf_param_dict = elf_param_dict
         return self

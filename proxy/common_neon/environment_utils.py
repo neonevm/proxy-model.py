@@ -13,7 +13,7 @@ LOG = logging.getLogger(__name__)
 class CliBase:
     def __init__(self, config: Config, enable_logging: bool):
         self._config = config
-        self._solana_url = config.random_solana_url
+        self._solana_url: str = config.random_solana_url
         self._enable_logging = enable_logging
 
     def _hide_solana_url(self, cmd: List[str]) -> str:

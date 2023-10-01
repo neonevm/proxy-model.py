@@ -1,7 +1,7 @@
 import logging
 import requests
 
-from typing import Optional, Dict, Any, Union, List
+from typing import Optional, Dict, Any, Union, List, Tuple
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
@@ -14,6 +14,7 @@ from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.solana_tx import SolCommit
 
 from .neon_layouts import NeonAccountInfo
+from .neon_cli import NeonCli
 
 
 LOG = logging.getLogger(__name__)
@@ -199,6 +200,12 @@ class NeonCoreApiClient:
             neon_acct_info = self.get_neon_account_info(acct, block)
 
         return neon_acct_info.tx_count if neon_acct_info is not None else 0
+
+    def read_elf_params(self, last_deployed_slot: int) -> Tuple[int, Dict[str, str]]:
+        return NeonCli(self._config, False).read_elf_params(last_deployed_slot)
+
+    def version(self) -> str:
+        return NeonCli(self._config, False).version()
 
     def _add_block(self, request: RPCRequest, block: Optional[SolBlockInfo]) -> RPCRequest:
         if not block:

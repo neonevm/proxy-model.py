@@ -18,4 +18,8 @@ install_solc(version='0.7.6')
 
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.config import Config
-ElfParams().read_elf_param_dict_from_net(Config())
+
+from ..neon_core_api.neon_cli import NeonCli
+
+last_deployed_slot, elf_param_dict = NeonCli(Config(), False).read_elf_params(0)
+ElfParams().set_elf_param_dict(elf_param_dict, last_deployed_slot)
