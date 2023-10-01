@@ -20,7 +20,7 @@ from ..common_neon.solana_not_empty_block import SolFirstBlockFinder, SolNotEmpt
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolCommit
 from ..common_neon.utils.json_logger import logging_context
-from ..common_neon.utils.solana_block import SolBlockInfo
+from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.errors import SolHistoryNotFound, SolHistoryCriticalNotFound
 
 from ..statistic.data import NeonBlockStatData, NeonDoneBlockStatData

@@ -5,20 +5,20 @@ from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import EthereumError, NonceTooLowError
 from ..common_neon.utils.eth_proto import NeonTx
-from ..common_neon.solana_interactor import SolInteractor
+
+from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 
 
 class NeonTxValidator:
     _max_u64 = 2 ** 64 - 1
     _max_u256 = 2 ** 256 - 1
 
-    def __init__(self, config: Config, solana: SolInteractor, tx: NeonTx, gas_less_permit: bool, min_gas_price: int):
-        self._config = config
-        self._solana = solana
+    def __init__(self, cfg: Config, client: NeonCoreApiClient, tx: NeonTx, gas_less_permit: bool, min_gas_price: int):
+        self._config = cfg
         self._tx = tx
 
-        self._neon_account_info = solana.get_neon_account_info(self._tx.sender)
-        self._state_tx_cnt = solana.get_state_tx_cnt(self._neon_account_info)
+        self._neon_account_info = client.get_neon_account_info(self._tx.sender)
+        self._state_tx_cnt = client.get_state_tx_cnt(self._neon_account_info)
 
         self._has_gas_less_permit = gas_less_permit
         self._min_gas_price = min_gas_price

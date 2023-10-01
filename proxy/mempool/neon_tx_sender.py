@@ -5,7 +5,7 @@ from ..common_neon.errors import (
     NoMoreRetriesError, TxAccountCntTooBig
 )
 
-from ..common_neon.utils import NeonTxResultInfo
+from ..common_neon.neon_tx_result_info import NeonTxResultInfo
 
 from .neon_tx_send_base_strategy import BaseNeonTxStrategy
 from .neon_tx_send_holder_strategy import HolderNeonTxStrategy, ALTHolderNeonTxStrategy
@@ -107,7 +107,7 @@ class NeonTxSendStrategyExecutor:
             LOG.error('Failed to cancel tx', exc_info=exc)
 
     def _init_state_tx_cnt(self) -> None:
-        state_tx_cnt = self._ctx.solana.get_state_tx_cnt(self._ctx.neon_tx_info.addr)
+        state_tx_cnt = self._ctx.core_api_client.get_state_tx_cnt(self._ctx.neon_tx_info.addr)
         if self._ctx.has_good_sol_tx_receipt():
             state_tx_cnt = max(state_tx_cnt, self._ctx.neon_tx_info.nonce)
         self._ctx.set_state_tx_cnt(state_tx_cnt)

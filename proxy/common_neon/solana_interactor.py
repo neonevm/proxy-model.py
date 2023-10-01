@@ -13,14 +13,12 @@ import requests
 import base58
 import websockets.sync.client
 
-from .address import NeonAddress, neon_2program
 from .config import Config
-from .constants import NEON_ACCOUNT_TAG
-from .layouts import ACCOUNT_INFO_LAYOUT
 from .solana_tx import SolTx, SolBlockHash, SolPubKey, SolCommit
 from .solana_tx_error_parser import SolTxErrorParser
-from .utils import SolBlockInfo, get_from_dict
-from .layouts import HolderAccountInfo, AccountInfo, NeonAccountInfo, ALTAccountInfo
+from .utils import get_from_dict
+from .solana_block import SolBlockInfo
+from .layouts import HolderAccountInfo, AccountInfo, ALTAccountInfo
 
 
 LOG = logging.getLogger(__name__)
@@ -354,40 +352,6 @@ class SolInteractor:
 
         return balances_list
 
-    def get_neon_account_info(self, neon_account: Union[str, bytes, NeonAddress],
-                              commitment=SolCommit.Confirmed) -> Optional[NeonAccountInfo]:
-        if not isinstance(neon_account, NeonAddress):
-            neon_account = NeonAddress(neon_account)
-        account_sol, nonce = neon_2program(neon_account)
-        info = self.get_account_info(account_sol, commitment=commitment)
-        if info is None:
-            return None
-
-        return NeonAccountInfo.from_account_info(info)
-
-    def get_state_tx_cnt(self, neon_account: Union[str, bytes, NeonAddress, NeonAccountInfo, None],
-                         commitment=SolCommit.Confirmed) -> int:
-        if (neon_account is None) or isinstance(neon_account, NeonAccountInfo):
-            neon_account_info = neon_account
-        else:
-            neon_account_info = self.get_neon_account_info(neon_account, commitment)
-        return neon_account_info.tx_count if neon_account_info is not None else 0
-
-    def get_neon_account_info_list(self, neon_account_list: List[Union[NeonAddress, str]],
-                                   commitment=SolCommit.Confirmed) -> List[Optional[NeonAccountInfo]]:
-        requests_list = list()
-        for neon_account in neon_account_list:
-            account_sol, _nonce = neon_2program(neon_account)
-            requests_list.append(account_sol)
-        responses_list = self.get_account_info_list(requests_list, commitment=commitment)
-        accounts_list = list()
-        for account_sol, info in zip(requests_list, responses_list):
-            if (info is None) or (len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof()) or (info.tag != NEON_ACCOUNT_TAG):
-                accounts_list.append(None)
-                continue
-            accounts_list.append(NeonAccountInfo.from_account_info(info))
-        return accounts_list
-
     def get_holder_account_info(self, holder_account: SolPubKey) -> Optional[HolderAccountInfo]:
         info = self.get_account_info(holder_account)
         if info is None:
@@ -408,17 +372,18 @@ class SolInteractor:
         return response.get('result', 0)
 
     @staticmethod
-    def _decode_block_info(block_slot: int, response: Optional[RPCResponse]) -> SolBlockInfo:
+    def _decode_block_info(slot: int, sol_commit: SolCommit.Type, response: Optional[RPCResponse]) -> SolBlockInfo:
         if response is None:
-            return SolBlockInfo(block_slot=block_slot)
+            return SolBlockInfo(block_slot=slot)
 
         net_block = response.get('result', None)
         if net_block is None:
             error = get_from_dict(response, ('error', 'message'), None)
-            return SolBlockInfo(block_slot=block_slot, error=error)
+            return SolBlockInfo(block_slot=slot, error=error)
 
         return SolBlockInfo(
-            block_slot=block_slot,
+            block_slot=slot,
+            sol_commit=sol_commit,
             block_hash='0x' + base58.b58decode(net_block.get('blockhash', '')).hex().lower(),
             block_time=net_block.get('blockTime', None),
             block_height=net_block.get('blockHeight', None),
@@ -452,14 +417,14 @@ class SolInteractor:
             rewards=False
         )
 
-    def get_block_info(self, block_slot: int, commitment=SolCommit.Confirmed, full=False) -> SolBlockInfo:
+    def get_block_info(self, block_slot: int, commitment: SolCommit.Type, full=False) -> SolBlockInfo:
         opts = self._get_block_info_opts(commitment, full)
 
         response = self._send_rpc_request('getBlock', block_slot, opts)
-        return self._decode_block_info(block_slot, response)
+        return self._decode_block_info(block_slot, commitment, response)
 
     def get_block_info_list(self, block_slot_list: List[int],
-                            commitment=SolCommit.Confirmed, full=False) -> List[SolBlockInfo]:
+                            commitment: SolCommit.Type, full=False) -> List[SolBlockInfo]:
         block_list = list()
         if len(block_slot_list) == 0:
             return block_list
@@ -469,7 +434,7 @@ class SolInteractor:
 
         response_list = self._send_rpc_batch_request('getBlock', request_list)
         for block_slot, response in zip(block_slot_list, response_list):
-            block = self._decode_block_info(block_slot, response)
+            block = self._decode_block_info(block_slot, commitment, response)
             block_list.append(block)
         return block_list
 
@@ -512,7 +477,7 @@ class SolInteractor:
         block = self._send_rpc_request('getBlock', block_slot, block_opts)
         return SolBlockHash.from_string(get_from_dict(block, ('result', 'blockhash'), None))
 
-    def get_block_height(self, block_slot: Optional[int] = None, commitment=SolCommit.Confirmed) -> int:
+    def get_block_height(self, block_slot: Optional[int] = None, commitment=SolCommit.Finalized) -> int:
         opts = {
             'commitment': SolCommit.to_solana(commitment)
         }

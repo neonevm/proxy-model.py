@@ -6,8 +6,9 @@ from typing import Optional, Dict
 from singleton_decorator import singleton
 
 from .solana_tx import SolPubKey
-from .environment_utils import NeonCli
 from .config import Config
+
+from ..neon_core_api.neon_cli import NeonCli
 
 
 LOG = logging.getLogger(__name__)

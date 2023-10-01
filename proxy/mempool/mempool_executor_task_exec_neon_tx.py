@@ -5,21 +5,14 @@ from .mempool_executor_task_base import MPExecutorBaseTask
 from .neon_tx_sender import NeonTxSendStrategyExecutor
 from .neon_tx_sender_ctx import NeonTxSendCtx
 
-from ..common_neon.config import Config
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import RescheduleError, NonceTooLowError, NonceTooHighError, BadResourceError, StuckTxError
-
-from ..neon_core_api import NeonCoreApiClient
 
 
 LOG = logging.getLogger(__name__)
 
 
 class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
-    def __init__(self, config: Config, core_api_client: NeonCoreApiClient):
-        super().__init__(config)
-        self._core_api_client = core_api_client
-
     def execute_neon_tx(self, mp_tx_req: MPTxExecRequest) -> MPTxExecResult:
         neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
         try:

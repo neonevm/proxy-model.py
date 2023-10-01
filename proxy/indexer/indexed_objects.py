@@ -17,7 +17,10 @@ from ..common_neon.solana_neon_tx_receipt import (
     SolAltIxInfo
 )
 from ..common_neon.solana_tx import SolCommit
-from ..common_neon.utils import NeonTxResultInfo, NeonTxInfo, NeonTxReceiptInfo, SolBlockInfo, str_fmt_object
+from ..common_neon.utils import NeonTxInfo, str_fmt_object
+from ..common_neon.neon_tx_result_info import NeonTxResultInfo
+from ..common_neon.neon_tx_receipt_info import NeonTxReceiptInfo
+from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
 from ..common_neon.utils.utils import get_from_dict, cached_method
 

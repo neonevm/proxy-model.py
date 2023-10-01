@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .neon_tx_info import NeonTxInfo
+from .utils.neon_tx_info import NeonTxInfo
+from .utils.utils import str_fmt_object
 from .neon_tx_result_info import NeonTxResultInfo
-from .utils import str_fmt_object
 
 
 @dataclass(frozen=True)

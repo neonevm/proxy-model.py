@@ -22,7 +22,6 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 from ..statistic.data import NeonOpResListData
-from ..statistic.proxy_client import ProxyStatClient
 
 
 LOG = logging.getLogger(__name__)
@@ -126,10 +125,6 @@ class OpResInit:
 
 
 class MPExecutorOpResTask(MPExecutorBaseTask):
-    def __init__(self, config: Config, stat_client: ProxyStatClient):
-        super().__init__(config)
-        self._stat_client = stat_client
-
     def get_op_res_list(self) -> MPOpResGetListResult:
         try:
             secret_list = OpSecretMng(self._config).read_secret_list()

@@ -1,7 +1,7 @@
 import copy
 import logging
 
-from typing import List, Dict, Union
+from typing import List
 
 from ..common_neon.constants import EMPTY_HOLDER_TAG, ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
 from ..common_neon.elf_params import ElfParams

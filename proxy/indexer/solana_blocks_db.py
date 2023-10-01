@@ -1,18 +1,26 @@
 import math
 import logging
 
-from typing import Optional, List, Any, Tuple, cast
+from dataclasses import dataclass
+from typing import Optional, List, Any, Tuple
 
-from ..common_neon.utils import SolBlockInfo
+from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.db.base_db_table import BaseDBTable
 from ..common_neon.db.db_connect import DBConnection
-from ..common_neon.config import Config
+from ..common_neon.solana_tx import SolCommit
 from ..common_neon.constants import ONE_BLOCK_SEC
 
 from .indexed_objects import NeonIndexedBlockInfo
 
 
 LOG = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SolBlockSlotRange:
+    earliest_slot: int
+    finalized_slot: int
+    latest_slot: int
 
 
 class SolBlocksDB(BaseDBTable):
@@ -25,10 +33,6 @@ class SolBlocksDB(BaseDBTable):
             ],
             key_list=['block_slot']
         )
-
-    @property
-    def _config(self) -> Config:
-        return cast(Config, self._db.config)
 
     @staticmethod
     def _generate_fake_block_hash(block_slot: int) -> str:
@@ -43,7 +47,7 @@ class SolBlocksDB(BaseDBTable):
     def _check_block_hash(self, block_slot: int, block_hash: Optional[str]) -> str:
         return block_hash or self._generate_fake_block_hash(block_slot)
 
-    def _generate_fake_block_time(self, block_slot: int) -> int:
+    def _generate_block_time(self, block_slot: int) -> Optional[int]:
         # Search the nearest block before requested block
         request = f'''
             (SELECT block_slot AS b_block_slot,
@@ -66,8 +70,8 @@ class SolBlocksDB(BaseDBTable):
         '''
         value_list = self._fetch_one(request, (block_slot, block_slot,))
         if not len(value_list):
-            LOG.warning(f'Failed to get nearest blocks for block {block_slot}. Calculate based on genesis')
-            return math.ceil(block_slot * ONE_BLOCK_SEC) + self._config.genesis_timestamp
+            LOG.warning(f'Failed to get nearest blocks for block {block_slot}')
+            return None
 
         nearest_block_slot = value_list[0]
         if nearest_block_slot is not None:
@@ -77,9 +81,6 @@ class SolBlocksDB(BaseDBTable):
         nearest_block_slot = value_list[2]
         nearest_block_time = value_list[3]
         return nearest_block_time - math.ceil((nearest_block_slot - block_slot) * ONE_BLOCK_SEC)
-
-    def _check_block_time(self, block_slot: int, block_time: Optional[int]) -> int:
-        return block_time or self._generate_fake_block_time(block_slot)
 
     @staticmethod
     def _get_fake_block_slot(hash_number: str) -> Optional[int]:
@@ -91,30 +92,58 @@ class SolBlocksDB(BaseDBTable):
             return 0
         return int(hex_number, 16)
 
-    def _block_from_value(self, block_slot: Optional[int], value_list: List[Any]) -> SolBlockInfo:
+    def _generate_fake_block(self, block_slot: Optional[int], slot_range: SolBlockSlotRange) -> SolBlockInfo:
+        if block_slot is None:
+            return SolBlockInfo(block_slot=0)
+
+        block_time = self._generate_block_time(block_slot)
+        if not block_time:
+            return SolBlockInfo(block_slot=block_slot)
+
+        is_finalized = block_slot <= slot_range.finalized_slot
+        sol_commit = SolCommit.Finalized if is_finalized else SolCommit.Confirmed
+
+        return SolBlockInfo(
+            block_slot=block_slot,
+            sol_commit=sol_commit,
+            is_finalized=is_finalized,
+            block_hash=self._generate_fake_block_hash(block_slot),
+            block_time=block_time,
+            parent_block_hash=self._generate_fake_block_hash(block_slot - 1),
+        )
+
+    def _block_from_value(
+        self, block_slot: Optional[int],
+        slot_range: SolBlockSlotRange,
+        value_list: List[Any]
+    ) -> SolBlockInfo:
         if not len(value_list):
-            if block_slot is None:
-                return SolBlockInfo(block_slot=0)
-            return SolBlockInfo(
-                block_slot=block_slot,
-                block_hash=self._generate_fake_block_hash(block_slot),
-                block_time=self._generate_fake_block_time(block_slot),
-                parent_block_hash=self._generate_fake_block_hash(block_slot-1),
-            )
+            return self._generate_fake_block(block_slot, slot_range)
 
         if block_slot is None:
             block_slot = self._get_column_value('block_slot', value_list)
+
+        block_time = self._get_column_value('block_time', value_list)
+        if not block_time:
+            return self._generate_fake_block(block_slot, slot_range)
+
+        is_finalized = self._get_column_value('is_finalized', value_list)
+        sol_commit = SolCommit.Finalized if is_finalized else SolCommit.Confirmed
+
         return SolBlockInfo(
             block_slot=block_slot,
+            sol_commit=sol_commit,
+            is_finalized=is_finalized,
             block_hash=self._check_block_hash(block_slot, self._get_column_value('block_hash', value_list)),
-            block_time=self._check_block_time(block_slot, self._get_column_value('block_time', value_list)),
-            is_finalized=self._get_column_value('is_finalized', value_list),
+            block_time=block_time,
             parent_block_hash=self._check_block_hash(block_slot - 1, value_list[6])
         )
 
-    def get_block_by_slot(self, block_slot: int, latest_block_slot: int) -> SolBlockInfo:
-        if block_slot > latest_block_slot:
+    def get_block_by_slot(self, block_slot: int, slot_range: SolBlockSlotRange) -> SolBlockInfo:
+        if block_slot > slot_range.latest_slot:
             return SolBlockInfo(block_slot=block_slot)
+        elif block_slot < slot_range.earliest_slot:
+            return self._generate_fake_block(block_slot, slot_range)
 
         request = f'''
                 (SELECT {', '.join(['a.' + c for c in self._column_list])},
@@ -141,12 +170,12 @@ class SolBlocksDB(BaseDBTable):
         '''
 
         value_list = self._fetch_one(request, (block_slot - 1, block_slot, block_slot, block_slot - 1))
-        return self._block_from_value(block_slot, value_list)
+        return self._block_from_value(block_slot, slot_range, value_list)
 
-    def get_block_by_hash(self, block_hash: str, latest_block_slot: int) -> SolBlockInfo:
+    def get_block_by_hash(self, block_hash: str, slot_range: SolBlockSlotRange) -> SolBlockInfo:
         fake_block_slot = self._get_fake_block_slot(block_hash)
         if fake_block_slot is not None:
-            block = self.get_block_by_slot(fake_block_slot, latest_block_slot)
+            block = self.get_block_by_slot(fake_block_slot, slot_range)
             block.set_block_hash(block_hash)  # it can be a request from an uncle history branch
             return block
 
@@ -162,7 +191,7 @@ class SolBlocksDB(BaseDBTable):
                   WHERE a.block_hash = %s
         '''
         value_list = self._fetch_one(request, (block_hash,))
-        return self._block_from_value(None, value_list)
+        return self._block_from_value(None, slot_range, value_list)
 
     def set_block_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:
         row_list: List[List[Any]] = list()

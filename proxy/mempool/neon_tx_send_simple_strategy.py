@@ -4,7 +4,7 @@ from typing import List, Generator
 
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxSendState
-from ..common_neon.utils import NeonTxResultInfo
+from ..common_neon.neon_tx_result_info import NeonTxResultInfo
 from ..common_neon.solana_tx_error_parser import SolTxError
 from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName
 from ..common_neon.errors import WrongStrategyError
