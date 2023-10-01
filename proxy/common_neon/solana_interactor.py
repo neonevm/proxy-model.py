@@ -16,7 +16,7 @@ import websockets.sync.client
 from .config import Config
 from .solana_tx import SolTx, SolBlockHash, SolPubKey, SolCommit
 from .solana_tx_error_parser import SolTxErrorParser
-from .utils import get_from_dict
+from .utils.utils import get_from_dict, cached_property
 from .solana_block import SolBlockInfo
 from .layouts import HolderAccountInfo, AccountInfo, ALTAccountInfo
 
@@ -65,8 +65,7 @@ class SolClient:
     def __init__(self, solana_url: str, solana_timeout: float):
         self._solana_url = solana_url
         self._solana_timeout = solana_timeout
-        self._session: Optional[requests.Session] = None
-        self._has_fail = False
+        self._fail_cnt = 0
         self._headers = {
             'Content-Type': 'application/json',
             'Accept-Encoding': 'gzip,deflate'
@@ -79,37 +78,34 @@ class SolClient:
     def solana_url(self) -> str:
         return self._solana_url
 
+    @cached_property
+    def _session(self) -> requests.Session:
+        if self._fail_cnt > 5:
+            time.sleep(15)
+        elif self._fail_cnt > 0:
+            time.sleep(1)
+
+        session = requests.Session()
+        session.headers.update(self._headers)
+        return session
+
     def post(self, request: Union[RPCRequest, RPCRequestList]) -> Union[RPCResponse, RPCResponseList]:
         try:
-            self._init_client()
-
             raw_response = self._session.post(self._solana_url, json=request, timeout=self._solana_timeout)
             raw_response.raise_for_status()
-
-            return raw_response.json()
+            json_response = raw_response.json()
+            self._fail_cnt = 0
+            return json_response
 
         except (BaseException,):
-            self._has_fail = True
+            self._fail_cnt += 1
             self._close()
             raise
 
     def _close(self) -> None:
-        if self._session is None:
-            return
-
-        self._session.close()
-        self._session = None
-
-    def _init_client(self) -> None:
-        if self._session is not None:
-            return
-
-        if self._has_fail:
-            self._has_fail = False
-            time.sleep(15)
-
-        self._session = requests.Session()
-        self._session.headers.update(self._headers)
+        session = self.__dict__.pop('_session')
+        if session is not None:
+            return session.close()
 
 
 class SolInteractor:
@@ -211,8 +207,8 @@ class SolInteractor:
         request = self._build_rpc_request('getHealth')
 
         try:
-            for cli in self._client_list:
-                response = cli.post(request)
+            for client in self._client_list:
+                response = client.post(request)
                 if response.get('result', 'bad') != 'ok':
                     return False
             return True
