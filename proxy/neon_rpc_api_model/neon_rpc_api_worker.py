@@ -35,7 +35,6 @@ from ..mempool import (
 )
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
-from ..neon_core_api.neon_cli import NeonCli
 from ..neon_core_api.neon_layouts import NeonAccountInfo
 
 from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
@@ -120,7 +119,7 @@ class NeonRpcApiWorker:
         return 'Neon/v' + ElfParams().neon_evm_version + '-' + ElfParams().neon_evm_revision
 
     def neon_cliVersion(self) -> str:
-        return NeonCli(self._config, False).version()
+        return self._core_api_client.version()
 
     def neon_solanaVersion(self) -> str:
         return 'Solana/v' + self._solana.get_solana_version()
@@ -1246,10 +1245,10 @@ class NeonRpcApiWorker:
         now = math.ceil(time.time())
         elf_params = ElfParams()
         if self._last_elf_params_time != now:
-            elf_param_dict = self._mempool_client.get_elf_param_dict(get_req_id_from_log())
-            if elf_param_dict is None:
+            result = self._mempool_client.get_elf_param_dict(get_req_id_from_log())
+            if result is None:
                 raise EthereumError(message='Failed to read Neon EVM params from Solana cluster. Try again later')
-            elf_params.set_elf_param_dict(elf_param_dict)
+            elf_params.set_elf_param_dict(result.elf_param_dict, result.last_deployed_slot)
 
         always_allowed_method_set = {
             "eth_chainId",

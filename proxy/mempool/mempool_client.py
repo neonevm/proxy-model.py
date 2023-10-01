@@ -5,7 +5,7 @@ import logging
 from typing import Callable, Optional, Dict, Any
 
 from .mempool_api import (
-    MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPTxRequest,
+    MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPElfParamDictResult, MPTxRequest,
     MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult,
     MPTxPoolContentRequest, MPTxPoolContentResult, MPPendingTxBySenderNonceRequest, MPNeonTxResult
 )
@@ -104,8 +104,8 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def get_elf_param_dict(self, req_id: str) -> Optional[Dict[str, Any]]:
-        elf_param_dict_req = MPElfParamDictRequest(req_id=req_id, elf_param_dict={})
+    def get_elf_param_dict(self, req_id: str) -> Optional[MPElfParamDictResult]:
+        elf_param_dict_req = MPElfParamDictRequest(req_id=req_id)
         return self._pickable_data_client.send_data(elf_param_dict_req)
 
     @_guard_conn
