@@ -15,14 +15,16 @@ from ..common_neon.config import Config
 from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.environment_utils import NeonCli
 from ..common_neon.errors import EthereumError, InvalidParamError, RescheduleError, NonceTooLowError
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo, SolAltIxInfo
+from ..common_neon.eth_commit import EthCommit
 from ..common_neon.solana_tx import SolCommit
-from ..common_neon.utils import SolBlockInfo, NeonTxReceiptInfo, NeonTxInfo, NeonTxResultInfo
-from ..common_neon.layouts import NeonAccountInfo
+from ..common_neon.utils import NeonTxInfo
+from ..common_neon.neon_tx_receipt_info import NeonTxReceiptInfo
+from ..common_neon.neon_tx_result_info import NeonTxResultInfo
+from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.neon_instruction import EvmIxCodeName, AltIxCodeName
 from ..common_neon.db.db_connect import DBConnection
@@ -32,7 +34,9 @@ from ..mempool import (
     MPNeonTxResult, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
 )
 
-from ..neon_core_api import NeonCoreApiClient
+from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
+from ..neon_core_api.neon_cli import NeonCli
+from ..neon_core_api.neon_layouts import NeonAccountInfo
 
 from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
 from ..indexer.indexer_db import IndexerDB
@@ -150,7 +154,7 @@ class NeonRpcApiWorker:
 
         account = self._normalize_address(account, 'from-address').lower()
 
-        state_tx_cnt = self._solana.get_state_tx_cnt(account)
+        state_tx_cnt = self._core_api_client.get_state_tx_cnt(account)
         tx_nonce = param.get('nonce', None)
         if tx_nonce is not None:
             tx_nonce = self._normalize_hex(tx_nonce, 'nonce')
@@ -232,31 +236,68 @@ class NeonRpcApiWorker:
     def _should_return_starting_block(self, tag: Union[str, int]) -> bool:
         return (tag == '0x0' or str(tag) == '0') and self._config.use_earliest_block_if_0_passed
 
-    def _process_block_tag(self, tag: Union[str, int]) -> SolBlockInfo:
-        if tag == 'latest':
-            block = self._db.latest_block
-        elif tag == 'pending':
+    def _process_str_block_tag(self, tag: str) -> SolBlockInfo:
+        assert isinstance(tag, str)
+
+        tag = tag.lower().strip()
+        if tag.startswith('0x'):
+            return self._process_int_block_tag(tag)
+
+        eth_commit = EthCommit.to_type(tag)
+        sol_commit = SolCommit.from_ethereum(eth_commit)
+        if sol_commit == SolCommit.Processed:
             latest_block = self._db.latest_block
-            block = SolBlockInfo(
+            return SolBlockInfo(
                 block_slot=latest_block.block_slot + 1,
+                sol_commit=sol_commit,
                 block_time=latest_block.block_time,
                 parent_block_hash=latest_block.block_hash,
                 parent_block_slot=latest_block.block_slot
             )
-        elif tag in {'finalized', 'safe'}:
-            block = self._db.finalized_block
-        elif (tag == 'earliest') or self._should_return_starting_block(tag):
-            block = self._db.earliest_block
-        elif isinstance(tag, str):
-            try:
-                block = SolBlockInfo(block_slot=int(tag.strip(), 16))
-            except (Exception,):
-                raise InvalidParamError(message=f'failed to parse block tag: {tag}')
-        elif isinstance(tag, int):
-            block = SolBlockInfo(block_slot=tag)
-        else:
-            raise InvalidParamError(message=f'failed to parse block tag: {tag}')
+        elif sol_commit == SolCommit.Confirmed:
+            return self._db.latest_block
+        elif sol_commit in {SolCommit.Finalized, SolCommit.Safe}:
+            return self._db.finalized_block
+        elif sol_commit == SolCommit.Earliest:
+            return self._db.earliest_block
+        assert False, 'Bad commit level'
+
+    def _process_int_block_tag(self, tag: Union[int, str]) -> SolBlockInfo:
+        if isinstance(tag, str):
+            tag = tag.lower().strip()
+            assert tag.startswith('0x')
+            tag = int(tag, 16)
+
+        assert isinstance(tag, int)
+        assert tag >= 0
+        if tag == 0:
+            return self._db.earliest_block
+
+        return self._db.get_block_by_slot(tag)
+
+    def _process_dict_block_tag(self, tag: Dict[str, Any]) -> SolBlockInfo:
+        if 'blockHash' not in tag:
+            return self._process_int_block_tag(tag['blockNumber'])
+
+        assert 'blockNumber' not in tag
+        tag = tag['blockHash']
+        block = self._get_block_by_hash(tag)
+        if block.is_empty():
+            raise InvalidParamError(message=f'header for block hash {tag} not found')
         return block
+
+    def _process_block_tag(self, tag: Union[str, int, dict]) -> SolBlockInfo:
+        try:
+            if isinstance(tag, str):
+                return self._process_str_block_tag(tag)
+            elif isinstance(tag, int):
+                return self._process_int_block_tag(tag)
+            elif isinstance(tag, dict):
+                return self._process_dict_block_tag(tag)
+
+            assert False, 'Wrong type'
+        except (BaseException,):
+            raise InvalidParamError(message=f'failed to parse block tag: {tag}')
 
     @staticmethod
     def _normalize_tx_id(tag: str) -> str:
@@ -272,37 +313,6 @@ class NeonRpcApiWorker:
             return tag
         except (Exception,):
             raise InvalidParamError(message='transaction-id is not hex')
-
-    def _validate_block_tag(self, tag: Union[int, str, dict]) -> None:
-        try:
-            if isinstance(tag, int):
-                pass
-            elif isinstance(tag, str):
-                tag.strip().lower()
-                if tag in {'latest', 'pending', 'earliest', 'finalized', 'safe'}:
-                    return
-
-                assert tag[:2] == '0x'
-                int(tag[2:], 16)
-            elif isinstance(tag, dict):
-                if 'blockHash' in tag:
-                    assert 'blockNumber' not in tag
-                    block_hash = tag['blockHash']
-                    block = self._get_block_by_hash(block_hash)
-                    if block.is_empty():
-                        raise InvalidParamError(message=f'header for block hash {block_hash} not found')
-                else:
-                    block_number = tag['blockNumber']
-                    isinstance(block_number, int)
-                    block = self._db.get_block_by_slot(block_number)
-                    if block.is_empty():
-                        raise InvalidParamError(message=f'header for block number {block_number} not found')
-            else:
-                assert False, 'Bad type of tag'
-        except (InvalidParamError,):
-            raise
-        except (Exception,):
-            raise InvalidParamError(message=f'invalid block tag {tag}')
 
     @staticmethod
     def _normalize_address(raw_address: str, address_type='address') -> str:
@@ -321,9 +331,7 @@ class NeonRpcApiWorker:
     def _get_full_block_by_number(self, tag: Union[str, int]) -> SolBlockInfo:
         block = self._process_block_tag(tag)
         if block.is_empty():
-            block = self._db.get_block_by_slot(block.block_slot)
-            if block.is_empty():
-                LOG.debug(f"Not found block by slot {block.block_slot}")
+            LOG.debug(f'Not found block by slot {block.block_slot}')
 
         return block
 
@@ -331,23 +339,16 @@ class NeonRpcApiWorker:
         slot = self._db.latest_slot
         return hex(slot)
 
-    def eth_getBalance(self, account: str, tag: Union[int, str]) -> str:
+    def eth_getBalance(self, account: str, tag: Union[int, str, dict]) -> str:
         """account - address to check for balance.
            tag - integer block number, or the string "finalized", "safe", "latest", "earliest" or "pending"
         """
 
-        self._validate_block_tag(tag)
+        block = self._process_block_tag(tag)
         account = self._normalize_address(account)
 
         try:
-            if tag == 'pending':
-                commitment = SolCommit.Processed
-            elif tag in {'finalized', 'safe'}:
-                commitment = SolCommit.Finalized
-            else:
-                commitment = SolCommit.Confirmed
-
-            neon_account_info = self._solana.get_neon_account_info(account, commitment)
+            neon_account_info = self._core_api_client.get_neon_account_info(account, block)
             if (neon_account_info is None) or (neon_account_info.balance == 0):
                 return self._get_zero_balance(account, neon_account_info)
 
@@ -357,7 +358,7 @@ class NeonRpcApiWorker:
             return hex(0)
 
     def _get_zero_balance(self, account: str, neon_account_info: Optional[NeonAccountInfo]) -> str:
-        nonce = neon_account_info.nonce if neon_account_info is not None else 0
+        nonce = neon_account_info.tx_count if neon_account_info is not None else 0
         if self._has_gas_less_tx_permit(account.lower(), nonce, 0):
             return hex(1)
         return hex(0)
@@ -384,9 +385,9 @@ class NeonRpcApiWorker:
         address_list: List[str] = list()
         topic_list: List[List[str]] = list()
 
-        if obj.get('fromBlock', '0') != '0':
+        if obj.get('fromBlock', 0) not in {0, '0x0', EthCommit.Earliest}:
             from_block = self._process_block_tag(obj['fromBlock']).block_slot
-        if obj.get('toBlock', 'latest') not in {'latest', 'pending', 'finalized', 'safe'}:
+        if obj.get('toBlock', 'latest') not in {EthCommit.Latest, EthCommit.Pending}:
             to_block = self._process_block_tag(obj['toBlock']).block_slot
 
         if obj.get('blockHash', None) is not None:
@@ -481,9 +482,7 @@ class NeonRpcApiWorker:
 
     def _get_block_by_slot(self, block: SolBlockInfo, full: bool, skip_transaction: bool) -> Optional[dict]:
         if block.is_empty():
-            block = self._db.get_block_by_slot(block.block_slot)
-            if block.is_empty():
-                return None
+            return None
 
         sig_list = list()
         total_gas_used = 0
@@ -534,22 +533,21 @@ class NeonRpcApiWorker:
         }
         return result
 
-    def eth_getStorageAt(self, contract: str, position: Union[int, str], tag: Union[int, str]) -> str:
+    def eth_getStorageAt(self, contract: str, position: Union[int, str], tag: Union[int, str, dict]) -> str:
         """
         Retrieves storage data by given position
         Currently supports only 'latest' block
         """
 
-        self._validate_block_tag(tag)
+        block = self._process_block_tag(tag)
         contract = self._normalize_address(contract)
         position = hex(self._normalize_hex(position, 'position'))
-        default_value = '0x' + 64 * '0'
 
         try:
-            return self._core_api_client.get_storage_at(contract, position, default_value)
-        except (Exception,) as err:
+            return self._core_api_client.get_storage_at(contract, position, block)
+        except (BaseException,):
             # LOG.error(f'eth_getStorageAt: Neon-cli failed to execute: {str(err)}')
-            return default_value
+            return '0x' + 64 * '0'
 
     def _get_block_by_hash(self, block_hash: str) -> SolBlockInfo:
         try:
@@ -584,7 +582,7 @@ class NeonRpcApiWorker:
                    as in the default block parameter.
             full - If true it returns the full transaction objects, if false only the hashes of the transactions.
         """
-        is_pending = tag == 'pending'
+        is_pending = tag == EthCommit.Pending
         block = self._process_block_tag(tag)
         ret = self._get_block_by_slot(block, full, is_pending)
         if is_pending:
@@ -593,7 +591,7 @@ class NeonRpcApiWorker:
             ret['nonce'] = None
         return ret
 
-    def eth_call(self, obj: dict, tag: Union[int, str]) -> str:
+    def eth_call(self, obj: dict, tag: Union[int, str, dict]) -> str:
         """Executes a new message call immediately without creating a transaction on the blockchain.
            Parameters
             obj - The transaction call object
@@ -605,7 +603,7 @@ class NeonRpcApiWorker:
             tag                      - integer block number, or the string "finalized", "safe", "latest",
                                        "earliest" or "pending", see the default block parameter
         """
-        self._validate_block_tag(tag)
+        block = self._process_block_tag(tag)
         if not isinstance(obj, dict):
             raise InvalidParamError(message='invalid object type')
 
@@ -622,7 +620,7 @@ class NeonRpcApiWorker:
             retry_on_fail = self._config.retry_on_fail
             while True:
                 try:
-                    emulator_result = self._core_api_client.emulate(contract, sender, data, value, check_result=True)
+                    emulator_result = self._core_api_client.emulate(contract, sender, data, value, block, True)
                     return '0x' + emulator_result.result
 
                 except RescheduleError:
@@ -638,43 +636,31 @@ class NeonRpcApiWorker:
             LOG.debug(f'eth_call Exception {err}.')
             raise
 
-    def eth_getTransactionCount(self, account: str, tag: Union[str, int]) -> str:
-        if tag != 'mempool':
-            self._validate_block_tag(tag)
+    def eth_getTransactionCount(self, account: str, tag: Union[str, int, dict]) -> str:
+        block = self._process_block_tag(tag) if tag != 'mempool' else None
         account = self._normalize_address(account).lower()
 
         try:
             LOG.debug(f'Get transaction count. Account: {account}, tag: {tag}')
 
             mempool_tx_nonce: Optional[int] = None
-            commitment = SolCommit.Confirmed
             req_id = get_req_id_from_log()
 
-            if tag == 'pending':
-                commitment = SolCommit.Processed
-
-                mempool_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
-                LOG.debug(f'Pending tx count for: {account} - is: {mempool_tx_nonce}')
-
-            elif tag == 'mempool':
-                commitment = SolCommit.Processed
-
+            if tag == 'mempool':
                 mempool_tx_nonce = self._mempool_client.get_mempool_tx_nonce(req_id=req_id, sender=account)
                 LOG.debug(f'Mempool tx count for: {account} - is: {mempool_tx_nonce}')
 
-            elif tag == 'latest':
-                commitment = SolCommit.Processed
-
-            elif tag in {'finalized', 'safe'}:
-                commitment = SolCommit.Finalized
+            elif (block is not None) and (block.sol_commit == SolCommit.Processed):
+                mempool_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
+                LOG.debug(f'Pending tx count for: {account} - is: {mempool_tx_nonce}')
 
             if mempool_tx_nonce is None:
                 mempool_tx_nonce = 0
 
-            tx_cnt = self._solana.get_state_tx_cnt(account, commitment)
-            tx_count = max(tx_cnt, mempool_tx_nonce)
+            tx_cnt = self._core_api_client.get_state_tx_cnt(account, block)
+            tx_cnt = max(tx_cnt, mempool_tx_nonce)
 
-            return hex(tx_count)
+            return hex(tx_cnt)
         except (Exception,):
             # LOG.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
@@ -903,12 +889,12 @@ class NeonRpcApiWorker:
 
         return self._get_transaction(neon_tx_receipt)
 
-    def eth_getCode(self, account: str, tag: Union[str, int]) -> str:
-        self._validate_block_tag(tag)
+    def eth_getCode(self, account: str, tag: Union[str, int, dict]) -> str:
+        block = self._process_block_tag(tag)
         account = self._normalize_address(account)
 
         try:
-            account_info = self._solana.get_neon_account_info(account)
+            account_info = self._core_api_client.get_neon_account_info(account, block)
             if (not account_info) or (not account_info.code):
                 return '0x'
 
@@ -986,7 +972,8 @@ class NeonRpcApiWorker:
         #   so the Proxy returns the good result if Neon Tx wasn't finalized
         tx_sender = neon_tx.hex_sender
         tx_nonce = int(neon_tx.nonce)
-        state_tx_cnt = self._solana.get_state_tx_cnt(tx_sender, SolCommit.Finalized)
+        block = self._process_block_tag(EthCommit.Finalized)
+        state_tx_cnt = self._core_api_client.get_state_tx_cnt(tx_sender, block)
         NonceTooLowError.raise_if_error(tx_sender, tx_nonce, state_tx_cnt)
 
     def _get_neon_tx_exec_cfg(self, neon_tx: NeonTx) -> NeonTxExecCfg:
@@ -995,8 +982,8 @@ class NeonRpcApiWorker:
             gas_less_permit = self._has_gas_less_tx_permit(neon_tx.hex_sender, neon_tx.nonce, neon_tx.gasLimit)
 
         min_gas_price = self._gas_price.min_executable_gas_price
-        neon_tx_validator = NeonTxValidator(self._config, self._solana, neon_tx, gas_less_permit, min_gas_price)
-        neon_tx_exec_cfg = neon_tx_validator.validate()
+        validator = NeonTxValidator(self._config, self._core_api_client, neon_tx, gas_less_permit, min_gas_price)
+        neon_tx_exec_cfg = validator.validate()
 
         return neon_tx_exec_cfg
 
@@ -1020,9 +1007,9 @@ class NeonRpcApiWorker:
             return None
         return self._get_transaction(neon_tx_receipt)
 
-    def eth_getTransactionByBlockNumberAndIndex(self, tag: str, tx_idx: int) -> Optional[Dict[str, Any]]:
+    def eth_getTransactionByBlockNumberAndIndex(self, tag: Union[str, int, dict], idx: int) -> Optional[Dict[str, Any]]:
         block = self._process_block_tag(tag)
-        return self._get_transaction_by_index(block, tx_idx)
+        return self._get_transaction_by_index(block, idx)
 
     def eth_getTransactionByBlockHashAndIndex(self, block_hash: str, tx_idx: int) -> Optional[Dict[str, Any]]:
         block = self._get_block_by_hash(block_hash)
@@ -1087,7 +1074,7 @@ class NeonRpcApiWorker:
             raise EthereumError(message='unknown account')
 
         if 'nonce' not in tx:
-            tx['nonce'] = self.eth_getTransactionCount(sender, 'pending')
+            tx['nonce'] = self.eth_getTransactionCount(sender, EthCommit.Pending)
 
         if 'chainId' not in tx:
             tx['chainId'] = hex(ElfParams().chain_id)

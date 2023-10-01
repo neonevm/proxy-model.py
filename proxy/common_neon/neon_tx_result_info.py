@@ -6,8 +6,8 @@ import dataclasses
 import logging
 
 from .solana_block import SolBlockInfo
-from .utils import str_fmt_object, cached_method
-from .evm_log_decoder import NeonLogTxEvent
+from .utils.utils import str_fmt_object, cached_method
+from .utils.evm_log_decoder import NeonLogTxEvent
 
 
 LOG = logging.getLogger(__name__)

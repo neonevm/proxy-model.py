@@ -1,13 +1,19 @@
-from typing import Optional, Dict, Any
-
 import logging
 import requests
 
+from typing import Optional, Dict, Any, Union, List
+
+from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.data import NeonEmulatorResult, NeonEmulatorExitStatus
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import EthereumError
+from ..common_neon.utils.utils import cached_property
 from ..common_neon.utils.eth_proto import NeonTx
+from ..common_neon.solana_block import SolBlockInfo
+from ..common_neon.solana_tx import SolCommit
+
+from .neon_layouts import NeonAccountInfo
 
 
 LOG = logging.getLogger(__name__)
@@ -18,7 +24,6 @@ RPCResponse = Dict[str, Any]
 class _NeonCoreApiClient:
     def __init__(self, port: int):
         self._port = port
-        self._client_impl: Optional[requests.Session] = None
 
         base_url = f'http://127.0.0.1:{port}/api'
         self._emulate_url = base_url + '/emulate'
@@ -36,20 +41,14 @@ class _NeonCoreApiClient:
     def port(self) -> int:
         return self._port
 
-    @property
+    @cached_property
     def _client(self) -> requests.Session:
-        if self._client_impl is not None:
-            return self._client_impl
-
-        self._client_impl = requests.Session()
-        self._client_impl.headers.update(self._headers)
-        return self._client_impl
+        client = requests.Session()
+        client.headers.update(self._headers)
+        return client
 
     def _close(self) -> None:
-        if self._client_impl is None:
-            return
-        self._client_impl.close()
-        self._client_impl = None
+        self._client.close()
 
     def emulate(self, request: RPCRequest) -> NeonEmulatorResult:
         response = self._post(self._emulate_url, request)
@@ -59,6 +58,11 @@ class _NeonCoreApiClient:
         response = self._get(self._get_storage_at_url, request)
         value = response.get('value', None)
         return bytes(value).hex() if value else None
+
+    def get_neon_account_info(self, request: RPCRequest) -> Optional[NeonAccountInfo]:
+        response = self._get(self._get_neon_account_url, request)
+        json_acct = response.get('value')
+        return NeonAccountInfo.from_json(json_acct) if json_acct else None
 
     def _post(self, url: str, request: RPCRequest) -> RPCResponse:
         return self._send_request(lambda: self._client.post(url, json=request))
@@ -70,7 +74,8 @@ class _NeonCoreApiClient:
         raw_response: Optional[requests.Response] = None
         try:
             raw_response = request()
-            raw_response.raise_for_status()
+            # TODO: strange workflow in neon-core-api
+            # raw_response.raise_for_status()
             return raw_response.json()
         except (BaseException,):
             self._close()
@@ -110,7 +115,8 @@ class NeonCoreApiClient:
         contract: str,
         sender: str,
         data: Optional[str],
-        value: Optional[str],
+        value: Optional[Union[str, int]],
+        block: Optional[SolBlockInfo] = None,
         check_result=False
     ) -> NeonEmulatorResult:
         if not sender:
@@ -123,6 +129,8 @@ class NeonCoreApiClient:
 
         if not value:
             value = '0x0'
+        elif isinstance(value, int):
+            value = hex(value)
 
         request = dict(
             token_mint=str(ElfParams().neon_token_mint),
@@ -137,6 +145,8 @@ class NeonCoreApiClient:
             gas_limit=None
         )
 
+        request = self._add_block(request, block)
+
         result = self._call(_NeonCoreApiClient.emulate, request)
         if result is None:
             raise EthereumError(message='Fail to execute emulation')
@@ -146,15 +156,60 @@ class NeonCoreApiClient:
         return result
 
     def emulate_neon_tx(self, neon_tx: NeonTx) -> NeonEmulatorResult:
-        return self.emulate(neon_tx.hex_to_address, neon_tx.hex_sender, neon_tx.hex_call_data, hex(neon_tx.value))
+        return self.emulate(neon_tx.hex_to_address, neon_tx.hex_sender, neon_tx.hex_call_data, neon_tx.value)
 
-    def get_storage_at(self, contract: str, position: str, default_value: str) -> str:
+    def get_storage_at(self, contract: str, position: str, block: SolBlockInfo) -> str:
         request = dict(
             contract_id=contract,
             index=position
         )
+        request = self._add_block(request, block)
         value = self._call(_NeonCoreApiClient.get_storage_at, request)
-        return '0x' + value if value else default_value
+        assert value is not None
+        return '0x' + value
+
+    def get_neon_account_info(
+        self,
+        addr: Union[str, bytes, NeonAddress],
+        block: Optional[SolBlockInfo] = None
+    ) -> Optional[NeonAccountInfo]:
+        if isinstance(addr, bytes):
+            addr = NeonAddress(addr)
+        if isinstance(addr, NeonAddress):
+            addr = str(addr)
+
+        request = self._add_block(dict(ether=addr), block)
+        return self._call(_NeonCoreApiClient.get_neon_account_info, request)
+
+    def get_neon_account_info_list(
+        self,
+        addr_list: List[Union[str, bytes, NeonAddress]],
+        block: Optional[SolBlockInfo] = None
+    ) -> List[NeonAccountInfo]:
+        return [self.get_neon_account_info(addr, block) for addr in addr_list]
+
+    def get_state_tx_cnt(
+        self,
+        acct: Union[str, bytes, NeonAddress, NeonAccountInfo, None],
+        block: Optional[SolBlockInfo] = None
+    ) -> int:
+        if (not acct) or isinstance(acct, NeonAccountInfo):
+            neon_acct_info = acct
+        else:
+            neon_acct_info = self.get_neon_account_info(acct, block)
+
+        return neon_acct_info.tx_count if neon_acct_info is not None else 0
+
+    def _add_block(self, request: RPCRequest, block: Optional[SolBlockInfo]) -> RPCRequest:
+        if not block:
+            pass
+        elif block.sol_commit in {SolCommit.Confirmed, SolCommit.Processed}:
+            pass
+        elif len(self._config.ch_dsn_list):
+            request.update(dict(slot=block.block_slot))
+        else:
+            request.update(dict(commitment=block.sol_commit))
+        return request
 
     def _check_exit_status(self, result: NeonEmulatorResult):
         exit_status = result.exit_status

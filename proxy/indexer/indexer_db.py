@@ -8,7 +8,7 @@ from .neon_tx_logs_db import NeonTxLogsDB
 from .neon_txs_db import NeonTxsDB
 from .solana_alt_infos_db import SolAltInfosDB
 from .solana_alt_txs_db import SolAltTxsDB
-from .solana_blocks_db import SolBlocksDB
+from .solana_blocks_db import SolBlocksDB, SolBlockSlotRange
 from .solana_neon_txs_db import SolNeonTxsDB
 from .solana_tx_costs_db import SolTxCostsDB
 from .stuck_neon_holders_db import StuckNeonHoldersDB
@@ -18,7 +18,8 @@ from ..common_neon.config import Config
 from ..common_neon.db.constats_db import ConstantsDB
 from ..common_neon.db.db_connect import DBConnection
 from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo, SolAltIxInfo
-from ..common_neon.utils import NeonTxReceiptInfo, SolBlockInfo
+from ..common_neon.neon_tx_receipt_info import NeonTxReceiptInfo
+from ..common_neon.solana_block import SolBlockInfo
 
 
 class IndexerDB:
@@ -251,15 +252,10 @@ class IndexerDB:
                 del self._constants_db[k]
 
     def get_block_by_slot(self, block_slot: int) -> SolBlockInfo:
-        return self._get_block_by_slot(block_slot, self.earliest_slot, self.latest_slot)
-
-    def _get_block_by_slot(self, block_slot: int, starting_block_slot: int, latest_block_slot: int) -> SolBlockInfo:
-        if starting_block_slot <= block_slot <= latest_block_slot:
-            return self._sol_blocks_db.get_block_by_slot(block_slot, latest_block_slot)
-        return SolBlockInfo(block_slot=0)
+        return self._sol_blocks_db.get_block_by_slot(block_slot, self._block_slot_range)
 
     def get_block_by_hash(self, block_hash: str) -> SolBlockInfo:
-        return self._sol_blocks_db.get_block_by_hash(block_hash, self.latest_slot)
+        return self._sol_blocks_db.get_block_by_hash(block_hash, self._block_slot_range)
 
     @property
     def earliest_slot(self) -> int:
@@ -279,21 +275,26 @@ class IndexerDB:
 
     @property
     def earliest_block(self) -> SolBlockInfo:
-        slot = self.earliest_slot
-        latest_slot = self.latest_slot
-        return self._get_block_by_slot(slot, slot, latest_slot)
+        slot_range = self._block_slot_range
+        return self._sol_blocks_db.get_block_by_slot(slot_range.earliest_slot, slot_range)
 
     @property
     def latest_block(self) -> SolBlockInfo:
-        earliest_slot = self.earliest_slot
-        slot = self.latest_slot
-        return self._get_block_by_slot(slot, earliest_slot, slot)
+        slot_range = self._block_slot_range
+        return self._sol_blocks_db.get_block_by_slot(slot_range.latest_slot, slot_range)
 
     @property
     def finalized_block(self) -> SolBlockInfo:
-        earliest_slot = self.earliest_slot
-        slot = self.finalized_slot
-        return self._get_block_by_slot(slot, earliest_slot, slot)
+        slot_range = self._block_slot_range
+        return self._sol_blocks_db.get_block_by_slot(slot_range.finalized_slot, slot_range)
+
+    @property
+    def _block_slot_range(self) -> SolBlockSlotRange:
+        return SolBlockSlotRange(
+            earliest_slot=self.earliest_slot,
+            finalized_slot=self.finalized_slot,
+            latest_slot=self.latest_slot
+        )
 
     def get_log_list(self, from_block: Optional[int], to_block: Optional[int],
                      address_list: List[str], topic_list: List[List[str]]) -> List[Dict[str, Any]]:

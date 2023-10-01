@@ -12,6 +12,7 @@ import solders.signature
 import solders.transaction
 
 from .errors import SolTxSizeError
+from .eth_commit import EthCommit
 
 
 SolTxIx = solders.instruction.Instruction
@@ -35,11 +36,15 @@ class SolCommit:
     Confirmed = Type('confirmed')
     Safe = Type('safe')  # optimistic-finalized => 2/3 of validators
     Finalized = Type('finalized')
+    Earliest = Type('earliest')
 
     Order = (NotProcessed, Processed, Confirmed, Safe, Finalized)
 
     @staticmethod
     def to_level(commitment: SolCommit.Type) -> int:
+        if commitment == SolCommit.Earliest:
+            commitment = SolCommit.Finalized
+
         for index, value in enumerate(SolCommit.Order):
             if value == commitment:
                 return index
@@ -50,6 +55,8 @@ class SolCommit:
     def to_type(value: Union[int, str]) -> Type:
         if isinstance(value, str):
             commit_type = SolCommit.Type(value)
+            if commit_type == SolCommit.Earliest:
+                return commit_type
             if commit_type in SolCommit.Order:
                 return commit_type
 
@@ -64,10 +71,27 @@ class SolCommit:
             return SolCommit.Processed
         elif commitment == SolCommit.Safe:
             return SolCommit.Confirmed
-        elif commitment in (SolCommit.Processed, SolCommit.Confirmed, SolCommit.Finalized):
+        elif commitment == SolCommit.Earliest:
+            return SolCommit.Finalized
+        elif commitment in {SolCommit.Processed, SolCommit.Confirmed, SolCommit.Finalized}:
             return commitment
 
         assert False, 'Wrong commitment'
+
+    @staticmethod
+    def from_ethereum(tag: EthCommit.Type) -> Type:
+        tag = tag.lower().strip()
+        if tag == EthCommit.Pending:
+            return SolCommit.Processed
+        elif tag == EthCommit.Finalized:
+            return SolCommit.Finalized
+        elif tag == EthCommit.Safe:
+            return SolCommit.Safe
+        elif tag == EthCommit.Latest:
+            return SolCommit.Confirmed
+        elif tag == EthCommit.Earliest:
+            return SolCommit.Earliest
+        return SolCommit.NotProcessed
 
 
 class SolTx(abc.ABC):

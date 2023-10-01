@@ -1,5 +1,5 @@
 from ..common_neon.solana_tx_legacy import SolLegacyTx
-from ..common_neon.utils.neon_tx_result_info import NeonTxResultInfo
+from ..common_neon.neon_tx_result_info import NeonTxResultInfo
 from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName
 from ..common_neon.constants import FINALIZED_HOLDER_TAG
 

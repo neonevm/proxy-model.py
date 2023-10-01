@@ -11,11 +11,9 @@ from construct import Struct
 
 from .constants import (
     ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG,
-    LOOKUP_ACCOUNT_TAG, NEON_ACCOUNT_TAG,
-    ADDRESS_LOOKUP_TABLE_ID
+    LOOKUP_ACCOUNT_TAG, ADDRESS_LOOKUP_TABLE_ID
 )
 
-from .elf_params import ElfParams
 from .solana_tx import SolPubKey
 
 
@@ -82,51 +80,6 @@ class AccountInfo:
     lamports: int
     owner: SolPubKey
     data: bytes
-
-
-@dataclass
-class NeonAccountInfo:
-    pda_address: SolPubKey
-    ether: str
-    nonce: int
-    tx_count: int
-    balance: int
-    generation: int
-    code_size: int
-    is_rw_blocked: bool
-    code: Optional[str]
-
-    @staticmethod
-    def from_account_info(info: AccountInfo) -> NeonAccountInfo:
-        if len(info.data) < ACCOUNT_INFO_LAYOUT.sizeof():
-            raise RuntimeError(
-                f"Wrong data length for account data {str(info.address)}: "
-                f"{len(info.data)} < {ACCOUNT_INFO_LAYOUT.sizeof()}"
-            )
-        elif info.tag != NEON_ACCOUNT_TAG:
-            raise RuntimeError(f"Wrong tag {info.tag} for neon account info {str(info.address)}")
-
-        cont = ACCOUNT_INFO_LAYOUT.parse(info.data)
-
-        base_size = ACCOUNT_INFO_LAYOUT.sizeof()
-        storage_size = ElfParams().storage_entries_in_contract_account * 32
-        code_offset = base_size + storage_size
-
-        code = None
-        if cont.code_size > 0 and len(info.data) >= code_offset:
-            code = '0x' + info.data[code_offset:][:cont.code_size].hex()
-
-        return NeonAccountInfo(
-            pda_address=info.address,
-            ether=cont.ether.hex(),
-            nonce=cont.nonce,
-            tx_count=int.from_bytes(cont.tx_count, "little"),
-            balance=int.from_bytes(cont.balance, "little"),
-            generation=cont.generation,
-            code_size=cont.code_size,
-            is_rw_blocked=(cont.is_rw_blocked != 0),
-            code=code,
-        )
 
 
 @dataclass(frozen=True)

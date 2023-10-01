@@ -45,7 +45,7 @@ class NewAccountNeonTxPrepStage(BaseNeonTxPrepStage):
         elif sender_addr is None:
             raise EthereumError('Sender address is NULL')
 
-        account_info = self._ctx.solana.get_neon_account_info(sender_addr)
+        account_info = self._ctx.core_api_client.get_neon_account_info(sender_addr)
         if account_info is None:
             if self._ctx.neon_tx_info.gas_price != 0:
                 raise EthereumError('Sender address does not exist')

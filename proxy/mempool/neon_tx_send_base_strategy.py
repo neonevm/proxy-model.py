@@ -8,7 +8,8 @@ from ..common_neon.solana_neon_tx_receipt import SolNeonTxReceiptInfo, SolNeonIx
 from ..common_neon.solana_tx import SolTx, SolTxIx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_tx_list_sender import SolTxListSender, SolTxSendState
-from ..common_neon.utils import NeonTxResultInfo, cached_property
+from ..common_neon.neon_tx_result_info import NeonTxResultInfo
+from ..common_neon.utils import cached_property
 
 from ..mempool.neon_tx_sender_ctx import NeonTxSendCtx
 

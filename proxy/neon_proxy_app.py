@@ -1,7 +1,7 @@
 from .proxy import entry_point
 from .mempool.mempool_service import MPService
 from .statistic.proxy_service import ProxyStatService
-from .neon_core_api import NeonCoreApiService
+from .neon_core_api.neon_core_api_service import NeonCoreApiService
 from .common_neon.config import Config
 from .common.logger import Logger
 

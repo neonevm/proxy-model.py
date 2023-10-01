@@ -1,7 +1,7 @@
 from typing import List, Generator, Optional
 import logging
 
-from ..common_neon.utils.solana_block import SolBlockInfo
+from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
 from ..common_neon.errors import SolHistoryNotFound, SolHistoryCriticalNotFound
