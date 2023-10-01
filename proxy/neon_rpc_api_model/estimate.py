@@ -99,7 +99,7 @@ class GasEstimate:
             toAddress=to_addr,
             value=value,
             callData=data,
-            v=ElfParams().chain_id * 2 + 35,
+            v=245022934 * 1024 + 35,
             r=0x1820182018201820182018201820182018201820182018201820182018201820,
             s=0x1820182018201820182018201820182018201820182018201820182018201820
         )
@@ -122,7 +122,9 @@ class GasEstimate:
         return self._cached_tx_cost_size
 
     def _holder_tx_cost(self, neon_tx_len: int) -> int:
-        return ((neon_tx_len // ElfParams().holder_msg_size) + 1) * 5000
+        # TODO: should be moved to neon-core-api
+        holder_msg_size = 950
+        return ((neon_tx_len // holder_msg_size) + 1) * 5000
 
     def _execution_cost(self) -> int:
         return self._emulator_result.used_gas

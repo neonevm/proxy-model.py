@@ -111,7 +111,6 @@ class NeonIxBuilder:
         self._treasury_pool_index_buf: Optional[bytes] = None
         self._treasury_pool_address: Optional[SolPubKey] = None
         self._holder: Optional[SolPubKey] = None
-        self._elf_params = ElfParams()
 
     @property
     def operator_account(self) -> SolPubKey:
@@ -135,10 +134,13 @@ class NeonIxBuilder:
 
     def init_neon_tx_sig(self, neon_tx_sig: str) -> NeonIxBuilder:
         self._neon_tx_sig = bytes.fromhex(neon_tx_sig[2:])
-        treasury_pool_index = int().from_bytes(self._neon_tx_sig[:4], 'little') % ElfParams().treasury_pool_max
+        elf_params = ElfParams()
+        treasury_pool_cnt = elf_params.treasury_pool_cnt
+        treasury_pool_seed = elf_params.treasury_pool_seed
+        treasury_pool_index = int().from_bytes(self._neon_tx_sig[:4], 'little') % treasury_pool_cnt
         self._treasury_pool_index_buf = treasury_pool_index.to_bytes(4, 'little')
         self._treasury_pool_address = SolPubKey.find_program_address(
-            [b'treasury_pool', self._treasury_pool_index_buf],
+            [treasury_pool_seed, self._treasury_pool_index_buf],
             EVM_PROGRAM_ID
         )[0]
 
@@ -370,8 +372,9 @@ class NeonIxBuilder:
             ]
         )
 
-    def make_compute_budget_heap_ix(self) -> SolTxIx:
-        heap_frame_size = self._elf_params.neon_heap_frame
+    @staticmethod
+    def make_compute_budget_heap_ix() -> SolTxIx:
+        heap_frame_size = 256 * 1024
         ix_data = (
             int(ComputeBudgetIxCode.HeapRequest).to_bytes(1, 'little') +
             heap_frame_size.to_bytes(4, 'little')
@@ -383,8 +386,9 @@ class NeonIxBuilder:
 
         )
 
-    def make_compute_budget_cu_ix(self) -> SolTxIx:
-        compute_unit_cnt = self._elf_params.neon_compute_units
+    @staticmethod
+    def make_compute_budget_cu_ix() -> SolTxIx:
+        compute_unit_cnt = 1_400_000
         ix_data = (
             int(ComputeBudgetIxCode.CURequest).to_bytes(1, 'little') +
             compute_unit_cnt.to_bytes(4, 'little')
