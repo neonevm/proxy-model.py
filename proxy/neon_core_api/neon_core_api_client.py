@@ -1,20 +1,22 @@
+import json
 import logging
 import requests
+import re
 
 from typing import Optional, Dict, Any, Union, List, Tuple
+
+from .neon_cli import NeonCli
+from .neon_layouts import NeonAccountInfo
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.data import NeonEmulatorResult, NeonEmulatorExitStatus
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import EthereumError
-from ..common_neon.utils.utils import cached_property
-from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.solana_tx import SolCommit
-
-from .neon_layouts import NeonAccountInfo
-from .neon_cli import NeonCli
+from ..common_neon.utils.eth_proto import NeonTx
+from ..common_neon.utils.utils import cached_property
 
 
 LOG = logging.getLogger(__name__)
@@ -51,19 +53,14 @@ class _NeonCoreApiClient:
     def _close(self) -> None:
         self._client.close()
 
-    def emulate(self, request: RPCRequest) -> NeonEmulatorResult:
-        response = self._post(self._emulate_url, request)
-        return NeonEmulatorResult(response.get('value'))
+    def emulate(self, request: RPCRequest) -> RPCResponse:
+        return self._post(self._emulate_url, request)
 
-    def get_storage_at(self, request: RPCRequest) -> Optional[str]:
-        response = self._get(self._get_storage_at_url, request)
-        value = response.get('value', None)
-        return bytes(value).hex() if value else None
+    def get_storage_at(self, request: RPCRequest) -> RPCResponse:
+        return self._get(self._get_storage_at_url, request)
 
-    def get_neon_account_info(self, request: RPCRequest) -> Optional[NeonAccountInfo]:
-        response = self._get(self._get_neon_account_url, request)
-        json_acct = response.get('value')
-        return NeonAccountInfo.from_json(json_acct) if json_acct else None
+    def get_neon_account_info(self, request: RPCRequest) -> RPCResponse:
+        return self._get(self._get_neon_account_url, request)
 
     def _post(self, url: str, request: RPCRequest) -> RPCResponse:
         return self._send_request(lambda: self._client.post(url, json=request))
@@ -86,6 +83,10 @@ class _NeonCoreApiClient:
 
 
 class NeonCoreApiClient:
+    _re_insufficient_balance = re.compile(
+        r'EVM Error. Insufficient balance for transfer, account = 0x([0-9a-fA-F]+), required = (\d+)'
+    )
+
     def __init__(self, config: Config):
         self._config = config
         self._retry_cnt = len(config.solana_url_list)
@@ -147,14 +148,12 @@ class NeonCoreApiClient:
         )
 
         request = self._add_block(request, block)
+        response = self._call(_NeonCoreApiClient.emulate, request)
+        self._check_emulated_error(response)
 
-        result = self._call(_NeonCoreApiClient.emulate, request)
-        if result is None:
-            raise EthereumError(message='Fail to execute emulation')
         if check_result:
-            self._check_exit_status(result)
-
-        return result
+            return self._get_emulated_result(response)
+        return NeonEmulatorResult(response.get('value'))
 
     def emulate_neon_tx(self, neon_tx: NeonTx) -> NeonEmulatorResult:
         return self.emulate(neon_tx.hex_to_address, neon_tx.hex_sender, neon_tx.hex_call_data, neon_tx.value)
@@ -165,9 +164,11 @@ class NeonCoreApiClient:
             index=position
         )
         request = self._add_block(request, block)
-        value = self._call(_NeonCoreApiClient.get_storage_at, request)
-        assert value is not None
-        return '0x' + value
+        response = self._call(_NeonCoreApiClient.get_storage_at, request)
+        value = response.get('value')
+        if value is None:
+            raise EthereumError('No storage')
+        return '0x' + bytes(value).hex()
 
     def get_neon_account_info(
         self,
@@ -180,7 +181,12 @@ class NeonCoreApiClient:
             addr = str(addr)
 
         request = self._add_block(dict(ether=addr), block)
-        return self._call(_NeonCoreApiClient.get_neon_account_info, request)
+        response = self._call(_NeonCoreApiClient.get_neon_account_info, request)
+        if not response:
+            return None
+
+        json_acct = response.get('value')
+        return NeonAccountInfo.from_json(json_acct) if json_acct else None
 
     def get_neon_account_info_list(
         self,
@@ -218,10 +224,32 @@ class NeonCoreApiClient:
             request.update(dict(commitment=block.sol_commit))
         return request
 
-    def _check_exit_status(self, result: NeonEmulatorResult):
-        exit_status = result.exit_status
+    def _check_emulated_error(self, response: RPCResponse) -> None:
+        error = response.get('error')
+        if error is None:
+            return
+
+        error = self._check_insufficient_balance(error)
+        raise EthereumError(message=error)
+
+    def _check_insufficient_balance(self, error: str) -> str:
+        match = self._re_insufficient_balance.match(error)
+        if match is None:
+            return error
+
+        sender = match.group(1)
+        amount = match.group(2)
+        return f'insufficient funds for transfer: address {sender} want {amount}'
+
+    def _get_emulated_result(self, response: RPCResponse) -> NeonEmulatorResult:
+        value = response.get('value')
+        if value is None:
+            raise EthereumError(message=json.dumps(response))
+
+        emulated_result = NeonEmulatorResult(value)
+        exit_status = emulated_result.exit_status
         if exit_status == NeonEmulatorExitStatus.Revert:
-            revert_data = result.revert_data
+            revert_data = emulated_result.revert_data
             LOG.debug(f'Got revert call emulated result with data: {revert_data}')
             result_value = self._decode_revert_message(revert_data)
             if result_value is None:
@@ -230,11 +258,13 @@ class NeonCoreApiClient:
                 raise EthereumError(code=3, message='execution reverted: ' + result_value, data='0x' + revert_data)
 
         if exit_status != NeonEmulatorExitStatus.Succeed:
-            LOG.debug(f"Got not succeed emulate exit_status: {exit_status}")
-            reason = result.exit_reason
+            LOG.debug(f'Got not succeed emulate exit_status: {exit_status}')
+            reason = emulated_result.exit_reason
             if isinstance(reason, str):
                 raise EthereumError(code=3, message=f'execution finished with error: {reason}')
             raise EthereumError(code=3, message=exit_status)
+
+        return emulated_result
 
     @staticmethod
     def _decode_revert_message(data: str) -> Optional[str]:
