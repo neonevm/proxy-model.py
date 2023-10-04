@@ -4,13 +4,13 @@ import math
 import time
 
 from collections import deque
-from typing import List, Tuple, Optional, Any, cast, Generator, Union, Deque
+from typing import List, Optional, Any, cast, Union, Deque
 
 from .executor_mng import MPExecutorMng
 
 from .mempool_api import (
-    MPRequest, MPRequestType, MPTask, MPTxRequestList,
-    MPResult, MPGasPriceResult,
+    MPRequest, MPRequestType, MPTask,
+    MPGasPriceResult,
     MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest, MPStuckTxInfo,
     MPTxSendResult, MPTxSendResultCode,
     MPTxPoolContentResult,
@@ -55,7 +55,6 @@ class MemPool:
         self._schedule_cond = asyncio.Condition()
         self._processing_task_list: List[MPTask] = list()
         self._rescheduled_tx_queue: Deque[MPTxRequest] = deque()
-        self._is_active: bool = True
         self._executor_mng = executor_mng
         self._op_res_mng = op_res_mng
         self._completed_tx_dict = MPTxDict(config)
@@ -181,15 +180,11 @@ class MemPool:
 
     def _acquire_tx(self) -> Optional[MPTxExecRequest]:
         try:
-            tx = self._acquire_stuck_tx()
-            if tx is not None:
-                return tx
-
-            tx = self._acquire_rescheduled_tx()
-            if tx is not None:
-                return tx
-
-            return self._acquire_scheduled_tx()
+            return (
+                self._acquire_stuck_tx() or
+                self._acquire_rescheduled_tx() or
+                self._acquire_scheduled_tx()
+            )
 
         except BaseException as exc:
             LOG.error('Failed to get tx for execution', exc_info=exc)
@@ -267,7 +262,6 @@ class MemPool:
             try:
                 async with self._schedule_cond:
                     await self._schedule_cond.wait()
-                    await self._schedule_cond.wait_for(self.is_active)
                     # LOG.debug(f"Schedule processing got awake, condition: {self._schedule_cond.__repr__()}")
 
                     while self._executor_mng.is_available():
@@ -462,33 +456,6 @@ class MemPool:
 
     def _create_kick_tx_schedule_task(self) -> None:
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
-
-    def suspend_processing(self) -> MPResult:
-        if not self._is_active:
-            LOG.warning('No need to suspend mempool, already suspended')
-            return MPResult()
-        self._is_active = False
-        LOG.info('Transaction processing suspended')
-        return MPResult()
-
-    def resume_processing(self) -> MPResult:
-        if self._is_active:
-            LOG.warning('No need to resume mempool, not suspended')
-            return MPResult()
-        self._is_active = True
-        LOG.info('Transaction processing resumed')
-        self._create_kick_tx_schedule_task()
-        return MPResult()
-
-    def is_active(self) -> bool:
-        return self._is_active
-
-    def iter_taking_out_tx_list(self) -> Generator[Tuple[str, MPTxRequestList], None, None]:
-        return self._tx_schedule.iter_taking_out_tx_list
-
-    def take_in_tx_list(self, sender_addr: str, mp_tx_request_list: MPTxRequestList):
-        self._tx_schedule.take_in_tx_list(sender_addr, mp_tx_request_list)
-        self._create_kick_tx_schedule_task()
 
     async def _process_tx_dict_clear_loop(self) -> None:
         while True:
