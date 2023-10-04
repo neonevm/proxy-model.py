@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import random
 
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 
 from eth_keys import keys as neon_keys
 from sha3 import keccak_256
@@ -14,11 +14,21 @@ from .solana_tx import SolPubKey
 
 
 class NeonAddress:
-    def __init__(self, data: Union[str, bytes], private: neon_keys.PrivateKey = None):
+    data: bytes
+    private: Optional[neon_keys.PrivateKey]
+
+    def __init__(self, data: Union[str, bytes], private: Optional[neon_keys.PrivateKey] = None):
         if isinstance(data, str):
             data = bytes(bytearray.fromhex(data[2:]))
+
         self.data = data
         self.private = private
+
+    @staticmethod
+    def from_raw(data: InNeonAddress, private: Optional[neon_keys.PrivateKey] = None) -> NeonAddress:
+        if isinstance(data, NeonAddress):
+            return data
+        return NeonAddress(data, private)
 
     @staticmethod
     def random() -> NeonAddress:
@@ -51,6 +61,9 @@ class NeonAddress:
 
     def __ne__(self, other):
         return self.data != other.data
+
+
+InNeonAddress = Union[str, bytes, NeonAddress]
 
 
 def neon_account_with_seed(base_address: SolPubKey, seed: bytes) -> SolPubKey:

@@ -18,6 +18,7 @@ class NeonTxValidator:
         self._tx = tx
 
         self._neon_account_info = client.get_neon_account_info(self._tx.sender)
+        self._neon_contract_info = client.get_neon_contract_info(self._tx.sender)
         self._state_tx_cnt = client.get_state_tx_cnt(self._neon_account_info)
 
         self._has_gas_less_permit = gas_less_permit
@@ -96,7 +97,7 @@ class NeonTxValidator:
         if not self._neon_account_info:
             return
 
-        if self._neon_account_info.code_size > 0:
+        if self._neon_contract_info.code is not None:
             raise EthereumError(message='sender not an eoa')
 
     def _prevalidate_sender_balance(self):
