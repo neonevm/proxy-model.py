@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import enum
 
-from typing import List, Dict, Set, Optional, Tuple, Union, Generator, cast
+from typing import List, Dict, Set, Optional, Tuple, Union, cast
 
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.json_logger import logging_context
@@ -35,14 +35,12 @@ class MPTxRequestDict:
     @staticmethod
     def _sender_nonce(tx: Union[MPTxRequest, Tuple[str, int]]) -> str:
         if isinstance(tx, MPTxRequest):
-            sender_addr = tx.sender_address
-            tx_nonce = tx.nonce
+            sender_addr, tx_nonce = tx.sender_address, tx.nonce
         else:
-            sender_addr = tx[0]
-            tx_nonce = tx[1]
+            sender_addr, tx_nonce = tx
         return f'{sender_addr}:{tx_nonce}'
 
-    def add(self, tx: MPTxRequest) -> None:
+    def add_tx(self, tx: MPTxRequest) -> None:
         sender_nonce = self._sender_nonce(tx)
         assert tx.sig not in self._tx_hash_dict, f'Tx {tx.sig} is already in dictionary'
         assert sender_nonce not in self._tx_sender_nonce_dict, f'Tx {sender_nonce} is already in dictionary'
@@ -52,7 +50,7 @@ class MPTxRequestDict:
         self._tx_gas_price_queue.add(tx)
         assert len(self._tx_hash_dict) == len(self._tx_sender_nonce_dict) >= len(self._tx_gas_price_queue)
 
-    def pop(self, tx: MPTxRequest) -> MPTxRequest:
+    def pop_tx(self, tx: MPTxRequest) -> MPTxRequest:
         assert tx.sig in self._tx_hash_dict, f'Tx {tx.sig} is absent in dictionary'
 
         sender_nonce = self._sender_nonce(tx)
@@ -197,8 +195,7 @@ class MPSenderTxPool:
         assert not self.is_empty(), f'no transactions in {self.sender_address} pool'
         assert self._is_processing(), f'{self.sender_address} pool does not process tx {tx.sig}'
 
-        t_tx = self.top_tx
-        p_tx = self._processing_tx
+        t_tx, p_tx = self.top_tx, self._processing_tx
         assert tx.sig == p_tx.sig, f'tx {tx.sig} is not equal to processing tx {p_tx.sig}'
         assert t_tx is p_tx, f'top tx {t_tx.sig} is not equal to processing tx {p_tx.sig}'
 
@@ -236,8 +233,7 @@ class MPSenderTxPool:
         if self.state in {self.State.Suspended, self.State.Empty}:
             return 0
 
-        pending_pos = 0
-        pending_nonce = self._state_tx_cnt
+        pending_pos, pending_nonce = 0, self._state_tx_cnt
         for tx in reversed(self._tx_nonce_queue):
             if tx.nonce != pending_nonce:
                 break
@@ -267,7 +263,7 @@ class MPTxSchedule:
         LOG.debug(f'Add tx {tx.sig} to mempool with {self.tx_cnt} txs')
 
         sender_pool.add_tx(tx)
-        self._tx_dict.add(tx)
+        self._tx_dict.add_tx(tx)
 
         # the first tx in the sender pool
         if sender_pool.len_tx_nonce_queue == 1:
@@ -276,7 +272,7 @@ class MPTxSchedule:
     def _drop_tx_from_sender_pool(self, sender_pool: MPSenderTxPool, tx: MPTxRequest) -> None:
         LOG.debug(f'Drop tx {tx.sig} from pool {sender_pool.sender_address}')
         sender_pool.drop_tx(tx)
-        self._tx_dict.pop(tx)
+        self._tx_dict.pop_tx(tx)
 
     def _find_sender_pool(self, sender_address: str) -> Optional[MPSenderTxPool]:
         return self._sender_pool_dict.get(sender_address, None)
@@ -456,7 +452,7 @@ class MPTxSchedule:
 
         sender_pool = self._get_sender_pool(tx.sender_address)
         sender_pool.done_tx(tx)
-        self._tx_dict.pop(tx)
+        self._tx_dict.pop_tx(tx)
         self._schedule_sender_pool(sender_pool, tx.neon_tx_exec_cfg.state_tx_cnt)
 
     def done_tx(self, tx: MPTxRequest) -> None:
@@ -483,24 +479,6 @@ class MPTxSchedule:
                 continue
 
             self._schedule_sender_pool(sender_pool, sender_tx_cnt_data.state_tx_cnt)
-
-    @property
-    def iter_taking_out_tx_list(self) -> Generator[Tuple[str, MPTxRequestList], None, None]:
-        for sender_address, tx_pool in list(self._sender_pool_dict.items()):
-            taken_out_tx_list = tx_pool.take_out_tx_list()
-            for tx in taken_out_tx_list:
-                self._tx_dict.pop(tx)
-            if tx_pool.is_empty():
-                self._sender_pool_dict.pop(sender_address)
-            yield sender_address, taken_out_tx_list
-
-        self._suspended_sender_set.clear()
-        self._sender_pool_queue.clear()
-
-    def take_in_tx_list(self, sender_address: str, mp_tx_request_list: MPTxRequestList):
-        LOG.debug(f'Take in mp_tx_request_list, sender_addr: {sender_address}, {len(mp_tx_request_list)} - txs')
-        for mp_tx_request in mp_tx_request_list:
-            self.add_tx(mp_tx_request)
 
     def get_content(self) -> MPTxPoolContentResult:
         pending_list: List[NeonTxInfo] = list()
