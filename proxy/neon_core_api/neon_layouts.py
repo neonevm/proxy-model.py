@@ -9,29 +9,35 @@ from ..common_neon.address import NeonAddress
 
 @dataclass(frozen=True)
 class NeonAccountInfo:
-    pda_address: SolPubKey
     neon_addr: NeonAddress
+    chain_id: int
+    pda_address: SolPubKey
     tx_count: int
     balance: int
+
+    def from_json(neon_addr: NeonAddress, chain_id: int, src: Dict[str, Any]) -> NeonAccountInfo:
+        return NeonAccountInfo(
+            neon_addr=neon_addr,
+            chain_id=chain_id,
+            pda_address=src.get('solana_address'),
+            tx_count=src.get('trx_count'),
+            balance=int(src.get('balance'), 16),
+        )
+
+
+@dataclass(frozen=True)
+class NeonContractInfo:
+    neon_addr: NeonAddress
+    chain_id: int
     code: Optional[str]
-    code_size: int
 
     @staticmethod
-    def from_json(src: Dict[str, Any]) -> NeonAccountInfo:
-        code = src.get('code')
-        code_size = src.get('code_size')
-        if (not len(code)) or (not code_size):
-            code = None
-        else:
-            code = '0x' + code
-
-        return NeonAccountInfo(
-            pda_address=src.get('solana_address'),
-            neon_addr=NeonAddress(src.get('address')),
-            tx_count=src.get('trx_count'),
-            balance=int(src.get('balance'), 10),
-            code=code,
-            code_size=code_size
+    def from_json(neon_addr: NeonAddress, src: Dict[str, Any]) -> NeonContractInfo:
+        code = '0x' + (src.get('code') or '')
+        return NeonContractInfo(
+            neon_addr=neon_addr,
+            chain_id=src.get('chain_id'),
+            code=code
         )
 
 

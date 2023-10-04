@@ -14,7 +14,7 @@ from .logging_level import NeonCoreApiLoggingLevel
 LOG = logging.getLogger(__name__)
 
 
-class _NeonCoreApiService:
+class _Service:
     def __init__(self, config: Config, idx: int, solana_url: str):
         self._config = config
         port = config.neon_core_api_port + idx
@@ -47,7 +47,7 @@ class _NeonCoreApiService:
         return env
 
     def _run(self):
-        cmd = ['neon-core-api', '--host', self._host]
+        cmd = ['neon-core-api', '-H', self._host]
         env = self._create_env()
 
         while True:
@@ -79,7 +79,7 @@ class _NeonCoreApiService:
 
 class NeonCoreApiService:
     def __init__(self, config: Config):
-        self._service_list = [_NeonCoreApiService(config, idx, url) for idx, url in enumerate(config.solana_url_list)]
+        self._service_list = [_Service(config, idx, url) for idx, url in enumerate(config.solana_url_list)]
 
     def start(self) -> None:
         for service in self._service_list:

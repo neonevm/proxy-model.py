@@ -2,13 +2,14 @@ import json
 import logging
 import requests
 import re
+import enum
 
 from typing import Optional, Dict, Any, Union, List, Tuple
 
 from .neon_cli import NeonCli
-from .neon_layouts import NeonAccountInfo
+from .neon_layouts import NeonAccountInfo, NeonContractInfo
 
-from ..common_neon.address import NeonAddress
+from ..common_neon.address import NeonAddress, InNeonAddress
 from ..common_neon.config import Config
 from ..common_neon.data import NeonEmulatorResult, NeonEmulatorExitStatus
 from ..common_neon.elf_params import ElfParams
@@ -24,17 +25,27 @@ RPCRequest = Dict[str, Any]
 RPCResponse = Dict[str, Any]
 
 
-class _NeonCoreApiClient:
+class _MethodName(enum.Enum):
+    emulate = 'emulate'
+    get_storage_at = 'storage'
+    get_neon_account_info_list = 'balance'
+    get_neon_contract_info = 'contract'
+
+
+class _Client:
     def __init__(self, port: int):
         self._port = port
 
-        base_url = f'http://127.0.0.1:{port}/api'
-        self._emulate_url = base_url + '/emulate'
-        self._get_storage_at_url = base_url + '/get-storage-at'
-        self._get_neon_account_url = base_url + '/get-ether-account-data'
-
         self._headers = {
             'Content-Type': 'application/json',
+        }
+
+        base_url = f'http://127.0.0.1:{port}/api'
+        self._call_url_map = {
+            _MethodName.emulate: base_url + '/emulate',
+            _MethodName.get_storage_at: base_url + '/storage',
+            _MethodName.get_neon_account_info_list: base_url + '/balance',
+            _MethodName.get_neon_contract_info: base_url + '/contract'
         }
 
     def __del__(self):
@@ -53,25 +64,13 @@ class _NeonCoreApiClient:
     def _close(self) -> None:
         self._client.close()
 
-    def emulate(self, request: RPCRequest) -> RPCResponse:
-        return self._post(self._emulate_url, request)
-
-    def get_storage_at(self, request: RPCRequest) -> RPCResponse:
-        return self._get(self._get_storage_at_url, request)
-
-    def get_neon_account_info(self, request: RPCRequest) -> RPCResponse:
-        return self._get(self._get_neon_account_url, request)
+    def call(self, method: _MethodName, request: RPCRequest) -> RPCResponse:
+        return self._post(self._call_url_map[method], request)
 
     def _post(self, url: str, request: RPCRequest) -> RPCResponse:
-        return self._send_request(lambda: self._client.post(url, json=request))
-
-    def _get(self, url: str, request: RPCRequest) -> RPCResponse:
-        return self._send_request(lambda: self._client.get(url, params=request))
-
-    def _send_request(self, request) -> RPCResponse:
         raw_response: Optional[requests.Response] = None
         try:
-            raw_response = request()
+            raw_response = self._client.post(url, json=request)
             # TODO: strange workflow in neon-core-api
             # raw_response.raise_for_status()
             return raw_response.json()
@@ -92,10 +91,10 @@ class NeonCoreApiClient:
         self._retry_cnt = len(config.solana_url_list)
 
         port = config.neon_core_api_port
-        self._client_list = [_NeonCoreApiClient(port + idx) for idx in range(self._retry_cnt)]
+        self._client_list = [_Client(port + idx) for idx in range(self._retry_cnt)]
         self._last_client_idx = 0
 
-    def _get_client(self) -> _NeonCoreApiClient:
+    def _get_client(self) -> _Client:
         idx = self._last_client_idx
 
         self._last_client_idx += 1
@@ -104,17 +103,16 @@ class NeonCoreApiClient:
 
         return self._client_list[idx]
 
-    def _call(self, method, *args, **kwargs) -> Any:
+    def _call(self, method: _MethodName, request: RPCRequest) -> RPCResponse:
         for retry in range(self._retry_cnt):
             client = self._get_client()
             try:
-                return method(client, *args, **kwargs)
+                return client.call(method, request)
             except BaseException as exc:
-                LOG.warning(f'Fail to call {method.__name__} on the neon_core_api({client.port})', exc_info=exc)
+                LOG.warning(f'Fail to call {method} on the neon_core_api({client.port})', exc_info=exc)
 
     def emulate(
-        self,
-        contract: str,
+        self, contract: str,
         sender: str,
         data: Optional[str],
         value: Optional[Union[str, int]],
@@ -152,7 +150,7 @@ class NeonCoreApiClient:
         )
 
         request = self._add_block(request, block)
-        response = self._call(_NeonCoreApiClient.emulate, request)
+        response = self._call(_MethodName.emulate, request)
         self._check_emulated_error(response)
 
         if check_result:
@@ -168,47 +166,66 @@ class NeonCoreApiClient:
             index=position
         )
         request = self._add_block(request, block)
-        response = self._call(_NeonCoreApiClient.get_storage_at, request)
+        response = self._call(_MethodName.get_storage_at, request)
         value = response.get('value')
         if value is None:
             raise EthereumError('No storage')
         return '0x' + bytes(value).hex()
 
-    def get_neon_account_info(
-        self,
-        addr: Union[str, bytes, NeonAddress],
-        block: Optional[SolBlockInfo] = None
-    ) -> Optional[NeonAccountInfo]:
-        if isinstance(addr, bytes):
-            addr = NeonAddress(addr)
-        if isinstance(addr, NeonAddress):
-            addr = str(addr)
-
-        request = self._add_block(dict(ether=addr), block)
-        response = self._call(_NeonCoreApiClient.get_neon_account_info, request)
-        if not response:
-            return None
-
-        json_acct = response.get('value')
-        return NeonAccountInfo.from_json(json_acct) if json_acct else None
-
     def get_neon_account_info_list(
-        self,
-        addr_list: List[Union[str, bytes, NeonAddress]],
+        self, addr_list: List[InNeonAddress],
         block: Optional[SolBlockInfo] = None
     ) -> List[NeonAccountInfo]:
-        return [self.get_neon_account_info(addr, block) for addr in addr_list]
+        addr_list = [NeonAddress(addr) for addr in addr_list]
+        chain_id = ElfParams().chain_id
+
+        request = dict(
+            account=[
+                dict(
+                    address=str(addr),
+                    chain_id=chain_id
+                )
+                for addr in addr_list
+            ]
+        )
+        request = self._add_block(request, block)
+
+        response = self._call(_MethodName.get_neon_account_info_list, request)
+        json_acct_list = response.get('value')
+        return [
+            NeonAccountInfo.from_json(addr, chain_id, json_acct)
+            for addr, json_acct in zip(addr_list, json_acct_list)
+        ]
+
+    def get_neon_account_info(
+        self, addr: InNeonAddress,
+        block: Optional[SolBlockInfo] = None
+    ) -> Optional[NeonAccountInfo]:
+        return self.get_neon_account_info_list([addr], block)[0]
+
+    def get_neon_contract_info(
+        self, addr: InNeonAddress,
+        block: Optional[SolBlockInfo] = None
+    ) -> Optional[NeonContractInfo]:
+        addr = NeonAddress(addr)
+        request = dict(
+            contract=addr
+        )
+        request = self._add_block(request, block)
+
+        response = self._call(_MethodName.get_neon_contract_info, request)
+        json_contract = response.get('value')
+        return NeonContractInfo.from_json(addr, json_contract)
 
     def get_state_tx_cnt(
         self,
-        acct: Union[str, bytes, NeonAddress, NeonAccountInfo, None],
+        addr: Union[str, bytes, NeonAddress, NeonAccountInfo, None],
         block: Optional[SolBlockInfo] = None
     ) -> int:
-        if (not acct) or isinstance(acct, NeonAccountInfo):
-            neon_acct_info = acct
+        if not isinstance(addr, NeonAccountInfo):
+            neon_acct_info = self.get_neon_account_info(addr, block)
         else:
-            neon_acct_info = self.get_neon_account_info(acct, block)
-
+            neon_acct_info = addr
         return neon_acct_info.tx_count if neon_acct_info is not None else 0
 
     def read_elf_params(self, last_deployed_slot: int) -> Tuple[int, Dict[str, str]]:

@@ -935,16 +935,13 @@ class NeonRpcApiWorker:
 
         return self._get_transaction(neon_tx_receipt)
 
-    def eth_getCode(self, account: str, tag: Union[str, int, dict]) -> str:
+    def eth_getCode(self, contract: str, tag: Union[str, int, dict]) -> str:
         block = self._process_block_tag(tag)
-        account = self._normalize_address(account)
+        contract = self._normalize_address(contract)
 
         try:
-            account_info = self._core_api_client.get_neon_account_info(account, block)
-            if (not account_info) or (not account_info.code):
-                return '0x'
-
-            return account_info.code
+            contract_info = self._core_api_client.get_neon_contract_info(contract, block)
+            return contract_info.code
         except (Exception,):
             return '0x'
 

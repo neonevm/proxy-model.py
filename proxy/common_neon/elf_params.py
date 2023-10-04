@@ -38,7 +38,7 @@ class ElfParams:
 
     @property
     def chain_id(self) -> int:
-        return int(self._elf_param_dict.get('NEON_CHAIN_ID'))
+        return int(self._elf_param_dict.get('NEON_CHAIN_ID', 111))
 
     @property
     def neon_evm_version(self) -> Optional[str]:
