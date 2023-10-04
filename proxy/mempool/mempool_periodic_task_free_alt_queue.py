@@ -118,7 +118,7 @@ class MPFreeALTQueueTaskLoop(MPPeriodicTaskLoop[MPRequest, MPALTListResult]):
         for alt_info in mp_res.alt_info_list:
             pos = queue.find(alt_info)
             if pos is not None:
-                queue.pop(alt_info)
+                queue.pop_tx(alt_info)
 
     def _process_deactivate_list_result(self, mp_res: MPALTListResult) -> None:
         self._clear_queue(self._deactivate_alt_queue, mp_res)

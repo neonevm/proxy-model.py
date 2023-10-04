@@ -20,11 +20,11 @@ from ..common_neon.operator_resource_mng import OpResMng
 from ..mempool.mempool_api import (
     MPRequest, OpResIdent,
     MPTxRequest, MPTxExecRequest, MPTxExecResult, MPTxExecResultCode, MPTxSendResult,
-    MPGasPriceResult, MPSenderTxCntData, MPTxSendResultCode
+    MPGasPriceResult, MPSenderTxCntData, MPTxSendResultCode, MPTxRequestList
 )
 
 from ..mempool.executor_mng import MPExecutorMng, IMPExecutorMngUser
-from ..mempool.mempool import MemPool, MPTask, MPTxRequestList
+from ..mempool.mempool import MemPool, MPTask
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 
 from ..statistic.proxy_client import ProxyStatClient
@@ -34,8 +34,6 @@ def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: 
                                from_acct: Union[NeonAccount, NeonLocalAccount, None] = None,
                                to_acct: Union[NeonAccount, NeonLocalAccount, None] = None,
                                value: int = 0, data: bytes = b'') -> MPTxExecRequest:
-    evm_program_id = SolPubKey.from_string('CmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2')
-
     if from_acct is None:
         from_acct = NeonAccount.create()
 
@@ -460,33 +458,6 @@ class TestMPSchedule(unittest.TestCase):
             schedule.add_tx(req)
         self.assertEqual(mp_schedule_capacity, schedule.tx_cnt)
 
-    def test_take_out_txs(self):
-        schedule = MPTxSchedule(100)
-        acct_list = [NeonAccount.create() for _ in range(3)]
-        req_data_list = [
-            dict(req_id='000', nonce=0, gas_price=60000, gas=10, value=1, from_acct=acct_list[0], to_acct=acct_list[1]),
-            dict(req_id='001', nonce=1, gas_price=60000, gas=10, value=1, from_acct=acct_list[0], to_acct=acct_list[1]),
-            dict(req_id='002', nonce=0, gas_price=40000, gas=10, value=1, from_acct=acct_list[1], to_acct=acct_list[2]),
-            dict(req_id='003', nonce=0, gas_price=70000, gas=10, value=1, from_acct=acct_list[2], to_acct=acct_list[1]),
-            dict(req_id='004', nonce=1, gas_price=25000, gas=10, value=1, from_acct=acct_list[1], to_acct=acct_list[2]),
-            dict(req_id='005', nonce=1, gas_price=50000, gas=10, value=1, from_acct=acct_list[2], to_acct=acct_list[1]),
-            dict(req_id='006', nonce=2, gas_price=50000, gas=10, value=1, from_acct=acct_list[2], to_acct=acct_list[1])
-        ]
-        req_list = [create_transfer_mp_request(**req) for req in req_data_list]
-        for req in req_list:
-            schedule.add_tx(req)
-        self.assertEqual(len(schedule._sender_pool_dict), 3)
-        self.assertEqual(len(schedule._sender_pool_queue), 3)
-        acct0, acct1, acct2 = acct_list[0].address.lower(), acct_list[1].address.lower(), acct_list[2].address.lower()
-        awaiting_dict = {acct0: 2, acct1: 2, acct2: 3}
-
-        for sender_addr, tx_list in schedule.iter_taking_out_tx_list:
-            self.assertEqual(awaiting_dict[sender_addr], len(tx_list))
-
-        self.assertEqual(self._get_pending_tx_count(schedule, acct0), 0)
-        self.assertEqual(self._get_pending_tx_count(schedule, acct1), 0)
-        self.assertEqual(self._get_pending_tx_count(schedule, acct2), 0)
-
     def test_tx_lifecycle(self):
         def _tx_is_been_scheduled():
             self.assertEqual(len(schedule._sender_pool_dict), 1)
@@ -654,14 +625,3 @@ class TestMPSenderTxPool(unittest.TestCase):
         self.assertEqual(self._pool.state, self._pool.State.Processing)
         self._pool.cancel_process_tx(tx)
         self.assertEqual(self._pool.len_tx_nonce_queue, 5)
-
-    def test_take_out_txs_on_processing_pool(self):
-        self._acquire_top_tx()
-        taken_out_tx_list = self._pool.take_out_tx_list()
-        self.assertEqual(self._pool.len_tx_nonce_queue, 1)
-        self.assertEqual(len(taken_out_tx_list), 4)
-
-    def test_take_out_txs_on_non_processing_pool(self):
-        taken_out_tx_list = self._pool.take_out_tx_list()
-        self.assertEqual(self._pool.len_tx_nonce_queue, 0)
-        self.assertEqual(len(taken_out_tx_list), 5)
