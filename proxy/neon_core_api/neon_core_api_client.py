@@ -32,6 +32,7 @@ class _MethodName(enum.Enum):
     get_neon_account_info_list = 'balance'
     get_neon_contract_info = 'contract'
     get_config = 'config'
+    get_version = 'build-info'
     get_holder_info = 'holder'
 
 
