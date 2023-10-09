@@ -5,7 +5,7 @@ from .mempool_api import MPOpResGetListResult, MPOpResInitRequest, MPOpResInitRe
 from .mempool_executor_task_base import MPExecutorBaseTask
 
 from ..common_neon.config import Config
-from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG, EVM_PROGRAM_ID
+from ..common_neon.constants import EVM_PROGRAM_ID
 from ..common_neon.evm_config import EVMConfig
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.address import NeonAddress
@@ -23,6 +23,7 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 from ..neon_core_api.neon_client_base import NeonClientBase
+from ..neon_core_api.neon_layouts import HolderStatus
 
 from ..statistic.data import NeonOpResListData
 
@@ -98,31 +99,27 @@ class OpResInit:
 
     def _create_holder_account(self, builder: NeonIxBuilder, resource: OpResInfo) -> None:
         holder_address = str(resource.holder_account)
-        holder_info = self._solana.get_holder_account_info(resource.holder_account)
+        holder_info = self._neon_client.get_holder_account_info(resource.holder_account)
         size = self._config.holder_size
         balance = self._solana.get_rent_exempt_balance_for_size(size)
 
-        if holder_info is None:
+        if holder_info.status == HolderStatus.Empty:
             LOG.debug(f'Create account {holder_address} for resource {resource}')
             stage = NeonCreateHolderAccountStage(builder, resource.holder_account, resource.holder_seed, size, balance)
             self._execute_stage(stage, resource)
 
-        elif (holder_info.lamports < balance) or (holder_info.data_size != size):
-            LOG.debug(
-                f'Resize account {holder_address} '
-                f'(balance: {holder_info.lamports}, size: {holder_info.data_size}) '
-                f'for resource {resource}'
-            )
+        elif holder_info.data_size != size:
+            LOG.debug(f'Resize account {holder_address} (size: {holder_info.data_size}) for resource {resource}')
             self._recreate_holder(builder, resource, balance)
 
         elif holder_info.owner != EVM_PROGRAM_ID:
             raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
 
-        elif holder_info.tag == ACTIVE_HOLDER_TAG:
+        elif holder_info.status == HolderStatus.Active:
             raise StuckTxError(holder_info.neon_tx_sig, holder_address)
 
-        elif holder_info.tag not in {FINALIZED_HOLDER_TAG, HOLDER_TAG}:
-            LOG.debug(f'Wrong tag {holder_info.tag} of {holder_address} for resource {resource}')
+        elif holder_info.status not in {HolderStatus.Finalized, HolderStatus.Holder}:
+            LOG.debug(f'Wrong tag {holder_info.status} of {holder_address} for resource {resource}')
             self._recreate_holder(builder, resource, size)
 
         else:

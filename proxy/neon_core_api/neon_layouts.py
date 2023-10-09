@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import enum
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.address import NeonAddress
@@ -15,12 +16,12 @@ class NeonAccountInfo:
     balance: int
 
     @staticmethod
-    def from_json(neon_addr: NeonAddress, src: Dict[str, Any]) -> NeonAccountInfo:
+    def from_json(neon_addr: NeonAddress, json_data: Dict[str, Any]) -> NeonAccountInfo:
         return NeonAccountInfo(
             neon_addr=neon_addr,
-            pda_address=SolPubKey.from_string(src.get('solana_address')),
-            tx_count=src.get('trx_count'),
-            balance=int(src.get('balance'), 16),
+            pda_address=SolPubKey.from_string(json_data.get('solana_address')),
+            tx_count=json_data.get('trx_count'),
+            balance=int(json_data.get('balance'), 16),
         )
 
     @property
@@ -35,11 +36,11 @@ class NeonContractInfo:
     code: Optional[str]
 
     @staticmethod
-    def from_json(neon_addr: NeonAddress, src: Dict[str, Any]) -> NeonContractInfo:
-        code = '0x' + (src.get('code') or '')
+    def from_json(neon_addr: NeonAddress, json_data: Dict[str, Any]) -> NeonContractInfo:
+        code = '0x' + (json_data.get('code') or '')
         return NeonContractInfo(
             neon_addr=neon_addr,
-            chain_id=src.get('chain_id'),
+            chain_id=json_data.get('chain_id'),
             code=code
         )
 
@@ -161,4 +162,87 @@ class EVMConfigData:
             revision='unknown',
             chain_id=0,
             token_mint=SolPubKey.default()
+        )
+
+
+@dataclass(frozen=True)
+class HolderAccountMetaInfo:
+    pubkey: SolPubKey
+    is_writable: bool
+
+
+class HolderStatus(enum.Enum):
+    Empty = 'Empty'
+    Error = 'Error'
+    Holder = 'Holder'
+    Active = 'Active'
+    Finalized = 'Finalized'
+
+    @staticmethod
+    def from_string(value: str) -> HolderStatus:
+        if value == 'Empty':
+            return HolderStatus.Empty
+        elif value == 'Holder':
+            return HolderStatus.Holder
+        elif value == 'Active':
+            return HolderStatus.Active
+        elif value == 'Finalized':
+            return HolderStatus.Finalized
+        return HolderStatus.Error
+
+
+
+@dataclass(frozen=True)
+class HolderAccountInfo:
+    holder_account: SolPubKey
+
+    status: HolderStatus
+    data_size: int
+    owner: SolPubKey
+
+    neon_tx_sig: str
+    chain_id: Optional[int]
+
+    gas_price: Optional[int]
+    gas_limit: Optional[int]
+    gas_used: Optional[int]
+
+    account_list: List[HolderAccountMetaInfo]
+
+    @staticmethod
+    def from_json(addr: SolPubKey, json_data: Dict[str, Any]) -> HolderAccountInfo:
+        owner = json_data.get('owner', None)
+        owner = SolPubKey.from_string(owner) if owner else SolPubKey.default()
+
+        neon_tx_sig = json_data.get('tx', None)
+        neon_tx_sig = ('0x' + neon_tx_sig) if neon_tx_sig else ''
+
+        acct_list = json_data.get('accounts', list())
+        acct_list = [
+            HolderAccountMetaInfo(
+                pubkey=SolPubKey.from_string(json_acct.get('key')),
+                is_writable=json_acct.get('is_writeable')
+            )
+            for json_acct in acct_list
+        ]
+
+        def _get_int(_name: str) -> Optional[int]:
+            value = json_data.get(_name, None)
+            return int(value, 10) if value else None
+
+        return HolderAccountInfo(
+            holder_account=addr,
+
+            status=HolderStatus.from_string(json_data.get('status', '')),
+            data_size=json_data.get('len', None) or None,
+            owner=owner,
+
+            neon_tx_sig=neon_tx_sig,
+            chain_id=json_data.get('chain_id', None),
+
+            gas_price=_get_int('gas_price'),
+            gas_limit=_get_int('gas_limit'),
+            gas_used=_get_int('gas_used'),
+
+            account_list=acct_list
         )

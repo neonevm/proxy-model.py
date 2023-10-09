@@ -9,9 +9,11 @@ from ..common_neon.environment_utils import CliBase
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 
-from .neon_layouts import NeonAccountInfo, EVMConfigData
+from .neon_layouts import NeonAccountInfo, EVMConfigData, HolderAccountInfo
 from .neon_client_base import NeonClientBase
 from .logging_level import NeonCoreApiLoggingLevel
+
+from ..common_neon.solana_tx import SolPubKey
 
 
 LOG = logging.getLogger(__name__)
@@ -76,9 +78,11 @@ class NeonClient(CliBase, NeonClientBase):
     def get_neon_account_info(self, addr: NeonAddress) -> Optional[NeonAccountInfo]:
         json_acct_list = self.call('get-ether-account-data', addr.address, str(addr.chain_id))
         json_acct = json_acct_list[0]
-        if not json_acct:
-            return None
         return NeonAccountInfo.from_json(addr, json_acct)
+
+    def get_holder_account_info(self, addr: SolPubKey) -> HolderAccountInfo:
+        json_acct = self.call('get-holder-account-data', str(addr))
+        return HolderAccountInfo.from_json(addr, json_acct)
 
     def get_evm_config(self) -> EVMConfigData:
         LOG.debug('Read EVM config')
