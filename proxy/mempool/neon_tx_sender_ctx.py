@@ -10,7 +10,7 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolPubKey, SolAccountMeta, SolAccount
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.eth_proto import NeonTx
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.address import NeonAddress
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient

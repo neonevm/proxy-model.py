@@ -4,7 +4,7 @@ from typing import List
 
 from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import EthereumError, NonceTooLowError
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.address import NeonAddress
@@ -30,7 +30,7 @@ class NeonTxValidator:
         if len(neon_tx.callData) == 0:
             return neon_tx.gasLimit
 
-        no_chainid_gas_limit_multiplier = ElfParams().neon_gas_limit_multiplier_no_chainid
+        no_chainid_gas_limit_multiplier = EVMConfig().neon_gas_limit_multiplier_no_chainid
         tx_gas_limit = neon_tx.gasLimit * no_chainid_gas_limit_multiplier
         if self._max_u64 > tx_gas_limit:
             return tx_gas_limit

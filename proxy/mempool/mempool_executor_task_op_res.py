@@ -6,7 +6,7 @@ from .mempool_executor_task_base import MPExecutorBaseTask
 
 from ..common_neon.config import Config
 from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG, EVM_PROGRAM_ID
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.address import NeonAddress
 from ..common_neon.errors import BadResourceError, RescheduleError, StuckTxError
@@ -164,7 +164,7 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
             return MPOpResGetListResult(res_info_list=[])
 
     def init_op_res(self, mp_op_res_req: MPOpResInitRequest) -> MPOpResInitResult:
-        ElfParams().set_elf_param_dict(mp_op_res_req.elf_param_dict)
+        EVMConfig().set_evm_config(mp_op_res_req.evm_config_data)
         resource = mp_op_res_req.res_info
         try:
             OpResInit(self._config, self._solana, self._core_api_client).init_resource(resource)

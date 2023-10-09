@@ -1,59 +1,60 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, Dict
+from typing import Optional, Dict, Any, List
 from singleton_decorator import singleton
 
 from .solana_tx import SolPubKey
+
+from ..neon_core_api.neon_layouts import EVMConfigData
 
 
 LOG = logging.getLogger(__name__)
 
 
 @singleton
-class ElfParams:
+class EVMConfig:
     def __init__(self):
-        self._last_deployed_slot = 0
-        self._elf_param_dict: Dict[str, any] = {}
+        self._data = EVMConfigData.init_empty()
 
     @property
     def last_deployed_slot(self) -> int:
-        return self._last_deployed_slot
+        return self._data.last_deployed_slot
 
     @property
     def treasury_pool_cnt(self) -> int:
-        return int(self._elf_param_dict.get('NEON_TREASURY_POOL_COUNT'))
+        return int(self._data.evm_param_dict.get('NEON_TREASURY_POOL_COUNT'))
 
     @property
     def treasury_pool_seed(self) -> bytes:
-        return bytes(self._elf_param_dict.get('NEON_TREASURY_POOL_SEED'), 'utf8')
+        return bytes(self._data.evm_param_dict.get('NEON_TREASURY_POOL_SEED'), 'utf8')
 
     @property
     def neon_evm_steps(self) -> int:
-        return int(self._elf_param_dict.get("NEON_EVM_STEPS_MIN"))
+        return int(self._data.evm_param_dict.get('NEON_EVM_STEPS_MIN'))
 
     @property
     def neon_token_mint(self) -> SolPubKey:
-        return SolPubKey.from_string(self._elf_param_dict.get("NEON_TOKEN_MINT"))
+        return self._data.token_mint
 
     @property
     def chain_id(self) -> int:
-        return int(self._elf_param_dict.get('NEON_CHAIN_ID', 111))
+        return self._data.chain_id
 
     @property
     def neon_evm_version(self) -> Optional[str]:
-        return self._elf_param_dict.get("NEON_PKG_VERSION")
+        return self._data.version
 
     @property
     def neon_evm_revision(self) -> Optional[str]:
-        return self._elf_param_dict.get('NEON_REVISION')
+        return self._data.revision
 
     @property
     def neon_gas_limit_multiplier_no_chainid(self) -> int:
-        return int(self._elf_param_dict.get('NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID'))
+        return int(self._data.evm_param_dict.get('NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID'))
 
-    def has_params(self) -> bool:
-        return len(self._elf_param_dict) > 0
+    def has_config(self) -> bool:
+        return len(self._data.evm_param_dict) > 0
 
     def is_evm_compatible(self, proxy_version: str) -> bool:
         evm_version = None
@@ -67,10 +68,21 @@ class ElfParams:
             return False
 
     @property
-    def elf_param_dict(self) -> Dict[str: str]:
-        return self._elf_param_dict
+    def evm_param_dict(self) -> Dict[str: str]:
+        return self._data.evm_param_dict
 
-    def set_elf_param_dict(self, elf_param_dict: Dict[str, str], last_deployed_slot: int = 0) -> ElfParams:
-        self._last_deployed_slot = last_deployed_slot
-        self._elf_param_dict = elf_param_dict
+    @property
+    def token_dict(self) -> Dict[int, Dict[str, Any]]:
+        return self._data.token_dict
+
+    @property
+    def chain_id_list(self) -> List[int]:
+        return list(self._data.token_dict.keys())
+
+    @property
+    def evm_config_data(self) -> EVMConfigData:
+        return self._data
+
+    def set_evm_config(self, evm_config_data: EVMConfigData) -> EVMConfig:
+        self._data = evm_config_data
         return self

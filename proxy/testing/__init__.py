@@ -16,10 +16,10 @@ logging.basicConfig(handlers=[logging.StreamHandler(sys.stdout)], level=logging.
 from solcx import install_solc
 install_solc(version='0.7.6')
 
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.config import Config
 
 from ..neon_core_api.neon_client import NeonClient
 
-last_deployed_slot, elf_param_dict = NeonClient(Config()).read_elf_params(0)
-ElfParams().set_elf_param_dict(elf_param_dict, last_deployed_slot)
+evm_config_data = NeonClient(Config()).get_evm_config()
+EVMConfig().set_evm_config(evm_config_data)

@@ -4,7 +4,7 @@ import logging
 from typing import List
 
 from ..common_neon.constants import EMPTY_HOLDER_TAG, ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import BadResourceError, HolderContentError, StuckTxError
 from ..common_neon.solana_tx import SolTx
 from ..common_neon.solana_tx_legacy import SolLegacyTx

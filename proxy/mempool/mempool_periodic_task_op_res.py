@@ -6,7 +6,7 @@ from .mempool_periodic_task import MPPeriodicTaskLoop
 from .mempool_stuck_tx_dict import MPStuckTxDict
 from .operator_resource_mng import OpResMng
 
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import StuckTxError
 from ..common_neon.constants import ONE_BLOCK_SEC
 
@@ -20,8 +20,8 @@ class MPInitOpResTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOpResInitResu
         self._stuck_tx_dict = stuck_tx_dict
 
     def _submit_request(self) -> None:
-        elf_params = ElfParams()
-        if not elf_params.has_params():
+        evm_config = EVMConfig()
+        if not evm_config.has_config():
             return
 
         resource = self._op_res_mng.get_disabled_resource()
@@ -32,7 +32,7 @@ class MPInitOpResTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOpResInitResu
             self._sleep_sec = self._check_sleep_sec
         mp_req = MPOpResInitRequest(
             req_id=self._generate_req_id(),
-            elf_param_dict=elf_params.elf_param_dict,
+            evm_config_data=evm_config.evm_config_data,
             res_info=resource
         )
         self._submit_request_to_executor(mp_req)

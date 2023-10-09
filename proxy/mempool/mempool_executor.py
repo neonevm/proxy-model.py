@@ -8,11 +8,11 @@ from typing import Optional, Any, Type, cast
 from .mempool_api import (
     MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest,
     MPOpResInitRequest, MPGasPriceRequest,
-    MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPElfParamDictRequest,
+    MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPGetEVMConfigRequest,
     MPGetStuckTxListRequest
 )
 
-from .mempool_executor_task_elf_params import MPExecutorElfParamsTask
+from .mempool_executor_task_evm_config import MPExecutorEVMConfigTask
 from .mempool_executor_task_exec_neon_tx import MPExecutorExecNeonTxTask
 from .mempool_executor_task_free_alt_queue import MPExecutorFreeALTQueueTask
 from .mempool_executor_task_gas_price import MPExecutorGasPriceTask
@@ -73,9 +73,9 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             mp_gas_price_req = cast(MPGasPriceRequest, mp_req)
             return self._new_task_executor(MPExecutorGasPriceTask).calc_gas_price(mp_gas_price_req)
 
-        elif mp_req.type == MPRequestType.GetElfParamDict:
-            mp_elf_req = cast(MPElfParamDictRequest, mp_req)
-            return self._new_task_executor(MPExecutorElfParamsTask).read_elf_param_dict(mp_elf_req)
+        elif mp_req.type == MPRequestType.GetEVMConfig:
+            mp_evm_req = cast(MPGetEVMConfigRequest, mp_req)
+            return self._new_task_executor(MPExecutorEVMConfigTask).get_evm_config(mp_evm_req)
 
         elif mp_req.type == MPRequestType.GetStateTxCnt:
             mp_state_req = cast(MPSenderTxCntRequest, mp_req)

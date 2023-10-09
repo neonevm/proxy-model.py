@@ -16,7 +16,7 @@ from ..common_neon.config import Config
 from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.address import NeonAddress
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import EthereumError, InvalidParamError, NonceTooLowError
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolInteractor
@@ -92,16 +92,15 @@ class NeonRpcApiWorker:
         self._gas_tank = GasLessAccountsDB(db_conn)
 
         self._core_api_client = NeonCoreApiClient(cfg)
-
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price_value: Optional[MPGasPriceResult] = None
         self._last_gas_price_time = 0
 
-        self._chain_id = self._def_chain_id = ElfParams().chain_id
-        valid_chain_id_list = [self._chain_id, None]
-        self._last_elf_params_time = 0
-        self._neon_tx_validator = NeonTxValidator(cfg, self._core_api_client, self._def_chain_id, valid_chain_id_list)
+        self._chain_id = self._def_chain_id = 0
+        self._last_evm_config_time = 0
+        self._is_evm_compatible = False
+        self._neon_tx_validator: Optional[NeonTxValidator] = None
 
         with self.proxy_id_glob.get_lock():
             self.proxy_id = self.proxy_id_glob.value
@@ -110,6 +109,26 @@ class NeonRpcApiWorker:
         if self.proxy_id == 0:
             LOG.debug(f'Neon Proxy version: {self.neon_proxyVersion()}')
         LOG.debug(f"Worker id {self.proxy_id}")
+
+    def _init_evm_config(self) -> None:
+        now = math.ceil(time.time())
+        if self._last_evm_config_time == now:
+            return
+
+        evm_config_data = self._mempool_client.get_evm_config(get_req_id_from_log())
+        if (evm_config_data is None) or (not len(evm_config_data.evm_param_dict)):
+            raise EthereumError(message='Failed to read Neon EVM params from Solana cluster. Try again later')
+
+        evm_config = EVMConfig()
+        evm_config.set_evm_config(evm_config_data)
+
+        self._is_evm_compatible = evm_config.is_evm_compatible(NEON_PROXY_PKG_VERSION)
+        def_chain_id = self._chain_id = self._def_chain_id = evm_config.chain_id
+
+        chain_id_list = [None] + evm_config.chain_id_list
+        self._neon_tx_validator = NeonTxValidator(self._config, self._core_api_client, def_chain_id, chain_id_list)
+
+        self._last_evm_config_time = now
 
     @property
     def _gas_price(self) -> MPGasPriceResult:
@@ -138,7 +157,7 @@ class NeonRpcApiWorker:
 
     @staticmethod
     def neon_evmVersion() -> str:
-        return 'Neon/v' + ElfParams().neon_evm_version + '-' + ElfParams().neon_evm_revision
+        return 'Neon/v' + EVMConfig().neon_evm_version + '-' + EVMConfig().neon_evm_revision
 
     def neon_cliVersion(self) -> str:
         return self._core_api_client.version()
@@ -1291,9 +1310,21 @@ class NeonRpcApiWorker:
     @staticmethod
     def neon_getEvmParams() -> Dict[str, str]:
         """Returns map of Neon-EVM parameters"""
-        elf_param_dict = ElfParams().elf_param_dict
-        elf_param_dict['NEON_EVM_ID'] = EVM_PROGRAM_ID_STR
-        return elf_param_dict
+        evm_param_dict = EVMConfig().evm_param_dict
+        evm_param_dict['NEON_EVM_ID'] = EVM_PROGRAM_ID_STR
+        return evm_param_dict
+
+    @staticmethod
+    def neon_getGasTokenList() -> List[Dict[str, str]]:
+        token_dict = EVMConfig().token_dict
+        return list(
+            dict(
+                token_name=token['token_name'],
+                token_mint=str(token['token_mint']),
+                token_chain_id=hex(token['chain_id'])
+            )
+            for token in token_dict.values()
+        )
 
     def is_allowed_api(self, method_name: str) -> bool:
         for prefix in ('eth_', 'net_', 'web3_', 'neon_', 'txpool_'):
@@ -1305,14 +1336,7 @@ class NeonRpcApiWorker:
         if method_name == 'neon_proxyVersion':
             return True
 
-        now = math.ceil(time.time())
-        elf_params = ElfParams()
-        if self._last_elf_params_time != now:
-            result = self._mempool_client.get_elf_param_dict(get_req_id_from_log())
-            if result is None:
-                raise EthereumError(message='Failed to read Neon EVM params from Solana cluster. Try again later')
-            elf_params.set_elf_param_dict(result.elf_param_dict, result.last_deployed_slot)
-            self._last_elf_params_time = now
+        self._init_evm_config()
 
         always_allowed_method_set = {
             "eth_chainId",
@@ -1326,10 +1350,9 @@ class NeonRpcApiWorker:
         }
 
         if method_name in always_allowed_method_set:
-            if elf_params.has_params():
-                return True
+            return True
 
-        if not elf_params.is_evm_compatible(NEON_PROXY_PKG_VERSION):
+        if not self._is_evm_compatible:
             raise EthereumError(
                 f'Neon Proxy {self.neon_proxyVersion()} is not compatible with '
                 f'Neon EVM {self.web3_clientVersion()}'

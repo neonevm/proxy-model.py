@@ -16,7 +16,7 @@ from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.operator_resource_info import OpResInfo, OpResInfoBuilder
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.address import NeonAddress
 
 from ..mempool.operator_resource_mng import OpResMng
@@ -73,7 +73,7 @@ def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: 
             neon_tx_exec_cfg=neon_tx_exec_cfg
         ),
         res_info=res_info,
-        elf_param_dict=ElfParams().elf_param_dict
+        evm_config_data=EVMConfig().evm_config_data
     )
     return mp_tx_req
 
@@ -206,7 +206,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self._mempool._op_res_init_task_loop._task = task
         self._mempool._op_res_get_list_task_loop._task = task
 
-        self._mempool._elf_param_dict_task_loop._task = task
+        self._mempool._evm_config_task_loop._task = task
         self._mempool._state_tx_cnt_task_loop._task = task
         self._mempool._free_alt_queue_task_loop._task = task
         self._mempool._stuck_list_task_loop._task = task

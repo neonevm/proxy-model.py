@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import threading
 import logging
-from typing import Callable, Optional, Dict, Any
+from typing import Callable, Optional
 
 from .mempool_api import (
-    MPGasPriceResult, MPGasPriceRequest, MPElfParamDictRequest, MPElfParamDictResult, MPTxRequest,
+    MPGasPriceResult, MPGasPriceRequest, MPGetEVMConfigRequest, MPEVMConfigResult, MPTxRequest,
     MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxByHashRequest, MPTxSendResult,
     MPTxPoolContentRequest, MPTxPoolContentResult, MPPendingTxBySenderNonceRequest, MPNeonTxResult
 )
@@ -109,9 +109,9 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def get_elf_param_dict(self, req_id: str) -> Optional[MPElfParamDictResult]:
-        elf_param_dict_req = MPElfParamDictRequest(req_id=req_id)
-        return self._pickable_data_client.send_data(elf_param_dict_req)
+    def get_evm_config(self, req_id: str) -> Optional[MPEVMConfigResult]:
+        evm_config_req = MPGetEVMConfigRequest(req_id=req_id)
+        return self._pickable_data_client.send_data(evm_config_req)
 
     @_guard_conn
     @_reconnecting

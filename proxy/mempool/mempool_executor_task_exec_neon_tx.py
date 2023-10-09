@@ -5,7 +5,7 @@ from .mempool_executor_task_base import MPExecutorBaseTask
 from .neon_tx_sender import NeonTxSendStrategyExecutor
 from .neon_tx_sender_ctx import NeonTxSendCtx
 
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import RescheduleError, NonceTooLowError, NonceTooHighError, BadResourceError, StuckTxError
 
 
@@ -46,7 +46,7 @@ class MPExecutorExecNeonTxTask(MPExecutorBaseTask):
         return MPTxExecResult(MPTxExecResultCode.Done, neon_tx_exec_cfg)
 
     def _execute_neon_tx(self, mp_tx_req: MPTxExecRequest):
-        ElfParams().set_elf_param_dict(mp_tx_req.elf_param_dict)
+        EVMConfig().set_evm_config(mp_tx_req.evm_config_data)
 
         strategy_ctx = NeonTxSendCtx(self._config, self._solana, self._core_api_client, mp_tx_req)
         strategy_executor = NeonTxSendStrategyExecutor(strategy_ctx)

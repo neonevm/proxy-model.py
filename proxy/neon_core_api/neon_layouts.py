@@ -83,3 +83,82 @@ class BPFLoader2ExecutableInfo:
             version=version,
             deployed_slot=int.from_bytes(data[4:8], 'little')
         )
+
+
+@dataclass(frozen=True)
+class EVMConfigData:
+    last_deployed_slot: int
+
+    evm_param_dict: Dict[str, str]
+    token_dict: Dict[int, Dict[str, Any]]
+
+    version: str
+    revision: str
+
+    chain_id: int
+    token_mint: SolPubKey
+
+    @staticmethod
+    def from_json(last_deployed_slot: int, json_config: Dict[str, Any]) -> EVMConfigData:
+        evm_param_dict: Dict[str, str] = dict()
+        token_dict: Dict[int, Dict[str, Any]] = dict()
+
+        version = ''
+        revision = ''
+
+        for key, value in json_config.items():
+            if key.upper() == 'CONFIG':
+                evm_param_dict = value
+            elif key.upper() == 'CHAINS':
+                token_dict = {
+                    token['id']: dict(
+                        chain_id=token['id'],
+                        token_mint=SolPubKey.from_string(token['token']),
+                        token_name=token['name'].upper()
+                    )
+                    for token in value
+                }
+            elif key.upper() == 'VERSION':
+                version = value
+            elif key.upper() == 'REVISION':
+                revision = value
+
+        chain_id = 0
+        token_mint = SolPubKey.default()
+        for token in token_dict.values():
+            if token['token_name'] != 'NEON':
+                continue
+            chain_id = token['chain_id']
+            token_mint = token['token_mint']
+            break
+
+        if chain_id == 0:
+            chain_id = evm_param_dict.get('NEON_CHAIN_ID', 0)
+            token_mint = evm_param_dict.get('NEON_TOKEN_MINT', None)
+            token_mint = SolPubKey.from_string(token_mint) if token_mint else SolPubKey.default()
+
+        if not len(version):
+            version = evm_param_dict.get('NEON_PKG_VERSION', '0.0.0-unknown'),
+            revision = evm_param_dict.get('NEON_REVISION', 'unknown')
+
+        return EVMConfigData(
+            last_deployed_slot=last_deployed_slot,
+            evm_param_dict=evm_param_dict,
+            token_dict=token_dict,
+            version=version,
+            revision=revision,
+            chain_id=chain_id,
+            token_mint=token_mint
+        )
+
+    @staticmethod
+    def init_empty() -> EVMConfigData:
+        return EVMConfigData(
+            last_deployed_slot=0,
+            evm_param_dict=dict(),
+            token_dict=dict(),
+            version='0.0.0-unknown',
+            revision='unknown',
+            chain_id=0,
+            token_mint=SolPubKey.default()
+        )
