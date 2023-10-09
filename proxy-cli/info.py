@@ -11,7 +11,9 @@ from proxy.common_neon.address import NeonAddress
 from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.solana_tx import SolPubKey
 from proxy.common_neon.config import Config
+
 from proxy.neon_core_api.neon_client import NeonClient
+from proxy.neon_core_api.neon_layouts import HolderStatus
 
 from .secret import get_key_info_list, get_res_info_list, get_token_name
 
@@ -119,6 +121,9 @@ class InfoHandler:
             print(f'{ str(key_info.public_key) }\t {balance:,.9f} SOL')
             print('holders:')
             for holder_info in key_info.holder_info_list:
+                holder = self._neon_client.get_holder_account_info(holder_info.public_key)
+                if holder.status in {HolderStatus.Empty, HolderStatus.Error}:
+                    continue
                 balance = self._get_sol_balance(holder_info.public_key)
                 if balance == Decimal(0):
                     continue
@@ -138,6 +143,10 @@ class InfoHandler:
         for key_info in key_info_list:
             holder_list: List[Dict[str, Any]] = list()
             for holder_info in key_info.holder_info_list:
+                holder = self._neon_client.get_holder_account_info(holder_info.public_key)
+                if holder.status in {HolderStatus.Empty, HolderStatus.Error}:
+                    continue
+
                 balance = self._get_sol_balance(holder_info.public_key)
                 if balance == Decimal(0):
                     continue

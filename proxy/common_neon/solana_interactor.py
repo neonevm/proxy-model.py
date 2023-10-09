@@ -18,7 +18,7 @@ from .solana_tx import SolTx, SolBlockHash, SolPubKey, SolCommit
 from .solana_tx_error_parser import SolTxErrorParser
 from .utils.utils import get_from_dict, cached_property
 from .solana_block import SolBlockInfo
-from .layouts import HolderAccountInfo, AccountInfo, ALTAccountInfo
+from .layouts import AccountInfo, ALTAccountInfo
 
 
 LOG = logging.getLogger(__name__)
@@ -347,12 +347,6 @@ class SolInteractor:
             balances_list.append(balance)
 
         return balances_list
-
-    def get_holder_account_info(self, holder_account: SolPubKey) -> Optional[HolderAccountInfo]:
-        info = self.get_account_info(holder_account)
-        if info is None:
-            return None
-        return HolderAccountInfo.from_account_info(info)
 
     def get_account_lookup_table_info(self, table_account: SolPubKey) -> Optional[ALTAccountInfo]:
         info = self.get_account_info(table_account)

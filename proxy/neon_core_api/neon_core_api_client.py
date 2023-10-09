@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, Union, List
 
 from .neon_client import NeonClient
 from .neon_client_base import NeonClientBase
-from .neon_layouts import NeonAccountInfo, NeonContractInfo, EVMConfigData
+from .neon_layouts import NeonAccountInfo, NeonContractInfo, EVMConfigData, HolderAccountInfo
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
@@ -16,7 +16,7 @@ from ..common_neon.data import NeonEmulatorResult, NeonEmulatorExitStatus
 from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import EthereumError
 from ..common_neon.solana_block import SolBlockInfo
-from ..common_neon.solana_tx import SolCommit
+from ..common_neon.solana_tx import SolCommit, SolPubKey
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils.utils import cached_property
 
@@ -32,6 +32,7 @@ class _MethodName(enum.Enum):
     get_neon_account_info_list = 'balance'
     get_neon_contract_info = 'contract'
     get_config = 'config'
+    get_holder_info = 'holder'
 
 
 class _Client:
@@ -44,11 +45,8 @@ class _Client:
 
         base_url = f'http://127.0.0.1:{port}/api'
         self._call_url_map = {
-            _MethodName.emulate: base_url + '/emulate',
-            _MethodName.get_storage_at: base_url + '/storage',
-            _MethodName.get_neon_account_info_list: base_url + '/balance',
-            _MethodName.get_neon_contract_info: base_url + '/contract',
-            _MethodName.get_config: base_url + '/config'
+            method: base_url + '/' + method.value
+            for method in list(_MethodName)
         }
 
     def __del__(self):
@@ -214,7 +212,7 @@ class NeonCoreApiClient(NeonClientBase):
     def get_neon_account_info(
         self, addr: NeonAddress,
         block: Optional[SolBlockInfo] = None
-    ) -> Optional[NeonAccountInfo]:
+    ) -> NeonAccountInfo:
         return self.get_neon_account_info_list([addr], block)[0]
 
     def get_neon_contract_info(
@@ -238,12 +236,18 @@ class NeonCoreApiClient(NeonClientBase):
             neon_acct_info = self.get_neon_account_info(addr, block)
         else:
             neon_acct_info = addr
-        return neon_acct_info.tx_count if neon_acct_info is not None else 0
+        return neon_acct_info.tx_count
 
     def get_evm_config(self, last_deployed_slot: int) -> EVMConfigData:
         response = self._call(_MethodName.get_config, dict())
         json_cfg = response.get('value')
         return EVMConfigData.from_json(last_deployed_slot, json_cfg)
+
+    def get_holder_account_info(self, addr: SolPubKey) -> HolderAccountInfo:
+        request = dict(pubkey=str(addr))
+        response = self._call(_MethodName.get_holder_info, request)
+        json_acct = response.get('value')
+        return HolderAccountInfo.from_json(addr, json_acct)
 
     def version(self) -> str:
         return NeonClient(self._config).version()

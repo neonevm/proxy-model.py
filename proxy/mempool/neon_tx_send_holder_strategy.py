@@ -1,7 +1,8 @@
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.neon_tx_result_info import NeonTxResultInfo
 from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName
-from ..common_neon.constants import FINALIZED_HOLDER_TAG
+
+from ..neon_core_api.neon_layouts import HolderStatus
 
 from .neon_tx_sender_ctx import NeonTxSendCtx
 from .neon_tx_send_iterative_strategy import IterativeNeonTxStrategy
@@ -29,7 +30,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
         return self._build_cu_tx(builder.make_tx_step_from_account_ix(self._evm_step_cnt, uniq_idx))
 
     def execute(self) -> NeonTxResultInfo:
-        if (not self._ctx.has_sol_tx(self.name)) and (self._write_holder_stage.holder_tag == FINALIZED_HOLDER_TAG):
+        if (not self._ctx.has_sol_tx(self.name)) and (self._write_holder_stage.holder_status == HolderStatus.Finalized):
             neon_tx_res = NeonTxResultInfo()
             neon_tx_res.set_lost_res()
             return neon_tx_res
@@ -42,7 +43,7 @@ class HolderNeonTxStrategy(IterativeNeonTxStrategy):
             return neon_tx_res
 
         self._write_holder_stage.update_holder_tag()
-        if self._write_holder_stage.holder_tag == FINALIZED_HOLDER_TAG:
+        if self._write_holder_stage.holder_status == HolderStatus.Finalized:
             neon_tx_res.set_lost_res()
         return neon_tx_res
 

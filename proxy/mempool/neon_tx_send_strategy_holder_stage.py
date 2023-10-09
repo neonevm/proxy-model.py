@@ -3,14 +3,14 @@ import logging
 
 from typing import List
 
-from ..common_neon.constants import EMPTY_HOLDER_TAG, ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG
 from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import BadResourceError, HolderContentError, StuckTxError
 from ..common_neon.solana_tx import SolTx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
-from ..common_neon.layouts import HolderAccountInfo
 from ..common_neon.data import NeonEmulatorResult
 from ..common_neon.neon_instruction import EvmIxCodeName, EvmIxCode
+
+from ..neon_core_api.neon_layouts import HolderStatus, HolderAccountInfo
 
 from .neon_tx_send_base_strategy import BaseNeonTxPrepStage
 
@@ -23,11 +23,11 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._holder_tag = EMPTY_HOLDER_TAG
+        self._holder_status = HolderStatus.Empty
 
     @property
-    def holder_tag(self) -> int:
-        return self._holder_tag
+    def holder_status(self) -> HolderStatus:
+        return self._holder_status
 
     def complete_init(self) -> None:
         if not self._ctx.is_stuck_tx():
@@ -36,44 +36,39 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
     def _validate_holder_account(self) -> None:
         holder_info = self._get_holder_account_info()
         holder_acct = holder_info.holder_account
-        self._holder_tag = holder_info.tag
+        self._holder_status = holder_info.status
 
-        if holder_info.tag == FINALIZED_HOLDER_TAG:
+        if holder_info.status == HolderStatus.Finalized:
             if not self._ctx.has_sol_tx(self.name):
                 return
             elif holder_info.neon_tx_sig != self._ctx.neon_tx_info.sig:
                 HolderContentError(str(holder_acct))
 
-        elif holder_info.tag == ACTIVE_HOLDER_TAG:
+        elif holder_info.status == HolderStatus.Active:
             if holder_info.neon_tx_sig != self._ctx.neon_tx_info.sig:
                 raise StuckTxError(holder_info.neon_tx_sig, str(holder_acct))
 
-        elif holder_info.tag == HOLDER_TAG:
+        elif holder_info.status == HolderStatus.Holder:
             if not self._ctx.has_sol_tx(self.name):
                 return
-
-            builder = self._ctx.ix_builder
-            holder_msg_len = len(builder.holder_msg)
-            if builder.holder_msg != holder_info.neon_tx_data[:holder_msg_len]:
-                HolderContentError(str(holder_acct))
 
     def validate_stuck_tx(self) -> None:
         holder_info = self._get_holder_account_info()
         holder_acct = holder_info.holder_account
-        self._holder_tag = holder_info.tag
+        self._holder_status = holder_info.status
 
-        if holder_info.tag == FINALIZED_HOLDER_TAG:
+        if holder_info.status == HolderStatus.Finalized:
             pass
 
-        elif holder_info.tag == ACTIVE_HOLDER_TAG:
+        elif holder_info.status == HolderStatus.Active:
             if holder_info.neon_tx_sig != self._ctx.neon_tx_info.sig:
-                self._holder_tag = FINALIZED_HOLDER_TAG
+                self._holder_status = HolderStatus.Finalized
                 LOG.debug(f'NeonTx in {str(holder_acct)} was finished...')
             else:
                 self._read_blocked_account_list(holder_info)
 
-        elif holder_info.tag == HOLDER_TAG:
-            self._holder_tag = FINALIZED_HOLDER_TAG
+        elif holder_info.status == HolderStatus.Holder:
+            self._holder_status = HolderStatus.Finalized
             LOG.debug(f'NeonTx in {str(holder_acct)} was finished...')
 
     def _read_blocked_account_list(self, holder_info: HolderAccountInfo) -> None:
@@ -91,13 +86,13 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
     def _get_holder_account_info(self) -> HolderAccountInfo:
         holder_account = self._ctx.holder_account
 
-        holder_info = self._ctx.solana.get_holder_account_info(holder_account)
+        holder_info = self._ctx.core_api_client.get_holder_account_info(holder_account)
         if holder_info is None:
             raise BadResourceError(f'Bad holder account {str(holder_account)}')
-        elif holder_info.tag not in {FINALIZED_HOLDER_TAG, ACTIVE_HOLDER_TAG, HOLDER_TAG}:
-            raise BadResourceError(f'Holder account {str(holder_account)} has bad tag: {holder_info.tag}')
+        elif holder_info.status not in {HolderStatus.Finalized, HolderStatus.Active, HolderStatus.Holder}:
+            raise BadResourceError(f'Holder account {str(holder_account)} has bad tag: {holder_info.status}')
 
-        self._holder_tag = holder_info.tag
+        self._holder_status = holder_info.status
         return holder_info
 
     def get_tx_name_list(self) -> List[str]:

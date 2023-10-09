@@ -388,7 +388,7 @@ class NeonRpcApiWorker:
 
         try:
             neon_acct_info = self._core_api_client.get_neon_account_info(addr, block)
-            if (neon_acct_info is None) or (neon_acct_info.balance == 0):
+            if neon_acct_info.balance == 0:
                 return self._get_zero_balance(addr, neon_acct_info)
 
             return hex(neon_acct_info.balance)

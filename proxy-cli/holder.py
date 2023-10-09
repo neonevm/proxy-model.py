@@ -8,9 +8,11 @@ from proxy.common_neon.operator_resource_info import OpResInfo
 from proxy.common_neon.neon_tx_stages import NeonTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
 from proxy.common_neon.solana_tx_list_sender import SolTxListSender
 from proxy.common_neon.neon_instruction import NeonIxBuilder
-from proxy.common_neon.constants import FINALIZED_HOLDER_TAG, HOLDER_TAG
 from proxy.common_neon.solana_tx import SolPubKey
 from proxy.common_neon.config import Config
+
+from proxy.neon_core_api.neon_client import NeonClient
+from proxy.neon_core_api.neon_layouts import HolderStatus
 
 from .secret import get_res_info_list
 
@@ -19,6 +21,7 @@ class HolderHandler:
     def __init__(self):
         self._config = Config()
         self._solana = SolInteractor(self._config)
+        self._neon_client = NeonClient(self._config)
         self.command = 'holder-account'
 
     @staticmethod
@@ -49,8 +52,8 @@ class HolderHandler:
         if res_info is None:
             return
 
-        holder_info = self._solana.get_holder_account_info(res_info.holder_account)
-        if holder_info is not None:
+        holder_info = self._neon_client.get_holder_account_info(res_info.holder_account)
+        if holder_info.status not in {HolderStatus.Empty, HolderStatus.Error}:
             print(f'Holder account {str(res_info)} already exist', file=sys.stderr)
             return
 
@@ -71,13 +74,13 @@ class HolderHandler:
         if res_info is None:
             return
 
-        holder_info = self._solana.get_holder_account_info(holder_address)
+        holder_info = self._neon_client.get_holder_account_info(holder_address)
         if holder_info is None:
             print(f'Holder account {str(res_info)} does not exist', file=sys.stderr)
             return
 
-        if holder_info.tag not in {FINALIZED_HOLDER_TAG, HOLDER_TAG}:
-            print(f'Holder account {str(res_info)} has wrong tag', file=sys.stderr)
+        if holder_info.status not in {HolderStatus.Finalized, HolderStatus.Holder}:
+            print(f'Holder account {str(res_info)} has wrong status {holder_info.status}', file=sys.stderr)
             return
 
         builder = NeonIxBuilder(res_info.public_key)
