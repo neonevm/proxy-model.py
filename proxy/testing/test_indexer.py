@@ -12,10 +12,11 @@ from proxy.common_neon.neon_instruction import NeonIxBuilder
 from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolPubKey, SolAccount
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.common_neon.utils.eth_proto import NeonTx
-from proxy.common_neon.address import neon_2program
-from proxy.common_neon.operator_resource_info import OpResInfo, OpResIdent
+from proxy.common_neon.operator_resource_info import OpResInfoBuilder
 
 from proxy.mempool.mempool_executor_task_op_res import OpResInit
+
+from proxy.neon_core_api.neon_client import NeonClient
 
 from proxy.testing.testing_helpers import Proxy, SolClient, NeonLocalAccount
 from proxy.testing.solana_utils import WalletAccount, wallet_path
@@ -73,7 +74,9 @@ class FakeConfig(Config):
 
 class CompleteTest(unittest.TestCase):
     proxy: Proxy
+    chain_id: int
     config: FakeConfig
+    neon_client: NeonClient
     solana: SolClient
     eth_account: NeonLocalAccount
     eth_account_invoked: NeonLocalAccount
@@ -94,8 +97,9 @@ class CompleteTest(unittest.TestCase):
         cls.eth_account = cls.proxy.create_signer_account(SEED)
         cls.eth_account_invoked = cls.proxy.create_signer_account(SEED_INVOKED)
         cls.eth_account_getter = cls.proxy.create_signer_account(SEED_GETTER)
-
+        cls.neon_client = NeonClient(cls.config)
         cls.solana = SolClient(cls.config)
+        cls.chain_id = cls.proxy.web3.eth.chain_id
 
         print(f"proxy_program: {proxy_program}")
 
@@ -108,18 +112,18 @@ class CompleteTest(unittest.TestCase):
 
         reid_eth = cls.storage_contract.address.lower()
         print('contract_eth', reid_eth)
-        cls.re_id, _ = neon_2program(str(reid_eth))
+        cls.re_id = cls.proxy.get_account_info(str(reid_eth)).pda_address
         print('contract', cls.re_id)
 
         # Create ethereum account for user account
         caller_ether = NeonAddress.from_private_key(bytes(cls.eth_account.key))
-        cls.caller, _ = caller, _ = neon_2program(str(caller_ether))
+        cls.caller = caller = cls.proxy.get_account_info(str(caller_ether)).pda_address
 
         caller_ether_invoked = NeonAddress.from_private_key(bytes(cls.eth_account_invoked.key))
-        cls.caller_invoked, _ = neon_2program(str(caller_ether_invoked))
+        cls.caller_invoked = cls.proxy.get_account_info(str(caller_ether_invoked)).pda_address
 
         caller_ether_getter = NeonAddress.from_private_key(bytes(cls.eth_account_getter.key))
-        cls.caller_getter, _ = caller_getter, _ = neon_2program(str(caller_ether_getter))
+        cls.caller_getter = caller_getter = cls.proxy.get_account_info(str(caller_ether_getter)).pda_address
 
         print(f'caller_ether: {caller_ether} {caller}')
         print(f'caller_ether_invoked: {caller_ether_invoked} {cls.caller_invoked}')
@@ -132,15 +136,14 @@ class CompleteTest(unittest.TestCase):
 
     @classmethod
     def create_neon_ix_builder(cls, raw_tx, neon_account_list: List[SolAccountMeta]):
-        resource = OpResInfo.from_ident(OpResIdent(
-            public_key=str(cls.signer.pubkey()),
+        resource = OpResInfoBuilder(cls.config).build_test_resource_info(
             private_key=cls.signer.secret(),
             res_id=int.from_bytes(raw_tx[:8], byteorder="little")
-        ))
-        OpResInit(cls.config, cls.solana).init_resource(resource)
+        )
+        OpResInit(cls.config, cls.solana, cls.neon_client).init_resource(resource)
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
-        neon_ix_builder.init_operator_neon(NeonAddress.from_private_key(resource.secret_key))
+        neon_ix_builder.init_operator_neon(resource.neon_account_dict[cls.chain_id])
 
         neon_tx = NeonTx.from_string(raw_tx)
         neon_ix_builder.init_neon_tx(neon_tx)

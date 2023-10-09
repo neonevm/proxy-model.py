@@ -12,7 +12,6 @@ from solana.rpc.commitment import Confirmed
 from solcx import install_solc, compile_source
 
 from .solana_tx import SolAccountMeta, SolAccount, SolPubKey
-from .address import NeonAddress, neon_2program
 from .constants import ACCOUNT_SEED_VERSION, EVM_PROGRAM_ID
 from .utils.eth_proto import NeonTx
 from .neon_instruction import NeonIxBuilder
@@ -115,7 +114,7 @@ class ERC20Wrapper:
         LOG.debug(f'tx_deploy_receipt: {tx_deploy_receipt}')
         LOG.debug(f'deploy status: {tx_deploy_receipt.status}')
         self.neon_contract_address = ChecksumAddress(tx_deploy_receipt.contractAddress)
-        self.solana_contract_address, _ = neon_2program(self.neon_contract_address)
+        self.solana_contract_address = self.proxy.neon.neon_getAccount(self.neon_contract_address).solanaAddress
 
         self.erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
 
@@ -180,7 +179,7 @@ class ERC20Wrapper:
         neon_account_dict = list(neon_account_dict.values())
 
         neon = NeonIxBuilder(owner)
-        neon.init_operator_neon(NeonAddress(signer_acct.address))
+        neon.init_operator_neon(SolPubKey.default())
         neon.init_neon_tx(NeonTx.from_string(neon_tx))
         neon.init_neon_account_list(neon_account_dict)
         return neon

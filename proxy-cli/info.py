@@ -1,20 +1,19 @@
 from __future__ import annotations
-from decimal import Decimal
 
 import sys
 import json
 import base58
-from typing import Dict, Any, List
+
+from decimal import Decimal
+from typing import Dict, List, Any
 
 from proxy.common_neon.address import NeonAddress
 from proxy.common_neon.solana_interactor import SolInteractor
-from proxy.common_neon.operator_resource_info import OpResInfo, OpResIdent
-from proxy.common_neon.solana_tx import SolAccount
+from proxy.common_neon.solana_tx import SolPubKey
 from proxy.common_neon.config import Config
-from proxy.common_neon.constants import HOLDER_TAG, EMPTY_HOLDER_TAG, ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG
-from proxy.neon_core_api.neon_cli import NeonCli
+from proxy.neon_core_api.neon_client import NeonClient
 
-from .secret import get_res_ident_list, get_solana_acct_list
+from .secret import get_key_info_list, get_res_info_list, get_token_name
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -28,7 +27,7 @@ class InfoHandler:
     def __init__(self):
         self._config = Config()
         self._solana = SolInteractor(self._config)
-        self._neon_cli = NeonCli(self._config, False)
+        self._neon_client = NeonClient(self._config)
         self.command = 'info'
 
     @staticmethod
@@ -56,156 +55,137 @@ class InfoHandler:
         elif args.subcommand == 'solana-accounts':
             self._solana_accounts_info(args)
         elif args.subcommand == 'full' or args.subcommand is None:
-            ret_js = self._all_info(args)
-            print(json.dumps(ret_js, cls=DecimalEncoder))
+            self._all_info(args)
         else:
             print(f'Unknown command {args.subcommand} for info', file=sys.stderr)
             return
 
     def _holder_accounts_info(self, _) -> None:
-        op_res_ident_list = get_res_ident_list()
-        for op_res_ident in op_res_ident_list:
-            op_res_info = OpResInfo.from_ident(op_res_ident)
-            holder_info = self._solana.get_holder_account_info(op_res_info.holder_account)
-            if holder_info is None:
+        res_info_list = get_res_info_list()
+        for res_info in res_info_list:
+            acct_info = self._solana.get_account_info(res_info.holder_account)
+            if acct_info is None:
                 continue
 
-            balance = Decimal(holder_info.lamports) / 1_000_000_000
-            holder_address = str(op_res_info.holder_account)
-            op_key = op_res_ident.public_key
-            print(f'{ holder_address }\t { op_key }:{ op_res_ident.res_id }\t { balance:,.9f} SOL')
+            balance = Decimal(acct_info.lamports) / 1_000_000_000
+            holder_address = str(res_info.holder_account)
+            print(f'{ holder_address }\t { str(res_info) }\t { balance:,.9f} SOL')
 
     @staticmethod
     def _solana_private_key_info(_) -> None:
-        for sol_account in get_solana_acct_list():
-            address = str(sol_account.pubkey())
-            private = base58.b58encode(sol_account.secret()).decode('utf-8')
+        key_info_list = get_key_info_list()
+        for key_info in key_info_list:
+            address = str(key_info.public_key)
+            private = base58.b58encode(key_info.private_key).decode('utf-8')
 
             print(f'{ address }\t { private }')
 
     @staticmethod
     def _neon_private_key_info(_) -> None:
-        neon_accounts = [
-            NeonAddress.from_private_key(operator.secret())
-            for operator in get_solana_acct_list()
-        ]
-
-        for neon_account in neon_accounts:
-            address = str(neon_account)
-            private = str(neon_account.private)
-
-            print(f'{ address }\t { private }')
+        key_info_list = get_key_info_list()
+        for key_info in key_info_list:
+            for neon_addr in key_info.neon_address_list:
+                print(
+                    f'{ get_token_name(neon_addr.chain_id) }\t '
+                    f'{ neon_addr.checksum_address }\t '
+                    f'{ str(neon_addr.private_key) }'
+                )
 
     def _neon_address_info(self, _) -> None:
-        total_balance = Decimal(0)
-        op_acct_list = get_solana_acct_list()
-        neon_acct_list = [NeonAddress.from_private_key(operator.secret()) for operator in op_acct_list]
+        total_balance_dict: Dict[str, Decimal] = dict()
+        key_info_list = get_key_info_list()
+        for key_info in key_info_list:
+            print(f'{ str(key_info.public_key) }:')
+            for neon_addr in key_info.neon_address_list:
+                token_name = get_token_name(neon_addr.chain_id)
+                balance = self._get_neon_balance(neon_addr)
+                total_balance_dict[token_name] = total_balance_dict.get(token_name, Decimal(0)) + balance
 
-        for sol_acct, neon_acct in zip(op_acct_list, neon_acct_list):
-            address = str(neon_acct)
-            balance = self._get_neon_balance(neon_acct)
-            total_balance += balance
+                print(f'\t { neon_addr.checksum_address }\t { balance:,.18f} { token_name }')
 
-            print(f'{ address }\t { str(sol_acct.pubkey()) }\t { balance:,.18f} NEON')
-
-        print(f'total_balance\t { total_balance:,.18f} NEON')
+        print('total_balance:')
+        for token_name, balance in total_balance_dict.items():
+            print(f' { balance:,.18f} { token_name }')
 
     def _solana_accounts_info(self, _) -> None:
         total_balance = Decimal(0)
         resource_balance = Decimal(0)
 
-        op_acct_list = get_solana_acct_list()
-        op_res_ident_list = get_res_ident_list()
-
-        for sol_acct in op_acct_list:
-            acc_info_js = self._get_solana_account_info(sol_acct, op_res_ident_list)
-
-            address = acc_info_js['address']
-            balance = acc_info_js['balance']
-            holder_account_list = acc_info_js['holder']
-
+        key_info_list = get_key_info_list()
+        for key_info in key_info_list:
+            balance = self._get_sol_balance(key_info.public_key)
             total_balance += balance
 
-            print(f'{ address }\t { balance:,.9f}')
-            print('holder:')
-
-            for holder_account in holder_account_list:
-                address = holder_account['address']
-                balance = holder_account['balance']
+            print(f'{ str(key_info.public_key) }\t {balance:,.9f} SOL')
+            print('holders:')
+            for holder_info in key_info.holder_info_list:
+                balance = self._get_sol_balance(holder_info.public_key)
+                if balance == Decimal(0):
+                    continue
                 resource_balance += balance
+                print(f'\t { str(holder_info.public_key) }\t { balance:,.9f} SOL')
 
-                print(f'\t { address }\t { balance:,.9f}')
+        print(f'total_balance\t { total_balance:,.9f} SOL')
+        print(f'resource_balance\t { resource_balance:,.9f} SOL')
 
-        print(f'total_balance\t { total_balance:,.9f}')
-        print(f'resource_balance\t { resource_balance:,.9f}')
+    def _all_info(self, _) -> None:
+        op_acct_list: List[Dict[str, Any]] = list()
+        neon_balance_dict: Dict[str, Decimal] = dict()
+        sol_balance = Decimal(0)
+        resource_balance = Decimal(0)
 
-    def _all_info(self, _) -> Dict[str, Any]:
-        ret_js = {
-            'accounts': [],
-            'total_balance': Decimal(0),
-            'resource_balance': Decimal(0),
-            'total_neon_balance': Decimal(0)
-        }
+        key_info_list = get_key_info_list()
+        for key_info in key_info_list:
+            holder_list: List[Dict[str, Any]] = list()
+            for holder_info in key_info.holder_info_list:
+                balance = self._get_sol_balance(holder_info.public_key)
+                if balance == Decimal(0):
+                    continue
 
-        op_acct_list = get_solana_acct_list()
-        op_res_ident_list = get_res_ident_list()
-        neon_acct_list = [NeonAddress.from_private_key(operator.secret()) for operator in op_acct_list]
+                holder_list.append(dict(
+                    address=str(holder_info.public_key),
+                    res_id=holder_info.res_id,
+                    balance=balance
+                ))
 
-        for sol_acct, neon_acct in zip(op_acct_list, neon_acct_list):
-            acc_info_js = self._get_solana_account_info(sol_acct, op_res_ident_list)
-            acc_info_js['private'] = base58.b58encode(sol_acct.secret()).decode('utf-8')
+            resource_balance += sum([holder_info['balance'] for holder_info in holder_list])
 
-            ret_js['total_balance'] += acc_info_js['balance']
+            neon_acct_dict: Dict[str, Dict[str, Any]] = {
+                get_token_name(neon_addr.chain_id): dict(
+                    neon_address=neon_addr.checksum_address,
+                    neon_private=str(neon_addr.private_key),
+                    chain_id=neon_addr.chain_id,
+                    balance=self._get_neon_balance(neon_addr)
+                )
+                for neon_addr in key_info.neon_address_list
+            }
+            for token_name, neon_addr_info in neon_acct_dict.items():
+                neon_balance = neon_addr_info['balance']
+                neon_balance_dict[token_name] = neon_balance_dict.get(token_name, Decimal(0)) + neon_balance
 
-            for holder_account in acc_info_js['holder']:
-                ret_js['resource_balance'] += holder_account['balance']
+            sol_balance = self._get_sol_balance(key_info.public_key)
 
-            acc_info_js['neon_address'] = str(neon_acct)
-            acc_info_js['neon_private'] = str(neon_acct.private)
-            acc_info_js['neon_balance'] = self._get_neon_balance(neon_acct)
+            op_acct_list.append(dict(
+                address=str(key_info.public_key),
+                balance=sol_balance,
+                private=base58.b58encode(key_info.private_key).decode('utf-8'),
+                holders=holder_list,
+                neon_balances=neon_acct_dict
+            ))
 
-            ret_js['total_neon_balance'] += acc_info_js['neon_balance']
+        res_js = dict(
+            total_sol_balance=sol_balance,
+            total_resource_balance=resource_balance,
+            total_neon_balance=neon_balance_dict,
+            accounts=op_acct_list
+        )
 
-            ret_js['accounts'].append(acc_info_js)
-
-        return ret_js
+        print(json.dumps(res_js, cls=DecimalEncoder))
 
     def _get_neon_balance(self, neon_address: NeonAddress) -> Decimal:
-        neon_layout = self._neon_cli.get_neon_account_info(neon_address)
-        return Decimal(neon_layout.balance) / 1_000_000_000 / 1_000_000_000 if neon_layout else 0
+        neon_layout = self._neon_client.get_neon_account_info(neon_address)
+        return Decimal(neon_layout.balance) / (10 ** 18) if neon_layout else 0
 
-    def _get_solana_account_info(self, sol_acct: SolAccount, op_res_ident_list: List[OpResIdent]) -> Dict[str, Any]:
-        res_tag_dict = {
-            EMPTY_HOLDER_TAG: 'EMPTY',
-            HOLDER_TAG: 'HOLDER_ACCOUNT',
-            ACTIVE_HOLDER_TAG: 'ACTIVE_HOLDER_ACCOUNT',
-            FINALIZED_HOLDER_TAG: 'FINALIZED_HOLDER_ACCOUNT',
-        }
-
-        acc_info_js = {
-            'address': str(sol_acct.pubkey()),
-            'balance': Decimal(self._solana.get_sol_balance(sol_acct.pubkey())) / 1_000_000_000,
-            'holder': []
-        }
-
-        op_key = str(sol_acct.pubkey())
-
-        stop_perm_account_id = self._config.perm_account_id + self._config.perm_account_limit
-        for op_res_ident in op_res_ident_list:
-            if op_res_ident.res_id >= stop_perm_account_id:
-                continue
-            if op_res_ident.public_key != op_key:
-                continue
-
-            op_res_info = OpResInfo.from_ident(op_res_ident)
-            holder_info = self._solana.get_account_info(op_res_info.holder_account)
-
-            if holder_info:
-                holder_account = {
-                    'address': str(op_res_info.holder_account),
-                    'status': res_tag_dict.get(holder_info.tag, 'UNKNOWN'),
-                    'balance': Decimal(holder_info.lamports) / 1_000_000_000,
-                }
-                acc_info_js['holder'].append(holder_account)
-
-        return acc_info_js
+    def _get_sol_balance(self, sol_pubkey: SolPubKey) -> Decimal:
+        balance = self._solana.get_sol_balance(sol_pubkey)
+        return Decimal(balance) / (10 ** 9)

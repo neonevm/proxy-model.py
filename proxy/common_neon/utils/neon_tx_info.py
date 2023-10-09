@@ -84,6 +84,14 @@ class NeonTxInfo:
     def has_chain_id(self) -> bool:
         return self.v not in (0, 27, 28)
 
+    @property
+    def chain_id(self) -> Optional[int]:
+        if self.v >= 37:
+            # chainid*2 + 35  xxxxx0 + 100011   xxxx0 + 100010 +1
+            # chainid*2 + 36  xxxxx0 + 100100   xxxx0 + 100011 +1
+            return ((self.v - 1) // 2) - 17
+        return None
+
     def as_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)
 

@@ -99,12 +99,12 @@ class PortalAnalyzer(GasTankNeonTxAnalyzer):
             LOG.debug(f'Exception on parsing VAA: {str(exc)}')
             return None
 
-        token_address = NeonAddress(vaa.payload.tokenAddress[12:32])
+        token_address = NeonAddress.from_raw(vaa.payload.tokenAddress[12:32])
         token_id = f'{vaa.payload.tokenChain}:{token_address}'
         if not self._is_allowed_token(token_id, vaa.payload.amount):
             LOG.debug(f'not allowed token: {str(token_address)}')
             return None
 
-        to = NeonAddress(vaa.payload.to[12:])
+        to = NeonAddress.from_raw(vaa.payload.to[12:])
         LOG.info(f'Portal transfer: {vaa.payload.amount} of {token_id} token to {to}')
         return to

@@ -27,7 +27,7 @@ class GasLessAccountsDB(BaseDBTable):
         '''
 
         if isinstance(address, NeonAddress):
-            address = str(address)
+            address = address.address
 
         value_list = self._fetch_one(request, (address,))
         return len(value_list) > 0

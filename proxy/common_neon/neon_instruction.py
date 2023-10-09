@@ -9,13 +9,13 @@ from rlp import encode as rlp_encode
 
 from solders.system_program import CreateAccountWithSeedParams, create_account_with_seed
 
-from .address import neon_2program, NeonAddress
 from .constants import INCINERATOR_ID, COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID, EVM_PROGRAM_ID
 from .elf_params import ElfParams
 from .utils.eth_proto import NeonTx
 from .utils.utils import str_enum
-from .layouts import CREATE_ACCOUNT_LAYOUT
 from .solana_tx import SolTxIx, SolPubKey, SolAccountMeta
+
+from ..neon_core_api.neon_layouts import NeonAccountInfo
 
 
 LOG = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class EvmIxCode(IntEnum):
     HolderWrite = 0x26                  # 38
     DepositV03 = 0x27                   # 39
     CreateAccountV03 = 0x28             # 40
+    CreateBalance = 0x2D                # 45
 
 
 @singleton
@@ -92,13 +93,6 @@ class ComputeBudgetIxCodeName:
         return value
 
 
-def create_account_layout(ether):
-    return (
-        EvmIxCode.CreateAccountV03.value.to_bytes(1, byteorder='little') +
-        CREATE_ACCOUNT_LAYOUT.build(dict(ether=ether))
-    )
-
-
 class NeonIxBuilder:
     def __init__(self, operator: SolPubKey):
         self._operator_account = operator
@@ -121,8 +115,8 @@ class NeonIxBuilder:
         assert self._holder_msg is not None
         return cast(bytes, self._holder_msg)
 
-    def init_operator_neon(self, operator_ether: NeonAddress) -> NeonIxBuilder:
-        self._operator_neon_address = neon_2program(operator_ether)[0]
+    def init_operator_neon(self, operator_neon_account: SolPubKey) -> NeonIxBuilder:
+        self._operator_neon_address = operator_neon_account
         return self
 
     def init_neon_tx(self, neon_tx: NeonTx) -> NeonIxBuilder:
@@ -195,21 +189,27 @@ class NeonIxBuilder:
             )
         )
 
-    def make_create_neon_account_ix(self, neon_address: NeonAddress) -> SolTxIx:
-        if isinstance(neon_address, str):
-            neon_address = NeonAddress(neon_address)
-        pda_account, nonce = neon_2program(neon_address)
-        LOG.debug(f'Create neon account: {str(neon_address)}, sol account: {pda_account}, nonce: {nonce}')
+    def make_create_neon_account_ix(self, neon_account_info: NeonAccountInfo) -> SolTxIx:
+        LOG.debug(
+            f'Create neon account: {neon_account_info.neon_addr.address, neon_account_info.chain_id}, '
+            f'sol account: {neon_account_info.pda_address}'
+        )
 
-        data = create_account_layout(bytes(neon_address))
+        ix_data = b''.join([
+            EvmIxCode.CreateBalance.value.to_bytes(1, byteorder='little'),
+            bytes(neon_account_info.neon_addr),
+            neon_account_info.chain_id.to_bytes(8, byteorder='little')
+        ])
+
         return SolTxIx(
             program_id=EVM_PROGRAM_ID,
-            data=data,
+            data=ix_data,
             accounts=[
                 SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
                 SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                SolAccountMeta(pubkey=pda_account, is_signer=False, is_writable=True),
-            ])
+                SolAccountMeta(pubkey=neon_account_info.pda_address, is_signer=False, is_writable=True),
+            ]
+        )
 
     def make_write_ix(self, offset: int, data: bytes) -> SolTxIx:
         ix_data = b''.join([
@@ -330,13 +330,12 @@ class NeonIxBuilder:
 
     def make_extend_lookup_table_ix(self, table_account: SolPubKey,
                                     account_list: List[SolPubKey]) -> SolTxIx:
-        data = b"".join(
-            [
-                int(AltIxCode.Extend).to_bytes(4, byteorder='little'),
-                len(account_list).to_bytes(8, byteorder='little')
-            ] +
-            [bytes(pubkey) for pubkey in account_list]
-        )
+        data = b"".join([
+            int(AltIxCode.Extend).to_bytes(4, byteorder='little'),
+            len(account_list).to_bytes(8, byteorder='little')
+        ] + [
+            bytes(pubkey) for pubkey in account_list
+        ])
 
         return SolTxIx(
             program_id=ADDRESS_LOOKUP_TABLE_ID,
@@ -383,7 +382,6 @@ class NeonIxBuilder:
             program_id=COMPUTE_BUDGET_ID,
             accounts=[],
             data=ix_data
-
         )
 
     @staticmethod

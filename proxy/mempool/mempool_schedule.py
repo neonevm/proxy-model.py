@@ -7,6 +7,7 @@ from typing import List, Dict, Set, Optional, Tuple, Union, cast
 
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.json_logger import logging_context
+from ..common_neon.address import NeonAddress
 
 from .mempool_api import (
     MPTxRequest, MPTxSendResult, MPTxSendResultCode, MPSenderTxCntData,
@@ -90,9 +91,10 @@ class MPSenderTxPool:
         Processing = 3
         Suspended = 4
 
-    def __init__(self, sender_address: str) -> None:
+    def __init__(self, sender_address: str, chain_id: int) -> None:
         self._state = self.State.Empty
         self._sender_address = sender_address
+        self._chain_id = chain_id
         self._gas_price = 0
         self._state_tx_cnt = 0
         self._processing_tx: Optional[MPTxRequest] = None
@@ -104,6 +106,10 @@ class MPSenderTxPool:
     @property
     def sender_address(self) -> str:
         return self._sender_address
+
+    @property
+    def chain_id(self) -> int:
+        return self._chain_id
 
     @property
     def gas_price(self) -> int:
@@ -257,7 +263,7 @@ class MPTxSchedule:
             lt_key_func=lambda a: a.gas_price,
             eq_key_func=lambda a: a.sender_address
         )
-        self._suspended_sender_set: Set[str] = set()
+        self._suspended_sender_set: Set[NeonAddress] = set()
 
     @property
     def min_gas_price(self) -> int:
@@ -287,10 +293,10 @@ class MPTxSchedule:
     def _find_sender_pool(self, sender_address: str) -> Optional[MPSenderTxPool]:
         return self._sender_pool_dict.get(sender_address, None)
 
-    def _get_or_create_sender_pool(self, sender_address: str) -> MPSenderTxPool:
+    def _get_or_create_sender_pool(self, sender_address: str, chain_id: int) -> MPSenderTxPool:
         sender_pool = self._find_sender_pool(sender_address)
         if sender_pool is None:
-            sender_pool = MPSenderTxPool(sender_address)
+            sender_pool = MPSenderTxPool(sender_address, chain_id)
         return sender_pool
 
     def _get_sender_pool(self, sender_address: str) -> MPSenderTxPool:
@@ -323,7 +329,7 @@ class MPTxSchedule:
 
         old_state = sender_pool.state
         if old_state == sender_pool.State.Suspended:
-            self._suspended_sender_set.remove(sender_pool.sender_address)
+            self._suspended_sender_set.remove(NeonAddress.from_raw(sender_pool.sender_address, sender_pool.chain_id))
         elif old_state == sender_pool.State.Queued:
             self._sender_pool_queue.pop(sender_pool)
 
@@ -332,7 +338,7 @@ class MPTxSchedule:
             self._sender_pool_dict.pop(sender_pool.sender_address)
             LOG.debug(f'Done sender {sender_pool.sender_address}')
         elif new_state == sender_pool.State.Suspended:
-            self._suspended_sender_set.add(sender_pool.sender_address)
+            self._suspended_sender_set.add(NeonAddress.from_raw(sender_pool.sender_address, sender_pool.chain_id))
             LOG.debug(f'Suspend sender {sender_pool.sender_address}')
         elif new_state == sender_pool.State.Queued:
             self._sender_pool_queue.add(sender_pool)
@@ -357,7 +363,7 @@ class MPTxSchedule:
                 LOG.debug(f'Lowermost tx {lower_tx.sig} has higher gas price {lower_tx.gas_price} > {tx.gas_price}')
                 return MPTxSendResult(code=MPTxSendResultCode.Underprice, state_tx_cnt=None)
 
-        sender_pool = self._get_or_create_sender_pool(tx.sender_address)
+        sender_pool = self._get_or_create_sender_pool(tx.sender_address, tx.chain_id)
         LOG.debug(f'Got sender pool {tx.sender_address} with {sender_pool.len_tx_nonce_queue} txs')
 
         if sender_pool.state == sender_pool.State.Processing:
@@ -479,12 +485,12 @@ class MPTxSchedule:
         return True
 
     @property
-    def suspended_sender_list(self) -> List[str]:
+    def suspended_sender_list(self) -> List[NeonAddress]:
         return list(self._suspended_sender_set)
 
     def set_sender_state_tx_cnt_list(self, sender_tx_cnt_list: List[MPSenderTxCntData]) -> None:
         for sender_tx_cnt_data in sender_tx_cnt_list:
-            sender_pool = self._find_sender_pool(sender_tx_cnt_data.sender)
+            sender_pool = self._find_sender_pool(sender_tx_cnt_data.sender.address)
             if (sender_pool is None) or (sender_pool.state != sender_pool.State.Suspended):
                 continue
 

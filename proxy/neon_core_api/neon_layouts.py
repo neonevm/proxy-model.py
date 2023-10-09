@@ -10,19 +10,22 @@ from ..common_neon.address import NeonAddress
 @dataclass(frozen=True)
 class NeonAccountInfo:
     neon_addr: NeonAddress
-    chain_id: int
     pda_address: SolPubKey
     tx_count: int
     balance: int
 
-    def from_json(neon_addr: NeonAddress, chain_id: int, src: Dict[str, Any]) -> NeonAccountInfo:
+    @staticmethod
+    def from_json(neon_addr: NeonAddress, src: Dict[str, Any]) -> NeonAccountInfo:
         return NeonAccountInfo(
             neon_addr=neon_addr,
-            chain_id=chain_id,
-            pda_address=src.get('solana_address'),
+            pda_address=SolPubKey.from_string(src.get('solana_address')),
             tx_count=src.get('trx_count'),
             balance=int(src.get('balance'), 16),
         )
+
+    @property
+    def chain_id(self) -> int:
+        return self.neon_addr.chain_id
 
 
 @dataclass(frozen=True)

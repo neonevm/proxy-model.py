@@ -129,7 +129,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
                     if neon_tx is None:
                         continue
 
-                    account = NeonAddress(base58.b58decode(create_ix['data'])[1:][:20])
+                    account = NeonAddress.from_raw(base58.b58decode(create_ix['data'])[1:][:20])
                     approved_list.append((account, neon_tx))
 
         return approved_list

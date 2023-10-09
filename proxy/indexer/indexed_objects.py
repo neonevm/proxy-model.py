@@ -70,6 +70,7 @@ class BaseNeonIndexedObjInfo:
 @dataclass(frozen=True)
 class NeonAccountInfo:
     neon_address: str
+    chain_id: int
     pda_address: str
     block_slot: int
     sol_sig: str
@@ -970,7 +971,7 @@ class SolNeonDecoderStat:
         self.sol_neon_ix_cnt += 1
 
     def add_sol_tx_meta_cnt(self, value: int) -> None:
-        self.sol_tx_meta_cnt += 1
+        self.sol_tx_meta_cnt += value
 
     def inc_sol_block_cnt(self) -> None:
         self.sol_block_cnt += 1

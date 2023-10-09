@@ -46,7 +46,7 @@ class PickableDataServer(ABC):
                 LOG.error(f"Incomplete read error: {err}")
                 break
             except Exception as err:
-                LOG.error(f"Failed to receive data err: {err}")
+                LOG.error(f"Failed to receive data err: {err}", exc_info=err)
                 break
 
     async def _recv_pickable_data(self, reader: StreamReader):

@@ -9,9 +9,9 @@ from .mempool_api import (
 )
 from .mempool_periodic_task import MPPeriodicTaskLoop
 from .sorted_queue import SortedQueue
+from .operator_resource_mng import OpResMng
 
 from ..common_neon.config import Config
-from ..common_neon.operator_resource_mng import OpResMng
 from ..common_neon.solana_alt import ALTAddress
 
 

@@ -58,7 +58,7 @@ class GasTankApp:
             return
 
         for address in raw_contract_list.split(','):
-            self._gas_tank.add_neon_tx_analyzer(NeonAddress(address), neon_tx_analyzer)
+            self._gas_tank.add_neon_tx_analyzer(NeonAddress.from_raw(address), neon_tx_analyzer)
 
     @staticmethod
     def _get_token_whitelist(raw_token_whitelist: str) -> Union[bool, Dict[str, int]]:

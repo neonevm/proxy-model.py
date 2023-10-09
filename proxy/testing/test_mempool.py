@@ -6,6 +6,7 @@ from random import randint
 
 from eth_account.account import LocalAccount as NeonLocalAccount, Account as NeonAccount
 from typing import Any, List, Dict, Optional, Union, Tuple, cast
+from singleton_decorator import singleton
 
 import unittest
 from unittest.mock import patch, MagicMock, call
@@ -14,11 +15,13 @@ from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.utils.eth_proto import NeonTx
+from ..common_neon.operator_resource_info import OpResInfo, OpResInfoBuilder
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.operator_resource_mng import OpResMng
+from ..common_neon.address import NeonAddress
 
+from ..mempool.operator_resource_mng import OpResMng
 from ..mempool.mempool_api import (
-    MPRequest, OpResIdent,
+    MPRequest,
     MPTxRequest, MPTxExecRequest, MPTxExecResult, MPTxExecResultCode, MPTxSendResult,
     MPGasPriceResult, MPSenderTxCntData, MPTxSendResultCode, MPTxRequestList
 )
@@ -28,6 +31,18 @@ from ..mempool.mempool import MemPool, MPTask
 from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 
 from ..statistic.proxy_client import ProxyStatClient
+
+from .solana_utils import WalletAccount, wallet_path
+
+
+@singleton
+class MockOpResInfo:
+    def __init__(self):
+        wallet = WalletAccount(wallet_path())
+        self._res_info = OpResInfoBuilder(FakeConfig()).build_test_resource_info(wallet.get_acc().secret(), res_id=1)
+
+    def get(self) -> OpResInfo:
+        return self._res_info
 
 
 def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: int,
@@ -48,14 +63,16 @@ def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: 
     neon_tx = NeonTx.from_string(bytearray(signed_tx_data.rawTransaction))
     neon_tx_exec_cfg = NeonTxExecCfg()
     neon_tx_exec_cfg.set_state_tx_cnt(0)
+    res_info = MockOpResInfo().get()
 
     mp_tx_req = MPTxExecRequest.from_tx_req(
         MPTxRequest.from_neon_tx(
             req_id=req_id,
             neon_tx=neon_tx,
+            def_chain_id=neon_tx.chain_id,
             neon_tx_exec_cfg=neon_tx_exec_cfg
         ),
-        res_ident=OpResIdent(public_key='test', private_key=b'test'),
+        res_info=res_info,
         elf_param_dict=ElfParams().elf_param_dict
     )
     return mp_tx_req
@@ -107,13 +124,13 @@ class MockMPExecutor(MPExecutorMng):
 
 
 class MockResourceManager(OpResMng):
-    def init_resource_list(self, res_ident_list: List[Union[OpResIdent, bytes]]) -> None:
+    def init_resource_list(self, res_ident_list: List[Union[OpResInfo, bytes]]) -> None:
         pass
 
-    def get_resource(self, ident: str) -> OpResIdent:
-        return OpResIdent(public_key='test', private_key=b'test')
+    def get_resource(self, ident: str) -> OpResInfo:
+        return MockOpResInfo().get()
 
-    def enable_resource(self, ident: OpResIdent) -> None:
+    def enable_resource(self, ident: OpResInfo) -> None:
         pass
 
     def release_resource(self, ident: str) -> None:
@@ -122,7 +139,7 @@ class MockResourceManager(OpResMng):
     def update_resource(self, neon_sig: str) -> None:
         pass
 
-    def get_disabled_resource(self) -> Optional[OpResIdent]:
+    def get_disabled_resource(self) -> Optional[OpResInfo]:
         return None
 
 
@@ -231,7 +248,9 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(self._mempool._check_task_timeout_sec * 2)
         submit_mp_request_mock.assert_has_calls([call(req_list[0])])
 
-        self._update_state_tx_cnt([MPSenderTxCntData(sender=from_acct.address.lower(), state_tx_cnt=1)])
+        self._update_state_tx_cnt([
+            MPSenderTxCntData(sender=NeonAddress.from_raw(from_acct.address), state_tx_cnt=1)
+        ])
         self._mempool.on_executor_got_available(1)
         await asyncio.sleep(self._mempool._check_task_timeout_sec * 2)
         submit_mp_request_mock.assert_has_calls([call(req_list[1])])
@@ -254,8 +273,8 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         submit_mp_request_mock.assert_has_calls([call(req_list[2]), call(req_list[0])])
 
         self._update_state_tx_cnt([
-            MPSenderTxCntData(sender=acct_list[0].address.lower(), state_tx_cnt=1),
-            MPSenderTxCntData(sender=acct_list[1].address.lower(), state_tx_cnt=1)
+            MPSenderTxCntData(sender=NeonAddress.from_raw(acct_list[0].address), state_tx_cnt=1),
+            MPSenderTxCntData(sender=NeonAddress.from_raw(acct_list[1].address), state_tx_cnt=1)
         ])
         self._mempool.on_executor_got_available(1)
         await asyncio.sleep(self._mempool._check_task_timeout_sec * 2)
@@ -402,7 +421,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
             nonce = i + 1
             update_tx_cnt_list: List[MPSenderTxCntData] = list()
             for sender in self._mempool._tx_schedule._sender_pool_dict.keys():
-                update_tx_cnt_list.append(MPSenderTxCntData(sender=sender, state_tx_cnt=nonce))
+                update_tx_cnt_list.append(MPSenderTxCntData(sender=NeonAddress.from_raw(sender), state_tx_cnt=nonce))
             self._update_state_tx_cnt(update_tx_cnt_list)
 
         self.assertEqual(self._mempool._tx_schedule.tx_cnt, 0)
@@ -415,7 +434,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
 
     def _update_state_tx_cnt(self, sender_tx_cnt_list: List[MPSenderTxCntData]) -> None:
         for data in sender_tx_cnt_list:
-            tx_pool = self._mempool._tx_schedule._find_sender_pool(data.sender)
+            tx_pool = self._mempool._tx_schedule._find_sender_pool(data.sender.address)
             self.assertIsNotNone(tx_pool)
             self.assertNotEqual(tx_pool._actual_state, tx_pool.State.Processing)
             self.assertNotEqual(tx_pool.state, tx_pool.State.Processing)
@@ -527,7 +546,9 @@ class TestMPSchedule(unittest.TestCase):
         self.assertEqual(tx.sig, req.sig)
         _tx_is_been_processed()
 
-        schedule.set_sender_state_tx_cnt_list([MPSenderTxCntData(sender=tx.sender_address, state_tx_cnt=tx.nonce + 1)])
+        schedule.set_sender_state_tx_cnt_list(
+            [MPSenderTxCntData(sender=NeonAddress.from_raw(tx.sender_address), state_tx_cnt=tx.nonce + 1)]
+        )
         _tx_is_been_processed()
 
         schedule.cancel_tx(tx)
@@ -591,7 +612,9 @@ class TestMPSchedule(unittest.TestCase):
         self.assertNotIn(req.sig, schedule._tx_dict._tx_hash_dict)
         self.assertIn(new_req.sig, schedule._tx_dict._tx_hash_dict)
 
-        schedule.set_sender_state_tx_cnt_list([MPSenderTxCntData(sender=req.sender_address, state_tx_cnt=req.nonce)])
+        schedule.set_sender_state_tx_cnt_list([
+            MPSenderTxCntData(sender=NeonAddress.from_raw(req.sender_address), state_tx_cnt=req.nonce)
+        ])
         tx = self._acquire_top_tx(schedule)
         self.assertEqual(new_req.sig, tx.sig)
 
@@ -612,7 +635,7 @@ class TestMPSchedule(unittest.TestCase):
 
 class TestMPSenderTxPool(unittest.TestCase):
     def setUp(self) -> None:
-        self._pool = MPSenderTxPool('test_sender')
+        self._pool = MPSenderTxPool('test_sender', chain_id=1)
         acct_list = [NeonAccount.create() for _ in range(2)]
         req_data_list = [
             dict(req_id='000', nonce=3, gas_price=30000, gas=10, value=1, from_acct=acct_list[0], to_acct=acct_list[1]),

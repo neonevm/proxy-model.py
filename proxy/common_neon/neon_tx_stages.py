@@ -4,9 +4,10 @@ import abc
 import logging
 
 from .neon_instruction import NeonIxBuilder
-from .address import NeonAddress
 from .solana_tx import SolPubKey
 from .solana_tx_legacy import SolLegacyTx
+
+from ..neon_core_api.neon_layouts import NeonAccountInfo
 
 
 LOG = logging.getLogger(__name__)
@@ -30,14 +31,14 @@ class NeonTxStage(abc.ABC):
 class NeonCreateAccountTxStage(NeonTxStage):
     name = 'createNeonAccount'
 
-    def __init__(self, builder: NeonIxBuilder, addr: NeonAddress):
+    def __init__(self, builder: NeonIxBuilder, neon_account_info: NeonAccountInfo):
         super().__init__(builder)
-        self._addr = addr
+        self._neon_acct_info = neon_account_info
 
     def build(self) -> None:
         assert self._is_empty()
-        LOG.debug(f'Create user account {self._addr}')
-        self.tx.add(self._ix_builder.make_create_neon_account_ix(self._addr))
+        LOG.debug(f'Create user account {self._neon_acct_info.neon_addr}:{self._neon_acct_info.chain_id}')
+        self.tx.add(self._ix_builder.make_create_neon_account_ix(self._neon_acct_info))
 
 
 class NeonCreateHolderAccountStage(NeonTxStage):

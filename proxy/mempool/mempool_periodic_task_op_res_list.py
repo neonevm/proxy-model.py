@@ -1,8 +1,7 @@
 from .executor_mng import MPExecutorMng
 from .mempool_api import MPOpResGetListRequest, MPOpResGetListResult
 from .mempool_periodic_task import MPPeriodicTaskLoop
-
-from ..common_neon.operator_resource_mng import OpResMng
+from .operator_resource_mng import OpResMng
 
 
 class MPOpResGetListTaskLoop(MPPeriodicTaskLoop[MPOpResGetListRequest, MPOpResGetListResult]):
@@ -21,8 +20,8 @@ class MPOpResGetListTaskLoop(MPPeriodicTaskLoop[MPOpResGetListRequest, MPOpResGe
         self._sleep_sec = self._bad_recheck_sleep_sec
 
     async def _process_result(self, mp_req: MPOpResGetListRequest, mp_res: MPOpResGetListResult) -> None:
-        self._op_res_mng.init_resource_list(mp_res.res_ident_list)
-        if len(mp_res.res_ident_list) == 0:
+        self._op_res_mng.init_resource_list(mp_res.res_info_list)
+        if len(mp_res.res_info_list) == 0:
             self._sleep_sec = self._bad_recheck_sleep_sec
         else:
             self._sleep_sec = self._normal_recheck_sleep_sec

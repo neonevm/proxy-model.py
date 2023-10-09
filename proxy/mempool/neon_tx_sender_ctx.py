@@ -5,12 +5,13 @@ from typing import Dict, List, Union
 from ..common_neon.config import Config
 from ..common_neon.data import NeonEmulatorResult
 from ..common_neon.neon_instruction import NeonIxBuilder
-from ..common_neon.operator_resource_info import OpResInfo
 from ..common_neon.solana_alt import ALTAddress
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolPubKey, SolAccountMeta, SolAccount
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.eth_proto import NeonTx
+from ..common_neon.elf_params import ElfParams
+from ..common_neon.address import NeonAddress
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 
@@ -32,10 +33,10 @@ class NeonTxSendCtx:
         self._neon_tx_exec_cfg = mp_tx_req.neon_tx_exec_cfg
         self._solana = solana
         self._core_api_client = core_api_client
-        self._resource = OpResInfo.from_ident(mp_tx_req.res_ident)
+        self._resource = mp_tx_req.res_info
 
         self._ix_builder = NeonIxBuilder(self._resource.public_key)
-        self._ix_builder.init_operator_neon(self._resource.neon_address)
+        self._ix_builder.init_operator_neon(self._resource.neon_account_dict[mp_tx_req.chain_id])
         self._ix_builder.init_iterative(self.holder_account)
         if not mp_tx_req.is_stuck_tx():
             self._ix_builder.init_neon_tx(mp_tx_req.neon_tx)
@@ -45,6 +46,10 @@ class NeonTxSendCtx:
         self._neon_meta_dict: Dict[SolPubKey, SolAccountMeta] = dict()
         if not mp_tx_req.is_stuck_tx():
             self._build_account_list()
+
+    @property
+    def sender_address(self) -> NeonAddress:
+        return NeonAddress(self.neon_tx_info.addr, self._mp_tx_req.chain_id)
 
     def _add_meta(self, pubkey: Union[str, SolPubKey], is_writable: bool) -> None:
         if isinstance(pubkey, str):
@@ -84,7 +89,7 @@ class NeonTxSendCtx:
         return not self._neon_tx_exec_cfg.emulator_result.is_empty()
 
     def emulate(self) -> None:
-        emulator_result = self._core_api_client.emulate_neon_tx(self.neon_tx)
+        emulator_result = self._core_api_client.emulate_neon_tx(self.neon_tx, self._mp_tx_req.chain_id)
         self.set_emulator_result(emulator_result)
 
     def set_emulator_result(self, emulator_result: NeonEmulatorResult) -> None:

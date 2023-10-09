@@ -29,13 +29,13 @@ from .mempool_periodic_task_op_res_list import MPOpResGetListTaskLoop
 from .mempool_periodic_task_sender_tx_cnt import MPSenderTxCntTaskLoop
 from .mempool_periodic_task_stuck_tx import MPStuckTxListLoop
 from .mempool_schedule import MPTxSchedule
+from .operator_resource_mng import OpResMng
 
 from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.errors import StuckTxError
-from ..common_neon.operator_resource_info import OpResIdent
-from ..common_neon.operator_resource_mng import OpResMng
+from ..common_neon.operator_resource_info import OpResInfo
 from ..common_neon.utils.json_logger import logging_context
 from ..common_neon.constants import ONE_BLOCK_SEC
 
@@ -66,6 +66,7 @@ class MemPool:
         self._gas_price_task_loop = MPGasPriceTaskLoop(executor_mng)
         self._state_tx_cnt_task_loop = MPSenderTxCntTaskLoop(executor_mng, self._tx_schedule)
 
+        self._def_chain_id = ElfParams().chain_id
         self._reschedule_timeout_sec = ONE_BLOCK_SEC * 3
         self._check_task_timeout_sec = 0.05
 
@@ -250,16 +251,17 @@ class MemPool:
 
     def _attach_resource_to_tx(self, tx: Union[MPTxRequest, MPStuckTxInfo]) -> Optional[MPTxExecRequest]:
         with logging_context(req_id=tx.req_id):
-            res_ident = self._op_res_mng.get_resource(tx.sig)
-            if res_ident is None:
+            res_info = self._op_res_mng.get_resource(tx.sig)
+            if res_info is None:
                 return None
 
+        elf_param_dict = ElfParams().elf_param_dict
         if not isinstance(tx, MPStuckTxInfo):
-            return MPTxExecRequest.from_tx_req(tx, res_ident, ElfParams().elf_param_dict)
+            return MPTxExecRequest.from_tx_req(tx, res_info, elf_param_dict)
 
         neon_exec_cfg = NeonTxExecCfg()
         neon_exec_cfg.set_holder_account(False, tx.holder_account)
-        return MPTxExecRequest.from_stuck_tx(tx, neon_exec_cfg, res_ident, ElfParams().elf_param_dict)
+        return MPTxExecRequest.from_stuck_tx(tx, self._def_chain_id, neon_exec_cfg, res_info, elf_param_dict)
 
     async def _process_tx_schedule_loop(self):
         while (not self.has_gas_price()) and (not ElfParams().has_params()):
@@ -444,7 +446,7 @@ class MemPool:
 
         return self._on_cancel_tx(tx)
 
-    def _release_resource(self, tx: MPTxExecRequest) -> Optional[OpResIdent]:
+    def _release_resource(self, tx: MPTxExecRequest) -> Optional[OpResInfo]:
         resource = self._op_res_mng.release_resource(tx.sig)
         if resource is None:
             return None

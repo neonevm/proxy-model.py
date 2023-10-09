@@ -17,6 +17,9 @@ from proxy.common_neon.config import Config
 from proxy.common_neon.constants import MIN_FINALIZE_SEC
 from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.solana_tx import SolTx, SolAccount, SolSig, SolPubKey, SolCommit
+from proxy.common_neon.address import NeonAddress
+
+from proxy.neon_core_api.neon_layouts import NeonAccountInfo
 
 
 @dataclass(frozen=True)
@@ -159,6 +162,15 @@ class Proxy:
         with open(contract_file) as distributor_sol:
             source = distributor_sol.read()
         return self.compile_and_deploy_contract(signer, source)
+
+    def get_account_info(self, address: str) -> NeonAccountInfo:
+        res = self._web3.neon.neon_getAccount(bytes.fromhex(address[2:]))
+        return NeonAccountInfo(
+            neon_addr=NeonAddress.from_raw(res.address),
+            pda_address=SolPubKey.from_string(res.solanaAddress),
+            tx_count=res.transactionCount,
+            balance=res.balance
+        )
 
 
 class SolClient(SolInteractor):

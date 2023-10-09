@@ -12,8 +12,9 @@ from .mempool_api import (
     MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxBySenderNonceRequest
 )
 
+from .operator_resource_mng import OpResMng
+
 from ..common_neon.config import Config
-from ..common_neon.operator_resource_mng import OpResMng
 from ..common_neon.pickable_data_server import AddrPickableDataSrv, IPickableDataServerUser
 from ..common_neon.utils.json_logger import logging_context
 
