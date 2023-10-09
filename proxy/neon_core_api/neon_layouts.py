@@ -22,6 +22,8 @@ class NeonAccountInfo:
         code_size = src.get('code_size')
         if (not len(code)) or (not code_size):
             code = None
+        else:
+            code = '0x' + code
 
         return NeonAccountInfo(
             pda_address=src.get('solana_address'),
