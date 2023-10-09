@@ -3,7 +3,7 @@ import logging
 
 from typing import Optional, List, Generator, cast
 
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.solana_neon_tx_receipt import SolNeonTxReceiptInfo, SolNeonIxReceiptInfo
 from ..common_neon.solana_tx import SolTx, SolTxIx
 from ..common_neon.solana_tx_legacy import SolLegacyTx
@@ -45,7 +45,7 @@ class BaseNeonTxStrategy(abc.ABC):
         self._validation_error_msg: Optional[str] = None
         self._prep_stage_list: List[BaseNeonTxPrepStage] = list()
         self._ctx = ctx
-        self._evm_step_cnt = ElfParams().neon_evm_steps
+        self._evm_step_cnt = EVMConfig().neon_evm_steps
 
     @property
     def ctx(self) -> NeonTxSendCtx:

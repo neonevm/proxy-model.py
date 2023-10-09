@@ -5,7 +5,7 @@ import time
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Optional, List, Dict, Union
+from typing import Any, Optional, List, Union
 
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.operator_resource_info import OpResInfo
@@ -15,6 +15,8 @@ from ..common_neon.utils import str_fmt_object
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.address import NeonAddress
+
+from ..neon_core_api.neon_layouts import EVMConfigData
 
 
 @dataclass(frozen=True)
@@ -33,7 +35,7 @@ class MPRequestType(IntEnum):
     GetStateTxCnt = 5
     GetOperatorResourceList = 6
     InitOperatorResource = 7
-    GetElfParamDict = 8
+    GetEVMConfig = 8
     GetALTList = 9
     DeactivateALTList = 10
     CloseALTList = 11
@@ -118,7 +120,7 @@ class MPTxRequest(MPRequest):
 
 @dataclass
 class MPTxExecRequest(MPTxRequest):
-    elf_param_dict: Dict[str, str] = None
+    evm_config_data: EVMConfigData = None
     res_info: OpResInfo = None
 
     def is_stuck_tx(self) -> bool:
@@ -127,7 +129,7 @@ class MPTxExecRequest(MPTxRequest):
     @staticmethod
     def from_tx_req(tx: MPTxRequest,
                     res_info: OpResInfo,
-                    elf_param_dict: Dict[str, str]) -> MPTxExecRequest:
+                    evm_config_data: EVMConfigData) -> MPTxExecRequest:
         return MPTxExecRequest(
             req_id=tx.req_id,
             neon_tx=tx.neon_tx,
@@ -136,7 +138,7 @@ class MPTxExecRequest(MPTxRequest):
             chain_id=tx.chain_id,
             gas_price=tx.gas_price,
             start_time=tx.start_time,
-            elf_param_dict=elf_param_dict,
+            evm_config_data=evm_config_data,
             res_info=res_info
         )
 
@@ -145,7 +147,7 @@ class MPTxExecRequest(MPTxRequest):
                       def_chain_id: int,
                       neon_tx_exec_cfg: NeonTxExecCfg,
                       res_info: OpResInfo,
-                      elf_param_dict: Dict[str, str]) -> MPTxExecRequest:
+                      evm_config_data: EVMConfigData) -> MPTxExecRequest:
         return MPTxExecRequest(
             req_id=stuck_tx.req_id,
             neon_tx=None,
@@ -155,7 +157,7 @@ class MPTxExecRequest(MPTxRequest):
             gas_price=stuck_tx.neon_tx.gas_price,
             start_time=stuck_tx.start_time,
             res_info=res_info,
-            elf_param_dict=elf_param_dict
+            evm_config_data=evm_config_data
         )
 
 
@@ -206,11 +208,11 @@ class MPGasPriceRequest(MPRequest):
 
 
 @dataclass
-class MPElfParamDictRequest(MPRequest):
-    last_deployed_slot: int = 0
+class MPGetEVMConfigRequest(MPRequest):
+    evm_config_data: EVMConfigData = None
 
     def __post_init__(self):
-        self.type = MPRequestType.GetElfParamDict
+        self.type = MPRequestType.GetEVMConfig
 
 
 @dataclass
@@ -229,7 +231,7 @@ class MPOpResGetListRequest(MPRequest):
 
 @dataclass
 class MPOpResInitRequest(MPRequest):
-    elf_param_dict: Dict[str, str] = None
+    evm_config_data: EVMConfigData = None
     res_info: OpResInfo = None
 
     def __post_init__(self):
@@ -342,10 +344,7 @@ class MPGasPriceResult:
     neon_price_account: SolPubKey
 
 
-@dataclass(frozen=True)
-class MPElfParamDictResult:
-    last_deployed_slot: int
-    elf_param_dict: Dict[str, str]
+MPEVMConfigResult = EVMConfigData
 
 
 @dataclass(frozen=True)

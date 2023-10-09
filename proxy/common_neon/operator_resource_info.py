@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from .config import Config
 from .solana_tx import SolAccount, SolPubKey
-from .elf_params import ElfParams
+from .evm_config import EVMConfig
 from .utils.utils import cached_method
 from .address import NeonAddress, perm_account_seed, neon_account_with_seed
 
@@ -115,7 +115,7 @@ class OpResInfoBuilder:
         self._config = config
 
     def build_key_list(self, secret_list: List[bytes]) -> List[OpKeyInfo]:
-        chain_id_list = self._build_chain_id_list()
+        chain_id_list = EVMConfig().chain_id_list
         key_info_list: List[OpKeyInfo] = list()
         start_res_id = self._config.perm_account_id
         stop_res_id = self._config.perm_account_id + self._config.perm_account_limit
@@ -150,8 +150,9 @@ class OpResInfoBuilder:
             for holder_info in key_info.holder_info_list
         ]
 
-    def build_test_resource_info(self, private_key: bytes, res_id: int) -> OpResInfo:
-        chain_id_list = self._build_chain_id_list()
+    @staticmethod
+    def build_test_resource_info(private_key: bytes, res_id: int) -> OpResInfo:
+        chain_id_list = EVMConfig().chain_id_list
         signer = SolAccount.from_seed(private_key)
         neon_addr_list = [
             NeonAddress.from_private_key(private_key, chain_id)
@@ -160,7 +161,3 @@ class OpResInfoBuilder:
         holder_info = OpHolderInfo.from_public_key(signer.pubkey(), res_id)
         key_info = OpKeyInfo.from_signer_account(signer, neon_addr_list, [holder_info])
         return OpResInfo(key_info, holder_info)
-
-    @staticmethod
-    def _build_chain_id_list() -> List[int]:
-        return [ElfParams().chain_id]

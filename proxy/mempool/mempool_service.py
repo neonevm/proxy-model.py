@@ -74,8 +74,8 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
                 return self._mempool.get_pending_tx_by_sender_nonce(req.sender, req.tx_nonce)
             elif mp_request.type == MPRequestType.GetGasPrice:
                 return self._mempool.get_gas_price()
-            elif mp_request.type == MPRequestType.GetElfParamDict:
-                return self._mempool.get_elf_param_dict()
+            elif mp_request.type == MPRequestType.GetEVMConfig:
+                return self._mempool.get_evm_config()
             elif mp_request.type == MPRequestType.TxPoolContent:
                 return self._mempool.get_content()
             LOG.error(f"Failed to process mp_request, unknown type: {mp_request.type}")

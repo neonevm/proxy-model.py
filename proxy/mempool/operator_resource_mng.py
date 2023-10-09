@@ -63,7 +63,6 @@ class OpResMng:
         self._last_check_time = 0
 
     def init_resource_list(self, res_info_list: List[OpResInfo]) -> None:
-        LOG.debug(f'IN: {len(res_info_list)}')
         old_res_cnt = self.resource_cnt
 
         new_info_set: Set[OpResInfo] = set(res_info_list)

@@ -10,7 +10,7 @@ from rlp import encode as rlp_encode
 from solders.system_program import CreateAccountWithSeedParams, create_account_with_seed
 
 from .constants import INCINERATOR_ID, COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID, EVM_PROGRAM_ID
-from .elf_params import ElfParams
+from .evm_config import EVMConfig
 from .utils.eth_proto import NeonTx
 from .utils.utils import str_enum
 from .solana_tx import SolTxIx, SolPubKey, SolAccountMeta
@@ -128,9 +128,9 @@ class NeonIxBuilder:
 
     def init_neon_tx_sig(self, neon_tx_sig: str) -> NeonIxBuilder:
         self._neon_tx_sig = bytes.fromhex(neon_tx_sig[2:])
-        elf_params = ElfParams()
-        treasury_pool_cnt = elf_params.treasury_pool_cnt
-        treasury_pool_seed = elf_params.treasury_pool_seed
+        evm_config = EVMConfig()
+        treasury_pool_cnt = evm_config.treasury_pool_cnt
+        treasury_pool_seed = evm_config.treasury_pool_seed
         treasury_pool_index = int().from_bytes(self._neon_tx_sig[:4], 'little') % treasury_pool_cnt
         self._treasury_pool_index_buf = treasury_pool_index.to_bytes(4, 'little')
         self._treasury_pool_address = SolPubKey.find_program_address(

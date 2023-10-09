@@ -57,6 +57,9 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         global statInstance
         global modelInstance
 
+        if modelInstance is not None:
+            return configInstance, statInstance, modelInstance
+
         with modelInstanceLock:
             if modelInstance is None:
                 configInstance = Config()

@@ -4,16 +4,16 @@ import requests
 import re
 import enum
 
-from typing import Optional, Dict, Any, Union, List, Tuple
+from typing import Optional, Dict, Any, Union, List
 
 from .neon_client import NeonClient
 from .neon_client_base import NeonClientBase
-from .neon_layouts import NeonAccountInfo, NeonContractInfo
+from .neon_layouts import NeonAccountInfo, NeonContractInfo, EVMConfigData
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.data import NeonEmulatorResult, NeonEmulatorExitStatus
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import EthereumError
 from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.solana_tx import SolCommit
@@ -31,6 +31,7 @@ class _MethodName(enum.Enum):
     get_storage_at = 'storage'
     get_neon_account_info_list = 'balance'
     get_neon_contract_info = 'contract'
+    get_config = 'config'
 
 
 class _Client:
@@ -46,7 +47,8 @@ class _Client:
             _MethodName.emulate: base_url + '/emulate',
             _MethodName.get_storage_at: base_url + '/storage',
             _MethodName.get_neon_account_info_list: base_url + '/balance',
-            _MethodName.get_neon_contract_info: base_url + '/contract'
+            _MethodName.get_neon_contract_info: base_url + '/contract',
+            _MethodName.get_config: base_url + '/config'
         }
 
     def __del__(self):
@@ -143,7 +145,7 @@ class NeonCoreApiClient(NeonClientBase):
         if isinstance(gas_limit, int):
             gas_limit = hex(value)
 
-        token_mint = str(ElfParams().neon_token_mint)
+        token_mint = str(EVMConfig().neon_token_mint)
 
         request = dict(
             token_mint=token_mint,
@@ -238,8 +240,10 @@ class NeonCoreApiClient(NeonClientBase):
             neon_acct_info = addr
         return neon_acct_info.tx_count if neon_acct_info is not None else 0
 
-    def read_elf_params(self, last_deployed_slot: int) -> Tuple[int, Dict[str, str]]:
-        return NeonClient(self._config).read_elf_params(last_deployed_slot)
+    def get_evm_config(self, last_deployed_slot: int) -> EVMConfigData:
+        response = self._call(_MethodName.get_config, dict())
+        json_cfg = response.get('value')
+        return EVMConfigData.from_json(last_deployed_slot, json_cfg)
 
     def version(self) -> str:
         return NeonClient(self._config).version()

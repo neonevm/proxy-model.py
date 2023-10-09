@@ -16,12 +16,12 @@ from .mempool_api import (
     MPTxSendResult, MPTxSendResultCode,
     MPTxPoolContentResult,
     MPNeonTxResult,
-    MPElfParamDictResult
+    MPEVMConfigResult
 )
 
 from .mempool_neon_tx_dict import MPTxDict
 from .mempool_stuck_tx_dict import MPStuckTxDict
-from .mempool_periodic_task_elf_params import MPElfParamDictTaskLoop
+from .mempool_periodic_task_evm_config import MPEVMConfigTaskLoop
 from .mempool_periodic_task_free_alt_queue import MPFreeALTQueueTaskLoop
 from .mempool_periodic_task_gas_price import MPGasPriceTaskLoop
 from .mempool_periodic_task_op_res import MPInitOpResTaskLoop
@@ -33,10 +33,11 @@ from .operator_resource_mng import OpResMng
 
 from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import StuckTxError
 from ..common_neon.operator_resource_info import OpResInfo
 from ..common_neon.utils.json_logger import logging_context
+from ..common_neon.utils.utils import cached_property
 from ..common_neon.constants import ONE_BLOCK_SEC
 
 from ..statistic.data import NeonTxBeginData, NeonTxEndCode, NeonTxEndData
@@ -62,11 +63,10 @@ class MemPool:
         self._stuck_tx_dict = MPStuckTxDict(self._completed_tx_dict)
         self._stat_client = stat_client
 
-        self._elf_param_dict_task_loop = MPElfParamDictTaskLoop(executor_mng)
+        self._evm_config_task_loop = MPEVMConfigTaskLoop(executor_mng)
         self._gas_price_task_loop = MPGasPriceTaskLoop(executor_mng)
         self._state_tx_cnt_task_loop = MPSenderTxCntTaskLoop(executor_mng, self._tx_schedule)
 
-        self._def_chain_id = ElfParams().chain_id
         self._reschedule_timeout_sec = ONE_BLOCK_SEC * 3
         self._check_task_timeout_sec = 0.05
 
@@ -85,6 +85,11 @@ class MemPool:
     @property
     def _gas_price(self) -> Optional[MPGasPriceResult]:
         return self._gas_price_task_loop.gas_price
+
+    @cached_property
+    def _def_chain_id(self) -> int:
+        # No reason to check that EVMConfig has values, see: _process_tx_schedule_loop
+        return EVMConfig().chain_id
 
     def has_gas_price(self) -> bool:
         return self._gas_price is not None
@@ -161,11 +166,11 @@ class MemPool:
         return self._gas_price
 
     @staticmethod
-    def get_elf_param_dict() -> Optional[MPElfParamDictResult]:
-        elf_params = ElfParams()
-        if not elf_params.has_params():
+    def get_evm_config() -> Optional[MPEVMConfigResult]:
+        evm_config = EVMConfig()
+        if not evm_config.has_config():
             return None
-        return MPElfParamDictResult(elf_params.last_deployed_slot, elf_params.elf_param_dict)
+        return evm_config.evm_config_data
 
     def get_content(self) -> MPTxPoolContentResult:
         return self._tx_schedule.get_content()
@@ -255,16 +260,16 @@ class MemPool:
             if res_info is None:
                 return None
 
-        elf_param_dict = ElfParams().elf_param_dict
+        evm_cfg_data = EVMConfig().evm_config_data
         if not isinstance(tx, MPStuckTxInfo):
-            return MPTxExecRequest.from_tx_req(tx, res_info, elf_param_dict)
+            return MPTxExecRequest.from_tx_req(tx, res_info, evm_cfg_data)
 
         neon_exec_cfg = NeonTxExecCfg()
         neon_exec_cfg.set_holder_account(False, tx.holder_account)
-        return MPTxExecRequest.from_stuck_tx(tx, self._def_chain_id, neon_exec_cfg, res_info, elf_param_dict)
+        return MPTxExecRequest.from_stuck_tx(tx, self._def_chain_id, neon_exec_cfg, res_info, evm_cfg_data)
 
     async def _process_tx_schedule_loop(self):
-        while (not self.has_gas_price()) and (not ElfParams().has_params()):
+        while (not self.has_gas_price()) and (not EVMConfig().has_config()):
             await asyncio.sleep(self._check_task_timeout_sec)
 
         while True:

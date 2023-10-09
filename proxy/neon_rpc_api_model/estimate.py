@@ -2,7 +2,7 @@ import logging
 
 from typing import Dict, Any, List, Optional
 
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.evm_config import EVMConfig
 from ..common_neon.data import NeonEmulatorResult
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.neon_instruction import NeonIxBuilder
@@ -45,7 +45,7 @@ class _GasTxBuilder:
             ix_list=[
                 self._neon_ix_builder.make_compute_budget_heap_ix(),
                 self._neon_ix_builder.make_compute_budget_cu_ix(),
-                self._neon_ix_builder.make_tx_step_from_data_ix(ElfParams().neon_evm_steps, 1)
+                self._neon_ix_builder.make_tx_step_from_data_ix(EVMConfig().neon_evm_steps, 1)
             ]
         )
 
