@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import List, Union
+from typing import List, Dict, Union
 
 from aioprometheus import Counter, Histogram, Gauge
 
@@ -11,6 +11,8 @@ from .data import NeonMethodData, NeonGasPriceData, NeonTxBeginData, NeonTxEndDa
 from .data import NeonOpResStatData, NeonOpResListData, NeonExecutorStatData
 
 from ..common_neon.config import Config
+from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.address import NeonAddress
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 
@@ -21,8 +23,8 @@ class ProxyStatDataPeeker(StatDataPeeker):
         self._stat_service = stat_srv
         self._core_api_client = NeonCoreApiClient(config)
 
-        self._sol_account_list: List[str] = list()
-        self._neon_account_list: List[str] = list()
+        self._sol_account_list: List[SolPubKey] = list()
+        self._neon_account_list: List[NeonAddress] = list()
 
     def set_op_account_list(self, op_list: NeonOpResListData) -> None:
         self._sol_account_list = op_list.sol_account_list
@@ -32,16 +34,33 @@ class ProxyStatDataPeeker(StatDataPeeker):
         await super()._run()
         self._stat_operator_balance()
 
+    @staticmethod
+    def _get_token_name(_: int) -> str:
+        # TODO: fix token names
+        return 'NEON'
+
     def _stat_operator_balance(self) -> None:
+        sol_total_balance = Decimal(0)
         sol_balance_list = self._solana.get_sol_balance_list(self._sol_account_list)
         for sol_account, balance in zip(self._sol_account_list, sol_balance_list):
-            self._stat_service.commit_op_sol_balance(sol_account, Decimal(balance) / 1_000_000_000)
+            balance = Decimal(balance) / (10 ** 9)
+            sol_total_balance += balance
+            self._stat_service.commit_op_sol_balance(str(sol_account), balance)
+        self._stat_service.commit_op_sol_balance('TOTAL', sol_total_balance)
 
+        token_total_balance: Dict[str, Decimal] = dict()
         neon_layout_list = self._core_api_client.get_neon_account_info_list(self._neon_account_list)
-        for neon_account, neon_layout in zip(self._neon_account_list, neon_layout_list):
-            if neon_layout is not None:
-                neon_balance = Decimal(neon_layout.balance) / 1_000_000_000 / 1_000_000_000
-                self._stat_service.commit_op_neon_balance(neon_account, neon_balance)
+        for neon_layout in neon_layout_list:
+            if neon_layout.balance == 0:
+                continue
+
+            token_name = self._get_token_name(neon_layout.chain_id)
+            balance = Decimal(neon_layout.balance) / (10 ** 18)
+            token_total_balance[token_name] = token_total_balance.get(token_name, Decimal(0)) + balance
+            self._stat_service.commit_op_neon_balance(neon_layout.neon_addr.address, token_name, balance)
+
+        for token_name, balance in token_total_balance.items():
+            self._stat_service.commit_op_neon_balance('TOTAL', token_name, balance)
 
 
 class ProxyStatService(StatService, IHealthStatService):
@@ -220,8 +239,11 @@ class ProxyStatService(StatService, IHealthStatService):
     def commit_op_sol_balance(self, sol_account: str, sol_balance: Decimal) -> None:
         self._metr_op_sol_balance.set({"operator_sol_wallet": sol_account}, float(sol_balance))
 
-    def commit_op_neon_balance(self, neon_account: str, neon_balance: Decimal) -> None:
-        self._metr_op_neon_balance.set({'operator_neon_wallet': neon_account}, float(neon_balance))
+    def commit_op_neon_balance(self, neon_account: str, token_name: str, neon_balance: Decimal) -> None:
+        self._metr_op_neon_balance.set(
+            {'operator_neon_wallet': neon_account, 'token': token_name},
+            float(neon_balance)
+        )
 
     def commit_op_res_stat(self, res_stat: NeonOpResStatData) -> None:
         self._metr_key_total.set({}, res_stat.secret_cnt)

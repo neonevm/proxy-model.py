@@ -8,12 +8,13 @@ from enum import IntEnum
 from typing import Any, Optional, List, Dict, Union
 
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.operator_resource_info import OpResIdent
+from ..common_neon.operator_resource_info import OpResInfo
 from ..common_neon.errors import EthereumError
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.utils import str_fmt_object
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
+from ..common_neon.address import NeonAddress
 
 
 @dataclass(frozen=True)
@@ -80,16 +81,18 @@ class MPTxRequest(MPRequest):
     neon_tx: Optional[NeonTx] = None
     neon_tx_info: Optional[NeonTxInfo] = None
     neon_tx_exec_cfg: Optional[NeonTxExecCfg] = None
+    chain_id: int = 0
     gas_price: int = 0
     start_time: int = 0
 
     @staticmethod
-    def from_neon_tx(req_id: str, neon_tx: NeonTx, neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxRequest:
+    def from_neon_tx(req_id: str, neon_tx: NeonTx, def_chain_id: int, neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxRequest:
         return MPTxRequest(
             req_id=req_id,
             neon_tx=neon_tx,
             neon_tx_info=NeonTxInfo.from_neon_tx(neon_tx),
             neon_tx_exec_cfg=neon_tx_exec_cfg,
+            chain_id=(neon_tx.chain_id or def_chain_id),
             gas_price=neon_tx.gasPrice,
             start_time=time.time_ns()
         )
@@ -116,39 +119,42 @@ class MPTxRequest(MPRequest):
 @dataclass
 class MPTxExecRequest(MPTxRequest):
     elf_param_dict: Dict[str, str] = None
-    res_ident: OpResIdent = None
+    res_info: OpResInfo = None
 
     def is_stuck_tx(self) -> bool:
         return self.neon_tx is None
 
     @staticmethod
     def from_tx_req(tx: MPTxRequest,
-                    res_ident: OpResIdent,
+                    res_info: OpResInfo,
                     elf_param_dict: Dict[str, str]) -> MPTxExecRequest:
         return MPTxExecRequest(
             req_id=tx.req_id,
             neon_tx=tx.neon_tx,
             neon_tx_info=tx.neon_tx_info,
             neon_tx_exec_cfg=tx.neon_tx_exec_cfg,
+            chain_id=tx.chain_id,
             gas_price=tx.gas_price,
             start_time=tx.start_time,
             elf_param_dict=elf_param_dict,
-            res_ident=res_ident
+            res_info=res_info
         )
 
     @staticmethod
     def from_stuck_tx(stuck_tx: MPStuckTxInfo,
+                      def_chain_id: int,
                       neon_tx_exec_cfg: NeonTxExecCfg,
-                      res_ident: OpResIdent,
+                      res_info: OpResInfo,
                       elf_param_dict: Dict[str, str]) -> MPTxExecRequest:
         return MPTxExecRequest(
             req_id=stuck_tx.req_id,
             neon_tx=None,
             neon_tx_info=stuck_tx.neon_tx,
             neon_tx_exec_cfg=neon_tx_exec_cfg,
+            chain_id=def_chain_id,
             gas_price=stuck_tx.neon_tx.gas_price,
             start_time=stuck_tx.start_time,
-            res_ident=res_ident,
+            res_info=res_info,
             elf_param_dict=elf_param_dict
         )
 
@@ -209,7 +215,7 @@ class MPElfParamDictRequest(MPRequest):
 
 @dataclass
 class MPSenderTxCntRequest(MPRequest):
-    sender_list: List[str] = None
+    sender_list: List[NeonAddress] = None
 
     def __post_init__(self):
         self.type = MPRequestType.GetStateTxCnt
@@ -224,7 +230,7 @@ class MPOpResGetListRequest(MPRequest):
 @dataclass
 class MPOpResInitRequest(MPRequest):
     elf_param_dict: Dict[str, str] = None
-    res_ident: OpResIdent = None
+    res_info: OpResInfo = None
 
     def __post_init__(self):
         self.type = MPRequestType.InitOperatorResource
@@ -344,7 +350,7 @@ class MPElfParamDictResult:
 
 @dataclass(frozen=True)
 class MPSenderTxCntData:
-    sender: str
+    sender: NeonAddress
     state_tx_cnt: int
 
 
@@ -362,12 +368,13 @@ class MPOpResInitResultCode(IntEnum):
 
 @dataclass(frozen=True)
 class MPOpResGetListResult:
-    res_ident_list: List[OpResIdent]
+    res_info_list: List[OpResInfo]
 
 
 @dataclass(frozen=True)
 class MPOpResInitResult:
     code: MPOpResInitResultCode
+    res_info: Optional[OpResInfo]
     exc: Optional[BaseException]
 
 

@@ -1,7 +1,7 @@
 import unittest
 import base58
 
-from unittest.mock import patch, call
+from unittest.mock import patch
 from typing import Optional, Union
 
 from ..common_neon.config import Config, StartSlot
@@ -59,13 +59,13 @@ class TestGasTank(unittest.TestCase):
     def add_portal_analyzer(cls, gas_tank: GasTank):
         portal_whitelist = {wormhole_token_mint: wormhole_gas_less_amount}
         portal_analyzer = PortalAnalyzer(gas_tank._config, portal_whitelist)
-        gas_tank.add_neon_tx_analyzer(NeonAddress(wormhole_contract), portal_analyzer)
+        gas_tank.add_neon_tx_analyzer(NeonAddress.from_raw(wormhole_contract), portal_analyzer)
 
     @classmethod
     def add_erc20_analyzer(cls, gas_tank: GasTank):
         erc20_whitelist = {erc20_token_mint: wormhole_gas_less_amount}
         erc20_analyzer = ERC20Analyzer(gas_tank._config, erc20_whitelist)
-        gas_tank.add_neon_tx_analyzer(NeonAddress(wormhole_contract), erc20_analyzer)
+        gas_tank.add_neon_tx_analyzer(NeonAddress.from_raw(wormhole_contract), erc20_analyzer)
 
     @patch.object(NeonPassAnalyzer, '_is_allowed_contract')
     @patch.object(GasLessAccountsDB, 'add_gas_less_permit_list')
@@ -94,7 +94,7 @@ class TestGasTank(unittest.TestCase):
         gas_tank._process_sol_tx(neon_pass_tx)
         gas_tank._save_cached_data()
 
-        mock_has_gas_less_tx_permit.assert_called_once_with(NeonAddress(neon_pass_gas_less_account))
+        mock_has_gas_less_tx_permit.assert_called_once_with(NeonAddress.from_raw(neon_pass_gas_less_account))
         mock_add_gas_less_permit.assert_not_called()
 
     @patch.object(GasTank, '_allow_gas_less_tx')
@@ -110,7 +110,7 @@ class TestGasTank(unittest.TestCase):
         ix_data = base58.b58decode(neon_pass_claim_to_ix_data)
         neon_tx = NeonTxInfo.from_sig_data(ix_data[5:])
 
-        mock_allow_gas_less_tx.assert_called_once_with(NeonAddress(neon_pass_gas_less_account), neon_tx)
+        mock_allow_gas_less_tx.assert_called_once_with(NeonAddress.from_raw(neon_pass_gas_less_account), neon_tx)
 
     @patch.object(GasTank, '_allow_gas_less_tx')
     def test_wormhole_transaction_simple_case(self, mock_allow_gas_less_tx):
@@ -126,7 +126,7 @@ class TestGasTank(unittest.TestCase):
         ix_data = base58.b58decode(wormhole_write_ix_data)
         neon_tx = NeonTxInfo.from_sig_data(ix_data[41:])
 
-        mock_allow_gas_less_tx.assert_called_once_with(NeonAddress(wormhole_gas_less_account), neon_tx)
+        mock_allow_gas_less_tx.assert_called_once_with(NeonAddress.from_raw(wormhole_gas_less_account), neon_tx)
 
     @patch.object(GasTank, '_allow_gas_less_tx')
     def test_erc20_transaction_simple_case(self, mock_allow_gas_less_tx):
@@ -142,7 +142,7 @@ class TestGasTank(unittest.TestCase):
         ix_data = base58.b58decode(wormhole_write_ix_data)
         neon_tx = NeonTxInfo.from_sig_data(ix_data[41:])
 
-        mock_allow_gas_less_tx.assert_called_once_with(NeonAddress(wormhole_gas_less_account), neon_tx)
+        mock_allow_gas_less_tx.assert_called_once_with(NeonAddress.from_raw(wormhole_gas_less_account), neon_tx)
 
     @patch.object(ConstantsDB, 'get')
     @patch.object(SolInteractor, 'get_block_slot')

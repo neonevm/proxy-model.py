@@ -518,20 +518,22 @@ class WriteHolderAccountIx(BaseTxIxDecoder):
         return False
 
 
-class CreateAccount3IxDecoder(DummyIxDecoder):
-    _ix_code = EvmIxCode.CreateAccountV03
+class CreateBalanceIxDecoder(DummyIxDecoder):
+    _ix_code = EvmIxCode.CreateBalance
     _is_deprecated = False
 
     def execute(self) -> bool:
         ix = self.state.sol_neon_ix
-        if len(ix.ix_data) < 21:
+        if len(ix.ix_data) < 29:
             return self._decoding_skip(f'not enough data to get NeonAccount {len(ix.ix_data)}')
 
         neon_account = '0x' + ix.ix_data[1:21].hex()
+        chain_id = int.from_bytes(ix.ix_data[21:29], byteorder='little')
         pda_account = ix.get_account(2)
 
         account_info = NeonAccountInfo(
             neon_account,
+            chain_id,
             pda_account,
             ix.block_slot,
             ix.sol_sig
@@ -595,7 +597,7 @@ def get_neon_ix_decoder_list() -> List[Type[DummyIxDecoder]]:
         TxStepFromAccountNoChainIdIxDecoder,
         CancelWithHashIxDecoder,
         WriteHolderAccountIx,
-        CreateAccount3IxDecoder,
+        CreateBalanceIxDecoder,
         CollectTreasureIxDecoder,
         CreateHolderAccountIx,
         DeleteHolderAccountIx,

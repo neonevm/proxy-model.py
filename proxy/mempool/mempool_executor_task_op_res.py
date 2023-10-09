@@ -4,10 +4,11 @@ from typing import List
 from .mempool_api import MPOpResGetListResult, MPOpResInitRequest, MPOpResInitResult, MPOpResInitResultCode
 from .mempool_executor_task_base import MPExecutorBaseTask
 
-from ..common_neon.address import neon_2program
 from ..common_neon.config import Config
 from ..common_neon.constants import ACTIVE_HOLDER_TAG, FINALIZED_HOLDER_TAG, HOLDER_TAG, EVM_PROGRAM_ID
 from ..common_neon.elf_params import ElfParams
+from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.address import NeonAddress
 from ..common_neon.errors import BadResourceError, RescheduleError, StuckTxError
 from ..common_neon.neon_instruction import NeonIxBuilder
 
@@ -16,10 +17,12 @@ from ..common_neon.neon_tx_stages import (
     NeonTxStage
 )
 
-from ..common_neon.operator_resource_info import OpResInfo, OpResIdentListBuilder
+from ..common_neon.operator_resource_info import OpResInfo, OpResInfoBuilder
 from ..common_neon.operator_secret_mng import OpSecretMng
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx_list_sender import SolTxListSender
+
+from ..neon_core_api.neon_client_base import NeonClientBase
 
 from ..statistic.data import NeonOpResListData
 
@@ -28,9 +31,10 @@ LOG = logging.getLogger(__name__)
 
 
 class OpResInit:
-    def __init__(self, config: Config, solana: SolInteractor):
+    def __init__(self, config: Config, solana: SolInteractor, neon_client: NeonClientBase):
         self._config = config
         self._solana = solana
+        self._neon_client = neon_client
 
     def init_resource(self, resource: OpResInfo):
         LOG.debug(f'Rechecking of accounts for resource {resource}')
@@ -73,16 +77,24 @@ class OpResInit:
         tx_sender.send([stage.tx])
 
     def _create_neon_account(self, builder: NeonIxBuilder, resource: OpResInfo):
-        solana_address = neon_2program(resource.neon_address)[0]
+        for neon_addr in resource.neon_address_list:
+            neon_acct_info = self._neon_client.get_neon_account_info(neon_addr)
+            neon_addr_str = f'{neon_addr.address}:{neon_addr.chain_id}'
 
-        account_info = self._solana.get_account_info(solana_address)
-        if account_info is not None:
-            LOG.debug(f'Use neon account {str(solana_address)}({str(resource.neon_address)}) for resource {resource}')
-            return
+            sol_addr = neon_acct_info.pda_address
+            sol_acct_info = self._solana.get_account_info(sol_addr)
+            if not sol_acct_info:
+                pass
+            elif sol_acct_info.owner == EVM_PROGRAM_ID:
+                LOG.debug(f'Use neon account {str(sol_addr)}({neon_addr_str}) for resource {resource}')
+                continue
+            else:
+                raise BadResourceError(f'Wrong owner for neon account {str(sol_acct_info.owner)}')
 
-        LOG.debug(f'Create neon account {str(solana_address)}({str(resource.neon_address)}) for resource {resource}')
-        stage = NeonCreateAccountTxStage(builder, resource.neon_address)
-        self._execute_stage(stage, resource)
+            resource.neon_account_dict[neon_addr.chain_id] = sol_addr
+            LOG.debug(f'Create neon account {str(sol_addr)}({neon_addr_str}) for resource {resource}')
+            stage = NeonCreateAccountTxStage(builder, neon_acct_info)
+            self._execute_stage(stage, resource)
 
     def _create_holder_account(self, builder: NeonIxBuilder, resource: OpResInfo) -> None:
         holder_address = str(resource.holder_account)
@@ -128,15 +140,15 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
     def get_op_res_list(self) -> MPOpResGetListResult:
         try:
             secret_list = OpSecretMng(self._config).read_secret_list()
-            res_ident_list = OpResIdentListBuilder(self._config).build_resource_list(secret_list)
+            key_info_list = OpResInfoBuilder(self._config).build_key_list(secret_list)
 
-            sol_account_list: List[str] = []
-            neon_account_list: List[str] = []
+            sol_account_list: List[SolPubKey] = list()
+            neon_account_list: List[NeonAddress] = list()
 
-            for res_ident in res_ident_list:
-                op_info = OpResInfo.from_ident(res_ident)
-                sol_account_list.append(str(op_info.public_key))
-                neon_account_list.append(str(op_info.neon_address))
+            for key_info in key_info_list:
+                sol_account_list.append(key_info.public_key)
+                for neon_addr in key_info.neon_address_list:
+                    neon_account_list.append(neon_addr)
 
             stat = NeonOpResListData(
                 sol_account_list=sol_account_list,
@@ -144,27 +156,28 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
             )
             self._stat_client.commit_op_res_list(stat)
 
-            return MPOpResGetListResult(res_ident_list=res_ident_list)
+            res_info_list = OpResInfoBuilder(self._config).build_resource_list(key_info_list)
+            return MPOpResGetListResult(res_info_list=res_info_list)
 
         except BaseException as exc:
             LOG.error(f'Failed to read secret list', exc_info=exc)
-            return MPOpResGetListResult(res_ident_list=[])
+            return MPOpResGetListResult(res_info_list=[])
 
     def init_op_res(self, mp_op_res_req: MPOpResInitRequest) -> MPOpResInitResult:
         ElfParams().set_elf_param_dict(mp_op_res_req.elf_param_dict)
-        resource = OpResInfo.from_ident(mp_op_res_req.res_ident)
+        resource = mp_op_res_req.res_info
         try:
-            OpResInit(self._config, self._solana).init_resource(resource)
-            return MPOpResInitResult(MPOpResInitResultCode.Success, None)
+            OpResInit(self._config, self._solana, self._core_api_client).init_resource(resource)
+            return MPOpResInitResult(MPOpResInitResultCode.Success, resource, None)
 
         except RescheduleError as exc:
             LOG.debug(f'Rescheduling init of operator resource {resource}: {str(exc)}')
-            return MPOpResInitResult(MPOpResInitResultCode.Reschedule, None)
+            return MPOpResInitResult(MPOpResInitResultCode.Reschedule, resource, None)
 
         except StuckTxError as exc:
             LOG.debug(str(exc))
-            return MPOpResInitResult(MPOpResInitResultCode.StuckTx, exc)
+            return MPOpResInitResult(MPOpResInitResultCode.StuckTx, resource, exc)
 
         except BaseException as exc:
             LOG.error(f'Failed to init operator resource tx {resource}', exc_info=exc)
-            return MPOpResInitResult(MPOpResInitResultCode.Failed, None)
+            return MPOpResInitResult(MPOpResInitResultCode.Failed, None, None)

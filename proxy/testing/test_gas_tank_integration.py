@@ -11,16 +11,14 @@ from solders.system_program import ID as SYS_PROGRAM_ID
 
 from spl.token.client import Token as SplToken
 from spl.token.constants import TOKEN_PROGRAM_ID
-import spl.token.instructions as SplTokenInstrutions
+import spl.token.instructions as SplTokenIxs
 
 from proxy.common_neon.metaplex import create_metadata_instruction_data, create_metadata_instruction
 from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolAccount, SolPubKey
-from proxy.common_neon.neon_instruction import create_account_layout, NeonIxBuilder
+from proxy.common_neon.neon_instruction import NeonIxBuilder
 from proxy.common_neon.erc20_wrapper import ERC20Wrapper
 from proxy.common_neon.config import Config
-from proxy.common_neon.elf_params import ElfParams
-from proxy.common_neon.address import neon_2program
-from proxy.common_neon.constants import COMPUTE_BUDGET_ID, EVM_PROGRAM_ID
+from proxy.common_neon.constants import EVM_PROGRAM_ID
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 
 from proxy.testing.testing_helpers import Proxy, SolClient, NeonLocalAccount
@@ -116,14 +114,15 @@ class TestGasTankIntegration(TestCase):
 
     @classmethod
     def create_account_instruction(cls, neon_address: str, payer: SolPubKey):
-        dest_address_solana, nonce = neon_2program(neon_address)
+        neon_ix_builder = NeonIxBuilder(payer)
+        acct_info = cls.proxy.get_account_info(neon_address)
         return SolTxIx(
             program_id=EVM_PROGRAM_ID,
-            data=create_account_layout(bytes.fromhex(neon_address[2:])),
+            data=neon_ix_builder.make_create_neon_account_ix(acct_info),
             accounts=[
                 SolAccountMeta(pubkey=payer, is_signer=True, is_writable=True),
                 SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                SolAccountMeta(pubkey=dest_address_solana, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=acct_info.pda_address, is_signer=False, is_writable=True),
             ]
         )
 
@@ -202,7 +201,7 @@ class TestGasTankIntegration(TestCase):
             ix_list=[
                 self.create_account_instruction(signer_acct.address, from_owner.pubkey()),
                 self.create_account_instruction(to_neon_acct.address, from_owner.pubkey()),
-                SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
+                SplTokenIxs.approve(SplTokenIxs.ApproveParams(
                     program_id=self.token.program_id,
                     source=from_spl_token_acc,
                     delegate=self.erc20_for_spl.get_auth_account_address(signer_acct.address),
@@ -264,7 +263,7 @@ class TestGasTankIntegration(TestCase):
             ix_list=[
                 self.create_account_instruction(to_neon_acct1.address, from_owner.pubkey()),
                 self.create_account_instruction(to_neon_acct2.address, from_owner.pubkey()),
-                SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
+                SplTokenIxs.approve(SplTokenIxs.ApproveParams(
                     program_id=self.token.program_id,
                     source=from_spl_token_acct,
                     delegate=self.erc20_for_spl.get_auth_account_address(signer_acct.address),
@@ -338,7 +337,7 @@ class TestGasTankIntegration(TestCase):
             name='NoGasTankAllowance',
             ix_list=[
                 self.create_account_instruction(signer_acct.address, from_owner.pubkey()),
-                SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
+                SplTokenIxs.approve(SplTokenIxs.ApproveParams(
                     program_id=self.token.program_id,
                     source=from_spl_token_acc,
                     delegate=self.erc20_for_spl.get_auth_account_address(signer_acct.address),
@@ -387,7 +386,7 @@ class TestGasTankIntegration(TestCase):
             name='FailedTxCase',
             ix_list=[
                 self.create_account_instruction(to_neon_acct.address, from_owner.pubkey()),
-                SplTokenInstrutions.approve(SplTokenInstrutions.ApproveParams(
+                SplTokenIxs.approve(SplTokenIxs.ApproveParams(
                     program_id=self.token.program_id,
                     source=from_spl_token_acc,
                     delegate=self.erc20_for_spl.get_auth_account_address(to_neon_acct.address),

@@ -6,10 +6,11 @@ import enum
 
 from typing import Optional, Dict, Any, Union, List, Tuple
 
-from .neon_cli import NeonCli
+from .neon_client import NeonClient
+from .neon_client_base import NeonClientBase
 from .neon_layouts import NeonAccountInfo, NeonContractInfo
 
-from ..common_neon.address import NeonAddress, InNeonAddress
+from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.data import NeonEmulatorResult, NeonEmulatorExitStatus
 from ..common_neon.elf_params import ElfParams
@@ -81,7 +82,7 @@ class _Client:
             raise
 
 
-class NeonCoreApiClient:
+class NeonCoreApiClient(NeonClientBase):
     _re_insufficient_balance = re.compile(
         r'EVM Error. Insufficient balance for transfer, account = 0x([0-9a-fA-F]+), required = (\d+)'
     )
@@ -112,8 +113,9 @@ class NeonCoreApiClient:
                 LOG.warning(f'Fail to call {method} on the neon_core_api({client.port})', exc_info=exc)
 
     def emulate(
-        self, contract: str,
-        sender: str,
+        self, contract: Optional[NeonAddress],
+        sender: Optional[NeonAddress],
+        chain_id: int,
         data: Optional[str],
         value: Optional[Union[str, int]],
         gas_limit: Optional[str] = None,
@@ -122,6 +124,11 @@ class NeonCoreApiClient:
     ) -> NeonEmulatorResult:
         if not sender:
             sender = '0x0000000000000000000000000000000000000000'
+        else:
+            sender = sender.address
+
+        if contract:
+            contract = contract.address
 
         if data is not None:
             if data[:2] in {'0x', '0X'}:
@@ -136,9 +143,11 @@ class NeonCoreApiClient:
         if isinstance(gas_limit, int):
             gas_limit = hex(value)
 
+        token_mint = str(ElfParams().neon_token_mint)
+
         request = dict(
-            token_mint=str(ElfParams().neon_token_mint),
-            chain_id=ElfParams().chain_id,
+            token_mint=token_mint,
+            chain_id=chain_id,
             max_steps_to_execute=self._config.max_evm_step_cnt_emulate,
             cached_accounts=None,
             solana_accouts=None,
@@ -157,10 +166,16 @@ class NeonCoreApiClient:
             return self._get_emulated_result(response)
         return NeonEmulatorResult(response.get('value'))
 
-    def emulate_neon_tx(self, neon_tx: NeonTx) -> NeonEmulatorResult:
-        return self.emulate(neon_tx.hex_to_address, neon_tx.hex_sender, neon_tx.hex_call_data, neon_tx.value)
+    def emulate_neon_tx(self, neon_tx: NeonTx, chain_id: int) -> NeonEmulatorResult:
+        return self.emulate(
+            NeonAddress.from_raw(neon_tx.to_address, chain_id),
+            NeonAddress.from_raw(neon_tx.sender, chain_id),
+            chain_id,
+            neon_tx.hex_call_data,
+            neon_tx.value
+        )
 
-    def get_storage_at(self, contract: str, position: str, block: SolBlockInfo) -> str:
+    def get_storage_at(self, contract: NeonAddress, position: str, block: SolBlockInfo) -> str:
         request = dict(
             contract_id=contract,
             index=position
@@ -173,17 +188,14 @@ class NeonCoreApiClient:
         return '0x' + bytes(value).hex()
 
     def get_neon_account_info_list(
-        self, addr_list: List[InNeonAddress],
+        self, addr_list: List[NeonAddress],
         block: Optional[SolBlockInfo] = None
     ) -> List[NeonAccountInfo]:
-        addr_list = [NeonAddress(addr) for addr in addr_list]
-        chain_id = ElfParams().chain_id
-
         request = dict(
             account=[
                 dict(
-                    address=str(addr),
-                    chain_id=chain_id
+                    address=addr.address,
+                    chain_id=addr.chain_id
                 )
                 for addr in addr_list
             ]
@@ -193,21 +205,20 @@ class NeonCoreApiClient:
         response = self._call(_MethodName.get_neon_account_info_list, request)
         json_acct_list = response.get('value')
         return [
-            NeonAccountInfo.from_json(addr, chain_id, json_acct)
+            NeonAccountInfo.from_json(addr, json_acct)
             for addr, json_acct in zip(addr_list, json_acct_list)
         ]
 
     def get_neon_account_info(
-        self, addr: InNeonAddress,
+        self, addr: NeonAddress,
         block: Optional[SolBlockInfo] = None
     ) -> Optional[NeonAccountInfo]:
         return self.get_neon_account_info_list([addr], block)[0]
 
     def get_neon_contract_info(
-        self, addr: InNeonAddress,
+        self, addr: NeonAddress,
         block: Optional[SolBlockInfo] = None
     ) -> Optional[NeonContractInfo]:
-        addr = NeonAddress(addr)
         request = dict(
             contract=addr
         )
@@ -218,8 +229,7 @@ class NeonCoreApiClient:
         return NeonContractInfo.from_json(addr, json_contract)
 
     def get_state_tx_cnt(
-        self,
-        addr: Union[str, bytes, NeonAddress, NeonAccountInfo, None],
+        self, addr: Union[NeonAddress, NeonAccountInfo],
         block: Optional[SolBlockInfo] = None
     ) -> int:
         if not isinstance(addr, NeonAccountInfo):
@@ -229,10 +239,10 @@ class NeonCoreApiClient:
         return neon_acct_info.tx_count if neon_acct_info is not None else 0
 
     def read_elf_params(self, last_deployed_slot: int) -> Tuple[int, Dict[str, str]]:
-        return NeonCli(self._config, False).read_elf_params(last_deployed_slot)
+        return NeonClient(self._config).read_elf_params(last_deployed_slot)
 
     def version(self) -> str:
-        return NeonCli(self._config, False).version()
+        return NeonClient(self._config).version()
 
     def _add_block(self, request: RPCRequest, block: Optional[SolBlockInfo]) -> RPCRequest:
         if not block:

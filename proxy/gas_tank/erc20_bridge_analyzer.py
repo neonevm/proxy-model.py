@@ -35,7 +35,7 @@ class ERC20Analyzer(GasTankNeonTxAnalyzer):
             if self._is_allowed_token(token_id, amount):
                 continue
 
-            to = NeonAddress(bytes.fromhex(event['topics'][2][2:])[12:])
+            to = NeonAddress.from_raw(bytes.fromhex(event['topics'][2][2:])[12:])
             LOG.info(f'Common ERC20 bridge transfer: {amount} of {token_id} token to {to}')
             return to
         return None

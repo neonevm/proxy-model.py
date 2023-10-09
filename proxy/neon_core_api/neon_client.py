@@ -6,19 +6,23 @@ from typing import Dict, Any, Optional, Tuple
 
 from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.environment_utils import CliBase
-from ..common_neon.address import NeonAddress, InNeonAddress
+from ..common_neon.address import NeonAddress
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolPubKey
-from ..common_neon.elf_params import ElfParams
+from ..common_neon.config import Config
 
 from .neon_layouts import NeonAccountInfo, BPFLoader2ProgramInfo, BPFLoader2ExecutableInfo
+from .neon_client_base import NeonClientBase
 from .logging_level import NeonCoreApiLoggingLevel
 
 
 LOG = logging.getLogger(__name__)
 
 
-class NeonCli(CliBase):
+class NeonClient(CliBase, NeonClientBase):
+    def __init__(self, config: Config):
+        super().__init__(config, False)
+
     def call(self, *args) -> Dict[str, Any]:
         try:
             cmd = [
@@ -71,15 +75,12 @@ class NeonCli(CliBase):
             LOG.error(f'ERR: neon-cli error {str(err)}')
             raise
 
-    def get_neon_account_info(self, addr: InNeonAddress) -> Optional[NeonAccountInfo]:
-        addr = NeonAddress.from_raw(addr)
-        chain_id = ElfParams().chain_id
-
-        response = self.call('get-ether-account-data', str(addr))
-        json_acct = response.get('value')
+    def get_neon_account_info(self, addr: NeonAddress) -> Optional[NeonAccountInfo]:
+        json_acct_list = self.call('get-ether-account-data', addr.address, str(addr.chain_id))
+        json_acct = json_acct_list[0]
         if not json_acct:
             return None
-        return NeonAccountInfo.from_json(addr, chain_id, json_acct)
+        return NeonAccountInfo.from_json(addr, json_acct)
 
     def read_elf_params(self, last_deployed_slot: int) -> Tuple[int, Dict[str, str]]:
         solana = SolInteractor(self._config, self._solana_url)

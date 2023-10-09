@@ -9,15 +9,15 @@ import time
 from dataclasses import dataclass
 from typing import Optional, Union, Dict, Any, List, cast, NewType
 
-import eth_utils
 from eth_account import Account as NeonAccount
 from sha3 import keccak_256
 
 from ..common_neon.config import Config
 from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.data import NeonTxExecCfg
+from ..common_neon.address import NeonAddress
 from ..common_neon.elf_params import ElfParams
-from ..common_neon.errors import EthereumError, InvalidParamError, RescheduleError, NonceTooLowError
+from ..common_neon.errors import EthereumError, InvalidParamError, NonceTooLowError
 from ..common_neon.keys_storage import KeyStorage
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo, SolAltIxInfo
@@ -83,22 +83,25 @@ def get_req_id_from_log():
 class NeonRpcApiWorker:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
-    def __init__(self, config: Config):
-        self._config = config
-        self._solana = SolInteractor(config)
+    def __init__(self, cfg: Config):
+        self._config = cfg
+        self._solana = SolInteractor(cfg)
 
-        db_conn = DBConnection(config)
-        self._db = IndexerDB.from_db(config, db_conn)
+        db_conn = DBConnection(cfg)
+        self._db = IndexerDB.from_db(cfg, db_conn)
         self._gas_tank = GasLessAccountsDB(db_conn)
 
-        self._core_api_client = NeonCoreApiClient(config)
+        self._core_api_client = NeonCoreApiClient(cfg)
 
         self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price_value: Optional[MPGasPriceResult] = None
         self._last_gas_price_time = 0
 
+        self._chain_id = self._def_chain_id = ElfParams().chain_id
+        valid_chain_id_list = [self._chain_id, None]
         self._last_elf_params_time = 0
+        self._neon_tx_validator = NeonTxValidator(cfg, self._core_api_client, self._def_chain_id, valid_chain_id_list)
 
         with self.proxy_id_glob.get_lock():
             self.proxy_id = self.proxy_id_glob.value
@@ -154,37 +157,35 @@ class NeonRpcApiWorker:
     def web3_clientVersion(self) -> str:
         return self.neon_evmVersion()
 
-    @staticmethod
-    def eth_chainId() -> str:
-        return hex(ElfParams().chain_id)
+    def eth_chainId(self) -> str:
+        return hex(self._chain_id)
 
-    @staticmethod
-    def net_version() -> str:
-        return str(ElfParams().chain_id)
+    def net_version(self) -> str:
+        return str(self._chain_id)
 
     def eth_gasPrice(self) -> str:
         return hex(self._gas_price.suggested_gas_price)
 
     def neon_gasPrice(self, param: Dict[str, Any]) -> str:
-        account = param.get('from', None)
-        if account is None:
+        from_addr = param.get('from', None)
+        if from_addr is None:
             return self._format_gas_price(self._gas_price.suggested_gas_price)
 
-        account = self._normalize_address(account, 'from-address').lower()
+        from_addr = self._normalize_address(from_addr, 'from-address')
 
-        state_tx_cnt = self._core_api_client.get_state_tx_cnt(account)
+        state_tx_cnt = self._core_api_client.get_state_tx_cnt(from_addr)
         tx_nonce = param.get('nonce', None)
         if tx_nonce is not None:
             tx_nonce = self._normalize_hex(tx_nonce, 'nonce')
         if tx_nonce is None:
             tx_nonce = state_tx_cnt
         else:
-            NonceTooLowError.raise_if_error(account, tx_nonce, state_tx_cnt)
+            NonceTooLowError.raise_if_error(from_addr.address, tx_nonce, state_tx_cnt)
 
         tx_gas = param.get('gas', 0)
         tx_gas = self._normalize_hex(tx_gas, 'gas')
 
-        if self._has_gas_less_tx_permit(account, tx_nonce, tx_gas):
+        if self._has_gas_less_tx_permit(from_addr, tx_nonce, tx_gas):
             return self._format_gas_price(0)
 
         return self._format_gas_price(self._gas_price.suggested_gas_price)
@@ -221,13 +222,13 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(f'invalid {name}: value')
 
-    def _has_gas_less_tx_permit(self, account: str, tx_nonce: int, tx_gas_limit: int) -> bool:
+    def _has_gas_less_tx_permit(self, addr: NeonAddress, tx_nonce: int, tx_gas_limit: int) -> bool:
         if self._config.gas_less_tx_max_nonce < tx_nonce:
             return False
         if self._config.gas_less_tx_max_gas < tx_gas_limit:
             return False
 
-        return self._gas_tank.has_gas_less_tx_permit(account)
+        return self._gas_tank.has_gas_less_tx_permit(addr)
 
     def eth_estimateGas(self, param: Dict[str, Any], tag: Union[str, int, dict] = 'latest') -> str:
         block = self._process_block_tag(tag)
@@ -240,7 +241,7 @@ class NeonRpcApiWorker:
             param['to'] = self._normalize_address(param['to'], 'to-address')
 
         try:
-            calculator = GasEstimate(self._core_api_client, param)
+            calculator = GasEstimate(self._core_api_client, self._def_chain_id, param)
             calculator.execute(block)
             return hex(calculator.estimate())
 
@@ -334,8 +335,7 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message='transaction-id is not hex')
 
-    @staticmethod
-    def _normalize_address(raw_address: str, address_type='address') -> str:
+    def _normalize_address(self, raw_address: str, address_type='address') -> NeonAddress:
         try:
             address = raw_address.strip().lower()
             assert address[:2] == '0x'
@@ -344,7 +344,7 @@ class NeonRpcApiWorker:
             bin_address = bytes.fromhex(address)
             assert len(bin_address) == 20
 
-            return eth_utils.to_checksum_address(address)
+            return NeonAddress.from_raw(bin_address, self._chain_id)
         except (Exception,):
             raise InvalidParamError(message=f'bad {address_type}: {raw_address}')
 
@@ -365,21 +365,21 @@ class NeonRpcApiWorker:
         """
 
         block = self._process_block_tag(tag)
-        account = self._normalize_address(account)
+        addr = self._normalize_address(account)
 
         try:
-            neon_account_info = self._core_api_client.get_neon_account_info(account, block)
-            if (neon_account_info is None) or (neon_account_info.balance == 0):
-                return self._get_zero_balance(account, neon_account_info)
+            neon_acct_info = self._core_api_client.get_neon_account_info(addr, block)
+            if (neon_acct_info is None) or (neon_acct_info.balance == 0):
+                return self._get_zero_balance(addr, neon_acct_info)
 
-            return hex(neon_account_info.balance)
+            return hex(neon_acct_info.balance)
         except (Exception,):
             # LOG.debug(f"eth_getBalance: Can't get account info: {err}")
             return hex(0)
 
-    def _get_zero_balance(self, account: str, neon_account_info: Optional[NeonAccountInfo]) -> str:
+    def _get_zero_balance(self, addr: NeonAddress, neon_account_info: Optional[NeonAccountInfo]) -> str:
         nonce = neon_account_info.tx_count if neon_account_info is not None else 0
-        if self._has_gas_less_tx_permit(account.lower(), nonce, 0):
+        if self._has_gas_less_tx_permit(addr, nonce, 0):
             return hex(1)
         return hex(0)
 
@@ -428,10 +428,10 @@ class NeonRpcApiWorker:
         if obj.get('address', None) is not None:
             raw_address_list = obj['address']
             if isinstance(raw_address_list, str):
-                address_list = [self._normalize_address(raw_address_list).lower()]
+                address_list = [self._normalize_address(raw_address_list).address]
             elif isinstance(raw_address_list, list):
                 for raw_address in raw_address_list:
-                    address_list.append(self._normalize_address(raw_address).lower())
+                    address_list.append(self._normalize_address(raw_address).address)
             else:
                 raise InvalidParamError(message=f'bad address {raw_address_list}')
 
@@ -639,25 +639,21 @@ class NeonRpcApiWorker:
 
         try:
             sender = obj.get('from')
+            if sender:
+                sender = self._normalize_address(sender, 'from-address')
+
             contract = obj.get('to')
+            if contract:
+                contract = self._normalize_address(contract, 'to-address')
+
             data = obj.get('data')
             value = obj.get('value')
             gas_limit = obj.get('gas')
 
-            retry_idx = 0
-            retry_on_fail = self._config.retry_on_fail
-            while True:
-                try:
-                    emulator_result = self._core_api_client.emulate(
-                        contract, sender, data, value, gas_limit, block=block, check_result=True
-                    )
-                    return '0x' + emulator_result.result
-
-                except RescheduleError:
-                    retry_idx += 1
-                    if retry_idx < retry_on_fail:
-                        continue
-                    raise
+            emulator_result = self._core_api_client.emulate(
+                contract, sender, self._def_chain_id, data, value, gas_limit, block, check_result=True
+            )
+            return '0x' + emulator_result.result
 
         except EthereumError:
             raise
@@ -668,26 +664,26 @@ class NeonRpcApiWorker:
 
     def eth_getTransactionCount(self, account: str, tag: Union[str, int, dict]) -> str:
         block = self._process_block_tag(tag) if tag != 'mempool' else None
-        account = self._normalize_address(account).lower()
+        addr = self._normalize_address(account)
 
         try:
-            LOG.debug(f'Get transaction count. Account: {account}, tag: {tag}')
+            LOG.debug(f'Get transaction count. Account: {addr}, tag: {tag}')
 
             mempool_tx_nonce: Optional[int] = None
             req_id = get_req_id_from_log()
 
             if tag == 'mempool':
-                mempool_tx_nonce = self._mempool_client.get_mempool_tx_nonce(req_id=req_id, sender=account)
-                LOG.debug(f'Mempool tx count for: {account} - is: {mempool_tx_nonce}')
+                mempool_tx_nonce = self._mempool_client.get_mempool_tx_nonce(req_id=req_id, sender=addr.address)
+                LOG.debug(f'Mempool tx count for: {addr.address} - is: {mempool_tx_nonce}')
 
             elif (block is not None) and (block.sol_commit == SolCommit.Processed):
-                mempool_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=account)
-                LOG.debug(f'Pending tx count for: {account} - is: {mempool_tx_nonce}')
+                mempool_tx_nonce = self._mempool_client.get_pending_tx_nonce(req_id=req_id, sender=addr.address)
+                LOG.debug(f'Pending tx count for: {addr.address} - is: {mempool_tx_nonce}')
 
             if mempool_tx_nonce is None:
                 mempool_tx_nonce = 0
 
-            tx_cnt = self._core_api_client.get_state_tx_cnt(account, block)
+            tx_cnt = self._core_api_client.get_state_tx_cnt(addr, block)
             tx_cnt = max(tx_cnt, mempool_tx_nonce)
 
             return hex(tx_cnt)
@@ -695,11 +691,33 @@ class NeonRpcApiWorker:
             # LOG.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
 
+    def neon_getAccount(self, account: str, tag: Union[str, int, dict]) -> Dict[str, Any]:
+        addr = self._normalize_address(account)
+        block = self._process_block_tag(tag)
+        acct = self._core_api_client.get_neon_account_info(addr, block)
+        return dict(
+            address=addr.checksum_address,
+            transactionCount=hex(acct.tx_count),
+            balance=hex(acct.balance),
+            chain_id=hex(acct.chain_id),
+            solanaAddress=str(acct.pda_address),
+        )
+
+
     def _fill_transaction_receipt_answer(self, tx: NeonTxReceiptInfo, details: TxReceiptDetail.Type) -> dict:
         if details in {TxReceiptDetail.Eth, TxReceiptDetail.Neon}:
             log_list = self._filter_log_list(tx.neon_tx_res.log_list, False)
         else:
             log_list = list()
+
+        contract = NeonAddress.from_raw(tx.neon_tx.contract)
+        if contract:
+            contract = contract.checksum_address
+
+        to_addr = NeonAddress.from_raw(tx.neon_tx.to_addr)
+        if to_addr:
+            to_addr = to_addr.checksum_address
+
         res = tx.neon_tx_res
 
         receipt = {
@@ -708,11 +726,11 @@ class NeonRpcApiWorker:
             "type": hex(tx.neon_tx.tx_type),
             "blockHash": res.block_hash,
             "blockNumber": hex(res.block_slot),
-            "from": tx.neon_tx.addr,
-            "to": tx.neon_tx.to_addr,
+            "from": NeonAddress.from_raw(tx.neon_tx.addr).checksum_address,
+            "to": to_addr,
             "gasUsed": hex(res.gas_used),
             "cumulativeGasUsed": hex(res.sum_gas_used),
-            "contractAddress": tx.neon_tx.contract,
+            "contractAddress": contract,
             "logs": log_list,
             "status": hex(res.status),
             "logsBloom": "0x" + '0' * 512
@@ -871,22 +889,27 @@ class NeonRpcApiWorker:
         if r.tx_idx is not None:
             hex_tx_idx = hex(r.tx_idx)
 
+        to_addr = NeonAddress.from_raw(t.to_addr)
+        if to_addr:
+            to_addr = to_addr.checksum_address
+
         result = {
             "blockHash": r.block_hash,
             "blockNumber": hex_block_number,
             "hash": t.sig,
             "transactionIndex": hex_tx_idx,
             "type": hex(t.tx_type),
-            "from": t.addr,
+            "from": NeonAddress.from_raw(t.addr).checksum_address,
             "nonce": hex(t.nonce),
             "gasPrice": hex(t.gas_price),
             "gas": hex(t.gas_limit),
-            "to": t.to_addr,
+            "to": to_addr,
             "value": hex(t.value),
             "input": t.calldata,
             "v": hex(t.v),
             "r": hex(t.r),
             "s": hex(t.s),
+            "chainId": hex(t.chain_id) if t.has_chain_id() else None
         }
 
         return result
@@ -908,8 +931,8 @@ class NeonRpcApiWorker:
             neon_tx_receipt = NeonTxReceiptInfo(neon_tx, NeonTxResultInfo())
         return self._get_transaction(neon_tx_receipt)
 
-    def neon_getTransactionBySenderNonce(self, address: str, nonce: Union[int, str]) -> Optional[Dict[str, Any]]:
-        sender_addr = self._normalize_address(address).lower()
+    def neon_getTransactionBySenderNonce(self, account: str, nonce: Union[int, str]) -> Optional[Dict[str, Any]]:
+        addr = self._normalize_address(account)
         if isinstance(nonce, str):
             nonce = nonce.lower()
             if nonce[:2] == '0x':
@@ -919,10 +942,10 @@ class NeonRpcApiWorker:
         else:
             tx_nonce = nonce
 
-        neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_sender_nonce(sender_addr, tx_nonce)
+        neon_tx_receipt: NeonTxReceiptInfo = self._db.get_tx_by_sender_nonce(addr.address, tx_nonce)
         if neon_tx_receipt is None:
             neon_tx: MPNeonTxResult = self._mempool_client.get_pending_tx_by_sender_nonce(
-                get_req_id_from_log(), sender_addr, tx_nonce
+                get_req_id_from_log(), addr.address, tx_nonce
             )
             if neon_tx is None:
                 LOG.debug("Not found receipt")
@@ -952,7 +975,7 @@ class NeonRpcApiWorker:
             neon_tx_exec_cfg: NeonTxExecCfg = self._get_neon_tx_exec_cfg(neon_tx)
 
             result: MPTxSendResult = self._mempool_client.send_raw_transaction(
-                req_id=get_req_id_from_log(), neon_tx=neon_tx, neon_tx_exec_cfg=neon_tx_exec_cfg
+                get_req_id_from_log(), neon_tx, self._def_chain_id, neon_tx_exec_cfg
             )
 
             if result.code in (MPTxSendResultCode.Success, MPTxSendResultCode.AlreadyKnown):
@@ -1010,21 +1033,20 @@ class NeonRpcApiWorker:
         # There are several Proxies in the network with independent mempools,
         #   the network can switch between branches
         #   so the Proxy returns the good result if Neon Tx wasn't finalized
-        tx_sender = neon_tx.hex_sender
+        tx_sender = NeonAddress.from_raw(neon_tx.sender, neon_tx.chain_id)
         tx_nonce = int(neon_tx.nonce)
         block = self._process_block_tag(EthCommit.Finalized)
         state_tx_cnt = self._core_api_client.get_state_tx_cnt(tx_sender, block)
-        NonceTooLowError.raise_if_error(tx_sender, tx_nonce, state_tx_cnt)
+        NonceTooLowError.raise_if_error(tx_sender.address, tx_nonce, state_tx_cnt)
 
     def _get_neon_tx_exec_cfg(self, neon_tx: NeonTx) -> NeonTxExecCfg:
         gas_less_permit = False
         if neon_tx.gasPrice == 0:
-            gas_less_permit = self._has_gas_less_tx_permit(neon_tx.hex_sender, neon_tx.nonce, neon_tx.gasLimit)
+            tx_sender = NeonAddress.from_raw(neon_tx.sender)
+            gas_less_permit = self._has_gas_less_tx_permit(tx_sender, neon_tx.nonce, neon_tx.gasLimit)
 
         min_gas_price = self._gas_price.min_executable_gas_price
-        validator = NeonTxValidator(self._config, self._core_api_client, neon_tx, gas_less_permit, min_gas_price)
-        neon_tx_exec_cfg = validator.validate()
-
+        neon_tx_exec_cfg = self._neon_tx_validator.validate(neon_tx, gas_less_permit, min_gas_price)
         return neon_tx_exec_cfg
 
     def _get_transaction_by_index(self, block: SolBlockInfo, tx_idx: Union[str, int]) -> Optional[Dict[str, Any]]:
@@ -1084,8 +1106,8 @@ class NeonRpcApiWorker:
         account_list = storage.get_list()
         return [str(a) for a in account_list]
 
-    def eth_sign(self, address: str, data: str) -> str:
-        address = self._normalize_address(address)
+    def eth_sign(self, account: str, data: str) -> str:
+        address = self._normalize_address(account)
         try:
             data = bytes.fromhex(data[2:])
         except (Exception,):
@@ -1096,7 +1118,7 @@ class NeonRpcApiWorker:
             raise EthereumError(message='unknown account')
 
         message = str.encode(f'\x19Ethereum Signed Message:\n{len(data)}') + data
-        return str(account.private.sign_msg(message))
+        return str(account.private_key.sign_msg(message))
 
     def eth_signTransaction(self, tx: Dict[str, Any]) -> Dict[str, Any]:
         if 'from' not in tx:
@@ -1107,26 +1129,25 @@ class NeonRpcApiWorker:
         sender = self._normalize_address(sender, 'from-address')
 
         if 'to' in tx:
-            tx['to'] = self._normalize_address(tx['to'], 'to-address')
+            tx['to'] = self._normalize_address(tx['to'], 'to-address').checksum_address
 
         account = KeyStorage().get_key(sender)
         if not account:
             raise EthereumError(message='unknown account')
 
         if 'nonce' not in tx:
-            tx['nonce'] = self.eth_getTransactionCount(sender, EthCommit.Pending)
+            tx['nonce'] = self.eth_getTransactionCount(sender.address, EthCommit.Pending)
 
         if 'chainId' not in tx:
-            tx['chainId'] = hex(ElfParams().chain_id)
+            tx['chainId'] = hex(self._chain_id)
 
         try:
-            signed_tx = NeonAccount().sign_transaction(tx, account.private)
+            signed_tx = NeonAccount().sign_transaction(tx, account.private_key)
             raw_tx = signed_tx.rawTransaction.hex()
             neon_tx = NeonTx.from_string(bytearray.fromhex(raw_tx[2:]))
 
             tx.update({
-                'from': neon_tx.hex_sender,
-                'to': neon_tx.hex_to_address,
+                'from': sender.checksum_address,
                 'hash': neon_tx.hex_tx_sig,
                 'r': hex(neon_tx.r),
                 's': hex(neon_tx.s),
@@ -1138,7 +1159,7 @@ class NeonRpcApiWorker:
                 'tx': tx
             }
         except BaseException as exc:
-            LOG.error('Failed on sign transaction.', exc_info=exc)
+            LOG.error('Failed on sign transaction', exc_info=exc)
             raise InvalidParamError(message='bad transaction')
 
     def eth_sendTransaction(self, tx: Dict[str, Any]) -> str:
@@ -1186,18 +1207,23 @@ class NeonRpcApiWorker:
 
     @staticmethod
     def _mp_pool_tx(neon_tx_info: NeonTxInfo) -> Dict[str, Any]:
+        to_addr = NeonAddress.from_raw(neon_tx_info.to_addr)
+        if to_addr:
+            to_addr = to_addr.checksum_address
+
         return {
             'blockHash': '0x' + '0' * 64,
             'blockNumber': None,
             'transactionIndex': None,
-            'from': neon_tx_info.addr,
+            'from': NeonAddress.from_raw(neon_tx_info.addr).checksum_address,
             'gas': hex(neon_tx_info.gas_limit),
             'gasPrice': hex(neon_tx_info.gas_price),
             'hash': neon_tx_info.sig,
             'input': neon_tx_info.calldata,
             'nonce': hex(neon_tx_info.nonce),
-            'to': neon_tx_info.to_addr,
-            'value': hex(neon_tx_info.value)
+            'to': to_addr,
+            'value': hex(neon_tx_info.value),
+            'chainId': hex(neon_tx_info.chain_id) if neon_tx_info.has_chain_id() else None
         }
 
     def _mp_pool_queue(self, tx_list: List[NeonTxInfo]) -> Dict[str, Any]:
@@ -1250,7 +1276,8 @@ class NeonRpcApiWorker:
         LOG.debug(f'Call neon_emulate: {raw_signed_tx}')
 
         neon_tx = NeonTx.from_string(bytearray.fromhex(raw_signed_tx))
-        emulator_result = self._core_api_client.emulate_neon_tx(neon_tx)
+        chain_id = neon_tx.chain_id or self._def_chain_id
+        emulator_result = self._core_api_client.emulate_neon_tx(neon_tx, chain_id)
         return emulator_result.full_dict
 
     def neon_finalizedBlockNumber(self) -> str:

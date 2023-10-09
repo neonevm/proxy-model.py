@@ -15,7 +15,7 @@ LOG = logging.getLogger(__name__)
 
 
 class NewAccountNeonTxPrepStage(BaseNeonTxPrepStage):
-    name = EvmIxCodeName().get(EvmIxCode.CreateAccountV03)
+    name = EvmIxCodeName().get(EvmIxCode.CreateBalance)
 
     def complete_init(self) -> None:
         pass
@@ -28,8 +28,8 @@ class NewAccountNeonTxPrepStage(BaseNeonTxPrepStage):
         if self._is_account_exist():
             return tx_list_list
 
-        sender_addr = NeonAddress(self._ctx.neon_tx_info.addr)
-        ix = self._ctx.ix_builder.make_create_neon_account_ix(sender_addr)
+        neon_acct_info = self._ctx.core_api_client.get_neon_account_info(self._ctx.sender_address)
+        ix = self._ctx.ix_builder.make_create_neon_account_ix(neon_acct_info)
         tx = SolLegacyTx(self.name, [ix])
         tx_list_list.append([tx])
         return tx_list_list
@@ -39,14 +39,14 @@ class NewAccountNeonTxPrepStage(BaseNeonTxPrepStage):
             raise SenderAccountNotExists(self._ctx.neon_tx_info.addr)
 
     def _is_account_exist(self) -> bool:
-        sender_addr = self._ctx.neon_tx_info.addr
+        sender_addr = self._ctx.sender_address
         if self._ctx.is_stuck_tx():
             return True
         elif sender_addr is None:
             raise EthereumError('Sender address is NULL')
 
-        account_info = self._ctx.core_api_client.get_neon_account_info(sender_addr)
-        if account_info is None:
+        neon_acct_info = self._ctx.core_api_client.get_neon_account_info(sender_addr)
+        if neon_acct_info is None:
             if self._ctx.neon_tx_info.gas_price != 0:
                 raise EthereumError('Sender address does not exist')
             return False

@@ -94,7 +94,7 @@ class GasTank:
             return
 
         sender = neon_tx.addr
-        to = NeonAddress(neon_tx.to_addr)
+        to = NeonAddress.from_raw(neon_tx.to_addr)
         LOG.debug(f'from: {sender}, to: {to}')
 
         neon_tx_analyzer = self._neon_tx_analyzer_dict.get(to, None)

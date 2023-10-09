@@ -18,8 +18,6 @@ export $(python3 -c "for k,v in $ELF_PARAMS['value'].items(): print(f'{k}={v}')"
 export NUM_ACCOUNTS=30
 /spl/bin/create-test-accounts.sh $NUM_ACCOUNTS
 
-echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:StartScript {} NEON_TOKEN_MINT=$NEON_TOKEN_MINT"
-
 for i in $(seq 1 $NUM_ACCOUNTS); do
   ID_FILE="$HOME/.config/solana/id"
   if [ "$i" -gt "1" ]; then

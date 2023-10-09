@@ -92,7 +92,7 @@ class NeonTx(rlp.Serializable):
     def has_chain_id(self) -> bool:
         return self.v not in (0, 27, 28)
 
-    @cached_method
+    @cached_property
     def chain_id(self) -> Optional[int]:
         if not self.has_chain_id():
             return None
@@ -104,7 +104,7 @@ class NeonTx(rlp.Serializable):
             raise InvalidNeonTx(f"Invalid V value {self.v}")
 
     def _unsigned_msg_impl(self) -> bytes:
-        chain_id = self.chain_id()
+        chain_id = self.chain_id
         if not self.has_chain_id():
             return rlp.encode((
                 self.nonce, self.gasPrice, self.gasLimit, self.toAddress, self.value, self.callData
@@ -125,7 +125,7 @@ class NeonTx(rlp.Serializable):
         elif not self.has_chain_id():
             pass
         elif self.v >= 37:
-            vee = self.v - self.chain_id() * 2 - 8
+            vee = self.v - self.chain_id * 2 - 8
             assert vee in (27, 28)
         else:
             raise InvalidNeonTx(f"Invalid V value {self.v}")

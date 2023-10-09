@@ -4,14 +4,14 @@ import unittest
 
 from proxy.common_neon.neon_instruction import NeonIxBuilder
 from proxy.common_neon.utils.eth_proto import NeonTx
-from proxy.common_neon.address import NeonAddress, neon_2program
 from proxy.common_neon.config import Config
-from proxy.common_neon.constants import EVM_PROGRAM_ID
-from proxy.common_neon.solana_tx import SolAccountMeta
+from proxy.common_neon.solana_tx import SolAccountMeta, SolPubKey
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
-from proxy.common_neon.operator_resource_info import OpResInfo, OpResIdent
+from proxy.common_neon.operator_resource_info import OpResInfoBuilder, OpResInfo
 
 from proxy.mempool.mempool_executor_task_op_res import OpResInit
+
+from proxy.neon_core_api.neon_client import NeonClient
 
 from proxy.testing.solana_utils import wallet_path, WalletAccount
 from proxy.testing.testing_helpers import Proxy, NeonLocalAccount, SolClient
@@ -63,34 +63,36 @@ class FakeConfig(Config):
 
 class BlockedTest(unittest.TestCase):
     proxy: Proxy
+    chain_id: int
     eth_account: NeonLocalAccount
 
     @classmethod
     def setUpClass(cls):
         cls.proxy = Proxy()
+        cls.chain_id = cls.proxy.web3.eth.chain_id
         cls.eth_account = cls.proxy.create_signer_account(SEED)
         cls.config = config = FakeConfig()
         cls.solana = solana = SolClient(config)
+
+        neon_client = NeonClient(config)
 
         print("\ntest_retry_on_blocked_accounts.py setUpClass")
 
         wallet = WalletAccount(wallet_path())
 
         res_acct = wallet.get_acc()
-        cls.resource_iter = resource = OpResInfo.from_ident(OpResIdent(
-            public_key=str(res_acct.pubkey()),
+        cls.resource_iter = resource = OpResInfoBuilder(config).build_test_resource_info(
             private_key=res_acct.secret(),
             res_id=365
-        ))
-        OpResInit(config, solana).init_resource(resource)
+        )
+        OpResInit(config, solana, neon_client).init_resource(resource)
 
         res_single_acct = wallet.get_acc()
-        cls.resource_single = resource = OpResInfo.from_ident(OpResIdent(
-            public_key=str(res_single_acct.pubkey()),
+        cls.resource_single = resource = OpResInfoBuilder(config).build_test_resource_info(
             private_key=res_single_acct.secret(),
             res_id=366
-        ))
-        OpResInit(config, solana).init_resource(resource)
+        )
+        OpResInit(config, solana, neon_client).init_resource(resource)
 
         deployed_info = cls.proxy.compile_and_deploy_contract(cls.eth_account, TEST_RETRY_BLOCKED_365)
         cls.storage_contract = deployed_info.contract
@@ -99,10 +101,10 @@ class BlockedTest(unittest.TestCase):
 
         reid_eth = deployed_info.contract.address.lower()
         print('contract_eth', reid_eth)
-        cls.re_id, _ = re_id, _ = neon_2program(reid_eth)
+        cls.re_id = re_id = cls.proxy.get_account_info(reid_eth).pda_address
         print('contract', re_id)
 
-        cls.caller, _ = neon_2program(cls.eth_account.address)
+        cls.caller = cls.proxy.get_account_info(cls.eth_account.address).pda_address
 
     def create_blocked_transaction(self, resource: OpResInfo):
         print("\ncreate_blocked_transaction")
@@ -113,7 +115,7 @@ class BlockedTest(unittest.TestCase):
         print(f'blocked tx hash: {tx_store.tx_signed.hash.hex()}')
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
-        neon_ix_builder.init_operator_neon(NeonAddress.from_private_key(resource.secret_key))
+        neon_ix_builder.init_operator_neon(resource.neon_account_dict[self.chain_id])
 
         neon_tx = NeonTx.from_string(tx_store.tx_signed.rawTransaction)
         neon_ix_builder.init_neon_tx(neon_tx)

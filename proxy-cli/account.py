@@ -39,8 +39,8 @@ class AccountHandler:
             print(f'Unknown command {args.subcommand} for account', file=sys.stderr)
 
     def _execute_new(self, _):
-        eth_address = self._storage.generate_new()
-        print(f'Address: {{{ str(eth_address)[2:] }}}')
+        neon_address = self._storage.generate_new()
+        print(f'Address: {{{ neon_address.checksum_address[2:] }}}')
 
     def _execute_import(self, args):
         if args.file:
@@ -59,20 +59,20 @@ class AccountHandler:
         with open(file, 'r') as f:
             line = f.read()
             pk_key = bytes.fromhex(line)
-            eth_address = self._storage.import_private_key(pk_key)
-            print(f'Address: {{{ str(eth_address)[2:] }}}')
+            neon_address = self._storage.import_private_key(pk_key)
+            print(f'Address: {{{ neon_address.checksum_address[2:] }}}')
 
     def _execute_import_key(self, args):
         pk_key = bytes.fromhex(args.private_key[0])
-        eth_address = self._storage.import_private_key(pk_key)
-        print(f'Address: {{{ str(eth_address)[2:] }}}')
+        neon_address = self._storage.import_private_key(pk_key)
+        print(f'Address: {{{ neon_address.checksum_address[2:] }}}')
 
     def _execute_list(self, args):
-        eth_address_list = self._storage.get_list()
+        neon_address_list = self._storage.get_list()
         path = self._storage.storage_path()
-        for i, eth_address in enumerate(sorted(eth_address_list, key=lambda x: str(x))):
-            s = f'Account #{i}: {{{str(eth_address)[2:]}}} keystore:///{path}'
+        for i, neon_address in enumerate(sorted(neon_address_list, key=lambda x: str(x))):
+            s = f'Account #{i}: {{{ neon_address.checksum_address[2:] }}} keystore:///{path}'
             if args.private_key:
-                s += f' private: {{{ str(eth_address.private) }}}'
+                s += f' private: {{{ str(neon_address.private_key) }}}'
 
             print(s)

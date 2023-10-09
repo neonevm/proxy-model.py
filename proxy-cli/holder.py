@@ -4,7 +4,7 @@ import sys
 from typing import Optional
 
 from proxy.common_neon.solana_interactor import SolInteractor
-from proxy.common_neon.operator_resource_info import OpResIdent, OpResInfo
+from proxy.common_neon.operator_resource_info import OpResInfo
 from proxy.common_neon.neon_tx_stages import NeonTxStage, NeonCreateHolderAccountStage, NeonDeleteHolderAccountStage
 from proxy.common_neon.solana_tx_list_sender import SolTxListSender
 from proxy.common_neon.neon_instruction import NeonIxBuilder
@@ -12,7 +12,7 @@ from proxy.common_neon.constants import FINALIZED_HOLDER_TAG, HOLDER_TAG
 from proxy.common_neon.solana_tx import SolPubKey
 from proxy.common_neon.config import Config
 
-from .secret import get_res_ident_list
+from .secret import get_res_info_list
 
 
 class HolderHandler:
@@ -45,14 +45,13 @@ class HolderHandler:
 
     def _create_holder_account(self, args) -> None:
         op_key = SolPubKey.from_string(args.operator_key)
-        res_ident = self._find_op_res_by_holder_id(op_key, args.holder_id)
-        if res_ident is None:
+        res_info = self._find_op_res_by_holder_id(op_key, args.holder_id)
+        if res_info is None:
             return
 
-        res_info = OpResInfo.from_ident(res_ident)
         holder_info = self._solana.get_holder_account_info(res_info.holder_account)
         if holder_info is not None:
-            print(f'Holder account {res_ident.public_key}:{res_ident.res_id} already exist', file=sys.stderr)
+            print(f'Holder account {str(res_info)} already exist', file=sys.stderr)
             return
 
         size = self._config.holder_size
@@ -62,59 +61,55 @@ class HolderHandler:
         self._execute_stage(stage, res_info)
         print(
             f'Holder account {str(res_info.holder_account)} '
-            f'{res_ident.public_key}:{res_ident.res_id} is successfully created',
+            f'{str(res_info)} is successfully created',
             file=sys.stderr
         )
 
     def _delete_holder_account(self, args) -> None:
         holder_address = SolPubKey.from_string(args.holder_address)
-        res_ident = self._find_op_res_by_holder_address(holder_address)
-        if res_ident is None:
+        res_info = self._find_op_res_by_holder_address(holder_address)
+        if res_info is None:
             return
 
         holder_info = self._solana.get_holder_account_info(holder_address)
         if holder_info is None:
-            print(f'Holder account {res_ident.public_key}:{res_ident.res_id} does not exist', file=sys.stderr)
+            print(f'Holder account {str(res_info)} does not exist', file=sys.stderr)
             return
 
         if holder_info.tag not in {FINALIZED_HOLDER_TAG, HOLDER_TAG}:
-            print(f'Holder account {res_ident.public_key}:{res_ident.res_id} has wrong tag', file=sys.stderr)
+            print(f'Holder account {str(res_info)} has wrong tag', file=sys.stderr)
             return
 
-        res_info = OpResInfo.from_ident(res_ident)
         builder = NeonIxBuilder(res_info.public_key)
         stage = NeonDeleteHolderAccountStage(builder, res_info.holder_account)
         self._execute_stage(stage, res_info)
         print(
             f'Holder account {str(res_info.holder_account)} '
-            f'{res_ident.public_key}:{res_ident.res_id} is successfully deleted',
+            f'{str(res_info)} is successfully deleted',
             file=sys.stderr
         )
 
     @staticmethod
-    def _find_op_res_by_holder_address(holder_address: SolPubKey) -> Optional[OpResIdent]:
-        res_ident_list = get_res_ident_list()
-        for res_ident in res_ident_list:
-            res_info = OpResInfo.from_ident(res_ident)
+    def _find_op_res_by_holder_address(holder_address: SolPubKey) -> Optional[OpResInfo]:
+        res_info_list = get_res_info_list()
+        for res_info in res_info_list:
             if res_info.holder_account == holder_address:
-                return res_ident
+                return res_info
 
         print(f'Unknown holder account: {str(holder_address)}', file=sys.stderr)
         return None
 
     @staticmethod
-    def _find_op_res_by_holder_id(op_key: SolPubKey, res_id: int) -> Optional[OpResIdent]:
-        op_key = str(op_key)
+    def _find_op_res_by_holder_id(op_key: SolPubKey, res_id: int) -> Optional[OpResInfo]:
+        res_info_list = get_res_info_list()
+        for res_info in res_info_list:
+            if res_info.public_key == op_key and res_info.res_id == res_id:
+                return res_info
 
-        res_ident_list = get_res_ident_list()
-        for res_ident in res_ident_list:
-            if res_ident.public_key == op_key and res_ident.res_id == res_id:
-                return res_ident
-
-        print(f'Unknown holder account: {op_key}:{res_id}', file=sys.stderr)
+        print(f'Unknown holder account: {str(op_key)}:{res_id}', file=sys.stderr)
         return None
 
-    def _execute_stage(self, stage: NeonTxStage, op_res_info: OpResInfo) -> None:
+    def _execute_stage(self, stage: NeonTxStage, res_info: OpResInfo) -> None:
         stage.build()
-        tx_sender = SolTxListSender(self._config, self._solana, op_res_info.signer)
+        tx_sender = SolTxListSender(self._config, self._solana, res_info.signer)
         tx_sender.send([stage.tx])

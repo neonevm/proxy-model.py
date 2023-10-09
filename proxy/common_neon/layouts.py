@@ -58,9 +58,6 @@ ACCOUNT_INFO_LAYOUT = Struct(
     "is_rw_blocked" / Int8ul,
 )
 
-CREATE_ACCOUNT_LAYOUT = Struct(
-    "ether" / Bytes(20),
-)
 
 ACCOUNT_LOOKUP_TABLE_LAYOUT = Struct(
     "type" / Int32ul,

@@ -2,7 +2,6 @@ import logging
 
 from typing import Dict, Any, List, Optional
 
-from ..common_neon.address import NeonAddress
 from ..common_neon.elf_params import ElfParams
 from ..common_neon.data import NeonEmulatorResult
 from ..common_neon.utils.eth_proto import NeonTx
@@ -31,12 +30,11 @@ class _GasTxBuilder:
             116, 202, 70, 182, 176, 194, 195, 168, 185, 132, 161, 142, 203, 57, 245, 90
         ])
         self._signer = SolAccount.from_seed(operator_key)
-        neon_address = NeonAddress.from_private_key(operator_key)
         self._block_hash = SolBlockHash.from_string('4NCYB3kRT8sCNodPNuCZo8VUh4xqpBQxsxed2wd9xaD4')
 
         self._neon_ix_builder = NeonIxBuilder(self._signer.pubkey())
         self._neon_ix_builder.init_iterative(holder.pubkey())
-        self._neon_ix_builder.init_operator_neon(neon_address)
+        self._neon_ix_builder.init_operator_neon(SolPubKey.default())
 
     def build_tx(self, tx: NeonTx, account_list: List[SolAccountMeta]) -> SolLegacyTx:
         self._neon_ix_builder.init_neon_tx(tx)
@@ -63,11 +61,12 @@ class _GasTxBuilder:
 class GasEstimate:
     _small_gas_limit = 30_000  # openzeppelin size check
     _tx_builder = _GasTxBuilder()
-    _u256_max = int.from_bytes(bytes([0xFF] * 32), "big")
+    _u256_max = int.from_bytes(bytes([0xFF] * 32), 'big')
 
-    def __init__(self, core_api_client: NeonCoreApiClient, request: Dict[str, Any]):
+    def __init__(self, core_api_client: NeonCoreApiClient, def_chain_id: int, request: Dict[str, Any]):
         self._sender = request.get('from')
         self._contract = request.get('to')
+        self._def_chain_id = def_chain_id
         self._data = request.get('data')
         self._value = request.get('value')
         self._gas = request.get('gas', hex(self._u256_max))
@@ -82,7 +81,7 @@ class GasEstimate:
 
     def execute(self, block: SolBlockInfo):
         self._emulator_result = self._core_api_client.emulate(
-            self._contract, self._sender, self._data, self._value,
+            self._contract, self._sender, self._def_chain_id, self._data, self._value,
             gas_limit=self._gas, block=block, check_result=True,
         )
 
@@ -90,7 +89,7 @@ class GasEstimate:
         if self._cached_tx_cost_size is not None:
             return self._cached_tx_cost_size
 
-        to_addr = bytes.fromhex((self._contract or '0x')[2:])
+        to_addr = bytes.fromhex(self._contract.address)[2:] if self._contract else bytes()
         data = bytes.fromhex((self._data or '0x')[2:])
         value = int((self._value or '0x0')[2:], 16)
         gas = int(self._gas[2:], 16) if self._gas else None
@@ -124,7 +123,8 @@ class GasEstimate:
         self._cached_tx_cost_size = self._holder_tx_cost(self._tx_builder.len_neon_tx)
         return self._cached_tx_cost_size
 
-    def _holder_tx_cost(self, neon_tx_len: int) -> int:
+    @staticmethod
+    def _holder_tx_cost(neon_tx_len: int) -> int:
         # TODO: should be moved to neon-core-api
         holder_msg_size = 950
         return ((neon_tx_len // holder_msg_size) + 1) * 5000
