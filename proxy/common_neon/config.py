@@ -150,7 +150,7 @@ class Config(DBConfig):
         self._op_acct_set = self._env_sol_acct_set('OPERATOR_ACCOUNT_LIST')
 
         # Integration Indexer with Tracer API
-        self._slot_processing_delay = self._env_num('SLOT_PROCESSING_DELAY', 0, 0, 32)
+        self._slot_processing_delay = self._env_num('SLOT_PROCESSING_DELAY', 0, 0, 64)
         self._ch_dsn_list = self._env_dsn_list('CLICKHOUSE_DSN_LIST')
 
         # Reindexing settings

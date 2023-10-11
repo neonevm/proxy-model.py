@@ -223,7 +223,7 @@ class Indexer:
 
         if self._last_tracer_slot is not None:
             stop_slot = min(stop_slot, self._last_tracer_slot)
-        if stop_slot < start_slot:
+        if stop_slot <= start_slot:
             return
         dctx.set_slot_range(start_slot, stop_slot, sol_commit)
 
@@ -299,6 +299,7 @@ class Indexer:
             if result:
                 self._last_finalized_slot = self._solana.get_finalized_slot()
                 self._last_tracer_slot = self._tracer_api.max_slot()
+                self._commit_progress_stat()
         return result
 
     def _is_done_parsing(self) -> bool:
@@ -331,7 +332,7 @@ class Indexer:
             return
 
         # Don't parse not-finalized blocks on reindexing of old blocks
-        if self._db.is_reindexing_mode():
+        if self._db.is_reindexing_mode() or self._last_tracer_slot:
             return
 
         # If there were a lot of transactions in the finalized state,
