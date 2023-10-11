@@ -41,8 +41,14 @@ class TracerAPIClient:
             return None
 
         request = f'''
-            SELECT MAX(slot)-{self._config.slot_processing_delay}
+            SELECT DISTINCT slot
               FROM events.update_account_distributed
+             WHERE slot >= (
+            SELECT max(slot) - ({self._config.slot_processing_delay} * 4)
+              FROM events.update_account_distributed
+            )
+             ORDER BY slot DESC
+             LIMIT {self._config.slot_processing_delay}
         '''
 
         while True:
@@ -55,7 +61,7 @@ class TracerAPIClient:
                 if ch_conn.ch_client is None:
                     ch_conn.ch_client = ch_get_client(dsn=ch_conn.ch_dsn)
 
-                slot = ch_conn.ch_client.query(request).result_set[0][0]
+                slot = ch_conn.ch_client.query(request).result_set[-1][0]
                 return slot
 
             except BaseException as exc:

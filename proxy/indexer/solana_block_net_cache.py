@@ -42,6 +42,8 @@ class SolBlockNetCache:
         while base_slot < ctx.stop_slot:
             slot_list = self._get_slot_list(ctx, base_slot)
             self._cache_block_list(ctx, base_slot, slot_list)
+            if base_slot == slot_list[-1]:
+                self._raise_error(ctx, base_slot, f'Failed to move forward on slot {base_slot}')
             base_slot = slot_list[-1]
 
             block_queue = self._build_block_queue(ctx, root_slot, base_slot)
