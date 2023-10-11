@@ -1256,6 +1256,7 @@ class NeonRpcApiWorker:
             if result is None:
                 raise EthereumError(message='Failed to read Neon EVM params from Solana cluster. Try again later')
             elf_params.set_elf_param_dict(result.elf_param_dict, result.last_deployed_slot)
+            self._last_elf_params_time = now
 
         always_allowed_method_set = {
             "eth_chainId",
