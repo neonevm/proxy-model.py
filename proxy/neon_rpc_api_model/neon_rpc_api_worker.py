@@ -229,7 +229,9 @@ class NeonRpcApiWorker:
 
         return self._gas_tank.has_gas_less_tx_permit(account)
 
-    def eth_estimateGas(self, param: Dict[str, Any]) -> str:
+    def eth_estimateGas(self, param: Dict[str, Any], tag: Union[str, int, dict] = 'latest') -> str:
+        block = self._process_block_tag(tag)
+
         if not isinstance(param, dict):
             raise InvalidParamError('invalid param')
         if 'from' in param:
@@ -239,7 +241,7 @@ class NeonRpcApiWorker:
 
         try:
             calculator = GasEstimate(self._core_api_client, param)
-            calculator.execute()
+            calculator.execute(block)
             return hex(calculator.estimate())
 
         except EthereumError:
@@ -616,7 +618,7 @@ class NeonRpcApiWorker:
             ret['nonce'] = None
         return ret
 
-    def eth_call(self, obj: dict, tag: Union[int, str, dict]) -> str:
+    def eth_call(self, obj: dict, tag: Union[int, str, dict], state: Optional[dict] = None) -> str:
         """Executes a new message call immediately without creating a transaction on the blockchain.
            Parameters
             obj - The transaction call object
@@ -640,12 +642,15 @@ class NeonRpcApiWorker:
             contract = obj.get('to')
             data = obj.get('data')
             value = obj.get('value')
+            gas_limit = obj.get('gas')
 
             retry_idx = 0
             retry_on_fail = self._config.retry_on_fail
             while True:
                 try:
-                    emulator_result = self._core_api_client.emulate(contract, sender, data, value, block, True)
+                    emulator_result = self._core_api_client.emulate(
+                        contract, sender, data, value, gas_limit, block=block, check_result=True
+                    )
                     return '0x' + emulator_result.result
 
                 except RescheduleError:

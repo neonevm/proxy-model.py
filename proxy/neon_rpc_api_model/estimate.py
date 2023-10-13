@@ -10,6 +10,7 @@ from ..common_neon.neon_instruction import NeonIxBuilder
 from ..common_neon.solana_alt_limit import ALTLimit
 from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockHash, SolTxSizeError
 from ..common_neon.solana_tx_legacy import SolLegacyTx
+from ..common_neon.solana_block import SolBlockInfo
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 
@@ -69,6 +70,7 @@ class GasEstimate:
         self._contract = request.get('to')
         self._data = request.get('data')
         self._value = request.get('value')
+        self._gas = request.get('gas', hex(self._u256_max))
 
         self._core_api_client = core_api_client
 
@@ -78,10 +80,10 @@ class GasEstimate:
         self._account_list: List[SolAccountMeta] = list()
         self._emulator_result = NeonEmulatorResult()
 
-    def execute(self):
+    def execute(self, block: SolBlockInfo):
         self._emulator_result = self._core_api_client.emulate(
             self._contract, self._sender, self._data, self._value,
-            check_result=True
+            gas_limit=self._gas, block=block, check_result=True,
         )
 
     def _tx_size_cost(self) -> int:
@@ -91,11 +93,12 @@ class GasEstimate:
         to_addr = bytes.fromhex((self._contract or '0x')[2:])
         data = bytes.fromhex((self._data or '0x')[2:])
         value = int((self._value or '0x0')[2:], 16)
+        gas = int(self._gas[2:], 16) if self._gas else None
 
         neon_tx = NeonTx(
             nonce=self._u256_max,
             gasPrice=self._u256_max,
-            gasLimit=self._u256_max,
+            gasLimit=gas,
             toAddress=to_addr,
             value=value,
             callData=data,
