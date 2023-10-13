@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Dict, Union
+from typing import List, Dict
 from dataclasses import dataclass
 
 from .config import Config
@@ -8,6 +8,9 @@ from .solana_tx import SolAccount, SolPubKey
 from .evm_config import EVMConfig
 from .utils.utils import cached_method
 from .address import NeonAddress, perm_account_seed, neon_account_with_seed
+
+from ..neon_core_api.neon_client_base import NeonClientBase
+from ..neon_core_api.neon_layouts import NeonAccountInfo
 
 
 @dataclass(frozen=True)
@@ -31,20 +34,21 @@ class OpHolderInfo:
 @dataclass(frozen=True)
 class OpKeyInfo:
     signer: SolAccount
-    neon_address_list: List[NeonAddress]
-    neon_account_dict: Dict[int, SolPubKey]
+    neon_account_dict: Dict[int, NeonAccountInfo]
     holder_info_list: List[OpHolderInfo]
 
     @staticmethod
     def from_signer_account(
         signer: SolAccount,
-        neon_address_list: List[NeonAddress],
+        neon_account_list: List[NeonAccountInfo],
         holder_info_list: List[OpHolderInfo]
     ) -> OpKeyInfo:
         return OpKeyInfo(
             signer=signer,
-            neon_address_list=neon_address_list,
-            neon_account_dict=dict(),
+            neon_account_dict={
+                neon_acct.neon_addr.chain_id: neon_acct
+                for neon_acct in neon_account_list
+            },
             holder_info_list=holder_info_list
         )
 
@@ -82,11 +86,7 @@ class OpResInfo:
         return self.key_info.signer
 
     @property
-    def neon_address_list(self) -> List[NeonAddress]:
-        return self.key_info.neon_address_list
-
-    @property
-    def neon_account_dict(self) -> Dict[int, SolPubKey]:
+    def neon_account_dict(self) -> Dict[int, NeonAccountInfo]:
         return self.key_info.neon_account_dict
 
     @property
@@ -111,8 +111,9 @@ class OpResInfo:
 
 
 class OpResInfoBuilder:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, neon_client: NeonClientBase):
         self._config = config
+        self._neon_client = neon_client
 
     def build_key_list(self, secret_list: List[bytes]) -> List[OpKeyInfo]:
         chain_id_list = EVMConfig().chain_id_list
@@ -122,8 +123,10 @@ class OpResInfoBuilder:
 
         for private_key in secret_list:
             signer = SolAccount.from_seed(private_key)
-            neon_addr_list = [
-                NeonAddress.from_private_key(private_key, chain_id)
+            neon_acct_list = [
+                self._neon_client.get_neon_account_info(
+                    NeonAddress.from_private_key(private_key, chain_id)
+                )
                 for chain_id in chain_id_list
             ]
             holder_info_list = [
@@ -133,31 +136,32 @@ class OpResInfoBuilder:
 
             key_info_list.append(OpKeyInfo.from_signer_account(
                 signer,
-                neon_addr_list,
+                neon_acct_list,
                 holder_info_list
             ))
         return key_info_list
 
-    def build_resource_list(self, key_info_list: List[Union[bytes, OpKeyInfo]]) -> List[OpResInfo]:
+    @staticmethod
+    def build_resource_list(key_info_list: List[OpKeyInfo]) -> List[OpResInfo]:
         if not len(key_info_list):
             return list()
-        if isinstance(key_info_list[0], bytes):
-            key_info_list = self.build_key_list(key_info_list)
 
         return [
-            OpResInfo(OpKeyInfo.from_signer_account(key_info.signer, key_info.neon_address_list, []), holder_info)
+            OpResInfo(key_info, holder_info)
             for key_info in key_info_list
             for holder_info in key_info.holder_info_list
         ]
 
-    @staticmethod
-    def build_test_resource_info(private_key: bytes, res_id: int) -> OpResInfo:
-        chain_id_list = EVMConfig().chain_id_list
-        signer = SolAccount.from_seed(private_key)
-        neon_addr_list = [
+
+def build_test_resource_info(neon_client: NeonClientBase, private_key: bytes, res_id: int) -> OpResInfo:
+    chain_id_list = EVMConfig().chain_id_list
+    signer = SolAccount.from_seed(private_key)
+    neon_acct_list = [
+        neon_client.get_neon_account_info(
             NeonAddress.from_private_key(private_key, chain_id)
-            for chain_id in chain_id_list
-        ]
-        holder_info = OpHolderInfo.from_public_key(signer.pubkey(), res_id)
-        key_info = OpKeyInfo.from_signer_account(signer, neon_addr_list, [holder_info])
-        return OpResInfo(key_info, holder_info)
+        )
+        for chain_id in chain_id_list
+    ]
+    holder_info = OpHolderInfo.from_public_key(signer.pubkey(), res_id)
+    key_info = OpKeyInfo.from_signer_account(signer, neon_acct_list, [holder_info])
+    return OpResInfo(key_info, holder_info)

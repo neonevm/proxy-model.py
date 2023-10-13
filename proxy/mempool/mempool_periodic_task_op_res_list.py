@@ -1,3 +1,5 @@
+from ..common_neon.evm_config import EVMConfig
+
 from .executor_mng import MPExecutorMng
 from .mempool_api import MPOpResGetListRequest, MPOpResGetListResult
 from .mempool_periodic_task import MPPeriodicTaskLoop
@@ -13,7 +15,12 @@ class MPOpResGetListTaskLoop(MPPeriodicTaskLoop[MPOpResGetListRequest, MPOpResGe
         self._op_res_mng = op_res_mng
 
     def _submit_request(self) -> None:
-        mp_req = MPOpResGetListRequest(req_id=self._generate_req_id())
+        evm_config = EVMConfig()
+        if not evm_config.has_config():
+            self._sleep_sec = self._bad_recheck_sleep_sec
+            return
+
+        mp_req = MPOpResGetListRequest(req_id=self._generate_req_id(), evm_config_data=evm_config.evm_config_data)
         self._submit_request_to_executor(mp_req)
 
     def _process_error(self, mp_req: MPOpResGetListRequest) -> None:

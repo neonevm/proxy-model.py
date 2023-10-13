@@ -16,7 +16,7 @@ from eth_account import Account
 
 from proxy.common_neon.address import NeonAddress
 
-from .secret import get_key_info_list, get_token_name, get_token_dict
+from .secret import get_key_info_list, get_token_name, get_token_name_list
 
 
 class NeonHandler:
@@ -40,7 +40,7 @@ class NeonHandler:
         n.withdraw_parser.add_argument('dest_address', type=str, help='destination address for withdraw')
         n.withdraw_parser.add_argument('amount', type=int, help='withdrawing amount')
 
-        token_name_list = list(get_token_dict().values())
+        token_name_list = get_token_name_list()
 
         token_list = '|'.join(token_name_list + [name + NeonHandler._percent_postfix for name in token_name_list])
         n.withdraw_parser.add_argument(
@@ -64,9 +64,9 @@ class NeonHandler:
         key_info_list = get_key_info_list()
 
         neon_acct_dict = {
-            neon_addr: self._proxy(neon_addr.chain_id).get_balance(Address(bytes(neon_addr)))
+            neon_acct.neon_addr: self._proxy(neon_acct.chain_id).get_balance(Address(bytes(neon_acct.neon_addr)))
             for key_info in key_info_list
-            for neon_addr in key_info.neon_address_list
+            for neon_acct in key_info.neon_account_dict.values()
         }
         return neon_acct_dict
 
@@ -142,7 +142,7 @@ class NeonHandler:
         if dest_addr is None:
             return
 
-        token_name_list = list(get_token_dict().values())
+        token_name_list = get_token_name_list()
         token_set = set(token_name_list + [name + self._percent_postfix for name in token_name_list] + [self._percent])
 
         amount = Wei(args.amount)

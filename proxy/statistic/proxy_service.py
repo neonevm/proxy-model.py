@@ -15,6 +15,7 @@ from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.address import NeonAddress
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
+from ..neon_core_api.neon_layouts import EVMTokenInfo
 
 
 class ProxyStatDataPeeker(StatDataPeeker):
@@ -23,43 +24,43 @@ class ProxyStatDataPeeker(StatDataPeeker):
         self._stat_service = stat_srv
         self._core_api_client = NeonCoreApiClient(config)
 
-        self._sol_account_list: List[SolPubKey] = list()
-        self._neon_account_list: List[NeonAddress] = list()
+        self._sol_acct_list: List[SolPubKey] = list()
+        self._neon_addr_list: List[NeonAddress] = list()
+        self._token_info_dict: Dict[int, EVMTokenInfo] = dict()
 
     def set_op_account_list(self, op_list: NeonOpResListData) -> None:
-        self._sol_account_list = list(set(op_list.sol_account_list))
-        self._neon_account_list = list(set(op_list.neon_account_list))
+        self._sol_acct_list = list(set(op_list.sol_account_list))
+        self._neon_addr_list = list(set(op_list.neon_address_list))
+        self._token_info_dict = {token.chain_id: token for token in op_list.token_info_list}
 
     async def _run(self) -> None:
         await super()._run()
         self._stat_operator_balance()
 
-    @staticmethod
-    def _get_token_name(_: int) -> str:
-        # TODO: fix token names
-        return 'NEON'
+    def _get_token_name(self, chain_id: int) -> str:
+        return self._token_info_dict[chain_id].token_name
 
     def _stat_operator_balance(self) -> None:
         sol_total_balance = Decimal(0)
-        sol_balance_list = self._solana.get_sol_balance_list(self._sol_account_list)
-        for sol_account, balance in zip(self._sol_account_list, sol_balance_list):
+        sol_balance_list = self._solana.get_sol_balance_list(self._sol_acct_list)
+        for sol_account, balance in zip(self._sol_acct_list, sol_balance_list):
             balance = Decimal(balance) / (10 ** 9)
             sol_total_balance += balance
             self._stat_service.commit_op_sol_balance(str(sol_account), balance)
         self._stat_service.commit_op_sol_balance('TOTAL', sol_total_balance)
 
-        token_total_balance: Dict[str, Decimal] = dict()
-        neon_layout_list = self._core_api_client.get_neon_account_info_list(self._neon_account_list)
-        for neon_layout in neon_layout_list:
-            if neon_layout.balance == 0:
+        token_balance_dict: Dict[str, Decimal] = dict()
+        neon_acct_list = self._core_api_client.get_neon_account_info_list(self._neon_addr_list)
+        for neon_acct in neon_acct_list:
+            if neon_acct.balance == 0:
                 continue
 
-            token_name = self._get_token_name(neon_layout.chain_id)
-            balance = Decimal(neon_layout.balance) / (10 ** 18)
-            token_total_balance[token_name] = token_total_balance.get(token_name, Decimal(0)) + balance
-            self._stat_service.commit_op_neon_balance(neon_layout.neon_addr.address, token_name, balance)
+            token_name = self._get_token_name(neon_acct.chain_id)
+            balance = Decimal(neon_acct.balance) / (10 ** 18)
+            token_balance_dict[token_name] = token_balance_dict.get(token_name, Decimal(0)) + balance
+            self._stat_service.commit_op_neon_balance(neon_acct.neon_addr.checksum_address, token_name, balance)
 
-        for token_name, balance in token_total_balance.items():
+        for token_name, balance in token_balance_dict.items():
             self._stat_service.commit_op_neon_balance('TOTAL', token_name, balance)
 
 

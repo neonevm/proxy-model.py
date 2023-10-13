@@ -1,11 +1,10 @@
 from typing import List
 
-
 from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.config import Config
 from ..common_neon.solana_tx import SolPubKey
 
-from ..neon_core_api.neon_client import NeonClient
+from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 from ..neon_core_api.neon_layouts import HolderStatus
 
 from .indexed_objects import NeonIndexedBlockInfo, NeonIndexedHolderInfo, NeonIndexedTxInfo
@@ -15,7 +14,7 @@ class StuckObjectValidator:
     def __init__(self, config: Config, solana: SolInteractor):
         self._config = config
         self._solana = solana
-        self._neon_client = NeonClient(config)
+        self._core_api_client = NeonCoreApiClient(config)
         self._last_slot = 0
 
     def validate_block(self, neon_block: NeonIndexedBlockInfo) -> None:
@@ -50,10 +49,7 @@ class StuckObjectValidator:
         neon_block.fail_neon_tx_list(failed_tx_list)
 
     def _is_valid_holder(self, holder_acct: str, neon_tx_sig: str) -> bool:
-        holder_info = self._neon_client.get_holder_account_info(SolPubKey.from_string(holder_acct))
-        if holder_info is None:
-            return False
-
+        holder_info = self._core_api_client.get_holder_account_info(SolPubKey.from_string(holder_acct))
         if holder_info.neon_tx_sig == neon_tx_sig:
-            return holder_info.status != HolderStatus.Finalized
+            return holder_info.status == HolderStatus.Active
         return False

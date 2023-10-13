@@ -8,12 +8,11 @@ from typing import Optional, Dict, Any, Union, List
 
 from .neon_client import NeonClient
 from .neon_client_base import NeonClientBase
-from .neon_layouts import NeonAccountInfo, NeonContractInfo, EVMConfigData, HolderAccountInfo
+from .neon_layouts import NeonAccountInfo, NeonContractInfo, EVMConfigInfo, HolderAccountInfo
 
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.data import NeonEmulatorResult, NeonEmulatorExitStatus
-from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import EthereumError
 from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.solana_tx import SolCommit, SolPubKey
@@ -60,19 +59,16 @@ class _Client:
     @cached_property
     def _client(self) -> requests.Session:
         client = requests.Session()
-        client.headers.update(self._headers)
+        client.headers = self._headers
         return client
 
     def _close(self) -> None:
         self._client.close()
 
     def call(self, method: _MethodName, request: RPCRequest) -> RPCResponse:
-        return self._post(self._call_url_map[method], request)
-
-    def _post(self, url: str, request: RPCRequest) -> RPCResponse:
         raw_response: Optional[requests.Response] = None
         try:
-            raw_response = self._client.post(url, json=request)
+            raw_response = self._client.post(self._call_url_map[method], json=request)
             # TODO: strange workflow in neon-core-api
             # raw_response.raise_for_status()
             return raw_response.json()
@@ -131,10 +127,8 @@ class NeonCoreApiClient(NeonClientBase):
         if contract:
             contract = contract.address
 
-        if data is not None:
-            if data[:2] in {'0x', '0X'}:
-                data = data[2:]
-            data = list(bytes.fromhex(data))
+        if (data is not None) and (data[:2] in {'0x', '0X'}):
+            data = data[2:]
 
         if not value:
             value = '0x0'
@@ -144,21 +138,21 @@ class NeonCoreApiClient(NeonClientBase):
         if isinstance(gas_limit, int):
             gas_limit = hex(value)
 
-        token_mint = str(EVMConfig().neon_token_mint)
-
         request = dict(
-            token_mint=token_mint,
-            chain_id=chain_id,
-            max_steps_to_execute=self._config.max_evm_step_cnt_emulate,
-            cached_accounts=None,
-            solana_accouts=None,
-            sender=sender,
-            contract=contract,
-            value=value,
-            data=data,
-            gas_limit=None
-        )
+            step_limit=self._config.max_evm_step_cnt_emulate,
+            accounts=[],
+            tx={
+                'from': sender,
+                'to': contract,
+                'value': value,
+                'data': data,
+                'chain_id': chain_id,
 
+                # 'nonce': None,
+                # 'gas_limit': gas_limit,
+                # 'access_list': None
+            },
+        )
         request = self._add_block(request, block)
         response = self._call(_MethodName.emulate, request)
         self._check_emulated_error(response)
@@ -169,7 +163,7 @@ class NeonCoreApiClient(NeonClientBase):
 
     def emulate_neon_tx(self, neon_tx: NeonTx, chain_id: int) -> NeonEmulatorResult:
         return self.emulate(
-            NeonAddress.from_raw(neon_tx.to_address, chain_id),
+            NeonAddress.from_raw(neon_tx.toAddress, chain_id),
             NeonAddress.from_raw(neon_tx.sender, chain_id),
             chain_id,
             neon_tx.hex_call_data,
@@ -221,12 +215,12 @@ class NeonCoreApiClient(NeonClientBase):
         block: Optional[SolBlockInfo] = None
     ) -> Optional[NeonContractInfo]:
         request = dict(
-            contract=addr
+            contract=addr.address
         )
         request = self._add_block(request, block)
 
         response = self._call(_MethodName.get_neon_contract_info, request)
-        json_contract = response.get('value')
+        json_contract = response.get('value')[0]
         return NeonContractInfo.from_json(addr, json_contract)
 
     def get_state_tx_cnt(
@@ -239,10 +233,10 @@ class NeonCoreApiClient(NeonClientBase):
             neon_acct_info = addr
         return neon_acct_info.tx_count
 
-    def get_evm_config(self, last_deployed_slot: int) -> EVMConfigData:
+    def get_evm_config(self, last_deployed_slot: int) -> EVMConfigInfo:
         response = self._call(_MethodName.get_config, dict())
         json_cfg = response.get('value')
-        return EVMConfigData.from_json(last_deployed_slot, json_cfg)
+        return EVMConfigInfo.from_json(last_deployed_slot, json_cfg)
 
     def get_holder_account_info(self, addr: SolPubKey) -> HolderAccountInfo:
         request = dict(pubkey=str(addr))

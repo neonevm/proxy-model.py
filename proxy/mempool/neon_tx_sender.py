@@ -107,7 +107,7 @@ class NeonTxSendStrategyExecutor:
             LOG.error('Failed to cancel tx', exc_info=exc)
 
     def _init_state_tx_cnt(self) -> None:
-        state_tx_cnt = self._ctx.core_api_client.get_state_tx_cnt(self._ctx.neon_tx_info.addr)
+        state_tx_cnt = self._ctx.core_api_client.get_state_tx_cnt(self._ctx.sender_address)
         if self._ctx.has_good_sol_tx_receipt():
             state_tx_cnt = max(state_tx_cnt, self._ctx.neon_tx_info.nonce)
         self._ctx.set_state_tx_cnt(state_tx_cnt)

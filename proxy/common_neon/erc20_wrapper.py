@@ -114,7 +114,7 @@ class ERC20Wrapper:
         LOG.debug(f'tx_deploy_receipt: {tx_deploy_receipt}')
         LOG.debug(f'deploy status: {tx_deploy_receipt.status}')
         self.neon_contract_address = ChecksumAddress(tx_deploy_receipt.contractAddress)
-        self.solana_contract_address = self.proxy.neon.neon_getAccount(self.neon_contract_address).solanaAddress
+        self.solana_contract_address = self.proxy.neon.get_neon_account(self.neon_contract_address).solanaAddress
 
         self.erc20 = self.proxy.eth.contract(address=self.neon_contract_address, abi=self.wrapper['abi'])
 

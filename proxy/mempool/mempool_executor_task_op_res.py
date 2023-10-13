@@ -1,7 +1,10 @@
 import logging
 from typing import List
 
-from .mempool_api import MPOpResGetListResult, MPOpResInitRequest, MPOpResInitResult, MPOpResInitResultCode
+from .mempool_api import (
+    MPOpResGetListRequest, MPOpResGetListResult,
+    MPOpResInitRequest, MPOpResInitResult, MPOpResInitResultCode
+)
 from .mempool_executor_task_base import MPExecutorBaseTask
 
 from ..common_neon.config import Config
@@ -78,11 +81,10 @@ class OpResInit:
         tx_sender.send([stage.tx])
 
     def _create_neon_account(self, builder: NeonIxBuilder, resource: OpResInfo):
-        for neon_addr in resource.neon_address_list:
-            neon_acct_info = self._neon_client.get_neon_account_info(neon_addr)
-            neon_addr_str = f'{neon_addr.address}:{neon_addr.chain_id}'
+        for neon_acct in resource.neon_account_dict.values():
+            neon_addr_str = f'{neon_acct.neon_addr.checksum_address}:{neon_acct.chain_id}'
 
-            sol_addr = neon_acct_info.pda_address
+            sol_addr = neon_acct.pda_address
             sol_acct_info = self._solana.get_account_info(sol_addr)
             if not sol_acct_info:
                 pass
@@ -92,9 +94,8 @@ class OpResInit:
             else:
                 raise BadResourceError(f'Wrong owner for neon account {str(sol_acct_info.owner)}')
 
-            resource.neon_account_dict[neon_addr.chain_id] = sol_addr
             LOG.debug(f'Create neon account {str(sol_addr)}({neon_addr_str}) for resource {resource}')
-            stage = NeonCreateAccountTxStage(builder, neon_acct_info)
+            stage = NeonCreateAccountTxStage(builder, neon_acct)
             self._execute_stage(stage, resource)
 
     def _create_holder_account(self, builder: NeonIxBuilder, resource: OpResInfo) -> None:
@@ -111,9 +112,6 @@ class OpResInit:
         elif holder_info.data_size != size:
             LOG.debug(f'Resize account {holder_address} (size: {holder_info.data_size}) for resource {resource}')
             self._recreate_holder(builder, resource, balance)
-
-        elif holder_info.owner != EVM_PROGRAM_ID:
-            raise BadResourceError(f'Wrong owner of {str(holder_info.owner)} for resource {resource}')
 
         elif holder_info.status == HolderStatus.Active:
             raise StuckTxError(holder_info.neon_tx_sig, holder_address)
@@ -134,26 +132,30 @@ class OpResInit:
 
 
 class MPExecutorOpResTask(MPExecutorBaseTask):
-    def get_op_res_list(self) -> MPOpResGetListResult:
+    def get_op_res_list(self, mp_req: MPOpResGetListRequest) -> MPOpResGetListResult:
+        evm_config = EVMConfig()
+        evm_config.set_evm_config(mp_req.evm_config_data)
         try:
             secret_list = OpSecretMng(self._config).read_secret_list()
-            key_info_list = OpResInfoBuilder(self._config).build_key_list(secret_list)
+            builder = OpResInfoBuilder(self._config, self._core_api_client)
+            key_info_list = builder.build_key_list(secret_list)
 
-            sol_account_list: List[SolPubKey] = list()
-            neon_account_list: List[NeonAddress] = list()
+            sol_acct_list: List[SolPubKey] = list()
+            neon_addr_list: List[NeonAddress] = list()
 
             for key_info in key_info_list:
-                sol_account_list.append(key_info.public_key)
-                for neon_addr in key_info.neon_address_list:
-                    neon_account_list.append(neon_addr)
+                sol_acct_list.append(key_info.public_key)
+                for neon_acct in key_info.neon_account_dict.values():
+                    neon_addr_list.append(neon_acct.neon_addr)
 
             stat = NeonOpResListData(
-                sol_account_list=sol_account_list,
-                neon_account_list=neon_account_list
+                sol_account_list=sol_acct_list,
+                neon_address_list=neon_addr_list,
+                token_info_list=list(evm_config.token_info_list)
             )
             self._stat_client.commit_op_res_list(stat)
 
-            res_info_list = OpResInfoBuilder(self._config).build_resource_list(key_info_list)
+            res_info_list = builder.build_resource_list(key_info_list)
             return MPOpResGetListResult(res_info_list=res_info_list)
 
         except BaseException as exc:
@@ -165,16 +167,16 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
         resource = mp_op_res_req.res_info
         try:
             OpResInit(self._config, self._solana, self._core_api_client).init_resource(resource)
-            return MPOpResInitResult(MPOpResInitResultCode.Success, resource, None)
+            return MPOpResInitResult(MPOpResInitResultCode.Success, None)
 
         except RescheduleError as exc:
             LOG.debug(f'Rescheduling init of operator resource {resource}: {str(exc)}')
-            return MPOpResInitResult(MPOpResInitResultCode.Reschedule, resource, None)
+            return MPOpResInitResult(MPOpResInitResultCode.Reschedule, None)
 
         except StuckTxError as exc:
             LOG.debug(str(exc))
-            return MPOpResInitResult(MPOpResInitResultCode.StuckTx, resource, exc)
+            return MPOpResInitResult(MPOpResInitResultCode.StuckTx, exc)
 
         except BaseException as exc:
             LOG.error(f'Failed to init operator resource tx {resource}', exc_info=exc)
-            return MPOpResInitResult(MPOpResInitResultCode.Failed, None, None)
+            return MPOpResInitResult(MPOpResInitResultCode.Failed, None)

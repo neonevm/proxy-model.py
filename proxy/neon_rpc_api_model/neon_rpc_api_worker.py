@@ -80,67 +80,118 @@ def get_req_id_from_log():
     return req_id
 
 
-class NeonRpcApiWorker:
+class NeonRpcApiWorkerData:
     proxy_id_glob = multiprocessing.Value('i', 0)
 
     def __init__(self, cfg: Config):
-        self._config = cfg
-        self._solana = SolInteractor(cfg)
-
         db_conn = DBConnection(cfg)
-        self._db = IndexerDB.from_db(cfg, db_conn)
-        self._gas_tank = GasLessAccountsDB(db_conn)
+        self.config = cfg
+        self.solana = SolInteractor(cfg)
 
-        self._core_api_client = NeonCoreApiClient(cfg)
-        self._mempool_client = MemPoolClient(MP_SERVICE_ADDR)
+        self.db = IndexerDB.from_db(cfg, db_conn)
+        self.gas_tank = GasLessAccountsDB(db_conn)
+
+        self.core_api_client = NeonCoreApiClient(cfg)
+        self.mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price_value: Optional[MPGasPriceResult] = None
         self._last_gas_price_time = 0
 
-        self._chain_id = self._def_chain_id = 0
         self._last_evm_config_time = 0
+        self._def_chain_id = 0
         self._is_evm_compatible = False
-        self._neon_tx_validator: Optional[NeonTxValidator] = None
 
         with self.proxy_id_glob.get_lock():
-            self.proxy_id = self.proxy_id_glob.value
+            proxy_id = self.proxy_id_glob.value
             self.proxy_id_glob.value += 1
 
-        if self.proxy_id == 0:
+        if proxy_id == 0:
             LOG.debug(f'Neon Proxy version: {self.neon_proxyVersion()}')
-        LOG.debug(f"Worker id {self.proxy_id}")
+        LOG.debug(f'Worker id {proxy_id}')
 
-    def _init_evm_config(self) -> None:
+    def init_evm_config(self) -> None:
         now = math.ceil(time.time())
         if self._last_evm_config_time == now:
             return
 
-        evm_config_data = self._mempool_client.get_evm_config(get_req_id_from_log())
-        if (evm_config_data is None) or (not len(evm_config_data.evm_param_dict)):
+        evm_config_data = self.mempool_client.get_evm_config(get_req_id_from_log())
+        if (evm_config_data is None) or (not len(evm_config_data.evm_param_list)):
             raise EthereumError(message='Failed to read Neon EVM params from Solana cluster. Try again later')
 
         evm_config = EVMConfig()
         evm_config.set_evm_config(evm_config_data)
 
         self._is_evm_compatible = evm_config.is_evm_compatible(NEON_PROXY_PKG_VERSION)
-        def_chain_id = self._chain_id = self._def_chain_id = evm_config.chain_id
-
-        chain_id_list = [None] + evm_config.chain_id_list
-        self._neon_tx_validator = NeonTxValidator(self._config, self._core_api_client, def_chain_id, chain_id_list)
-
+        self._def_chain_id = evm_config.chain_id
         self._last_evm_config_time = now
 
+    @staticmethod
+    def neon_proxyVersion() -> str:
+        return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
+
     @property
-    def _gas_price(self) -> MPGasPriceResult:
+    def gas_price(self) -> MPGasPriceResult:
         now = math.ceil(time.time())
         if self._last_gas_price_time != now:
-            gas_price = self._mempool_client.get_gas_price(get_req_id_from_log())
+            gas_price = self.mempool_client.get_gas_price(get_req_id_from_log())
             if gas_price is not None:
                 self._gas_price_value = gas_price
 
         if self._gas_price_value is None:
             raise EthereumError(message='Failed to calculate gas price. Try again later')
         return cast(MPGasPriceResult, self._gas_price_value)
+
+    @property
+    def is_evm_compatible(self) -> bool:
+        return self._is_evm_compatible
+
+    @property
+    def def_chain_id(self) -> int:
+        return self._def_chain_id
+
+
+class NeonRpcApiWorker:
+    def __init__(self, data: NeonRpcApiWorkerData, token_name: Optional[str]):
+        self._data = data
+        self._data.init_evm_config()
+        self._evm_config = EVMConfig()
+        self._chain_id = self._get_chain_id(token_name)
+
+    def _get_chain_id(self, token_name: Optional[str]) -> int:
+        if not token_name:
+            return self._data.def_chain_id
+
+        token_name = token_name.upper()
+        token_info = self._evm_config.get_token_info_by_name(token_name)
+        if not token_info:
+            LOG.debug(f'FAIL: {token_info}')
+            raise EthereumError(message=f'Token {token_name} is not supported.', data={"token_name": token_name})
+        LOG.debug(f'CHAIN_ID: {token_info.chain_id}')
+        return token_info.chain_id
+
+    @property
+    def _config(self) -> Config:
+        return self._data.config
+
+    @property
+    def _solana(self) -> SolInteractor:
+        return self._data.solana
+
+    @property
+    def _db(self) -> IndexerDB:
+        return self._data.db
+
+    @property
+    def _gas_tank(self) -> GasLessAccountsDB:
+        return self._data.gas_tank
+
+    @property
+    def _core_api_client(self) -> NeonCoreApiClient:
+        return self._data.core_api_client
+
+    @property
+    def _mempool_client(self) -> MemPoolClient:
+        return self._data.mempool_client
 
     def neon_proxy_version(self) -> str:
         return self.neon_proxyVersion()
@@ -151,13 +202,11 @@ class NeonRpcApiWorker:
     def neon_evm_version(self) -> str:
         return self.neon_evmVersion()
 
-    @staticmethod
-    def neon_proxyVersion() -> str:
-        return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
+    def neon_proxyVersion(self) -> str:
+        return self._data.neon_proxyVersion()
 
-    @staticmethod
-    def neon_evmVersion() -> str:
-        return 'Neon/v' + EVMConfig().neon_evm_version + '-' + EVMConfig().neon_evm_revision
+    def neon_evmVersion(self) -> str:
+        return 'Neon/v' + self._evm_config.neon_evm_version + '-' + self._evm_config.neon_evm_revision
 
     def neon_cliVersion(self) -> str:
         return self._core_api_client.version()
@@ -183,12 +232,12 @@ class NeonRpcApiWorker:
         return str(self._chain_id)
 
     def eth_gasPrice(self) -> str:
-        return hex(self._gas_price.suggested_gas_price)
+        return hex(self._data.gas_price.suggested_gas_price)
 
     def neon_gasPrice(self, param: Dict[str, Any]) -> str:
         from_addr = param.get('from', None)
         if from_addr is None:
-            return self._format_gas_price(self._gas_price.suggested_gas_price)
+            return self._format_gas_price(self._data.gas_price.suggested_gas_price)
 
         from_addr = self._normalize_address(from_addr, 'from-address')
 
@@ -207,10 +256,10 @@ class NeonRpcApiWorker:
         if self._has_gas_less_tx_permit(from_addr, tx_nonce, tx_gas):
             return self._format_gas_price(0)
 
-        return self._format_gas_price(self._gas_price.suggested_gas_price)
+        return self._format_gas_price(self._data.gas_price.suggested_gas_price)
 
     def _format_gas_price(self, gas_price: int) -> Union[str, Dict[str, str]]:
-        gas_price_info = self._gas_price
+        gas_price_info = self._data.gas_price
         return dict(
             gas_price=hex(gas_price),
             suggested_gas_price=hex(gas_price_info.suggested_gas_price),
@@ -260,7 +309,7 @@ class NeonRpcApiWorker:
             param['to'] = self._normalize_address(param['to'], 'to-address')
 
         try:
-            calculator = GasEstimate(self._core_api_client, self._def_chain_id, param)
+            calculator = GasEstimate(self._core_api_client, self._chain_id, param)
             calculator.execute(block)
             return hex(calculator.estimate())
 
@@ -673,7 +722,7 @@ class NeonRpcApiWorker:
             gas_limit = obj.get('gas')
 
             emulator_result = self._core_api_client.emulate(
-                contract, sender, self._def_chain_id, data, value, gas_limit, block, check_result=True
+                contract, sender, self._chain_id, data, value, gas_limit, block, check_result=True
             )
             return '0x' + emulator_result.result
 
@@ -997,7 +1046,7 @@ class NeonRpcApiWorker:
             neon_tx_exec_cfg: NeonTxExecCfg = self._get_neon_tx_exec_cfg(neon_tx)
 
             result: MPTxSendResult = self._mempool_client.send_raw_transaction(
-                get_req_id_from_log(), neon_tx, self._def_chain_id, neon_tx_exec_cfg
+                get_req_id_from_log(), neon_tx, self._chain_id, neon_tx_exec_cfg
             )
 
             if result.code in (MPTxSendResultCode.Success, MPTxSendResultCode.AlreadyKnown):
@@ -1067,8 +1116,10 @@ class NeonRpcApiWorker:
             tx_sender = NeonAddress.from_raw(neon_tx.sender)
             gas_less_permit = self._has_gas_less_tx_permit(tx_sender, neon_tx.nonce, neon_tx.gasLimit)
 
-        min_gas_price = self._gas_price.min_executable_gas_price
-        neon_tx_exec_cfg = self._neon_tx_validator.validate(neon_tx, gas_less_permit, min_gas_price)
+        min_gas_price = self._data.gas_price.min_executable_gas_price
+        chain_id_list = [self._chain_id, None] if self._data.def_chain_id == self._chain_id else [self._chain_id]
+        neon_tx_validator = NeonTxValidator(self._config, self._core_api_client, self._chain_id, chain_id_list)
+        neon_tx_exec_cfg = neon_tx_validator.validate(neon_tx, gas_less_permit, min_gas_price)
         return neon_tx_exec_cfg
 
     def _get_transaction_by_index(self, block: SolBlockInfo, tx_idx: Union[str, int]) -> Optional[Dict[str, Any]]:
@@ -1298,7 +1349,7 @@ class NeonRpcApiWorker:
         LOG.debug(f'Call neon_emulate: {raw_signed_tx}')
 
         neon_tx = NeonTx.from_string(bytearray.fromhex(raw_signed_tx))
-        chain_id = neon_tx.chain_id or self._def_chain_id
+        chain_id = neon_tx.chain_id or self._chain_id
         emulator_result = self._core_api_client.emulate_neon_tx(neon_tx, chain_id)
         return emulator_result.full_dict
 
@@ -1310,23 +1361,20 @@ class NeonRpcApiWorker:
         slot = self._db.earliest_slot
         return hex(slot)
 
-    @staticmethod
-    def neon_getEvmParams() -> Dict[str, str]:
+    def neon_getEvmParams(self) -> Dict[str, str]:
         """Returns map of Neon-EVM parameters"""
-        evm_param_dict = EVMConfig().evm_param_dict
+        evm_param_dict = self._evm_config.evm_param_dict
         evm_param_dict['NEON_EVM_ID'] = EVM_PROGRAM_ID_STR
         return evm_param_dict
 
-    @staticmethod
-    def neon_getGasTokenList() -> List[Dict[str, str]]:
-        token_dict = EVMConfig().token_dict
+    def neon_getGasTokenList(self) -> List[Dict[str, str]]:
         return list(
             dict(
-                token_name=token['token_name'],
-                token_mint=str(token['token_mint']),
-                token_chain_id=hex(token['chain_id'])
+                token_name=token.token_name,
+                token_mint=str(token.token_mint),
+                token_chain_id=hex(token.chain_id)
             )
-            for token in token_dict.values()
+            for token in self._evm_config.token_info_list
         )
 
     def is_allowed_api(self, method_name: str) -> bool:
@@ -1336,12 +1384,8 @@ class NeonRpcApiWorker:
         else:
             return False
 
-        if method_name == 'neon_proxyVersion':
-            return True
-
-        self._init_evm_config()
-
         always_allowed_method_set = {
+            "neon_proxyVersion",
             "eth_chainId",
             "neon_cliVersion",
             "neon_evmVersion",
@@ -1355,7 +1399,7 @@ class NeonRpcApiWorker:
         if method_name in always_allowed_method_set:
             return True
 
-        if not self._is_evm_compatible:
+        if not self._data.is_evm_compatible:
             raise EthereumError(
                 f'Neon Proxy {self.neon_proxyVersion()} is not compatible with '
                 f'Neon EVM {self.web3_clientVersion()}'

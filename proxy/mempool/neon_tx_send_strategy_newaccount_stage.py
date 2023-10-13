@@ -46,7 +46,7 @@ class NewAccountNeonTxPrepStage(BaseNeonTxPrepStage):
             raise EthereumError('Sender address is NULL')
 
         neon_acct_info = self._ctx.core_api_client.get_neon_account_info(sender_addr)
-        if neon_acct_info.balance > 0:
+        if neon_acct_info.balance == 0:
             if self._ctx.neon_tx_info.gas_price != 0:
                 raise EthereumError('Sender address does not exist')
             return False

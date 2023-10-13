@@ -184,8 +184,12 @@ class SolTxErrorParser:
     _block_hash_notfound_err = 'BlockhashNotFound'
     _numslots_behind_data = 'numSlotsBehind'
 
-    _rw_locked_account_re = re.compile(
+    _rw_locked_account_re_vold = re.compile(
         r'Program log: [a-zA-Z/._]+:\d+ : trying to execute transaction on rw locked account \w+'
+    )
+
+    _rw_locked_account_re = re.compile(
+        r'Program log: Account [a-zA-Z0-9]+ - blocked, trying to execute transaction on rw locked account'
     )
 
     _create_account_re = re.compile(
@@ -359,6 +363,8 @@ class SolTxErrorParser:
         log_list = self._get_evm_log_list()
         for log_rec in log_list:
             if self._rw_locked_account_re.match(log_rec) is not None:
+                return True
+            elif self._rw_locked_account_re_vold.match(log_rec) is not None:
                 return True
         return False
 
