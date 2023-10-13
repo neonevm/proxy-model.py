@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import math
 import multiprocessing
@@ -5,7 +7,7 @@ import threading
 import time
 
 from dataclasses import dataclass
-from typing import Optional, Union, Dict, Any, List, cast
+from typing import Optional, Union, Dict, Any, List, cast, NewType
 
 import eth_utils
 from eth_account import Account as NeonAccount
@@ -53,6 +55,23 @@ LOG = logging.getLogger(__name__)
 class OpCostInfo:
     sol_spent: int = 0
     neon_income: int = 0
+
+
+class TxReceiptDetail:
+    Type = NewType('TxReceiptDetail', str)
+    Eth = Type('ethereum')
+    Neon = Type('neon')
+    SolTxList = Type('solanaTransactionList')
+
+    TypeList = [Eth, Neon, SolTxList]
+
+    @staticmethod
+    def to_type(value: str) -> TxReceiptDetail.Type:
+        for detail in TxReceiptDetail.TypeList:
+            if detail.upper() == value.upper():
+                return detail
+
+        raise InvalidParamError(message='Wrong receipt type')
 
 
 def get_req_id_from_log():
@@ -671,32 +690,45 @@ class NeonRpcApiWorker:
             # LOG.debug(f"eth_getTransactionCount: Can't get account info: {err}")
             return hex(0)
 
-    def _fill_transaction_receipt_answer(self, tx: NeonTxReceiptInfo, full: bool) -> dict:
-        log_list = self._filter_log_list(tx.neon_tx_res.log_list, False)
+    def _fill_transaction_receipt_answer(self, tx: NeonTxReceiptInfo, details: TxReceiptDetail.Type) -> dict:
+        if details in {TxReceiptDetail.Eth, TxReceiptDetail.Neon}:
+            log_list = self._filter_log_list(tx.neon_tx_res.log_list, False)
+        else:
+            log_list = list()
+        res = tx.neon_tx_res
 
         receipt = {
             "transactionHash": tx.neon_tx.sig,
-            "transactionIndex": hex(tx.neon_tx_res.tx_idx),
+            "transactionIndex": hex(res.tx_idx),
             "type": hex(tx.neon_tx.tx_type),
-            "blockHash": tx.neon_tx_res.block_hash,
-            "blockNumber": hex(tx.neon_tx_res.block_slot),
+            "blockHash": res.block_hash,
+            "blockNumber": hex(res.block_slot),
             "from": tx.neon_tx.addr,
             "to": tx.neon_tx.to_addr,
-            "gasUsed": hex(tx.neon_tx_res.gas_used),
-            "cumulativeGasUsed": hex(tx.neon_tx_res.sum_gas_used),
+            "gasUsed": hex(res.gas_used),
+            "cumulativeGasUsed": hex(res.sum_gas_used),
             "contractAddress": tx.neon_tx.contract,
             "logs": log_list,
-            "status": hex(tx.neon_tx_res.status),
+            "status": hex(res.status),
             "logsBloom": "0x" + '0' * 512
         }
 
-        if full:
-            self._fill_sol_tx_info_list(tx, receipt)
-            receipt.update({
-                'neonIsCompleted': tx.neon_tx_res.is_completed,
-                'neonIsCanceled': tx.neon_tx_res.is_canceled
-            })
+        if details == TxReceiptDetail.Eth:
+            return receipt
 
+        inner_idx = None if tx.neon_tx_res.sol_ix_inner_idx is None else hex(res.sol_ix_inner_idx)
+        receipt.update({
+            'solanaCompleteTransactionHash': tx.neon_tx_res.sol_sig,
+            'solanaCompleteInstructionIndex': hex(tx.neon_tx_res.sol_ix_idx),
+            'solanaCompleteInnerInstructionIndex': inner_idx,
+            'neonIsCompleted': res.is_completed,
+            'neonIsCanceled': res.is_canceled
+        })
+
+        if details != TxReceiptDetail.SolTxList:
+            return receipt
+
+        self._fill_sol_tx_info_list(tx, receipt)
         return receipt
 
     def _fill_sol_tx_info_list(self, tx: NeonTxReceiptInfo, receipt: Dict[str, Any]) -> None:
@@ -813,13 +845,13 @@ class NeonRpcApiWorker:
         tx = self._get_transaction_receipt(neon_tx_sig)
         if tx is None:
             return None
-        return self._fill_transaction_receipt_answer(tx, False)
+        return self._fill_transaction_receipt_answer(tx, TxReceiptDetail.Eth)
 
-    def neon_getTransactionReceipt(self, neon_tx_sig: str) -> Optional[dict]:
+    def neon_getTransactionReceipt(self, neon_tx_sig: str, details: str = TxReceiptDetail.SolTxList) -> Optional[dict]:
         tx = self._get_transaction_receipt(neon_tx_sig)
         if tx is None:
             return None
-        return self._fill_transaction_receipt_answer(tx, True)
+        return self._fill_transaction_receipt_answer(tx, TxReceiptDetail.to_type(details))
 
     @staticmethod
     def _get_transaction(tx: NeonTxReceiptInfo) -> Dict[str, Any]:
