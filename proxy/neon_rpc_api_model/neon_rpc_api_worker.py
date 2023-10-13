@@ -1214,7 +1214,10 @@ class NeonRpcApiWorker:
             return sol_sig_list
 
         sol_tx_list = self._solana.get_tx_receipt_list(sol_sig_list, SolCommit.Confirmed)
-        return sol_tx_list
+        for sol_tx in sol_tx_list:
+            if sol_tx is None:
+                return sol_sig_list
+        return sol_sig_list
 
     def neon_emulate(self, raw_signed_tx: str):
         """Executes emulator with given transaction"""
