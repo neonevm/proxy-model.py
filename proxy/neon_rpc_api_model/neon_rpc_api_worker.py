@@ -1161,14 +1161,6 @@ class NeonRpcApiWorker:
     def eth_mining() -> bool:
         return False
 
-    @staticmethod
-    def eth_hashrate() -> str:
-        return hex(0)
-
-    @staticmethod
-    def eth_getWork() -> [str]:
-        return ['', '', '', '']
-
     def eth_syncing(self) -> Union[bool, dict]:
         try:
             slots_behind = self._solana.get_slots_behind()
