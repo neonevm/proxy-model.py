@@ -118,6 +118,7 @@ class NeonCoreApiClient:
         sender: str,
         data: Optional[str],
         value: Optional[Union[str, int]],
+        gas_limit: Optional[str] = None,
         block: Optional[SolBlockInfo] = None,
         check_result=False
     ) -> NeonEmulatorResult:
@@ -133,6 +134,9 @@ class NeonCoreApiClient:
             value = '0x0'
         elif isinstance(value, int):
             value = hex(value)
+
+        if isinstance(gas_limit, int):
+            gas_limit = hex(value)
 
         request = dict(
             token_mint=str(ElfParams().neon_token_mint),
