@@ -3,7 +3,7 @@ from web3.module import Module
 from web3.method import Method, default_root_munger
 from web3.providers.base import BaseProvider
 from typing import Optional, Tuple, Callable, Union
-from web3.types import RPCEndpoint, TypedDict, HexBytes, HexStr, ChecksumAddress
+from web3.types import RPCEndpoint, TypedDict, HexBytes, HexStr, ChecksumAddress, Address, BlockIdentifier, BlockParams
 
 
 NeonAccountData = TypedDict(
@@ -44,13 +44,35 @@ class Neon(Module):
         mungers=[default_root_munger]
     )
 
-    _neon_getAccount: Method[Callable[[Union[HexStr, bytes]], NeonAccountData]] = Method(
-        RPCEndpoint('neon_getAccount'),
-        mungers=[default_root_munger],
+    _neon_getAccount = RPCEndpoint('neon_getAccount')
+
+    def _get_account_munger(
+        self,
+        account: Union[Address, ChecksumAddress, str],
+        block_identifier: Optional[BlockIdentifier] = None,
+    ) -> Tuple[str, BlockIdentifier]:
+        if block_identifier is None:
+            block_identifier = 'latest'
+        if isinstance(account, bytes):
+            account = '0x' + account.hex()
+        return account, block_identifier
+
+    _neon_get_account: Method[
+        Callable[
+            [Union[Address, ChecksumAddress], Optional[BlockIdentifier]],
+            NeonAccountData
+        ]
+    ] = Method(
+        _neon_getAccount,
+        mungers=[_get_account_munger],
     )
 
-    def neon_getAccount(self, account: Union[HexStr, bytes]) -> NeonAccountData:
-        return self._neon_getAccount(account)
+    def get_neon_account(
+        self,
+        account: Union[Address, ChecksumAddress, str],
+        block_identifier: Optional[BlockIdentifier] = None,
+    ) -> NeonAccountData:
+        return self._neon_get_account(account, block_identifier)
 
 
 class NeonWeb3(Web3):

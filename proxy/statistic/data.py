@@ -6,6 +6,8 @@ from enum import Enum, auto as enum_auto
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.address import NeonAddress
 
+from ..neon_core_api.neon_layouts import EVMTokenInfo
+
 
 @dataclass(frozen=True)
 class NeonMethodData:
@@ -81,7 +83,8 @@ class NeonTxEndData:
 @dataclass(frozen=True)
 class NeonOpResListData:
     sol_account_list: List[SolPubKey]
-    neon_account_list: List[NeonAddress]
+    neon_address_list: List[NeonAddress]
+    token_info_list: List[EVMTokenInfo]
 
 
 @dataclass(frozen=True)

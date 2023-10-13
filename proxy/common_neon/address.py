@@ -33,7 +33,7 @@ class NeonAddress:
 
     @staticmethod
     def from_raw(data: InNeonAddress, chain_id: Optional[int] = None) -> Optional[NeonAddress]:
-        if data is None:
+        if not data:
             return None
         elif isinstance(data, NeonAddress):
             if chain_id is None or data.chain_id == chain_id:

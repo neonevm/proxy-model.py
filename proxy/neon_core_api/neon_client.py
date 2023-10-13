@@ -9,7 +9,7 @@ from ..common_neon.environment_utils import CliBase
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 
-from .neon_layouts import NeonAccountInfo, EVMConfigData, HolderAccountInfo
+from .neon_layouts import NeonAccountInfo, EVMConfigInfo, HolderAccountInfo
 from .neon_client_base import NeonClientBase
 from .logging_level import NeonCoreApiLoggingLevel
 
@@ -84,7 +84,7 @@ class NeonClient(CliBase, NeonClientBase):
         json_acct = self.call('get-holder-account-data', str(addr))
         return HolderAccountInfo.from_json(addr, json_acct)
 
-    def get_evm_config(self) -> EVMConfigData:
+    def get_evm_config(self) -> EVMConfigInfo:
         LOG.debug('Read EVM config')
         json_cfg = self.call('neon-elf-params')
-        return EVMConfigData.from_json(1, {'config': json_cfg})
+        return EVMConfigInfo.from_json(1, {'config': json_cfg})

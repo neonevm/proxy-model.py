@@ -1,18 +1,17 @@
 import unittest
-import os
+import subprocess
 
-from typing import List
+from typing import Dict, Any
 
 from web3 import eth as web3_eth
 
-from proxy.common_neon.address import NeonAddress
 from proxy.common_neon.constants import EVM_PROGRAM_ID
 from proxy.common_neon.config import Config
 from proxy.common_neon.neon_instruction import NeonIxBuilder
 from proxy.common_neon.solana_tx import SolAccountMeta, SolTxIx, SolPubKey, SolAccount
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.common_neon.utils.eth_proto import NeonTx
-from proxy.common_neon.operator_resource_info import OpResInfoBuilder
+from proxy.common_neon.operator_resource_info import build_test_resource_info
 
 from proxy.mempool.mempool_executor_task_op_res import OpResInit
 
@@ -21,8 +20,6 @@ from proxy.neon_core_api.neon_client import NeonClient
 from proxy.testing.testing_helpers import Proxy, SolClient, NeonLocalAccount
 from proxy.testing.solana_utils import WalletAccount, wallet_path
 
-
-proxy_program = os.environ.get("TEST_PROGRAM")
 
 SEED = 'https://github.com/neonlabsorg/proxy-model.py/issues/196'
 SEED_INVOKED = 'https://github.com/neonlabsorg/proxy-model.py/issues/755'
@@ -78,14 +75,11 @@ class CompleteTest(unittest.TestCase):
     config: FakeConfig
     neon_client: NeonClient
     solana: SolClient
-    eth_account: NeonLocalAccount
-    eth_account_invoked: NeonLocalAccount
-    eth_account_getter: NeonLocalAccount
+    test_program_address: SolPubKey
+    neon_account: NeonLocalAccount
+    neon_account_invoked: NeonLocalAccount
+    neon_account_getter: NeonLocalAccount
     signer: SolAccount
-    caller: SolPubKey
-    re_id: SolPubKey
-    caller_invoked: SolPubKey
-    caller_getter: SolPubKey
     storage_contract: web3_eth.Contract
 
     @classmethod
@@ -94,40 +88,22 @@ class CompleteTest(unittest.TestCase):
 
         cls.proxy = Proxy()
         cls.config = FakeConfig()
-        cls.eth_account = cls.proxy.create_signer_account(SEED)
-        cls.eth_account_invoked = cls.proxy.create_signer_account(SEED_INVOKED)
-        cls.eth_account_getter = cls.proxy.create_signer_account(SEED_GETTER)
+        cls.neon_account = cls.proxy.create_signer_account(SEED)
+        cls.neon_account_invoked = cls.proxy.create_signer_account(SEED_INVOKED)
+        cls.neon_account_getter = cls.proxy.create_signer_account(SEED_GETTER)
         cls.neon_client = NeonClient(cls.config)
         cls.solana = SolClient(cls.config)
         cls.chain_id = cls.proxy.web3.eth.chain_id
+        cls.test_program_address = cls.get_test_program_name()
 
-        print(f"proxy_program: {proxy_program}")
+        print(f"proxy_program: {str(cls.test_program_address)}")
 
         wallet = WalletAccount(wallet_path())
         cls.signer = wallet.get_acc()
 
-        deployed_info = cls.proxy.compile_and_deploy_contract(cls.eth_account, TEST_EVENT_SOURCE_196)
+        deployed_info = cls.proxy.compile_and_deploy_contract(cls.neon_account, TEST_EVENT_SOURCE_196)
         cls.storage_contract = deployed_info.contract
         print(cls.storage_contract.address)
-
-        reid_eth = cls.storage_contract.address.lower()
-        print('contract_eth', reid_eth)
-        cls.re_id = cls.proxy.get_account_info(str(reid_eth)).pda_address
-        print('contract', cls.re_id)
-
-        # Create ethereum account for user account
-        caller_ether = NeonAddress.from_private_key(bytes(cls.eth_account.key))
-        cls.caller = caller = cls.proxy.get_account_info(str(caller_ether)).pda_address
-
-        caller_ether_invoked = NeonAddress.from_private_key(bytes(cls.eth_account_invoked.key))
-        cls.caller_invoked = cls.proxy.get_account_info(str(caller_ether_invoked)).pda_address
-
-        caller_ether_getter = NeonAddress.from_private_key(bytes(cls.eth_account_getter.key))
-        cls.caller_getter = caller_getter = cls.proxy.get_account_info(str(caller_ether_getter)).pda_address
-
-        print(f'caller_ether: {caller_ether} {caller}')
-        print(f'caller_ether_invoked: {caller_ether_invoked} {cls.caller_invoked}')
-        print(f'caller_ether_getter: {caller_ether_getter} {caller_getter}')
 
         cls.create_two_calls_in_transaction()
         cls.create_hanged_transaction()
@@ -135,18 +111,35 @@ class CompleteTest(unittest.TestCase):
         cls.create_invoked_transaction_combined()
 
     @classmethod
-    def create_neon_ix_builder(cls, raw_tx, neon_account_list: List[SolAccountMeta]):
-        resource = OpResInfoBuilder(cls.config).build_test_resource_info(
+    def get_test_program_name(cls) -> SolPubKey:
+        pubkey = subprocess.check_output([
+            'solana', 'address', '-k', '/spl/bin/neon_test_invoke_program-keypair.json'
+        ])
+        return SolPubKey.from_string(bytes.decode(pubkey, 'utf8').strip())
+
+    @classmethod
+    def create_neon_ix_builder(cls, raw_tx, emulate_res: Dict[str, Any]):
+        resource = build_test_resource_info(
+            cls.neon_client,
             private_key=cls.signer.secret(),
             res_id=int.from_bytes(raw_tx[:8], byteorder="little")
         )
         OpResInit(cls.config, cls.solana, cls.neon_client).init_resource(resource)
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
-        neon_ix_builder.init_operator_neon(resource.neon_account_dict[cls.chain_id])
+        neon_ix_builder.init_operator_neon(resource.neon_account_dict[cls.chain_id].pda_address)
 
         neon_tx = NeonTx.from_string(raw_tx)
         neon_ix_builder.init_neon_tx(neon_tx)
+
+        neon_account_list = [
+            SolAccountMeta(
+                is_signer=False,
+                is_writable=a['is_writable'],
+                pubkey=SolPubKey.from_string(a['pubkey'])
+            )
+            for a in emulate_res.get('solana_accounts', list())
+        ]
         neon_ix_builder.init_neon_account_list(neon_account_list)
 
         neon_ix_builder.init_iterative(resource.holder_account)
@@ -157,18 +150,15 @@ class CompleteTest(unittest.TestCase):
     def create_hanged_transaction(cls):
         print("\ncreate_hanged_transaction")
         tx_store = cls.storage_contract.functions.addReturnEventTwice(1, 1).build_transaction({
-            'from': cls.eth_account.address,
+            'from': cls.neon_account.address,
             'gasPrice': 0
         })
-        tx_store = cls.proxy.sign_transaction(cls.eth_account, tx_store)
+        tx_store = cls.proxy.sign_transaction(cls.neon_account, tx_store)
 
-        neon_ix_builder, signer = cls.create_neon_ix_builder(
-            tx_store.tx_signed.rawTransaction,
-            [
-                SolAccountMeta(pubkey=cls.re_id, is_signer=False, is_writable=True),
-                SolAccountMeta(pubkey=cls.caller, is_signer=False, is_writable=True)
-            ]
-        )
+        emulate_res = cls.proxy.emulate(tx_store.tx_signed.rawTransaction)
+        print(f'emulate: {emulate_res}')
+
+        neon_ix_builder, signer = cls.create_neon_ix_builder(tx_store.tx_signed.rawTransaction, emulate_res)
 
         cls.tx_hash = tx_hash = tx_store.tx_signed.hash
         print(f'tx_hash: {tx_hash.hex()}')
@@ -188,23 +178,20 @@ class CompleteTest(unittest.TestCase):
         print("\ncreate_invoked_transaction")
 
         tx_transfer = cls.proxy.sign_transaction(
-            cls.eth_account_invoked,
+            cls.neon_account_invoked,
             dict(
-                to=cls.eth_account_getter.address,
+                to=cls.neon_account_getter.address,
                 value=1_000_000_000_000_000_000
             )
         )
 
+        emulate_res = cls.proxy.emulate(tx_transfer.tx_signed.rawTransaction)
+        print(f'emulate: {emulate_res}')
+
         cls.tx_hash_invoked = tx_hash = tx_transfer.tx_signed.hash
         print(f'tx_hash_invoked: {tx_hash.hex}')
 
-        neon_ix_builder, signer = cls.create_neon_ix_builder(
-            tx_transfer.tx_signed.rawTransaction,
-            [
-                SolAccountMeta(pubkey=cls.caller_getter, is_signer=False, is_writable=True),
-                SolAccountMeta(pubkey=cls.caller_invoked, is_signer=False, is_writable=True)
-            ]
-        )
+        neon_ix_builder, signer = cls.create_neon_ix_builder(tx_transfer.tx_signed.rawTransaction, emulate_res)
         noniterative = neon_ix_builder.make_tx_exec_from_data_ix()
 
         tx = SolLegacyTx(
@@ -217,7 +204,7 @@ class CompleteTest(unittest.TestCase):
                         SolAccountMeta(pubkey=EVM_PROGRAM_ID, is_signer=False, is_writable=False)
                     ] + noniterative.accounts,
                     data=noniterative.data,
-                    program_id=SolPubKey.from_string(proxy_program)
+                    program_id=cls.test_program_address
                 )
             ]
         )
@@ -229,9 +216,9 @@ class CompleteTest(unittest.TestCase):
         print("\ncreate_invoked_transaction_combined")
 
         tx_transfer = cls.proxy.sign_transaction(
-            cls.eth_account_invoked,
+            cls.neon_account_invoked,
             dict(
-                to=cls.eth_account_getter.address,
+                to=cls.neon_account_getter.address,
                 value=500_000_000_000_000_000
             )
         )
@@ -239,13 +226,10 @@ class CompleteTest(unittest.TestCase):
         cls.tx_hash_invoked_combined = tx_hash = tx_transfer.tx_signed.hash
         print(f'tx_hash_invoked_combined: {tx_hash.hex()}')
 
-        neon_ix_builder, signer = cls.create_neon_ix_builder(
-            tx_transfer.tx_signed.rawTransaction,
-            [
-                SolAccountMeta(pubkey=cls.caller_getter, is_signer=False, is_writable=True),
-                SolAccountMeta(pubkey=cls.caller_invoked, is_signer=False, is_writable=True),
-            ]
-        )
+        emulate_res = cls.proxy.emulate(tx_transfer.tx_signed.rawTransaction)
+        print(f'emulate: {emulate_res}')
+
+        neon_ix_builder, signer = cls.create_neon_ix_builder(tx_transfer.tx_signed.rawTransaction, emulate_res)
 
         iterative = neon_ix_builder.make_tx_step_from_data_ix(250, 1)
         tx = SolLegacyTx(
@@ -258,7 +242,7 @@ class CompleteTest(unittest.TestCase):
                         SolAccountMeta(pubkey=EVM_PROGRAM_ID, is_signer=False, is_writable=False)
                     ] + iterative.accounts,
                     data=b''.join([bytes.fromhex("ef"), iterative.data]),
-                    program_id=SolPubKey.from_string(proxy_program)
+                    program_id=cls.test_program_address
                 )
             ]
         )
@@ -269,31 +253,33 @@ class CompleteTest(unittest.TestCase):
     def create_two_calls_in_transaction(cls):
         print("\ncreate_two_calls_in_transaction")
 
-        account_list = [
-            SolAccountMeta(pubkey=cls.caller, is_signer=False, is_writable=True),
-            SolAccountMeta(pubkey=cls.re_id, is_signer=False, is_writable=True),
-        ]
-
-        nonce1 = cls.proxy.conn.get_transaction_count(cls.eth_account.address)
-        tx = {'nonce': nonce1, 'from': cls.eth_account.address}
+        nonce1 = cls.proxy.conn.get_transaction_count(cls.neon_account.address)
+        tx = {'nonce': nonce1, 'from': cls.neon_account.address}
         call1_dict = cls.storage_contract.functions.addReturn(1, 1).build_transaction(tx)
-        call1 = cls.proxy.sign_transaction(cls.eth_account, call1_dict)
+        call1 = cls.proxy.sign_transaction(cls.neon_account, call1_dict)
 
         cls.tx_hash_call1 = tx_hash = call1.tx_signed.hash
         print(f'tx_hash_call1: {tx_hash.hex()}')
 
+        emulate_res1 = cls.proxy.emulate(call1.tx_signed.rawTransaction)
+        print(f'emulate call1: {emulate_res1}')
+
         nonce2 = nonce1 + 1
-        tx = {'nonce': nonce2, 'from': cls.eth_account.address}
+        tx = {'nonce': nonce2, 'from': cls.neon_account.address}
         call2_dict = cls.storage_contract.functions.addReturnEvent(2, 2).build_transaction(tx)
-        call2 = cls.proxy.sign_transaction(cls.eth_account, call2_dict)
+        call2 = cls.proxy.sign_transaction(cls.neon_account, call2_dict)
 
         cls.tx_hash_call2 = tx_hash = call2.tx_signed.hash
         print(f'tx_hash_call2: {tx_hash.hex()}')
 
-        neon_ix_builder, signer = cls.create_neon_ix_builder(call1.tx_signed.rawTransaction, account_list)
+        emulate_res2 = cls.proxy.emulate(call2.tx_signed.rawTransaction)
+        print(f'emulate call2: {emulate_res2}')
+
+        neon_ix_builder, signer = cls.create_neon_ix_builder(call1.tx_signed.rawTransaction, emulate_res1)
         noniterative1 = neon_ix_builder.make_tx_exec_from_data_ix()
 
         neon_ix_builder.init_neon_tx(NeonTx.from_string(call2.tx_signed.rawTransaction))
+        neon_ix_builder, signer = cls.create_neon_ix_builder(call2.tx_signed.rawTransaction, emulate_res2)
         noniterative2 = neon_ix_builder.make_tx_exec_from_data_ix()
 
         tx = SolLegacyTx(

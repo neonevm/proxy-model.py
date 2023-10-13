@@ -7,7 +7,7 @@ from typing import Optional, Any, Type, cast
 
 from .mempool_api import (
     MPGetALTList, MPDeactivateALTListRequest, MPCloseALTListRequest,
-    MPOpResInitRequest, MPGasPriceRequest,
+    MPOpResInitRequest, MPOpResGetListRequest, MPGasPriceRequest,
     MPRequestType, MPRequest, MPTxExecRequest, MPSenderTxCntRequest, MPGetEVMConfigRequest,
     MPGetStuckTxListRequest
 )
@@ -82,7 +82,8 @@ class MPExecutor(mp.Process, IPickableDataServerUser):
             return self._new_task_executor(MPExecutorStateTxCntTask).read_state_tx_cnt(mp_state_req)
 
         elif mp_req.type == MPRequestType.GetOperatorResourceList:
-            return self._new_task_executor(MPExecutorOpResTask).get_op_res_list()
+            mp_op_res_req = cast(MPOpResGetListRequest, mp_req)
+            return self._new_task_executor(MPExecutorOpResTask).get_op_res_list(mp_op_res_req)
 
         elif mp_req.type == MPRequestType.InitOperatorResource:
             mp_op_res_req = cast(MPOpResInitRequest, mp_req)

@@ -16,7 +16,7 @@ from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.address import NeonAddress
 
-from ..neon_core_api.neon_layouts import EVMConfigData
+from ..neon_core_api.neon_layouts import EVMConfigInfo
 
 
 @dataclass(frozen=True)
@@ -120,7 +120,7 @@ class MPTxRequest(MPRequest):
 
 @dataclass
 class MPTxExecRequest(MPTxRequest):
-    evm_config_data: EVMConfigData = None
+    evm_config_data: EVMConfigInfo = None
     res_info: OpResInfo = None
 
     def is_stuck_tx(self) -> bool:
@@ -129,7 +129,7 @@ class MPTxExecRequest(MPTxRequest):
     @staticmethod
     def from_tx_req(tx: MPTxRequest,
                     res_info: OpResInfo,
-                    evm_config_data: EVMConfigData) -> MPTxExecRequest:
+                    evm_config_data: EVMConfigInfo) -> MPTxExecRequest:
         return MPTxExecRequest(
             req_id=tx.req_id,
             neon_tx=tx.neon_tx,
@@ -147,7 +147,7 @@ class MPTxExecRequest(MPTxRequest):
                       def_chain_id: int,
                       neon_tx_exec_cfg: NeonTxExecCfg,
                       res_info: OpResInfo,
-                      evm_config_data: EVMConfigData) -> MPTxExecRequest:
+                      evm_config_data: EVMConfigInfo) -> MPTxExecRequest:
         return MPTxExecRequest(
             req_id=stuck_tx.req_id,
             neon_tx=None,
@@ -209,7 +209,7 @@ class MPGasPriceRequest(MPRequest):
 
 @dataclass
 class MPGetEVMConfigRequest(MPRequest):
-    evm_config_data: EVMConfigData = None
+    evm_config_data: EVMConfigInfo = None
 
     def __post_init__(self):
         self.type = MPRequestType.GetEVMConfig
@@ -225,13 +225,15 @@ class MPSenderTxCntRequest(MPRequest):
 
 @dataclass
 class MPOpResGetListRequest(MPRequest):
+    evm_config_data: EVMConfigInfo = None
+
     def __post_init__(self):
         self.type = MPRequestType.GetOperatorResourceList
 
 
 @dataclass
 class MPOpResInitRequest(MPRequest):
-    evm_config_data: EVMConfigData = None
+    evm_config_data: EVMConfigInfo = None
     res_info: OpResInfo = None
 
     def __post_init__(self):
@@ -344,7 +346,7 @@ class MPGasPriceResult:
     neon_price_account: SolPubKey
 
 
-MPEVMConfigResult = EVMConfigData
+MPEVMConfigResult = EVMConfigInfo
 
 
 @dataclass(frozen=True)
@@ -373,7 +375,6 @@ class MPOpResGetListResult:
 @dataclass(frozen=True)
 class MPOpResInitResult:
     code: MPOpResInitResultCode
-    res_info: Optional[OpResInfo]
     exc: Optional[BaseException]
 
 

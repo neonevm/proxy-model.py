@@ -86,11 +86,11 @@ class InfoHandler:
     def _neon_private_key_info(_) -> None:
         key_info_list = get_key_info_list()
         for key_info in key_info_list:
-            for neon_addr in key_info.neon_address_list:
+            for neon_acct in key_info.neon_account_dict.values():
                 print(
-                    f'{ get_token_name(neon_addr.chain_id) }\t '
-                    f'{ neon_addr.checksum_address }\t '
-                    f'{ str(neon_addr.private_key) }'
+                    f'{ get_token_name(neon_acct.chain_id) }\t '
+                    f'{ neon_acct.neon_addr.checksum_address }\t '
+                    f'{ str(neon_acct.neon_addr.private_key) }'
                 )
 
     def _neon_address_info(self, _) -> None:
@@ -98,12 +98,12 @@ class InfoHandler:
         key_info_list = get_key_info_list()
         for key_info in key_info_list:
             print(f'{ str(key_info.public_key) }:')
-            for neon_addr in key_info.neon_address_list:
-                token_name = get_token_name(neon_addr.chain_id)
-                balance = self._get_neon_balance(neon_addr)
+            for neon_acct in key_info.neon_account_dict.values():
+                token_name = get_token_name(neon_acct.chain_id)
+                balance = self._get_neon_balance(neon_acct.neon_addr)
                 total_balance_dict[token_name] = total_balance_dict.get(token_name, Decimal(0)) + balance
 
-                print(f'\t { neon_addr.checksum_address }\t { balance:,.18f} { token_name }')
+                print(f'\t { neon_acct.neon_addr.checksum_address }\t { balance:,.18f} { token_name }')
 
         print('total_balance:')
         for token_name, balance in total_balance_dict.items():
@@ -160,13 +160,13 @@ class InfoHandler:
             resource_balance += sum([holder_info['balance'] for holder_info in holder_list])
 
             neon_acct_dict: Dict[str, Dict[str, Any]] = {
-                get_token_name(neon_addr.chain_id): dict(
-                    neon_address=neon_addr.checksum_address,
-                    neon_private=str(neon_addr.private_key),
-                    chain_id=neon_addr.chain_id,
-                    balance=self._get_neon_balance(neon_addr)
+                get_token_name(neon_acct.chain_id): dict(
+                    neon_address=neon_acct.neon_addr.checksum_address,
+                    neon_private=str(neon_acct.neon_addr.private_key),
+                    chain_id=neon_acct.neon_addr.chain_id,
+                    balance=self._get_neon_balance(neon_acct.neon_addr)
                 )
-                for neon_addr in key_info.neon_address_list
+                for neon_acct in key_info.neon_account_dict.values()
             }
             for token_name, neon_addr_info in neon_acct_dict.items():
                 neon_balance = neon_addr_info['balance']

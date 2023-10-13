@@ -15,7 +15,7 @@ from ..common_neon.config import Config
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.utils.eth_proto import NeonTx
-from ..common_neon.operator_resource_info import OpResInfo, OpResInfoBuilder
+from ..common_neon.operator_resource_info import OpResInfo, build_test_resource_info
 from ..common_neon.evm_config import EVMConfig
 from ..common_neon.address import NeonAddress
 
@@ -32,14 +32,18 @@ from ..mempool.mempool_schedule import MPTxSchedule, MPSenderTxPool
 
 from ..statistic.proxy_client import ProxyStatClient
 
+from ..neon_core_api.neon_client import NeonClient
+
 from .solana_utils import WalletAccount, wallet_path
 
 
 @singleton
 class MockOpResInfo:
     def __init__(self):
+        config = FakeConfig()
+        client = NeonClient(config)
         wallet = WalletAccount(wallet_path())
-        self._res_info = OpResInfoBuilder(FakeConfig()).build_test_resource_info(wallet.get_acc().secret(), res_id=1)
+        self._res_info = build_test_resource_info(client, wallet.get_acc().secret(), res_id=1)
 
     def get(self) -> OpResInfo:
         return self._res_info

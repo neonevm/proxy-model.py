@@ -18,6 +18,8 @@ from .indexer import Indexer
 from .indexer_db import IndexerDB
 from .indexer_utils import get_config_start_slot
 
+from ..neon_core_api.neon_core_api_service import NeonCoreApiService
+
 
 LOG = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ class NeonIndexerApp:
 
         self._db_conn: Optional[DBConnection] = None
         self._stat_service: Optional[IndexerStatService] = None
+        self._core_api_service: Optional[NeonCoreApiService] = None
 
         self._first_slot = 0
         self._last_known_slot = 0
@@ -44,6 +47,9 @@ class NeonIndexerApp:
 
         self._stat_service = IndexerStatService(self._config)
         self._stat_service.start()
+
+        self._core_api_service = NeonCoreApiService(self._config)
+        self._core_api_service.start()
 
         self._db_conn = DBConnection(self._config)
         constants_db = ConstantsDB(self._db_conn)

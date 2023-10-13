@@ -22,6 +22,7 @@ on:
       - "*"
 env:
   NEON_EVM_TAG: "latest"
+  FAUCET_TAG: "latest"
   AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
   AWS_DEFAULT_REGION: ${{secrets.AWS_DEFAULT_REGION}}
   AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
@@ -132,6 +133,7 @@ jobs:
           --skip_uniswap \
           --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
           --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
+          --faucet_tag=${{ env.FAUCET_TAG }} \
           --head_ref_branch=${{ github.head_ref }}
       - name: Dump docker logs
         if: always()
@@ -170,6 +172,7 @@ jobs:
             --head_ref_branch=${{ github.head_ref }} \
             --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \
             --proxy_tag=${{ needs.build-image.outputs.proxy_tag }} \
+            --faucet_tag=${{ env.FAUCET_TAG }} \
             --run_number=${GITHUB_RUN_NUMBER}
       - name: Set outputs
         id: share

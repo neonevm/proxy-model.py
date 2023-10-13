@@ -10,6 +10,7 @@ from ..common_neon.solana_alt_limit import ALTLimit
 from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBlockHash, SolTxSizeError
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_block import SolBlockInfo
+from ..common_neon.address import NeonAddress
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 
@@ -64,12 +65,12 @@ class GasEstimate:
     _u256_max = int.from_bytes(bytes([0xFF] * 32), 'big')
 
     def __init__(self, core_api_client: NeonCoreApiClient, def_chain_id: int, request: Dict[str, Any]):
-        self._sender = request.get('from')
-        self._contract = request.get('to')
+        self._sender: Optional[NeonAddress] = request.get('from')
+        self._contract: Optional[NeonAddress] = request.get('to')
         self._def_chain_id = def_chain_id
-        self._data = request.get('data')
-        self._value = request.get('value')
-        self._gas = request.get('gas', hex(self._u256_max))
+        self._data: Optional[str] = request.get('data')
+        self._value: Optional[str] = request.get('value')
+        self._gas: Optional[str] = request.get('gas', hex(self._u256_max))
 
         self._core_api_client = core_api_client
 
@@ -89,7 +90,7 @@ class GasEstimate:
         if self._cached_tx_cost_size is not None:
             return self._cached_tx_cost_size
 
-        to_addr = bytes.fromhex(self._contract.address)[2:] if self._contract else bytes()
+        to_addr = bytes.fromhex(self._contract.address[2:]) if self._contract else bytes()
         data = bytes.fromhex((self._data or '0x')[2:])
         value = int((self._value or '0x0')[2:], 16)
         gas = int(self._gas[2:], 16) if self._gas else None
@@ -132,16 +133,6 @@ class GasEstimate:
     def _execution_cost(self) -> int:
         return self._emulator_result.used_gas
 
-    @staticmethod
-    def _iterative_overhead_cost() -> int:
-        """
-        if the transaction fails on the simple execution in one iteration,
-        it is executed in iterative mode to store the Neon receipt on Solana
-        """
-        last_iteration_cost = 5000
-        cancel_cost = 5000
-        return last_iteration_cost + cancel_cost
-
     def _alt_cost(self) -> int:
         """
         Costs to create->extend->deactivate->close an Address Lookup Table
@@ -174,16 +165,14 @@ class GasEstimate:
 
         execution_cost = self._execution_cost()
         tx_size_cost = self._tx_size_cost()
-        overhead_cost = self._iterative_overhead_cost()
         alt_cost = self._alt_cost()
 
         # Ethereum's wallets don't accept gas limit less than 21000
-        gas = max(execution_cost + tx_size_cost + overhead_cost + alt_cost, 21000)
+        gas = max(execution_cost + tx_size_cost + alt_cost, 25000)
 
         LOG.debug(
             f'execution_cost: {execution_cost}, '
             f'tx_size_cost: {tx_size_cost}, '
-            f'iterative_overhead_cost: {overhead_cost}, '
             f'alt_cost: {alt_cost}, '
             f'estimated gas: {gas}'
         )

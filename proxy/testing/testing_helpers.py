@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from eth_account.account import LocalAccount as NeonLocalAccount, Account as NeonAccount, SignedTransaction
 from web3 import Web3, eth as web3_eth
 from web3.types import TxReceipt, HexBytes, Wei, TxParams
-from typing import Type, Dict, Union, Optional
+from typing import Type, Dict, Union, Optional, Any
 
 from proxy.common_neon.web3 import NeonWeb3
 from proxy.common_neon.config import Config
@@ -164,13 +164,16 @@ class Proxy:
         return self.compile_and_deploy_contract(signer, source)
 
     def get_account_info(self, address: str) -> NeonAccountInfo:
-        res = self._web3.neon.neon_getAccount(bytes.fromhex(address[2:]))
+        res = self._web3.neon.get_neon_account(address)
         return NeonAccountInfo(
             neon_addr=NeonAddress.from_raw(res.address),
             pda_address=SolPubKey.from_string(res.solanaAddress),
             tx_count=res.transactionCount,
             balance=res.balance
         )
+
+    def emulate(self, tx: bytes) -> Dict[str, Any]:
+        return self._web3.neon.neon_emulate(tx)
 
 
 class SolClient(SolInteractor):

@@ -5,9 +5,9 @@ import unittest
 from proxy.common_neon.neon_instruction import NeonIxBuilder
 from proxy.common_neon.utils.eth_proto import NeonTx
 from proxy.common_neon.config import Config
-from proxy.common_neon.solana_tx import SolAccountMeta, SolPubKey
+from proxy.common_neon.solana_tx import SolAccountMeta
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
-from proxy.common_neon.operator_resource_info import OpResInfoBuilder, OpResInfo
+from proxy.common_neon.operator_resource_info import OpResInfo, build_test_resource_info
 
 from proxy.mempool.mempool_executor_task_op_res import OpResInit
 
@@ -81,14 +81,16 @@ class BlockedTest(unittest.TestCase):
         wallet = WalletAccount(wallet_path())
 
         res_acct = wallet.get_acc()
-        cls.resource_iter = resource = OpResInfoBuilder(config).build_test_resource_info(
+        cls.resource_iter = resource = build_test_resource_info(
+            neon_client,
             private_key=res_acct.secret(),
             res_id=365
         )
         OpResInit(config, solana, neon_client).init_resource(resource)
 
         res_single_acct = wallet.get_acc()
-        cls.resource_single = resource = OpResInfoBuilder(config).build_test_resource_info(
+        cls.resource_single = resource = build_test_resource_info(
+            neon_client,
             private_key=res_single_acct.secret(),
             res_id=366
         )
@@ -115,7 +117,7 @@ class BlockedTest(unittest.TestCase):
         print(f'blocked tx hash: {tx_store.tx_signed.hash.hex()}')
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
-        neon_ix_builder.init_operator_neon(resource.neon_account_dict[self.chain_id])
+        neon_ix_builder.init_operator_neon(resource.neon_account_dict[self.chain_id].pda_address)
 
         neon_tx = NeonTx.from_string(tx_store.tx_signed.rawTransaction)
         neon_ix_builder.init_neon_tx(neon_tx)

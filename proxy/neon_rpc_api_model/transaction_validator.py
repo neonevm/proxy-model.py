@@ -97,7 +97,7 @@ class NeonTxValidator:
 
     @staticmethod
     def _prevalidate_sender_eoa(neon_contract_info: NeonContractInfo):
-        if neon_contract_info.code is not None:
+        if neon_contract_info.chain_id:
             raise EthereumError(message='sender not an eoa')
 
     def _prevalidate_sender_balance(self, neon_tx: NeonTx, neon_account_info: NeonAccountInfo, tx_gas_limit: int):

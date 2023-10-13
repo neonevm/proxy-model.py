@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.address import NeonAddress
@@ -87,81 +87,109 @@ class BPFLoader2ExecutableInfo:
 
 
 @dataclass(frozen=True)
-class EVMConfigData:
+class EVMTokenInfo:
+    chain_id: int
+    token_name: str
+    token_mint: SolPubKey
+
+
+class _EVMConfigConst(enum.Enum):
+    ConfigName = 'CONFIG'
+    ChainsName = 'CHAINS'
+    VersionName = 'VERSION'
+    RevisionName = 'REVISION'
+
+    NeonTokenName = 'NEON'
+    NeonTokenChainID = 'NEON_CHAIN_ID'
+    NeonTokenMint = 'NEON_TOKEN_MINT'
+
+    NeonPKGVersionName = 'NEON_PKG_VERSION'
+    NeonPKGRevisionName = 'NEON_REVISION'
+
+    NeonNoVersion = '0.0.0-unknown'
+    NeonNoRevision = 'unknown'
+
+
+@dataclass(frozen=True)
+class EVMConfigInfo:
     last_deployed_slot: int
 
-    evm_param_dict: Dict[str, str]
-    token_dict: Dict[int, Dict[str, Any]]
+    evm_param_list: List[Tuple[str, str]]
+    token_info_list: List[EVMTokenInfo]
 
     version: str
     revision: str
 
     chain_id: int
-    token_mint: SolPubKey
 
     @staticmethod
-    def from_json(last_deployed_slot: int, json_config: Dict[str, Any]) -> EVMConfigData:
+    def from_json(last_deployed_slot: int, json_config: Dict[str, Any]) -> EVMConfigInfo:
         evm_param_dict: Dict[str, str] = dict()
-        token_dict: Dict[int, Dict[str, Any]] = dict()
+        token_info_list: List[EVMTokenInfo] = list()
 
         version = ''
         revision = ''
 
         for key, value in json_config.items():
-            if key.upper() == 'CONFIG':
+            if key.upper() == _EVMConfigConst.ConfigName.value:
                 evm_param_dict = value
-            elif key.upper() == 'CHAINS':
-                token_dict = {
-                    token['id']: dict(
+            elif key.upper() == _EVMConfigConst.ChainsName.value:
+                token_info_list = [
+                    EVMTokenInfo(
                         chain_id=token['id'],
                         token_mint=SolPubKey.from_string(token['token']),
                         token_name=token['name'].upper()
                     )
                     for token in value
-                }
-            elif key.upper() == 'VERSION':
+                ]
+            elif key.upper() == _EVMConfigConst.VersionName.value:
                 version = value
-            elif key.upper() == 'REVISION':
+            elif key.upper() == _EVMConfigConst.RevisionName.value:
                 revision = value
 
         chain_id = 0
-        token_mint = SolPubKey.default()
-        for token in token_dict.values():
-            if token['token_name'] != 'NEON':
+        for token in token_info_list:
+            if token.token_name != _EVMConfigConst.NeonTokenName.value:
                 continue
-            chain_id = token['chain_id']
-            token_mint = token['token_mint']
+            chain_id = token.chain_id
             break
 
-        if chain_id == 0:
-            chain_id = evm_param_dict.get('NEON_CHAIN_ID', 0)
-            token_mint = evm_param_dict.get('NEON_TOKEN_MINT', None)
+        # the call of neon-cli utility
+        if not len(token_info_list):
+            chain_id = int(evm_param_dict.get(_EVMConfigConst.NeonTokenChainID.value, '0'), 10)
+            token_mint = evm_param_dict.get(_EVMConfigConst.NeonTokenMint.value, None)
             token_mint = SolPubKey.from_string(token_mint) if token_mint else SolPubKey.default()
+            token_info_list = [EVMTokenInfo(chain_id, 'NEON', token_mint)]
 
+        # the call of neon-cli utility
         if not len(version):
-            version = evm_param_dict.get('NEON_PKG_VERSION', '0.0.0-unknown'),
-            revision = evm_param_dict.get('NEON_REVISION', 'unknown')
+            version = evm_param_dict.get(
+                _EVMConfigConst.NeonPKGVersionName.value,
+                _EVMConfigConst.NeonNoVersion.value
+            )
+            revision = evm_param_dict.get(
+                _EVMConfigConst.NeonPKGRevisionName.value,
+                _EVMConfigConst.NeonNoRevision.value
+            )
 
-        return EVMConfigData(
+        return EVMConfigInfo(
             last_deployed_slot=last_deployed_slot,
-            evm_param_dict=evm_param_dict,
-            token_dict=token_dict,
+            evm_param_list=list(evm_param_dict.items()),
+            token_info_list=token_info_list,
             version=version,
             revision=revision,
-            chain_id=chain_id,
-            token_mint=token_mint
+            chain_id=chain_id
         )
 
     @staticmethod
-    def init_empty() -> EVMConfigData:
-        return EVMConfigData(
+    def init_empty() -> EVMConfigInfo:
+        return EVMConfigInfo(
             last_deployed_slot=0,
-            evm_param_dict=dict(),
-            token_dict=dict(),
-            version='0.0.0-unknown',
-            revision='unknown',
-            chain_id=0,
-            token_mint=SolPubKey.default()
+            evm_param_list=list(),
+            token_info_list=list(),
+            version=_EVMConfigConst.NeonNoVersion.value,
+            revision=_EVMConfigConst.NeonNoRevision.value,
+            chain_id=0
         )
 
 
@@ -189,7 +217,6 @@ class HolderStatus(enum.Enum):
         elif value == 'Finalized':
             return HolderStatus.Finalized
         return HolderStatus.Error
-
 
 
 @dataclass(frozen=True)
@@ -221,14 +248,14 @@ class HolderAccountInfo:
         acct_list = [
             HolderAccountMetaInfo(
                 pubkey=SolPubKey.from_string(json_acct.get('key')),
-                is_writable=json_acct.get('is_writeable')
+                is_writable=json_acct.get('is_writable')
             )
             for json_acct in acct_list
         ]
 
         def _get_int(_name: str) -> Optional[int]:
             value = json_data.get(_name, None)
-            return int(value, 10) if value else None
+            return int(value[2:], 16) if value else None
 
         return HolderAccountInfo(
             holder_account=addr,

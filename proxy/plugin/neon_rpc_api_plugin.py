@@ -15,6 +15,7 @@ import threading
 import time
 import urllib
 import logging
+import re
 from typing import List, Tuple, Dict, Any, Optional
 
 from ..common.utils import build_http_response
@@ -29,13 +30,13 @@ from ..http.parser import HttpParser
 from ..http.server import HttpWebServerBasePlugin, httpProtocolTypes
 from ..http.websocket import WebsocketFrame
 
-from ..neon_rpc_api_model import NeonRpcApiWorker
+from ..neon_rpc_api_model import NeonRpcApiWorkerData, NeonRpcApiWorker
 from ..statistic import ProxyStatClient, NeonMethodData
 
 modelInstanceLock = threading.Lock()
 configInstance: Optional[Config] = None
 statInstance: Optional[ProxyStatClient] = None
-modelInstance: Optional[NeonRpcApiWorker] = None
+modelInstanceData: Optional[NeonRpcApiWorkerData] = None
 
 
 LOG = logging.getLogger(__name__)
@@ -44,29 +45,30 @@ LOG = logging.getLogger(__name__)
 class NeonRpcApiPlugin(HttpWebServerBasePlugin):
     """Extend in-built Web Server to add Reverse Proxy capabilities.
     """
-    SOLANA_PROXY_LOCATION: str = r'/solana$'
+    SOLANA_PROXY_LOCATION: str = r'/solana(/*[a-zA-Z]*)$'
+    _SOLANA_PROXY_RE = re.compile(SOLANA_PROXY_LOCATION)
 
     def __init__(self, *args):
         HttpWebServerBasePlugin.__init__(self, *args)
-        self._config, self._stat_client, self._model = NeonRpcApiPlugin.getModel()
+        self._config, self._stat_client, self._model_data = NeonRpcApiPlugin.getModel()
 
     @classmethod
-    def getModel(cls) -> Tuple[Config, ProxyStatClient, NeonRpcApiWorker]:
+    def getModel(cls) -> Tuple[Config, ProxyStatClient, NeonRpcApiWorkerData]:
         global modelInstanceLock
         global configInstance
         global statInstance
-        global modelInstance
+        global modelInstanceData
 
-        if modelInstance is not None:
-            return configInstance, statInstance, modelInstance
+        if modelInstanceData is not None:
+            return configInstance, statInstance, modelInstanceData
 
         with modelInstanceLock:
-            if modelInstance is None:
+            if modelInstanceData is None:
                 configInstance = Config()
                 statInstance = ProxyStatClient(configInstance)
                 statInstance.start()
-                modelInstance = NeonRpcApiWorker(configInstance)
-            return configInstance, statInstance, modelInstance
+                modelInstanceData = NeonRpcApiWorkerData(configInstance)
+            return configInstance, statInstance, modelInstanceData
 
     def routes(self) -> List[Tuple[int, str]]:
         return [
@@ -84,7 +86,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         rpc_value = request.get(name, None)
         return self._sanitize_value(rpc_value)
 
-    def _process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_request(self, model: NeonRpcApiWorker, request: Dict[str, Any]) -> Dict[str, Any]:
         response = {
             'jsonrpc': '2.0',
             'id': self._get_request_value(request, 'id')
@@ -95,10 +97,10 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
 
         try:
             rpc_method = self._get_request_value(request, 'method')
-            if (not hasattr(self._model, rpc_method)) or (not self._model.is_allowed_api(rpc_method)):
+            if (not hasattr(model, rpc_method)) or (not model.is_allowed_api(rpc_method)):
                 response['error'] = {'code': -32601, 'message': f'the method {rpc_method} does not exist/is not available'}
             else:
-                method = getattr(self._model, rpc_method)
+                method = getattr(model, rpc_method)
                 param_object = []
                 if "params" in request and isinstance(request["params"], list):
                     param_object = request["params"]
@@ -121,7 +123,7 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
         LOG.info(
             'handle_request >>> %s 0x%0x %s %s resp_time_ms= %s',
             threading.get_ident(),
-            id(self._model),
+            id(self._model_data),
             response,
             rpc_method,
             resp_time_ms
@@ -161,9 +163,16 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
             return
 
         try:
+            request_path = bytes.decode(request.path or b'/', 'utf8')
+            token_name_match = self._SOLANA_PROXY_RE.match(request_path)
+            token_name = None
+            if token_name_match and len(token_name_match.groups()):
+                token_name = token_name_match[1].strip('/')
+
             request = json.loads(request.body)
+            model = NeonRpcApiWorker(self._model_data, token_name)
             LOG.info(
-                'handle_request <<< %s 0x%x %s', threading.get_ident(), id(self._model), request
+                'handle_request <<< %s 0x%x %s', threading.get_ident(), id(self._model_data), request
             )
             # request = json.loads(request.body)
             if isinstance(request, list):
@@ -171,11 +180,13 @@ class NeonRpcApiPlugin(HttpWebServerBasePlugin):
                 if len(request) == 0:
                     raise Exception("Empty batch request")
                 for r in request:
-                    response.append(self._process_request(r))
+                    response.append(self._process_request(model, r))
             elif isinstance(request, dict):
-                response = self._process_request(request)
+                response = self._process_request(model, request)
             else:
                 raise Exception("Invalid request")
+        except EthereumError as err:
+            response = {'jsonrpc': '2.0', 'error': err.get_error()}
         except Exception as err:
             response = {'jsonrpc': '2.0', 'error': {'code': -32000, 'message': str(err)}}
 
