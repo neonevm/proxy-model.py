@@ -46,7 +46,7 @@ from .estimate import GasEstimate
 from .transaction_validator import NeonTxValidator
 
 
-NEON_PROXY_PKG_VERSION = '1.5.0-dev'
+NEON_PROXY_PKG_VERSION = '1.7.0-dev'
 NEON_PROXY_REVISION = 'NEON_PROXY_REVISION_TO_BE_REPLACED'
 LOG = logging.getLogger(__name__)
 
