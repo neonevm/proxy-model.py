@@ -73,15 +73,8 @@ class SimpleNeonTxStrategy(BaseNeonTxStrategy):
     def _validate(self) -> bool:
         return (
             self._validate_stuck_tx() and
-            self._validate_tx_has_chainid() and
-            self._validate_no_resize_iter_cnt()
+            self._validate_tx_has_chainid()
         )
-
-    def _validate_no_resize_iter_cnt(self) -> bool:
-        if self._ctx.resize_iter_cnt <= 0:
-            return True
-        self._validation_error_msg = 'Has account resize iterations'
-        return False
 
 
 @alt_strategy

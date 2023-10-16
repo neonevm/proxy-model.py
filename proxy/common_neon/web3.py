@@ -1,22 +1,20 @@
+import dataclasses
+
 from web3 import Web3
 from web3.module import Module
 from web3.method import Method, default_root_munger
 from web3.providers.base import BaseProvider
 from typing import Optional, Tuple, Callable, Union
-from web3.types import RPCEndpoint, TypedDict, HexBytes, HexStr, ChecksumAddress, Address, BlockIdentifier, BlockParams
+from web3.types import RPCEndpoint, HexBytes, ChecksumAddress, Address, BlockIdentifier
 
 
-NeonAccountData = TypedDict(
-    "NeonAccountData",
-    {
-        "address": HexBytes,
-        "transactionCount": int,
-        "balance": int,
-        "chain_id": int,
-        "solanaAddress": str,
-    },
-    total=False,
-)
+@dataclasses.dataclass
+class NeonAccountData:
+    address: HexBytes
+    transactionCount: int
+    balance: int
+    chainId: int
+    solanaAddress: str
 
 
 class Neon(Module):
@@ -72,7 +70,19 @@ class Neon(Module):
         account: Union[Address, ChecksumAddress, str],
         block_identifier: Optional[BlockIdentifier] = None,
     ) -> NeonAccountData:
-        return self._neon_get_account(account, block_identifier)
+        result = self._neon_get_account(account, block_identifier)
+
+        def _to_int(_s) -> int:
+            if isinstance(_s, str):
+                return int(_s, 16)
+            return _s
+        return NeonAccountData(
+            address=result.address,
+            solanaAddress=result.solanaAddress,
+            chainId=_to_int(result.chainId),
+            transactionCount=_to_int(result.transactionCount),
+            balance=_to_int(result.balance)
+        )
 
 
 class NeonWeb3(Web3):

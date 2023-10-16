@@ -176,7 +176,9 @@ class SolTxErrorParser:
         r'Program (\w+) failed: exceeded CUs meter at BPF instruction #(\d+)$'
     )
     _read_write_blocked_log = 'trying to execute transaction on rw locked account'
-    _already_finalized_log = 'Program log: Storage Account is finalized'
+    _already_finalized_log_vold = 'Program log: Storage Account is finalized'
+    _already_finalized_log = 'Program log: Transaction already finalized'
+
 
     _log_truncated_log = 'Log truncated'
     _require_resize_iter_log = 'Deployment of contract which needs more than 10kb of account space needs several'
@@ -355,6 +357,8 @@ class SolTxErrorParser:
         log_list = self._get_evm_log_list()
         for log_rec in log_list:
             if log_rec == self._already_finalized_log:
+                return True
+            elif log_rec == self._already_finalized_log_vold:
                 return True
         return False
 

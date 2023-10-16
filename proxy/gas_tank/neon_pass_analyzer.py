@@ -13,12 +13,10 @@ from ..common_neon.utils import NeonTxInfo
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.solana_neon_tx_receipt import SolNeonTxReceiptInfo, SolTxMetaInfo, SolIxMetaInfo
 from ..common_neon.utils.evm_log_decoder import decode_log_list, NeonLogTxReturn
+from ..common_neon.neon_instruction import EvmIxCode
 
 
 LOG = logging.getLogger(__name__)
-
-EVM_PROGRAM_CREATE_ACCT = 0x28
-EVM_PROGRAM_CALL_FROM_RAW_TRX = 0x1f
 
 TOKEN_APPROVE = 0x04
 TOKEN_INIT_ACCT_2 = 0x10
@@ -95,7 +93,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
         #   1. Create token account (token.init_v2)
         #   2. Transfer tokens (token.transfer)
         # First: select all instructions that can form such chains
-        create_ix_list = self._find_evm_ix_list(tx_parser, 'create account', EVM_PROGRAM_CREATE_ACCT)
+        create_ix_list = self._find_evm_ix_list(tx_parser, 'create account', EvmIxCode.CreateBalance)
         if not len(create_ix_list):
             return approved_list
 
@@ -103,7 +101,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
         if not len(approve_ix_list):
             return approved_list
 
-        call_ix_list = self._find_evm_ix_list(tx_parser, 'call', EVM_PROGRAM_CALL_FROM_RAW_TRX)
+        call_ix_list = self._find_evm_ix_list(tx_parser, 'call', EvmIxCode.TxExecFromData)
         if not len(call_ix_list):
             return approved_list
 

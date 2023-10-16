@@ -166,7 +166,7 @@ class Proxy:
     def get_account_info(self, address: str) -> NeonAccountInfo:
         res = self._web3.neon.get_neon_account(address)
         return NeonAccountInfo(
-            neon_addr=NeonAddress.from_raw(res.address),
+            neon_addr=NeonAddress.from_raw(res.address, res.chainId),
             pda_address=SolPubKey.from_string(res.solanaAddress),
             tx_count=res.transactionCount,
             balance=res.balance

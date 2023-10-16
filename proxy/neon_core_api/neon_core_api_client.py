@@ -102,7 +102,7 @@ class NeonCoreApiClient(NeonClientBase):
         return self._client_list[idx]
 
     def _call(self, method: _MethodName, request: RPCRequest) -> RPCResponse:
-        for retry in range(self._retry_cnt):
+        for retry in range(5 * self._retry_cnt):
             client = self._get_client()
             try:
                 return client.call(method, request)
@@ -172,7 +172,7 @@ class NeonCoreApiClient(NeonClientBase):
 
     def get_storage_at(self, contract: NeonAddress, position: str, block: SolBlockInfo) -> str:
         request = dict(
-            contract_id=contract,
+            contract=contract.address,
             index=position
         )
         request = self._add_block(request, block)

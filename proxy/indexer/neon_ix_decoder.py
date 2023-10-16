@@ -262,7 +262,7 @@ class TxExecFromDataIxDecoder(BaseTxSimpleIxDecoder):
         # N bytes - NeonTx
 
         ix = self.state.sol_neon_ix
-        if len(ix.ix_data) < 6:
+        if len(ix.ix_data) < 5:
             self._decoding_skip(f'no enough SolIx.Data(len={len(ix.ix_data)}) to decode NeonTx')
             return None
 

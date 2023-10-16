@@ -9,7 +9,7 @@ from rlp import encode as rlp_encode
 
 from solders.system_program import CreateAccountWithSeedParams, create_account_with_seed
 
-from .constants import INCINERATOR_ID, COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID, EVM_PROGRAM_ID
+from .constants import COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID, EVM_PROGRAM_ID
 from .evm_config import EVMConfig
 from .utils.eth_proto import NeonTx
 from .utils.utils import str_enum
@@ -97,7 +97,8 @@ class NeonIxBuilder:
     def __init__(self, operator: SolPubKey):
         self._operator_account = operator
         self._operator_neon_address: Optional[SolPubKey] = None
-        self._neon_account_list: List[SolAccountMeta] = []
+        self._simple_neon_acct_list: List[SolAccountMeta] = list()
+        self._iter_neon_acct_list: List[SolAccountMeta] = list()
         self._neon_tx: Optional[NeonTx] = None
         self._neon_tx_sig: Optional[bytes] = None
         self._msg: Optional[bytes] = None
@@ -141,7 +142,11 @@ class NeonIxBuilder:
         return self
 
     def init_neon_account_list(self, neon_account_list: List[SolAccountMeta]) -> NeonIxBuilder:
-        self._neon_account_list = neon_account_list
+        self._simple_neon_acct_list = neon_account_list
+        self._iter_neon_acct_list = [
+            SolAccountMeta(pubkey=src.pubkey, is_writable=True, is_signer=src.is_signer)
+            for src in neon_account_list
+        ]
         return self
 
     def init_iterative(self, holder: SolPubKey):
@@ -197,7 +202,7 @@ class NeonIxBuilder:
 
         ix_data = b''.join([
             EvmIxCode.CreateBalance.value.to_bytes(1, byteorder='little'),
-            bytes(neon_account_info.neon_addr),
+            neon_account_info.neon_addr.to_bytes(),
             neon_account_info.chain_id.to_bytes(8, byteorder='little')
         ])
 
@@ -241,8 +246,7 @@ class NeonIxBuilder:
                 SolAccountMeta(pubkey=self._treasury_pool_address, is_signer=False, is_writable=True),
                 SolAccountMeta(pubkey=self._operator_neon_address, is_signer=False, is_writable=True),
                 SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                SolAccountMeta(pubkey=EVM_PROGRAM_ID, is_signer=False, is_writable=False),
-            ] + self._neon_account_list
+            ] + self._simple_neon_acct_list
         )
 
     def make_tx_exec_from_account_ix(self) -> SolTxIx:
@@ -250,7 +254,7 @@ class NeonIxBuilder:
             EvmIxCode.TxExecFromAccount.value.to_bytes(1, byteorder='little'),
             self._treasury_pool_index_buf,
         ])
-        return self._make_holder_ix(ix_data)
+        return self._make_holder_ix(ix_data, self._simple_neon_acct_list)
 
     def make_cancel_ix(self) -> SolTxIx:
         return SolTxIx(
@@ -259,8 +263,8 @@ class NeonIxBuilder:
             accounts=[
                 SolAccountMeta(pubkey=self._holder, is_signer=False, is_writable=True),
                 SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
-                SolAccountMeta(pubkey=INCINERATOR_ID, is_signer=False, is_writable=True),
-            ] + self._neon_account_list
+                self._operator_neon_address
+            ] + self._iter_neon_acct_list
         )
 
     def make_tx_step_from_data_ix(self, step_cnt: int, index: int) -> SolTxIx:
@@ -281,9 +285,9 @@ class NeonIxBuilder:
         if data is not None:
             ix_data += data
 
-        return self._make_holder_ix(ix_data)
+        return self._make_holder_ix(ix_data, self._iter_neon_acct_list)
 
-    def _make_holder_ix(self, ix_data: bytes):
+    def _make_holder_ix(self, ix_data: bytes, neon_acct_list: List[SolAccountMeta]):
         return SolTxIx(
             program_id=EVM_PROGRAM_ID,
             data=ix_data,
@@ -293,8 +297,7 @@ class NeonIxBuilder:
                  SolAccountMeta(pubkey=self._treasury_pool_address, is_signer=False, is_writable=True),
                  SolAccountMeta(pubkey=self._operator_neon_address, is_signer=False, is_writable=True),
                  SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                 SolAccountMeta(pubkey=EVM_PROGRAM_ID, is_signer=False, is_writable=False),
-             ] + self._neon_account_list
+             ] + neon_acct_list
         )
 
     def make_tx_step_from_account_ix(self, neon_step_cnt: int, index: int) -> SolTxIx:

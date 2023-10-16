@@ -63,9 +63,6 @@ class NeonTxSendCtx:
         self._neon_meta_dict.clear()
 
         # Parse information from the emulator output
-        for account_desc in self._neon_tx_exec_cfg.emulator_result.account_list:
-            self._add_meta(account_desc['account'], True)
-
         for account_desc in self._neon_tx_exec_cfg.emulator_result.solana_account_list:
             self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
 
@@ -138,10 +135,8 @@ class NeonTxSendCtx:
         return self._core_api_client
 
     @property
-    def resize_iter_cnt(self) -> int:
-        resize_iter_cnt = self._neon_tx_exec_cfg.emulator_result.resize_iter_cnt
-        assert resize_iter_cnt >= 0
-        return resize_iter_cnt
+    def iter_cnt(self) -> int:
+        return self._neon_tx_exec_cfg.emulator_result.iter_cnt
 
     @property
     def emulated_evm_step_cnt(self) -> int:
