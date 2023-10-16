@@ -64,33 +64,34 @@ class GasEstimate:
     _tx_builder = _GasTxBuilder()
     _u256_max = int.from_bytes(bytes([0xFF] * 32), 'big')
 
-    def __init__(self, core_api_client: NeonCoreApiClient, def_chain_id: int, request: Dict[str, Any]):
-        self._sender: Optional[NeonAddress] = request.get('from')
-        self._contract: Optional[NeonAddress] = request.get('to')
-        self._def_chain_id = def_chain_id
-        self._data: Optional[str] = request.get('data')
-        self._value: Optional[str] = request.get('value')
-        self._gas: Optional[str] = request.get('gas', hex(self._u256_max))
-
+    def __init__(self, core_api_client: NeonCoreApiClient, def_chain_id: int):
+        self._sender: Optional[NeonAddress] = None
+        self._contract: Optional[NeonAddress] = None
+        self._data: Optional[str] = None
+        self._value: Optional[str] = None
+        self._gas: Optional[str] = None
         self._core_api_client = core_api_client
 
-        self._cached_tx_cost_size: Optional[int] = None
-        self._cached_alt_cost: Optional[int] = None
+        self._def_chain_id = def_chain_id
 
         self._account_list: List[SolAccountMeta] = list()
         self._emulator_result = NeonEmulatorResult()
 
-    def execute(self, block: SolBlockInfo):
+    def _get_request_param(self, request: Dict[str, Any]) -> None:
+        self._sender: Optional[NeonAddress] = request.get('from')
+        self._contract: Optional[NeonAddress] = request.get('to')
+        self._data: Optional[str] = request.get('data')
+        self._value: Optional[str] = request.get('value')
+        self._gas: Optional[str] = request.get('gas', hex(self._u256_max))
+
+    def _execute(self, block: SolBlockInfo) -> None:
         self._emulator_result = self._core_api_client.emulate(
             self._contract, self._sender, self._def_chain_id, self._data, self._value,
             gas_limit=self._gas, block=block, check_result=True,
         )
 
     def _tx_size_cost(self) -> int:
-        if self._cached_tx_cost_size is not None:
-            return self._cached_tx_cost_size
-
-        to_addr = bytes.fromhex(self._contract.address[2:]) if self._contract else bytes()
+        to_addr = self._contract.to_bytes() if self._contract else bytes()
         data = bytes.fromhex((self._data or '0x')[2:])
         value = int((self._value or '0x0')[2:], 16)
         gas = int(self._gas[2:], 16) if self._gas else None
@@ -107,7 +108,6 @@ class GasEstimate:
             s=0x1820182018201820182018201820182018201820182018201820182018201820
         )
 
-        self._cached_tx_cost_size = 0
         try:
             sol_tx = self._tx_builder.build_tx(neon_tx, self._account_list)
             sol_tx.serialize()  # <- there will be exception about size
@@ -115,14 +115,13 @@ class GasEstimate:
             if not self._contract:  # deploy case
                 pass
             elif self._execution_cost() < self._small_gas_limit:
-                return self._cached_tx_cost_size
+                return 0
         except SolTxSizeError:
             pass
         except BaseException as exc:
             LOG.debug('Error during pack solana tx', exc_info=exc)
 
-        self._cached_tx_cost_size = self._holder_tx_cost(self._tx_builder.len_neon_tx)
-        return self._cached_tx_cost_size
+        return self._holder_tx_cost(self._tx_builder.len_neon_tx)
 
     @staticmethod
     def _holder_tx_cost(neon_tx_len: int) -> int:
@@ -134,33 +133,23 @@ class GasEstimate:
         return self._emulator_result.used_gas
 
     def _alt_cost(self) -> int:
+        """Costs to create->extend->deactivate->close an Address Lookup Table
         """
-        Costs to create->extend->deactivate->close an Address Lookup Table
-        """
-        if self._cached_alt_cost is not None:
-            return self._cached_alt_cost
-
         # ALT is used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
         acc_cnt = len(self._account_list) + 6
         if acc_cnt > ALTLimit.max_tx_account_cnt:
-            self._cached_alt_cost = 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
-        else:
-            self._cached_alt_cost = 0
+            return 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
 
-        return self._cached_alt_cost
+        return 0
 
     def _build_account_list(self):
         self._account_list.clear()
-        for account in self._emulator_result.account_list:
-            self._account_list.append(SolAccountMeta(SolPubKey.from_string(account['account']), False, True))
-
         for account in self._emulator_result.solana_account_list:
             self._account_list.append(SolAccountMeta(SolPubKey.from_string(account['pubkey']), False, True))
 
-    def estimate(self):
-        self._cached_tx_cost_size = None
-        self._cached_alt_cost = None
-
+    def estimate(self, request: Dict[str, Any], block: SolBlockInfo):
+        self._get_request_param(request)
+        self._execute(block)
         self._build_account_list()
 
         execution_cost = self._execution_cost()

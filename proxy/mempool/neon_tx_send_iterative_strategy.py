@@ -53,36 +53,18 @@ class IterativeNeonTxStrategy(BaseNeonTxStrategy):
             self._send_tx_list(self._build_cancel_tx_list())
 
     def _build_execute_tx_list(self) -> Generator[List[SolTx], None, None]:
-        LOG.debug(
-            f'Total EVM steps {self._ctx.emulated_evm_step_cnt}, '
-            f'total resize iterations {self._ctx.resize_iter_cnt}'
-        )
-
-        emulated_step_cnt = max(self._ctx.emulated_evm_step_cnt, self._evm_step_cnt)
-        additional_iter_cnt = self._ctx.resize_iter_cnt
-        additional_iter_cnt += 2  # `begin` and `finalization` iterations
-
-        yield from self._build_tx_list_impl(emulated_step_cnt, additional_iter_cnt)
+        yield from self._build_tx_list_impl(self._ctx.iter_cnt)
 
     def _build_complete_tx_list(self) -> Generator[List[SolTx], None, None]:
         LOG.debug('No receipt -> execute additional iteration')
-        yield from self._build_tx_list_impl(0, 1)
+        yield from self._build_tx_list_impl(1)
 
-    def _build_tx_list_impl(self, total_evm_step_cnt: int, add_iter_cnt: int) -> Generator[List[SolTx], None, None]:
-        tx_list: List[SolTx] = list()
-
-        for _ in range(add_iter_cnt):
-            tx_list.append(self._build_tx())
-
-        remain_evm_step_cnt = total_evm_step_cnt
-        while remain_evm_step_cnt > 0:
-            remain_evm_step_cnt -= self._evm_step_cnt
-            tx_list.append(self._build_tx())
+    def _build_tx_list_impl(self, iter_cnt: int) -> Generator[List[SolTx], None, None]:
+        tx_list: List[SolTx] = [self._build_tx() for _ in range(iter_cnt)]
 
         LOG.debug(
             f'Total iterations: {len(tx_list)}, '
-            f'additional iterations: {add_iter_cnt}, '
-            f'total EVM steps: {total_evm_step_cnt}, '
+            f'total EVM steps: {self._ctx.emulated_evm_step_cnt}, '
             f'EVM steps per iteration: {self._evm_step_cnt}'
         )
         yield tx_list

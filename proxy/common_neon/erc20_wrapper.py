@@ -161,16 +161,12 @@ class ERC20Wrapper:
 
     def _create_builder(self, tx, owner: SolPubKey, signer_acct: NeonAccount):
         tx = self.proxy.eth.account.sign_transaction(tx, signer_acct.key)
+        pda_acct = self.proxy.neon.get_neon_account(signer_acct.address).solanaAddress
 
         neon_tx = bytearray.fromhex(tx.rawTransaction.hex()[2:])
         emulating_result = self.proxy.neon.neon_emulate(neon_tx)
 
         neon_account_dict = dict()
-        for account in emulating_result['accounts']:
-            key = account['account']
-            meta = SolAccountMeta(pubkey=SolPubKey.from_string(key), is_signer=False, is_writable=True)
-            neon_account_dict[key] = meta
-
         for account in emulating_result['solana_accounts']:
             key = account['pubkey']
             meta = SolAccountMeta(pubkey=SolPubKey.from_string(key), is_signer=False, is_writable=True)
@@ -179,7 +175,7 @@ class ERC20Wrapper:
         neon_account_dict = list(neon_account_dict.values())
 
         neon = NeonIxBuilder(owner)
-        neon.init_operator_neon(SolPubKey.default())
+        neon.init_operator_neon(SolPubKey.from_string(pda_acct))
         neon.init_neon_tx(NeonTx.from_string(neon_tx))
         neon.init_neon_account_list(neon_account_dict)
         return neon

@@ -164,9 +164,7 @@ class NeonRpcApiWorker:
         token_name = token_name.upper()
         token_info = self._evm_config.get_token_info_by_name(token_name)
         if not token_info:
-            LOG.debug(f'FAIL: {token_info}')
             raise EthereumError(message=f'Token {token_name} is not supported.', data={"token_name": token_name})
-        LOG.debug(f'CHAIN_ID: {token_info.chain_id}')
         return token_info.chain_id
 
     @property
@@ -309,9 +307,8 @@ class NeonRpcApiWorker:
             param['to'] = self._normalize_address(param['to'], 'to-address')
 
         try:
-            calculator = GasEstimate(self._core_api_client, self._chain_id, param)
-            calculator.execute(block)
-            return hex(calculator.estimate())
+            calculator = GasEstimate(self._core_api_client, self._chain_id)
+            return hex(calculator.estimate(param, block))
 
         except EthereumError:
             raise
@@ -770,7 +767,7 @@ class NeonRpcApiWorker:
             address=addr.checksum_address,
             transactionCount=hex(acct.tx_count),
             balance=hex(acct.balance),
-            chain_id=hex(acct.chain_id),
+            chainId=hex(acct.chain_id),
             solanaAddress=str(acct.pda_address),
         )
 

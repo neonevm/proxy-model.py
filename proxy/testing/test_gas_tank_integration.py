@@ -116,15 +116,7 @@ class TestGasTankIntegration(TestCase):
     def create_account_instruction(cls, neon_address: str, payer: SolPubKey):
         neon_ix_builder = NeonIxBuilder(payer)
         acct_info = cls.proxy.get_account_info(neon_address)
-        return SolTxIx(
-            program_id=EVM_PROGRAM_ID,
-            data=neon_ix_builder.make_create_neon_account_ix(acct_info),
-            accounts=[
-                SolAccountMeta(pubkey=payer, is_signer=True, is_writable=True),
-                SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                SolAccountMeta(pubkey=acct_info.pda_address, is_signer=False, is_writable=True),
-            ]
-        )
+        return neon_ix_builder.make_create_neon_account_ix(acct_info)
 
     def create_sol_account(self):
         account = SolAccount()
@@ -138,11 +130,11 @@ class TestGasTankIntegration(TestCase):
         self.erc20_for_spl.mint_to(new_token_account, mint_amount)
         return new_token_account
 
-    def create_eth_account(self):
+    def create_neon_account(self):
         self.acc_num += 1
-        account = self.proxy.create_account(f'neonlabsorg/proxy-model.py/issues/344/eth_account{self.acc_num}')
-        print(f"NEON account created: {account.address}")
-        return account
+        neon_acct = self.proxy.create_account(f'neonlabsorg/proxy-model.py/issues/344/eth_account{self.acc_num}')
+        print(f"NEON account created: {neon_acct.address}")
+        return neon_acct
 
     def build_tx(self, name: str, ix_list) -> SolLegacyTx:
         return SolLegacyTx(
@@ -186,8 +178,8 @@ class TestGasTankIntegration(TestCase):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
         from_spl_token_acc = self.create_token_account(from_owner.pubkey(), mint_amount)
-        signer_acct = self.create_eth_account()
-        to_neon_acct = self.create_eth_account()
+        signer_acct = self.create_neon_account()
+        to_neon_acct = self.create_neon_account()
 
         print(f'        OWNER {from_owner.pubkey()}')
         print(f'            SPL TOKEN ACC {from_spl_token_acc}')
@@ -240,9 +232,9 @@ class TestGasTankIntegration(TestCase):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
         from_spl_token_acct = self.create_token_account(from_owner.pubkey(), mint_amount)
-        to_neon_acct1 = self.create_eth_account()
-        to_neon_acct2 = self.create_eth_account()
-        signer_acct = self.create_eth_account()
+        to_neon_acct1 = self.create_neon_account()
+        to_neon_acct2 = self.create_neon_account()
+        signer_acct = self.create_neon_account()
 
         self.assertEqual(self.erc20_for_spl.get_balance(from_spl_token_acct), mint_amount)
         self.assertEqual(self.erc20_for_spl.get_balance(to_neon_acct1.address), 0)
@@ -318,8 +310,8 @@ class TestGasTankIntegration(TestCase):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
         from_spl_token_acc = self.create_token_account(from_owner.pubkey(), mint_amount)
-        to_neon_acct = self.create_eth_account()
-        signer_acct = self.create_eth_account()
+        to_neon_acct = self.create_neon_account()
+        signer_acct = self.create_neon_account()
 
         initial_balance = 1_000
         # Create account before input liquidity (should not cause gas-less tx)
@@ -378,8 +370,8 @@ class TestGasTankIntegration(TestCase):
         from_owner = self.create_sol_account()
         mint_amount = 1000_000_000_000
         from_spl_token_acc = self.create_token_account(from_owner.pubkey(), mint_amount)
-        signer_acct = self.create_eth_account()
-        to_neon_acct = self.create_eth_account()
+        signer_acct = self.create_neon_account()
+        to_neon_acct = self.create_neon_account()
 
         transfer_amount = 6534
         tx = self.build_tx(

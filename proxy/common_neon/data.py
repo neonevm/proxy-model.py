@@ -39,21 +39,12 @@ class NeonEmulatorResult:
         return self._res_dict.get('steps_executed', 0)
 
     @cached_property
-    def account_list(self) -> List[Dict[str, Any]]:
-        return self._res_dict.get('accounts', list())
-
-    @cached_property
     def solana_account_list(self) -> List[Dict[str, Any]]:
         return self._res_dict.get('solana_accounts', list())
 
     @cached_property
-    def resize_iter_cnt(self) -> int:
-        max_resize_iter_cnt = 0
-
-        for acct in self.account_list:
-            acct_resize_iter_cnt = int(acct.get('additional_resize_steps', None) or 0)
-            max_resize_iter_cnt = max(max_resize_iter_cnt, acct_resize_iter_cnt)
-        return max_resize_iter_cnt
+    def iter_cnt(self) -> int:
+        return self._res_dict.get('iterations', 1)
 
     @cached_property
     def used_gas(self) -> int:

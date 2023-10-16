@@ -57,6 +57,9 @@ class NeonAddress:
     def chain_id(self) -> int:
         return self._chain_id
 
+    def to_bytes(self) -> bytes:
+        return self._address
+
     @cached_property
     def address(self) -> str:
         return '0x' + self._address.hex()
