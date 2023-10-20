@@ -125,7 +125,7 @@ class SolBlocksDB(BaseDBTable):
 
         block_time = self._get_column_value('block_time', value_list)
         if not block_time:
-            return self._generate_fake_block(block_slot, slot_range)
+            block_time = self._generate_block_time(block_slot)
 
         is_finalized = self._get_column_value('is_finalized', value_list)
         sol_commit = SolCommit.Finalized if is_finalized else SolCommit.Confirmed
