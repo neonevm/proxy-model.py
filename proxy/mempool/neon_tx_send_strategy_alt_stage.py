@@ -103,6 +103,9 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
         if len(self._alt_tx_set) == 0:
             return list()
 
+        if self._actual_alt_info is not None:
+            self._ctx.add_alt_address(self._actual_alt_info.alt_address)
+
         return self._alt_builder.build_prep_alt_list(self._alt_tx_set)
 
     def update_after_emulate(self) -> None:
@@ -118,8 +121,6 @@ class ALTNeonTxPrepStage(BaseNeonTxPrepStage):
             pass
         elif not self._tx_has_valid_size(legacy_tx):
             raise ALTContentError(str(alt_info.alt_address), 'is not synced yet')
-        else:
-            self._ctx.add_alt_address(alt_info.alt_address)
 
     def build_tx(self, legacy_tx: SolLegacyTx) -> SolV0Tx:
         return SolV0Tx(name=legacy_tx.name, ix_list=legacy_tx.ix_list, alt_info_list=self._alt_info_list)
