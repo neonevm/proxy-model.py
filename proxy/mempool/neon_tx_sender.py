@@ -34,8 +34,14 @@ class NeonTxSendStrategyExecutor:
     def execute(self) -> NeonTxResultInfo:
         self._validate_nonce()
 
-        start = self._ctx.strategy_idx
-        end = len(self._strategy_list)
+        start_idx = self._ctx.strategy_idx
+        end_idx = len(self._strategy_list)
+        try:
+            return self._iter_strategy_list(start_idx, end_idx)
+        finally:
+            self._init_state_tx_cnt()
+
+    def _iter_strategy_list(self, start: int, end: int) -> NeonTxResultInfo:
         for strategy_idx in range(start, end):
             strategy = self._strategy_list[strategy_idx](self._ctx)
             try:
@@ -58,9 +64,6 @@ class NeonTxSendStrategyExecutor:
                 LOG.warning('Fail on execute tx', exc_info=exc)
                 self._cancel(strategy)
                 raise
-
-            finally:
-                self._init_state_tx_cnt()
 
         raise BigTxError()
 
@@ -124,7 +127,7 @@ class NeonTxSendStrategyExecutor:
 
     def _validate_tx_acct_amount(self) -> None:
         # 6 is the base number of account in Neon Instruction. see NeonIxBuilder
-        acct_cnt = self._ctx.len_account_list + 6
+        acct_cnt = self._ctx.len_account_list + 5
         if acct_cnt > self._ctx.config.max_tx_account_cnt:
             raise TxAccountCntTooBig(acct_cnt, self._ctx.config.max_tx_account_cnt)
 

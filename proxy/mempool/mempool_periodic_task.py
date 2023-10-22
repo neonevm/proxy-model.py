@@ -93,7 +93,7 @@ class MPPeriodicTaskLoop(Generic[MPPeriodicTaskRequest, MPPeriodicTaskResult], a
 
         mp_result = task.aio_task.result()
         if mp_result is None:
-            LOG.error(f'Empty result from the executor')
+            LOG.error('Empty result from the executor')
             self._process_error(task.mp_request)
             return
 

@@ -13,6 +13,7 @@ from .mempool_api import (
 from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.pickable_data_server import AddrPickableDataClient
+from ..common_neon.address import NeonAddress
 
 
 LOG = logging.getLogger(__name__)
@@ -79,13 +80,13 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def get_pending_tx_nonce(self, req_id: str, sender: str) -> int:
+    def get_pending_tx_nonce(self, req_id: str, sender: NeonAddress) -> int:
         mempool_pending_tx_nonce_req = MPPendingTxNonceRequest(req_id=req_id, sender=sender)
         return self._pickable_data_client.send_data(mempool_pending_tx_nonce_req)
 
     @_guard_conn
     @_reconnecting
-    def get_mempool_tx_nonce(self, req_id: str, sender: str) -> int:
+    def get_mempool_tx_nonce(self, req_id: str, sender: NeonAddress) -> int:
         req = MPMempoolTxNonceRequest(req_id=req_id, sender=sender)
         return self._pickable_data_client.send_data(req)
 
@@ -97,7 +98,7 @@ class MemPoolClient:
 
     @_guard_conn
     @_reconnecting
-    def get_pending_tx_by_sender_nonce(self, req_id, sender: str, tx_nonce: int) -> MPNeonTxResult:
+    def get_pending_tx_by_sender_nonce(self, req_id, sender: NeonAddress, tx_nonce: int) -> MPNeonTxResult:
         req = MPPendingTxBySenderNonceRequest(req_id=req_id, sender=sender, tx_nonce=tx_nonce)
         return self._pickable_data_client.send_data(req)
 

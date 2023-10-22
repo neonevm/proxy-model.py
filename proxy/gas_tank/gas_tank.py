@@ -142,11 +142,10 @@ class GasTank:
             LOG.warning(f'holder account {holder_key} is not in the collected data')
             return
 
-        first_blocked_account = 6
         tx_info = GasTankTxInfo.create_tx_info(
             sol_neon_ix.neon_tx_sig, holder.data, ix_code, key,
             sol_neon_ix.sol_tx_cost.operator,
-            sol_neon_ix.get_account(0), sol_neon_ix.iter_account_key(first_blocked_account)
+            sol_neon_ix.get_account(0)
         )
         if tx_info is None:
             return
@@ -168,7 +167,7 @@ class GasTank:
         tx_info = GasTankTxInfo.create_tx_info(
             sol_neon_ix.neon_tx_sig, sol_neon_ix.ix_data[5:],
             EvmIxCode.TxExecFromData, GasTankTxInfo.Key(sol_neon_ix.neon_tx_sig),
-            sol_neon_ix.sol_tx_cost.operator, '', iter(())
+            sol_neon_ix.sol_tx_cost.operator, ''
         )
         if tx_info is None:
             return
@@ -184,8 +183,7 @@ class GasTank:
         key = GasTankTxInfo.Key(sol_neon_ix.neon_tx_sig)
         tx_info = self._neon_processed_tx_dict.get(key.value, None)
         if tx_info is None:
-            first_blocked_account = 6
-            if len(sol_neon_ix.ix_data) < 14 or sol_neon_ix.account_cnt < first_blocked_account + 1:
+            if len(sol_neon_ix.ix_data) < 14:
                 LOG.warning('no enough data or accounts to get Neon tx')
                 return
 
@@ -193,7 +191,7 @@ class GasTank:
                 sol_neon_ix.neon_tx_sig, sol_neon_ix.ix_data[13:],
                 EvmIxCode.TxStepFromAccountNoChainId, key,
                 sol_neon_ix.sol_tx_cost.operator,
-                sol_neon_ix.get_account(0), sol_neon_ix.iter_account_key(first_blocked_account)
+                sol_neon_ix.get_account(0)
             )
             if tx_info is None:
                 return

@@ -5,7 +5,7 @@ import unittest
 from proxy.common_neon.neon_instruction import NeonIxBuilder
 from proxy.common_neon.utils.eth_proto import NeonTx
 from proxy.common_neon.config import Config
-from proxy.common_neon.solana_tx import SolAccountMeta
+from proxy.common_neon.solana_tx import SolAccountMeta, SolPubKey
 from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.common_neon.operator_resource_info import OpResInfo, build_test_resource_info
 
@@ -64,13 +64,13 @@ class FakeConfig(Config):
 class BlockedTest(unittest.TestCase):
     proxy: Proxy
     chain_id: int
-    eth_account: NeonLocalAccount
+    neon_account: NeonLocalAccount
 
     @classmethod
     def setUpClass(cls):
         cls.proxy = Proxy()
         cls.chain_id = cls.proxy.web3.eth.chain_id
-        cls.eth_account = cls.proxy.create_signer_account(SEED)
+        cls.neon_account = cls.proxy.create_signer_account(SEED)
         cls.config = config = FakeConfig()
         cls.solana = solana = SolClient(config)
 
@@ -96,35 +96,39 @@ class BlockedTest(unittest.TestCase):
         )
         OpResInit(config, solana, neon_client).init_resource(resource)
 
-        deployed_info = cls.proxy.compile_and_deploy_contract(cls.eth_account, TEST_RETRY_BLOCKED_365)
+        deployed_info = cls.proxy.compile_and_deploy_contract(cls.neon_account, TEST_RETRY_BLOCKED_365)
         cls.storage_contract = deployed_info.contract
 
         print(deployed_info.contract.address)
 
-        reid_eth = deployed_info.contract.address.lower()
-        print('contract_eth', reid_eth)
-        cls.re_id = re_id = cls.proxy.get_account_info(reid_eth).pda_address
-        print('contract', re_id)
-
-        cls.caller = cls.proxy.get_account_info(cls.eth_account.address).pda_address
+        cls.caller = cls.proxy.get_account_info(cls.neon_account.address).pda_address
 
     def create_blocked_transaction(self, resource: OpResInfo):
         print("\ncreate_blocked_transaction")
         tx_store = self.storage_contract.functions.add_some(1, 30, "").build_transaction({
-            'from': self.eth_account.address
+            'from': self.neon_account.address
         })
-        tx_store = self.proxy.sign_transaction(self.eth_account, tx_store)
+        tx_store = self.proxy.sign_transaction(self.neon_account, tx_store)
         print(f'blocked tx hash: {tx_store.tx_signed.hash.hex()}')
+
+        emulate_res = self.proxy.emulate(tx_store.tx_signed.rawTransaction)
+        print(f'emulate: {emulate_res}')
+
+        neon_acct_list = [
+            SolAccountMeta(
+                is_signer=False,
+                is_writable=a['is_writable'],
+                pubkey=SolPubKey.from_string(a['pubkey'])
+            )
+            for a in emulate_res.get('solana_accounts', list())
+        ]
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
         neon_ix_builder.init_operator_neon(resource.neon_account_dict[self.chain_id].pda_address)
 
         neon_tx = NeonTx.from_string(tx_store.tx_signed.rawTransaction)
         neon_ix_builder.init_neon_tx(neon_tx)
-        neon_ix_builder.init_neon_account_list([
-            SolAccountMeta(pubkey=self.re_id, is_signer=False, is_writable=True),
-            SolAccountMeta(pubkey=self.caller, is_signer=False, is_writable=True)
-        ])
+        neon_ix_builder.init_neon_account_list(neon_acct_list)
 
         neon_ix_builder.init_iterative(resource.holder_account)
 

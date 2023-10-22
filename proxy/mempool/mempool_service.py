@@ -4,15 +4,12 @@ import logging
 from multiprocessing import Process
 from typing import Any, Optional, cast
 
-from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 from .mempool import MemPool
 
 from .mempool_api import (
     MPResult, MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest,
     MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxBySenderNonceRequest
 )
-
-from .operator_resource_mng import OpResMng
 
 from ..common_neon.config import Config
 from ..common_neon.pickable_data_server import AddrPickableDataSrv, IPickableDataServerUser
@@ -24,7 +21,7 @@ from ..statistic.proxy_client import ProxyStatClient
 LOG = logging.getLogger(__name__)
 
 
-class MPService(IPickableDataServerUser, IMPExecutorMngUser):
+class MPService(IPickableDataServerUser):
     MP_SERVICE_ADDR = ("0.0.0.0", 9091)
 
     def __init__(self, config: Config):
@@ -33,8 +30,6 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
         self._mempool_srv: Optional[AddrPickableDataSrv] = None
         self._mempool: Optional[MemPool] = None
         self._stat_client: Optional[ProxyStatClient] = None
-        self._op_res_mng: Optional[OpResMng] = None
-        self._mp_executor_mng: Optional[MPExecutorMng] = None
         self._process = Process(target=self.run)
         self._config = config
 
@@ -85,13 +80,8 @@ class MPService(IPickableDataServerUser, IMPExecutorMngUser):
             self._mempool_srv = AddrPickableDataSrv(user=self, address=self.MP_SERVICE_ADDR)
             self._stat_client = ProxyStatClient(self._config)
             self._stat_client.start()
-            self._mp_executor_mng = MPExecutorMng(self._config, self, self._stat_client)
-            self._event_loop.run_until_complete(self._mp_executor_mng.async_init())
-            self._op_res_mng = OpResMng(self._config, self._stat_client)
-            self._mempool = MemPool(self._config, self._stat_client, self._op_res_mng, self._mp_executor_mng)
+            self._mempool = MemPool(self._config, self._stat_client)
+            self._mempool.start()
             self._event_loop.run_forever()
         except BaseException as exc:
             LOG.error('Failed to run mempool_service.', exc_info=exc)
-
-    def on_executor_released(self, executor_id: int):
-        self._mempool.on_executor_got_available(executor_id)

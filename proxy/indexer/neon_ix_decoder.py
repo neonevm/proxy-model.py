@@ -1,7 +1,7 @@
 import logging
 import dataclasses
 
-from typing import Any, List, Type, Optional, Iterator
+from typing import Any, List, Type, Optional
 
 from ..common_neon.utils import NeonTxInfo
 from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName
@@ -91,21 +91,14 @@ class BaseTxIxDecoder(DummyIxDecoder):
         if holder_account is None:
             return None
 
-        iter_blocked_account: Optional[Iterator[str]] = self._decode_iter_blocked_account()
-        if iter_blocked_account is None:
-            return None
-
         block = self.state.neon_block
-        return block.add_neon_tx(EvmIxCode(self.ix_code()), neon_tx, holder_account, iter_blocked_account, ix)
+        return block.add_neon_tx(EvmIxCode(self.ix_code()), neon_tx, holder_account, ix)
 
     def _decode_neon_tx(self) -> Optional[NeonTxInfo]:
         return NeonTxInfo.from_neon_sig(self.state.sol_neon_ix.neon_tx_sig)
 
     def _decode_holder_account(self) -> Optional[str]:
         raise RuntimeError('Call of not-implemented method to decode NeonHolder.Account')
-
-    def _decode_iter_blocked_account(self) -> Optional[Iterator[str]]:
-        raise RuntimeError('Call of not-implemented method to decode NeonTx.BlockedAccounts')
 
     def _decode_neon_tx_from_data(self, data_name: str, data: bytes) -> Optional[NeonTxInfo]:
         ix = self.state.sol_neon_ix
@@ -233,9 +226,6 @@ class BaseTxSimpleIxDecoder(BaseTxIxDecoder):
         self._decoding_done(tx, msg)
         return True
 
-    def _decode_iter_blocked_account(self) -> Iterator[str]:
-        return iter(())
-
     def _decode_neon_tx_return(self, tx: NeonIndexedTxInfo) -> bool:
         if super()._decode_neon_tx_return(tx):
             return True
@@ -291,8 +281,6 @@ class TxExecFromAccountIxDecoder(BaseTxSimpleIxDecoder):
 
 
 class BaseTxStepIxDecoder(BaseTxIxDecoder):
-    _first_blocked_account_idx = 6
-
     def _decode_tx(self, msg: str) -> bool:
         if not self._decode_neon_evm_step_cnt():
             return False
@@ -331,14 +319,6 @@ class BaseTxStepIxDecoder(BaseTxIxDecoder):
             return None
 
         return ix.get_account(0)
-
-    def _decode_iter_blocked_account(self) -> Optional[Iterator[str]]:
-        ix = self.state.sol_neon_ix
-        if ix.account_cnt < self._first_blocked_account_idx + 1:
-            self._decoding_skip(f'no enough SolIx.Accounts(len={ix.account_cnt}) to get NeonTx.BlockedAccounts')
-            return None
-
-        return ix.iter_account_key(self._first_blocked_account_idx)
 
     def decode_failed_neon_tx_event_list(self) -> None:
         ix = self.state.sol_neon_ix
@@ -429,7 +409,6 @@ class TxStepFromAccountNoChainIdIxDecoder(BaseTxStepIxDecoder):
 class CancelWithHashIxDecoder(BaseTxStepIxDecoder):
     _ix_code = EvmIxCode.CancelWithHash
     _is_deprecated = False
-    _first_blocked_account_idx = 3
 
     def execute(self) -> bool:
         # 1  byte  - ix

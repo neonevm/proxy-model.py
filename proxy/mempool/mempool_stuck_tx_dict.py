@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 from ..common_neon.errors import StuckTxError
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.solana_tx import SolPubKey
+from ..common_neon.evm_config import EVMConfig
 
 from .mempool_api import MPStuckTxInfo
 from .mempool_neon_tx_dict import MPTxDict
@@ -29,8 +30,13 @@ class MPStuckTxDict:
     def processing_tx_cnt(self) -> int:
         return len(self._processing_tx_dict)
 
+    @property
+    def def_chain_id(self) -> int:
+        return EVMConfig().chain_id
+
     def add_external_tx_list(self, stuck_tx_list: List[MPStuckTxInfo]) -> None:
         tx_dict: Dict[str, MPStuckTxInfo] = dict()
+        def_chain_id = self.def_chain_id
         for stuck_tx in stuck_tx_list:
             neon_tx_sig = stuck_tx.sig
             if neon_tx_sig in self._own_tx_dict:
@@ -43,6 +49,8 @@ class MPStuckTxDict:
             elif neon_tx_sig not in self._external_tx_dict:
                 LOG.debug(f'found external stuck tx {str(stuck_tx.holder_account)}: {stuck_tx.neon_tx}')
 
+            if not stuck_tx.has_chain_id():
+                stuck_tx.set_chain_id(def_chain_id)
             tx_dict[neon_tx_sig] = stuck_tx
         self._external_tx_dict = tx_dict
 
@@ -55,11 +63,13 @@ class MPStuckTxDict:
         elif neon_tx_sig in self._completed_tx_dict:
             return
 
+        chain_id = stuck_tx_error.chain_id or self.def_chain_id
         stuck_tx = MPStuckTxInfo(
-            neon_tx=NeonTxInfo.from_neon_sig(stuck_tx_error.neon_tx_sig),
+            neon_tx=NeonTxInfo.from_neon_sig(neon_tx_sig),
             holder_account=SolPubKey.from_string(stuck_tx_error.holder_account),
             alt_addr_list=list(),
-            start_time=time.time_ns()
+            start_time=time.time_ns(),
+            chain_id=chain_id
         )
         LOG.debug(f'found own stuck tx {str(stuck_tx)}')
 

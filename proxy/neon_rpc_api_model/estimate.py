@@ -70,6 +70,7 @@ class GasEstimate:
         self._data: Optional[str] = None
         self._value: Optional[str] = None
         self._gas: Optional[str] = None
+        self._gas_price: Optional[str] = None
         self._core_api_client = core_api_client
 
         self._def_chain_id = def_chain_id
@@ -81,8 +82,16 @@ class GasEstimate:
         self._sender: Optional[NeonAddress] = request.get('from')
         self._contract: Optional[NeonAddress] = request.get('to')
         self._data: Optional[str] = request.get('data')
-        self._value: Optional[str] = request.get('value')
-        self._gas: Optional[str] = request.get('gas', hex(self._u256_max))
+
+        def _get_hex(_key: str) -> Optional[str]:
+            _value = request.get(_key, None)
+            if isinstance(_value, int):
+                _value = hex(_value)
+            return _value
+
+        self._value: Optional[str] = _get_hex('value') or '0x0'
+        self._gas: Optional[str] = _get_hex('gas') or hex(self._u256_max)
+        self._gas_price: Optional[str] = _get_hex('gasPrice')
 
     def _execute(self, block: SolBlockInfo) -> None:
         self._emulator_result = self._core_api_client.emulate(
@@ -93,8 +102,8 @@ class GasEstimate:
     def _tx_size_cost(self) -> int:
         to_addr = self._contract.to_bytes() if self._contract else bytes()
         data = bytes.fromhex((self._data or '0x')[2:])
-        value = int((self._value or '0x0')[2:], 16)
-        gas = int(self._gas[2:], 16) if self._gas else None
+        value = int(self._value, 16)
+        gas = int(self._gas, 16)
 
         neon_tx = NeonTx(
             nonce=self._u256_max,
@@ -136,7 +145,7 @@ class GasEstimate:
         """Costs to create->extend->deactivate->close an Address Lookup Table
         """
         # ALT is used by TransactionStepFromAccount, TransactionStepFromAccountNoChainId which have 6 fixed accounts
-        acc_cnt = len(self._account_list) + 6
+        acc_cnt = len(self._account_list) + 5
         if acc_cnt > ALTLimit.max_tx_account_cnt:
             return 5000 * 12  # ALT ix: create + ceil(256/30) extend + deactivate + close
 

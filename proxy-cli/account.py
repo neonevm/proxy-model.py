@@ -70,7 +70,7 @@ class AccountHandler:
     def _execute_list(self, args):
         neon_address_list = self._storage.get_list()
         path = self._storage.storage_path()
-        for i, neon_address in enumerate(sorted(neon_address_list, key=lambda x: str(x))):
+        for i, neon_address in enumerate(sorted(neon_address_list, key=lambda x: x.address)):
             s = f'Account #{i}: {{{ neon_address.checksum_address[2:] }}} keystore:///{path}'
             if args.private_key:
                 s += f' private: {{{ str(neon_address.private_key) }}}'

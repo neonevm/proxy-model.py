@@ -100,9 +100,9 @@ class PortalAnalyzer(GasTankNeonTxAnalyzer):
             return None
 
         token_address = NeonAddress.from_raw(vaa.payload.tokenAddress[12:32])
-        token_id = f'{vaa.payload.tokenChain}:{token_address}'
+        token_id = f'{vaa.payload.tokenChain}:{token_address.address}'
         if not self._is_allowed_token(token_id, vaa.payload.amount):
-            LOG.debug(f'not allowed token: {str(token_address)}')
+            LOG.debug(f'not allowed token: {token_address.address}')
             return None
 
         to = NeonAddress.from_raw(vaa.payload.to[12:])

@@ -46,7 +46,7 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
 
         elif holder_info.status == HolderStatus.Active:
             if holder_info.neon_tx_sig != self._ctx.neon_tx_info.sig:
-                raise StuckTxError(holder_info.neon_tx_sig, str(holder_acct))
+                raise StuckTxError(holder_info.neon_tx_sig, holder_info.chain_id, str(holder_acct))
 
         elif holder_info.status == HolderStatus.Holder:
             if not self._ctx.has_sol_tx(self.name):
@@ -73,7 +73,7 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
 
     def _read_blocked_account_list(self, holder_info: HolderAccountInfo) -> None:
         acct_list = [
-            dict(pubkey=acct.pubkey, is_writable=acct.is_writable)
+            dict(pubkey=str(acct.pubkey), is_writable=acct.is_writable)
             for acct in holder_info.account_list
         ]
 
