@@ -7,7 +7,7 @@ from typing import Any, Optional, cast
 from .mempool import MemPool
 
 from .mempool_api import (
-    MPResult, MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest,
+    MPRequest, MPRequestType, MPTxRequest, MPPendingTxByHashRequest,
     MPPendingTxNonceRequest, MPMempoolTxNonceRequest, MPPendingTxBySenderNonceRequest
 )
 
@@ -46,9 +46,7 @@ class MPService(IPickableDataServerUser):
         except BaseException as exc:
             with logging_context(req_id=mp_request.req_id):
                 LOG.error(f"Failed to process request: {mp_request}.", exc_info=exc)
-                return MPResult("Request failed")
-
-        return MPResult("Unexpected problem")
+        return None
 
     async def process_mp_request(self, mp_request: MPRequest) -> Any:
         with logging_context(req_id=mp_request.req_id):

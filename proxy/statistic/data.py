@@ -35,9 +35,10 @@ class NeonTxStatData:
 
 @dataclass(frozen=True)
 class NeonGasPriceData:
+    token_name: str
     min_gas_price: int
     sol_price_usd: Decimal
-    neon_price_usd: Decimal
+    token_price_usd: Decimal
 
 
 @dataclass

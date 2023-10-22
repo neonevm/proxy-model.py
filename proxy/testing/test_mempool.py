@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import copy
 from random import randint
 
 from eth_account.account import LocalAccount as NeonLocalAccount, Account as NeonAccount
@@ -23,7 +24,7 @@ from ..mempool.operator_resource_mng import OpResMng
 from ..mempool.mempool_api import (
     MPRequest,
     MPTxRequest, MPTxExecRequest, MPTxExecResult, MPTxExecResultCode, MPTxSendResult,
-    MPGasPriceResult, MPSenderTxCntData, MPTxSendResultCode, MPTxRequestList
+    MPGasPriceResult, MPGasPriceTokenResult, MPSenderTxCntData, MPTxSendResultCode, MPTxRequestList
 )
 
 from ..mempool.executor_mng import MPExecutorMng, IMPExecutorMngUser
@@ -193,19 +194,23 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self._mempool._executor_mng = MockMPExecutorMng(config, user, stat_client)
 
         price_result = MPGasPriceResult(
-            is_const_gas_price=True,
-            suggested_gas_price=1,
-            min_executable_gas_price=1,
-            min_acceptable_gas_price=1,
             last_update_mapping_sec=0,
             sol_price_usd=1000,
-            neon_price_usd=25,
             sol_price_account=SolPubKey.new_unique(),
-            neon_price_account=SolPubKey.new_unique(),
-            gas_price_slippage=1,
-            operator_fee=10,
-            allow_underpriced_tx_wo_chainid=True,
-            min_wo_chainid_acceptable_gas_price=1
+            token_list=[MPGasPriceTokenResult(
+                is_const_gas_price=True,
+                suggested_gas_price=1,
+                min_executable_gas_price=1,
+                min_acceptable_gas_price=1,
+                chain_id=DEF_CHAIN_ID,
+                token_name='NEON',
+                token_price_usd=25,
+                token_price_account=SolPubKey.new_unique(),
+                gas_price_slippage=1,
+                operator_fee=10,
+                allow_underpriced_tx_wo_chainid=True,
+                min_wo_chainid_acceptable_gas_price=1
+            )]
         )
         self._base_gas_price = price_result
 
@@ -382,7 +387,9 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
     @patch.object(MockMPExecutorMng, 'is_available')
     async def test_gas_price_increase(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         """Checks if gas-price increases when mempool is full, and returns back when txs have been executed"""
-        self.assertEqual(self._mempool.get_gas_price().suggested_gas_price, self._base_gas_price.suggested_gas_price)
+        base_gas_price = self._base_gas_price.token_list[0]
+        gas_price = self._emit_set_gas_price()
+        self.assertEqual(gas_price.suggested_gas_price, base_gas_price.suggested_gas_price)
 
         nonce_cnt = 101
         capacipy_90pct = self._config.mempool_capacity // 10 * 9
@@ -390,14 +397,21 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         await self._enqueue_requests_by_from_acct_nonce(from_acct_cnt, nonce_cnt)
         self.assertGreater(self._tx_schedule.tx_cnt, capacipy_90pct)
 
-        self.assertNotEqual(self._mempool.get_gas_price().suggested_gas_price, self._base_gas_price.suggested_gas_price)
+        gas_price = self._emit_set_gas_price()
+        self.assertNotEqual(gas_price.suggested_gas_price, base_gas_price.suggested_gas_price)
 
         self.assertEqual(submit_mp_request_mock.call_count, 0)
         is_available_mock.return_value = True
         await self._exec_all_txs_in_mempool(nonce_cnt)
         self.assertEqual(submit_mp_request_mock.call_count, (nonce_cnt - 1) * from_acct_cnt)
 
-        self.assertEqual(self._mempool.get_gas_price().suggested_gas_price, self._base_gas_price.suggested_gas_price)
+        gas_price = self._emit_set_gas_price()
+        self.assertEqual(gas_price.suggested_gas_price, base_gas_price.suggested_gas_price)
+
+    def _emit_set_gas_price(self):
+        base_gas_price = copy.deepcopy(self._base_gas_price)
+        self._mempool.on_gas_price(base_gas_price)
+        return self._mempool.get_gas_price().token_list[0]
 
     async def _enqueue_requests_by_from_acct_nonce(self, from_acct_cnt: int, nonce_cnt: int):
         acct_cnt = 1_000

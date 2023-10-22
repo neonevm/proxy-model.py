@@ -28,12 +28,13 @@ from ..common_neon.neon_tx_receipt_info import NeonTxReceiptInfo
 from ..common_neon.neon_tx_result_info import NeonTxResultInfo
 from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.utils.eth_proto import NeonTx
+from ..common_neon.utils.utils import cached_property
 from ..common_neon.neon_instruction import EvmIxCodeName, AltIxCodeName
 from ..common_neon.db.db_connect import DBConnection
 
 from ..mempool import (
     MemPoolClient, MP_SERVICE_ADDR,
-    MPNeonTxResult, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult
+    MPNeonTxResult, MPTxSendResult, MPTxSendResultCode, MPGasPriceResult, MPGasPriceTokenResult
 )
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
@@ -95,6 +96,7 @@ class NeonRpcApiWorkerData:
         self.mempool_client = MemPoolClient(MP_SERVICE_ADDR)
 
         self._gas_price_value: Optional[MPGasPriceResult] = None
+        self._gas_price_dict: Dict[int, MPGasPriceTokenResult] = dict()
         self._last_gas_price_time = 0
 
         self._last_evm_config_time = 0
@@ -134,9 +136,15 @@ class NeonRpcApiWorkerData:
         return 'Neon-proxy/v' + NEON_PROXY_PKG_VERSION + '-' + NEON_PROXY_REVISION
 
     @property
-    def gas_price(self) -> MPGasPriceResult:
+    def global_gas_price(self) -> MPGasPriceResult:
         self._update_gas_price()
         return cast(MPGasPriceResult, self._gas_price_value)
+
+    def get_gas_price(self, chain_id: int) -> MPGasPriceTokenResult:
+        gas_price = self._gas_price_dict.get(chain_id)
+        if not gas_price:
+            raise EthereumError(message='Failed to calculate gas price. Try again later')
+        return gas_price
 
     def _update_gas_price(self) -> None:
         now = math.ceil(time.time())
@@ -144,6 +152,10 @@ class NeonRpcApiWorkerData:
             gas_price = self.mempool_client.get_gas_price(get_req_id_from_log())
             if gas_price:
                 self._gas_price_value = gas_price
+                self._gas_price_dict.update({
+                    token_info.chain_id: token_info
+                    for token_info in gas_price.token_list
+                })
                 self._last_gas_price_time = now
 
         if not self._gas_price_value:
@@ -178,7 +190,16 @@ class NeonRpcApiWorker:
         token_info = self._evm_config.get_token_info_by_name(token_name)
         if not token_info:
             raise EthereumError(message=f'Token {token_name} is not supported.', data={"token_name": token_name})
+
         return token_info.chain_id
+
+    @cached_property
+    def _gas_price(self) -> MPGasPriceTokenResult:
+        return self._data.get_gas_price(self._chain_id)
+
+    @cached_property
+    def _neon_gas_price(self) -> MPGasPriceTokenResult:
+        return self._data.get_gas_price(self._data.def_chain_id)
 
     @property
     def _config(self) -> Config:
@@ -243,12 +264,12 @@ class NeonRpcApiWorker:
         return str(self._chain_id)
 
     def eth_gasPrice(self) -> str:
-        return hex(self._data.gas_price.suggested_gas_price)
+        return hex(self._gas_price.suggested_gas_price)
 
     def neon_gasPrice(self, param: Dict[str, Any]) -> str:
         from_addr = param.get('from', None)
         if from_addr is None:
-            return self._format_gas_price(self._data.gas_price.suggested_gas_price)
+            return self._format_gas_price(self._gas_price.suggested_gas_price)
 
         from_addr = self._normalize_address(from_addr, 'from-address')
 
@@ -267,22 +288,31 @@ class NeonRpcApiWorker:
         if self._has_gas_less_tx_permit(from_addr, tx_nonce, tx_gas):
             return self._format_gas_price(0)
 
-        return self._format_gas_price(self._data.gas_price.suggested_gas_price)
+        return self._format_gas_price(self._gas_price.suggested_gas_price)
 
     def _format_gas_price(self, gas_price: int) -> Union[str, Dict[str, str]]:
-        gas_price_info = self._data.gas_price
+        global_gas_price_info = self._data.global_gas_price
+        token_gas_price_info = self._gas_price
+        neon_gas_price_info = self._neon_gas_price
+
+        if token_gas_price_info.is_overloaded:
+            gas_price = token_gas_price_info.suggested_gas_price
+
         return dict(
             gas_price=hex(gas_price),
-            suggested_gas_price=hex(gas_price_info.suggested_gas_price),
-            is_const_gas_price=gas_price_info.is_const_gas_price,
-            min_acceptable_gas_price=hex(gas_price_info.min_acceptable_gas_price),
-            min_executable_gas_price=hex(gas_price_info.min_executable_gas_price),
-            min_wo_chainid_acceptable_gas_price=hex(gas_price_info.min_wo_chainid_acceptable_gas_price),
-            allow_underpriced_tx_wo_chainid=gas_price_info.allow_underpriced_tx_wo_chainid,
-            sol_price_usd=hex(gas_price_info.sol_price_usd),
-            neon_price_usd=hex(gas_price_info.neon_price_usd),
-            operator_fee=hex(gas_price_info.operator_fee),
-            gas_price_slippage=hex(gas_price_info.gas_price_slippage)
+            suggested_gas_price=hex(token_gas_price_info.suggested_gas_price),
+            is_const_gas_price=token_gas_price_info.is_const_gas_price,
+            min_acceptable_gas_price=hex(token_gas_price_info.min_acceptable_gas_price),
+            min_executable_gas_price=hex(token_gas_price_info.min_executable_gas_price),
+            min_wo_chainid_acceptable_gas_price=hex(token_gas_price_info.min_wo_chainid_acceptable_gas_price),
+            allow_underpriced_tx_wo_chainid=token_gas_price_info.allow_underpriced_tx_wo_chainid,
+            sol_price_usd=hex(global_gas_price_info.sol_price_usd),
+            neon_price_usd=hex(neon_gas_price_info.token_price_usd),
+            chain_id=hex(token_gas_price_info.chain_id),
+            token_name=token_gas_price_info.token_name,
+            token_price_usd=hex(token_gas_price_info.token_price_usd),
+            operator_fee=hex(token_gas_price_info.operator_fee),
+            gas_price_slippage=hex(token_gas_price_info.gas_price_slippage)
         )
 
     @staticmethod
@@ -1118,7 +1148,7 @@ class NeonRpcApiWorker:
             tx_sender = NeonAddress.from_raw(neon_tx.sender, self._chain_id)
             gas_less_permit = self._has_gas_less_tx_permit(tx_sender, neon_tx.nonce, neon_tx.gasLimit)
 
-        min_gas_price = self._data.gas_price.min_executable_gas_price
+        min_gas_price = self._gas_price.min_executable_gas_price
         chain_id_list = [self._chain_id, None] if self._data.def_chain_id == self._chain_id else [self._chain_id]
         neon_tx_validator = NeonTxValidator(self._config, self._core_api_client, self._chain_id, chain_id_list)
         neon_tx_exec_cfg = neon_tx_validator.validate(neon_tx, gas_less_permit, min_gas_price)

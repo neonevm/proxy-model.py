@@ -172,8 +172,8 @@ class ProxyStatService(StatService, IHealthStatService):
             'usd_price_sol', 'Sol Price USD',
             registry=self._registry
         )
-        self._metr_usd_price_neon = Gauge(
-            'usd_price_neon', 'Neon Price USD',
+        self._metr_usd_price_token = Gauge(
+            'usd_price_token', 'Token Price USD',
             registry=self._registry
         )
         self._metr_db_health = Gauge(
@@ -230,8 +230,8 @@ class ProxyStatService(StatService, IHealthStatService):
         self._metr_solana_node_health.set({}, 1 if status else 0)
 
     def commit_gas_price(self, gas_price: NeonGasPriceData) -> None:
-        self._metr_gas_price.set({}, gas_price.min_gas_price)
-        self._metr_usd_price_neon.set({}, float(gas_price.neon_price_usd))
+        self._metr_gas_price.set({'token_name': gas_price.token_name}, gas_price.min_gas_price)
+        self._metr_usd_price_token.set({'token_name': gas_price.token_name}, float(gas_price.token_price_usd))
         self._metr_usd_price_sol.set({}, float(gas_price.sol_price_usd))
 
     def commit_op_res_list(self, op_list: NeonOpResListData) -> None:

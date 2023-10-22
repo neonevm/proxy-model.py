@@ -16,23 +16,30 @@ LOG = logging.getLogger(__name__)
 
 class GasPriceCalculator:
     _sol_price_symbol = 'Crypto.SOL/USD'
-    _neon_price_symbol = 'Crypto.NEON/USD'
 
     def __init__(self, config: Config, solana: SolInteractor) -> None:
         self._config = config
         self._pyth_network_client = PythNetworkClient(solana)
         self._sol_price_usd: Optional[Decimal] = None
-        self._neon_price_usd: Optional[Decimal] = None
+        self._token_price_symbol = ''
+        self._token_price_usd: Optional[Decimal] = None
         self._is_const_gas_price = True
         self._min_gas_price: Optional[int] = None
         self._suggested_gas_price: Optional[int] = None
 
-    def set_price_account(self, sol_price_account: Optional[SolPubKey], neon_price_account: Optional[SolPubKey]):
-        if (sol_price_account is None) or (neon_price_account is None):
+    def set_price_account(
+        self, sol_price_account: Optional[SolPubKey],
+        sol_price_usd: Optional[Decimal],
+        token_name: str,
+        token_price_account: Optional[SolPubKey]
+    ):
+        self._sol_price_usd = sol_price_usd
+        self._token_price_symbol = 'Crypto.' + token_name + '/USD'
+        if (sol_price_account is None) or (token_price_account is None):
             return
 
         self._pyth_network_client.set_price_account(self._sol_price_symbol, sol_price_account)
-        self._pyth_network_client.set_price_account(self._neon_price_symbol, neon_price_account)
+        self._pyth_network_client.set_price_account(self._token_price_symbol, token_price_account)
 
     def is_valid(self) -> bool:
         return (self._min_gas_price is not None) and (self._suggested_gas_price is not None)
@@ -40,7 +47,7 @@ class GasPriceCalculator:
     def has_price(self) -> bool:
         return (
             self._pyth_network_client.has_price(self._sol_price_symbol) and
-            self._pyth_network_client.has_price(self._neon_price_symbol)
+            self._pyth_network_client.has_price(self._token_price_symbol)
         )
 
     def update_mapping(self) -> bool:
@@ -92,33 +99,28 @@ class GasPriceCalculator:
         if self._config.pyth_mapping_account is None:
             return
 
-        try:
-            self._neon_price_usd = self._get_token_price(self._neon_price_symbol)
-        except PythNetworkError as exc:
-            LOG.debug(f'Failed to retrieve NEON price: {str(exc)}')
-        except BaseException as exc:
-            LOG.error('Failed to retrieve NEON price', exc_info=exc)
-
-        try:
+        self._token_price_usd = self._get_token_price(self._token_price_symbol)
+        if self._sol_price_usd is None:
             self._sol_price_usd = self._get_token_price(self._sol_price_symbol)
-        except PythNetworkError as exc:
-            LOG.debug(f'Failed to retrieve SOL price: {str(exc)}')
-        except BaseException as exc:
-            LOG.error('Failed to retrieve SOL price', exc_info=exc)
 
     def _calc_gas_price_from_net(self) -> Optional[int]:
-        if (self._sol_price_usd is None) or (self._neon_price_usd is None):
+        if (self._sol_price_usd is None) or (self._token_price_usd is None):
             return None
 
-        return round((self._sol_price_usd / self._neon_price_usd) * pow(Decimal(10), 9))
+        return round((self._sol_price_usd / self._token_price_usd) * (10 ** 9))
 
-    def _get_token_price(self, symbol: str) -> Decimal:
-        price = self._pyth_network_client.get_price(symbol)
-        if price is None:
-            raise RuntimeError(f'{symbol} price is absent in the pyth.network list')
-        if price.get('status', 0) != 1:  # tradable
-            raise PythNetworkError(f'{symbol} price status is not tradable')
-        return Decimal(price['price'])
+    def _get_token_price(self, token_price_symbol: str) -> Decimal:
+        try:
+            price = self._pyth_network_client.get_price(token_price_symbol)
+            if price is None:
+                raise RuntimeError(f'{token_price_symbol} price is absent in the pyth.network list')
+            if price.get('status', 0) != 1:  # tradable
+                raise PythNetworkError(f'{token_price_symbol} price status is not tradable')
+            return Decimal(price['price'])
+        except PythNetworkError as exc:
+            LOG.debug(f'Failed to retrieve {token_price_symbol} price: {str(exc)}')
+        except BaseException as exc:
+            LOG.error(f'Failed to retrieve {token_price_symbol} price', exc_info=exc)
 
     @property
     def operator_fee(self) -> Decimal:
@@ -151,13 +153,13 @@ class GasPriceCalculator:
         return self._pyth_network_client.get_price_account(self._sol_price_symbol)
 
     @property
-    def neon_price_account(self) -> Optional[SolPubKey]:
-        return self._pyth_network_client.get_price_account(self._neon_price_symbol)
+    def token_price_account(self) -> Optional[SolPubKey]:
+        return self._pyth_network_client.get_price_account(self._token_price_symbol)
 
     @property
     def sol_price_usd(self) -> Decimal:
-        return self._sol_price_usd if self._sol_price_usd is not None else Decimal(0)
+        return self._sol_price_usd if self._sol_price_usd else Decimal(0)
 
     @property
-    def neon_price_usd(self) -> Decimal:
-        return self._neon_price_usd if self._neon_price_usd is not None else Decimal(0)
+    def token_price_usd(self) -> Decimal:
+        return self._token_price_usd if self._token_price_usd else Decimal(0)
