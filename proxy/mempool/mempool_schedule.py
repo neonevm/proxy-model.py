@@ -259,6 +259,16 @@ class MPTxSchedule:
         )
         self._suspended_sender_set: Set[str] = set()
 
+    @property
+    def min_gas_price(self) -> int:
+        if self.tx_cnt < int(self._capacity * 0.9):  # if there are more than 90%
+            return 0
+
+        lower_tx = self._tx_dict.peek_lower_tx()
+        if not lower_tx:
+            return 0
+        return int(lower_tx.gas_price * 1.3)  # increase gas-price in 30%
+
     def _add_tx_to_sender_pool(self, sender_pool: MPSenderTxPool, tx: MPTxRequest) -> None:
         LOG.debug(f'Add tx {tx.sig} to mempool with {self.tx_cnt} txs')
 
