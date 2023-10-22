@@ -23,7 +23,7 @@ from ..mempool.operator_resource_mng import OpResMng
 from ..mempool.mempool_api import (
     MPRequest,
     MPTxRequest, MPTxExecRequest, MPTxExecResult, MPTxExecResultCode, MPTxSendResult,
-    MPGasPriceResult, MPSenderTxCntData, MPTxSendResultCode, MPTxRequestList
+    MPGasPriceResult, MPGasPriceTokenResult, MPSenderTxCntData, MPTxSendResultCode, MPTxRequestList
 )
 
 from ..mempool.executor_mng import MPExecutorMng, IMPExecutorMngUser
@@ -193,19 +193,23 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self._mempool._executor_mng = MockMPExecutorMng(config, user, stat_client)
 
         price_result = MPGasPriceResult(
-            is_const_gas_price=True,
-            suggested_gas_price=1,
-            min_executable_gas_price=1,
-            min_acceptable_gas_price=1,
             last_update_mapping_sec=0,
             sol_price_usd=1000,
-            neon_price_usd=25,
             sol_price_account=SolPubKey.new_unique(),
-            neon_price_account=SolPubKey.new_unique(),
-            gas_price_slippage=1,
-            operator_fee=10,
-            allow_underpriced_tx_wo_chainid=True,
-            min_wo_chainid_acceptable_gas_price=1
+            token_list=[MPGasPriceTokenResult(
+                is_const_gas_price=True,
+                suggested_gas_price=1,
+                min_executable_gas_price=1,
+                min_acceptable_gas_price=1,
+                chain_id=DEF_CHAIN_ID,
+                token_name='NEON',
+                token_price_usd=25,
+                token_price_account=SolPubKey.new_unique(),
+                gas_price_slippage=1,
+                operator_fee=10,
+                allow_underpriced_tx_wo_chainid=True,
+                min_wo_chainid_acceptable_gas_price=1
+            )]
         )
         self._mempool.on_evm_config(EVMConfig())
         self._mempool.on_gas_price(price_result)

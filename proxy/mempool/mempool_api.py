@@ -209,14 +209,24 @@ class MPPendingTxBySenderNonceRequest(MPRequest):
         self.type = MPRequestType.GetTxBySenderNonce
 
 
+@dataclass(frozen=True)
+class MPGasPriceTokenRequest:
+    chain_id: int
+    token_name: str
+    price_account: Optional[SolPubKey] = None
+
+
 @dataclass
 class MPGasPriceRequest(MPRequest):
     last_update_mapping_sec: int = 0
+
     sol_price_account: Optional[SolPubKey] = None
-    neon_price_account: Optional[SolPubKey] = None
+    token_list: List[MPGasPriceTokenRequest] = None
 
     def __post_init__(self):
         self.type = MPRequestType.GetGasPrice
+        if not self.token_list:
+            self.token_list = list()
 
 
 @dataclass
@@ -340,9 +350,11 @@ class MPTxSendResult:
 
 
 @dataclass(frozen=True)
-class MPGasPriceResult:
-    sol_price_usd: int
-    neon_price_usd: int
+class MPGasPriceTokenResult:
+    chain_id: int
+    token_name: str
+    token_price_usd: int
+
     operator_fee: int
     gas_price_slippage: int
 
@@ -353,9 +365,22 @@ class MPGasPriceResult:
 
     min_wo_chainid_acceptable_gas_price: int
     allow_underpriced_tx_wo_chainid: bool
-    last_update_mapping_sec: int
+    token_price_account: SolPubKey
+
+    is_overloaded: bool = False
+
+    def up_suggested_gas_price(self, min_gas_price: int) -> None:
+        if self.suggested_gas_price < min_gas_price:
+            object.__setattr__(self, 'suggested_gas_price', min_gas_price)
+            object.__setattr__(self, 'is_overloaded', True)
+
+
+@dataclass(frozen=True)
+class MPGasPriceResult:
+    sol_price_usd: int
     sol_price_account: SolPubKey
-    neon_price_account: SolPubKey
+    last_update_mapping_sec: int
+    token_list: List[MPGasPriceTokenResult] = None
 
 
 MPEVMConfigResult = EVMConfigInfo
@@ -397,20 +422,6 @@ class MPALTListResult:
 
 
 MPNeonTxResult = Union[NeonTxInfo, EthereumError, None]
-
-
-@dataclass(frozen=True)
-class MPResult:
-    error: Optional[str] = None
-
-    def __bool__(self):
-        return self.error is None
-
-    def __str__(self):
-        return "ok" if self.__bool__() else self.error
-
-    def __repr__(self):
-        return f"""Result({'' if self.error is None else '"' + self.error + '"'})"""
 
 
 @dataclass(frozen=True)

@@ -76,6 +76,7 @@ class WriteHolderNeonTxPrepStage(BaseNeonTxPrepStage):
             dict(pubkey=str(acct.pubkey), is_writable=acct.is_writable)
             for acct in holder_info.account_list
         ]
+        LOG.debug(f'Accounts in holder_list: {[str(acct.pubkey) for acct in holder_info.account_list]}')
 
         emulator_result = NeonEmulatorResult(dict(
             steps_executed=1,

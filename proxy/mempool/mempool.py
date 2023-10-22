@@ -4,13 +4,13 @@ import math
 import time
 
 from collections import deque
-from typing import List, Optional, Any, cast, Union, Deque, Dict, Final
+from typing import List, Optional, Any, cast, Union, Deque, Dict, Final, Tuple
 
 from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 
 from .mempool_api import (
-    MPRequest, MPRequestType, MPTask,
-    MPGasPriceResult,
+    MPRequestType, MPTask,
+    MPGasPriceResult, MPGasPriceTokenResult,
     MPTxExecResult, MPTxExecResultCode, MPTxRequest, MPTxExecRequest, MPStuckTxInfo,
     MPTxSendResult, MPTxSendResultCode,
     MPTxPoolContentResult,
@@ -57,7 +57,9 @@ class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
 
         self._has_evm_config = False
         self._gas_price: Optional[MPGasPriceResult] = None
+        self._gas_price_dict: Dict[int, MPGasPriceTokenResult] = dict()
 
+        self._tx_schedule_idx = 0
         self._tx_schedule_dict: Dict[int, MPTxSchedule] = dict()
         self._completed_tx_dict = MPTxDict(config)
         self._stuck_tx_dict = MPStuckTxDict(self._completed_tx_dict)
@@ -85,11 +87,12 @@ class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
         else:
             return None
 
-        if not self._gas_price:
+        gas_price = self._gas_price_dict.get(tx.chain_id, None)
+        if not gas_price:
             LOG.debug("Mempool doesn't have gas price information")
             return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
 
-        tx.gas_price = self._gas_price.suggested_gas_price * 2
+        tx.gas_price = gas_price.suggested_gas_price * 2
         return None
 
     async def schedule_mp_tx_request(self, tx: MPTxRequest) -> MPTxSendResult:
@@ -225,25 +228,8 @@ class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
         return tx
 
     def _acquire_scheduled_tx(self) -> Optional[MPTxExecRequest]:
-        tx_schedule: Optional[MPTxSchedule] = None
-        tx: Optional[MPTxRequest] = None
-        tx_gas_price = 0
-
-        for check_tx_schedule in self._tx_schedule_dict.values():
-            gas_price = self._gas_price
-            check_tx = check_tx_schedule.peek_top_tx()
-
-            LOG.debug(f'check {check_tx}')
-            if (check_tx is None) or (check_tx.gas_price < gas_price.min_executable_gas_price):
-                continue
-
-            check_tx_gas_price = check_tx.gas_price * gas_price.neon_price_usd
-            if tx_gas_price < check_tx_gas_price:
-                tx_schedule = check_tx_schedule
-                tx = check_tx
-                tx_gas_price = check_tx_gas_price
-
-        if not tx:
+        tx_schedule, tx = self._find_tx_schedule()
+        if tx_schedule is None:
             return None
 
         tx: Optional[MPTxExecRequest] = self._attach_resource_to_tx(tx)
@@ -255,6 +241,26 @@ class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
             tx_schedule.acquire_tx(tx)
 
         return tx
+
+    def _find_tx_schedule(self) -> Tuple[Optional[MPTxSchedule], Optional[MPTxRequest]]:
+        tx_schedule_list: List[MPTxSchedule] = list(self._tx_schedule_dict.values())
+
+        for retry in range(len(tx_schedule_list)):
+            if self._tx_schedule_idx >= len(tx_schedule_list):
+                self._tx_schedule_idx = 0
+
+            tx_schedule = tx_schedule_list[self._tx_schedule_idx]
+            self._tx_schedule_idx += 1
+
+            gas_price = self._gas_price_dict.get(tx_schedule.chain_id, None)
+            if not gas_price:
+                continue
+
+            tx = tx_schedule.peek_top_tx()
+            if tx and (tx.gas_price >= gas_price.min_executable_gas_price):
+                return tx_schedule, tx
+
+        return None, None
 
     def _attach_resource_to_tx(self, tx: Union[MPTxRequest, MPStuckTxInfo]) -> Optional[MPTxExecRequest]:
         with logging_context(req_id=tx.req_id):
@@ -489,6 +495,16 @@ class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
 
     def on_gas_price(self, gas_price: MPGasPriceResult) -> None:
         self._gas_price = gas_price
+        self._gas_price_dict.update({
+            token_info.chain_id: token_info
+            for token_info in gas_price.token_list
+        })
+
+        for tx_schedule in self._tx_schedule_dict.values():
+            gas_price = self._gas_price_dict.get(tx_schedule.chain_id, None)
+            if gas_price:
+                gas_price.up_suggested_gas_price(tx_schedule.min_gas_price)
+
         if not self._config.enable_send_tx_api:
             return
         elif self._free_alt_queue_task_loop:
