@@ -21,9 +21,6 @@ class MPInitOpResTaskLoop(MPPeriodicTaskLoop[MPOpResInitRequest, MPOpResInitResu
 
     def _submit_request(self) -> None:
         evm_config = EVMConfig()
-        if not evm_config.has_config():
-            return
-
         resource = self._op_res_mng.get_disabled_resource()
         if resource is None:
             self._sleep_sec = self._default_sleep_sec

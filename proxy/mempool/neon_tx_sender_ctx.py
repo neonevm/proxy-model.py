@@ -1,6 +1,6 @@
 import logging
 
-from typing import Dict, List, Union
+from typing import List
 
 from ..common_neon.config import Config
 from ..common_neon.data import NeonEmulatorResult
@@ -10,7 +10,6 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx import SolTx, SolPubKey, SolAccountMeta, SolAccount
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 from ..common_neon.utils.eth_proto import NeonTx
-from ..common_neon.evm_config import EVMConfig
 from ..common_neon.address import NeonAddress
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
@@ -43,7 +42,7 @@ class NeonTxSendCtx:
         else:
             self._ix_builder.init_neon_tx_sig(mp_tx_req.sig)
 
-        self._neon_meta_dict: Dict[SolPubKey, SolAccountMeta] = dict()
+        self._neon_meta_list: List[SolAccountMeta] = list()
         if not mp_tx_req.is_stuck_tx():
             self._build_account_list()
 
@@ -51,36 +50,30 @@ class NeonTxSendCtx:
     def sender_address(self) -> NeonAddress:
         return NeonAddress(self.neon_tx_info.addr, self._mp_tx_req.chain_id)
 
-    def _add_meta(self, pubkey: Union[str, SolPubKey], is_writable: bool) -> None:
-        if isinstance(pubkey, str):
-            pubkey = SolPubKey.from_string(pubkey)
-        meta = self._neon_meta_dict.get(pubkey, None)
-        if meta is not None:
-            is_writable |= meta.is_writable
-        self._neon_meta_dict[pubkey] = SolAccountMeta(pubkey=pubkey, is_signer=False, is_writable=is_writable)
-
     def _build_account_list(self) -> None:
-        self._neon_meta_dict.clear()
+        self._neon_meta_list = [
+            SolAccountMeta(
+                pubkey=SolPubKey.from_string(acct_desc['pubkey']),
+                is_signer=False,
+                is_writable=acct_desc['is_writable']
+            )
+            for acct_desc in self._neon_tx_exec_cfg.emulator_result.solana_account_list
+        ]
 
-        # Parse information from the emulator output
-        for account_desc in self._neon_tx_exec_cfg.emulator_result.solana_account_list:
-            self._add_meta(account_desc['pubkey'], account_desc['is_writable'])
-
-        neon_meta_list = list(self._neon_meta_dict.values())
         LOG.debug(
-            f'metas ({len(neon_meta_list)}): ' +
-            ', '.join([f'{str(m.pubkey), m.is_signer, m.is_writable}' for m in neon_meta_list])
+            f'metas ({len(self._neon_meta_list)}): ' +
+            ', '.join([f'{str(m.pubkey), m.is_signer, m.is_writable}' for m in self._neon_meta_list])
         )
 
         contract = self._mp_tx_req.neon_tx_info.contract
         if contract is not None:
-            LOG.debug(f'contract {contract}: {len(neon_meta_list) + 6} accounts')
+            LOG.debug(f'contract {contract}: {len(self._neon_meta_list) + 5} accounts')
 
-        self._ix_builder.init_neon_account_list(neon_meta_list)
+        self._ix_builder.init_neon_account_list(self._neon_meta_list)
 
     @property
     def len_account_list(self) -> int:
-        return len(self._neon_meta_dict)
+        return len(self._neon_meta_list)
 
     def has_emulator_result(self) -> bool:
         return not self._neon_tx_exec_cfg.emulator_result.is_empty()

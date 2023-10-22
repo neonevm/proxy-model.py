@@ -143,7 +143,7 @@ def alt_strategy(cls):
             )
 
         def _validate_account_list_len(self) -> bool:
-            len_account_list = self._ctx.len_account_list + 6
+            len_account_list = self._ctx.len_account_list + 5
             if len_account_list < ALTLimit.max_tx_account_cnt:
                 self._validation_error_msg = (
                     f'Number of accounts {len_account_list} less than {ALTLimit.max_tx_account_cnt}'

@@ -196,7 +196,7 @@ class NeonIxBuilder:
 
     def make_create_neon_account_ix(self, neon_account_info: NeonAccountInfo) -> SolTxIx:
         LOG.debug(
-            f'Create neon account: {neon_account_info.neon_addr.address, neon_account_info.chain_id}, '
+            f'Create neon account: {str(neon_account_info.neon_addr)}, '
             f'sol account: {neon_account_info.pda_address}'
         )
 
@@ -263,7 +263,7 @@ class NeonIxBuilder:
             accounts=[
                 SolAccountMeta(pubkey=self._holder, is_signer=False, is_writable=True),
                 SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
-                self._operator_neon_address
+                SolAccountMeta(pubkey=self._operator_neon_address, is_signer=False, is_writable=True),
             ] + self._iter_neon_acct_list
         )
 

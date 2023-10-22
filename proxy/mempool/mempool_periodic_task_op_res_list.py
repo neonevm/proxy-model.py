@@ -16,10 +16,6 @@ class MPOpResGetListTaskLoop(MPPeriodicTaskLoop[MPOpResGetListRequest, MPOpResGe
 
     def _submit_request(self) -> None:
         evm_config = EVMConfig()
-        if not evm_config.has_config():
-            self._sleep_sec = self._bad_recheck_sleep_sec
-            return
-
         mp_req = MPOpResGetListRequest(req_id=self._generate_req_id(), evm_config_data=evm_config.evm_config_data)
         self._submit_request_to_executor(mp_req)
 

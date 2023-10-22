@@ -5,9 +5,9 @@ import math
 import time
 
 from collections import deque
-from typing import List, Optional, Any, cast, Union, Deque
+from typing import List, Optional, Any, cast, Union, Deque, Dict, Final
 
-from .executor_mng import MPExecutorMng
+from .executor_mng import MPExecutorMng, IMPExecutorMngUser
 
 from .mempool_api import (
     MPRequest, MPRequestType, MPTask,
@@ -21,13 +21,14 @@ from .mempool_api import (
 
 from .mempool_neon_tx_dict import MPTxDict
 from .mempool_stuck_tx_dict import MPStuckTxDict
-from .mempool_periodic_task_evm_config import MPEVMConfigTaskLoop
+from .mempool_periodic_task_evm_config import MPEVMConfigTaskLoop, IEVMConfigUser
 from .mempool_periodic_task_free_alt_queue import MPFreeALTQueueTaskLoop
-from .mempool_periodic_task_gas_price import MPGasPriceTaskLoop
+from .mempool_periodic_task_gas_price import MPGasPriceTaskLoop, IGasPriceUser
 from .mempool_periodic_task_op_res import MPInitOpResTaskLoop
 from .mempool_periodic_task_op_res_list import MPOpResGetListTaskLoop
 from .mempool_periodic_task_sender_tx_cnt import MPSenderTxCntTaskLoop
 from .mempool_periodic_task_stuck_tx import MPStuckTxListLoop
+from .mempool_periodic_task import MPPeriodicTaskLoop
 from .mempool_schedule import MPTxSchedule
 from .operator_resource_mng import OpResMng
 
@@ -36,8 +37,8 @@ from ..common_neon.data import NeonTxExecCfg
 from ..common_neon.evm_config import EVMConfig
 from ..common_neon.errors import StuckTxError
 from ..common_neon.operator_resource_info import OpResInfo
+from ..common_neon.address import NeonAddress
 from ..common_neon.utils.json_logger import logging_context
-from ..common_neon.utils.utils import cached_property
 from ..common_neon.constants import ONE_BLOCK_SEC
 
 from ..statistic.data import NeonTxBeginData, NeonTxEndCode, NeonTxEndData
@@ -47,58 +48,35 @@ from ..statistic.proxy_client import ProxyStatClient
 LOG = logging.getLogger(__name__)
 
 
-class MemPool:
-    def __init__(self, config: Config, stat_client: ProxyStatClient, op_res_mng: OpResMng, executor_mng: MPExecutorMng):
-        capacity = config.mempool_capacity
-        LOG.info(f'Init mempool schedule with capacity: {capacity}')
-        LOG.info(f'Config: {config.as_dict()}')
+class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
+    def __init__(self, config: Config, stat_client: ProxyStatClient):
+        LOG.info(f'Init mempool schedule with config: {config.as_dict()}')
 
-        self._tx_schedule = MPTxSchedule(capacity)
-        self._schedule_cond = asyncio.Condition()
-        self._processing_task_list: List[MPTask] = list()
-        self._rescheduled_tx_queue: Deque[MPTxRequest] = deque()
-        self._executor_mng = executor_mng
-        self._op_res_mng = op_res_mng
+        self._config = config
+        self._reschedule_timeout_sec: Final[float] = ONE_BLOCK_SEC * 3
+        self._check_task_timeout_sec: Final[float] = 0.05
+
+        self._has_evm_config = False
+        self._gas_price: Optional[MPGasPriceResult] = None
+
+        self._tx_schedule_dict: Dict[int, MPTxSchedule] = dict()
         self._completed_tx_dict = MPTxDict(config)
         self._stuck_tx_dict = MPStuckTxDict(self._completed_tx_dict)
+        self._rescheduled_tx_queue: Deque[MPTxRequest] = deque()
+
+        self._schedule_cond = asyncio.Condition()
+        self._processing_task_list: List[MPTask] = list()
+
+        self._executor_mng = MPExecutorMng(self._config, self, stat_client)
+        self._op_res_mng = OpResMng(self._config, stat_client)
         self._stat_client = stat_client
 
-        self._evm_config_task_loop = MPEVMConfigTaskLoop(executor_mng)
-        self._gas_price_task_loop = MPGasPriceTaskLoop(executor_mng)
-        self._state_tx_cnt_task_loop = MPSenderTxCntTaskLoop(executor_mng, self._tx_schedule)
+        self._async_task_list: List[Union[asyncio.Task, MPPeriodicTaskLoop]] = list()
+        self._free_alt_queue_task_loop: Optional[MPFreeALTQueueTaskLoop] = None
 
-        self._reschedule_timeout_sec = ONE_BLOCK_SEC * 3
-        self._check_task_timeout_sec = 0.05
-
-        if not config.enable_send_tx_api:
-            return
-
-        self._op_res_get_list_task_loop = MPOpResGetListTaskLoop(executor_mng, self._op_res_mng)
-        self._op_res_init_task_loop = MPInitOpResTaskLoop(executor_mng, self._op_res_mng, self._stuck_tx_dict)
-        self._free_alt_queue_task_loop = MPFreeALTQueueTaskLoop(config, executor_mng, self._op_res_mng)
-        self._stuck_list_task_loop = MPStuckTxListLoop(executor_mng, self._stuck_tx_dict)
-
-        self._process_tx_result_task_loop = asyncio.get_event_loop().create_task(self._process_tx_result_loop())
-        self._process_tx_schedule_task_loop = asyncio.get_event_loop().create_task(self._process_tx_schedule_loop())
-        self._process_tx_dict_clear_task_loop = asyncio.get_event_loop().create_task(self._process_tx_dict_clear_loop())
-
-    @property
-    def _gas_price(self) -> Optional[MPGasPriceResult]:
-        return self._gas_price_task_loop.gas_price
-
-    @cached_property
-    def _def_chain_id(self) -> int:
-        # No reason to check that EVMConfig has values, see: _process_tx_schedule_loop
-        return EVMConfig().chain_id
-
-    def has_gas_price(self) -> bool:
-        return self._gas_price is not None
-
-    async def enqueue_mp_request(self, mp_request: MPRequest):
-        assert mp_request.type == MPRequestType.SendTransaction, f'Wrong request type {mp_request}'
-
-        tx_request = cast(MPTxRequest, mp_request)
-        return await self.schedule_mp_tx_request(tx_request)
+    def start(self) -> None:
+        asyncio.get_event_loop().run_until_complete(self._executor_mng.set_executor_cnt(1))
+        self._async_task_list.append(MPEVMConfigTaskLoop(self._executor_mng, self))
 
     def _update_gas_price(self, tx: MPTxRequest) -> Optional[MPTxSendResult]:
         if not tx.has_chain_id():
@@ -108,7 +86,7 @@ class MemPool:
         else:
             return None
 
-        if not self.has_gas_price():
+        if not self._gas_price:
             LOG.debug("Mempool doesn't have gas price information")
             return MPTxSendResult(code=MPTxSendResultCode.Unspecified, state_tx_cnt=None)
 
@@ -122,12 +100,15 @@ class MemPool:
                 return MPTxSendResult(MPTxSendResultCode.AlreadyKnown, state_tx_cnt=None)
 
             result: Optional[MPTxSendResult] = self._update_gas_price(tx)
-            if result is not None:
+            if result:
                 return result
 
-            result: MPTxSendResult = self._tx_schedule.add_tx(tx)
-            if result.code == MPTxSendResultCode.Success:
+            result: Optional[MPTxSendResult] = self._call_tx_schedule(tx.chain_id, MPTxSchedule.add_tx, tx)
+            if not result:
+                return MPTxSendResult(MPTxSendResultCode.Unspecified, state_tx_cnt=None)
+            elif result.code == MPTxSendResultCode.Success:
                 self._stat_client.commit_tx_add()
+
             LOG.debug('Got tx and scheduled request')
             return result
 
@@ -138,23 +119,33 @@ class MemPool:
         finally:
             await self._kick_tx_schedule()
 
-    def get_pending_tx_nonce(self, sender_addr: str) -> int:
-        return self._tx_schedule.get_pending_tx_nonce(sender_addr)
+    def get_pending_tx_nonce(self, sender: NeonAddress) -> Optional[int]:
+        return self._call_tx_schedule(sender.chain_id, MPTxSchedule.get_pending_tx_nonce, sender.address)
 
-    def get_last_tx_nonce(self, sender_addr: str) -> int:
-        return self._tx_schedule.get_last_tx_nonce(sender_addr)
+    def get_last_tx_nonce(self, sender: NeonAddress) -> Optional[int]:
+        return self._call_tx_schedule(sender.chain_id, MPTxSchedule.get_last_tx_nonce, sender.address)
 
     def get_pending_tx_by_hash(self, tx_hash: str) -> MPNeonTxResult:
-        neon_tx_info = self._tx_schedule.get_pending_tx_by_hash(tx_hash)
-        if neon_tx_info is not None:
-            return neon_tx_info
+        for tx_schedule in self._tx_schedule_dict.values():
+            neon_tx_info = tx_schedule.get_pending_tx_by_hash(tx_hash)
+            if neon_tx_info is not None:
+                return neon_tx_info
         return self._completed_tx_dict.get_tx_by_hash(tx_hash)
 
-    def get_pending_tx_by_sender_nonce(self, sender_addr: str, tx_nonce: int) -> MPNeonTxResult:
-        neon_tx_info = self._tx_schedule.get_pending_tx_by_sender_nonce(sender_addr, tx_nonce)
-        if neon_tx_info is not None:
+    def get_pending_tx_by_sender_nonce(self, sender: NeonAddress, tx_nonce: int) -> MPNeonTxResult:
+        neon_tx_info = self._call_tx_schedule(
+            sender.chain_id, MPTxSchedule.get_pending_tx_by_sender_nonce,
+            sender.address, tx_nonce
+        )
+        if neon_tx_info:
             return neon_tx_info
-        return self._completed_tx_dict.get_tx_by_sender_nonce(sender_addr, tx_nonce)
+        return self._completed_tx_dict.get_tx_by_sender_nonce(sender, tx_nonce)
+
+    def _call_tx_schedule(self, chain_id: int, method, *args, **kwargs) -> Any:
+        tx_schedule = self._tx_schedule_dict.get(chain_id)
+        if tx_schedule:
+            return method(tx_schedule, *args, **kwargs)
+        return None
 
     def get_gas_price(self) -> Optional[MPGasPriceResult]:
         if self._gas_price is None:
@@ -165,15 +156,16 @@ class MemPool:
             return dataclasses.replace(self._gas_price, suggested_gas_price=min_gas_price)
         return self._gas_price
 
-    @staticmethod
-    def get_evm_config() -> Optional[MPEVMConfigResult]:
-        evm_config = EVMConfig()
-        if not evm_config.has_config():
+    def get_evm_config(self) -> Optional[MPEVMConfigResult]:
+        if not self._has_evm_config:
             return None
-        return evm_config.evm_config_data
+        return EVMConfig().evm_config_data
 
     def get_content(self) -> MPTxPoolContentResult:
-        return self._tx_schedule.get_content()
+        result = MPTxPoolContentResult(list(), list())
+        for tx_schedule in self._tx_schedule_dict.values():
+            result.extend(tx_schedule.get_content())
+        return result
 
     async def _enqueue_tx_request(self) -> bool:
         tx = self._acquire_tx()
@@ -210,7 +202,8 @@ class MemPool:
             if stuck_tx is None:
                 return None
 
-            if not self._tx_schedule.drop_stuck_tx(stuck_tx.sig):
+            result = self._call_tx_schedule(stuck_tx.chain_id, MPTxSchedule.drop_stuck_tx, stuck_tx.sig)
+            if not result:
                 self._stuck_tx_dict.skip_tx(stuck_tx)
                 continue
 
@@ -224,7 +217,7 @@ class MemPool:
             return tx
 
     def _acquire_rescheduled_tx(self) -> Optional[MPTxExecRequest]:
-        if len(self._rescheduled_tx_queue) == 0:
+        if not len(self._rescheduled_tx_queue):
             return None
 
         tx = self._rescheduled_tx_queue[0]
@@ -238,19 +231,35 @@ class MemPool:
         self._rescheduled_tx_queue.popleft()
         return tx
 
-    def _acquire_scheduled_tx(self, tx: Optional[MPTxRequest] = None) -> Optional[MPTxExecRequest]:
-        if tx is None:
-            tx = self._tx_schedule.peek_top_tx()
-            if (tx is None) or (tx.gas_price < self._gas_price.min_executable_gas_price):
-                return None
+    def _acquire_scheduled_tx(self) -> Optional[MPTxExecRequest]:
+        tx_schedule: Optional[MPTxSchedule] = None
+        tx: Optional[MPTxRequest] = None
+        tx_gas_price = 0
 
-            tx = self._attach_resource_to_tx(tx)
-            if tx is None:
-                return None
+        for check_tx_schedule in self._tx_schedule_dict.values():
+            gas_price = self._gas_price
+            check_tx = check_tx_schedule.peek_top_tx()
+
+            LOG.debug(f'check {check_tx}')
+            if (check_tx is None) or (check_tx.gas_price < gas_price.min_executable_gas_price):
+                continue
+
+            check_tx_gas_price = check_tx.gas_price * gas_price.neon_price_usd
+            if tx_gas_price < check_tx_gas_price:
+                tx_schedule = check_tx_schedule
+                tx = check_tx
+                tx_gas_price = check_tx_gas_price
+
+        if not tx:
+            return None
+
+        tx: Optional[MPTxExecRequest] = self._attach_resource_to_tx(tx)
+        if not tx:
+            return None
 
         with logging_context(req_id=tx.req_id):
             LOG.debug('Got tx from schedule')
-            self._tx_schedule.acquire_tx(tx)
+            tx_schedule.acquire_tx(tx)
 
         return tx
 
@@ -266,12 +275,9 @@ class MemPool:
 
         neon_exec_cfg = NeonTxExecCfg()
         neon_exec_cfg.set_holder_account(False, tx.holder_account)
-        return MPTxExecRequest.from_stuck_tx(tx, self._def_chain_id, neon_exec_cfg, res_info, evm_cfg_data)
+        return MPTxExecRequest.from_stuck_tx(tx, neon_exec_cfg, res_info, evm_cfg_data)
 
     async def _process_tx_schedule_loop(self):
-        while (not self.has_gas_price()) and (not EVMConfig().has_config()):
-            await asyncio.sleep(self._check_task_timeout_sec)
-
         while True:
             try:
                 async with self._schedule_cond:
@@ -298,7 +304,7 @@ class MemPool:
         stat.processing_cnt = len(self._processing_task_list) - stat.processing_stuck_cnt
         stat.in_reschedule_queue_cnt = len(self._rescheduled_tx_queue)
         stat.in_stuck_queue_cnt = self._stuck_tx_dict.tx_cnt
-        stat.in_mempool_cnt = self._tx_schedule.tx_cnt
+        stat.in_mempool_cnt = sum([tx_schedule.tx_cnt for tx_schedule in self._tx_schedule_dict.values()])
 
     async def _process_tx_result_loop(self):
         while True:
@@ -383,12 +389,12 @@ class MemPool:
         resource = self._release_resource(tx)
         if resource is not None:
             self._op_res_mng.disable_resource(resource)
-        self._tx_schedule.cancel_tx(tx)
+        self._call_tx_schedule(tx.chain_id, MPTxSchedule.cancel_tx, tx)
         return NeonTxEndCode.Canceled
 
     def _on_cancel_tx(self, tx: MPTxExecRequest) -> NeonTxEndCode:
         self._release_resource(tx)
-        self._tx_schedule.cancel_tx(tx)
+        self._call_tx_schedule(tx.chain_id, MPTxSchedule.cancel_tx, tx)
         return NeonTxEndCode.Canceled
 
     def _on_reschedule_tx(self, tx: MPTxExecRequest) -> NeonTxEndCode:
@@ -413,7 +419,7 @@ class MemPool:
                     self._rescheduled_tx_queue.append(tx)
                 else:
                     self._release_resource(tx)
-                    self._tx_schedule.cancel_tx(tx)
+                    self._call_tx_schedule(tx.chain_id, MPTxSchedule.cancel_tx, tx)
             except BaseException as exc:
                 LOG.error('Exception on the result processing of tx', exc_info=exc)
 
@@ -427,8 +433,8 @@ class MemPool:
 
     def _on_done_tx(self, tx: MPTxExecRequest) -> NeonTxEndCode:
         self._release_resource(tx)
-        self._tx_schedule.done_tx(tx)
-        self._completed_tx_dict.done_tx(tx.neon_tx_info, None)
+        self._call_tx_schedule(tx.chain_id, MPTxSchedule.done_tx, tx)
+        self._completed_tx_dict.done_tx(tx, None)
         LOG.debug(f'Request {tx.sig} is done')
         return NeonTxEndCode.Done
 
@@ -438,8 +444,8 @@ class MemPool:
             self._stuck_tx_dict.done_tx(tx.sig)
             LOG.debug(f'Stuck request {tx.sig} is failed - dropped away')
         else:
-            self._tx_schedule.fail_tx(tx)
-            self._completed_tx_dict.done_tx(tx.neon_tx_info, exc)
+            self._call_tx_schedule(tx.chain_id, MPTxSchedule.fail_tx, tx)
+            self._completed_tx_dict.done_tx(tx, exc)
             LOG.debug(f'Request {tx.sig} is failed - dropped away')
         return NeonTxEndCode.Failed
 
@@ -457,7 +463,8 @@ class MemPool:
             return None
 
         alt_address_list = tx.neon_tx_exec_cfg.alt_address_list
-        self._free_alt_queue_task_loop.add_alt_address_list(alt_address_list, resource.private_key)
+        if self._free_alt_queue_task_loop:
+            self._free_alt_queue_task_loop.add_alt_address_list(alt_address_list, resource.private_key)
         return resource
 
     async def _kick_tx_schedule(self) -> None:
@@ -465,8 +472,48 @@ class MemPool:
             # LOG.debug(f"Kick the schedule, condition: {self._schedule_cond.__repr__()}")
             self._schedule_cond.notify()
 
-    def on_executor_got_available(self, _: int) -> None:
+    def on_executor_released(self, _: int) -> None:
         self._create_kick_tx_schedule_task()
+
+    def on_evm_config(self, evm_config: EVMConfig) -> None:
+        capacity = self._config.mempool_capacity
+        for token_info in evm_config.token_info_list:
+            if token_info.chain_id not in self._tx_schedule_dict:
+                self._tx_schedule_dict[token_info.chain_id] = MPTxSchedule(capacity, token_info.chain_id)
+                LOG.info(f'Start transaction scheduler for the token {token_info.chain_id, token_info.token_name}')
+
+        chain_id_set = set(evm_config.chain_id_list)
+        for chain_id in list(self._tx_schedule_dict.keys()):
+            if chain_id not in chain_id_set:
+                LOG.info(f'Stop transaction scheduler for the chainId {chain_id}')
+                self._tx_schedule_dict.pop(chain_id)
+
+        if self._has_evm_config:
+            return
+        self._has_evm_config = True
+
+        self._async_task_list.append(MPGasPriceTaskLoop(self._executor_mng, self))
+
+    def on_gas_price(self, gas_price: MPGasPriceResult) -> None:
+        self._gas_price = gas_price
+        if not self._config.enable_send_tx_api:
+            return
+        elif self._free_alt_queue_task_loop:
+            return
+
+        LOG.info(f'Start transaction scheduler tasks')
+        self._free_alt_queue_task_loop = MPFreeALTQueueTaskLoop(self._config, self._executor_mng, self._op_res_mng)
+
+        self._async_task_list.extend([
+            self._free_alt_queue_task_loop,
+            MPSenderTxCntTaskLoop(self._executor_mng, self._tx_schedule_dict),
+            MPOpResGetListTaskLoop(self._executor_mng, self._op_res_mng),
+            MPInitOpResTaskLoop(self._executor_mng, self._op_res_mng, self._stuck_tx_dict),
+            MPStuckTxListLoop(self._executor_mng, self._stuck_tx_dict),
+            asyncio.get_event_loop().create_task(self._process_tx_result_loop()),
+            asyncio.get_event_loop().create_task(self._process_tx_schedule_loop()),
+            asyncio.get_event_loop().create_task(self._process_tx_dict_clear_loop())
+        ])
 
     def _create_kick_tx_schedule_task(self) -> None:
         asyncio.get_event_loop().create_task(self._kick_tx_schedule())
@@ -474,4 +521,4 @@ class MemPool:
     async def _process_tx_dict_clear_loop(self) -> None:
         while True:
             self._completed_tx_dict.clear()
-            await asyncio.sleep(self._completed_tx_dict.clear_time_sec)
+            await self._completed_tx_dict.sleep()

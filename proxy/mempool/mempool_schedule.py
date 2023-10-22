@@ -91,10 +91,9 @@ class MPSenderTxPool:
         Processing = 3
         Suspended = 4
 
-    def __init__(self, sender_address: str, chain_id: int) -> None:
+    def __init__(self, sender_address: str) -> None:
         self._state = self.State.Empty
         self._sender_address = sender_address
-        self._chain_id = chain_id
         self._gas_price = 0
         self._state_tx_cnt = 0
         self._processing_tx: Optional[MPTxRequest] = None
@@ -106,10 +105,6 @@ class MPSenderTxPool:
     @property
     def sender_address(self) -> str:
         return self._sender_address
-
-    @property
-    def chain_id(self) -> int:
-        return self._chain_id
 
     @property
     def gas_price(self) -> int:
@@ -136,7 +131,7 @@ class MPSenderTxPool:
     def _actual_state(self) -> MPSenderTxPool.State:
         if self.is_empty():
             return self.State.Empty
-        elif self._is_processing():
+        elif self.is_processing():
             return self.State.Processing
         elif self._state_tx_cnt != self.top_tx.nonce:
             return self.State.Suspended
@@ -145,7 +140,7 @@ class MPSenderTxPool:
     def is_empty(self) -> bool:
         return self.len_tx_nonce_queue == 0
 
-    def _is_processing(self) -> bool:
+    def is_processing(self) -> bool:
         return self._processing_tx is not None
 
     @property
@@ -161,7 +156,7 @@ class MPSenderTxPool:
         return self._tx_nonce_queue[self._top_index]
 
     def acquire_tx(self, tx: MPTxRequest) -> MPTxRequest:
-        assert not self._is_processing()
+        assert not self.is_processing()
         assert tx.sig == self.top_tx.sig
 
         self._processing_tx = self.top_tx
@@ -189,7 +184,7 @@ class MPSenderTxPool:
 
     @property
     def state_tx_cnt(self) -> int:
-        if self._is_processing():
+        if self.is_processing():
             assert self._state_tx_cnt == self._processing_tx.nonce
             return self._processing_tx.nonce + 1
         return self._state_tx_cnt
@@ -199,7 +194,7 @@ class MPSenderTxPool:
 
     def _validate_processing_tx(self, tx: MPTxRequest) -> None:
         assert not self.is_empty(), f'no transactions in {self.sender_address} pool'
-        assert self._is_processing(), f'{self.sender_address} pool does not process tx {tx.sig}'
+        assert self.is_processing(), f'{self.sender_address} pool does not process tx {tx.sig}'
 
         t_tx, p_tx = self.top_tx, self._processing_tx
         assert tx.sig == p_tx.sig, f'tx {tx.sig} is not equal to processing tx {p_tx.sig}'
@@ -213,7 +208,7 @@ class MPSenderTxPool:
         LOG.debug(f'Done tx {tx.sig}. There are {self.len_tx_nonce_queue} txs left in {self.sender_address} pool')
 
     def drop_tx(self, tx: MPTxRequest) -> None:
-        assert not self._is_processing() or tx.sig != self._processing_tx.sig, f'cannot drop processing tx {tx.sig}'
+        assert not self.is_processing() or tx.sig != self._processing_tx.sig, f'cannot drop processing tx {tx.sig}'
 
         self._tx_nonce_queue.pop(tx)
         LOG.debug(f'Drop tx {tx.sig}. There are {self.len_tx_nonce_queue} txs left in {self.sender_address} pool')
@@ -225,7 +220,7 @@ class MPSenderTxPool:
         self._processing_tx = None
 
     def take_out_tx_list(self) -> MPTxRequestList:
-        is_processing = self._is_processing()
+        is_processing = self.is_processing()
         LOG.debug(
             f'Take out txs from sender pool: {self.sender_address}, count: {self.len_tx_nonce_queue}, '
             f'processing: {is_processing}'
@@ -254,9 +249,10 @@ class MPSenderTxPool:
 class MPTxSchedule:
     _top_index = -1
 
-    def __init__(self, capacity: int) -> None:
+    def __init__(self, capacity: int, chain_id: int) -> None:
         self._capacity = capacity
         self._tx_dict = MPTxRequestDict()
+        self._chain_id = chain_id
 
         self._sender_pool_dict: Dict[str, MPSenderTxPool] = dict()
         self._sender_pool_queue = SortedQueue[MPSenderTxPool, int, str](
@@ -274,6 +270,10 @@ class MPTxSchedule:
         if not lower_tx:
             return 0
         return int(lower_tx.gas_price * 1.3)  # increase gas-price in 30%
+
+    @property
+    def chain_id(self) -> int:
+        return self._chain_id
 
     def _add_tx_to_sender_pool(self, sender_pool: MPSenderTxPool, tx: MPTxRequest) -> None:
         LOG.debug(f'Add tx {tx.sig} to mempool with {self.tx_cnt} txs')
@@ -293,10 +293,10 @@ class MPTxSchedule:
     def _find_sender_pool(self, sender_address: str) -> Optional[MPSenderTxPool]:
         return self._sender_pool_dict.get(sender_address, None)
 
-    def _get_or_create_sender_pool(self, sender_address: str, chain_id: int) -> MPSenderTxPool:
+    def _get_or_create_sender_pool(self, sender_address: str) -> MPSenderTxPool:
         sender_pool = self._find_sender_pool(sender_address)
         if sender_pool is None:
-            sender_pool = MPSenderTxPool(sender_address, chain_id)
+            sender_pool = MPSenderTxPool(sender_address)
         return sender_pool
 
     def _get_sender_pool(self, sender_address: str) -> MPSenderTxPool:
@@ -311,7 +311,7 @@ class MPTxSchedule:
     def _set_sender_tx_cnt(self, sender_pool: MPSenderTxPool, state_tx_cnt: int) -> None:
         if sender_pool.state_tx_cnt == state_tx_cnt:
             return
-        elif sender_pool.state == sender_pool.State.Processing:
+        elif sender_pool.is_processing():
             return
 
         while not sender_pool.is_empty():
@@ -329,23 +329,26 @@ class MPTxSchedule:
 
         old_state = sender_pool.state
         if old_state == sender_pool.State.Suspended:
-            self._suspended_sender_set.remove(NeonAddress.from_raw(sender_pool.sender_address, sender_pool.chain_id))
+            self._suspended_sender_set.remove(NeonAddress.from_raw(sender_pool.sender_address, self._chain_id))
         elif old_state == sender_pool.State.Queued:
             self._sender_pool_queue.pop(sender_pool)
 
         new_state = sender_pool.sync_state()
         if new_state == sender_pool.State.Empty:
             self._sender_pool_dict.pop(sender_pool.sender_address)
-            LOG.debug(f'Done sender {sender_pool.sender_address}')
+            LOG.debug(f'Done sender {self._chain_id, sender_pool.sender_address}')
         elif new_state == sender_pool.State.Suspended:
-            self._suspended_sender_set.add(NeonAddress.from_raw(sender_pool.sender_address, sender_pool.chain_id))
-            LOG.debug(f'Suspend sender {sender_pool.sender_address}')
+            self._suspended_sender_set.add(NeonAddress.from_raw(sender_pool.sender_address, self._chain_id))
+            LOG.debug(f'Suspend sender {self._chain_id, sender_pool.sender_address}')
         elif new_state == sender_pool.State.Queued:
             self._sender_pool_queue.add(sender_pool)
-            LOG.debug(f'Include sender {sender_pool.sender_address} into execution queue')
+            LOG.debug(f'Include sender {self._chain_id, sender_pool.sender_address} into execution queue')
 
     def add_tx(self, tx: MPTxRequest) -> MPTxSendResult:
-        LOG.debug(f'Try to add tx {tx.sig} (gas price {tx.gas_price}) to mempool with {self.tx_cnt} txs')
+        LOG.debug(
+            f'Try to add tx {tx.sig} (gas price {tx.gas_price}, nonce {tx.nonce}) '
+            f'to mempool {self.chain_id} with {self.tx_cnt} txs'
+        )
 
         old_tx = self._tx_dict.get_tx_by_hash(tx.sig)
         if old_tx is not None:
@@ -363,8 +366,8 @@ class MPTxSchedule:
                 LOG.debug(f'Lowermost tx {lower_tx.sig} has higher gas price {lower_tx.gas_price} > {tx.gas_price}')
                 return MPTxSendResult(code=MPTxSendResultCode.Underprice, state_tx_cnt=None)
 
-        sender_pool = self._get_or_create_sender_pool(tx.sender_address, tx.chain_id)
-        LOG.debug(f'Got sender pool {tx.sender_address} with {sender_pool.len_tx_nonce_queue} txs')
+        sender_pool = self._get_or_create_sender_pool(tx.sender_address)
+        LOG.debug(f'Got sender pool {tx.chain_id, tx.sender_address} with {sender_pool.len_tx_nonce_queue} txs')
 
         if sender_pool.state == sender_pool.State.Processing:
             top_tx = sender_pool.top_tx
@@ -488,13 +491,10 @@ class MPTxSchedule:
     def suspended_sender_list(self) -> List[NeonAddress]:
         return list(self._suspended_sender_set)
 
-    def set_sender_state_tx_cnt_list(self, sender_tx_cnt_list: List[MPSenderTxCntData]) -> None:
-        for sender_tx_cnt_data in sender_tx_cnt_list:
-            sender_pool = self._find_sender_pool(sender_tx_cnt_data.sender.address)
-            if (sender_pool is None) or (sender_pool.state != sender_pool.State.Suspended):
-                continue
-
-            self._schedule_sender_pool(sender_pool, sender_tx_cnt_data.state_tx_cnt)
+    def set_sender_state_tx_cnt(self, sender_tx_cnt: MPSenderTxCntData) -> None:
+        sender_pool = self._find_sender_pool(sender_tx_cnt.sender.address)
+        if sender_pool and sender_pool.state == sender_pool.State.Suspended:
+            self._schedule_sender_pool(sender_pool, sender_tx_cnt.state_tx_cnt)
 
     def get_content(self) -> MPTxPoolContentResult:
         pending_list: List[NeonTxInfo] = list()

@@ -60,6 +60,11 @@ class MPStuckTxInfo:
     holder_account: SolPubKey
     alt_addr_list: List[str]
     start_time: int
+    chain_id: Optional[int] = None
+
+    def __post_init__(self):
+        if self.neon_tx.has_chain_id():
+            self.set_chain_id(self.neon_tx.chain_id)
 
     def __str__(self) -> str:
         return str_fmt_object(self)
@@ -71,6 +76,12 @@ class MPStuckTxInfo:
     @property
     def req_id(self) -> str:
         return self.neon_tx.sig[2:10]
+
+    def has_chain_id(self) -> bool:
+        return self.chain_id is not None
+
+    def set_chain_id(self, chain_id: int) -> None:
+        object.__setattr__(self, 'chain_id', chain_id)
 
 
 @dataclass(frozen=True)
@@ -89,12 +100,14 @@ class MPTxRequest(MPRequest):
 
     @staticmethod
     def from_neon_tx(req_id: str, neon_tx: NeonTx, def_chain_id: int, neon_tx_exec_cfg: NeonTxExecCfg) -> MPTxRequest:
+        neon_tx_info = NeonTxInfo.from_neon_tx(neon_tx)
+        chain_id = (neon_tx_info.chain_id or def_chain_id)
         return MPTxRequest(
             req_id=req_id,
             neon_tx=neon_tx,
-            neon_tx_info=NeonTxInfo.from_neon_tx(neon_tx),
+            neon_tx_info=neon_tx_info,
             neon_tx_exec_cfg=neon_tx_exec_cfg,
-            chain_id=(neon_tx.chain_id or def_chain_id),
+            chain_id=chain_id,
             gas_price=neon_tx.gasPrice,
             start_time=time.time_ns()
         )
@@ -144,7 +157,6 @@ class MPTxExecRequest(MPTxRequest):
 
     @staticmethod
     def from_stuck_tx(stuck_tx: MPStuckTxInfo,
-                      def_chain_id: int,
                       neon_tx_exec_cfg: NeonTxExecCfg,
                       res_info: OpResInfo,
                       evm_config_data: EVMConfigInfo) -> MPTxExecRequest:
@@ -153,11 +165,11 @@ class MPTxExecRequest(MPTxRequest):
             neon_tx=None,
             neon_tx_info=stuck_tx.neon_tx,
             neon_tx_exec_cfg=neon_tx_exec_cfg,
-            chain_id=def_chain_id,
+            chain_id=stuck_tx.chain_id,
             gas_price=stuck_tx.neon_tx.gas_price,
             start_time=stuck_tx.start_time,
-            res_info=res_info,
-            evm_config_data=evm_config_data
+            evm_config_data=evm_config_data,
+            res_info=res_info
         )
 
 
@@ -166,7 +178,7 @@ MPTxRequestList = List[MPTxRequest]
 
 @dataclass
 class MPPendingTxNonceRequest(MPRequest):
-    sender: str = None
+    sender: NeonAddress = None
 
     def __post_init__(self):
         self.type = MPRequestType.GetPendingTxNonce
@@ -174,7 +186,7 @@ class MPPendingTxNonceRequest(MPRequest):
 
 @dataclass
 class MPMempoolTxNonceRequest(MPRequest):
-    sender: str = None
+    sender: NeonAddress = None
 
     def __post_init__(self):
         self.type = MPRequestType.GetMempoolTxNonce
@@ -190,7 +202,7 @@ class MPPendingTxByHashRequest(MPRequest):
 
 @dataclass
 class MPPendingTxBySenderNonceRequest(MPRequest):
-    sender: str = None
+    sender: NeonAddress = None
     tx_nonce: int = 0
 
     def __post_init__(self):
@@ -405,3 +417,7 @@ class MPResult:
 class MPTxPoolContentResult:
     pending_list: List[NeonTxInfo]
     queued_list: List[NeonTxInfo]
+
+    def extend(self, src: MPTxPoolContentResult):
+        self.pending_list.extend(src.pending_list)
+        self.queued_list.extend(src.queued_list)

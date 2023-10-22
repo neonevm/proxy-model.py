@@ -191,7 +191,6 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
                  key: NeonIndexedTxInfo.Key,
                  neon_tx: NeonTxInfo,
                  holder_account: str,
-                 blocked_account_list: List[str],
                  operator: Optional[str] = None,
                  neon_tx_res: NeonTxResultInfo = None,
                  neon_tx_event_list: List[NeonLogTxEvent] = None,
@@ -211,7 +210,6 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         self._neon_receipt = NeonTxReceiptInfo(neon_tx, neon_tx_res)
         self._ix_code = ix_code
         self._holder_acct = holder_account
-        self._blocked_acct_list = blocked_account_list
         self._is_done = False
         self._neon_event_list = neon_tx_event_list
         self._operator = operator
@@ -225,6 +223,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
         neon_res_info = NeonTxResultInfo.from_dict(src.pop('neon_tx_res'))
         neon_event_list = [NeonLogTxEvent.from_dict(s) for s in src.pop('neon_tx_event_list')]
         operator = src.pop('operator', None)
+        src.pop('blocked_account_list', None)
         return NeonIndexedTxInfo(
             key=key,
             neon_tx=neon_tx,
@@ -241,13 +240,6 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
     @property
     def neon_tx_sig(self) -> str:
         return self._key.value
-
-    @property
-    def blocked_account_cnt(self) -> int:
-        return len(self._blocked_acct_list)
-
-    def iter_blocked_account(self) -> Iterator[str]:
-        return iter(self._blocked_acct_list)
 
     @property
     def key(self) -> NeonIndexedTxInfo.Key:
@@ -289,7 +281,6 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
             ix_code=self._ix_code,
             neon_tx_sig=self._key.value,
             holder_account=self._holder_acct,
-            blocked_account_list=self._blocked_acct_list,
             operator=self._operator,
             gas_used=self._gas_used,
             total_gas_used=self._total_gas_used,
@@ -596,13 +587,11 @@ class NeonIndexedBlockInfo:
         return tx
 
     def add_neon_tx(self, ix_code: EvmIxCode, neon_tx: NeonTxInfo,
-                    holder_acct: str, iter_blocked_acct: Iterator[str],
-                    sol_neon_ix: SolNeonIxReceiptInfo) -> NeonIndexedTxInfo:
+                    holder_acct: str, sol_neon_ix: SolNeonIxReceiptInfo) -> NeonIndexedTxInfo:
         key = NeonIndexedTxInfo.Key(sol_neon_ix.neon_tx_sig)
         assert key.value not in self._neon_tx_dict, f'the tx {key} already in use!'
 
-        blocked_acct_list = list(iter_blocked_acct)
-        tx = NeonIndexedTxInfo(ix_code, key, neon_tx, holder_acct, blocked_acct_list)
+        tx = NeonIndexedTxInfo(ix_code, key, neon_tx, holder_acct)
         tx.add_sol_neon_ix(sol_neon_ix)
         self._neon_tx_dict[key.value] = tx
         self._add_alt_info(tx, sol_neon_ix)

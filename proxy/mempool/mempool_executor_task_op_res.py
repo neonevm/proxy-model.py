@@ -114,7 +114,7 @@ class OpResInit:
             self._recreate_holder(builder, resource, balance)
 
         elif holder_info.status == HolderStatus.Active:
-            raise StuckTxError(holder_info.neon_tx_sig, holder_address)
+            raise StuckTxError(holder_info.neon_tx_sig, holder_info.chain_id, holder_address)
 
         elif holder_info.status not in {HolderStatus.Finalized, HolderStatus.Holder}:
             LOG.debug(f'Wrong tag {holder_info.status} of {holder_address} for resource {resource}')

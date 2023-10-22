@@ -38,17 +38,22 @@ class BadResourceError(RescheduleError):
 
 
 class StuckTxError(BaseException):
-    def __init__(self, neon_tx_sig: str, holder_account: str):
-        super().__init__(neon_tx_sig, holder_account)
+    def __init__(self, neon_tx_sig: str, chain_id: Optional[int], holder_account: str):
+        super().__init__(neon_tx_sig, chain_id, holder_account)
         self._neon_tx_sig = neon_tx_sig
+        self._chain_id = chain_id
         self._holder_acct = holder_account
 
     def __str__(self) -> str:
-        return f'Holder account {self._holder_acct} contains stuck tx: {self._neon_tx_sig}'
+        return f'Holder account {self._holder_acct} contains stuck tx: {self._neon_tx_sig, self._chain_id}'
 
     @property
     def neon_tx_sig(self) -> str:
         return self._neon_tx_sig
+
+    @property
+    def chain_id(self) -> Optional[int]:
+        return self._chain_id
 
     @property
     def holder_account(self) -> str:

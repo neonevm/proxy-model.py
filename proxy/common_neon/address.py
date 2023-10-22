@@ -9,7 +9,7 @@ from eth_keys import keys as neon_keys
 from eth_keys.datatypes import to_checksum_address
 from sha3 import keccak_256
 
-from .utils.utils import cached_method, cached_property
+from .utils.utils import cached_method, cached_property, str_fmt_object
 from .constants import EVM_PROGRAM_ID
 from .solana_tx import SolPubKey
 
@@ -73,8 +73,12 @@ class NeonAddress:
         assert self._private_key is not None
         return neon_keys.PrivateKey(self._private_key)
 
+    @cached_method
     def __str__(self) -> str:
-        return self.address
+        return str_fmt_object(dict(
+            address=self.checksum_address,
+            chain_id=self.chain_id,
+        ))
 
     def __repr__(self):
         return self.__str__()

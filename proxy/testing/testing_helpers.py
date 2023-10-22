@@ -114,13 +114,16 @@ class Proxy:
         if 'gasPrice' not in tx:
             tx['gasPrice'] = self._proxy.gas_price
         if 'nonce' not in tx:
-            tx['nonce'] = self._proxy.get_transaction_count(signer.address, 'pending')
+            tx['nonce'] = self.get_transaction_count(signer.address, 'pending')
         if 'from' not in tx:
             tx['from'] = signer.address
         return TransactionSigned(
             tx=tx,
             tx_signed=self._proxy.account.sign_transaction(tx, signer.key)
         )
+
+    def get_transaction_count(self, address, block_indentifier) -> int:
+        return self._proxy.get_transaction_count(address, block_indentifier)
 
     def send_wait_transaction(self, tx: TransactionSigned) -> TransactionSent:
         print(f' -> {tx.tx}: {tx.tx_signed}')

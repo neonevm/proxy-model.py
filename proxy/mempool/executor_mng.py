@@ -85,9 +85,6 @@ class MPExecutorMng:
 
         self._commit_stat()
 
-    async def async_init(self):
-        await self.set_executor_cnt(0)
-
     def submit_mp_request(self, mp_request: MPRequest) -> MPTask:
         executor_id, executor = self._get_executor()
         task = asyncio.get_event_loop().create_task(executor.send_data_async(mp_request))
