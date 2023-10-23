@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 from singleton_decorator import singleton
 
 from ..neon_core_api.neon_layouts import EVMConfigInfo, EVMTokenInfo
@@ -78,6 +79,10 @@ class EVMConfig:
     @property
     def chain_id_list(self) -> List[int]:
         return [token.chain_id for token in self._token_info_dict.values()]
+
+    @property
+    def chain_json_list(self) -> List[Dict[str, Union[int, str]]]:
+        return [dataclasses.asdict(s) for s in self._data.chain_info_list]
 
     def get_token_info_by_name(self, token_name: str) -> Optional[EVMTokenInfo]:
         return self._token_info_dict.get(token_name, None)

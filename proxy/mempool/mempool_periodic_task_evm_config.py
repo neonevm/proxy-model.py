@@ -15,7 +15,7 @@ class IEVMConfigUser(abc.ABC):
 
 
 class MPEVMConfigTaskLoop(MPPeriodicTaskLoop[MPGetEVMConfigRequest, MPEVMConfigResult]):
-    _default_sleep_sec = ONE_BLOCK_SEC * 16
+    _default_sleep_sec = ONE_BLOCK_SEC
 
     def __init__(self, executor_mng: MPExecutorMng, user: IEVMConfigUser) -> None:
         super().__init__(name='evm-config', sleep_sec=self._default_sleep_sec, executor_mng=executor_mng)

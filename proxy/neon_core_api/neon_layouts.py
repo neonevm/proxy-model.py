@@ -93,6 +93,13 @@ class EVMTokenInfo:
     token_mint: SolPubKey
 
 
+@dataclass
+class EVMChainInfo:
+    id: int
+    name: str
+    token: str
+
+
 class _EVMConfigConst(enum.Enum):
     ConfigName = 'CONFIG'
     ChainsName = 'CHAINS'
@@ -116,6 +123,7 @@ class EVMConfigInfo:
 
     evm_param_list: List[Tuple[str, str]]
     token_info_list: List[EVMTokenInfo]
+    chain_info_list: List[EVMChainInfo]
 
     version: str
     revision: str
@@ -126,6 +134,7 @@ class EVMConfigInfo:
     def from_json(last_deployed_slot: int, json_config: Dict[str, Any]) -> EVMConfigInfo:
         evm_param_dict: Dict[str, str] = dict()
         token_info_list: List[EVMTokenInfo] = list()
+        chain_info_list: List[EVMChainInfo] = list()
 
         version = ''
         revision = ''
@@ -139,6 +148,14 @@ class EVMConfigInfo:
                         chain_id=token['id'],
                         token_mint=SolPubKey.from_string(token['token']),
                         token_name=token['name'].upper()
+                    )
+                    for token in value
+                ]
+                chain_info_list = [
+                    EVMChainInfo(
+                        id=token['id'],
+                        name=token['name'],
+                        token=token['token']
                     )
                     for token in value
                 ]
@@ -176,6 +193,7 @@ class EVMConfigInfo:
             last_deployed_slot=last_deployed_slot,
             evm_param_list=list(evm_param_dict.items()),
             token_info_list=token_info_list,
+            chain_info_list=chain_info_list,
             version=version,
             revision=revision,
             chain_id=chain_id
@@ -187,6 +205,7 @@ class EVMConfigInfo:
             last_deployed_slot=0,
             evm_param_list=list(),
             token_info_list=list(),
+            chain_info_list=list(),
             version=_EVMConfigConst.NeonNoVersion.value,
             revision=_EVMConfigConst.NeonNoRevision.value,
             chain_id=0

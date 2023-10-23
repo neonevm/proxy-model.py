@@ -18,6 +18,7 @@ from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.solana_tx import SolCommit, SolPubKey
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils.utils import cached_property
+from ..common_neon.evm_config import EVMConfig
 
 
 LOG = logging.getLogger(__name__)
@@ -141,6 +142,7 @@ class NeonCoreApiClient(NeonClientBase):
         request = dict(
             step_limit=self._config.max_evm_step_cnt_emulate,
             accounts=[],
+            chains=EVMConfig().chain_json_list,
             tx={
                 'from': sender,
                 'to': contract,
