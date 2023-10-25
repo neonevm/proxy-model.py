@@ -581,6 +581,8 @@ class NeonRpcApiWorker:
                     new_log_rec[key] = '0x'
                 elif full and (key == 'neonEventType'):
                     new_log_rec[key] = self._decode_event_type(value)
+                elif (key == 'address') and len(value):
+                    new_log_rec[key] = NeonAddress.from_raw(value).checksum_address
                 elif full or (key[:4] != 'neon'):
                     new_log_rec[key] = value
 
@@ -951,7 +953,7 @@ class NeonRpcApiWorker:
 
     def _get_full_log_dict(self, tx: NeonTxReceiptInfo) -> Dict[str, List[Dict[str, Any]]]:
         remove_neon_key_list = ['neonSolHash', 'neonIxIdx', 'neonInnerIxIdx']
-        remove_eth_key_list = ['removed', 'transactionHash', 'transactionIndex', 'blockHash', 'blockNumber']
+        remove_eth_key_list = ['removed', 'transactionHash', 'transactionIndex', 'blockHash', 'blockNumber', 'topics']
 
         full_log_list: List[Dict[str, Any]] = self._filter_log_list(tx.neon_tx_res.log_list, True)
         full_log_dict: Dict[str, List[Dict[str, Any]]] = dict()
@@ -962,6 +964,13 @@ class NeonRpcApiWorker:
             if 'transactionLogIndex' not in log_rec:
                 for key in remove_eth_key_list:
                     log_rec.pop(key, None)
+            else:
+                address = log_rec.pop('address', None)
+                if len(address):
+                    log_rec['address'] = NeonAddress.from_raw(address).checksum_address
+                data = log_rec.get('data')
+                if not len(data):
+                    log_rec['data'] = '0x'
 
             full_log_dict.setdefault(log_list_key, list()).append(log_rec)
         return full_log_dict
