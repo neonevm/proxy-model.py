@@ -9,7 +9,7 @@ services:
     hostname: solana
     networks:
       - net
-    ports:
+    expose:
       - 8899
     healthcheck:
       # Must be available from outside (calling without -u causes premature result)
@@ -45,8 +45,8 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
-    ports:
-      - "5432"
+    expose:
+      - 5432
     networks:
       - net
 
@@ -82,8 +82,8 @@ services:
       CONFIG: ci
       MIN_OPERATOR_BALANCE_TO_WARN: 4565760000 # = 913152000 * 5 (5 storage accounts) = 4.56576 SOL
       MIN_OPERATOR_BALANCE_TO_ERR: 913152000 # = solana rent 131072 (= Rent-exempt minimum: 0.913152 SOL) SOLs to create a storage
-      PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
-      PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
+      #PP_SOLANA_URL: ${CI_PP_SOLANA_URL:-https://api.devnet.solana.com}
+      #PYTH_MAPPING_ACCOUNT: ${CI_PYTH_MAPPING_ACCOUNT:-BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2}
       # Set to 0 + CONST_GAS_PRICE to 0, if you want 0 gas-price
       MINIMAL_GAS_PRICE: 1
       CONST_GAS_PRICE: 2
@@ -107,7 +107,8 @@ services:
         condition: service_healthy
       dbcreation:
         condition: service_completed_successfully
-    ports:
+    expose:
+      - 8888
       - 9090
     networks:
       - net
@@ -140,7 +141,7 @@ services:
       SOLANA_COMMITMENT: confirmed
       RUST_BACKTRACE: ${RUST_BACKTRACE:-0}
     hostname: faucet
-    ports:
+    expose:
       - 3333
     networks:
       - net
@@ -198,6 +199,16 @@ services:
       - net
     entrypoint: proxy/run-indexer.sh
 
-
+#  hashicorp:
+#    container_name: vault
+#    image: hashicorp/vault:latest
+#    hostname: vault
+#    expose:
+#      - 8200
+#    ports:
+#      - 8200:8200
+#    networks:
+#      - net
+#    entrypoint: vault server -dev -dev-listen-address=0.0.0.0:8200 -dev-root-token-id=local-test-hvac-token
 networks:
   net:
