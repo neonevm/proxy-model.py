@@ -25,7 +25,7 @@ class GithubClient():
 
     def run_dapps_dispatches(self, proxy_url, solana_url, faucet_url, pr_url_for_report, test_set, network_id='111',
                              branch='develop'):
-        dapps = "aave,saddle,uniswap-v3" if test_set=='fullTestSuite' else ''
+        dapps = "" if test_set=='extendedFullTestSuite' else "aave,saddle,uniswap-v3"
         data = {"ref": branch,
                 "inputs": {"proxy_url": proxy_url,
                            "solana_url": solana_url,
