@@ -25,8 +25,8 @@ class ProxyStatDataPeeker(StatDataPeeker):
         self._neon_account_list: List[str] = list()
 
     def set_op_account_list(self, op_list: NeonOpResListData) -> None:
-        self._sol_account_list = op_list.sol_account_list
-        self._neon_account_list = op_list.neon_account_list
+        self._sol_account_list = list(set(op_list.sol_account_list))
+        self._neon_account_list = list(set(op_list.neon_account_list))
 
     async def _run(self) -> None:
         await super()._run()
