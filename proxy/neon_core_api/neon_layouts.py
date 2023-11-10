@@ -8,25 +8,44 @@ from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.address import NeonAddress
 
 
+class NeonAccountStatus(enum.Enum):
+    Ok = 'Ok'
+    Legacy = 'Legacy'
+    Empty = 'Empty'
+
+    @staticmethod
+    def from_string(value: str) -> NeonAccountStatus:
+        if value == 'Ok':
+            return NeonAccountStatus.Ok
+        elif value == 'Legacy':
+            return NeonAccountStatus.Legacy
+        elif value == 'Empty':
+            return NeonAccountStatus.Empty
+
+
 @dataclass(frozen=True)
 class NeonAccountInfo:
-    neon_addr: NeonAddress
-    pda_address: SolPubKey
+    status: NeonAccountStatus
+    neon_address: NeonAddress
+    solana_address: SolPubKey
+    contract_solana_address: SolPubKey
     tx_count: int
     balance: int
 
     @staticmethod
     def from_json(neon_addr: NeonAddress, json_data: Dict[str, Any]) -> NeonAccountInfo:
         return NeonAccountInfo(
-            neon_addr=neon_addr,
-            pda_address=SolPubKey.from_string(json_data.get('solana_address')),
+            status=NeonAccountStatus.from_string(json_data.get('status')),
+            neon_address=neon_addr,
+            solana_address=SolPubKey.from_string(json_data.get('solana_address')),
+            contract_solana_address=SolPubKey.from_string(json_data.get('contract_solana_address')),
             tx_count=json_data.get('trx_count'),
             balance=int(json_data.get('balance'), 16),
         )
 
     @property
     def chain_id(self) -> int:
-        return self.neon_addr.chain_id
+        return self.neon_address.chain_id
 
 
 @dataclass(frozen=True)

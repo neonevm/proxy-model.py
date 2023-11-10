@@ -12,6 +12,6 @@ class MPExecutorStateTxCntTask(MPExecutorBaseTask):
 
         state_tx_cnt_list: List[MPSenderTxCntData] = []
         for neon_acct in neon_acct_list:
-            data = MPSenderTxCntData(neon_acct.neon_addr, neon_acct.tx_count)
+            data = MPSenderTxCntData(neon_acct.neon_address, neon_acct.tx_count)
             state_tx_cnt_list.append(data)
         return MPSenderTxCntResult(sender_tx_cnt_list=state_tx_cnt_list)

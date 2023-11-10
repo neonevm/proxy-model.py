@@ -58,7 +58,7 @@ class ProxyStatDataPeeker(StatDataPeeker):
             token_name = self._get_token_name(neon_acct.chain_id)
             balance = Decimal(neon_acct.balance) / (10 ** 18)
             token_balance_dict[token_name] = token_balance_dict.get(token_name, Decimal(0)) + balance
-            self._stat_service.commit_op_neon_balance(neon_acct.neon_addr.checksum_address, token_name, balance)
+            self._stat_service.commit_op_neon_balance(neon_acct.neon_address.checksum_address, token_name, balance)
 
         for token_name, balance in token_balance_dict.items():
             self._stat_service.commit_op_neon_balance('TOTAL', token_name, balance)

@@ -127,7 +127,7 @@ class CompleteTest(unittest.TestCase):
         OpResInit(cls.config, cls.solana, cls.neon_client).init_resource(resource)
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
-        neon_ix_builder.init_operator_neon(resource.neon_account_dict[cls.chain_id].pda_address)
+        neon_ix_builder.init_operator_neon(resource.neon_account_dict[cls.chain_id].solana_address)
 
         neon_tx = NeonTx.from_string(raw_tx)
         neon_ix_builder.init_neon_tx(neon_tx)

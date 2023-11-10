@@ -64,7 +64,7 @@ class NeonHandler:
         key_info_list = get_key_info_list()
 
         neon_acct_dict = {
-            neon_acct.neon_addr: self._proxy(neon_acct.chain_id).get_balance(Address(bytes(neon_acct.neon_addr)))
+            neon_acct.neon_address: self._proxy(neon_acct.chain_id).get_balance(Address(bytes(neon_acct.neon_address)))
             for key_info in key_info_list
             for neon_acct in key_info.neon_account_dict.values()
         }

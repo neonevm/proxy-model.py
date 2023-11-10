@@ -196,13 +196,13 @@ class NeonIxBuilder:
 
     def make_create_neon_account_ix(self, neon_account_info: NeonAccountInfo) -> SolTxIx:
         LOG.debug(
-            f'Create neon account: {str(neon_account_info.neon_addr)}, '
-            f'sol account: {neon_account_info.pda_address}'
+            f'Create neon account: {str(neon_account_info.neon_address)}, '
+            f'sol account: {neon_account_info.solana_address}'
         )
 
         ix_data = b''.join([
             EvmIxCode.CreateBalance.value.to_bytes(1, byteorder='little'),
-            neon_account_info.neon_addr.to_bytes(),
+            neon_account_info.neon_address.to_bytes(),
             neon_account_info.chain_id.to_bytes(8, byteorder='little')
         ])
 
@@ -212,7 +212,8 @@ class NeonIxBuilder:
             accounts=[
                 SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
                 SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-                SolAccountMeta(pubkey=neon_account_info.pda_address, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=neon_account_info.solana_address, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=neon_account_info.contract_solana_address, is_signer=False, is_writable=True),
             ]
         )
 

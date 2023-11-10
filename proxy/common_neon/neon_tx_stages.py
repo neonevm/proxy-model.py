@@ -37,7 +37,7 @@ class NeonCreateAccountTxStage(NeonTxStage):
 
     def build(self) -> None:
         assert self._is_empty()
-        LOG.debug(f'Create user account {self._neon_acct_info.neon_addr}:{self._neon_acct_info.chain_id}')
+        LOG.debug(f'Create user account {self._neon_acct_info.neon_address}:{self._neon_acct_info.chain_id}')
         self.tx.add(self._ix_builder.make_create_neon_account_ix(self._neon_acct_info))
 
 

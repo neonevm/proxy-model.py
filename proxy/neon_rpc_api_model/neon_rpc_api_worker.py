@@ -809,11 +809,13 @@ class NeonRpcApiWorker:
         block = self._process_block_tag(tag)
         acct = self._core_api_client.get_neon_account_info(addr, block)
         return dict(
+            status=acct.status.value,
             address=addr.checksum_address,
             transactionCount=hex(acct.tx_count),
             balance=hex(acct.balance),
             chainId=hex(acct.chain_id),
-            solanaAddress=str(acct.pda_address),
+            solanaAddress=str(acct.solana_address),
+            contractSolanaAddress=str(acct.contract_solana_address),
         )
 
     def _fill_transaction_receipt_answer(self, tx: NeonTxReceiptInfo, details: TxReceiptDetail.Type) -> dict:

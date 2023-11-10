@@ -35,7 +35,7 @@ class NeonTxSendCtx:
         self._resource = mp_tx_req.res_info
 
         self._ix_builder = NeonIxBuilder(self._resource.public_key)
-        self._ix_builder.init_operator_neon(self._resource.neon_account_dict[mp_tx_req.chain_id].pda_address)
+        self._ix_builder.init_operator_neon(self._resource.neon_account_dict[mp_tx_req.chain_id].solana_address)
         self._ix_builder.init_iterative(self.holder_account)
         if not mp_tx_req.is_stuck_tx():
             self._ix_builder.init_neon_tx(mp_tx_req.neon_tx)

@@ -101,7 +101,7 @@ class BlockedTest(unittest.TestCase):
 
         print(deployed_info.contract.address)
 
-        cls.caller = cls.proxy.get_account_info(cls.neon_account.address).pda_address
+        cls.caller = cls.proxy.get_account_info(cls.neon_account.address).solana_address
 
     def create_blocked_transaction(self, resource: OpResInfo):
         print("\ncreate_blocked_transaction")
@@ -124,7 +124,7 @@ class BlockedTest(unittest.TestCase):
         ]
 
         neon_ix_builder = NeonIxBuilder(resource.public_key)
-        neon_ix_builder.init_operator_neon(resource.neon_account_dict[self.chain_id].pda_address)
+        neon_ix_builder.init_operator_neon(resource.neon_account_dict[self.chain_id].solana_address)
 
         neon_tx = NeonTx.from_string(tx_store.tx_signed.rawTransaction)
         neon_ix_builder.init_neon_tx(neon_tx)

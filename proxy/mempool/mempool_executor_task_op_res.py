@@ -26,7 +26,7 @@ from ..common_neon.solana_interactor import SolInteractor
 from ..common_neon.solana_tx_list_sender import SolTxListSender
 
 from ..neon_core_api.neon_client_base import NeonClientBase
-from ..neon_core_api.neon_layouts import HolderStatus
+from ..neon_core_api.neon_layouts import NeonAccountStatus, HolderStatus
 
 from ..statistic.data import NeonOpResListData
 
@@ -82,18 +82,12 @@ class OpResInit:
 
     def _create_neon_account(self, builder: NeonIxBuilder, resource: OpResInfo):
         for neon_acct in resource.neon_account_dict.values():
-            neon_addr_str = f'{neon_acct.neon_addr.checksum_address}:{neon_acct.chain_id}'
+            neon_addr_str = f'{neon_acct.neon_address.checksum_address}:{neon_acct.chain_id}'
 
-            sol_addr = neon_acct.pda_address
-            sol_acct_info = self._solana.get_account_info(sol_addr)
-            if not sol_acct_info:
-                pass
-            elif sol_acct_info.owner == EVM_PROGRAM_ID:
-                LOG.debug(f'Use neon account {str(sol_addr)}({neon_addr_str}) for resource {resource}')
+            if neon_acct.status == NeonAccountStatus.Ok:
                 continue
-            else:
-                raise BadResourceError(f'Wrong owner for neon account {str(sol_acct_info.owner)}')
 
+            sol_addr = neon_acct.solana_address
             LOG.debug(f'Create neon account {str(sol_addr)}({neon_addr_str}) for resource {resource}')
             stage = NeonCreateAccountTxStage(builder, neon_acct)
             self._execute_stage(stage, resource)
@@ -146,7 +140,7 @@ class MPExecutorOpResTask(MPExecutorBaseTask):
             for key_info in key_info_list:
                 sol_acct_list.append(key_info.public_key)
                 for neon_acct in key_info.neon_account_dict.values():
-                    neon_addr_list.append(neon_acct.neon_addr)
+                    neon_addr_list.append(neon_acct.neon_address)
 
             stat = NeonOpResListData(
                 sol_account_list=sol_acct_list,

@@ -19,7 +19,7 @@ from proxy.common_neon.solana_interactor import SolInteractor
 from proxy.common_neon.solana_tx import SolTx, SolAccount, SolSig, SolPubKey, SolCommit
 from proxy.common_neon.address import NeonAddress
 
-from proxy.neon_core_api.neon_layouts import NeonAccountInfo
+from proxy.neon_core_api.neon_layouts import NeonAccountInfo, NeonAccountStatus
 
 
 @dataclass(frozen=True)
@@ -169,8 +169,10 @@ class Proxy:
     def get_account_info(self, address: str) -> NeonAccountInfo:
         res = self._web3.neon.get_neon_account(address)
         return NeonAccountInfo(
-            neon_addr=NeonAddress.from_raw(res.address, res.chainId),
-            pda_address=SolPubKey.from_string(res.solanaAddress),
+            status=NeonAccountStatus.from_string(res.status),
+            neon_address=NeonAddress.from_raw(res.address, res.chainId),
+            solana_address=SolPubKey.from_string(res.solanaAddress),
+            contract_solana_address=SolPubKey.from_string(res.contractSolanaAddress),
             tx_count=res.transactionCount,
             balance=res.balance
         )

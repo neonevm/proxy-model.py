@@ -46,7 +46,7 @@ class OpKeyInfo:
         return OpKeyInfo(
             signer=signer,
             neon_account_dict={
-                neon_acct.neon_addr.chain_id: neon_acct
+                neon_acct.neon_address.chain_id: neon_acct
                 for neon_acct in neon_account_list
             },
             holder_info_list=holder_info_list

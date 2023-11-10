@@ -10,11 +10,13 @@ from web3.types import RPCEndpoint, HexBytes, ChecksumAddress, Address, BlockIde
 
 @dataclasses.dataclass
 class NeonAccountData:
+    status: str
     address: HexBytes
     transactionCount: int
     balance: int
     chainId: int
     solanaAddress: str
+    contractSolanaAddress: str
 
 
 class Neon(Module):
@@ -77,8 +79,10 @@ class Neon(Module):
                 return int(_s, 16)
             return _s
         return NeonAccountData(
+            status=result.status,
             address=result.address,
             solanaAddress=result.solanaAddress,
+            contractSolanaAddress=result.contractSolanaAddress,
             chainId=_to_int(result.chainId),
             transactionCount=_to_int(result.transactionCount),
             balance=_to_int(result.balance)
