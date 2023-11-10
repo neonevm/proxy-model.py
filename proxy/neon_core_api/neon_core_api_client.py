@@ -81,10 +81,6 @@ class _Client:
 
 
 class NeonCoreApiClient(NeonClientBase):
-    _re_insufficient_balance = re.compile(
-        r'EVM Error. Insufficient balance for transfer, account = 0x([0-9a-fA-F]+), required = (\d+)'
-    )
-
     def __init__(self, config: Config):
         self._config = config
         self._retry_cnt = len(config.solana_url_list)
@@ -265,17 +261,7 @@ class NeonCoreApiClient(NeonClientBase):
         if error is None:
             return
 
-        error = self._check_insufficient_balance(error)
         raise EthereumError(message=error)
-
-    def _check_insufficient_balance(self, error: str) -> str:
-        match = self._re_insufficient_balance.match(error)
-        if match is None:
-            return error
-
-        sender = match.group(1)
-        amount = match.group(2)
-        return f'insufficient funds for transfer: address {sender} want {amount}'
 
     def _get_emulated_result(self, response: RPCResponse) -> NeonEmulatorResult:
         value = response.get('value')
