@@ -182,6 +182,8 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
             allow_underpriced_tx_wo_chainid=True,
             min_wo_chainid_acceptable_gas_price=1
         )
+        self._base_gas_price = price_result
+
         task = MPTask(1, MockTask(result=None, is_done=False), MPRequest('1'))
         self._mempool._gas_price_task_loop._task = task
         self._mempool._gas_price_task_loop._gas_price = price_result
@@ -342,29 +344,58 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
     @patch.object(MockMPExecutor, 'is_available')
     async def test_over_9000_transfers(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
         """Checks if all mp_tx_requests are processed by the MemPool"""
-        acct_count = 1_000
-        from_acct_count = 90
-        nonce_count = 101
-        acct_list = [NeonAccount.create() for _ in range(acct_count)]
-        req_list: List[MPTxExecRequest] = list()
+        nonce_cnt = 101
+        await self._enqueue_requests_by_from_acct_nonce(90, nonce_cnt)
 
-        for acct_idx in range(0, from_acct_count):
-            for nonce in range(1, nonce_count):
-                req = create_transfer_mp_request(
-                    from_acct=acct_list[acct_idx], to_acct=acct_list[randint(0, acct_count-1)],
+        self.assertEqual(submit_mp_request_mock.call_count, 0)
+        is_available_mock.return_value = True
+        await self._exec_all_txs_in_mempool(nonce_cnt)
+        self.assertEqual(submit_mp_request_mock.call_count, self._mempool._tx_schedule._capacity)
+
+    @patch.object(MockMPExecutor, 'submit_mp_request', side_effect=MockMPExecutor.create_mp_task)
+    @patch.object(MockMPExecutor, 'is_available')
+    async def test_gas_price_increase(self, is_available_mock: MagicMock, submit_mp_request_mock: MagicMock):
+        """Checks if gas-price increases when mempool is full, and returns back when txs have been executed"""
+        self.assertEqual(self._mempool.get_gas_price().suggested_gas_price, self._base_gas_price.suggested_gas_price)
+
+        nonce_cnt = 101
+        capacipy_90pct = self._config.mempool_capacity // 10 * 9
+        from_acct_cnt = capacipy_90pct // (nonce_cnt - 1) + 1
+        await self._enqueue_requests_by_from_acct_nonce(from_acct_cnt, nonce_cnt)
+        self.assertGreater(self._mempool._tx_schedule.tx_cnt, capacipy_90pct)
+
+        self.assertNotEqual(self._mempool.get_gas_price().suggested_gas_price, self._base_gas_price.suggested_gas_price)
+
+        self.assertEqual(submit_mp_request_mock.call_count, 0)
+        is_available_mock.return_value = True
+        await self._exec_all_txs_in_mempool(nonce_cnt)
+        self.assertEqual(submit_mp_request_mock.call_count, (nonce_cnt - 1) * from_acct_cnt)
+
+        self.assertEqual(self._mempool.get_gas_price().suggested_gas_price, self._base_gas_price.suggested_gas_price)
+
+    async def _enqueue_requests_by_from_acct_nonce(self, from_acct_cnt: int, nonce_cnt: int):
+        acct_cnt = 1_000
+        acct_list = [NeonAccount.create() for _ in range(acct_cnt)]
+        req_data_list: List[Dict[str, Any]] = list()
+
+        for acct_idx in range(0, from_acct_cnt):
+            for nonce in range(1, nonce_cnt):
+                req_data = dict(
+                    from_acct=acct_list[acct_idx], to_acct=acct_list[randint(0, acct_cnt - 1)],
                     req_id=str(acct_idx) + '-' + str(nonce), nonce=nonce,
                     gas_price=randint(50000, 100000), gas=randint(4000, 10000)
                 )
-                req_list.append(req)
+                req_data_list.append(req_data)
 
-        random.shuffle(req_list)
-        for req in req_list:
-            await self._mempool.enqueue_mp_request(req)
-        self.assertEqual(self._mempool._tx_schedule.tx_cnt, self._mempool._tx_schedule._capacity)
-        self.assertEqual(submit_mp_request_mock.call_count, 0)
+        random.shuffle(req_data_list)
+        await self._enqueue_requests(req_data_list)
+        self.assertEqual(
+            self._mempool._tx_schedule.tx_cnt,
+            min(self._mempool._tx_schedule._capacity, from_acct_cnt * (nonce_cnt - 1))
+        )
 
-        is_available_mock.return_value = True
-        for i in range(nonce_count):
+    async def _exec_all_txs_in_mempool(self, nonce_cnt: int):
+        for i in range(nonce_cnt):
             self._mempool.on_executor_got_available(1)
             await asyncio.sleep(self._mempool._check_task_timeout_sec * 2)
 
@@ -375,7 +406,6 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
             self._update_state_tx_cnt(update_tx_cnt_list)
 
         self.assertEqual(self._mempool._tx_schedule.tx_cnt, 0)
-        self.assertEqual(submit_mp_request_mock.call_count, self._mempool._tx_schedule._capacity)
 
     async def _enqueue_requests(self, req_data_list: List[Dict[str, Any]]) -> MPTxRequestList:
         req_list = [create_transfer_mp_request(**req) for req in req_data_list]
