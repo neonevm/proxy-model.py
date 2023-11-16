@@ -151,6 +151,9 @@ class MemPool:
         return self._completed_tx_dict.get_tx_by_sender_nonce(sender_addr, tx_nonce)
 
     def get_gas_price(self) -> Optional[MPGasPriceResult]:
+        if self._gas_price is None:
+            return None
+
         min_gas_price = self._tx_schedule.min_gas_price
         if min_gas_price > self._gas_price.suggested_gas_price:
             return dataclasses.replace(self._gas_price, suggested_gas_price=min_gas_price)
