@@ -405,6 +405,9 @@ class NeonRpcApiWorker:
         address_list: List[str] = list()
         topic_list: List[List[str]] = list()
 
+        if not isinstance(obj, dict):
+            raise InvalidParamError(message=f'invalid input params: {obj}')
+
         if obj.get('fromBlock', 0) not in {0, '0x0', EthCommit.Earliest}:
             from_block = self._process_block_tag(obj['fromBlock']).block_slot
         if obj.get('toBlock', 'latest') not in {EthCommit.Latest, EthCommit.Pending}:
