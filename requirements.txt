@@ -17,5 +17,5 @@ construct
 web3==6.11.3
 aioprometheus==23.3.0
 singleton-decorator==1.0.0
-clickhouse-connect==0.6.16
+clickhouse-connect==0.6.20
 websockets==11.0.3
