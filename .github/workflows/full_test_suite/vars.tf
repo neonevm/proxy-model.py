@@ -1,41 +1,16 @@
-// AWS specific
-variable "aws_subnet" {
+variable "server_type" {
+  type = string
+}
+
+variable "location" {
   type    = string
-  default = "default"
+  default = "nbg1"
 }
 
-variable "allow_list" {
-  type = list(string)
-}
-
-variable "solana_instance_type" {
+variable "run_number" {
   type = string
 }
 
-variable "proxy_instance_type" {
-  type = string
-}
-
-variable "ami" {
-  type = string
-}
-
-// software sprcific
-variable "branch" {
-  type = string
-}
-
-
-variable "proxy_model_commit" {
-  type = string
-}
-
-
-variable "neon_evm_commit" {
-  type = string
-}
-
-
-variable "faucet_model_commit" {
+variable "ci_pp_solana_url" {
   type = string
 }
