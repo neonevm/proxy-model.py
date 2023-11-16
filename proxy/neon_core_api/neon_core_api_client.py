@@ -1,7 +1,7 @@
 import json
 import logging
 import requests
-import re
+import time
 import enum
 
 from typing import Optional, Dict, Any, Union, List
@@ -70,8 +70,7 @@ class _Client:
         raw_response: Optional[requests.Response] = None
         try:
             raw_response = self._client.post(self._call_url_map[method], json=request)
-            # TODO: strange workflow in neon-core-api
-            # raw_response.raise_for_status()
+            raw_response.raise_for_status()
             return raw_response.json()
         except (BaseException,):
             self._close()
@@ -83,10 +82,10 @@ class _Client:
 class NeonCoreApiClient(NeonClientBase):
     def __init__(self, config: Config):
         self._config = config
-        self._retry_cnt = len(config.solana_url_list)
+        self._client_cnt = len(config.solana_url_list)
 
         port = config.neon_core_api_port
-        self._client_list = [_Client(port + idx) for idx in range(self._retry_cnt)]
+        self._client_list = [_Client(port + idx) for idx in range(self._client_cnt)]
         self._last_client_idx = 0
 
     def _get_client(self) -> _Client:
@@ -99,12 +98,15 @@ class NeonCoreApiClient(NeonClientBase):
         return self._client_list[idx]
 
     def _call(self, method: _MethodName, request: RPCRequest) -> RPCResponse:
-        for retry in range(5 * self._retry_cnt):
-            client = self._get_client()
-            try:
-                return client.call(method, request)
-            except BaseException as exc:
-                LOG.warning(f'Fail to call {method} on the neon_core_api({client.port})', exc_info=exc)
+        for retry in range(30):
+            for _ in range(self._client_cnt):
+                client = self._get_client()
+                try:
+                    return client.call(method, request)
+                except BaseException as exc:
+                    LOG.warning(f'Fail to call {method} on the neon_core_api({client.port})', exc_info=exc)
+            LOG.warning(f'Fail to call {method} on the neon_core_api, sleep on 1 second...')
+            time.sleep(1)
 
     def emulate(
         self, contract: Optional[NeonAddress],
