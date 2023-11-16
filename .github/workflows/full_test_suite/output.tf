@@ -1,9 +1,9 @@
 output "solana_ip" {
-  value = aws_instance.solana.public_ip
+  value = hcloud_server.solana.ipv4_address
 }
 
 output "proxy_ip" {
-  value = aws_instance.proxy.public_ip
+  value = hcloud_server.proxy.ipv4_address
 }
 
 output "branch" {
