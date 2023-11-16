@@ -29,6 +29,24 @@ env:
   DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
   BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
   NEON_TEST_IMAGE:  neonlabsorg/neon_tests
+  TF_VAR_run_number: ${{ github.run_number }}
+  TF_VAR_ci_pp_solana_url: ${{secrets.DEVNET_INTERNAL_RPC}}
+  TF_VAR_proxy_model_commit: ${{github.sha}}
+  TF_VAR_neon_evm_commit: "latest"
+  TF_VAR_faucet_model_commit: ${{vars.FAUCET_COMMIT}}
+  HCLOUD_TOKEN: ${{secrets.HCLOUD_TOKEN}}
+  DOCKERHUB_ORG_NAME: ${{vars.DOCKERHUB_ORG_NAME}}
+  FAUCET_COMMIT: ${{vars.FAUCET_COMMIT}}
+  GH_ORG_NAME: ${{vars.GH_ORG_NAME}}
+  IMAGE_NAME: ${{vars.IMAGE_NAME}}
+  NEON_TEST_INVOKE_PROGRAM_IMAGE: ${{vars.NEON_TEST_INVOKE_PROGRAM_IMAGE}}
+  NEON_TEST_RUN_LINK: ${{vars.NEON_TEST_RUN_LINK}}
+  TFSTATE_BUCKET: ${{vars.TFSTATE_BUCKET}}
+  TFSTATE_KEY_PREFIX: ${{vars.TFSTATE_KEY_PREFIX}}
+  TFSTATE_REGION: ${{vars.TFSTATE_REGION}}
+  UNISWAP_V2_CORE_COMMIT: ${{vars.UNISWAP_V2_CORE_COMMIT}}
+  UNISWAP_V2_CORE_REPO: ${{vars.UNISWAP_V2_CORE_REPO}}
+  GITHUB_RUN_NUMBER: ${{ github.run_number }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.inputs.neon_evm_commit }}
@@ -160,8 +178,10 @@ jobs:
       - uses: actions/checkout@v3
       - name: Add private key
         run: |
-          echo "${{ secrets.CI_STANDS_KEY }}" > ${HOME}/.ssh/ci-stands
-          chmod 644 ${HOME}/.ssh/ci-stands
+          echo "${{ secrets.CI_STANDS_KEY_HCLOUD }}" > ${HOME}/.ssh/ci-stands
+          chmod 600 ${HOME}/.ssh/ci-stands
+      - name: Remove known_host
+        run: rm -f ${HOME}/.ssh/known_hosts
       - name: Terraform build infra structure
         id: terraform
         run: |
@@ -344,6 +364,10 @@ jobs:
       PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
     steps:
       - uses: actions/checkout@v3
+      - name: Add private key
+        run: |
+          echo "${{ secrets.CI_STANDS_KEY_HCLOUD }}" > ${HOME}/.ssh/ci-stands
+          chmod 644 ${HOME}/.ssh/ci-stands
       - name: Get container logs
         if: always()
         run: python3 ./.github/workflows/deploy.py get_container_logs
@@ -357,15 +381,16 @@ jobs:
         with:
           name: Terraform infrastructure logs
           path: ./terraform.log
-      - name: Add private key
-        run: |
-          echo "${{ secrets.CI_STANDS_KEY }}" > ${HOME}/.ssh/ci-stands
-          chmod 644 ${HOME}/.ssh/ci-stands
+      - name: Set output
+        id: vars
+        run: echo "bname=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
       - name: Destroy terraform infrastructure
         if: ${{always() && needs.prepare-infrastructure.result != 'skipped'}}
+        env: 
+          TF_VAR_branch: ${{ steps.vars.outputs.bname }}
         run: |
           python3 ./.github/workflows/deploy.py destroy_terraform \
-          --run_number=${GITHUB_RUN_NUMBER} \
+          --run_number=${{env.GITHUB_RUN_NUMBER}} \
           --proxy_tag=${{ needs.build-image.outputs.proxy_tag }}
   finalize-image:
     runs-on: build-runner
