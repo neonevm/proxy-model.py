@@ -103,7 +103,7 @@ class SolClient:
             raise
 
     def _close(self) -> None:
-        session = self.__dict__.pop('_session')
+        session = self.__dict__.pop('_session', None)
         if session is not None:
             return session.close()
 
