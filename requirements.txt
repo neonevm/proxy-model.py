@@ -8,7 +8,7 @@ solana==0.30.2
 solders==0.18.1
 psycopg2-binary
 ethereum
-py-solc-x==1.1.1
+py-solc-x==2.0.2
 hvac==2.0.0
 requests==2.31.0
 base58
