@@ -93,7 +93,7 @@ class NeonPassAnalyzer(GasTankSolTxAnalyzer):
         #   1. Create token account (token.init_v2)
         #   2. Transfer tokens (token.transfer)
         # First: select all instructions that can form such chains
-        create_ix_list = self._find_evm_ix_list(tx_parser, 'create account', EvmIxCode.CreateBalance)
+        create_ix_list = self._find_evm_ix_list(tx_parser, 'create account', EvmIxCode.CreateAccountBalance)
         if not len(create_ix_list):
             return approved_list
 

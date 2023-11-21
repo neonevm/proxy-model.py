@@ -71,7 +71,8 @@ class BaseNeonIndexedObjInfo:
 class NeonAccountInfo:
     neon_address: str
     chain_id: int
-    pda_address: str
+    solana_address: str
+    contract_solana_address: Optional[str]
     block_slot: int
     sol_sig: str
 

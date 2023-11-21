@@ -9,7 +9,7 @@ from rlp import encode as rlp_encode
 
 from solders.system_program import CreateAccountWithSeedParams, create_account_with_seed
 
-from .constants import COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID, EVM_PROGRAM_ID
+from .constants import COMPUTE_BUDGET_ID, ADDRESS_LOOKUP_TABLE_ID, SYS_PROGRAM_ID, EVM_PROGRAM_ID, INCINERATOR_ID
 from .evm_config import EVMConfig
 from .utils.eth_proto import NeonTx
 from .utils.utils import str_enum
@@ -23,19 +23,33 @@ LOG = logging.getLogger(__name__)
 
 class EvmIxCode(IntEnum):
     Unknown = -1
-    CollectTreasure = 0x1e              # 30
-    TxExecFromData = 0x1f               # 31
-    TxExecFromAccount = 0x2a            # 42
-    TxStepFromData = 0x20               # 32
-    TxStepFromAccount = 0x21            # 33
-    TxStepFromAccountNoChainId = 0x22   # 34
-    CancelWithHash = 0x23               # 35
-    HolderCreate = 0x24                 # 36
-    HolderDelete = 0x25                 # 37
-    HolderWrite = 0x26                  # 38
-    DepositV03 = 0x27                   # 39
-    CreateAccountV03 = 0x28             # 40
-    CreateBalance = 0x2D                # 45
+    CollectTreasure = 0x1e                # 30
+
+    HolderCreate = 0x24                   # 36
+    HolderDelete = 0x25                   # 37
+    HolderWrite = 0x26                    # 38
+
+    CreateAccountBalance = 0x30           # 48
+    Deposit = 0x31                        # 49
+
+    TxExecFromData = 0x32                 # 50
+    TxExecFromAccount = 0x33              # 51
+    TxStepFromData = 0x34                 # 52
+    TxStepFromAccount = 0x35              # 53
+    TxStepFromAccountNoChainId = 0x36     # 54
+
+    CancelWithHash = 0x37                 # 55
+
+    OldDeposit = 0x27                     # 39
+    OldCreateAccount = 0x28               # 40
+
+    OldTxExecFromData = 0x1f              # 31
+    OldTxExecFromAccount = 0x2a           # 42
+    OldTxStepFromData = 0x20              # 32
+    OldTxStepFromAccount = 0x21           # 33
+    OldTxStepFromAccountNoChainId = 0x22  # 34
+
+    OldCancelWithHash = 0x23              # 35
 
 
 @singleton
@@ -116,6 +130,10 @@ class NeonIxBuilder:
         assert self._holder_msg is not None
         return cast(bytes, self._holder_msg)
 
+    def _is_old_evm(self) -> bool:
+        # TODO: implement logic to check the EVM version
+        return False
+
     def init_operator_neon(self, operator_neon_account: SolPubKey) -> NeonIxBuilder:
         self._operator_neon_address = operator_neon_account
         return self
@@ -195,13 +213,17 @@ class NeonIxBuilder:
         )
 
     def make_create_neon_account_ix(self, neon_account_info: NeonAccountInfo) -> SolTxIx:
+        if self._is_old_evm():
+            return self._make_old_create_neon_account_ix(neon_account_info)
+
         LOG.debug(
-            f'Create neon account: {str(neon_account_info.neon_address)}, '
-            f'sol account: {neon_account_info.solana_address}'
+            f'Create neon address: {str(neon_account_info.neon_address)}, '
+            f'solana address: {neon_account_info.solana_address}, '
+            f'contract solana address: {neon_account_info.contract_solana_address}'
         )
 
         ix_data = b''.join([
-            EvmIxCode.CreateBalance.value.to_bytes(1, byteorder='little'),
+            EvmIxCode.CreateAccountBalance.value.to_bytes(1, byteorder='little'),
             neon_account_info.neon_address.to_bytes(),
             neon_account_info.chain_id.to_bytes(8, byteorder='little')
         ])
@@ -214,6 +236,27 @@ class NeonIxBuilder:
                 SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
                 SolAccountMeta(pubkey=neon_account_info.solana_address, is_signer=False, is_writable=True),
                 SolAccountMeta(pubkey=neon_account_info.contract_solana_address, is_signer=False, is_writable=True),
+            ]
+        )
+
+    def _make_old_create_neon_account_ix(self, neon_account_info: NeonAccountInfo) -> SolTxIx:
+        LOG.debug(
+            f'Create OLD neon address: {str(neon_account_info.neon_address)}, '
+            f'solana address: {neon_account_info.solana_address}'
+        )
+
+        ix_data = b''.join([
+            EvmIxCode.OldCreateAccount.value.to_bytes(1, byteorder='little'),
+            neon_account_info.neon_address.to_bytes()
+        ])
+
+        return SolTxIx(
+            program_id=EVM_PROGRAM_ID,
+            data=ix_data,
+            accounts=[
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                SolAccountMeta(pubkey=neon_account_info.solana_address, is_signer=False, is_writable=True),
             ]
         )
 
@@ -234,6 +277,9 @@ class NeonIxBuilder:
         )
 
     def make_tx_exec_from_data_ix(self) -> SolTxIx:
+        if self._is_old_evm():
+            return self._make_old_tx_exec_from_data_ix()
+
         ix_data = b''.join([
             EvmIxCode.TxExecFromData.value.to_bytes(1, byteorder='little'),
             self._treasury_pool_index_buf,
@@ -250,14 +296,45 @@ class NeonIxBuilder:
             ] + self._simple_neon_acct_list
         )
 
+    def _make_old_tx_exec_from_data_ix(self) -> SolTxIx:
+        ix_data = b''.join([
+            EvmIxCode.OldTxExecFromData.value.to_bytes(1, byteorder='little'),
+            self._treasury_pool_index_buf,
+            self._msg
+        ])
+        return SolTxIx(
+            program_id=EVM_PROGRAM_ID,
+            data=ix_data,
+            accounts=[
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                SolAccountMeta(pubkey=self._treasury_pool_address, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_neon_address, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                SolAccountMeta(pubkey=EVM_PROGRAM_ID, is_signer=False, is_writable=False),
+            ] + self._simple_neon_acct_list
+        )
+
     def make_tx_exec_from_account_ix(self) -> SolTxIx:
+        if self._is_old_evm():
+            return self._make_old_tx_exec_from_account_ix()
+
         ix_data = b''.join([
             EvmIxCode.TxExecFromAccount.value.to_bytes(1, byteorder='little'),
             self._treasury_pool_index_buf,
         ])
         return self._make_holder_ix(ix_data, self._simple_neon_acct_list)
 
+    def _make_old_tx_exec_from_account_ix(self) -> SolTxIx:
+        ix_data = b''.join([
+            EvmIxCode.OldTxExecFromAccount.value.to_bytes(1, byteorder='little'),
+            self._treasury_pool_index_buf,
+        ])
+        return self._make_old_holder_ix(ix_data, self._simple_neon_acct_list)
+
     def make_cancel_ix(self) -> SolTxIx:
+        if self._is_old_evm():
+            return self._make_old_cancel_ix()
+
         return SolTxIx(
             program_id=EVM_PROGRAM_ID,
             data=EvmIxCode.CancelWithHash.value.to_bytes(1, byteorder='little') + self._neon_tx_sig,
@@ -268,14 +345,33 @@ class NeonIxBuilder:
             ] + self._iter_neon_acct_list
         )
 
+    def _make_old_cancel_ix(self) -> SolTxIx:
+        return SolTxIx(
+            program_id=EVM_PROGRAM_ID,
+            data=EvmIxCode.OldCancelWithHash.value.to_bytes(1, byteorder='little') + self._neon_tx_sig,
+            accounts=[
+                SolAccountMeta(pubkey=self._holder, is_signer=False, is_writable=True),
+                SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                SolAccountMeta(pubkey=INCINERATOR_ID, is_signer=False, is_writable=True),
+            ] + self._iter_neon_acct_list
+        )
+
     def make_tx_step_from_data_ix(self, step_cnt: int, index: int) -> SolTxIx:
+        if self._is_old_evm():
+            return self._make_old_tx_step_from_data_ix(step_cnt, index)
+
         return self._make_tx_step_ix(
             EvmIxCode.TxStepFromData.value.to_bytes(1, byteorder='little'),
             step_cnt, index, self._msg
         )
 
-    def _make_tx_step_ix(self, ix_id_byte: bytes, neon_step_cnt: int, index: int,
-                         data: Optional[bytes]) -> SolTxIx:
+    def _make_old_tx_step_from_data_ix(self, step_cnt: int, index: int) -> SolTxIx:
+        return self._make_old_tx_step_ix(
+            EvmIxCode.OldTxStepFromData.value.to_bytes(1, byteorder='little'),
+            step_cnt, index, self._msg
+        )
+
+    def _make_tx_step_ix(self, ix_id_byte: bytes, neon_step_cnt: int, index: int, data: Optional[bytes]) -> SolTxIx:
         ix_data = b''.join([
             ix_id_byte,
             self._treasury_pool_index_buf,
@@ -287,6 +383,19 @@ class NeonIxBuilder:
             ix_data += data
 
         return self._make_holder_ix(ix_data, self._iter_neon_acct_list)
+
+    def _make_old_tx_step_ix(self, ix_id_byte: bytes, neon_step_cnt: int, index: int, data: Optional[bytes]) -> SolTxIx:
+        ix_data = b''.join([
+            ix_id_byte,
+            self._treasury_pool_index_buf,
+            neon_step_cnt.to_bytes(4, byteorder='little'),
+            index.to_bytes(4, byteorder="little")
+        ])
+
+        if data is not None:
+            ix_data += data
+
+        return self._make_old_holder_ix(ix_data, self._iter_neon_acct_list)
 
     def _make_holder_ix(self, ix_data: bytes, neon_acct_list: List[SolAccountMeta]):
         return SolTxIx(
@@ -301,15 +410,47 @@ class NeonIxBuilder:
              ] + neon_acct_list
         )
 
+    def _make_old_holder_ix(self, ix_data: bytes, neon_acct_list: List[SolAccountMeta]):
+        return SolTxIx(
+            program_id=EVM_PROGRAM_ID,
+            data=ix_data,
+            accounts=[
+                 SolAccountMeta(pubkey=self._holder, is_signer=False, is_writable=True),
+                 SolAccountMeta(pubkey=self._operator_account, is_signer=True, is_writable=True),
+                 SolAccountMeta(pubkey=self._treasury_pool_address, is_signer=False, is_writable=True),
+                 SolAccountMeta(pubkey=self._operator_neon_address, is_signer=False, is_writable=True),
+                 SolAccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                 SolAccountMeta(pubkey=EVM_PROGRAM_ID, is_signer=False, is_writable=False),
+            ] + neon_acct_list
+        )
+
     def make_tx_step_from_account_ix(self, neon_step_cnt: int, index: int) -> SolTxIx:
+        if self._is_old_evm():
+            return self._make_old_tx_step_from_account_ix(neon_step_cnt, index)
+
         return self._make_tx_step_ix(
             EvmIxCode.TxStepFromAccount.value.to_bytes(1, byteorder='little'),
             neon_step_cnt, index, None
         )
 
+    def _make_old_tx_step_from_account_ix(self, neon_step_cnt: int, index: int) -> SolTxIx:
+        return self._make_old_tx_step_ix(
+            EvmIxCode.OldTxStepFromAccount.value.to_bytes(1, byteorder='little'),
+            neon_step_cnt, index, None
+        )
+
     def make_tx_step_from_account_no_chainid_ix(self, neon_step_cnt: int, index: int) -> SolTxIx:
+        if self._is_old_evm():
+            return self._make_old_tx_step_from_account_no_chainid_ix(neon_step_cnt, index)
+
         return self._make_tx_step_ix(
             EvmIxCode.TxStepFromAccountNoChainId.value.to_bytes(1, byteorder='little'),
+            neon_step_cnt, index, None
+        )
+
+    def _make_old_tx_step_from_account_no_chainid_ix(self, neon_step_cnt: int, index: int) -> SolTxIx:
+        return self._make_old_tx_step_ix(
+            EvmIxCode.OldTxStepFromAccountNoChainId.value.to_bytes(1, byteorder='little'),
             neon_step_cnt, index, None
         )
 

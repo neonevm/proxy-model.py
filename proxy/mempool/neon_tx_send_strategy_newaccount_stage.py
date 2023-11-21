@@ -15,7 +15,7 @@ LOG = logging.getLogger(__name__)
 
 
 class NewAccountNeonTxPrepStage(BaseNeonTxPrepStage):
-    name = EvmIxCodeName().get(EvmIxCode.CreateBalance)
+    name = EvmIxCodeName().get(EvmIxCode.CreateAccountBalance)
 
     def complete_init(self) -> None:
         pass

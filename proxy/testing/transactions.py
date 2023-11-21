@@ -7,7 +7,7 @@ evm_program = EVM_PROGRAM_ID_STR
 neon_pass_erc20_for_spl = '0x04b27acb0013a31822ec1624c1a3066b023e3a93'
 neon_pass_gas_less_account = '0x4136faa9cae6c9afde37045a255b087f2ccfee75'
 neon_pass_gas_less_amount = 123456
-neon_pass_claim_to_ix_data = 'TjDbbsDNCryDtGGYA4MXa9pT7et6FgLvJPdf4ezz3twpbTrexM1HrC3QrKR1yNMYYizyEZNcYhXoLyzDbdpZGwCqPPrYsUMWgg4diCW6mbxXUzbyVwbMERRhADEY4rAqBAutTXaPq3BZxMVLRvffkSZGrZLTp3STFfmBVX8ZTZpks7b2iKsVqFuHAkxNtHpD8UWAhuptGzpheHyEybzKFDrn1bi1YL6zs6eRqB1VCv64tR1D52pzQ4WZWLt8VebjcbeYdQUeKihW4TsyMN825kJHJ'
+neon_pass_claim_to_ix_data = 'jsnANuQyP1QMDqCNaghCenGeEuxWfSffJUnLu4BW6RgH6SVWxdXLtVZWQWP4A3PjpsEVXBHg6YcQ3FsCvV1uLzpWd4cRPinmycRSZWW41JyzEa3FKXMmYBnHuDfHmjLoFateZiKTzdEn7AX4MGaZLhiJAtJQfoGRGLHtEB3aoKcrXsSzJFPbKDPuuJLHDwEC2dy6ZadSnqCvwwbWsrPBGat3bbYSttdVtcrTCByicnVbHJfKHmEe45hE3DJrSwZjQ2y3pm72uQKkz85oYbh9fR2Rz'
 
 
 # The Solana transaction for simple case gas-less tx
@@ -233,12 +233,12 @@ neon_pass_tx = {
                 },
                 {
                     "accounts": [0, 9, 5],
-                    "data": "3ncei94EwLHyhQAfg1ukpRoKcczPA",
+                    "data": "3yKDvzybLMHSxGWcEXxtY1C5wEyDr",
                     "programIdIndex": 13
                 },
                 {
                     "accounts": [0, 9, 1],
-                    "data": "3nQHhAPg59Da3Vk8UL3v1zK3hKygp",
+                    "data": "3y6rv2K2UAD3JN652r73jZhp1wxXW",
                     "programIdIndex": 13
                 },
                 {
@@ -266,6 +266,7 @@ wormhole_contract = '0xee3db83916ccdc3593b734f7f2d16d630f39f1d0'
 erc20_token_mint = '0xae13d989dac2f0debff460ac112a837c89baa7cd'
 wormhole_token_mint = f'4:{erc20_token_mint}'
 wormhole_write_ix_data = '3UTv64yHjqhjz5C3kPryURvtiiH1ntFhLCyk2MXq541jPMvwhZrTwu678u2WJxsnAyBLERGpkh1H9fS89MSerce77RmebjEmfAAQZxYkm2tNnoDPejEiKLVPzK3zpCRdJt9M1tA6GXN2ADp5TQurh5MLHd1rk59ed7TdTwKBzgKY4eYya5uWFFoBCf5XduyPpGHzhq1rjVXy8K2edUKiw2n7az9McsMVgoWTeR9QyqNvSiW7NShFM8JWGTCHFWyCwp9wvjeWJSt8NZyr24L7kfXiZ9kPQh6jyNDUxrPVQmBkBhZGLaS19TxgrJhhpZDjuhdFtpqK3x4XmVZ1a8MaHRSHBbCojF4KNb2sYpFMFdijNPtq5pCxzGPe99LRBTDbPjYRhX6x3yW1h3H5BcnMZ81mk9yYgfFoiQRn78nhbNcu1BzDSCrf6C7BTcppuu9giTz5fnKwQ9sTwA4mbKhv28HMWyAmdTgiW9PEpAKZ3WVvKFmpQkqDX98V18xu1wNrXnAY37KyCnCEe15U3bHwJSUC461bjGF4zDvR9HokNXHd8tFScgykh7daeMzJo7pkgSy2jwnuXMMyxD233k2JcyzVzheZQTKs1XrMHDnQkaADyaLAdxvRsAV4SpeFeJV4FrqTJH76K'
+wormhole_redeem_ix_data = '6nikNFy'
 
 wormhole_redeem_write_tx = {
     'blockTime': 1675925799,
@@ -494,7 +495,7 @@ wormhole_redeem_execute_tx = {
                 },
                 {
                     'accounts': [10, 0, 8, 11, 13, 15, 6, 5, 12, 1, 3, 9, 2, 4, 16, 22, 19, 21, 20, 17, 7, 18],
-                    'data': '5mpxtyV',
+                    'data': wormhole_redeem_ix_data,
                     'programIdIndex': 15
                 }
             ],
