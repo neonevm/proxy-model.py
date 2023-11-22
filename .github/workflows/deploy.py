@@ -186,7 +186,8 @@ def finalize_image(head_ref_branch, github_ref, proxy_tag):
 def terraform_build_infrastructure(head_ref_branch, github_ref_name, proxy_tag, neon_evm_tag, faucet_tag, run_number):
     branch = head_ref_branch if head_ref_branch != "" else github_ref_name
     neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
-    faucet_tag = update_faucet_tag_if_same_branch_exists(branch, faucet_tag)
+    if branch not in ['master', 'develop']:
+        faucet_tag = update_faucet_tag_if_same_branch_exists(branch, faucet_tag)
     os.environ["TF_VAR_branch"] = branch.replace('_', '-')
     os.environ["TF_VAR_proxy_image_tag"] = proxy_tag
     os.environ["TF_VAR_neon_evm_commit"] = neon_evm_tag
@@ -309,7 +310,8 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
 def deploy_check(proxy_tag, neon_evm_tag, faucet_tag, head_ref_branch, github_ref_name, skip_uniswap, test_files, skip_pull):
     feature_branch = head_ref_branch if head_ref_branch != "" else github_ref_name
     neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
-    faucet_tag = update_faucet_tag_if_same_branch_exists(feature_branch, faucet_tag)
+    if feature_branch not in ['master', 'develop']:
+        faucet_tag = update_faucet_tag_if_same_branch_exists(feature_branch, faucet_tag)
 
     os.environ["REVISION"] = proxy_tag
     os.environ["NEON_EVM_COMMIT"] = neon_evm_tag

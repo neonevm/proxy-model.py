@@ -21,8 +21,8 @@ on:
     tags:
       - "*"
 env:
-  NEON_EVM_TAG: "multiple_tokens"
-  FAUCET_TAG: "multiple_tokens"
+  NEON_EVM_TAG: "latest"
+  FAUCET_TAG: "latest"
   AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
   AWS_DEFAULT_REGION: ${{secrets.AWS_DEFAULT_REGION}}
   AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
@@ -148,7 +148,7 @@ jobs:
       - name: Set latest tag for test image if feature/version branch doesn't exist
         id: neon_test_final_tag
         run: |
-          if [[ "${{ steps.test_image_exists.conclusion }}" == "success" ]]; then
+          if [[ "${{ steps.test_image_exists.outcome }}" == "success" && "${{ github.ref_name }}" != "develop" ]]; then
             tag=${{ steps.neon_test_tag.outputs.value}}
           else
             tag='latest'
