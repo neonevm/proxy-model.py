@@ -175,14 +175,15 @@ def finalize_image(head_ref_branch, github_ref, proxy_tag):
 @click.option('--github_ref_name')
 @click.option('--neon_evm_tag')
 @click.option('--proxy_tag')
+@click.option('--faucet_tag')
 @click.option('--run_number')
-def terraform_build_infrastructure(head_ref_branch, github_ref_name, proxy_tag, neon_evm_tag, run_number):
+def terraform_build_infrastructure(head_ref_branch, github_ref_name, proxy_tag, neon_evm_tag, faucet_tag, run_number):
     branch = head_ref_branch if head_ref_branch != "" else github_ref_name
     neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
     os.environ["TF_VAR_branch"] = branch
     os.environ["TF_VAR_proxy_model_commit"] = proxy_tag
     os.environ["TF_VAR_neon_evm_commit"] = neon_evm_tag
-    os.environ["TF_VAR_faucet_model_commit"] = FAUCET_COMMIT
+    os.environ["TF_VAR_faucet_model_commit"] = faucet_tag
     thstate_key = f'{TFSTATE_KEY_PREFIX}{proxy_tag}-{run_number}'
 
     backend_config = {"bucket": TFSTATE_BUCKET,
@@ -292,18 +293,19 @@ def upload_remote_logs(ssh_client, service, artifact_logs):
 @cli.command(name="deploy_check")
 @click.option('--proxy_tag', help="the neon proxy image tag")
 @click.option('--neon_evm_tag', help="the neon evm_loader image tag")
+@click.option('--faucet_tag', help="the neon faucet image tag")
 @click.option('--head_ref_branch')
 @click.option('--skip_uniswap', is_flag=True, show_default=True, default=False, help="flag for skipping uniswap tests")
 @click.option('--test_files', help="comma-separated file names if you want to run a specific list of tests")
 @click.option('--skip_pull', is_flag=True, default=False, help="skip pulling of docker images from the docker-hub")
-def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_files, skip_pull):
+def deploy_check(proxy_tag, neon_evm_tag, faucet_tag, head_ref_branch, skip_uniswap, test_files, skip_pull):
     if head_ref_branch is not None:
         neon_evm_tag = update_neon_evm_tag_if_same_branch_exists(head_ref_branch, neon_evm_tag)
 
 
     os.environ["REVISION"] = proxy_tag
     os.environ["NEON_EVM_COMMIT"] = neon_evm_tag
-    os.environ["FAUCET_COMMIT"] = FAUCET_COMMIT
+    os.environ["FAUCET_COMMIT"] = faucet_tag
     project_name = proxy_tag
     cleanup_docker(project_name)
 
@@ -334,8 +336,6 @@ def deploy_check(proxy_tag, neon_evm_tag, head_ref_branch, skip_uniswap, test_fi
     else:
         test_list = test_files.split(',')
 
-    prepare_run_test(project_name)
-
     errors_count = 0
     for file in test_list:
         errors_count += run_test(project_name, file)
@@ -352,18 +352,9 @@ def get_test_list(project_name):
     return test_list
 
 
-def prepare_run_test(project_name):
-    inst = docker_client.exec_create(
-        f"{project_name}_proxy_1", './proxy/prepare-deploy-test.sh')
-    out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
-    test_logs = test_logs.decode('utf-8')
-    click.echo(out)
-    click.echo(test_logs)
-
-
 def run_test(project_name, file_name):
     click.echo(f"Running {file_name} tests")
-    env = {"SKIP_PREPARE_DEPLOY_TEST": "YES", "TESTNAME": file_name}
+    env = {"TESTNAME": file_name}
     inst = docker_client.exec_create(
         f"{project_name}_proxy_1", './proxy/deploy-test.sh', environment=env)
     out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
