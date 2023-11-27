@@ -40,6 +40,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 export REVISION=${proxy_image_tag}
 export NEON_EVM_COMMIT=${neon_evm_commit}
 export FAUCET_COMMIT=${faucet_model_commit}
+export DOCKERHUB_ORG_NAME=${dockerhub_org_name}
 
 # Receive docker-compose file and create override file
 cd /opt

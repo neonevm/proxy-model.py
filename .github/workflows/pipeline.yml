@@ -35,6 +35,7 @@ env:
   TF_VAR_proxy_model_commit: ${{github.sha}}
   TF_VAR_neon_evm_commit: "latest"
   TF_VAR_faucet_model_commit: ${{vars.FAUCET_COMMIT}}
+  TV_VAR_dockerhub_org_name: ${{vars.DOCKERHUB_ORG_NAME}}
   HCLOUD_TOKEN: ${{secrets.HCLOUD_TOKEN}}
   DOCKERHUB_ORG_NAME: ${{vars.DOCKERHUB_ORG_NAME}}
   FAUCET_COMMIT: ${{vars.FAUCET_COMMIT}}
@@ -216,6 +217,7 @@ jobs:
         id: terraform
         run: |
           python3 ./.github/workflows/deploy.py terraform_infrastructure \
+            --dockerhub_org_name=${{ env.DOCKERHUB_ORG_NAME }} \
             --github_ref_name=${{ github.ref_name }} \
             --head_ref_branch=${{ github.head_ref }} \
             --neon_evm_tag=${{ needs.build-image.outputs.neon_evm_tag }} \

@@ -42,6 +42,7 @@ data "template_file" "solana_init" {
     proxy_image_tag     = "${var.proxy_image_tag}"
     neon_evm_commit     = "${var.neon_evm_commit}"
     faucet_model_commit = "${var.faucet_model_commit}"
+    dockerhub_org_name  = "${var.dockerhub_org_name}"
   }
 }
 
@@ -56,5 +57,6 @@ data "template_file" "proxy_init" {
     neon_evm_commit     = "${var.neon_evm_commit}"
     faucet_model_commit = "${var.faucet_model_commit}"
     ci_pp_solana_url    = "${var.ci_pp_solana_url}"
+    dockerhub_org_name  = "${var.dockerhub_org_name}"
   }
 }
