@@ -14,3 +14,7 @@ variable "run_number" {
 variable "ci_pp_solana_url" {
   type = string
 }
+
+variable "dockerhub_org_name" {
+  type = string
+}

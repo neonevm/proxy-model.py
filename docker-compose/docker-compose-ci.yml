@@ -2,7 +2,7 @@ version: "3"
 
 services:
   solana:
-    image: neonlabsorg/evm_loader:${NEON_EVM_COMMIT}
+    image: ${DOCKERHUB_ORG_NAME}/evm_loader:${NEON_EVM_COMMIT}
     environment:
       SOLANA_URL: http://solana:8899
       RUST_LOG: solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
@@ -21,7 +21,7 @@ services:
     entrypoint: /opt/solana/bin/solana-run-neon.sh
 
   neon_test_invoke_program_loader:
-    image: neonlabsorg/neon_test_invoke_program:develop
+    image: ${DOCKERHUB_ORG_NAME}/neon_test_invoke_program:develop
     environment:
       SOLANA_URL: http://solana:8899
     networks:
@@ -51,7 +51,7 @@ services:
       - net
 
   dbcreation:
-    image: neonlabsorg/proxy:${REVISION}
+    image: ${DOCKERHUB_ORG_NAME}/proxy:${REVISION}
     environment:
       SOLANA_URL: http://solana:8899
       POSTGRES_DB: neon-db
@@ -67,7 +67,7 @@ services:
         condition: service_healthy
 
   proxy:
-    image: neonlabsorg/proxy:${REVISION}
+    image: ${DOCKERHUB_ORG_NAME}/proxy:${REVISION}
     environment:
       SOLANA_URL: http://solana:8899
       FAUCET_URL: http://faucet:3333
@@ -121,7 +121,7 @@ services:
       start_period: 5s
 
   faucet:
-    image: neonlabsorg/faucet:${FAUCET_COMMIT}
+    image: ${DOCKERHUB_ORG_NAME}/faucet:${FAUCET_COMMIT}
     environment:
       FAUCET_RPC_BIND: 0.0.0.0
       FAUCET_RPC_PORT: 3333
@@ -151,7 +151,7 @@ services:
         condition: service_healthy
 
   gas_tank:
-    image: neonlabsorg/proxy:${REVISION}
+    image: ${DOCKERHUB_ORG_NAME}/proxy:${REVISION}
     environment:
       POSTGRES_DB: neon-db
       POSTGRES_USER: neon-proxy
@@ -175,7 +175,7 @@ services:
         condition: service_started
 
   indexer:
-    image: neonlabsorg/proxy:${REVISION}
+    image: ${DOCKERHUB_ORG_NAME}/proxy:${REVISION}
     environment:
       SOLANA_URL: http://solana:8899
       POSTGRES_DB: neon-db
