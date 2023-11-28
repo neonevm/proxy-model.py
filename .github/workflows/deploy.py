@@ -244,6 +244,8 @@ def destroy_terraform(proxy_tag, run_number):
 
     TF_OUTPUT_OFFSET = 16
     ####
+    os.environ["TF_VAR_proxy_image_tag"] = proxy_tag
+    os.environ["TF_VAR_dockerhub_org_name"] = DOCKERHUB_ORG_NAME
     thstate_key = f'{TFSTATE_KEY_PREFIX}{proxy_tag}-{run_number}'
 
     backend_config = {"bucket": TFSTATE_BUCKET,
