@@ -60,6 +60,7 @@ jobs:
       proxy_tag: ${{ steps.tags.outputs.proxy }}
       neon_evm_tag: ${{ steps.tags.outputs.neon_evm }}
       is_version_proxy_branch: ${{ steps.is_version_proxy_branch.outputs.value }}
+      tag_creation_base_branch: ${{ steps.tag_creation.outputs.base_branch }}
       test_set: ${{ steps.test_set.outputs.value }}
       neon_test_tag: ${{ steps.neon_test_final_tag.outputs.value }}
     steps:
@@ -80,7 +81,13 @@ jobs:
             echo "value=false"
             echo "value=false" >> $GITHUB_OUTPUT
           fi
-
+      - name: Define base branch if the action is tag creation
+        id: tag_creation
+        if:  startsWith(github.ref , 'refs/tags/')
+        run: |
+          base_branch=`echo ${{ github.ref_name }} | sed 's/\.[0-9]*$/\.x/'`
+          echo "base_branch=$base_branch" >> $GITHUB_OUTPUT
+          echo "base_branch=$base_branch"
       - name: Define images tags
         id: tags
         run: |
@@ -118,8 +125,8 @@ jobs:
           if ${{ steps.is_version_proxy_branch.outputs.value }}; then
             tag=${GITHUB_REF/refs\/heads\//}
 
-          elif [[ $github_ref == *"refs/tags/"* ]]; then
-            tag=${GITHUB_REF/refs\/tags\//}
+          elif [[ "${{ steps.tag_creation.outputs.base_branch }}" != "" ]]; then
+            tag=${{ steps.tag_creation.outputs.base_branch }}
 
           elif [[ "${{ github.base_ref }}" =~ "refs/heads/"[vt][0-9]+\.[0-9]+\.x ]]; then # pr to version branch
             tag=${GITHUB_BASE_REF/refs\/heads\//}
@@ -309,7 +316,8 @@ jobs:
       - name: Update contracts in the container
         run: |
           docker exec -i ${{ env.CONTAINER }} \
-            python3 ./clickfile.py update-contracts --branch ${{ github.head_ref || github.ref_name }}
+            python3 ./clickfile.py update-contracts \
+          --branch ${{ needs.build-image.outputs.tag_creation_base_branch || github.head_ref || github.ref_name }}
       - name: Run basic tests
         run: |
           docker exec -i ${{ env.CONTAINER }} \
