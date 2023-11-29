@@ -6,15 +6,24 @@ All rights reserved.
 This code includes components derived from the code copyrighted by “Abhinav Singh and contributors” and distributed under the license detailed below. The component of this by Abhinav Singh and contributors is distributed by the original license as detailed below.
 
 Subject to the acknowledgement above, the following conditions apply:
+    1. Restrictions: The code, in whole or in part, may not be copied, reproduced, distributed, modified, or forked without explicit prior written permission from Neon Protocol Ltd.
+    2. No Redistribution: Redistribution of the source code or any derivative work is strictly prohibited. If you wish to use in any way or distribute the software, please request permission by contacting legal@neonfoundation.io.
+    3. Acknowledgement: If permitted as provided hereinabove, redistributions in any form must reproduce the following copyright notices:
+        “Copyright (c) 2023 by Neon Protocol Ltd”
+        and
+        “Copyright (c) 2013-2020 by Abhinav Singh and contributors
 
-1. Restrictions: The code, in whole or in part, may not be copied, reproduced, distributed, modified, or forked without explicit prior written permission from Neon Protocol Ltd.
-2. No Redistribution: Redistribution of the source code or any derivative work is strictly prohibited. If you wish to use in any way or distribute the software, please request permission by contacting legal@neonfoundation.io.
-3. Acknowledgement: If permitted as provided hereinabove, redistributions in any form must reproduce the following copyright notices:
-“Copyright (c) 2023 by Neon Protocol Ltd”
-and
-“Copyright (c) 2013-2020 by Abhinav Singh and contributors
-
-    Disclaimer: THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.”
+    Disclaimer: 
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+    ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+    LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+    ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.”
 
 --------------------------------------------------------
 
