@@ -1014,13 +1014,19 @@ class NeonRpcApiWorker:
         if to_addr:
             to_addr = to_addr.checksum_address
 
+        from_addr = NeonAddress.from_raw(t.addr)
+        if from_addr:
+            from_addr = from_addr.checksum_address
+        else:
+            from_addr = '0x' + '0' * 40
+
         result = {
             "blockHash": r.block_hash,
             "blockNumber": hex_block_number,
             "hash": t.sig,
             "transactionIndex": hex_tx_idx,
             "type": hex(t.tx_type),
-            "from": NeonAddress.from_raw(t.addr).checksum_address,
+            "from": from_addr,
             "nonce": hex(t.nonce),
             "gasPrice": hex(t.gas_price),
             "gas": hex(t.gas_limit),
