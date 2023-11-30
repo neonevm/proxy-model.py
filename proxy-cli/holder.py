@@ -34,7 +34,7 @@ class HolderHandler:
         h.create_parser.add_argument('operator_key', type=str, help='operator public key')
         h.create_parser.add_argument('holder_id', type=int, help='id of the holder account')
         h.delete_parser = h.sub_parser.add_parser('delete')
-        h.delete_parser.add_argument('holder_address', type=str, help='id of the holder account')
+        h.delete_parser.add_argument('holder_address', type=str, help='address of holder account')
         return h
 
     def execute(self, args) -> None:

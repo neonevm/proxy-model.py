@@ -115,8 +115,14 @@ class NeonHandler:
         tx_hash = proxy.send_raw_transaction(tx_signed.rawTransaction)
         amount = self._get_neon_amount(amount)
         token_name = get_token_name(from_addr.chain_id)
+        to_addr = NeonAddress.from_raw(to_addr, from_addr.chain_id)
 
-        print(f'send {amount:,.18} {token_name} from {str(from_addr)} to 0x{to_addr.hex()}: 0x{tx_hash.hex()}')
+        print(
+            f'send {amount:,.18} {token_name} '
+            f'from {from_addr.checksum_address} '
+            f'to {to_addr.checksum_address}: '
+            f'{tx_hash.hex()}'
+        )
 
     def _estimate_tx(self, from_addr: NeonAddress, to_addr: Address) -> int:
         tx = self._create_tx(from_addr, to_addr, 1)
@@ -203,6 +209,7 @@ class NeonHandler:
             if amount <= 0:
                 break
 
-        for token_name, balance in sent_amount_dict:
+        dest_addr = NeonAddress.from_raw(dest_addr, 0)
+        for token_name, balance in sent_amount_dict.items():
             balance = self._get_neon_amount(balance)
-            print(f'successfully send {balance:,.18} {token_name} to 0x{dest_addr.hex()}')
+            print(f'successfully send {balance:,.18} {token_name} to {dest_addr.checksum_address}')
