@@ -57,6 +57,6 @@ class KeyStorage:
 
         store_addr_list = self.get_list()
         for store_addr in store_addr_list:
-            if store_addr == address:
-                return NeonAddress.from_raw(store_addr, address.chain_id)
+            if store_addr.checksum_address == address.checksum_address:
+                return store_addr
         return None
