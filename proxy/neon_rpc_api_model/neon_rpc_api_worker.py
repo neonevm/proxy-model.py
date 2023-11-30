@@ -1215,7 +1215,7 @@ class NeonRpcApiWorker:
     def eth_accounts() -> [str]:
         storage = KeyStorage()
         account_list = storage.get_list()
-        return [str(a) for a in account_list]
+        return [a.checksum_address for a in account_list]
 
     def eth_sign(self, account: str, data: str) -> str:
         address = self._normalize_address(account)
