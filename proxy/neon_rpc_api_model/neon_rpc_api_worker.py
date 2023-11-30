@@ -1405,7 +1405,7 @@ class NeonRpcApiWorker:
         evm_param_dict['NEON_EVM_ID'] = EVM_PROGRAM_ID_STR
         return evm_param_dict
 
-    def neon_getGasTokenList(self) -> List[Dict[str, str]]:
+    def neon_getNativeTokenList(self) -> List[Dict[str, str]]:
         return list(
             dict(
                 token_name=token.token_name,
