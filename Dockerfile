@@ -32,12 +32,12 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=spl \
-    /opt/solana/bin/solana \
-    /opt/solana/bin/solana-keygen \
+    /root/.local/share/solana/install/active_release/bin/solana \
+    /root/.local/share/solana/install/active_release/bin/solana-keygen \
     /cli/bin/
 
 COPY --from=spl \
-    /opt/spl-token \
+    /root/.local/share/solana/install/active_release/bin/spl-token \
     /opt/create-test-accounts.sh \
     /opt/neon-cli \
     /opt/evm_loader-keypair.json \

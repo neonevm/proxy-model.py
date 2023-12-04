@@ -221,7 +221,7 @@ class EVMConfigInfo:
     @staticmethod
     def init_empty() -> EVMConfigInfo:
         return EVMConfigInfo(
-            last_deployed_slot=0,
+            last_deployed_slot=-1,
             evm_param_list=list(),
             token_info_list=list(),
             chain_info_list=list(),
