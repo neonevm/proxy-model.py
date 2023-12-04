@@ -84,6 +84,7 @@ class OpResInit:
         for neon_acct in resource.neon_account_dict.values():
             neon_addr_str = f'{neon_acct.neon_address.checksum_address}:{neon_acct.chain_id}'
 
+            neon_acct = self._neon_client.get_neon_account_info(neon_acct.neon_address)
             if neon_acct.status == NeonAccountStatus.Ok:
                 continue
 
