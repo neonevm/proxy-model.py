@@ -133,6 +133,7 @@ def build_docker_image(neon_evm_tag,  proxy_tag, head_ref_branch, skip_pull):
         click.echo('skip pulling of docker images')
 
     buildargs = {"NEON_EVM_COMMIT": neon_evm_tag,
+                 "DOCKERHUB_ORG_NAME": DOCKERHUB_ORG_NAME,
                  "PROXY_REVISION": proxy_tag}
 
     click.echo("Start build")
