@@ -1,7 +1,8 @@
 import click
 import requests
+import os
 
-NEON_TESTS_ENDPOINT = "https://api.github.com/repos/neonlabsorg/neon-tests"
+NEON_TESTS_ENDPOINT = os.environ.get("NEON_TESTS_ENDPOINT")
 
 
 class GithubClient():
