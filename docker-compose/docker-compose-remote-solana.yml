@@ -80,8 +80,6 @@ services:
       #
     hostname: proxy
     depends_on:
-      solana:
-        condition: service_healthy
       dbcreation:
         condition: service_completed_successfully
     ports:
