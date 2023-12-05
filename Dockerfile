@@ -1,7 +1,8 @@
 ARG NEON_EVM_COMMIT
+ARG DOCKERHUB_ORG_NAME
 
-FROM neonlabsorg/evm_loader:${NEON_EVM_COMMIT} AS spl
-FROM neonlabsorg/neon_test_invoke_program:develop AS neon_test_invoke_program
+FROM ${DOCKERHUB_ORG_NAME}/evm_loader:${NEON_EVM_COMMIT} AS spl
+FROM ${DOCKERHUB_ORG_NAME}/neon_test_invoke_program:develop AS neon_test_invoke_program
 
 FROM ubuntu:20.04
 
