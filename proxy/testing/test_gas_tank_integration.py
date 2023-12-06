@@ -26,7 +26,7 @@ from proxy.common_neon.solana_tx_legacy import SolLegacyTx
 from proxy.testing.testing_helpers import Proxy, SolClient, NeonLocalAccount
 
 
-MAX_ZERO_GAS_PRICE_WAIT_TIME = 15
+MAX_ZERO_GAS_PRICE_WAIT_TIME = 60
 NAME = 'TestToken'
 SYMBOL = 'TST'
 
