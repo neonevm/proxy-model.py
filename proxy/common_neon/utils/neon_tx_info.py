@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 from eth_utils import big_endian_to_int
 
+import rlp
 import dataclasses
 
 from .utils import str_fmt_object, cached_method
@@ -80,6 +81,26 @@ class NeonTxInfo:
     @staticmethod
     def from_neon_sig(neon_sig: str) -> NeonTxInfo:
         return NeonTxInfo(sig=neon_sig)
+
+    def as_raw_tx(self) -> bytes:
+        def _from_hex(_value: Optional[str]) -> Optional[bytes]:
+            if not _value:
+                return None
+            return bytes.fromhex(_value[2:])
+
+        obj = [
+            self.nonce,
+            self.gas_price,
+            self.gas_limit,
+            _from_hex(self.to_addr),
+            self.value,
+            _from_hex(self.calldata),
+            self.v,
+            self.r,
+            self.s,
+        ]
+
+        return rlp.encode(obj, NeonTx)
 
     def has_chain_id(self) -> bool:
         return self.v not in (0, 27, 28)

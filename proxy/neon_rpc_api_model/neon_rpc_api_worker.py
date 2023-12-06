@@ -855,6 +855,7 @@ class NeonRpcApiWorker:
 
         inner_idx = None if tx.neon_tx_res.sol_ix_inner_idx is None else hex(res.sol_ix_inner_idx)
         receipt.update({
+            'neonRawTransaction': '0x' + tx.neon_tx.as_raw_tx().hex(),
             'solanaCompleteTransactionHash': tx.neon_tx_res.sol_sig,
             'solanaCompleteInstructionIndex': hex(tx.neon_tx_res.sol_ix_idx),
             'solanaCompleteInnerInstructionIndex': inner_idx,
