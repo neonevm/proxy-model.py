@@ -5,11 +5,13 @@ import enum
 import logging
 import re
 
+from eth_bloom import BloomFilter
+
 from singleton_decorator import singleton
 from dataclasses import dataclass, asdict as dataclass_asdict
 from typing import List, Iterator, Optional, Tuple, Dict, Any
 
-from .utils import str_fmt_object, str_enum, cached_method, cached_property
+from .utils import str_fmt_object, str_enum, cached_method, cached_property, hex_to_bytes
 from .address import NeonAddress
 
 
@@ -110,24 +112,38 @@ class NeonLogTxEvent:
         addr = NeonAddress.from_raw(self.address)
         return addr.checksum_address if addr else ''
 
+    @cached_property
+    def log_bloom(self) -> int:
+        if self.event_type != NeonLogTxEvent.Type.Log:
+            return 0
+        bloom = BloomFilter.from_iterable((self.address,) + self.topic_list)
+        return int(bloom)
+
     @staticmethod
     def from_dict(src: Dict[str, Any]) -> NeonLogTxEvent:
+        address = src.pop('address')
+        data = src.pop('data')
+        topic_list = src.pop('topic_list')
         src.update(dict(
-            address=bytes.fromhex(src['address']),
-            data=bytes.fromhex(src['data']),
-            topic_list=tuple(bytes.fromhex(t) for t in src['topic_list'])
+            address=hex_to_bytes(address),
+            data=hex_to_bytes(data),
+            topic_list=tuple(hex_to_bytes(t) for t in topic_list)
         ))
         return NeonLogTxEvent(**src)
 
     @staticmethod
     def from_rpc_dict(src: Dict[str, Any]) -> NeonLogTxEvent:
+        address = src.pop('address', '0x')
+        data = src.pop('data', '0x')
+        topic_list = src.pop('topics', list())
+
         return NeonLogTxEvent(
             event_type=NeonLogTxEvent.Type(src.get('neonEventType', 0)),
             is_hidden=src.get('neonIsHidden', True),
             is_reverted=src.get('neonIsReverted', False),
-            address=bytes.fromhex(src.get('address')[2:]),
-            topic_list=tuple(bytes.fromhex(value[2:]) for value in src.get('topics', [])),
-            data=bytes.fromhex(src.get('data')[2:]),
+            address=hex_to_bytes(address),
+            topic_list=tuple(hex_to_bytes(value) for value in topic_list),
+            data=hex_to_bytes(data),
             sol_sig=src.get('neonSolHash', ''),
             idx=src.get('neonIxIdx', 0),
             inner_idx=src.get('neonInnerIxIdx', None),
@@ -145,9 +161,9 @@ class NeonLogTxEvent:
     def as_dict(self) -> Dict[str, Any]:
         res = dataclass_asdict(self)
         res.update(dict(
-            address=self.address.hex(),
-            data=self.data.hex(),
-            topic_list=tuple(t.hex() for t in self.topic_list)
+            address='0x' + self.address.hex(),
+            data='0x' + self.data.hex(),
+            topic_list=tuple('0x' + t.hex() for t in self.topic_list)
         ))
 
         return res
@@ -170,9 +186,11 @@ class NeonLogTxEvent:
             NeonLogTxEvent.Type.EnterCreate2
         }
 
-    def set_order(self, event_level: int, event_order: int) -> None:
+    def set_order(self, event_level: int, event_order: int, address: bytes) -> None:
         object.__setattr__(self, 'event_level', event_level)
         object.__setattr__(self, 'event_order', event_order)
+        if (not len(self.address)) and len(address):
+            object.__setattr__(self, 'address', address)
 
     def set_hidden(self, is_hidden: bool, is_reverted: bool) -> None:
         object.__setattr__(self, 'is_reverted', is_reverted)
@@ -200,7 +218,7 @@ class NeonLogTxEvent:
             ('data', '0x' + (self.data.hex() if self.data else '')),
         ]
 
-        if prop_filter in (NeonLogTxEvent.PropFilter.Full, NeonLogTxEvent.PropFilter.Eth):
+        if self.event_type == self.Type.Log:
             item_list.extend([
                 ('removed', False),
                 ('topics', tuple('0x' + topic.hex() for topic in self.topic_list)),
@@ -223,7 +241,7 @@ class NeonLogTxEvent:
                 ('neonInnerIxIdx', hex(self.inner_idx) if self.inner_idx else None)
             ])
 
-        if prop_filter in (NeonLogTxEvent.PropFilter.Full, NeonLogTxEvent.PropFilter.Neon):
+        if prop_filter != self.PropFilter.Eth:
             item_list.extend([
                 ('neonEventType', NeonLogTxEvent.TypeName().get(self.event_type)),
                 ('neonEventLevel', hex(self.event_level)),

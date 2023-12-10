@@ -183,3 +183,19 @@ def get_from_dict(src: Dict, path: Tuple[Any, ...], default_value: Any) -> Any:
 
 def gen_unique_id():
     return hashlib.md5((time.time_ns()).to_bytes(16, 'big')).hexdigest()[:7]
+
+
+def u256big_to_bytes(value: int) -> bytes:
+    return value.to_bytes(256, 'big')
+
+
+def u256big_to_hex(value: int) -> str:
+    return '0x' + u256big_to_bytes(value).hex()
+
+
+def hex_to_bytes(value: str) -> bytes:
+    if not value:
+        return b''
+    if value[:2] in ('0x', '0X'):
+        value = value[2:]
+    return bytes.fromhex(value)

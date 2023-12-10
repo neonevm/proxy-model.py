@@ -153,23 +153,24 @@ class NeonTxsDB(BaseDBTable):
         self._update_row(request, (from_slot, to_slot, slot_list))
 
     @staticmethod
-    def _encode_event_list(tx_res: NeonTxResultInfo) -> str:
+    def _encode_event_list(tx_res: NeonTxResultInfo) -> Optional[bytes]:
         if not len(tx_res.event_list):
-            return ''
+            return None
 
-        return json.dumps([event.as_dict() for event in tx_res.event_list])
+        return json.dumps([event.as_dict() for event in tx_res.event_list]).encode('utf-8')
 
-    def _decode_event_list(self, value: Union[str, bytes, None]) -> Tuple[NeonLogTxEvent, ...]:
+    def _decode_event_list(self, value: memoryview) -> Tuple[NeonLogTxEvent, ...]:
         try:
-            if not len(value):
+            if (not value) or (not len(value)):
                 return ()
 
-            if value.startswith('['):
-                value_list = json.loads(value)
+            value_str = value.tobytes()
+            if value_str.startswith(b'['):
+                value_list = json.loads(value_str.decode('utf-8'))
                 return tuple([NeonLogTxEvent.from_dict(value) for value in value_list])
 
             # TODO: remove after converting all records
-            value_list = [] if not value else self._decode(value)
+            value_list = self._decode(value)
             return tuple([NeonLogTxEvent.from_rpc_dict(value) for value in value_list])
 
         except BaseException as exc:

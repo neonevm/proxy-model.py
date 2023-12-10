@@ -336,22 +336,28 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
 
         current_level = 0
         current_order = 0
+        addr_stack: List[bytes] = list()
 
         neon_event_list = self._get_sorted_neon_event_list()
         for event in neon_event_list:
-            if event.is_reverted:
-                event_level = 0
-            elif event.is_start_event_type():
+            if event.is_start_event_type():
                 current_level += 1
                 event_level = current_level
+                addr = event.address
+                addr_stack.append(addr)
             elif event.is_exit_event_type():
                 event_level = current_level
                 current_level -= 1
+                addr = addr_stack.pop()
             else:
                 event_level = current_level
+                if len(addr_stack) and (event.event_type != event.Type.Log):
+                    addr = addr_stack[-1]
+                else:
+                    addr = b''
 
             current_order += 1
-            event.set_order(event_level=event_level, event_order=current_order)
+            event.set_order(event_level=event_level, event_order=current_order, address=addr)
 
         reverted_level = -1
         is_failed = (self.neon_tx_res.status == 0)
@@ -388,7 +394,7 @@ class NeonIndexedAltInfo:
 
     @staticmethod
     def from_dict(src: Dict[str, Any]) -> NeonIndexedAltInfo:
-        next_check_slot = src.pop('next_check_slot', src.pop('done_block_slot', None))
+        next_check_slot = src.pop('next_check_slot', src.pop('done_block_slot', 0))
         return NeonIndexedAltInfo(**src, next_check_slot=next_check_slot)
 
     def __str__(self) -> str:

@@ -9,7 +9,7 @@ from eth_keys import keys as neon_keys
 from eth_keys.datatypes import to_checksum_address
 from sha3 import keccak_256
 
-from .utils.utils import cached_method, cached_property, str_fmt_object
+from .utils.utils import cached_method, cached_property, str_fmt_object, hex_to_bytes
 from .constants import EVM_PROGRAM_ID
 from .solana_tx import SolPubKey
 
@@ -22,7 +22,7 @@ class NeonAddress:
             private_key = data.to_bytes()
             address = data.public_key.to_canonical_address()
         elif isinstance(data, str):
-            address = bytes.fromhex(data[2:])
+            address = hex_to_bytes(data)
         else:
             assert isinstance(data, bytes)
             address = data

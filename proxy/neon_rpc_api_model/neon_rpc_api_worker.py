@@ -35,7 +35,7 @@ from ..common_neon.solana_tx import SolCommit
 from ..common_neon.utils import NeonTxInfo
 from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.evm_log_decoder import NeonLogTxEvent
-from ..common_neon.utils.utils import cached_property
+from ..common_neon.utils.utils import cached_property, u256big_to_hex, hex_to_bytes
 
 from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
 
@@ -456,9 +456,8 @@ class NeonRpcApiWorker:
         try:
             address = raw_address.strip().lower()
             assert address[:2] == '0x'
-            address = address[2:]
 
-            bin_address = bytes.fromhex(address)
+            bin_address = hex_to_bytes(address)
             assert len(bin_address) == 20
 
             return NeonAddress.from_raw(bin_address, self._chain_id)
@@ -507,9 +506,8 @@ class NeonRpcApiWorker:
 
             topic = raw_topic.strip().lower()
             assert topic[:2] == '0x'
-            topic = topic[2:]
 
-            bin_topic = bytes.fromhex(topic)
+            bin_topic = hex_to_bytes(topic)
             assert len(bin_topic) == 32
 
             return '0x' + bin_topic.hex().lower()
@@ -596,6 +594,8 @@ class NeonRpcApiWorker:
             return None
 
         sig_list = list()
+
+        log_bloom = 0
         total_gas_used = 0
         if skip_transaction:
             tx_list = list()
@@ -604,6 +604,7 @@ class NeonRpcApiWorker:
 
         for tx in tx_list:
             total_gas_used = max(tx.neon_tx_res.sum_gas_used, total_gas_used)
+            log_bloom |= tx.neon_tx_res.log_bloom
 
             if full:
                 receipt = self._get_transaction(tx)
@@ -617,7 +618,7 @@ class NeonRpcApiWorker:
         root = empty_root if len(tx_list) == 0 else '0x' + '0' * 63 + '1'
 
         result = {
-            "logsBloom": '0x' + '0' * 512,
+            "logsBloom": u256big_to_hex(log_bloom),
             "transactionsRoot": root,
             "receiptsRoot": root,
             "stateRoot": '0x' + '0' * 63 + '1',
@@ -665,7 +666,7 @@ class NeonRpcApiWorker:
             block_hash = block_hash.strip().lower()
             assert block_hash[:2] == '0x'
 
-            bin_block_hash = bytes.fromhex(block_hash[2:])
+            bin_block_hash = hex_to_bytes(block_hash)
             assert len(bin_block_hash) == 32
         except (Exception,):
             raise InvalidParamError(message=f'bad block hash {block_hash}')
@@ -790,14 +791,6 @@ class NeonRpcApiWorker:
         )
 
     def _fill_transaction_receipt_answer(self, tx: NeonTxReceiptInfo, details: TxReceiptDetail.Type) -> dict:
-        if details not in (TxReceiptDetail.Eth, TxReceiptDetail.Neon):
-            log_list = list()
-        else:
-            log_list = self._filter_event_list(
-                tx.neon_tx_res.event_list,
-                TxReceiptDetail.to_prop_filter(details)
-            )
-
         contract = NeonAddress.from_raw(tx.neon_tx.contract)
         if contract:
             contract = contract.checksum_address
@@ -819,17 +812,22 @@ class NeonRpcApiWorker:
             "gasUsed": hex(res.gas_used),
             "cumulativeGasUsed": hex(res.sum_gas_used),
             "contractAddress": contract,
-            "logs": log_list,
             "status": hex(res.status),
-            "logsBloom": "0x" + '0' * 512
+            "logsBloom": u256big_to_hex(res.log_bloom)
         }
+
+        if details != TxReceiptDetail.SolTxList:
+            receipt['logs'] = self._filter_event_list(
+                tx.neon_tx_res.event_list,
+                TxReceiptDetail.to_prop_filter(details)
+            )
 
         if details == TxReceiptDetail.Eth:
             return receipt
 
         inner_idx = None if tx.neon_tx_res.sol_ix_inner_idx is None else hex(res.sol_ix_inner_idx)
         receipt.update({
-            'solanaBlockHash': base58.b58encode(bytes.fromhex(res.block_hash[2:])).decode('utf-8'),
+            'solanaBlockHash': base58.b58encode(hex_to_bytes(res.block_hash)).decode('utf-8'),
             'solanaCompleteTransactionHash': tx.neon_tx_res.sol_sig,
             'solanaCompleteInstructionIndex': hex(tx.neon_tx_res.sol_ix_idx),
             'solanaCompleteInnerInstructionIndex': inner_idx,
@@ -933,11 +931,7 @@ class NeonRpcApiWorker:
         full_log_dict: Dict[str, List[Dict[str, Any]]] = dict()
         for event in tx.neon_tx_res.event_list:
             full_log_dict.setdefault(event.str_ident, list()).append(
-                event.as_rpc_dict(
-                    NeonLogTxEvent.PropFilter.Neon
-                    if event.neon_tx_log_idx is None
-                    else NeonLogTxEvent.PropFilter.Eth
-                )
+                event.as_rpc_dict(NeonLogTxEvent.PropFilter.Neon)
             )
 
         return full_log_dict
@@ -1191,7 +1185,7 @@ class NeonRpcApiWorker:
     def eth_sign(self, account: str, data: str) -> str:
         address = self._normalize_address(account)
         try:
-            data = bytes.fromhex(data[2:])
+            data = hex_to_bytes(data)
         except (Exception,):
             raise InvalidParamError(message='data is not hex string')
 
@@ -1251,7 +1245,7 @@ class NeonRpcApiWorker:
     @staticmethod
     def web3_sha3(data: str) -> str:
         try:
-            data = bytes.fromhex(data[2:])
+            data = hex_to_bytes(data)
         except (Exception,):
             raise InvalidParamError(message='data is not hex string')
 

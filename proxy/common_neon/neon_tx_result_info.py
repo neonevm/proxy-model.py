@@ -6,7 +6,7 @@ import dataclasses
 import logging
 
 from .solana_block import SolBlockInfo
-from .utils.utils import str_fmt_object, cached_method
+from .utils.utils import str_fmt_object, cached_method, cached_property
 from .evm_log_decoder import NeonLogTxEvent
 
 
@@ -42,8 +42,17 @@ class NeonTxResultInfo:
     def __str__(self) -> str:
         return str_fmt_object(self)
 
-    def _reset_str(self) -> None:
+    @cached_property
+    def log_bloom(self) -> int:
+        value = 0
+        for event in self.event_list:
+            value |= event.log_bloom
+        return value
+
+    def _reset_cache(self) -> None:
         self.__str__.reset_cache(self)
+        if len(self.event_list) > 0:
+            self.__dict__.pop('log_bloom', None)
 
     def as_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)
@@ -55,17 +64,17 @@ class NeonTxResultInfo:
 
         event_list = self.event_list + (event,)
         object.__setattr__(self, 'event_list', event_list)
-        self._reset_str()
+        self._reset_cache()
 
     def set_event_list(self, event_list: Iterable[NeonLogTxEvent]) -> None:
         object.__setattr__(self, 'event_list', tuple(event_list))
-        self._reset_str()
+        self._reset_cache()
 
     def set_res(self, status: int, gas_used: int) -> None:
         object.__setattr__(self, 'status', status)
         object.__setattr__(self, 'gas_used', gas_used)
         object.__setattr__(self, 'is_completed', True)
-        self._reset_str()
+        self._reset_cache()
 
     def set_canceled_res(self, gas_used: int) -> None:
         self.set_res(status=0, gas_used=gas_used)
@@ -79,7 +88,7 @@ class NeonTxResultInfo:
         object.__setattr__(self, 'sol_sig', sol_sig)
         object.__setattr__(self, 'sol_ix_idx', sol_ix_idx)
         object.__setattr__(self, 'sol_ix_inner_idx', sol_ix_inner_idx)
-        self._reset_str()
+        self._reset_cache()
 
     def set_block_info(self, block: SolBlockInfo, neon_sig: str, tx_idx: int, log_idx: int, sum_gas_used: int) -> int:
         object.__setattr__(self, 'block_slot', block.block_slot)
@@ -87,7 +96,7 @@ class NeonTxResultInfo:
         object.__setattr__(self, 'neon_sig', neon_sig)
         object.__setattr__(self, 'tx_idx', tx_idx)
         object.__setattr__(self, 'sum_gas_used', sum_gas_used)
-        self._reset_str()
+        self._reset_cache()
 
         tx_log_idx = 0
         for event in self.event_list:

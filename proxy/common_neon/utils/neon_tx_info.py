@@ -5,7 +5,7 @@ from eth_utils import big_endian_to_int
 import rlp
 import dataclasses
 
-from .utils import str_fmt_object, cached_method
+from .utils import str_fmt_object, cached_method, hex_to_bytes
 from .eth_proto import NeonTx
 
 
@@ -83,18 +83,13 @@ class NeonTxInfo:
         return NeonTxInfo(sig=neon_sig)
 
     def as_raw_tx(self) -> bytes:
-        def _from_hex(_value: Optional[str]) -> Optional[bytes]:
-            if not _value:
-                return None
-            return bytes.fromhex(_value[2:])
-
         obj = [
             self.nonce,
             self.gas_price,
             self.gas_limit,
-            _from_hex(self.to_addr),
+            hex_to_bytes(self.to_addr),
             self.value,
-            _from_hex(self.calldata),
+            hex_to_bytes(self.calldata),
             self.v,
             self.r,
             self.s,

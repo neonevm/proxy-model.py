@@ -120,8 +120,7 @@ class MockMPExecutorMng(MPExecutorMng):
     def create_mp_task(mp_req: MPRequest) -> MPTask:
         mp_tx_req = cast(MPTxExecRequest, mp_req)
         neon_tx_cfg = mp_tx_req.neon_tx_exec_cfg
-        done_status_list = [MPTxExecResultCode.Done, MPTxExecResultCode.Failed]
-        done_status = random.choice(done_status_list)
+        done_status = MPTxExecResultCode.Done
         mp_tx_res = MPTxExecResult(done_status, neon_tx_cfg)
         aio_task = MockTask(mp_tx_res)
         return MPTask(1, aio_task, mp_req)

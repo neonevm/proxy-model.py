@@ -557,7 +557,7 @@ class SolNeonIxReceiptInfo:
 
     @cached_property
     def str_ident(self) -> str:
-        return ':'.join([str(s) for s in self.ident])
+        return ':'.join([str(s) for s in self.ident if s])
 
     def __str__(self) -> str:
         return self.str_ident

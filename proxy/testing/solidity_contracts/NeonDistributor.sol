@@ -6,6 +6,8 @@ contract NeonDistributor {
     mapping(string => address payable) recipients;
     string[] names;
 
+    event Transfer(address indexed _from, address indexed _id, uint _value);
+
     function set_address(string calldata _name, address payable _address) public {
         require(recipients[_name] == 0x0000000000000000000000000000000000000000);
         recipients[_name] = _address;
@@ -19,7 +21,9 @@ contract NeonDistributor {
     function distribute_value () public payable {
         uint val = msg.value / names.length;
         for (uint i = 0; i < names.length; i++) {
-            recipients[ names[i] ].transfer(val);
+            address payable _to = recipients[ names[i] ];
+            _to.transfer(val);
+            emit Transfer(msg.sender, _to, val);
         }
     }
 }

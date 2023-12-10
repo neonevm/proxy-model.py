@@ -54,7 +54,7 @@ class NeonTxLogsDB(BaseDBTable):
                         elif column in self._topic_column_list:
                             idx = int(column[len('log_topic'):])
                             if idx <= len(event.topic_list):
-                                value_list.append(event.topic_list[idx - 1])
+                                value_list.append(event_dict['topic_list'][idx-1])
                             else:
                                 value_list.append(None)
                         else:
@@ -66,19 +66,23 @@ class NeonTxLogsDB(BaseDBTable):
         self._insert_row_list(row_list)
 
     def _event_from_value(self, value_list: List[Any]) -> NeonLogTxEvent:
-        event_dict: Dict[str, Any] = dict()
+        event_dict = dict(
+            event_type=NeonLogTxEvent.Type.Log,
+            is_hidden=False
+        )
         topic_list = ['', '', '', '']
+        topic_cnt = len(topic_list)
         for column, value in zip(self._column_list, value_list):
             if column in self._topic_column_list:
                 idx = int(column[len('log_topic'):])
-                topic_list[idx] = value
+                topic_list[idx - 1] = value
             elif column == 'log_topic_cnt':
-                topic_list = topic_list[:value]
+                topic_cnt = value
             else:
                 key = self._column2field_dict.get(column, None)
                 event_dict[key] = value
         event_dict['block_hash'] = value_list[-1]
-        event_dict['topic_list'] = topic_list
+        event_dict['topic_list'] = topic_list[:topic_cnt]
         return NeonLogTxEvent.from_dict(event_dict)
 
     def get_event_list(self, from_block: Optional[int],
