@@ -5,32 +5,41 @@ import math
 import multiprocessing
 import threading
 import time
+import base58
 
 from dataclasses import dataclass
-from typing import Optional, Union, Dict, Any, List, cast, NewType
+from typing import Optional, Union, Dict, Any, List, cast, NewType, Iterable
 
 from eth_account import Account as NeonAccount
 from sha3 import keccak_256
 
+from .estimate import GasEstimate
+from .transaction_validator import NeonTxValidator
+
+from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.constants import EVM_PROGRAM_ID_STR
 from ..common_neon.data import NeonTxExecCfg
-from ..common_neon.address import NeonAddress
-from ..common_neon.evm_config import EVMConfig
+from ..common_neon.db.db_connect import DBConnection
 from ..common_neon.errors import EthereumError, InvalidParamError, NonceTooLowError
-from ..common_neon.keys_storage import KeyStorage
-from ..common_neon.solana_interactor import SolInteractor
-from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo, SolAltIxInfo
 from ..common_neon.eth_commit import EthCommit
-from ..common_neon.solana_tx import SolCommit
-from ..common_neon.utils import NeonTxInfo
+from ..common_neon.evm_config import EVMConfig
+from ..common_neon.keys_storage import KeyStorage
+from ..common_neon.neon_instruction import EvmIxCodeName, AltIxCodeName
 from ..common_neon.neon_tx_receipt_info import NeonTxReceiptInfo
 from ..common_neon.neon_tx_result_info import NeonTxResultInfo
 from ..common_neon.solana_block import SolBlockInfo
+from ..common_neon.solana_interactor import SolInteractor
+from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo, SolAltIxInfo
+from ..common_neon.solana_tx import SolCommit
+from ..common_neon.utils import NeonTxInfo
 from ..common_neon.utils.eth_proto import NeonTx
+from ..common_neon.evm_log_decoder import NeonLogTxEvent
 from ..common_neon.utils.utils import cached_property
-from ..common_neon.neon_instruction import EvmIxCodeName, AltIxCodeName
-from ..common_neon.db.db_connect import DBConnection
+
+from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
+
+from ..indexer.indexer_db import IndexerDB
 
 from ..mempool import (
     MemPoolClient, MP_SERVICE_ADDR,
@@ -39,12 +48,6 @@ from ..mempool import (
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 from ..neon_core_api.neon_layouts import NeonAccountInfo
-
-from ..gas_tank.gas_less_accounts_db import GasLessAccountsDB
-from ..indexer.indexer_db import IndexerDB
-
-from .estimate import GasEstimate
-from .transaction_validator import NeonTxValidator
 
 
 NEON_PROXY_PKG_VERSION = '1.7.0-dev'
@@ -73,6 +76,12 @@ class TxReceiptDetail:
                 return detail
 
         raise InvalidParamError(message='Wrong receipt type')
+
+    @staticmethod
+    def to_prop_filter(detail: TxReceiptDetail.Type) -> NeonLogTxEvent.PropFilter:
+        if detail == TxReceiptDetail.Eth:
+            return NeonLogTxEvent.PropFilter.Eth
+        return NeonLogTxEvent.PropFilter.Full
 
 
 def get_req_id_from_log():
@@ -507,7 +516,7 @@ class NeonRpcApiWorker:
         except (Exception,):
             raise InvalidParamError(message=f'bad topic {raw_topic}')
 
-    def _get_log_list(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _get_event_list(self, obj: Dict[str, Any]) -> List[NeonLogTxEvent]:
         from_block: Optional[int] = None
         to_block: Optional[int] = None
         address_list: List[str] = list()
@@ -563,62 +572,24 @@ class NeonRpcApiWorker:
                 else:
                     topic_list.append([self._normalize_topic(raw_topic)])
 
-        return self._db.get_log_list(from_block, to_block, address_list, topic_list)
-
-    def _filter_log_list(self, log_list: List[Dict[str, Any]], full: bool) -> List[Dict[str, Any]]:
-        filtered_log_list: List[Dict[str, Any]] = list()
-
-        for log_rec in log_list:
-            if (not full) and log_rec.get('neonIsHidden', False):
-                continue
-
-            new_log_rec: Dict[str, Any] = {
-                'removed': False,
-            }
-
-            for key, value in log_rec.items():
-                if (key == 'data') and (not len(value)):
-                    new_log_rec[key] = '0x'
-                elif full and (key == 'neonEventType'):
-                    new_log_rec[key] = self._decode_event_type(value)
-                elif (key == 'address') and len(value):
-                    new_log_rec[key] = NeonAddress.from_raw(value).checksum_address
-                elif full or (key[:4] != 'neon'):
-                    new_log_rec[key] = value
-
-            filtered_log_list.append(new_log_rec)
-        return filtered_log_list
+        return self._db.get_event_list(from_block, to_block, address_list, topic_list)
 
     @staticmethod
-    def _decode_event_type(event_type: int) -> Union[str, int]:
-        event_type_dict: Dict[int, str] = {
-            1: 'LOG',
-            101: 'ENTER CALL',
-            102: 'ENTER CALL CODE',
-            103: 'ENTER STATICCALL',
-            104: 'ENTER DELEGATECALL',
-            105: 'ENTER CREATE',
-            106: 'ENTER CREATE2',
-            201: 'EXIT STOP',
-            202: 'EXIT RETURN',
-            203: 'EXIT SELFDESTRUCT',
-            204: 'EXIT REVERT',
-            300: 'RETURN',
-            301: 'CANCEL'
-        }
-
-        value = event_type_dict.get(event_type, None)
-        if value is None:
-            return event_type
-        return value
+    def _filter_event_list(event_list: Iterable[NeonLogTxEvent],
+                           prop_filter: NeonLogTxEvent.PropFilter) -> List[Dict[str, Any]]:
+        return [
+            event.as_rpc_dict(prop_filter)
+            for event in event_list
+            if event.has_rpc_dict(prop_filter)
+        ]
 
     def eth_getLogs(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
-        log_list = self._get_log_list(obj)
-        return self._filter_log_list(log_list, False)
+        event_list = self._get_event_list(obj)
+        return self._filter_event_list(event_list, NeonLogTxEvent.PropFilter.Eth)
 
     def neon_getLogs(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
-        log_list = self._get_log_list(obj)
-        return self._filter_log_list(log_list, True)
+        event_list = self._get_event_list(obj)
+        return self._filter_event_list(event_list, NeonLogTxEvent.PropFilter.Full)
 
     def _get_block_by_slot(self, block: SolBlockInfo, full: bool, skip_transaction: bool) -> Optional[dict]:
         if block.is_empty():
@@ -819,10 +790,13 @@ class NeonRpcApiWorker:
         )
 
     def _fill_transaction_receipt_answer(self, tx: NeonTxReceiptInfo, details: TxReceiptDetail.Type) -> dict:
-        if details in {TxReceiptDetail.Eth, TxReceiptDetail.Neon}:
-            log_list = self._filter_log_list(tx.neon_tx_res.log_list, False)
-        else:
+        if details not in (TxReceiptDetail.Eth, TxReceiptDetail.Neon):
             log_list = list()
+        else:
+            log_list = self._filter_event_list(
+                tx.neon_tx_res.event_list,
+                TxReceiptDetail.to_prop_filter(details)
+            )
 
         contract = NeonAddress.from_raw(tx.neon_tx.contract)
         if contract:
@@ -855,10 +829,11 @@ class NeonRpcApiWorker:
 
         inner_idx = None if tx.neon_tx_res.sol_ix_inner_idx is None else hex(res.sol_ix_inner_idx)
         receipt.update({
-            'neonRawTransaction': '0x' + tx.neon_tx.as_raw_tx().hex(),
+            'solanaBlockHash': base58.b58encode(bytes.fromhex(res.block_hash[2:])).decode('utf-8'),
             'solanaCompleteTransactionHash': tx.neon_tx_res.sol_sig,
             'solanaCompleteInstructionIndex': hex(tx.neon_tx_res.sol_ix_idx),
             'solanaCompleteInnerInstructionIndex': inner_idx,
+            'neonRawTransaction': '0x' + tx.neon_tx.as_raw_tx().hex(),
             'neonIsCompleted': res.is_completed,
             'neonIsCanceled': res.is_canceled
         })
@@ -912,23 +887,22 @@ class NeonRpcApiWorker:
 
             neon_income = neon_ix.neon_gas_used * tx.neon_tx.gas_price
             op_cost.neon_income += neon_income
-            log_list_key = ':'.join([sol_sig, str(neon_ix.idx), str(neon_ix.inner_idx)])
 
             result_ix_list.append({
                 'solanaProgram': 'NeonEVM',
                 'solanaInstructionIndex': hex(neon_ix.idx),
-                'solanaInnerInstructionIndex': hex(neon_ix.inner_idx) if neon_ix.inner_idx is not None else None,
+                'solanaInnerInstructionIndex': hex(neon_ix.inner_idx) if neon_ix.inner_idx else None,
                 'svmHeapSizeLimit': hex(neon_ix.max_heap_size),
                 'svmHeapSizeUsed': hex(neon_ix.used_heap_size),
                 'svmCyclesLimit': hex(neon_ix.max_bpf_cycle_cnt),
                 'svmCyclesUsed': hex(neon_ix.used_bpf_cycle_cnt),
                 'neonInstructionCode': hex(neon_ix.ix_code),
                 'neonInstructionName': EvmIxCodeName().get(neon_ix.ix_code),
-                'neonStepLimit': hex(neon_ix.neon_step_cnt) if neon_ix.neon_step_cnt > 0 else None,
+                'neonStepLimit': hex(neon_ix.neon_step_cnt) if neon_ix.neon_step_cnt else None,
                 'neonAlanIncome': hex(neon_income),
                 'neonGasUsed': hex(neon_ix.neon_gas_used),
                 'neonTotalGasUsed': hex(neon_ix.neon_total_gas_used),
-                'neonLogs': full_log_dict.get(log_list_key, None),
+                'neonLogs': full_log_dict.get(neon_ix.str_ident, None),
             })
 
         sol_sig = ''
@@ -940,7 +914,7 @@ class NeonRpcApiWorker:
             result_ix_list.append({
                 'solanaProgram': 'AddressLookupTable',
                 'solanaInstructionIndex': hex(alt_ix.idx),
-                'solanaInnerInstructionIndex': hex(alt_ix.inner_idx) if alt_ix.inner_idx is not None else None,
+                'solanaInnerInstructionIndex': hex(alt_ix.inner_idx) if alt_ix.inner_idx else None,
                 'altInstructionCode': hex(alt_ix.ix_code),
                 'altInstructionName': AltIxCodeName().get(alt_ix.ix_code),
                 'altAddress': alt_ix.alt_address,
@@ -954,28 +928,18 @@ class NeonRpcApiWorker:
             for op, cost in result_cost_dict.items()
         ])
 
-    def _get_full_log_dict(self, tx: NeonTxReceiptInfo) -> Dict[str, List[Dict[str, Any]]]:
-        remove_neon_key_list = ['neonSolHash', 'neonIxIdx', 'neonInnerIxIdx']
-        remove_eth_key_list = ['removed', 'transactionHash', 'transactionIndex', 'blockHash', 'blockNumber', 'topics']
-
-        full_log_list: List[Dict[str, Any]] = self._filter_log_list(tx.neon_tx_res.log_list, True)
+    @staticmethod
+    def _get_full_log_dict(tx: NeonTxReceiptInfo) -> Dict[str, List[Dict[str, Any]]]:
         full_log_dict: Dict[str, List[Dict[str, Any]]] = dict()
-        for log_rec in full_log_list:
-            log_list_key = ':'.join([log_rec['neonSolHash'], str(log_rec['neonIxIdx']), str(log_rec['neonInnerIxIdx'])])
-            for key in remove_neon_key_list:
-                log_rec.pop(key, None)
-            if 'transactionLogIndex' not in log_rec:
-                for key in remove_eth_key_list:
-                    log_rec.pop(key, None)
-            else:
-                address = log_rec.pop('address', None)
-                if len(address):
-                    log_rec['address'] = NeonAddress.from_raw(address).checksum_address
-                data = log_rec.get('data')
-                if not len(data):
-                    log_rec['data'] = '0x'
+        for event in tx.neon_tx_res.event_list:
+            full_log_dict.setdefault(event.str_ident, list()).append(
+                event.as_rpc_dict(
+                    NeonLogTxEvent.PropFilter.Neon
+                    if event.neon_tx_log_idx is None
+                    else NeonLogTxEvent.PropFilter.Eth
+                )
+            )
 
-            full_log_dict.setdefault(log_list_key, list()).append(log_rec)
         return full_log_dict
 
     def _get_transaction_receipt(self, neon_tx_sig: str) -> Optional[NeonTxReceiptInfo]:

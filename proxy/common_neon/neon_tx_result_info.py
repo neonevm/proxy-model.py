@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import List, Dict, Any, Optional
+from typing import Iterable, Dict, Any, Optional, Tuple
 
 import dataclasses
 import logging
 
 from .solana_block import SolBlockInfo
 from .utils.utils import str_fmt_object, cached_method
-from .utils.evm_log_decoder import NeonLogTxEvent
+from .evm_log_decoder import NeonLogTxEvent
 
 
 LOG = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class NeonTxResultInfo:
     gas_used: int = 0
     sum_gas_used: int = 0
 
-    log_list: List[Dict[str, Any]] = None
+    event_list: Tuple[NeonLogTxEvent, ...] = tuple()
 
     is_completed = False
     is_canceled = False
@@ -37,10 +37,6 @@ class NeonTxResultInfo:
     @staticmethod
     def from_dict(src: Dict[str, Any]) -> NeonTxResultInfo:
         return NeonTxResultInfo(**src)
-
-    def __post_init__(self):
-        if self.log_list is None:
-            object.__setattr__(self, 'log_list', [])
 
     @cached_method
     def __str__(self) -> str:
@@ -57,29 +53,12 @@ class NeonTxResultInfo:
             LOG.warning(f'Neon tx {self.neon_sig} has completed event logs')
             return
 
-        rec = {
-            'address': '0x' + event.address.hex() if len(event.address) > 0 else '',
-            'topics': ['0x' + topic.hex() for topic in event.topic_list],
-            'data': '0x' + event.data.hex() if len(event.data) > 0 else '',
+        event_list = self.event_list + (event,)
+        object.__setattr__(self, 'event_list', event_list)
+        self._reset_str()
 
-            'neonSolHash': event.sol_sig,
-            'neonIxIdx': event.idx,
-            'neonInnerIxIdx': event.inner_idx,
-            'neonEventType': int(event.event_type),
-            'neonEventLevel': event.event_level,
-            'neonEventOrder': event.event_order,
-            'neonIsHidden': event.is_hidden,
-            'neonIsReverted': event.is_reverted,
-
-            # 'transactionLogIndex': hex(tx_log_idx), # set when transaction is found
-            # 'logIndex': hex(log_idx), # set when transaction is found
-            # 'transactionIndex': hex(ix.idx), # set when transaction is found
-            # 'blockNumber': block_number, # set when transaction is found
-            # 'blockHash': block_hash # set when transaction is found
-            # 'cumulativeGasUsed': sum_gas_used  # set when transaction is found
-        }
-
-        self.log_list.append(rec)
+    def set_event_list(self, event_list: Iterable[NeonLogTxEvent]) -> None:
+        object.__setattr__(self, 'event_list', tuple(event_list))
         self._reset_str()
 
     def set_res(self, status: int, gas_used: int) -> None:
@@ -110,18 +89,16 @@ class NeonTxResultInfo:
         object.__setattr__(self, 'sum_gas_used', sum_gas_used)
         self._reset_str()
 
-        hex_block_slot = hex(self.block_slot)
-        hex_tx_idx = hex(self.tx_idx)
         tx_log_idx = 0
-
-        for rec in self.log_list:
-            rec['transactionHash'] = neon_sig
-            rec['blockHash'] = block.block_hash
-            rec['blockNumber'] = hex_block_slot
-            rec['transactionIndex'] = hex_tx_idx
-            if not rec['neonIsHidden']:
-                rec['logIndex'] = hex(log_idx)
-                rec['transactionLogIndex'] = hex(tx_log_idx)
+        for event in self.event_list:
+            event.set_tx_info(
+                neon_sig=neon_sig,
+                block_hash=block.block_hash,
+                block_slot=block.block_slot,
+                neon_tx_idx=tx_idx,
+            )
+            if not event.is_hidden:
+                event.set_log_idx(block_log_idx=log_idx, neon_tx_log_idx=tx_log_idx)
                 log_idx += 1
                 tx_log_idx += 1
 

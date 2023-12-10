@@ -1,5 +1,5 @@
 from collections.abc import MutableMapping
-from typing import List, Tuple, Any, overload
+from typing import List, Tuple, Any
 
 from .db_connect import DBConnection
 from .base_db_table import BaseDBTable
@@ -7,7 +7,7 @@ from .base_db_table import BaseDBTable
 
 class ConstantsDB(MutableMapping, BaseDBTable):
     def __init__(self, db_conn: DBConnection):
-        super().__init__(db_conn, 'constants', ['key', 'value'], ['key'])
+        super().__init__(db_conn, 'constants', ('key', 'value'), ('key',))
 
         self._len_request = f'SELECT COUNT(*) FROM {self._table_name}'
         self._key_list_request = f'SELECT key FROM {self._table_name}'

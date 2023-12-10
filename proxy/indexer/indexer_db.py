@@ -20,6 +20,7 @@ from ..common_neon.db.db_connect import DBConnection
 from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo, SolAltIxInfo
 from ..common_neon.neon_tx_receipt_info import NeonTxReceiptInfo
 from ..common_neon.solana_block import SolBlockInfo
+from ..common_neon.evm_log_decoder import NeonLogTxEvent
 
 
 class IndexerDB:
@@ -296,9 +297,9 @@ class IndexerDB:
             latest_slot=self.latest_slot
         )
 
-    def get_log_list(self, from_block: Optional[int], to_block: Optional[int],
-                     address_list: List[str], topic_list: List[List[str]]) -> List[Dict[str, Any]]:
-        return self._neon_tx_logs_db.get_log_list(from_block, to_block, address_list, topic_list)
+    def get_event_list(self, from_block: Optional[int], to_block: Optional[int],
+                       address_list: List[str], topic_list: List[List[str]]) -> List[NeonLogTxEvent]:
+        return self._neon_tx_logs_db.get_event_list(from_block, to_block, address_list, topic_list)
 
     def get_tx_list_by_block_slot(self, block_slot: int) -> List[NeonTxReceiptInfo]:
         return self._neon_txs_db.get_tx_list_by_block_slot(block_slot)

@@ -6,8 +6,6 @@ FROM ${DOCKERHUB_ORG_NAME}/neon_test_invoke_program:develop AS neon_test_invoke_
 
 FROM ubuntu:20.04
 
-COPY ./requirements.txt /opt
-
 WORKDIR /opt
 
 RUN apt-get update && \
@@ -23,14 +21,17 @@ RUN apt-get update && \
             python3-pip \
             python3-venv \
             postgresql-client && \
-    python3 -m venv venv && \
+    apt-get remove -y git && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY ./requirements.txt /opt
+
+RUN python3 -m venv venv && \
     pip3 install --upgrade pip && \
     /bin/bash -c "source venv/bin/activate" && \
     pip install -r requirements.txt && \
     pip3 install py-solc-x && \
-    python3 -c "import solcx; solcx.install_solc(version='0.7.6')" && \
-    apt-get remove -y git && \
-    rm -rf /var/lib/apt/lists/*
+    python3 -c "import solcx; solcx.install_solc(version='0.7.6')"
 
 COPY --from=spl \
     /root/.local/share/solana/install/active_release/bin/solana \

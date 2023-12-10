@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import re
 import time
@@ -351,10 +352,10 @@ def deploy_check(proxy_tag, neon_evm_tag, faucet_tag, head_ref_branch, github_re
     else:
         test_list = test_files.split(',')
 
-    errors_count = 0
-    for file in test_list:
-        errors_count += run_test(project_name, file)
+    with multiprocessing.Pool(multiprocessing.cpu_count()) as p:
+        errors_count_list = p.starmap(run_test, [(project_name, x) for x in test_list])
 
+    errors_count = sum(errors_count_list)
     if errors_count > 0:
         raise RuntimeError(f"Tests failed! Errors count: {errors_count}")
 
@@ -370,9 +371,10 @@ def get_test_list(project_name):
 def run_test(project_name, file_name):
     click.echo(f"Running {file_name} tests")
     env = {"TESTNAME": file_name}
-    inst = docker_client.exec_create(
+    local_docker_client = docker.APIClient()
+    inst = local_docker_client.exec_create(
         f"{project_name}_proxy_1", './proxy/deploy-test.sh', environment=env)
-    out, test_logs = docker_client.exec_start(inst['Id'], demux=True)
+    out, test_logs = local_docker_client.exec_start(inst['Id'], demux=True)
     test_logs = test_logs.decode('utf-8')
     click.echo(out)
     click.echo(test_logs)

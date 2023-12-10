@@ -28,10 +28,10 @@ class SolBlocksDB(BaseDBTable):
         super().__init__(
             db,
             table_name='solana_blocks',
-            column_list=[
+            column_list=(
                 'block_slot', 'block_hash', 'block_time', 'parent_block_slot', 'is_finalized', 'is_active'
-            ],
-            key_list=['block_slot']
+            ),
+            key_list=('block_slot', )
         )
 
     @staticmethod

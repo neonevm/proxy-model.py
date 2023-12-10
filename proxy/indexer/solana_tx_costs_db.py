@@ -11,8 +11,8 @@ class SolTxCostsDB(BaseDBTable):
         super().__init__(
             db,
             table_name='solana_transaction_costs',
-            column_list=['sol_sig', 'block_slot', 'operator', 'sol_spent'],
-            key_list=['sol_sig', 'block_slot']
+            column_list=('sol_sig', 'block_slot', 'operator', 'sol_spent'),
+            key_list=('sol_sig', 'block_slot')
         )
 
     def set_cost_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:

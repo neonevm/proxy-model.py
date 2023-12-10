@@ -10,7 +10,7 @@ from typing import Optional, Dict, Union, Iterator, Generator, List, Any, Tuple,
 
 import base58
 
-from .utils.evm_log_decoder import decode_log_list, NeonLogInfo, NeonLogTxReturn, NeonLogTxEvent
+from .evm_log_decoder import decode_log_list, NeonLogInfo, NeonLogTxReturn, NeonLogTxEvent
 from .utils.utils import str_fmt_object, cached_method, cached_property, get_from_dict
 from .solana_tx import SolTxReceipt, SolPubKey
 from .constants import COMPUTE_BUDGET_ID, EVM_PROGRAM_ID
@@ -555,9 +555,12 @@ class SolNeonIxReceiptInfo:
             _tx_meta=ix_meta.tx_meta
         )
 
-    @cached_method
-    def __str__(self) -> str:
+    @cached_property
+    def str_ident(self) -> str:
         return ':'.join([str(s) for s in self.ident])
+
+    def __str__(self) -> str:
+        return self.str_ident
 
     def __eq__(self, other: SolNeonIxReceiptInfo) -> bool:
         return self.ident == other.ident

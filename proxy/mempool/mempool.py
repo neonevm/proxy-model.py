@@ -54,7 +54,7 @@ class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
 
         self._config = config
         self._reschedule_timeout_sec: Final[float] = ONE_BLOCK_SEC * 3
-        self._check_task_timeout_sec: Final[float] = 0.05
+        self._check_task_timeout_sec: Final[float] = 0.01
 
         self._has_evm_config = False
         self._gas_price: Optional[MPGasPriceResult] = None

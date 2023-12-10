@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import multiprocessing
 import asyncio
 import random
 import copy
@@ -55,8 +56,8 @@ class MockOpResInfo:
 
 
 def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: int,
-                               from_acct: Union[NeonAccount, NeonLocalAccount, None] = None,
-                               to_acct: Union[NeonAccount, NeonLocalAccount, None] = None,
+                               from_acct: Union[NeonLocalAccount, None] = None,
+                               to_acct: Union[NeonLocalAccount, None] = None,
                                value: int = 0, data: bytes = b'') -> MPTxExecRequest:
     if from_acct is None:
         from_acct = NeonAccount.create()
@@ -65,9 +66,8 @@ def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: 
         to_acct = NeonAccount.create()
 
     to_addr = to_acct.address
-    signed_tx_data = NeonAccount().sign_transaction(
+    signed_tx_data = from_acct.sign_transaction(
         dict(nonce=nonce, chainId=DEF_CHAIN_ID, gas=gas, gasPrice=gas_price, to=to_addr, value=value, data=data),
-        from_acct.key
     )
     neon_tx = NeonTx.from_string(bytearray(signed_tx_data.rawTransaction))
     neon_tx_exec_cfg = NeonTxExecCfg()
@@ -85,6 +85,10 @@ def create_transfer_mp_request(*, req_id: str, nonce: int, gas: int, gas_price: 
         evm_config_data=EVMConfig().evm_config_data
     )
     return mp_tx_req
+
+
+def create_transfer_mp_request_dict(req):
+    return create_transfer_mp_request(**req)
 
 
 class MockTask:
@@ -398,7 +402,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(self._tx_schedule.tx_cnt, capacipy_90pct)
 
         gas_price = self._emit_set_gas_price()
-        self.assertNotEqual(gas_price.suggested_gas_price, base_gas_price.suggested_gas_price)
+        self.assertGreater(gas_price.suggested_gas_price, base_gas_price.suggested_gas_price)
 
         self.assertEqual(submit_mp_request_mock.call_count, 0)
         is_available_mock.return_value = True
@@ -428,7 +432,11 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
                 req_data_list.append(req_data)
 
         random.shuffle(req_data_list)
-        await self._enqueue_requests(req_data_list)
+        with multiprocessing.Pool(multiprocessing.cpu_count()) as p:
+            req_list = p.map(create_transfer_mp_request_dict, req_data_list)
+        for req in req_list:
+            await self._mempool.schedule_mp_tx_request(req)
+
         self.assertEqual(
             self._tx_schedule.tx_cnt,
             min(self._tx_schedule._capacity, from_acct_cnt * (nonce_cnt - 1))
@@ -437,7 +445,7 @@ class TestMemPool(unittest.IsolatedAsyncioTestCase):
     async def _exec_all_txs_in_mempool(self, nonce_cnt: int):
         for i in range(nonce_cnt):
             self._mempool.on_executor_released(1)
-            await asyncio.sleep(self._mempool._check_task_timeout_sec * 2)
+            await asyncio.sleep(self._mempool._check_task_timeout_sec * 1.5)
 
             nonce = i + 1
             update_tx_cnt_list: List[MPSenderTxCntData] = list()

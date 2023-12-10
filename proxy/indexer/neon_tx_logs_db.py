@@ -2,6 +2,7 @@ from typing import List, Any, Optional, Dict, Tuple
 
 from ..common_neon.db.base_db_table import BaseDBTable
 from ..common_neon.db.db_connect import DBConnection
+from ..common_neon.evm_log_decoder import NeonLogTxEvent
 
 from ..indexer.indexed_objects import NeonIndexedBlockInfo
 
@@ -11,91 +12,79 @@ class NeonTxLogsDB(BaseDBTable):
         super().__init__(
             db,
             table_name='neon_transaction_logs',
-            column_list=[
+            column_list=(
                 'log_topic1', 'log_topic2', 'log_topic3', 'log_topic4',
                 'log_topic_cnt', 'log_data',
                 'block_slot', 'tx_hash', 'tx_idx', 'tx_log_idx', 'log_idx', 'address',
                 'event_order', 'event_level', 'sol_sig', 'idx', 'inner_idx'
-            ],
-            key_list=['block_slot', 'tx_hash', 'tx_log_idx']
+            ),
+            key_list=('block_slot', 'tx_hash', 'tx_log_idx')
         )
 
         self._column2field_dict = {
             'address': 'address',
             'log_data': 'data',
-            'block_slot': 'blockNumber',
-            'tx_hash': 'transactionHash',
-            'tx_idx': 'transactionIndex',
-            'tx_log_idx': 'transactionLogIndex',
-            'log_idx': 'logIndex',
-            'event_level': 'neonEventLevel',
-            'event_order': 'neonEventOrder',
-            'sol_sig': 'neonSolHash',
-            'idx': 'neonIxIdx',
-            'inner_idx': 'neonInnerIxIdx'
+            'block_slot': 'block_slot',
+            'tx_hash': 'neon_sig',
+            'tx_idx': 'neon_tx_idx',
+            'tx_log_idx': 'neon_tx_log_idx',
+            'log_idx': 'block_log_idx',
+            'event_level': 'event_level',
+            'event_order': 'event_order',
+            'sol_sig': 'sol_sig',
+            'idx': 'idx',
+            'inner_idx': 'inner_idx'
         }
 
-        self._hex_field_set = {
-            'blockNumber', 'transactionIndex', 'transactionLogIndex', 'logIndex'
-        }
-
-        self._topic_column_list = ['log_topic1', 'log_topic2', 'log_topic3', 'log_topic4']
+        self._topic_column_list = ('log_topic1', 'log_topic2', 'log_topic3', 'log_topic4')
 
     def set_tx_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:
         row_list: List[List[Any]] = list()
         for neon_block in neon_block_queue:
             for tx in neon_block.iter_done_neon_tx():
-                for log in tx.neon_tx_res.log_list:
-                    topic_list = log['topics']
-                    if log['neonIsHidden'] or (len(topic_list) == 0):
+                for event in tx.neon_tx_res.event_list:
+                    if event.is_hidden or (len(event.topic_list) == 0):
                         continue
 
+                    event_dict = event.as_dict()
                     value_list: List[Any] = list()
-                    for key, topic_value in zip(self._topic_column_list, topic_list):
-                        value_list.append(topic_value)
-
-                    while len(value_list) < len(self._topic_column_list):
-                        value_list.append(None)
-
-                    for idx, column in enumerate(self._column_list):
-                        if column in self._topic_column_list:
-                            assert idx < len(self._topic_column_list)
-                        elif column == 'log_topic_cnt':
-                            value_list.append(len(topic_list))
+                    for column in self._column_list:
+                        if column == 'log_topic_cnt':
+                            value_list.append(len(event.topic_list))
+                        elif column in self._topic_column_list:
+                            idx = int(column[len('log_topic'):])
+                            if idx <= len(event.topic_list):
+                                value_list.append(event.topic_list[idx - 1])
+                            else:
+                                value_list.append(None)
                         else:
                             key = self._column2field_dict.get(column, None)
-                            value = log.get(key, None)
-                            if (value is not None) and (key in self._hex_field_set):
-                                value = int(value[2:], 16)
+                            value = event_dict[key]
                             value_list.append(value)
                     row_list.append(value_list)
 
         self._insert_row_list(row_list)
 
-    def _log_from_value(self, value_list: List[Any]) -> Optional[Dict[str, Any]]:
-        log: Dict[str, Any] = dict()
-        topic_list: List[str] = list()
-        for idx, column in enumerate(self._column_list):
-            value = value_list[idx]
+    def _event_from_value(self, value_list: List[Any]) -> NeonLogTxEvent:
+        event_dict: Dict[str, Any] = dict()
+        topic_list = ['', '', '', '']
+        for column, value in zip(self._column_list, value_list):
             if column in self._topic_column_list:
-                topic_list.append(value)
+                idx = int(column[len('log_topic'):])
+                topic_list[idx] = value
             elif column == 'log_topic_cnt':
-                log['topics'] = topic_list[:value]
+                topic_list = topic_list[:value]
             else:
                 key = self._column2field_dict.get(column, None)
-                if key is None:
-                    raise RuntimeError(f'Wrong usage {self._table_name}: {idx} -> {column}!')
+                event_dict[key] = value
+        event_dict['block_hash'] = value_list[-1]
+        event_dict['topic_list'] = topic_list
+        return NeonLogTxEvent.from_dict(event_dict)
 
-                if (value is not None) and (key in self._hex_field_set):
-                    value = hex(value)
-                log[key] = value
-        log['blockHash'] = value_list[-1]
-        return log
-
-    def get_log_list(self, from_block: Optional[int],
-                     to_block: Optional[int],
-                     address_list: List[str],
-                     topic_list: List[List[str]]) -> List[Dict[str, Any]]:
+    def get_event_list(self, from_block: Optional[int],
+                       to_block: Optional[int],
+                       address_list: List[str],
+                       topic_list: List[List[str]]) -> List[NeonLogTxEvent]:
 
         query_list: List[str] = ['1 = 1']
         param_list: List[Any] = []
@@ -140,12 +129,12 @@ class NeonTxLogsDB(BaseDBTable):
 
         row_list = self._fetch_all(request, tuple(param_list))
 
-        log_list: List[Dict[str, Any]] = list()
+        event_list: List[NeonLogTxEvent] = list()
         for value_list in reversed(row_list):
-            log_rec = self._log_from_value(value_list)
-            log_list.append(log_rec)
+            event = self._event_from_value(value_list)
+            event_list.append(event)
 
-        return log_list
+        return event_list
 
     def finalize_block_list(self, from_slot: int, to_slot: int, slot_list: Tuple[int, ...]) -> None:
         request = f'''

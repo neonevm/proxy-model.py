@@ -55,9 +55,10 @@ class EvmIxCode(IntEnum):
 @singleton
 class EvmIxCodeName:
     def __init__(self):
-        self._ix_code_dict: Dict[int, str] = dict()
-        for ix_code in list(EvmIxCode):
-            self._ix_code_dict[ix_code.value] = str_enum(ix_code)
+        self._ix_code_dict = {
+            ix_code.value: str_enum(ix_code)
+            for ix_code in list(EvmIxCode)
+        }
 
     def get(self, ix_code: int, default=None) -> str:
         value = self._ix_code_dict.get(ix_code, default)
@@ -77,9 +78,10 @@ class AltIxCode(IntEnum):
 @singleton
 class AltIxCodeName:
     def __init__(self):
-        self._ix_code_dict: Dict[int, str] = dict()
-        for ix_code in list(AltIxCode):
-            self._ix_code_dict[ix_code.value] = str_enum(ix_code)
+        self._ix_code_dict = {
+            ix_code.value: str_enum(ix_code)
+            for ix_code in list(AltIxCode)
+        }
 
     def get(self, ix_code: int, default=None) -> str:
         value = self._ix_code_dict.get(ix_code, default)

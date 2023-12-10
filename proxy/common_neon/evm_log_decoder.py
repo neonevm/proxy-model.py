@@ -5,10 +5,12 @@ import enum
 import logging
 import re
 
+from singleton_decorator import singleton
 from dataclasses import dataclass, asdict as dataclass_asdict
 from typing import List, Iterator, Optional, Tuple, Dict, Any
 
-from .utils import str_fmt_object, cached_method
+from .utils import str_fmt_object, str_enum, cached_method, cached_property
+from .address import NeonAddress
 
 
 LOG = logging.getLogger(__name__)
@@ -52,11 +54,30 @@ class NeonLogTxEvent:
         Return = 300
         Cancel = 301
 
+    @singleton
+    class TypeName:
+        def __init__(self):
+            self._type_name_dict = {
+                code: str_enum(code)
+                for code in list(NeonLogTxEvent.Type)
+            }
+
+        def get(self, code: NeonLogTxEvent.Type, default=None) -> str:
+            value = self._type_name_dict.get(code, default)
+            if value is None:
+                return hex(code)
+            return value
+
+    class PropFilter(enum.IntEnum):
+        Full = 0
+        Eth = 1
+        Neon = 2
+
     event_type: Type
     is_hidden: bool
 
     address: bytes
-    topic_list: List[bytes]
+    topic_list: Tuple[bytes, ...] = tuple()
     data: bytes = b''
 
     sol_sig: str = ''
@@ -67,25 +88,66 @@ class NeonLogTxEvent:
     event_level: int = 0
     event_order: int = 0
 
+    neon_sig: str = ''
+    block_hash: str = ''
+    block_slot: int = 0
+    neon_tx_idx: int = 0
+
+    block_log_idx: Optional[int] = None
+    neon_tx_log_idx: Optional[int] = None
+
     @cached_method
     def __str__(self) -> str:
         return str_fmt_object(self)
+
+    @cached_property
+    def str_ident(self) -> str:
+        ident = (self.sol_sig, self.block_slot, self.idx, self.inner_idx)
+        return ':'.join([str(s) for s in ident if s])
+
+    @cached_property
+    def checksum_address(self) -> str:
+        addr = NeonAddress.from_raw(self.address)
+        return addr.checksum_address if addr else ''
 
     @staticmethod
     def from_dict(src: Dict[str, Any]) -> NeonLogTxEvent:
         src.update(dict(
             address=bytes.fromhex(src['address']),
             data=bytes.fromhex(src['data']),
-            topic_list=[bytes.fromhex(t) for t in src['topic_list']]
+            topic_list=tuple(bytes.fromhex(t) for t in src['topic_list'])
         ))
         return NeonLogTxEvent(**src)
+
+    @staticmethod
+    def from_rpc_dict(src: Dict[str, Any]) -> NeonLogTxEvent:
+        return NeonLogTxEvent(
+            event_type=NeonLogTxEvent.Type(src.get('neonEventType', 0)),
+            is_hidden=src.get('neonIsHidden', True),
+            is_reverted=src.get('neonIsReverted', False),
+            address=bytes.fromhex(src.get('address')[2:]),
+            topic_list=tuple(bytes.fromhex(value[2:]) for value in src.get('topics', [])),
+            data=bytes.fromhex(src.get('data')[2:]),
+            sol_sig=src.get('neonSolHash', ''),
+            idx=src.get('neonIxIdx', 0),
+            inner_idx=src.get('neonInnerIxIdx', None),
+            total_gas_used=0,
+            event_level=src.get('neonEventLevel', 0),
+            event_order=src.get('neonEventOrder', 0),
+            neon_sig=src.get('transactionHash', ''),
+            block_hash=src.get('blockHash', ''),
+            block_slot=int(src.get('blockNumber', '0x0'), 16),
+            neon_tx_idx=int(src.get('transactionIndex', '0x0'), 16),
+            block_log_idx=int(src.get('logIndex', '0x0'), 16),
+            neon_tx_log_idx=int(src.get('transactionLogIndex', '0x0'), 16),
+        )
 
     def as_dict(self) -> Dict[str, Any]:
         res = dataclass_asdict(self)
         res.update(dict(
             address=self.address.hex(),
             data=self.data.hex(),
-            topic_list=[t.hex() for t in self.topic_list]
+            topic_list=tuple(t.hex() for t in self.topic_list)
         ))
 
         return res
@@ -107,6 +169,70 @@ class NeonLogTxEvent:
             NeonLogTxEvent.Type.EnterCreate,
             NeonLogTxEvent.Type.EnterCreate2
         }
+
+    def set_order(self, event_level: int, event_order: int) -> None:
+        object.__setattr__(self, 'event_level', event_level)
+        object.__setattr__(self, 'event_order', event_order)
+
+    def set_hidden(self, is_hidden: bool, is_reverted: bool) -> None:
+        object.__setattr__(self, 'is_reverted', is_reverted)
+        object.__setattr__(self, 'is_hidden', is_hidden)
+
+    def set_tx_info(self, neon_sig: str, block_hash: str, block_slot: int, neon_tx_idx: int) -> None:
+        object.__setattr__(self, 'neon_sig', neon_sig)
+        object.__setattr__(self, 'block_hash', block_hash)
+        object.__setattr__(self, 'block_slot', block_slot)
+        object.__setattr__(self, 'neon_tx_idx', neon_tx_idx)
+
+    def set_log_idx(self, block_log_idx: int, neon_tx_log_idx: int) -> None:
+        object.__setattr__(self, 'block_log_idx', block_log_idx)
+        object.__setattr__(self, 'neon_tx_log_idx', neon_tx_log_idx)
+
+    def has_rpc_dict(self, prop_filter: NeonLogTxEvent.PropFilter) -> bool:
+        return (prop_filter != NeonLogTxEvent.PropFilter.Eth) or (not self.is_hidden)
+
+    def as_rpc_dict(self, prop_filter: NeonLogTxEvent.PropFilter) -> Optional[Dict[str, Any]]:
+        if not self.has_rpc_dict(prop_filter):
+            return None
+
+        item_list = [
+            ('address', self.checksum_address),
+            ('data', '0x' + (self.data.hex() if self.data else '')),
+        ]
+
+        if prop_filter in (NeonLogTxEvent.PropFilter.Full, NeonLogTxEvent.PropFilter.Eth):
+            item_list.extend([
+                ('removed', False),
+                ('topics', tuple('0x' + topic.hex() for topic in self.topic_list)),
+                ('transactionHash', self.neon_sig),
+                ('blockHash', self.block_hash),
+                ('blockNumber', hex(self.block_slot)),
+                ('transactionIndex', hex(self.neon_tx_idx)),
+            ])
+
+            if not self.is_hidden:
+                item_list.extend([
+                    ('logIndex', hex(self.block_log_idx)),
+                    ('transactionLogIndex', hex(self.neon_tx_log_idx))
+                ])
+
+        if prop_filter == NeonLogTxEvent.PropFilter.Full:
+            item_list.extend([
+                ('neonSolHash', self.sol_sig),
+                ('neonIxIdx', hex(self.idx)),
+                ('neonInnerIxIdx', hex(self.inner_idx) if self.inner_idx else None)
+            ])
+
+        if prop_filter in (NeonLogTxEvent.PropFilter.Full, NeonLogTxEvent.PropFilter.Neon):
+            item_list.extend([
+                ('neonEventType', NeonLogTxEvent.TypeName().get(self.event_type)),
+                ('neonEventLevel', hex(self.event_level)),
+                ('neonEventOrder', hex(self.event_order)),
+                ('neonIsHidden', self.is_hidden),
+                ('neonIsReverted', self.is_reverted),
+            ])
+
+        return dict(item_list)
 
 
 @dataclass(frozen=True)
@@ -198,7 +324,7 @@ class _NeonLogDecoder:
             LOG.error(f'Failed to decode enter event, address has wrong length: {address}')
             return None
 
-        return NeonLogTxEvent(event_type=event_type, is_hidden=True, address=address, topic_list=list())
+        return NeonLogTxEvent(event_type=event_type, is_hidden=True, address=address, topic_list=tuple())
 
     @staticmethod
     def _decode_neon_tx_exit(data_list: List[str]) -> Optional[NeonLogTxEvent]:
@@ -231,7 +357,7 @@ class _NeonLogDecoder:
         if len(data_list) > 1:
             data = base64.b64decode(data_list[1])
 
-        return NeonLogTxEvent(event_type=event_type, is_hidden=True, address=b'', data=data, topic_list=list())
+        return NeonLogTxEvent(event_type=event_type, is_hidden=True, address=b'', data=data, topic_list=tuple())
 
     @staticmethod
     def _decode_neon_tx_event(log_num: int, data_list: List[str]) -> Optional[NeonLogTxEvent]:
@@ -259,7 +385,7 @@ class _NeonLogDecoder:
             return None
 
         address = base64.b64decode(data_list[0])
-        topic_list = [base64.b64decode(data_list[2 + i]) for i in range(topic_cnt)]
+        topic_list = tuple(base64.b64decode(data_list[2 + i]) for i in range(topic_cnt))
 
         data_index = 2 + topic_cnt
         data = base64.b64decode(data_list[data_index]) if data_index < len(data_list) else b''

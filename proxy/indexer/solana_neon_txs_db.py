@@ -12,12 +12,12 @@ class SolNeonTxsDB(BaseDBTable):
         super().__init__(
             db,
             table_name='solana_neon_transactions',
-            column_list=[
+            column_list=(
                 'sol_sig', 'block_slot', 'idx', 'inner_idx', 'ix_code', 'is_success',
                 'neon_sig', 'neon_step_cnt', 'neon_gas_used', 'neon_total_gas_used',
                 'max_heap_size', 'used_heap_size', 'max_bpf_cycle_cnt', 'used_bpf_cycle_cnt'
-            ],
-            key_list=['sol_sig', 'block_slot', 'idx', 'inner_idx']
+            ),
+            key_list=('sol_sig', 'block_slot', 'idx', 'inner_idx')
         )
 
     def set_tx_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:

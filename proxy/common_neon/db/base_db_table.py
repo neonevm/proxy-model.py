@@ -3,19 +3,18 @@ from __future__ import annotations
 import logging
 
 from pickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
-from typing import List, Tuple, Dict, Any, Optional, Union, Set
+from typing import List, Tuple, Dict, Any, Set
 
 import psycopg2
 
 from .db_connect import DBConnection
-from .db_config import DBConfig
 
 
 LOG = logging.getLogger(__name__)
 
 
 class BaseDBTable:
-    def __init__(self, db: DBConnection, table_name: str, column_list: List[str], key_list: List[str]):
+    def __init__(self, db: DBConnection, table_name: str, column_list: Tuple[str, ...], key_list: Tuple[str, ...]):
         assert len(column_list) > 0
 
         self._db = db
@@ -72,12 +71,6 @@ class BaseDBTable:
     @staticmethod
     def _decode(obj: Any) -> Any:
         return loads(bytes(obj))
-
-    def _decode_list(self, v: Optional[bytes]) -> List[Any]:
-        return [] if not v else self._decode(v)
-
-    def _encode_list(self, v: List[Any]) -> Optional[bytes]:
-        return None if (not v) or (len(v) == 0) else self._encode(v)
 
     def _insert_row(self, value_list: Tuple[Any, ...]) -> None:
         assert len(self._column_list) == len(value_list)

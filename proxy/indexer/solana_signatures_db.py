@@ -10,8 +10,8 @@ class SolSigsDB(BaseDBTable):
         super().__init__(
             db,
             table_name='solana_transaction_signatures',
-            column_list=['block_slot', 'signature'],
-            key_list=['block_slot', 'signature']
+            column_list=('block_slot', 'signature'),
+            key_list=('block_slot', 'signature')
         )
 
     def add_sig(self, info: SolTxSigSlotInfo) -> None:

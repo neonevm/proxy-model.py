@@ -9,7 +9,7 @@ from typing import Dict, Iterator, Optional, Any, Tuple, Union, List
 from ..common_neon.address import NeonAddress
 from ..common_neon.config import Config
 from ..common_neon.neon_instruction import EvmIxCode
-from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
+from ..common_neon.evm_log_decoder import NeonLogTxEvent
 from ..common_neon.solana_neon_tx_receipt import SolNeonIxReceiptInfo
 from ..common_neon.utils.neon_tx_info import NeonTxInfo
 
@@ -57,7 +57,7 @@ class GasTankTxInfo(NeonIndexedTxInfo):
             self.neon_tx_res.set_sol_sig_info(ix.sol_sig, ix.idx, ix.inner_idx)
             self.add_neon_event(NeonLogTxEvent(
                 event_type=NeonLogTxEvent.Type.Return,
-                is_hidden=True, address=b'', topic_list=[],
+                is_hidden=True, address=b'', topic_list=tuple(),
                 data=ix.neon_tx_return.status.to_bytes(1, 'little'),
                 total_gas_used=ix.neon_tx_return.gas_used + 5000,
                 sol_sig=ix.sol_sig, idx=ix.idx, inner_idx=ix.inner_idx
@@ -73,10 +73,10 @@ class GasTankTxInfo(NeonIndexedTxInfo):
 
         self.complete_event_list()
 
-    def iter_events(self) -> Iterator[Dict[str, Any]]:
-        for ev in self.neon_tx_res.log_list:
-            if not ev['neonIsHidden']:
-                yield ev
+    def iter_event_list(self) -> Iterator[NeonLogTxEvent]:
+        for event in self.neon_tx_res.event_list:
+            if not event.is_hidden:
+                yield event
 
 
 # Base class to create NeonEVM transaction analyzers for gas-tank

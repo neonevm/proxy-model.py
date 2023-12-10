@@ -1,6 +1,6 @@
 import json
 
-from typing import List, Dict, Any, Iterator, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional
 
 from ..common_neon.db.base_db_table import BaseDBTable
 from ..common_neon.db.db_connect import DBConnection
@@ -13,8 +13,8 @@ class SolAltInfosDB(BaseDBTable):
         super().__init__(
             db,
             table_name='solana_alt_infos',
-            column_list=['block_slot', 'json_data_list'],
-            key_list=['block_slot']
+            column_list=('block_slot', 'json_data_list'),
+            key_list=('block_slot', )
         )
 
         self._select_request = f'''

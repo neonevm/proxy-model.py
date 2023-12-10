@@ -12,7 +12,7 @@ from ..common_neon.utils.eth_proto import NeonTx
 from ..common_neon.utils import NeonTxInfo
 from ..common_neon.solana_tx import SolPubKey
 from ..common_neon.solana_neon_tx_receipt import SolNeonTxReceiptInfo, SolTxMetaInfo, SolIxMetaInfo
-from ..common_neon.utils.evm_log_decoder import decode_log_list, NeonLogTxReturn
+from ..common_neon.evm_log_decoder import decode_log_list, NeonLogTxReturn
 from ..common_neon.neon_instruction import EvmIxCode
 
 

@@ -12,10 +12,10 @@ class SolAltTxsDB(BaseDBTable):
         super().__init__(
             db,
             table_name='solana_alt_transactions',
-            column_list=[
+            column_list=(
                 'sol_sig', 'block_slot', 'idx', 'inner_idx', 'is_success', 'ix_code', 'alt_address', 'neon_sig'
-            ],
-            key_list=['sol_sig', 'block_slot', 'idx', 'inner_idx']
+            ),
+            key_list=('sol_sig', 'block_slot', 'idx', 'inner_idx')
         )
 
         self._select_request = f'''

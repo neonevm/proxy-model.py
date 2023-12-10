@@ -5,7 +5,7 @@ from typing import Any, List, Type, Optional
 
 from ..common_neon.utils import NeonTxInfo
 from ..common_neon.neon_instruction import EvmIxCode, EvmIxCodeName
-from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
+from ..common_neon.evm_log_decoder import NeonLogTxEvent
 
 from ..indexer.indexed_objects import NeonIndexedTxInfo, NeonIndexedHolderInfo, NeonAccountInfo, SolNeonDecoderCtx
 
@@ -191,7 +191,7 @@ class BaseTxIxDecoder(DummyIxDecoder):
             event_type=event_type,
             is_hidden=True,
             address=b'',
-            topic_list=list(),
+            topic_list=tuple(),
             data=res.status.to_bytes(1, 'little'),
             total_gas_used=res.gas_used + 5000,  # to move event to the end of the list
             sol_sig=ix.sol_sig,

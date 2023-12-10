@@ -10,7 +10,7 @@ from .gas_tank_types import GasTankNeonTxAnalyzer, GasTankTxInfo
 LOG = logging.getLogger(__name__)
 
 # keccak256("Transfer(address,address,uint256)")
-TRANSFER_EVENT = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+TRANSFER_EVENT = bytes.fromhex('ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef')
 
 
 class ERC20Analyzer(GasTankNeonTxAnalyzer):
@@ -20,22 +20,19 @@ class ERC20Analyzer(GasTankNeonTxAnalyzer):
         if not self._has_token_whitelist:
             return None
 
-        call_data = bytes.fromhex(neon_tx.neon_tx.calldata[2:])
-        LOG.debug(f'callData: {call_data.hex()}')
-
-        for event in neon_tx.iter_events():
-            if len(event['topics']) != 3:
+        for event in neon_tx.iter_event_list():
+            if len(event.topic_list) != 3:
                 continue
 
-            if event['topics'][0] != TRANSFER_EVENT or event['topics'][1] != '0x' + 64*'0':
+            if (event.topic_list[0] != TRANSFER_EVENT) or (event.topic_list[1] != 32 * b'\0'):
                 continue
 
-            token_id = event['address']
-            amount = int.from_bytes(bytes.fromhex(event['data'][2:]), 'big')
+            token_id = event.checksum_address.lower()
+            amount = int.from_bytes(event.data, 'big')
             if self._is_allowed_token(token_id, amount):
                 continue
 
-            to = NeonAddress.from_raw(bytes.fromhex(event['topics'][2][2:])[12:])
-            LOG.info(f'Common ERC20 bridge transfer: {amount} of {token_id} token to {to}')
+            to = NeonAddress.from_raw(event.topic_list[2][12:])
+            LOG.info(f'Common ERC20 bridge transfer: {amount} of {token_id} token to {to.checksum_address}')
             return to
         return None

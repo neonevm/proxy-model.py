@@ -1,6 +1,10 @@
-from typing import Optional, List, Any, Tuple
+import json
+import logging
+
+from typing import Optional, List, Any, Tuple, Union
 
 from ..common_neon.utils import NeonTxInfo
+from ..common_neon.evm_log_decoder import NeonLogTxEvent
 from ..common_neon.neon_tx_result_info import NeonTxResultInfo
 from ..common_neon.neon_tx_receipt_info import NeonTxReceiptInfo
 from ..common_neon.db.base_db_table import BaseDBTable
@@ -9,19 +13,22 @@ from ..common_neon.db.db_connect import DBConnection
 from ..indexer.indexed_objects import NeonIndexedBlockInfo
 
 
+LOG = logging.getLogger(__name__)
+
+
 class NeonTxsDB(BaseDBTable):
     def __init__(self, db: DBConnection):
         super().__init__(
             db,
             table_name='neon_transactions',
-            column_list=[
+            column_list=(
                 'sol_sig', 'sol_ix_idx', 'sol_ix_inner_idx', 'block_slot', 'tx_idx',
                 'neon_sig', 'tx_type', 'from_addr', 'nonce', 'to_addr', 'contract', 'value', 'calldata',
                 'gas_price', 'gas_limit',
                 'v', 'r', 's',
                 'status', 'is_canceled', 'is_completed', 'gas_used', 'sum_gas_used', 'logs'
-            ],
-            key_list=['neon_sig', 'block_slot']
+            ),
+            key_list=('neon_sig', 'block_slot')
         )
 
         self._base_request_hdr = f'''
@@ -64,7 +71,7 @@ class NeonTxsDB(BaseDBTable):
 
         for idx, column in enumerate(self._column_list):
             if column == 'logs':
-                neon_tx_res.log_list.extend(self._decode_list(value_list[idx]))
+                neon_tx_res.set_event_list(self._decode_event_list(value_list[idx]))
 
             elif column in self._hex_res_column_set:
                 object.__setattr__(neon_tx_res, column, int(value_list[idx][2:], 16))
@@ -87,7 +94,7 @@ class NeonTxsDB(BaseDBTable):
                     elif column == 'from_addr':
                         value_list.append(tx.neon_tx.addr)
                     elif column == 'logs':
-                        value_list.append(self._encode_list(tx.neon_tx_res.log_list))
+                        value_list.append(self._encode_event_list(tx.neon_tx_res))
                     elif column in self._hex_tx_column_set:
                         value_list.append(hex(getattr(tx.neon_tx, column)))
                     elif column in self._hex_res_column_set:
@@ -144,3 +151,27 @@ class NeonTxsDB(BaseDBTable):
                     AND block_slot NOT IN %s
             '''
         self._update_row(request, (from_slot, to_slot, slot_list))
+
+    @staticmethod
+    def _encode_event_list(tx_res: NeonTxResultInfo) -> str:
+        if not len(tx_res.event_list):
+            return ''
+
+        return json.dumps([event.as_dict() for event in tx_res.event_list])
+
+    def _decode_event_list(self, value: Union[str, bytes, None]) -> Tuple[NeonLogTxEvent, ...]:
+        try:
+            if not len(value):
+                return ()
+
+            if value.startswith('['):
+                value_list = json.loads(value)
+                return tuple([NeonLogTxEvent.from_dict(value) for value in value_list])
+
+            # TODO: remove after converting all records
+            value_list = [] if not value else self._decode(value)
+            return tuple([NeonLogTxEvent.from_rpc_dict(value) for value in value_list])
+
+        except BaseException as exc:
+            LOG.warning(f'Cannot decode event list {value}', exc_info=exc)
+            return ()

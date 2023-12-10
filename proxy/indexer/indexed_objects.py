@@ -21,7 +21,7 @@ from ..common_neon.utils import NeonTxInfo, str_fmt_object
 from ..common_neon.neon_tx_result_info import NeonTxResultInfo
 from ..common_neon.neon_tx_receipt_info import NeonTxReceiptInfo
 from ..common_neon.solana_block import SolBlockInfo
-from ..common_neon.utils.evm_log_decoder import NeonLogTxEvent
+from ..common_neon.evm_log_decoder import NeonLogTxEvent
 from ..common_neon.utils.utils import get_from_dict, cached_method
 
 from ..statistic.data import NeonTxStatData
@@ -331,7 +331,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
 
     def complete_event_list(self) -> None:
         event_list_len = len(self._neon_event_list)
-        if (not self.neon_tx_res.is_valid()) or (len(self.neon_tx_res.log_list) > 0) or (event_list_len == 0):
+        if (not self.neon_tx_res.is_valid()) or (len(self.neon_tx_res.event_list) > 0) or (event_list_len == 0):
             return
 
         current_level = 0
@@ -351,8 +351,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
                 event_level = current_level
 
             current_order += 1
-            object.__setattr__(event, 'event_level', event_level)
-            object.__setattr__(event, 'event_order', current_order)
+            event.set_order(event_level=event_level, event_order=current_order)
 
         reverted_level = -1
         is_failed = (self.neon_tx_res.status == 0)
@@ -372,8 +371,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
                 is_reverted = (reverted_level != -1) or is_failed
                 is_hidden = (event.is_hidden or is_reverted)
 
-            object.__setattr__(event, 'is_reverted', is_reverted)
-            object.__setattr__(event, 'is_hidden', is_hidden)
+            event.set_hidden(is_hidden=is_hidden, is_reverted=is_reverted)
 
         for event in neon_event_list:
             self.neon_tx_res.add_event(event)

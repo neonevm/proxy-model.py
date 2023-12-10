@@ -11,10 +11,10 @@ class GasLessUsagesDB(BaseDBTable):
         super().__init__(
             db,
             table_name='gas_less_usages',
-            column_list=[
+            column_list=(
                 'address', 'block_slot', 'neon_sig', 'nonce', 'to_addr', 'operator', 'neon_total_gas_usage'
-            ],
-            key_list=['neon_sig']
+            ),
+            key_list=('neon_sig', )
         )
 
     def set_tx_list(self, neon_block_queue: List[NeonIndexedBlockInfo]) -> None:
