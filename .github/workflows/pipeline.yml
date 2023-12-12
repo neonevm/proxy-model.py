@@ -254,7 +254,7 @@ jobs:
       SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
       PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
       CONTAINER: oz-${{ github.run_id }}
-      NETWORK_NAME: aws_custom
+      NETWORK: terraform
     steps:
       - name: Pull docker image
         run: docker pull ${{ env.NEON_TEST_IMAGE }}:${{ needs.build-image.outputs.neon_test_tag }}
@@ -262,17 +262,15 @@ jobs:
         run: |
           docker run -i -e PROXY_IP=${{env.PROXY_IP}} \
           -e SOLANA_IP=${{env.SOLANA_IP}} \
-          -e DUMP_ENVS=true \
-          -e NETWORK_ID=111 \
-          -e FAUCET_URL="http://${{env.PROXY_IP}}:3333/request_neon" \
-          -e SOLANA_URL="http://${{env.SOLANA_IP}}:8899" \
-          -e PROXY_URL="http://${{env.PROXY_IP}}:9090/solana" \
-          -e NETWORK_NAME=${{env.NETWORK_NAME}} \
-          -d --name=${{ env.CONTAINER }} ${{ env.NEON_TEST_IMAGE }} /bin/bash
+          -e NETWORK=${{env.NETWORK}} \
+          -d --name=${{ env.CONTAINER }} ${{ env.NEON_TEST_IMAGE }}:${{ needs.build-image.outputs.neon_test_tag }} /bin/bash
       - name: Run OpenZeppelin tests
         run: |
-          docker exec -i ${{ env.CONTAINER }} python3 ./clickfile.py run oz \
-            --network ${{ env.NETWORK_NAME }} \
+          docker exec -i -e PROXY_IP=${{env.PROXY_IP}} \
+              -e SOLANA_IP=${{env.SOLANA_IP}} \
+              -e NETWORK=${{env.NETWORK}} \
+              ${{ env.CONTAINER }} python3 ./clickfile.py run oz \
+            --network ${{ env.NETWORK }} \
             --jobs 8 \
             --users 10
       - name: Print OpenZeppelin report
@@ -306,7 +304,7 @@ jobs:
       PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
       NUMPROCESSES: 4
       CONTAINER: basic-${{ github.run_id }}
-      NETWORK: aws
+      NETWORK: terraform
     steps:
       - name: Run docker container
         run: |
@@ -359,7 +357,7 @@ jobs:
       SOLANA_IP: ${{ needs.prepare-infrastructure.outputs.solana_ip }}
       PROXY_IP: ${{ needs.prepare-infrastructure.outputs.proxy_ip }}
       CONTAINER: economy-${{ github.run_id }}
-      NETWORK: aws
+      NETWORK: terraform
     steps:
       - name: Run docker container
         run: |
