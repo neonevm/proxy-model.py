@@ -272,7 +272,7 @@ class NeonIndexedTxInfo(BaseNeonIndexedObjInfo):
 
     def is_corrupted(self) -> bool:
         """Return true if indexer didn't find all instructions for the tx"""
-        return self._gas_used != self._total_gas_used
+        return (self.neon_tx.gas_limit <= 0) or (self._gas_used != self._total_gas_used)
 
     def as_dict(self) -> Dict[str, Any]:
         return dict(
