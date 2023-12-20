@@ -1,4 +1,4 @@
-typing-extensions==4.8.0
+typing-extensions==4.9.0
 ecdsa==0.18.0
 pysha3==1.0.2
 rusty_rlp==0.2.1
