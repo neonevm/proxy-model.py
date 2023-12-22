@@ -165,7 +165,7 @@ class NeonTxsDB(BaseDBTable):
                 return ()
 
             value_str = value.tobytes()
-            if value_str.startswith(b'['):
+            if value_str.startswith(b'[') and value_str.endswith(b']'):
                 value_list = json.loads(value_str.decode('utf-8'))
                 return tuple([NeonLogTxEvent.from_dict(value) for value in value_list])
 

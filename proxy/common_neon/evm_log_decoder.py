@@ -138,8 +138,8 @@ class NeonLogTxEvent:
         topic_list = src.pop('topics', list())
 
         return NeonLogTxEvent(
-            event_type=NeonLogTxEvent.Type(src.get('neonEventType', 0)),
-            is_hidden=src.get('neonIsHidden', True),
+            event_type=NeonLogTxEvent.Type(src.get('neonEventType', NeonLogTxEvent.Type.Log)),
+            is_hidden=src.get('neonIsHidden', False),
             is_reverted=src.get('neonIsReverted', False),
             address=hex_to_bytes(address),
             topic_list=tuple(hex_to_bytes(value) for value in topic_list),
