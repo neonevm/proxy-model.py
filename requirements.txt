@@ -10,7 +10,7 @@ py-solc-x==1.1.1
 hvac==2.0.0
 requests==2.31.0
 base58==2.1.1
-web3==6.11.3
+web3==6.13.0
 aioprometheus==23.12.0
 singleton-decorator==1.0.0
 clickhouse-connect==0.6.23
