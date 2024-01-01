@@ -88,6 +88,12 @@ class Config(DBConfig):
             15,      # 15 sec
             60 * 60   # 1 hour
         )
+        self._mempool_reschedule_time_sec = self._env_num(
+            'MEMPOOL_RESCHEDULE_TIME_SEC',
+            ONE_BLOCK_SEC * 3,
+            ONE_BLOCK_SEC / 4,
+            ONE_BLOCK_SEC * 1000
+        )
 
         # Transaction execution settings
         self._retry_on_fail = self._env_num('RETRY_ON_FAIL', 10, 1, 50)
@@ -379,6 +385,10 @@ class Config(DBConfig):
     def mempool_cache_life_sec(self) -> int:
         return self._mempool_cache_life_sec
 
+    @property
+    def mempool_reschedule_time_sec(self) -> int:
+        return self._mempool_reschedule_time_sec
+
     #################################
     # Transaction execution settings
 
@@ -608,6 +618,7 @@ class Config(DBConfig):
             'MEMPOOL_CAPACITY': self.mempool_capacity,
             'MEMPOOL_EXECUTOR_LIMIT_CNT': self.mempool_executor_limit_cnt,
             'MEMPOOL_CACHE_LIFE_SEC': self.mempool_cache_life_sec,
+            'MEMPOOL_RESCHEDULE_TIME_SEC': self.mempool_reschedule_time_sec,
 
             # Transaction execution settings
             'RETRY_ON_FAIL': self.retry_on_fail,

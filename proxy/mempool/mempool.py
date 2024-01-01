@@ -1,5 +1,4 @@
 import asyncio
-import dataclasses
 import logging
 import math
 import time
@@ -39,7 +38,6 @@ from ..common_neon.errors import StuckTxError
 from ..common_neon.operator_resource_info import OpResInfo
 from ..common_neon.address import NeonAddress
 from ..common_neon.utils.json_logger import logging_context
-from ..common_neon.constants import ONE_BLOCK_SEC
 
 from ..statistic.data import NeonTxBeginData, NeonTxEndCode, NeonTxEndData
 from ..statistic.proxy_client import ProxyStatClient
@@ -53,8 +51,8 @@ class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
         LOG.info(f'Init mempool schedule with config: {config.as_dict()}')
 
         self._config = config
-        self._reschedule_timeout_sec: Final[float] = ONE_BLOCK_SEC * 3
-        self._check_task_timeout_sec: Final[float] = 0.01
+        self._reschedule_time_sec: Final[float] = config.mempool_reschedule_time_sec
+        self._check_task_time_sec: Final[float] = 0.01
 
         self._has_evm_config = False
         self._gas_price: Optional[MPGasPriceResult] = None
@@ -326,7 +324,7 @@ class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
             self._fill_mempool_stat(stat)
             self._stat_client.commit_tx_end(stat)
 
-            await asyncio.sleep(self._check_task_timeout_sec)
+            await asyncio.sleep(self._check_task_time_sec)
 
     def _complete_task(self, mp_task: MPTask) -> NeonTxEndCode:
         try:
@@ -407,9 +405,9 @@ class MemPool(IEVMConfigUser, IGasPriceUser, IMPExecutorMngUser):
 
     async def _reschedule_tx(self, tx: MPTxExecRequest):
         with logging_context(req_id=tx.req_id):
-            LOG.debug(f'Tx will be rescheduled in {math.ceil(self._reschedule_timeout_sec * 1000)} msec')
+            LOG.debug(f'Tx will be rescheduled in {math.ceil(self._reschedule_time_sec * 1000)} msec')
 
-        await asyncio.sleep(self._reschedule_timeout_sec)
+        await asyncio.sleep(self._reschedule_time_sec)
 
         with logging_context(req_id=tx.req_id):
             try:
