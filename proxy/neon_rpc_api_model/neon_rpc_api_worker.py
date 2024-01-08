@@ -459,6 +459,7 @@ class NeonRpcApiWorker:
 
             bin_address = hex_to_bytes(address)
             assert len(bin_address) == 20
+            assert len(address) == 42
 
             return NeonAddress.from_raw(bin_address, self._chain_id)
         except (Exception,):
@@ -509,6 +510,7 @@ class NeonRpcApiWorker:
 
             bin_topic = hex_to_bytes(topic)
             assert len(bin_topic) == 32
+            assert len(topic) == 66
 
             return '0x' + bin_topic.hex().lower()
         except (Exception,):
@@ -668,6 +670,7 @@ class NeonRpcApiWorker:
 
             bin_block_hash = hex_to_bytes(block_hash)
             assert len(bin_block_hash) == 32
+            assert len(block_hash) == 66
         except (Exception,):
             raise InvalidParamError(message=f'bad block hash {block_hash}')
 
@@ -719,15 +722,13 @@ class NeonRpcApiWorker:
         if not isinstance(obj, dict):
             raise InvalidParamError(message='invalid object type')
 
-        if not obj['data']:
-            raise InvalidParamError(message="missing data")
-
         sender = obj.get('from')
         if sender:
-            sender = self._normalize_address(sender, 'from-address')
+            sender = self._normalize_address(sender, 'from')
 
         contract = obj.get('to')
-        contract = self._normalize_address(contract, 'to-address')
+        if contract:
+            contract = self._normalize_address(contract, 'to')
 
         try:
             data = obj.get('data')

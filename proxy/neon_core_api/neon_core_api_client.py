@@ -135,8 +135,14 @@ class NeonCoreApiClient(NeonClientBase):
         if contract:
             contract = contract.address
 
-        if (data is not None) and (data[:2] in {'0x', '0X'}):
-            data = data[2:]
+        if data is not None:
+            if data[:2] in {'0x', '0X'}:
+                data = data[2:]
+            try:
+                hex_data = bytes.fromhex(data).hex()
+                assert len(hex_data) == len(data)
+            except (BaseException, ):
+                raise EthereumError('Invalid data')
 
         if not value:
             value = '0x0'
