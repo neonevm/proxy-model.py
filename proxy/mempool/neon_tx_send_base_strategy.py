@@ -178,14 +178,16 @@ class BaseNeonTxStrategy(abc.ABC):
         if len(name) == 0:
             name = self.name
 
-        return SolLegacyTx(
-            name=name,
-            ix_list=[
-                self._ctx.ix_builder.make_compute_budget_heap_ix(),
-                self._ctx.ix_builder.make_compute_budget_cu_ix(),
-                ix
-            ]
-        )
+        ix_list = [
+            self._ctx.ix_builder.make_compute_budget_heap_ix(),
+            self._ctx.ix_builder.make_compute_budget_cu_ix()
+        ]
+        if self._ctx.config.cu_priority_fee:
+            ix_list.append(self._ctx.ix_builder.make_compute_budget_cu_fee_ix(self._ctx.config.cu_priority_fee))
+
+        ix_list.append(ix)
+
+        return SolLegacyTx(name=name, ix_list=ix_list)
 
     @staticmethod
     def _find_sol_neon_ix(tx_send_state: SolTxSendState) -> Optional[SolNeonIxReceiptInfo]:

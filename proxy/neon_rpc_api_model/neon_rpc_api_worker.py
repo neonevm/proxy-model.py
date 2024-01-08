@@ -362,7 +362,7 @@ class NeonRpcApiWorker:
             param['to'] = self._normalize_address(param['to'], 'to-address')
 
         try:
-            calculator = GasEstimate(self._core_api_client, self._chain_id)
+            calculator = GasEstimate(self._config, self._core_api_client, self._chain_id)
             return hex(calculator.estimate(param, block))
 
         except EthereumError:

@@ -1,4 +1,5 @@
 import logging
+import math
 
 from typing import Dict, Any, List, Optional
 
@@ -11,6 +12,7 @@ from ..common_neon.solana_tx import SolAccount, SolPubKey, SolAccountMeta, SolBl
 from ..common_neon.solana_tx_legacy import SolLegacyTx
 from ..common_neon.solana_block import SolBlockInfo
 from ..common_neon.address import NeonAddress
+from ..common_neon.config import Config
 
 from ..neon_core_api.neon_core_api_client import NeonCoreApiClient
 
@@ -37,18 +39,20 @@ class _GasTxBuilder:
         self._neon_ix_builder.init_iterative(holder.pubkey())
         self._neon_ix_builder.init_operator_neon(SolPubKey.default())
 
-    def build_tx(self, tx: NeonTx, account_list: List[SolAccountMeta]) -> SolLegacyTx:
+    def build_tx(self, config: Config, tx: NeonTx, account_list: List[SolAccountMeta]) -> SolLegacyTx:
         self._neon_ix_builder.init_neon_tx(tx)
         self._neon_ix_builder.init_neon_account_list(account_list)
 
-        tx = SolLegacyTx(
-            name='Estimate',
-            ix_list=[
-                self._neon_ix_builder.make_compute_budget_heap_ix(),
-                self._neon_ix_builder.make_compute_budget_cu_ix(),
-                self._neon_ix_builder.make_tx_step_from_data_ix(EVMConfig().neon_evm_steps, 1)
-            ]
-        )
+        ix_list = [
+            self._neon_ix_builder.make_compute_budget_heap_ix(),
+            self._neon_ix_builder.make_compute_budget_cu_ix()
+        ]
+        if config.cu_priority_fee > 0:
+            ix_list.append(self._neon_ix_builder.make_compute_budget_cu_fee_ix(config.cu_priority_fee))
+
+        ix_list.append(self._neon_ix_builder.make_tx_step_from_data_ix(EVMConfig().neon_evm_steps, 1))
+
+        tx = SolLegacyTx(name='Estimate', ix_list=ix_list)
 
         tx.recent_block_hash = self._block_hash
         tx.sign(self._signer)
@@ -64,7 +68,9 @@ class GasEstimate:
     _tx_builder = _GasTxBuilder()
     _u256_max = int.from_bytes(bytes([0xFF] * 32), 'big')
 
-    def __init__(self, core_api_client: NeonCoreApiClient, def_chain_id: int):
+    def __init__(self, config: Config, core_api_client: NeonCoreApiClient, def_chain_id: int):
+        self._config = config
+
         self._sender: Optional[NeonAddress] = None
         self._contract: Optional[NeonAddress] = None
         self._data: Optional[str] = None
@@ -118,7 +124,7 @@ class GasEstimate:
         )
 
         try:
-            sol_tx = self._tx_builder.build_tx(neon_tx, self._account_list)
+            sol_tx = self._tx_builder.build_tx(self._config, neon_tx, self._account_list)
             sol_tx.serialize()  # <- there will be exception about size
 
             if not self._contract:  # deploy case
@@ -140,6 +146,18 @@ class GasEstimate:
 
     def _execution_cost(self) -> int:
         return self._emulator_result.used_gas
+
+    def _iterative_overhead_cost(self) -> int:
+        if self._config.cu_priority_fee == 0:
+            return 0
+
+        # Add priority fee to the estimated gas
+        iter_cnt = self._emulator_result.iter_cnt
+
+        # Each iteration requests 1'400'000 CUs
+        # Priority fee is calculated in micro-LAMPORTs per 1 CU
+        priority_cost = iter_cnt * math.ceil(self._config.cu_priority_fee * 1_400_000 / 1_000_000)
+        return priority_cost
 
     def _alt_cost(self) -> int:
         """Costs to create->extend->deactivate->close an Address Lookup Table
@@ -163,14 +181,16 @@ class GasEstimate:
 
         execution_cost = self._execution_cost()
         tx_size_cost = self._tx_size_cost()
+        iterative_cost = self._iterative_overhead_cost()
         alt_cost = self._alt_cost()
 
         # Ethereum's wallets don't accept gas limit less than 21000
-        gas = max(execution_cost + tx_size_cost + alt_cost, 25000)
+        gas = max(execution_cost + tx_size_cost + iterative_cost + alt_cost, 25000)
 
         LOG.debug(
             f'execution_cost: {execution_cost}, '
             f'tx_size_cost: {tx_size_cost}, '
+            f'iterative_cost: {iterative_cost},'
             f'alt_cost: {alt_cost}, '
             f'estimated gas: {gas}'
         )

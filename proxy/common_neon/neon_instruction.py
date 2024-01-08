@@ -93,6 +93,7 @@ class AltIxCodeName:
 class ComputeBudgetIxCode(IntEnum):
     HeapRequest = 1
     CURequest = 2
+    CUPriorityFee = 3
 
 
 @singleton
@@ -543,3 +544,16 @@ class NeonIxBuilder:
             accounts=[],
             data=ix_data
         )
+
+    @staticmethod
+    def make_compute_budget_cu_fee_ix(cu_priority_fee: int) -> SolTxIx:
+        ix_data = (
+            int(ComputeBudgetIxCode.CUPriorityFee).to_bytes(1, 'little') +
+            cu_priority_fee.to_bytes(8, 'little')
+        )
+        return SolTxIx(
+            program_id=COMPUTE_BUDGET_ID,
+            accounts=[],
+            data=ix_data
+        )
+
