@@ -189,7 +189,7 @@ class NeonIndexerApp:
         total_len = self._reindex_stop_slot - start_slot + 1
         avail_cnt = max(1, self._config.reindex_max_range_cnt - len(db_list))
         need_cnt = int(total_len / self._config.reindex_range_len) + 1
-        avail_cnt = min(avail_cnt, need_cnt)
+        avail_cnt = max(1, min(avail_cnt, need_cnt))
         range_len = int(total_len / avail_cnt) + 1
 
         new_db_list: List[IndexerDB] = list()
